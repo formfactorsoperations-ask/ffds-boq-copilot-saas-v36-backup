@@ -275,6 +275,16 @@ styles in `notifyStyles.ts` (added to the page when first imported, like
   the keyboard or covers the middle of the page.
 - Live in place: a chip that turns in beside the page title (`LiveStamp`), glows
   once (`nt-live`) and leaves on its own.
+- "What reaches you" (`NotifySettings`, opened from the bell) is a modal on the
+  `AssignProjectsModal` pattern: sections in bordered cards with `IconTile`s that
+  rise in with `hud-row-in`, switches in the brand colour, `Glide` for quiet hours
+  and check-ins, and a footer that says it saved. No Save button.
+- "Waiting on you" on the Ops Desk (`WaitingOnYou`) is a desk `Panel`; rows turn in
+  like the bell's, and each timer is a chip: slate, amber from 10 minutes, rose
+  from 30.
+- Desktop alerts, the dot on the tab's icon and the chime (`notifyChannels.ts`)
+  never ask for permission on their own; the browser asks from "What reaches you"
+  or the one-time offer in the bell.
 - Same fonts and colours as everywhere: brand, slate, rose/amber/emerald for
   state. Everything stops under `prefers-reduced-motion`.
 

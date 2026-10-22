@@ -2936,7 +2936,7 @@ export default function App() {
     );
 
     return (
-      <NotifyProvider email={currentUserAuth?.email} onOpen={() => {}}>
+      <NotifyProvider email={currentUserAuth?.email} uid={currentUserAuth?.uid} onOpen={() => {}}>
       <NeedsYouBar />
       <SupervisorMobileApp
         projects={projectLibrary.filter((p) => {
@@ -3010,7 +3010,7 @@ export default function App() {
   console.log("App render returned JSX!");
   return (
     <PageHeaderProvider route={activeTab}>
-      <NotifyProvider email={currentUserAuth?.email} onOpen={openNoteTarget}>
+      <NotifyProvider email={currentUserAuth?.email} uid={currentUserAuth?.uid} onOpen={openNoteTarget}>
       <NeedsYouBar />
       <div className={`min-h-screen overflow-x-hidden relative ${isProjectTab && hasProjectData ? "md:h-screen md:overflow-hidden" : ""}`}>
         {/* Global Background Beams with Collision Animation */}

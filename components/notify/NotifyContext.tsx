@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { foldGroups, isOpen, tabCounts, type Stored } from '../../lib/notify';
+import { counted, foldGroups, interrupts, isOpen, tabCounts, type NotifyPrefs, type Stored } from '../../lib/notify';
 import { listenInbox, markDone, markRead, snooze as snoozeNotes, undoDone } from '../../services/inboxService';
+import { cachedPrefs, readPrefs, savePrefs } from '../../services/notifyPrefsService';
+import { chime, inFront, setIconDot, showDesktop } from './notifyChannels';
 
 /*
   THE INBOX, ONCE FOR THE WHOLE APP.
@@ -14,6 +16,11 @@ import { listenInbox, markDone, markRead, snooze as snoozeNotes, undoDone } from
   A note that arrives while the app is open is announced on the window as
   `studiodesk:note`, so a screen that shows the thing itself (People's
   arrivals, the Ops Desk) can reload it at once rather than on its own clock.
+
+  Each person's settings (lib/notify.ts NotifyPrefs) decide what interrupts
+  them and when: the bar, a desktop alert when StudioDesk is not the window
+  in front, a chime. The bell and the badges always get everything, except
+  on-time check-ins for someone who asked for only late and from home.
 */
 
 export const NOTE_EVENT = 'studiodesk:note';
@@ -43,6 +50,11 @@ interface InboxState {
   readAll: () => void;
   /** Close the bar on a note without doing it; it stays in the bell. */
   dismiss: (id: string) => void;
+  /** This person's settings, and saving a change to them (on every device). */
+  prefs: NotifyPrefs;
+  setPrefs: (p: NotifyPrefs) => void;
+  /** Every open "needs you" note, oldest first: the Ops Desk's waiting queue. */
+  waiting: Stored[];
 }
 
 const Ctx = createContext<InboxState | null>(null);
@@ -50,8 +62,14 @@ const Ctx = createContext<InboxState | null>(null);
 /** The inbox, or nothing when there is no signed-in studio member (the client portal, the login screen). */
 export const useInbox = () => useContext(Ctx);
 
-export const NotifyProvider: React.FC<{ email: string | null | undefined; onOpen: (n: Stored) => void; children: React.ReactNode }> =
-  ({ email, onOpen, children }) => {
+export const NotifyProvider: React.FC<{ email: string | null | undefined; uid?: string | null; onOpen: (n: Stored) => void; children: React.ReactNode }> =
+  ({ email, uid, onOpen, children }) => {
+    const [prefs, setPrefsState] = useState<NotifyPrefs>(() => cachedPrefs(uid));
+    const prefsRef = useRef(prefs);
+    prefsRef.current = prefs;
+    useEffect(() => { let alive = true; readPrefs(uid).then((p) => { if (alive) setPrefsState(p); }); return () => { alive = false; }; }, [uid]);
+    const setPrefs = useCallback((p: NotifyPrefs) => { setPrefsState(p); savePrefs(uid, p).catch(() => {}); }, [uid]);
+    const openNoteRef = useRef<(n: Stored) => void>(() => {});
     const [notes, setNotes] = useState<Stored[]>([]);
     const [ready, setReady] = useState(false);
     const [arrivedIds, setArrivedIds] = useState<string[]>([]);
@@ -80,9 +98,14 @@ export const NotifyProvider: React.FC<{ email: string | null | undefined; onOpen
         const fresh = list.filter((n) => !seen.has(n.id) && n.at >= openedAt.current).sort((a, b) => a.at - b.at);
         if (!fresh.length) return;
         fresh.forEach((n) => window.dispatchEvent(new CustomEvent(NOTE_EVENT, { detail: n })));
-        setLatest(fresh[fresh.length - 1]);
-        const needs = fresh.filter((n) => n.level === 'needs').map((n) => n.id);
-        if (needs.length) setArrivedIds((ids) => [...needs.reverse(), ...ids].slice(0, 20));
+        const p = prefsRef.current, when = new Date();
+        const shown = fresh.filter((n) => counted(n, p));
+        if (shown.length) setLatest(shown[shown.length - 1]);
+        const bar = fresh.filter((n) => interrupts(n, p, when, 'bar')).map((n) => n.id);
+        if (bar.length) setArrivedIds((ids) => [...bar.reverse(), ...ids].slice(0, 20));
+        /* StudioDesk behind another tab or app: the browser's own alert, which brings it forward. */
+        if (!inFront()) fresh.filter((n) => interrupts(n, p, when, 'desktop')).slice(-3).forEach((n) => showDesktop(n, () => openNoteRef.current(n)));
+        if (fresh.some((n) => interrupts(n, p, when, 'sound'))) chime();
       }, () => setReady(true));
     }, [email]);
 
@@ -92,7 +115,9 @@ export const NotifyProvider: React.FC<{ email: string | null | undefined; onOpen
       return () => window.clearInterval(t);
     }, []);
 
-    const openNotes = useMemo(() => notes.filter((n) => isOpen(n, now)), [notes, now]);
+    /* What this person counts and lists (their check-in setting); the rest stays stored, untouched. */
+    const visible = useMemo(() => notes.filter((n) => counted(n, prefs)), [notes, prefs]);
+    const openNotes = useMemo(() => visible.filter((n) => isOpen(n, now)), [visible, now]);
     const unread = useMemo(() => openNotes.filter((n) => !n.readAt).length, [openNotes]);
 
     /* "(3) StudioDesk" in the browser tab, so a count shows from another tab. */
@@ -102,6 +127,9 @@ export const NotifyProvider: React.FC<{ email: string | null | undefined; onOpen
       document.title = unread ? `(${unread}) ${baseTitle.current}` : baseTitle.current;
     }, [unread]);
     useEffect(() => () => { if (baseTitle.current) document.title = baseTitle.current; }, []);
+    /* And a rose dot on the tab's icon. */
+    useEffect(() => { setIconDot(unread > 0); }, [unread > 0]);
+    useEffect(() => () => { setIconDot(false); }, []);
 
     const done_ = useCallback((ids: string[]) => {
       setNotes((ns) => ns.map((n) => (ids.includes(n.id) ? { ...n, doneAt: Date.now(), readAt: n.readAt || Date.now() } : n)));
@@ -123,6 +151,7 @@ export const NotifyProvider: React.FC<{ email: string | null | undefined; onOpen
     }, [email, notes]);
     const readAll = useCallback(() => read(openNotes.filter((n) => !n.readAt).map((n) => n.id)), [openNotes, read]);
     const openNote = useCallback((n: Stored) => { read([n.id]); setDismissed((d) => [...d, n.id]); openRef.current(n); }, [read]);
+    openNoteRef.current = openNote;
     const dismiss = useCallback((id: string) => setDismissed((d) => [...d, id]), []);
 
     const value = useMemo<InboxState>(() => {
@@ -139,16 +168,18 @@ export const NotifyProvider: React.FC<{ email: string | null | undefined; onOpen
         .filter((n): n is Stored => !!n && isOpen(n, now) && !dismissed.includes(n.id));
       return {
         ready,
-        open: foldGroups(notes, now),
-        done: notes.filter((n) => n.doneAt).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)),
+        open: foldGroups(visible, now),
+        done: visible.filter((n) => n.doneAt).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)),
         unread,
-        byTab: tabCounts(notes, now),
+        byTab: tabCounts(visible, now),
         forProject: (id) => (id && byProject.get(id)) || {},
         arrivals,
         latest,
         openNote, done_, undo, snooze, read, readAll, dismiss,
+        prefs, setPrefs,
+        waiting: openNotes.filter((n) => n.level === 'needs').sort((a, b) => a.at - b.at),
       };
-    }, [notes, openNotes, now, unread, ready, arrivedIds, dismissed, latest, openNote, done_, undo, snooze, read, readAll, dismiss]);
+    }, [notes, visible, openNotes, now, unread, ready, arrivedIds, dismissed, latest, openNote, done_, undo, snooze, read, readAll, dismiss, prefs, setPrefs]);
 
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
   };

@@ -231,7 +231,9 @@ service cloud.firestore {
       allow update: if isSuperAdmin() ||
         (isAuthenticated() && request.auth.uid == userId &&
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['mustChangePassword', 'updatedAt', 'displayName', 'lastSeenAt', 'email', 'lastProjectTabs', 'attentionState']));
+           .hasOnly(['mustChangePassword', 'updatedAt', 'displayName', 'lastSeenAt', 'email', 'lastProjectTabs', 'attentionState', 'notifyPrefs'])
+         /* What interrupts them (lib/notify.ts NotifyPrefs): their own choice, kept small. */
+         && (!('notifyPrefs' in request.resource.data) || (request.resource.data.notifyPrefs is map && request.resource.data.notifyPrefs.size() <= 8)));
         /*
           There used to be a third branch here letting any non-client write
           their own `role`, so the studio sign-in could copy it from the team

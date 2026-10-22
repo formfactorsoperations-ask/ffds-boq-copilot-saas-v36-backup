@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ALWAYS_KINDS, DEFAULT_PREFS, cleanPrefs, counted, interrupts, isQuiet,
   approversOf, clientActionDraft, escalationDraft, foldGroups, foldedTitle, initialsOf, isOpen, leadDraft,
   peopleDrafts, resolveAudience, reviewDraft, siteDraft, stamp, tabCounts, type Stored,
 } from '../../lib/notify';
@@ -89,6 +90,7 @@ describe('People', () => {
     const [d] = peopleDrafts({ action: 'checkin', session }, { actor: people[3], employee: people[3], people, timezone: tz, late: true });
     expect(d).toMatchObject({ level: 'update', group: 'checkin:2026-10-22', title: 'Riya Test checked in late', route: 'people' });
     expect(d.line).toBe('10:31 AM · from home');
+    expect(d.tags).toEqual(['late', 'home']);
     expect(d.to.emails).toEqual(['lead@ff.in']);
   });
 
@@ -162,5 +164,57 @@ describe('in the app', () => {
     expect(initialsOf('Mr Prasad Naik')).toBe('PN');
     expect(initialsOf('Riya')).toBe('R');
     expect(initialsOf('')).toBe('S');
+  });
+});
+
+describe('each person\'s settings', () => {
+  const at = (iso: string) => new Date(iso);
+  const needs = { kind: 'client.message', level: 'needs' as const, area: 'clients' as const };
+
+  it('fills in anything missing or wrong, with quiet nights and no sound by default', () => {
+    expect(cleanPrefs(undefined)).toEqual(DEFAULT_PREFS);
+    const p = cleanPrefs({ bar: { team: false, clients: 'no' }, sound: 'yes', quiet: 'always', checkins: 'exceptions' });
+    expect(p.bar.team).toBe(false);
+    expect(p.bar.clients).toBe(true);
+    expect(p.sound).toBe(false);
+    expect(p.quiet).toBe('night');
+    expect(p.checkins).toBe('exceptions');
+  });
+
+  it('keeps quiet from 8 PM to 8 AM, and at weekends when asked', () => {
+    const night = { quiet: 'night' as const };
+    expect(isQuiet(night, at('2026-10-22T19:59:00'))).toBe(false);
+    expect(isQuiet(night, at('2026-10-22T20:00:00'))).toBe(true);
+    expect(isQuiet(night, at('2026-10-23T07:59:00'))).toBe(true);
+    expect(isQuiet(night, at('2026-10-24T11:00:00'))).toBe(false);
+    expect(isQuiet({ quiet: 'nightAndWeekend' }, at('2026-10-24T11:00:00'))).toBe(true);
+    expect(isQuiet({ quiet: 'off' }, at('2026-10-22T23:00:00'))).toBe(false);
+  });
+
+  it('only "needs you" interrupts, and quiet hours hold it back', () => {
+    const day = at('2026-10-22T11:00:00'), night = at('2026-10-22T22:00:00');
+    expect(interrupts(needs, DEFAULT_PREFS, day, 'bar')).toBe(true);
+    expect(interrupts({ ...needs, level: 'update' }, DEFAULT_PREFS, day, 'bar')).toBe(false);
+    expect(interrupts(needs, DEFAULT_PREFS, night, 'bar')).toBe(false);
+    expect(interrupts(needs, DEFAULT_PREFS, day, 'sound')).toBe(false);
+    expect(interrupts(needs, { ...DEFAULT_PREFS, sound: true }, day, 'sound')).toBe(true);
+    expect(interrupts(needs, { ...DEFAULT_PREFS, desktop: { ...DEFAULT_PREFS.desktop, clients: false } }, day, 'desktop')).toBe(false);
+  });
+
+  it('a blocked site and a dispute always get through, at night and with the kind switched off', () => {
+    expect([...ALWAYS_KINDS].sort()).toEqual(['client.dispute', 'site.blocker']);
+    const off = { ...DEFAULT_PREFS, bar: { ...DEFAULT_PREFS.bar, site: false } };
+    expect(interrupts({ kind: 'site.blocker', level: 'needs', area: 'site' }, off, at('2026-10-22T23:30:00'), 'bar')).toBe(true);
+    expect(interrupts({ kind: 'site.blocker', level: 'needs', area: 'site' }, off, at('2026-10-22T23:30:00'), 'sound')).toBe(false);
+  });
+
+  it('with "only late and from home", an on-time check-in at the office does not count', () => {
+    const only = { checkins: 'exceptions' as const };
+    expect(counted({ kind: 'people.checkin', tags: [] }, only)).toBe(false);
+    expect(counted({ kind: 'people.checkin' }, only)).toBe(false);
+    expect(counted({ kind: 'people.checkin', tags: ['late'] }, only)).toBe(true);
+    expect(counted({ kind: 'people.checkin', tags: ['home'] }, only)).toBe(true);
+    expect(counted({ kind: 'people.leave' }, only)).toBe(true);
+    expect(counted({ kind: 'people.checkin', tags: [] }, { checkins: 'all' })).toBe(true);
   });
 });

@@ -34,6 +34,7 @@ beforeEach(async () => {
     const db = ctx.firestore();
     await setDoc(doc(db, 'inbox/riya@ff.in/notes/n1'), note());
     await setDoc(doc(db, 'inbox/meera@ff.in/notes/n2'), note());
+    await setDoc(doc(db, 'users/riya'), { email: 'riya@ff.in', tenantId: 'studio_a', role: 'Client Relations' });
   });
 });
 
@@ -78,5 +79,19 @@ describe('a person\'s inbox', () => {
     await assertFails(setDoc(doc(db, 'inbox/riya@ff.in/notes/mine'), note()));
     await assertFails(setDoc(doc(db, 'inbox/meera@ff.in/notes/forged'), note({ title: 'Approve this' })));
     await assertFails(deleteDoc(doc(db, 'inbox/riya@ff.in/notes/n1')));
+  });
+});
+
+describe('a person\'s settings', () => {
+  const prefs = { bar: { clients: true, team: false }, desktop: { clients: true }, sound: true, quiet: 'night', checkins: 'exceptions' };
+
+  it('are theirs to save, on their own profile', async () => {
+    await assertSucceeds(updateDoc(doc(as('riya', 'riya@ff.in'), 'users/riya'), { notifyPrefs: prefs, updatedAt: 1 }));
+  });
+
+  it('cannot be saved for somebody else, or carry a role in with them', async () => {
+    await assertFails(updateDoc(doc(as('meera', 'meera@ff.in'), 'users/riya'), { notifyPrefs: prefs }));
+    await assertFails(updateDoc(doc(as('riya', 'riya@ff.in'), 'users/riya'), { notifyPrefs: prefs, role: 'Admin' }));
+    await assertFails(updateDoc(doc(as('riya', 'riya@ff.in'), 'users/riya'), { notifyPrefs: 'everything' }));
   });
 });

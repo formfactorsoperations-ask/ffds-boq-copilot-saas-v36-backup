@@ -38,9 +38,10 @@ const KIND: Record<string, { icon: React.ComponentType<any>; tone: RingTone }> =
 };
 export const kindOf = (n: Pick<Stored, 'kind'>) => KIND[n.kind] || { icon: Sparkles, tone: 'brand' as RingTone };
 /** A late check-in reads amber, whatever its kind says. */
-export const toneOf = (n: Pick<Stored, 'kind' | 'title'>): RingTone => (n.kind === 'people.checkin' && /\blate$/.test(n.title) ? 'warn' : kindOf(n).tone);
+export const toneOf = (n: Pick<Stored, 'kind' | 'title' | 'tags'>): RingTone =>
+  (n.kind === 'people.checkin' && ((n.tags || []).includes('late') || /\blate$/.test(n.title)) ? 'warn' : kindOf(n).tone);
 
-export const NoteTile: React.FC<{ note: Pick<Stored, 'kind' | 'title'>; size?: 'sm' | 'md' | 'lg' }> = ({ note, size = 'md' }) =>
+export const NoteTile: React.FC<{ note: Pick<Stored, 'kind' | 'title' | 'tags'>; size?: 'sm' | 'md' | 'lg' }> = ({ note, size = 'md' }) =>
   <IconTile icon={kindOf(note).icon} tone={toneOf(note)} size={size} />;
 
 /** "just now", "4 min", "2 h", "Tue". */

@@ -64,6 +64,8 @@ export interface Note {
   initials: string;
   /** Notes with the same group arriving together are shown as one ("4 people checked in"). */
   group: string | null;
+  /** Small facts a person's settings can filter on: a check-in that was "late" or from "home". */
+  tags?: string[];
   at: number;
   readAt: number | null;
   doneAt: number | null;
@@ -183,7 +185,8 @@ export function peopleDrafts(
   const s = e.session, r = e.request;
   if (e.action === 'checkin' && s) {
     const where = s.mode === 'Site' && s.site ? `at ${clip(s.site, 40)}` : MODE_LINE[s.mode] || '';
-    return [{ ...base, kind: 'people.checkin', level: 'update', title: p.late ? `${name} checked in late` : `${name} checked in`, line: `${clock12(s.checkIn, p.timezone)} · ${where}`, action: null, actor: name, group: `checkin:${s.date}`, to: { emails: approvers } }];
+    const tags = [p.late ? 'late' : '', s.mode === 'WFH' ? 'home' : ''].filter(Boolean);
+    return [{ ...base, kind: 'people.checkin', level: 'update', title: p.late ? `${name} checked in late` : `${name} checked in`, line: `${clock12(s.checkIn, p.timezone)} · ${where}`, action: null, actor: name, group: `checkin:${s.date}`, tags, to: { emails: approvers } }];
   }
   if (e.action === 'checkout' && s?.checkOut) {
     return [{ ...base, kind: 'people.checkout', level: 'update', title: `${name} checked out`, line: `${clock12(s.checkOut, p.timezone)} · ${hoursBetween(s.checkIn, s.checkOut)} today`, action: null, actor: name, group: `checkout:${s.date}`, to: { emails: approvers } }];
@@ -336,4 +339,63 @@ export function tabCounts(notes: Note[], now = Date.now()): Record<string, { nee
     else if (!n.readAt) c.unread++;
   }
   return out;
+}
+
+/* ── Each person's settings: what interrupts them, and when ──────────────── */
+
+export type QuietHours = 'off' | 'night' | 'nightAndWeekend';
+export interface NotifyPrefs {
+  /** The bar at the bottom, by kind. The bell and the badges always get everything. */
+  bar: Record<NoteArea, boolean>;
+  /** A desktop alert when StudioDesk is not the window in front, by kind. */
+  desktop: Record<NoteArea, boolean>;
+  /** A soft chime with the bar. Off unless the person turns it on. */
+  sound: boolean;
+  /** No bar, alert or chime from 8 PM to 8 AM (and at weekends); the counts still change. */
+  quiet: QuietHours;
+  /** Every check-in, or only the late ones and those from home. */
+  checkins: 'all' | 'exceptions';
+}
+
+const AREAS: NoteArea[] = ['clients', 'team', 'design', 'site', 'money'];
+const allOn = () => Object.fromEntries(AREAS.map((a) => [a, true])) as Record<NoteArea, boolean>;
+export const DEFAULT_PREFS: NotifyPrefs = { bar: allOn(), desktop: allOn(), sound: false, quiet: 'night', checkins: 'all' };
+
+/** What always gets through, whatever the settings and the hour: a blocked site and a client's dispute. */
+export const ALWAYS_KINDS = new Set(['site.blocker', 'client.dispute']);
+
+/** Settings as stored (or missing, or from an older version), made whole. */
+export function cleanPrefs(raw: any): NotifyPrefs {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const flags = (v: any) => Object.fromEntries(AREAS.map((a) => [a, v && typeof v[a] === 'boolean' ? v[a] : true])) as Record<NoteArea, boolean>;
+  return {
+    bar: flags(r.bar),
+    desktop: flags(r.desktop),
+    sound: r.sound === true,
+    quiet: r.quiet === 'off' || r.quiet === 'nightAndWeekend' ? r.quiet : 'night',
+    checkins: r.checkins === 'exceptions' ? 'exceptions' : 'all',
+  };
+}
+
+/** Quiet hours are 8 PM to 8 AM in the person's own time; with weekends, Saturday and Sunday all day too. */
+export function isQuiet(prefs: Pick<NotifyPrefs, 'quiet'>, when: Date): boolean {
+  if (prefs.quiet === 'off') return false;
+  const h = when.getHours();
+  if (h >= 20 || h < 8) return true;
+  return prefs.quiet === 'nightAndWeekend' && (when.getDay() === 0 || when.getDay() === 6);
+}
+
+/** Whether a note may interrupt through this channel now. Only "needs you" ever interrupts. */
+export function interrupts(n: Pick<Note, 'kind' | 'level' | 'area'>, prefs: NotifyPrefs, when: Date, channel: 'bar' | 'desktop' | 'sound'): boolean {
+  if (n.level !== 'needs') return false;
+  if (channel === 'sound' && !prefs.sound) return false;
+  if (ALWAYS_KINDS.has(n.kind)) return true;
+  if (isQuiet(prefs, when)) return false;
+  return channel === 'desktop' ? prefs.desktop[n.area] !== false : prefs.bar[n.area] !== false;
+}
+
+/** Whether a note counts and lists at all: with "only late and from home", an on-time check-in at the office does not. */
+export function counted(n: Pick<Note, 'kind' | 'tags'>, prefs: Pick<NotifyPrefs, 'checkins'>): boolean {
+  if (n.kind !== 'people.checkin' || prefs.checkins === 'all') return true;
+  return (n.tags || []).some((t) => t === 'late' || t === 'home');
 }

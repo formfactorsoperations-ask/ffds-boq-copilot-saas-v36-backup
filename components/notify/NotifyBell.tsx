@@ -1,11 +1,18 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Check, RotateCcw } from '@/lib/lucide-shim';
+import { Check, Monitor, RotateCcw, SlidersHorizontal, X } from '@/lib/lucide-shim';
 import { type Stored } from '../../lib/notify';
 import { DoneTick, Glide, EASE } from '../people/PeopleBits';
 import { useInbox, useNoteArrivals, type Folded } from './NotifyContext';
 import { AlarmClock, BellGlyph, Count, Faces, NoteTile, SNOOZES, ago, titleOf } from './NotifyBits';
+import NotifySettings from './NotifySettings';
+import { askDesktop, desktopPermission } from './notifyChannels';
+
+/* The offer of desktop alerts, once per browser until it is answered. */
+const OFFER_KEY = 'studiodesk.desktopOffer';
+const offered = () => { try { return window.localStorage.getItem(OFFER_KEY) === 'done'; } catch { return true; } };
+const markOffered = () => { try { window.localStorage.setItem(OFFER_KEY, 'done'); } catch { /* private window */ } };
 
 /*
   THE BELL: the one list of everything that reached you.
@@ -110,6 +117,8 @@ export default function NotifyBell({ className = '' }: { className?: string }) {
   const [view, setView] = useState<View>('inbox');
   const [ringing, setRinging] = useState(false);
   const [at, setAt] = useState<{ top: number; right: number } | null>(null);
+  const [settings, setSettings] = useState(false);
+  const [offer, setOffer] = useState(() => desktopPermission() === 'default' && !offered());
   const btn = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
 
@@ -179,6 +188,15 @@ export default function NotifyBell({ className = '' }: { className?: string }) {
           </div>
 
           <div className="flex-1 overflow-y-auto">
+            {offer && view === 'inbox' && (
+              <div className="hud-row-in mx-3 mt-3 rounded-2xl border border-[#3D52A0]/20 bg-[#3D52A0]/5 px-3 py-2.5 flex items-center gap-3">
+                <Monitor className="w-4 h-4 text-[#3D52A0] shrink-0" />
+                <p className="flex-1 text-xs text-slate-600">Get an alert on your computer when someone is waiting on you and StudioDesk is in another tab.</p>
+                <button type="button" onClick={async () => { await askDesktop(); markOffered(); setOffer(false); }}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486]">Turn on</button>
+                <button type="button" aria-label="Not now" title="Not now" onClick={() => { markOffered(); setOffer(false); }} className="shrink-0 p-1 rounded-lg text-slate-400 hover:text-slate-700"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            )}
             {!list.length ? (
               <div className="px-6 py-10 flex flex-col items-center text-center gap-2">
                 <DoneTick size={44} />
@@ -199,12 +217,15 @@ export default function NotifyBell({ className = '' }: { className?: string }) {
             )}
           </div>
 
-          <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 text-[11px] text-slate-500">
-            Each note also counts on its tab. Someone waiting on you shows in red.
+          <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
+            <span className="text-[11px] text-slate-500">Someone waiting on you shows in red, on the bell and the tab.</span>
+            <button type="button" onClick={() => { setOpen(false); setSettings(true); }}
+              className="shrink-0 inline-flex items-center gap-1.5 text-xs font-bold text-[#3D52A0] hover:underline"><SlidersHorizontal className="w-3.5 h-3.5" />What reaches you</button>
           </div>
         </motion.div>,
         document.body,
       )}
+      {settings && <NotifySettings onClose={() => setSettings(false)} />}
     </>
   );
 }
