@@ -3,6 +3,7 @@ import { counted, foldGroups, interrupts, isOpen, tabCounts, type NotifyPrefs, t
 import { listenInbox, markDone, markRead, snooze as snoozeNotes, undoDone } from '../../services/inboxService';
 import { cachedPrefs, readPrefs, savePrefs } from '../../services/notifyPrefsService';
 import { chime, inFront, setIconDot, showDesktop } from './notifyChannels';
+import { onPhoneTap, refreshPhone } from './notifyPush';
 
 /*
   THE INBOX, ONCE FOR THE WHOLE APP.
@@ -21,13 +22,26 @@ import { chime, inFront, setIconDot, showDesktop } from './notifyChannels';
   them and when: the bar, a desktop alert when StudioDesk is not the window
   in front, a chime. The bell and the badges always get everything, except
   on-time check-ins for someone who asked for only late and from home.
+
+  The same provider serves a client in their portal ("New for you"): only
+  the box differs (lib/notify.ts staffBox, clientBox). A phone notification
+  that is tapped opens its note here, from the worker's message or from
+  ?note= when it opened StudioDesk fresh (notifyPush.ts).
 */
 
 export const NOTE_EVENT = 'studiodesk:note';
+/** In the client portal, a note asks the portal to open its tab (detail: the note's route). */
+export const PORTAL_OPEN_EVENT = 'studiodesk:portal-open';
 export type Folded = ReturnType<typeof foldGroups>[number];
+
+export type InboxAudience = 'studio' | 'client';
 
 interface InboxState {
   ready: boolean;
+  /** Where these notes live (inbox/{email} or portalInbox/{uid}), for phone notifications on this device. */
+  box: string | null;
+  /** A studio member, or a client in their portal: the client sees fewer settings. */
+  audience: InboxAudience;
   /** Open notes, newest first, with bursts folded ("4 people checked in"). */
   open: Folded[];
   /** Notes marked done, newest first. */
@@ -59,16 +73,19 @@ interface InboxState {
 
 const Ctx = createContext<InboxState | null>(null);
 
-/** The inbox, or nothing when there is no signed-in studio member (the client portal, the login screen). */
+/** The inbox, or nothing when nobody is signed in (the login screen, a shared link). */
 export const useInbox = () => useContext(Ctx);
 
-export const NotifyProvider: React.FC<{ email: string | null | undefined; uid?: string | null; onOpen: (n: Stored) => void; children: React.ReactNode }> =
-  ({ email, uid, onOpen, children }) => {
-    const [prefs, setPrefsState] = useState<NotifyPrefs>(() => cachedPrefs(uid));
+export const NotifyProvider: React.FC<{ box: string | null | undefined; audience?: InboxAudience; onOpen: (n: Stored) => void; children: React.ReactNode }> =
+  ({ box: rawBox, audience = 'studio', onOpen, children }) => {
+    const box = rawBox || null;
+    const [prefs, setPrefsState] = useState<NotifyPrefs>(() => cachedPrefs(box));
     const prefsRef = useRef(prefs);
     prefsRef.current = prefs;
-    useEffect(() => { let alive = true; readPrefs(uid).then((p) => { if (alive) setPrefsState(p); }); return () => { alive = false; }; }, [uid]);
-    const setPrefs = useCallback((p: NotifyPrefs) => { setPrefsState(p); savePrefs(uid, p).catch(() => {}); }, [uid]);
+    useEffect(() => { let alive = true; readPrefs(box).then((p) => { if (alive) setPrefsState(p); }); return () => { alive = false; }; }, [box]);
+    const setPrefs = useCallback((p: NotifyPrefs) => { setPrefsState(p); savePrefs(box, p).catch(() => {}); }, [box]);
+    /* The browser may have changed this device's push token since the last visit. */
+    useEffect(() => { refreshPhone(box); }, [box]);
     const openNoteRef = useRef<(n: Stored) => void>(() => {});
     const [notes, setNotes] = useState<Stored[]>([]);
     const [ready, setReady] = useState(false);
@@ -87,8 +104,8 @@ export const NotifyProvider: React.FC<{ email: string | null | undefined; uid?: 
     useEffect(() => {
       known.current = null;
       setNotes([]); setReady(false); setArrivedIds([]); setLatest(null);
-      if (!email) return;
-      return listenInbox(email, (list) => {
+      if (!box) return;
+      return listenInbox(box, (list) => {
         const seen = known.current;
         known.current = new Set(list.map((n) => n.id));
         setNotes(list);
@@ -107,7 +124,7 @@ export const NotifyProvider: React.FC<{ email: string | null | undefined; uid?: 
         if (!inFront()) fresh.filter((n) => interrupts(n, p, when, 'desktop')).slice(-3).forEach((n) => showDesktop(n, () => openNoteRef.current(n)));
         if (fresh.some((n) => interrupts(n, p, when, 'sound'))) chime();
       }, () => setReady(true));
-    }, [email]);
+    }, [box]);
 
     /* A snooze ends by itself: look again every minute. */
     useEffect(() => {
@@ -133,25 +150,42 @@ export const NotifyProvider: React.FC<{ email: string | null | undefined; uid?: 
 
     const done_ = useCallback((ids: string[]) => {
       setNotes((ns) => ns.map((n) => (ids.includes(n.id) ? { ...n, doneAt: Date.now(), readAt: n.readAt || Date.now() } : n)));
-      markDone(email, ids).catch(() => {});
-    }, [email]);
+      markDone(box, ids).catch(() => {});
+    }, [box]);
     const undo = useCallback((ids: string[]) => {
       setNotes((ns) => ns.map((n) => (ids.includes(n.id) ? { ...n, doneAt: null, snoozedUntil: null } : n)));
-      undoDone(email, ids).catch(() => {});
-    }, [email]);
+      undoDone(box, ids).catch(() => {});
+    }, [box]);
     const snooze = useCallback((ids: string[], until: number) => {
       setNotes((ns) => ns.map((n) => (ids.includes(n.id) ? { ...n, snoozedUntil: until, readAt: n.readAt || Date.now() } : n)));
-      snoozeNotes(email, ids, until).catch(() => {});
-    }, [email]);
+      snoozeNotes(box, ids, until).catch(() => {});
+    }, [box]);
     const read = useCallback((ids: string[]) => {
       const fresh = ids.filter((id) => notes.find((n) => n.id === id && !n.readAt));
       if (!fresh.length) return;
       setNotes((ns) => ns.map((n) => (fresh.includes(n.id) ? { ...n, readAt: Date.now() } : n)));
-      markRead(email, fresh).catch(() => {});
-    }, [email, notes]);
+      markRead(box, fresh).catch(() => {});
+    }, [box, notes]);
     const readAll = useCallback(() => read(openNotes.filter((n) => !n.readAt).map((n) => n.id)), [openNotes, read]);
     const openNote = useCallback((n: Stored) => { read([n.id]); setDismissed((d) => [...d, n.id]); openRef.current(n); }, [read]);
     openNoteRef.current = openNote;
+
+    /* A tapped phone notification: from the worker while StudioDesk is open, or ?note= when it opened it. */
+    const [wanted, setWanted] = useState<string | null>(() => {
+      try { return new URLSearchParams(window.location.search).get('note'); } catch { return null; }
+    });
+    useEffect(() => onPhoneTap((id) => setWanted(id)), []);
+    useEffect(() => {
+      if (!wanted || !ready) return;
+      const n = notes.find((x) => x.id === wanted);
+      setWanted(null);
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('note')) { url.searchParams.delete('note'); window.history.replaceState(window.history.state, '', url.toString()); }
+      } catch { /* leave the address as it is */ }
+      if (n) openNote(n);
+    }, [wanted, ready, notes, openNote]);
+
     const dismiss = useCallback((id: string) => setDismissed((d) => [...d, id]), []);
 
     const value = useMemo<InboxState>(() => {
@@ -168,6 +202,8 @@ export const NotifyProvider: React.FC<{ email: string | null | undefined; uid?: 
         .filter((n): n is Stored => !!n && isOpen(n, now) && !dismissed.includes(n.id));
       return {
         ready,
+        box,
+        audience,
         open: foldGroups(visible, now),
         done: visible.filter((n) => n.doneAt).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)),
         unread,
@@ -179,7 +215,7 @@ export const NotifyProvider: React.FC<{ email: string | null | undefined; uid?: 
         prefs, setPrefs,
         waiting: openNotes.filter((n) => n.level === 'needs').sort((a, b) => a.at - b.at),
       };
-    }, [notes, visible, openNotes, now, unread, ready, arrivedIds, dismissed, latest, openNote, done_, undo, snooze, read, readAll, dismiss, prefs, setPrefs]);
+    }, [box, audience, notes, visible, openNotes, now, unread, ready, arrivedIds, dismissed, latest, openNote, done_, undo, snooze, read, readAll, dismiss, prefs, setPrefs]);
 
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
   };

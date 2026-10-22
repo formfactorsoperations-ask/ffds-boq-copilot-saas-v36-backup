@@ -21,7 +21,23 @@ vi.mock('../../services/inboxService', () => ({
   markDone: h.done, markRead: h.read, snooze: h.snooze, undoDone: h.undo,
 }));
 
+const phone = vi.hoisted(() => ({
+  state: 'off' as string,
+  on: vi.fn(async () => 'on'),
+  off: vi.fn(async () => 'off'),
+  tap: null as null | ((id: string) => void),
+}));
+vi.mock('../../components/notify/notifyPush', () => ({
+  phoneState: async () => phone.state,
+  turnPhoneOn: phone.on,
+  turnPhoneOff: phone.off,
+  refreshPhone: async () => {},
+  platformName: () => 'Android · Chrome',
+  onPhoneTap: (fn: (id: string) => void) => { phone.tap = fn; return () => { phone.tap = null; }; },
+}));
+
 import { NotifyProvider, NOTE_EVENT, useInbox } from '../../components/notify/NotifyContext';
+import CatchUp, { awaySummary, sinceAway } from '../../components/notify/CatchUp';
 import NotifyBell from '../../components/notify/NotifyBell';
 import NeedsYouBar from '../../components/notify/NeedsYouBar';
 import NotifySettings from '../../components/notify/NotifySettings';
@@ -41,7 +57,7 @@ const Tabs = () => {
 
 function setup(onOpen = vi.fn()) {
   render(
-    <NotifyProvider email="riya@ff.in" onOpen={onOpen}>
+    <NotifyProvider box="inbox/riya@ff.in" onOpen={onOpen}>
       <NotifyBell />
       <NeedsYouBar />
       <Tabs />
@@ -51,7 +67,7 @@ function setup(onOpen = vi.fn()) {
 }
 const serve = (notes: Stored[]) => act(() => { h.push!(notes); });
 
-beforeEach(() => { Object.values(h).forEach((f: any) => f?.mockClear?.()); h.prefs = { ...DEFAULT_PREFS, quiet: 'off' } as NotifyPrefs; document.title = 'StudioDesk'; });
+beforeEach(() => { Object.values(h).forEach((f: any) => f?.mockClear?.()); phone.state = 'off'; phone.on.mockClear(); phone.off.mockClear(); try { window.localStorage.clear(); } catch { /* none */ } window.history.replaceState(null, '', '/'); h.prefs = { ...DEFAULT_PREFS, quiet: 'off' } as NotifyPrefs; document.title = 'StudioDesk'; });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('notifications in the app', () => {
@@ -91,7 +107,7 @@ describe('notifications in the app', () => {
     serve([note('x')]);
     fireEvent.click(within(screen.getByRole('status')).getByRole('button', { name: 'Reply' }));
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'x', route: 'comms-tracker', projectId: 'p1' }));
-    expect(h.read).toHaveBeenCalledWith('riya@ff.in', ['x']);
+    expect(h.read).toHaveBeenCalledWith('inbox/riya@ff.in', ['x']);
     serve([note('y', { title: 'Site blocked at Harmony 704' }), note('x', { readAt: 1 })]);
     const bar = screen.getByRole('status', { name: 'Needs you: Site blocked at Harmony 704' });
     fireEvent.click(within(bar).getByRole('button', { name: 'Close. It stays in the bell' }));
@@ -109,7 +125,7 @@ describe('notifications in the app', () => {
     expect(within(panel).getByText('3 people checked in')).toBeTruthy();
     const row = within(panel).getByText('Mr Prasad Naik sent you a message').closest('li')!;
     fireEvent.click(within(row as HTMLElement).getByRole('button', { name: 'Mark done' }));
-    expect(h.done).toHaveBeenCalledWith('riya@ff.in', ['m']);
+    expect(h.done).toHaveBeenCalledWith('inbox/riya@ff.in', ['m']);
   });
 });
 
@@ -161,16 +177,16 @@ describe('away from the page, and each person\'s settings', () => {
   });
 
   it('the settings window saves a change at once, for every device', () => {
-    render(<NotifyProvider email="riya@ff.in" uid="u1" onOpen={vi.fn()}><NotifySettings onClose={vi.fn()} /></NotifyProvider>);
+    render(<NotifyProvider box="inbox/riya@ff.in" onOpen={vi.fn()}><NotifySettings onClose={vi.fn()} /></NotifyProvider>);
     fireEvent.click(screen.getByRole('switch', { name: 'Team in the bar' }));
-    expect(h.save).toHaveBeenLastCalledWith('u1', expect.objectContaining({ bar: expect.objectContaining({ team: false, clients: true }) }));
+    expect(h.save).toHaveBeenLastCalledWith('inbox/riya@ff.in', expect.objectContaining({ bar: expect.objectContaining({ team: false, clients: true }) }));
     fireEvent.click(screen.getByRole('radio', { name: 'Nights and weekends' }));
-    expect(h.save).toHaveBeenLastCalledWith('u1', expect.objectContaining({ quiet: 'nightAndWeekend' }));
+    expect(h.save).toHaveBeenLastCalledWith('inbox/riya@ff.in', expect.objectContaining({ quiet: 'nightAndWeekend' }));
     expect(screen.getByText(/Saved\. It holds on every device/)).toBeTruthy();
   });
 
   it('the Ops Desk queue lists who is waiting, oldest first, and turns rose after half an hour', () => {
-    render(<NotifyProvider email="riya@ff.in" onOpen={vi.fn()}><WaitingOnYou /></NotifyProvider>);
+    render(<NotifyProvider box="inbox/riya@ff.in" onOpen={vi.fn()}><WaitingOnYou /></NotifyProvider>);
     const t = Date.now();
     serve([note('new', { at: t - 2 * 60000, title: 'New enquiry from Aditi Joshi', kind: 'lead.new' }), note('old', { at: t - 35 * 60000 }), { ...checkin('c', 'Arjun Rao'), at: t }]);
     const rows = screen.getAllByRole('listitem');
@@ -178,6 +194,81 @@ describe('away from the page, and each person\'s settings', () => {
     expect(within(rows[0]).getByText(/^waiting 3[45]:/).className).toContain('rose');
     expect(within(rows[1]).getByText(/^waiting [12]:/).className).toContain('slate');
     expect(screen.getByText(/2 waiting · longest 3[45]:/)).toBeTruthy();
+  });
+});
+
+describe('step 3: phones, catch-up and the client portal', () => {
+  it('turns phone notifications on for this device, and then lets each kind reach the phone or not', async () => {
+    render(<NotifyProvider box="inbox/riya@ff.in" onOpen={vi.fn()}><NotifySettings onClose={vi.fn()} /></NotifyProvider>);
+    const sw = await screen.findByRole('switch', { name: 'Phone notifications on this device' });
+    expect((screen.getByRole('switch', { name: 'Team on your phone' }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { fireEvent.click(sw); });
+    expect(phone.on).toHaveBeenCalledWith('inbox/riya@ff.in');
+    expect(await screen.findByText('Phone notifications · Android · Chrome')).toBeTruthy();
+    fireEvent.click(screen.getByRole('switch', { name: 'Team on your phone' }));
+    expect(h.save).toHaveBeenLastCalledWith('inbox/riya@ff.in', expect.objectContaining({ phone: expect.objectContaining({ team: false, clients: true }) }));
+  });
+
+  it('says what to do when the phone cannot be turned on yet', async () => {
+    phone.state = 'install';
+    render(<NotifyProvider box="inbox/riya@ff.in" onOpen={vi.fn()}><NotifySettings onClose={vi.fn()} /></NotifyProvider>);
+    expect(await screen.findByText(/add StudioDesk to your Home Screen first/)).toBeTruthy();
+    expect(screen.queryByRole('switch', { name: 'Phone notifications on this device' })).toBeNull();
+  });
+
+  it('a client sees only alerts and phone, not the studio\'s kinds, quiet hours or check-ins', async () => {
+    render(<NotifyProvider box="portalInbox/c1" audience="client" onOpen={vi.fn()}><NotifySettings onClose={vi.fn()} /></NotifyProvider>);
+    expect(screen.getByRole('heading', { name: 'Alerts on this device' })).toBeTruthy();
+    expect(await screen.findByRole('switch', { name: 'Phone notifications on this device' })).toBeTruthy();
+    expect(screen.queryByText('Quiet hours')).toBeNull();
+    expect(screen.queryByText('Check-ins')).toBeNull();
+  });
+
+  it('a tapped phone notification opens its note, from the worker or from ?note=', async () => {
+    window.history.replaceState(null, '', '/?note=b');
+    const onOpen = setup();
+    serve([note('a'), note('b', { title: 'Design meeting moved' })]);
+    await waitFor(() => expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' })));
+    expect(window.location.search).toBe('');
+    act(() => { phone.tap!('a'); });
+    await waitFor(() => expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'a' })));
+  });
+
+  it('back after hours away: says what came in, then deals who is waiting one at a time', async () => {
+    const t = Date.now();
+    window.localStorage.setItem('studiodesk.lastSeen.inbox/riya@ff.in', String(t - 6 * 3600000));
+    const onOpen = vi.fn();
+    render(<NotifyProvider box="inbox/riya@ff.in" onOpen={onOpen}><CatchUp /></NotifyProvider>);
+    /* The first answer can be the cache's, empty; the catch-up waits for the notes to settle. */
+    serve([]);
+    serve([
+      note('m1', { at: t - 3 * 3600000 }),
+      note('m2', { at: t - 2 * 3600000, title: 'New enquiry from Aditi Joshi', kind: 'lead.new' }),
+      { ...checkin('c1', 'Arjun Rao'), at: t - 3600000 },
+      note('old', { at: t - 9 * 3600000, title: 'Before you left' }),
+    ]);
+    const card = await screen.findByRole('dialog', { name: 'While you were away' }, { timeout: 4000 });
+    expect(within(card).getByText(/^3 new since/)).toBeTruthy();
+    expect(within(card).getByText('2 from clients')).toBeTruthy();
+    expect(within(card).getByText('1 from the team')).toBeTruthy();
+    expect(within(card).getByText('Mr Prasad Naik sent you a message')).toBeTruthy();
+    fireEvent.click(within(card).getByRole('button', { name: /Skip/ }));
+    expect(await within(card).findByText('New enquiry from Aditi Joshi')).toBeTruthy();
+    fireEvent.click(within(card).getByRole('button', { name: 'Mark the updates read' }));
+    expect(h.read).toHaveBeenCalledWith('inbox/riya@ff.in', ['c1']);
+    fireEvent.click(within(card).getByRole('button', { name: 'Reply' }));
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'm2' }));
+    expect(screen.queryByRole('dialog', { name: 'While you were away' })).toBeNull();
+  });
+
+  it('does not show for a short break, a first visit, or a single note', () => {
+    const t = Date.now();
+    const two = [note('a', { at: t - 1000 }), note('b', { at: t - 2000 })];
+    expect(sinceAway(two, t - 3600000, t)).toBeNull();
+    expect(sinceAway(two, null, t)).toBeNull();
+    expect(sinceAway([two[0]], t - 5 * 3600000, t)).toBeNull();
+    expect(sinceAway(two, t - 5 * 3600000, t)?.map((n) => n.id)).toEqual(['a', 'b']);
+    expect(awaySummary([{ area: 'clients', level: 'needs' }, { area: 'clients', level: 'update' }], true)).toEqual(['1 waiting for you', '1 update']);
   });
 });
 

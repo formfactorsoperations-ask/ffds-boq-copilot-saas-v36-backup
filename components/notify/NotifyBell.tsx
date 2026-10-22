@@ -191,7 +191,9 @@ export default function NotifyBell({ className = '' }: { className?: string }) {
             {offer && view === 'inbox' && (
               <div className="hud-row-in mx-3 mt-3 rounded-2xl border border-[#3D52A0]/20 bg-[#3D52A0]/5 px-3 py-2.5 flex items-center gap-3">
                 <Monitor className="w-4 h-4 text-[#3D52A0] shrink-0" />
-                <p className="flex-1 text-xs text-slate-600">Get an alert on your computer when someone is waiting on you and StudioDesk is in another tab.</p>
+                <p className="flex-1 text-xs text-slate-600">{inbox.audience === 'client'
+                  ? 'Get an alert on this device when the studio shares something for you and the portal is in another tab.'
+                  : 'Get an alert on your computer when someone is waiting on you and StudioDesk is in another tab.'}</p>
                 <button type="button" onClick={async () => { await askDesktop(); markOffered(); setOffer(false); }}
                   className="shrink-0 px-3 py-1.5 rounded-lg bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486]">Turn on</button>
                 <button type="button" aria-label="Not now" title="Not now" onClick={() => { markOffered(); setOffer(false); }} className="shrink-0 p-1 rounded-lg text-slate-400 hover:text-slate-700"><X className="w-3.5 h-3.5" /></button>
@@ -218,9 +220,9 @@ export default function NotifyBell({ className = '' }: { className?: string }) {
           </div>
 
           <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
-            <span className="text-[11px] text-slate-500">Someone waiting on you shows in red, on the bell and the tab.</span>
+            <span className="text-[11px] text-slate-500">{inbox.audience === 'client' ? 'Anything waiting on you shows in red.' : 'Someone waiting on you shows in red, on the bell and the tab.'}</span>
             <button type="button" onClick={() => { setOpen(false); setSettings(true); }}
-              className="shrink-0 inline-flex items-center gap-1.5 text-xs font-bold text-[#3D52A0] hover:underline"><SlidersHorizontal className="w-3.5 h-3.5" />What reaches you</button>
+              className="shrink-0 inline-flex items-center gap-1.5 text-xs font-bold text-[#3D52A0] hover:underline"><SlidersHorizontal className="w-3.5 h-3.5" />{inbox.audience === 'client' ? 'Alerts on this device' : 'What reaches you'}</button>
           </div>
         </motion.div>,
         document.body,

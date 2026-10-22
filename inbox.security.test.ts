@@ -82,16 +82,57 @@ describe('a person\'s inbox', () => {
   });
 });
 
-describe('a person\'s settings', () => {
-  const prefs = { bar: { clients: true, team: false }, desktop: { clients: true }, sound: true, quiet: 'night', checkins: 'exceptions' };
+describe('a person\'s settings and devices', () => {
+  const prefs = { bar: { clients: true, team: false }, desktop: { clients: true }, phone: { clients: true }, sound: true, quiet: 'night', checkins: 'exceptions' };
 
-  it('are theirs to save, on their own profile', async () => {
-    await assertSucceeds(updateDoc(doc(as('riya', 'riya@ff.in'), 'users/riya'), { notifyPrefs: prefs, updatedAt: 1 }));
+  it('are theirs to save beside their inbox, with their time zone', async () => {
+    await assertSucceeds(setDoc(doc(as('riya', 'riya@ff.in'), 'inbox/riya@ff.in'), { prefs, tz: 'Asia/Kolkata', updatedAt: 1 }, { merge: true }));
+    await assertSucceeds(getDoc(doc(as('riya', 'riya@ff.in'), 'inbox/riya@ff.in')));
   });
 
-  it('cannot be saved for somebody else, or carry a role in with them', async () => {
-    await assertFails(updateDoc(doc(as('meera', 'meera@ff.in'), 'users/riya'), { notifyPrefs: prefs }));
-    await assertFails(updateDoc(doc(as('riya', 'riya@ff.in'), 'users/riya'), { notifyPrefs: prefs, role: 'Admin' }));
-    await assertFails(updateDoc(doc(as('riya', 'riya@ff.in'), 'users/riya'), { notifyPrefs: 'everything' }));
+  it('cannot be saved or read for somebody else, or carry anything but settings', async () => {
+    await assertFails(setDoc(doc(as('meera', 'meera@ff.in'), 'inbox/riya@ff.in'), { prefs }));
+    await assertFails(getDoc(doc(as('meera', 'meera@ff.in'), 'inbox/riya@ff.in')));
+    await assertFails(setDoc(doc(as('riya', 'riya@ff.in'), 'inbox/riya@ff.in'), { prefs, role: 'Admin' }));
+    await assertFails(setDoc(doc(as('riya', 'riya@ff.in'), 'inbox/riya@ff.in'), { prefs: 'everything' }));
+    await assertFails(updateDoc(doc(as('riya', 'riya@ff.in'), 'users/riya'), { notifyPrefs: prefs }));
+  });
+
+  it('a device for phone notifications is theirs to add and remove, and nobody else\'s', async () => {
+    const mine = doc(as('riya', 'riya@ff.in'), 'inbox/riya@ff.in/devices/d1');
+    await assertSucceeds(setDoc(mine, { token: 'fcm-token-abc', platform: 'Android · Chrome', at: 1 }));
+    await assertSucceeds(deleteDoc(mine));
+    await assertFails(setDoc(doc(as('meera', 'meera@ff.in'), 'inbox/riya@ff.in/devices/d2'), { token: 'x', platform: '', at: 1 }));
+    await assertFails(setDoc(doc(as('riya', 'riya@ff.in'), 'inbox/riya@ff.in/devices/d3'), { token: 'x', at: 1, email: 'other@x.com' }));
+    await assertFails(getDocs(collection(as('meera', 'meera@ff.in'), 'inbox/riya@ff.in/devices')));
+  });
+});
+
+describe('a client\'s "New for you"', () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'portalInbox/client1/notes/c1'), note({ kind: 'portal.document', title: 'New for you: a scope revision', route: 'documents' }));
+    });
+  });
+  /* Client logins are password accounts: their address is not verified, and their sign-in is what identifies them. */
+  const client = (uid: string) => env.authenticatedContext(uid, { email: `${uid}@home.in`, email_verified: false }).firestore();
+
+  it('is read and marked by that client only', async () => {
+    await assertSucceeds(getDocs(collection(client('client1'), 'portalInbox/client1/notes')));
+    await assertSucceeds(updateDoc(doc(client('client1'), 'portalInbox/client1/notes/c1'), { readAt: 5, doneAt: 6 }));
+    await assertFails(getDocs(collection(client('client2'), 'portalInbox/client1/notes')));
+    await assertFails(updateDoc(doc(client('client1'), 'portalInbox/client1/notes/c1'), { title: 'Pay now' }));
+  });
+
+  it('keeps that client\'s own settings and phones, and nobody else\'s', async () => {
+    await assertSucceeds(setDoc(doc(client('client1'), 'portalInbox/client1'), { prefs: { phone: { clients: true } }, tz: 'Asia/Kolkata', updatedAt: 1 }, { merge: true }));
+    await assertSucceeds(setDoc(doc(client('client1'), 'portalInbox/client1/devices/d1'), { token: 'fcm-token', platform: 'iPhone · Safari', at: 1 }));
+    await assertFails(setDoc(doc(client('client2'), 'portalInbox/client1/devices/d2'), { token: 'x', platform: '', at: 1 }));
+    await assertFails(setDoc(doc(client('client1'), 'portalInbox/client1'), { prefs: {}, projectIds: ['p9'] }));
+  });
+
+  it('is never written by a browser', async () => {
+    await assertFails(setDoc(doc(client('client1'), 'portalInbox/client1/notes/x'), note()));
+    await assertFails(deleteDoc(doc(client('client1'), 'portalInbox/client1/notes/c1')));
   });
 });

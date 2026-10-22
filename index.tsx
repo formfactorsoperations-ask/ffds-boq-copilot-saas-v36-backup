@@ -200,8 +200,10 @@ class ErrorBoundary extends React.Component<Props, State> {
   sendError, which dereferences the socket it does not have and re-enters
   itself until the stack blows.
 
-  Nothing registers a worker in this app any more, so in dev there is never a
-  legitimate one to keep. Production registration is untouched.
+  In dev nothing registers a worker, so there is never a legitimate one to
+  keep. In production the only one is the notification worker
+  (/firebase-messaging-sw.js, components/notify/notifyPush.ts), registered
+  when someone turns phone notifications on; this does not touch it.
 */
 const isDevEnv = Boolean(typeof import.meta !== 'undefined' && (import.meta as any)?.env?.DEV);
 if (isDevEnv && typeof navigator !== "undefined" && "serviceWorker" in navigator) {

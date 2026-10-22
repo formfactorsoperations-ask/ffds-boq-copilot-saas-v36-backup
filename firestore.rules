@@ -231,9 +231,7 @@ service cloud.firestore {
       allow update: if isSuperAdmin() ||
         (isAuthenticated() && request.auth.uid == userId &&
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['mustChangePassword', 'updatedAt', 'displayName', 'lastSeenAt', 'email', 'lastProjectTabs', 'attentionState', 'notifyPrefs'])
-         /* What interrupts them (lib/notify.ts NotifyPrefs): their own choice, kept small. */
-         && (!('notifyPrefs' in request.resource.data) || (request.resource.data.notifyPrefs is map && request.resource.data.notifyPrefs.size() <= 8)));
+           .hasOnly(['mustChangePassword', 'updatedAt', 'displayName', 'lastSeenAt', 'email', 'lastProjectTabs', 'attentionState']));
         /*
           There used to be a third branch here letting any non-client write
           their own `role`, so the studio sign-in could copy it from the team
@@ -247,12 +245,22 @@ service cloud.firestore {
     /*
       A person's notifications (lib/notify.ts), keyed by the lowercased email
       their studio's team list holds -- the same verified address that admits
-      them to the studio (functions/src/access.ts). Only the server writes a
-      note (functions/src/notify.ts). The person reads their own and may mark
-      one read, done or snoozed, and nothing else: not its words, not who it
-      is from, not where it leads.
+      them to the studio (functions/src/access.ts).
+
+        inbox/{email}                 their settings (what interrupts them,
+                                      quiet hours) and time zone, theirs to
+                                      write; the server reads them to decide
+                                      a phone notification.
+        inbox/{email}/notes/{id}      written only by the server
+                                      (functions/src/notify.ts). They may mark
+                                      one read, done or snoozed, and nothing
+                                      else: not its words, not who it is from,
+                                      not where it leads.
+        inbox/{email}/devices/{id}    the phones and browsers they turned
+                                      phone notifications on for: a push
+                                      token each, theirs to add and remove.
     */
-    match /inbox/{email}/notes/{noteId} {
+    match /inbox/{email} {
       function inboxOwner() {
         return isAuthenticated() && request.auth.token.email is string
           && request.auth.token.email_verified == true
@@ -261,13 +269,71 @@ service cloud.firestore {
       function stampOrNull(v) {
         return v == null || v is int;
       }
+      function settingsOnly() {
+        return request.resource.data.keys().hasOnly(['prefs', 'tz', 'updatedAt'])
+          && (!('prefs' in request.resource.data) || (request.resource.data.prefs is map && request.resource.data.prefs.size() <= 10))
+          && (!('tz' in request.resource.data) || (request.resource.data.tz is string && request.resource.data.tz.size() <= 64));
+      }
       allow read: if inboxOwner();
-      allow update: if inboxOwner()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt', 'doneAt', 'snoozedUntil'])
-        && stampOrNull(request.resource.data.get('readAt', null))
-        && stampOrNull(request.resource.data.get('doneAt', null))
-        && stampOrNull(request.resource.data.get('snoozedUntil', null));
-      allow create, delete: if false;
+      allow create, update: if inboxOwner() && settingsOnly();
+      allow delete: if false;
+
+      match /notes/{noteId} {
+        allow read: if inboxOwner();
+        allow update: if inboxOwner()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt', 'doneAt', 'snoozedUntil'])
+          && stampOrNull(request.resource.data.get('readAt', null))
+          && stampOrNull(request.resource.data.get('doneAt', null))
+          && stampOrNull(request.resource.data.get('snoozedUntil', null));
+        allow create, delete: if false;
+      }
+
+      match /devices/{deviceId} {
+        allow read, delete: if inboxOwner();
+        allow create, update: if inboxOwner()
+          && request.resource.data.keys().hasOnly(['token', 'platform', 'at'])
+          && request.resource.data.token is string && request.resource.data.token.size() <= 4096
+          && request.resource.data.get('platform', '') is string && request.resource.data.get('platform', '').size() <= 120;
+      }
+    }
+
+    /*
+      A client's notifications in their portal ("New for you", lib/notify.ts
+      portalDrafts). Keyed by their sign-in, not their email: a client login is
+      made by createClientLogin with a password, so its address is not
+      verified, and the sign-in itself is what identifies them. Written only by
+      the server (functions/src/portalNotify.ts); they may mark one read, done
+      or snoozed, and keep their own settings.
+    */
+    match /portalInbox/{uid} {
+      function boxOwner() {
+        return isAuthenticated() && request.auth.uid == uid;
+      }
+      allow read: if boxOwner();
+      allow create, update: if boxOwner()
+        && request.resource.data.keys().hasOnly(['prefs', 'tz', 'updatedAt'])
+        && (!('prefs' in request.resource.data) || (request.resource.data.prefs is map && request.resource.data.prefs.size() <= 10))
+        && (!('tz' in request.resource.data) || (request.resource.data.tz is string && request.resource.data.tz.size() <= 64));
+      allow delete: if false;
+
+      match /notes/{noteId} {
+        allow read: if boxOwner();
+        allow update: if boxOwner()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt', 'doneAt', 'snoozedUntil'])
+          && (request.resource.data.get('readAt', null) == null || request.resource.data.get('readAt', null) is int)
+          && (request.resource.data.get('doneAt', null) == null || request.resource.data.get('doneAt', null) is int)
+          && (request.resource.data.get('snoozedUntil', null) == null || request.resource.data.get('snoozedUntil', null) is int);
+        allow create, delete: if false;
+      }
+
+      /* The devices they turned phone notifications on for, as for the studio. */
+      match /devices/{deviceId} {
+        allow read, delete: if boxOwner();
+        allow create, update: if boxOwner()
+          && request.resource.data.keys().hasOnly(['token', 'platform', 'at'])
+          && request.resource.data.token is string && request.resource.data.token.size() <= 4096
+          && request.resource.data.get('platform', '') is string && request.resource.data.get('platform', '').size() <= 120;
+      }
     }
 
     match /organizations/{orgId} {

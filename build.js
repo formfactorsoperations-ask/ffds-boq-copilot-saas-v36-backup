@@ -42,6 +42,8 @@ const clientEnv = {
 const PUBLIC_CLIENT_ENV = [
   'VITE_STUDIO_NAME', 'VITE_STUDIO_PHONE', 'VITE_STUDIO_LOGO_URL', 'VITE_BRAND_COLOR', 'VITE_EMAIL_FROM',
   'VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_APP_DOMAIN', 'VITE_PUBLIC_APP_URL',
+  /* The public half of the Web Push certificate (Firebase console, Cloud Messaging); public by design. */
+  'VITE_FIREBASE_VAPID_KEY',
 ];
 for (const k of PUBLIC_CLIENT_ENV) {
   if (typeof process.env[k] === 'string') clientEnv[k] = process.env[k];
@@ -58,6 +60,7 @@ if (!clientEnv.VITE_SUPABASE_URL) clientEnv.VITE_SUPABASE_URL = '';
 if (!clientEnv.VITE_SUPABASE_ANON_KEY) clientEnv.VITE_SUPABASE_ANON_KEY = '';
 if (!clientEnv.VITE_APP_DOMAIN) clientEnv.VITE_APP_DOMAIN = '';
 if (!clientEnv.VITE_PUBLIC_APP_URL) clientEnv.VITE_PUBLIC_APP_URL = '';
+if (!clientEnv.VITE_FIREBASE_VAPID_KEY) clientEnv.VITE_FIREBASE_VAPID_KEY = '';
 
 console.log('5. Bundling client with esbuild...');
 const clientEnvJson = JSON.stringify(clientEnv);
@@ -67,6 +70,13 @@ const envDefines = Object.entries(clientEnv)
 
 execSync(
   `npx esbuild index.tsx --bundle --outfile=dist/assets/index.js --format=esm --conditions=style --loader:.tsx=tsx --loader:.ts=ts --loader:.css=css --jsx=automatic --jsx-import-source=react --minify --define:process.env.NODE_ENV=\\"production\\" --define:import.meta.env=${JSON.stringify(clientEnvJson)} ${envDefines}`,
+  { stdio: 'inherit' }
+);
+
+/* Phone notifications (components/notify/notifyPush.ts): the service worker, served from the site's root. */
+console.log('5a. Bundling the notification service worker...');
+execSync(
+  'npx esbuild sw/firebase-messaging-sw.ts --bundle --outfile=dist/firebase-messaging-sw.js --format=iife --loader:.ts=ts --minify --define:process.env.NODE_ENV=\\"production\\"',
   { stdio: 'inherit' }
 );
 

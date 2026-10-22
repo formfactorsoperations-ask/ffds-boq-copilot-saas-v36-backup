@@ -86,6 +86,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="theme-color" content="#ffffff" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
+    <!--
+      The manifest makes "Add to Home Screen" install StudioDesk as an app. On an
+      iPhone that is the only way a web app may send phone notifications
+      (components/notify/notifyPush.ts).
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>TheStudioDesk</title>
     
     <!-- Fonts -->

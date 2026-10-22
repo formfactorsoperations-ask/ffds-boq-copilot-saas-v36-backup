@@ -104,6 +104,10 @@ export function initialsOf(name: string | null | undefined): string {
 /** Inbox documents are keyed by the lowercased email; Firestore ids cannot contain "/". */
 export const inboxKey = (email: string) => String(email || '').trim().toLowerCase();
 
+/** Where a person's notes and settings live: a studio member's by email, a client's by their sign-in. */
+export const staffBox = (email: string | null | undefined) => (inboxKey(email || '') ? `inbox/${inboxKey(email || '')}` : null);
+export const clientBox = (uid: string | null | undefined) => (uid ? `portalInbox/${uid}` : null);
+
 /** A note ready to store: a draft without its audience, stamped. */
 export function stamp(d: Draft, at: number): Note {
   const { to: _to, ...rest } = d;
@@ -349,6 +353,8 @@ export interface NotifyPrefs {
   bar: Record<NoteArea, boolean>;
   /** A desktop alert when StudioDesk is not the window in front, by kind. */
   desktop: Record<NoteArea, boolean>;
+  /** A phone (or computer) notification when StudioDesk is closed, by kind, on devices the person turned it on for. */
+  phone: Record<NoteArea, boolean>;
   /** A soft chime with the bar. Off unless the person turns it on. */
   sound: boolean;
   /** No bar, alert or chime from 8 PM to 8 AM (and at weekends); the counts still change. */
@@ -359,7 +365,7 @@ export interface NotifyPrefs {
 
 const AREAS: NoteArea[] = ['clients', 'team', 'design', 'site', 'money'];
 const allOn = () => Object.fromEntries(AREAS.map((a) => [a, true])) as Record<NoteArea, boolean>;
-export const DEFAULT_PREFS: NotifyPrefs = { bar: allOn(), desktop: allOn(), sound: false, quiet: 'night', checkins: 'all' };
+export const DEFAULT_PREFS: NotifyPrefs = { bar: allOn(), desktop: allOn(), phone: allOn(), sound: false, quiet: 'night', checkins: 'all' };
 
 /** What always gets through, whatever the settings and the hour: a blocked site and a client's dispute. */
 export const ALWAYS_KINDS = new Set(['site.blocker', 'client.dispute']);
@@ -371,31 +377,121 @@ export function cleanPrefs(raw: any): NotifyPrefs {
   return {
     bar: flags(r.bar),
     desktop: flags(r.desktop),
+    phone: flags(r.phone),
     sound: r.sound === true,
     quiet: r.quiet === 'off' || r.quiet === 'nightAndWeekend' ? r.quiet : 'night',
     checkins: r.checkins === 'exceptions' ? 'exceptions' : 'all',
   };
 }
 
-/** Quiet hours are 8 PM to 8 AM in the person's own time; with weekends, Saturday and Sunday all day too. */
-export function isQuiet(prefs: Pick<NotifyPrefs, 'quiet'>, when: Date): boolean {
-  if (prefs.quiet === 'off') return false;
-  const h = when.getHours();
-  if (h >= 20 || h < 8) return true;
-  return prefs.quiet === 'nightAndWeekend' && (when.getDay() === 0 || when.getDay() === 6);
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/** The hour and weekday at `when`, in a time zone (the server's push uses the person's own), or in this device's. */
+function clockAt(when: Date, tz?: string | null): { hour: number; day: number } {
+  if (tz) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23', weekday: 'short' }).formatToParts(when);
+      const hour = Number(parts.find((x) => x.type === 'hour')?.value);
+      const day = DAYS.indexOf(String(parts.find((x) => x.type === 'weekday')?.value));
+      if (Number.isFinite(hour) && day >= 0) return { hour: hour % 24, day };
+    } catch { /* an unknown zone: fall through to this device's clock */ }
+  }
+  return { hour: when.getHours(), day: when.getDay() };
 }
 
+/** Quiet hours are 8 PM to 8 AM in the person's own time; with weekends, Saturday and Sunday all day too. */
+export function isQuiet(prefs: Pick<NotifyPrefs, 'quiet'>, when: Date, tz?: string | null): boolean {
+  if (prefs.quiet === 'off') return false;
+  const { hour, day } = clockAt(when, tz);
+  if (hour >= 20 || hour < 8) return true;
+  return prefs.quiet === 'nightAndWeekend' && (day === 0 || day === 6);
+}
+
+export type Channel = 'bar' | 'desktop' | 'phone' | 'sound';
 /** Whether a note may interrupt through this channel now. Only "needs you" ever interrupts. */
-export function interrupts(n: Pick<Note, 'kind' | 'level' | 'area'>, prefs: NotifyPrefs, when: Date, channel: 'bar' | 'desktop' | 'sound'): boolean {
+export function interrupts(n: Pick<Note, 'kind' | 'level' | 'area'>, prefs: NotifyPrefs, when: Date, channel: Channel, tz?: string | null): boolean {
   if (n.level !== 'needs') return false;
   if (channel === 'sound' && !prefs.sound) return false;
   if (ALWAYS_KINDS.has(n.kind)) return true;
-  if (isQuiet(prefs, when)) return false;
-  return channel === 'desktop' ? prefs.desktop[n.area] !== false : prefs.bar[n.area] !== false;
+  if (isQuiet(prefs, when, tz)) return false;
+  if (channel === 'desktop') return prefs.desktop[n.area] !== false;
+  if (channel === 'phone') return prefs.phone[n.area] !== false;
+  return prefs.bar[n.area] !== false;
 }
 
 /** Whether a note counts and lists at all: with "only late and from home", an on-time check-in at the office does not. */
 export function counted(n: Pick<Note, 'kind' | 'tags'>, prefs: Pick<NotifyPrefs, 'checkins'>): boolean {
   if (n.kind !== 'people.checkin' || prefs.checkins === 'all') return true;
   return (n.tags || []).some((t) => t === 'late' || t === 'home');
+}
+
+/* ── To the client, in the portal ────────────────────────────────────────── */
+
+const DOC_LABEL: Record<string, string> = {
+  terms_docket: 'the Terms Docket', payment_schedule: 'the payment schedule', execution_agreement: 'the Execution Agreement',
+  onboarding_kit: 'your onboarding kit', handover_docket: 'the handover docket', snag_list: 'the snag list',
+  detailed_boq: 'the detailed BOQ', scope_revision: 'a scope revision',
+};
+/** Documents a client reads and keeps; every other kind asks them to approve or sign. */
+const READ_ONLY_DOCS = new Set(['onboarding_kit']);
+const ids = (xs: any): Set<string> => new Set((Array.isArray(xs) ? xs : []).map((x: any) => String(x?.id || '')).filter(Boolean));
+const fresh = (before: any, after: any): any[] => { const had = ids(before); return (Array.isArray(after) ? after : []).filter((x: any) => x?.id && !had.has(String(x.id))); };
+
+/**
+ * What became new for the client when the studio released their portal: the
+ * difference between two builds of portalView/current (lib/portalProjection).
+ * Only additions and answers count, so the client's own actions (which also
+ * rebuild the view) never notify them. The very first build is one note, not
+ * a flood; more than five things at once become one note that counts them.
+ */
+export function portalDrafts(before: any, after: any, p: { projectId: string; studioName?: string | null }): Draft[] {
+  if (!after) return [];
+  const projectName = String(after?.context?.name || '') || null;
+  const actor = p.studioName || 'The studio';
+  const base = { area: 'clients' as NoteArea, projectId: p.projectId, projectName, actor, group: null, to: {} as Audience };
+  if (!before) {
+    return [{ ...base, kind: 'portal.ready', level: 'update', title: 'Your project portal is ready', line: 'Everything the studio shares with you will be here', route: 'overview', action: null }];
+  }
+  const b = before?.context || {}, a = after?.context || {};
+  const out: Draft[] = [];
+  for (const d of fresh(b.documents?.issues, a.documents?.issues)) {
+    const label = DOC_LABEL[d.kind] || 'a document';
+    const readOnly = READ_ONLY_DOCS.has(d.kind);
+    out.push({ ...base, kind: 'portal.document', level: readOnly ? 'update' : 'needs', title: `New for you: ${label}${Number(d.version) > 1 ? ` (version ${d.version})` : ''}`, line: readOnly ? 'Yours to read and keep' : 'Please read it, then approve it or ask about it', route: 'documents', action: readOnly ? null : 'Read it' });
+  }
+  for (const m of fresh(b.momHistory, a.momHistory)) {
+    out.push({ ...base, kind: 'portal.minutes', level: 'needs', title: `Minutes: ${clip(m.title, 70) || 'your meeting'}`, line: 'Please read them and acknowledge', route: 'feed', action: 'Read the minutes' });
+  }
+  const beforeSel = new Map((Array.isArray(b.materialSelections) ? b.materialSelections : []).map((x: any) => [String(x?.id), x]));
+  for (const s of Array.isArray(a.materialSelections) ? a.materialSelections : []) {
+    const was: any = beforeSel.get(String(s?.id));
+    if (s?.studioReply && s.studioReply !== was?.studioReply) {
+      out.push({ ...base, kind: 'portal.answer', level: 'needs', title: `The studio answered your question about ${clip(s.itemName, 50) || 'a finish'}`, line: quote(s.studioReply), route: 'materials', action: 'Read the answer' });
+    } else if (!was && s?.id && !s.clientConfirmedAt) {
+      out.push({ ...base, kind: 'portal.finish', level: 'needs', title: `A finish waits for you: ${clip(s.itemName, 50) || 'a selection'}`, line: 'Have a look and confirm it, or ask about it', route: 'materials', action: 'Choose' });
+    }
+  }
+  for (const m of fresh(before?.designRecord, after?.designRecord)) {
+    if (m?.confirmation) continue;
+    out.push({ ...base, kind: 'portal.meeting', level: 'needs', title: 'Your design meeting record is ready', line: 'Check what was agreed, room by room, and confirm it', route: 'designScope:record', action: 'Confirm it' });
+  }
+  const beforePay = new Map((Array.isArray(b.paymentMilestones) ? b.paymentMilestones : []).map((x: any) => [String(x?.id), x]));
+  for (const m of Array.isArray(a.paymentMilestones) ? a.paymentMilestones : []) {
+    const was: any = beforePay.get(String(m?.id));
+    if (m?.status === 'invoiced' && was?.status !== 'invoiced') {
+      out.push({ ...base, kind: 'portal.invoice', level: 'needs', title: `Invoice raised: ${clip(m.name, 60) || 'a milestone'}`, line: m.invoiceNumber ? `Invoice ${clip(m.invoiceNumber, 30)}` : 'On your payment schedule', route: 'financials', action: 'See the schedule' });
+    }
+  }
+  for (const d of fresh(b.projectDecisions, a.projectDecisions)) {
+    if (d?.clientConfirmedAt) continue;
+    out.push({ ...base, kind: 'portal.decision', level: 'needs', title: `A decision waits for you: ${clip(d.title, 60) || 'one item'}`, line: clip(d.description, 120) || 'Choose, or ask about it', route: 'decisions', action: 'Decide' });
+  }
+  const news = [...fresh(b.siteUpdates, a.siteUpdates), ...fresh(b.projectUpdates, a.projectUpdates)];
+  if (news.length) {
+    out.push({ ...base, kind: 'portal.update', level: 'update', title: news.length === 1 ? `New from your project: ${clip(news[0].title, 60) || 'an update'}` : `${news.length} new updates from your project`, line: clip(news[0].note || news[0].summary, 120) || 'With photos where there are some', route: 'feed', action: null });
+  }
+  if (out.length > 5) {
+    const needs = out.filter((d) => d.level === 'needs').length;
+    return [{ ...base, kind: 'portal.many', level: needs ? 'needs' : 'update', title: `${out.length} new things in your portal`, line: out.slice(0, 3).map((d) => d.title).join(' · '), route: 'overview', action: needs ? 'Have a look' : null }];
+  }
+  return out;
 }

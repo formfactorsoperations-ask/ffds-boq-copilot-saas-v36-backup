@@ -160,7 +160,9 @@ import { releasePortal } from "./services/portalRelease";
 import { NotifyProvider } from "./components/notify/NotifyContext";
 import NotifyBell from "./components/notify/NotifyBell";
 import NeedsYouBar from "./components/notify/NeedsYouBar";
-import { STUDIO_ROUTES, type Stored } from "./lib/notify";
+import CatchUp from "./components/notify/CatchUp";
+import { PORTAL_OPEN_EVENT } from "./components/notify/NotifyContext";
+import { STUDIO_ROUTES, staffBox, clientBox, type Stored } from "./lib/notify";
 
 // Default Empty Context
 const DEFAULT_CONTEXT: ProjectContext = {
@@ -2905,7 +2907,12 @@ export default function App() {
   }
 
   if (appMode === "client" && clientPortalProject) {
+    /* "New for you" (lib/notify.ts portalDrafts): the client's own notes, opened on the portal's tab that owns each. */
     return (
+      <NotifyProvider box={clientBox(currentUserAuth?.uid)} audience="client"
+        onOpen={(n) => window.dispatchEvent(new CustomEvent(PORTAL_OPEN_EVENT, { detail: n.route }))}>
+      <NeedsYouBar />
+      <CatchUp />
       <ClientPortal
         projectData={clientPortalProject}
         bank={bank}
@@ -2927,6 +2934,7 @@ export default function App() {
           setClientPortalProject(updatedProject);
         }}
       />
+      </NotifyProvider>
     );
   }
 
@@ -2936,8 +2944,9 @@ export default function App() {
     );
 
     return (
-      <NotifyProvider email={currentUserAuth?.email} uid={currentUserAuth?.uid} onOpen={() => {}}>
+      <NotifyProvider box={staffBox(currentUserAuth?.email)} onOpen={() => {}}>
       <NeedsYouBar />
+      <CatchUp />
       <SupervisorMobileApp
         projects={projectLibrary.filter((p) => {
           if (
@@ -3010,8 +3019,9 @@ export default function App() {
   console.log("App render returned JSX!");
   return (
     <PageHeaderProvider route={activeTab}>
-      <NotifyProvider email={currentUserAuth?.email} uid={currentUserAuth?.uid} onOpen={openNoteTarget}>
+      <NotifyProvider box={staffBox(currentUserAuth?.email)} onOpen={openNoteTarget}>
       <NeedsYouBar />
+      <CatchUp />
       <div className={`min-h-screen overflow-x-hidden relative ${isProjectTab && hasProjectData ? "md:h-screen md:overflow-hidden" : ""}`}>
         {/* Global Background Beams with Collision Animation */}
         <div className="fixed inset-0 pointer-events-none z-[50] overflow-hidden">

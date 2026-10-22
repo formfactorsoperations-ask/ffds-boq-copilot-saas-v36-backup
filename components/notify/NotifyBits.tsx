@@ -1,7 +1,7 @@
 import React, { useId } from 'react';
 import {
   AlarmClock, AlertTriangle, BadgeCheck, CalendarCheck, CalendarDays, Check, CircleHelp, Clock, DoorOpen, FileSignature,
-  HardHat, LogOut, MessageSquare, Palette, PenTool, Sparkles, Undo2, UserPlus, Gavel,
+  FileText, HardHat, IndianRupee, Layers, LogOut, MessageSquare, NotebookPen, Palette, PenTool, Sparkles, Undo2, UserPlus, Gavel,
 } from '@/lib/lucide-shim';
 import { foldedTitle, type Stored } from '../../lib/notify';
 import { IconTile, type RingTone } from '../people/PeopleBits';
@@ -35,6 +35,17 @@ const KIND: Record<string, { icon: React.ComponentType<any>; tone: RingTone }> =
   'site.unblocked': { icon: HardHat, tone: 'ok' },
   'site.update': { icon: HardHat, tone: 'brand' },
   'lead.new': { icon: UserPlus, tone: 'brand' },
+  /* To the client, in their portal. */
+  'portal.ready': { icon: Sparkles, tone: 'brand' },
+  'portal.document': { icon: FileText, tone: 'brand' },
+  'portal.minutes': { icon: NotebookPen, tone: 'brand' },
+  'portal.answer': { icon: MessageSquare, tone: 'brand' },
+  'portal.finish': { icon: Palette, tone: 'brand' },
+  'portal.meeting': { icon: CalendarCheck, tone: 'brand' },
+  'portal.invoice': { icon: IndianRupee, tone: 'warn' },
+  'portal.decision': { icon: CircleHelp, tone: 'brand' },
+  'portal.update': { icon: HardHat, tone: 'ok' },
+  'portal.many': { icon: Layers, tone: 'brand' },
 };
 export const kindOf = (n: Pick<Stored, 'kind'>) => KIND[n.kind] || { icon: Sparkles, tone: 'brand' as RingTone };
 /** A late check-in reads amber, whatever its kind says. */

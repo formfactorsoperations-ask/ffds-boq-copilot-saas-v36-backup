@@ -285,6 +285,17 @@ styles in `notifyStyles.ts` (added to the page when first imported, like
 - Desktop alerts, the dot on the tab's icon and the chime (`notifyChannels.ts`)
   never ask for permission on their own; the browser asks from "What reaches you"
   or the one-time offer in the bell.
+- Phone notifications (`notifyPush.ts`) are one more section and one more switch
+  column in "What reaches you", turned on per device. When a device cannot turn
+  them on yet (an iPhone not on the Home Screen, no Web Push key), the section
+  says what to do in its blurb and shows no switch.
+- The catch-up after time away (`CatchUp`) is the bar's glass as a centred card on
+  the modal scrim: it rises in 3D, the counts by kind turn in with `hud-row-in`,
+  and the notes waiting on you are dealt one at a time, each turning over sideways
+  into the next, with brand dots for the steps.
+- In the client portal the same bell sits in the header before the account menu.
+  A client's settings window has only alerts and phone; the rest of the kit is the
+  same.
 - Same fonts and colours as everywhere: brand, slate, rose/amber/emerald for
   state. Everything stops under `prefers-reduced-motion`.
 

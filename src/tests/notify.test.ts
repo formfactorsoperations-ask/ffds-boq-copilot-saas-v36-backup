@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  ALWAYS_KINDS, DEFAULT_PREFS, cleanPrefs, counted, interrupts, isQuiet,
+  ALWAYS_KINDS, DEFAULT_PREFS, cleanPrefs, counted, interrupts, isQuiet, portalDrafts,
   approversOf, clientActionDraft, escalationDraft, foldGroups, foldedTitle, initialsOf, isOpen, leadDraft,
   peopleDrafts, resolveAudience, reviewDraft, siteDraft, stamp, tabCounts, type Stored,
 } from '../../lib/notify';
@@ -216,5 +216,72 @@ describe('each person\'s settings', () => {
     expect(counted({ kind: 'people.checkin', tags: ['home'] }, only)).toBe(true);
     expect(counted({ kind: 'people.leave' }, only)).toBe(true);
     expect(counted({ kind: 'people.checkin', tags: [] }, { checkins: 'all' })).toBe(true);
+  });
+});
+
+describe('phone notifications', () => {
+  const needs = { kind: 'client.message', level: 'needs' as const, area: 'clients' as const };
+
+  it('keep quiet hours in the person\'s own time zone, wherever the server runs', () => {
+    const at = new Date('2026-10-22T15:00:00Z');
+    expect(isQuiet({ quiet: 'night' }, at, 'Asia/Kolkata')).toBe(true);
+    expect(isQuiet({ quiet: 'night' }, at, 'Europe/London')).toBe(false);
+    expect(isQuiet({ quiet: 'night' }, at, 'Not/AZone')).toBe(isQuiet({ quiet: 'night' }, at));
+    expect(isQuiet({ quiet: 'nightAndWeekend' }, new Date('2026-10-24T06:00:00Z'), 'Asia/Kolkata')).toBe(true);
+  });
+
+  it('go only for "needs you", by kind, and a blocked site gets through at night', () => {
+    const day = new Date('2026-10-22T06:00:00Z'), night = new Date('2026-10-22T18:00:00Z');
+    expect(interrupts(needs, DEFAULT_PREFS, day, 'phone', 'Asia/Kolkata')).toBe(true);
+    expect(interrupts(needs, DEFAULT_PREFS, night, 'phone', 'Asia/Kolkata')).toBe(false);
+    expect(interrupts(needs, { ...DEFAULT_PREFS, phone: { ...DEFAULT_PREFS.phone, clients: false } }, day, 'phone', 'Asia/Kolkata')).toBe(false);
+    expect(interrupts({ ...needs, level: 'update' }, DEFAULT_PREFS, day, 'phone', 'Asia/Kolkata')).toBe(false);
+    expect(interrupts({ kind: 'site.blocker', level: 'needs', area: 'site' }, DEFAULT_PREFS, night, 'phone', 'Asia/Kolkata')).toBe(true);
+    expect(cleanPrefs({}).phone.team).toBe(true);
+  });
+});
+
+describe('the client portal: what is new for the client', () => {
+  const view = (ctx: any, extra: any = {}) => ({ context: { name: 'Harmony 704', ...ctx }, ...extra });
+  const p = { projectId: 'p1', studioName: 'Form Factors' };
+
+  it('the first release is one note, not a flood', () => {
+    const d = portalDrafts(null, view({ documents: { issues: [{ id: 'i1', kind: 'terms_docket', version: 1 }] } }), p);
+    expect(d.map((x) => x.kind)).toEqual(['portal.ready']);
+  });
+
+  it('a new document to approve, minutes, an answer and an invoice each say so and open the right place', () => {
+    const before = view({ documents: { issues: [{ id: 'i1', kind: 'terms_docket', version: 1 }] }, materialSelections: [{ id: 's1', itemName: 'Walnut veneer', changeReason: 'Matte?' }], paymentMilestones: [{ id: 'm1', name: 'Milestone 3', status: 'pending' }] });
+    const after = view({
+      documents: { issues: [{ id: 'i1', kind: 'terms_docket', version: 1 }, { id: 'i2', kind: 'scope_revision', version: 3 }] },
+      momHistory: [{ id: 'mom1', title: 'Design meeting 3' }],
+      materialSelections: [{ id: 's1', itemName: 'Walnut veneer', changeReason: 'Matte?', studioReply: 'It is matte.' }],
+      paymentMilestones: [{ id: 'm1', name: 'Milestone 3', status: 'invoiced', invoiceNumber: 'INV-42' }],
+    });
+    const d = portalDrafts(before, after, p);
+    expect(d.map((x) => [x.kind, x.route, x.level])).toEqual([
+      ['portal.document', 'documents', 'needs'], ['portal.minutes', 'feed', 'needs'], ['portal.answer', 'materials', 'needs'], ['portal.invoice', 'financials', 'needs'],
+    ]);
+    expect(d[0].title).toBe('New for you: a scope revision (version 3)');
+    expect(d[0].actor).toBe('Form Factors');
+  });
+
+  it('the client\'s own action, which rebuilds the view, tells them nothing', () => {
+    const before = view({ documents: { issues: [{ id: 'i2', kind: 'scope_revision', version: 3 }] }, materialSelections: [{ id: 's1', itemName: 'Walnut' }] });
+    const after = view({ documents: { issues: [{ id: 'i2', kind: 'scope_revision', version: 3, approval: { at: 1 } }] }, materialSelections: [{ id: 's1', itemName: 'Walnut', clientConfirmedAt: 5 }] });
+    expect(portalDrafts(before, after, p)).toEqual([]);
+  });
+
+  it('a meeting record to confirm opens Design and Scope; site news is one quiet update', () => {
+    const d = portalDrafts(view({}), view({ siteUpdates: [{ id: 'u1', title: 'Carcass up' }, { id: 'u2', title: 'Tiles' }] }, { designRecord: [{ id: 'dm1', confirmation: null }] }), p);
+    expect(d.map((x) => [x.kind, x.route, x.level])).toEqual([['portal.meeting', 'designScope:record', 'needs'], ['portal.update', 'feed', 'update']]);
+    expect(d[1].title).toBe('2 new updates from your project');
+  });
+
+  it('more than five new things become one note that counts them', () => {
+    const issues = Array.from({ length: 6 }, (_, i) => ({ id: `d${i}`, kind: 'snag_list', version: 1 }));
+    const d = portalDrafts(view({ documents: { issues: [] } }), view({ documents: { issues } }), p);
+    expect(d).toHaveLength(1);
+    expect(d[0]).toMatchObject({ kind: 'portal.many', title: '6 new things in your portal', level: 'needs', route: 'overview' });
   });
 });
