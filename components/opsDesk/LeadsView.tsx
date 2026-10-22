@@ -11,10 +11,14 @@ import {
   BOARD_STAGES, LEAD_STAGES, LEAD_SOURCES, SCOPES, LOST_REASONS, FIRST_CALL_MINUTES, QUIET_DAYS, QUIET_DAYS_LEAD,
   leadName, homeLine, leadUrgency, waitedLabel, sourceLabel, mainPerson, findMatches, conversionLines, leadStats, lostReasons, phoneKey, emailKey,
   blankDraft, blankPerson, draftProblems, isOpen,
-  type Lead, type LeadDraft, type LeadStage, type LeadSource, type TouchKind, type FirstStep,
+  type Lead, type LeadDraft, type LeadStage, type LeadSource, type TouchKind, type FirstStep, type LeadNext,
 } from '../../lib/leads';
+import { VISIT_MODES, visitCalendarEvent, visitCalendarMove, guestEmails, type VisitMode } from '../../lib/clientCare';
+import { bookVisitCalendar, moveVisitCalendar } from '../../services/opsDeskService';
+import { addCalendarAccount, isCalendarAccountLive } from '../../services/googleCalendarService';
+import { CalendarStep, MeetLinkRow, calendarError, useCalendarAccounts } from './MeetLink';
 import { createLead, saveLead, withTouch, readLeadChat, studioMatches, type StudioMatch } from '../../services/leadsService';
-import { btnPri, btnSec, btnSm, input, Label } from './OpsDeskPanels';
+import { btnPri, btnSec, btnSm, input, Label, Seg } from './OpsDeskPanels';
 import { useDesk, Panel, Chip, Avatar, Empty, EYEBROW, BRAND_EYEBROW, fmtDay, fmtWhen, dialable, waLink, cardV } from './DeskBits';
 import type { Person } from './OpsDeskPanels';
 import { FormLinkSheet } from './FormLink';
@@ -490,7 +494,20 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
   const [reached, setReached] = useState(true);
   const [text, setText] = useState('');
   const [editNext, setEditNext] = useState(false);
-  const [next, setNext] = useState(l.next || { text: '', due: addDays(dayKey(d.now), 1), kind: 'call' as FirstStep });
+  const [next, setNext] = useState<LeadNext>(l.next || { text: '', due: addDays(dayKey(d.now), 1), kind: 'call' as FirstStep });
+  /* A meeting booked with the lead: on Google Calendar with a Meet link, as on Meetings & visits (MeetLink.tsx). */
+  const calendars = useCalendarAccounts();
+  const booked = l.next?.kind === 'meeting' && l.next.calendarEventId ? l.next : null;
+  const meeting = next.kind === 'meeting';
+  const slotOf = (n: LeadNext) => (n.time && /^\d{4}-\d{2}-\d{2}$/.test(n.due) ? { date: n.due, time: n.time } : null);
+  const meetSlot = meeting ? slotOf(next) : null;
+  const moved = !!booked && !!meetSlot && (booked.due !== meetSlot.date || booked.time !== meetSlot.time);
+  const calMode: 'create' | 'move' | null = !meeting || !meetSlot ? null : booked ? (booked.calendarAccount && moved ? 'move' : null) : 'create';
+  const [calOn, setCalOn] = useState(false);
+  const [calAccount, setCalAccount] = useState(calendars.active || '');
+  useEffect(() => { if (!calAccount && calendars.active) setCalAccount(calendars.active); }, [calendars.active, calAccount]);
+  const [guests, setGuests] = useState(mainPerson(l)?.email || '');
+  useEffect(() => { setCalOn(booked ? true : next.mode === 'video'); }, [next.mode, !!booked]); // eslint-disable-line react-hooks/exhaustive-deps
   const [losing, setLosing] = useState(false);
   const main = mainPerson(l);
   const u = leadUrgency(l, d.now);
@@ -508,6 +525,41 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
     } finally {
       setBusy(false);
     }
+  };
+  /** Save the next step; a meeting goes on Google Calendar first, signing in before anything else so the window may open. */
+  const saveNext = async () => {
+    const clean: LeadNext = meeting
+      ? { ...next, text: next.text.trim(), time: next.time || null, mode: next.mode || 'in_person', meetUrl: next.meetUrl ?? null, calendarEventId: next.calendarEventId ?? null, calendarAccount: next.calendarAccount ?? null }
+      : { text: next.text.trim(), due: next.due, kind: next.kind };
+    if (calMode && calOn && meetSlot) {
+      setBusy(true);
+      setError(null);
+      try {
+        let acct = calMode === 'move' ? booked!.calendarAccount! : calAccount;
+        if (!isCalendarAccountLive(acct)) {
+          const signed = await addCalendarAccount(acct || undefined);
+          if (acct && signed.email !== acct) { setError(`You signed in as ${signed.email}, not ${acct}. Sign in as ${acct}, or untick the calendar box.`); setBusy(false); return; }
+          acct = signed.email;
+        }
+        if (calMode === 'create') {
+          const list = guestEmails(guests);
+          const event = visitCalendarEvent({ kind: 'meeting', mode: clean.mode as VisitMode, purpose: clean.text, slot: meetSlot }, {
+            projectName: `${leadName(l)} (enquiry)`, clientName: mainPerson(l)?.name || '', guests: list,
+            requestId: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
+          });
+          const cal = await bookVisitCalendar(acct!, event, list.length > 0);
+          Object.assign(clean, { meetUrl: cal.meetUrl, calendarEventId: cal.calendarEventId, calendarAccount: cal.calendarAccount });
+        } else {
+          await moveVisitCalendar(acct!, booked!.calendarEventId!, visitCalendarMove(meetSlot));
+        }
+      } catch (e: any) {
+        setError(`${calendarError(e)} Untick the calendar box to save without it.`);
+        setBusy(false);
+        return;
+      }
+    }
+    setEditNext(false);
+    commit({ ...l, next: clean, stage: clean.kind === 'meeting' && (l.stage === 'new' || l.stage === 'talking') ? 'meeting' : l.stage });
   };
   const moveTo = (s: LeadStage) => {
     if (!canEdit || s === l.stage || s === 'won') return;
@@ -641,8 +693,21 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
                 <div className="flex flex-col gap-2">
                   <input aria-label="Next step" className={input} placeholder="Book a studio meeting" value={next.text} onChange={(e) => setNext({ ...next, text: e.target.value })} />
                   <input aria-label="By when" type="date" className={input} value={next.due} onChange={(e) => setNext({ ...next, due: e.target.value })} />
+                  {meeting && (
+                    <>
+                      <input aria-label="Time" type="time" className={input} value={next.time || ''} onChange={(e) => setNext({ ...next, time: e.target.value || null })} />
+                      <Seg label="How" value={next.mode || 'in_person'} onChange={(m: VisitMode) => setNext({ ...next, mode: m })} options={VISIT_MODES} />
+                      {!meetSlot && <p className="text-[11px] text-slate-500">Add a time to put it on Google Calendar{next.mode === 'video' ? ' with a Meet link' : ''}.</p>}
+                      {calMode && (
+                        <CalendarStep id="lead-cal" on={calOn} onToggle={setCalOn} video={next.mode === 'video'} account={calAccount} onAccount={setCalAccount} onError={setError}
+                          fixed={calMode === 'move' ? booked!.calendarAccount : null}
+                          label={calMode === 'move' ? 'Move it on Google Calendar too' : next.mode === 'video' ? 'Create a Google Meet link and put it on Google Calendar' : 'Put it on Google Calendar'}
+                          guests={calMode === 'create' ? guests : undefined} onGuests={calMode === 'create' ? setGuests : undefined} />
+                      )}
+                    </>
+                  )}
                   <div className="flex gap-2">
-                    <button type="button" className={btnSm} disabled={!next.text.trim() || busy} onClick={() => { setEditNext(false); commit({ ...l, next: { ...next, text: next.text.trim() }, stage: next.kind === 'meeting' && (l.stage === 'new' || l.stage === 'talking') ? 'meeting' : l.stage }); }}><Check className="w-3.5 h-3.5" />Save</button>
+                    <button type="button" className={btnSm} disabled={!next.text.trim() || busy} onClick={saveNext}><Check className="w-3.5 h-3.5" />Save</button>
                     {l.next && <button type="button" className={btnSm} onClick={() => setEditNext(false)}>Cancel</button>}
                   </div>
                 </div>
@@ -650,7 +715,8 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
             ) : (
               <>
                 <p className="text-sm font-semibold text-slate-800">{l.next.text}</p>
-                <p className="text-xs text-slate-500">{l.ownerName} · by {fmtDay(l.next.due)} {u.tone === 'bad' && <Chip tone="rose">Overdue</Chip>}</p>
+                <p className="text-xs text-slate-500">{l.ownerName} · {l.next.kind === 'meeting' && l.next.time ? `${fmtDay(l.next.due)}, ${l.next.time}${l.next.mode ? ` · ${VISIT_MODES.find((m) => m.id === l.next!.mode)?.label}` : ''}` : `by ${fmtDay(l.next.due)}`} {u.tone === 'bad' && <Chip tone="rose">Overdue</Chip>}</p>
+                {l.next.meetUrl && <div className="mt-2"><MeetLinkRow url={l.next.meetUrl} onError={setError} /></div>}
                 {canEdit && (
                   <div className="flex gap-2 mt-3">
                     <button type="button" className={btnSm} disabled={busy} onClick={() => { setNext({ text: '', due: addDays(dayKey(d.now), 2), kind: 'call' }); setEditNext(true); commit(withTouch({ ...l, next: null }, { kind: 'note', text: `Done: ${l.next!.text}` }, d.me)); }}><Check className="w-3.5 h-3.5" />Done</button>

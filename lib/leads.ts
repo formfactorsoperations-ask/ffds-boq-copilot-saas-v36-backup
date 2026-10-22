@@ -17,6 +17,7 @@
   Pure, and shared by the screens and the tests.
 */
 import { addDays, dayKey, daysBetween, type QueueItem } from './opsDesk';
+import type { VisitMode, VisitRequest } from './clientCare';
 
 export type LeadStage = 'new' | 'talking' | 'meeting' | 'measured' | 'proposal' | 'won' | 'lost';
 export type LeadSource = 'instagram' | 'website' | 'referral' | 'walkin' | 'architect' | 'repeat' | 'other';
@@ -85,7 +86,17 @@ export interface LeadTouch {
   reached?: boolean | null;
 }
 
-export interface LeadNext { text: string; due: string /* YYYY-MM-DD */; kind: FirstStep }
+export interface LeadNext {
+  text: string;
+  due: string /* YYYY-MM-DD */;
+  kind: FirstStep;
+  /** A meeting booked with the lead (kind 'meeting'): its time, how it is held, and its Google Meet link and calendar event. */
+  time?: string | null;
+  mode?: VisitMode | null;
+  meetUrl?: string | null;
+  calendarEventId?: string | null;
+  calendarAccount?: string | null;
+}
 
 export interface Lead {
   id: string;
@@ -407,4 +418,25 @@ export function readChat(text: string): { people: { name: string; phone: string;
   const n = Math.max(names.length ? 1 : 0, phones.length ? 1 : 0, emails.length ? 1 : 0);
   const people = Array.from({ length: n }, (_, i) => ({ name: names[i] || '', phone: phones[i] || '', email: emails[i] || '' }));
   return { people, enquiry: enquiry.slice(0, 500) };
+}
+
+/* ── A meeting booked with a lead, on the Ops Desk's Meetings & visits ───── */
+
+/**
+ * The meeting booked as a lead's next step, as Meetings & visits lists it:
+ * the lead has no project yet, so it is its own row ("Lead · Mehta family"),
+ * opened on the lead. Null when the next step is not a meeting.
+ */
+export function leadMeeting(l: Lead): VisitRequest | null {
+  const n = l.next;
+  if (!n || n.kind !== 'meeting' || !/^\d{4}-\d{2}-\d{2}$/.test(n.due) || !isOpen(l)) return null;
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(n.time || '')) ? String(n.time) : '';
+  return {
+    id: `lead:${l.id}`, tenantId: l.tenantId, projectId: '', projectName: `Lead · ${leadName(l)}`,
+    kind: 'meeting', mode: n.mode || 'in_person', purpose: n.text, requestedBy: 'studio',
+    status: time ? 'confirmed' : 'requested', slot: time ? { date: n.due, time } : null, reschedules: 0, history: [],
+    createdAt: l.updatedAt, createdBy: l.ownerEmail, createdByName: l.ownerName, updatedAt: l.updatedAt, updatedBy: l.updatedBy,
+    meetUrl: n.meetUrl || null, calendarEventId: n.calendarEventId || null, calendarAccount: n.calendarAccount || null,
+    source: 'lead', leadId: l.id,
+  };
 }

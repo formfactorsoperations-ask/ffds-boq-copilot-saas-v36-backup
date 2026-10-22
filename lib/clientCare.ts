@@ -342,8 +342,12 @@ export interface VisitRequest {
   meetUrl?: string | null;
   calendarEventId?: string | null;
   calendarAccount?: string | null;
-  /** 'project': a meeting or visit logged on the project itself (siteVisits), shown here and changed there. */
-  source?: 'project';
+  /**
+   * 'project': a meeting or visit logged on the project itself (siteVisits), shown here and changed there.
+   * 'lead': a meeting booked with a lead (lib/leads leadMeeting), changed on the lead.
+   */
+  source?: 'project' | 'lead';
+  leadId?: string;
 }
 
 export const VISIT_KINDS: { id: VisitKind; label: string }[] = [
@@ -425,9 +429,10 @@ const msOf = (d: any): number | null => {
 /**
  * A meeting or visit logged on the project (organizations/{studio}/projects/{id}/siteVisits,
  * services/siteVisitService.ts), as the Ops Desk lists it. It is changed on the project,
- * so the desk only shows it: confirmed while it is ahead, done once its day has passed.
+ * so the desk only shows it: confirmed until it has ended, done once it has, or as soon
+ * as its minutes are written (`minuted`), and cancelled when the project cancelled it.
  */
-export function fromSiteVisit(raw: any, project: { id: string; name: string }, tenantId: string, now: number): VisitRequest | null {
+export function fromSiteVisit(raw: any, project: { id: string; name: string }, tenantId: string, now: number, minuted = false): VisitRequest | null {
   if (!raw?.id) return null;
   const at = msOf(raw.date);
   const day = isDayKey(raw.date) ? raw.date : at != null ? dayKey(at) : null;
@@ -436,7 +441,9 @@ export function fromSiteVisit(raw: any, project: { id: string; name: string }, t
   const type = String(raw.type || '');
   const kind: VisitKind = type === 'site_visit' ? 'site_visit' : type === 'measurement_survey' ? 'measurement' : 'meeting';
   const mode: VisitMode = raw.isVirtual ? (raw.meetingMode === 'phone' ? 'call' : 'video') : 'in_person';
-  const status: VisitStatus = raw.status === 'cancelled' ? 'cancelled' : slot && slot.date < dayKey(now) ? 'done' : 'confirmed';
+  const minutes = Number(raw.durationMinutes) > 0 ? Number(raw.durationMinutes) : 60;
+  const ended = !!slot && new Date(`${slot.date}T${slot.time}:00+05:30`).getTime() + minutes * 60000 <= now;
+  const status: VisitStatus = raw.status === 'cancelled' ? 'cancelled' : minuted || ended ? 'done' : 'confirmed';
   const logged = msOf(raw.loggedAt) ?? at ?? now;
   const meetUrl = String(raw.googleMeetUrl || raw.meetingLink || '') || null;
   return {

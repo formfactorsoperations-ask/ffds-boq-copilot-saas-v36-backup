@@ -82,7 +82,8 @@ describe('Design Desk', () => {
   it('opens the Design Head on every project, with her review queue first', () => {
     asHead();
     render(<DesignDeskTab projects={projects} />);
-    expect(screen.getByRole('heading', { name: 'Design Desk' })).toBeTruthy();
+    /* The page title is the shell's title row now (PageTitleBlock); the desk's own bar is its views. */
+    expect(screen.getByRole('tablist', { name: 'Design Desk views' })).toBeTruthy();
     expect(screen.getByText('All projects')).toBeTruthy();
     expect(screen.getByText('sheets waiting for your review')).toBeTruthy();
     expect(screen.getByText(/Most urgent: Master Bedroom Wardrobe/)).toBeTruthy();
@@ -150,7 +151,8 @@ describe('Design Desk', () => {
     expect(screen.getByRole('heading', { name: 'Kids Room Elevation' })).toBeTruthy();
     expect(screen.getByText('A clear desk')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Design Desk/ }));
-    expect(screen.getByRole('heading', { name: 'Design Desk' })).toBeTruthy();
+    /* The page title is the shell's title row now (PageTitleBlock); the desk's own bar is its views. */
+    expect(screen.getByRole('tablist', { name: 'Design Desk views' })).toBeTruthy();
   });
 
   it('gives a sheet under review the whole screen, and leaves it with Esc or F', () => {

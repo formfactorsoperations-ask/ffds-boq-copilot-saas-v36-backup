@@ -250,6 +250,18 @@ describe('meetings logged on the project', () => {
     expect(fromSiteVisit({}, p, 's', NOW)).toBeNull();
   });
 
+  it('are done once they have ended, or once their minutes are written, even on the day', () => {
+    /* NOW is 11 Oct, 10:00 in India. */
+    const at = (startTime: string, durationMinutes?: number) => ({ id: 'sv', type: 'client_meeting', title: 'BOQ discussion', date: '2026-10-11', startTime, durationMinutes });
+    expect(fromSiteVisit(at('09:00', 30), p, 's', NOW)!.status).toBe('done');
+    expect(fromSiteVisit(at('09:30', 30), p, 's', NOW)!.status).toBe('done');
+    expect(fromSiteVisit(at('09:30', 60), p, 's', NOW)!.status).toBe('confirmed');
+    expect(fromSiteVisit(at('09:30'), p, 's', NOW)!.status).toBe('confirmed');
+    expect(fromSiteVisit(at('16:30', 30), p, 's', NOW)!.status).toBe('confirmed');
+    expect(fromSiteVisit(at('16:30', 30), p, 's', NOW, true)!.status).toBe('done');
+    expect(fromSiteVisit({ ...at('16:30', 30), status: 'cancelled' }, p, 's', NOW, true)!.status).toBe('cancelled');
+  });
+
   it('come up on the queue the day before, and in the client care counts, like a desk booking', () => {
     const v = fromSiteVisit({ id: 'sv1', type: 'client_meeting', title: 'Kitchen review', date: '2026-10-12', startTime: '11:00' }, p, 's', NOW)!;
     const q = careQueue([{ id: 'p1', name: 'Unique Vistas', status: 'execution', targetHandover: null, checklists: {}, visits: [v], prompts: [] }], [], false, NOW);

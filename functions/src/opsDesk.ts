@@ -7,6 +7,7 @@ import { PLATFORM_OWNER_EMAILS } from "./guards";
 import { escalationRecipientsOf, opsSettingsOf, sweepCandidates, type FollowUp } from "../../lib/opsDesk";
 import { escalationDraft } from "../../lib/notify";
 import { notify } from "./notify";
+import { syncStudioMeetings } from "./meetingSync";
 
 /*
   THE OPS DESK'S SERVER SIDE (lib/opsDesk.ts has the rules of it).
@@ -141,10 +142,13 @@ export async function sweepStudio(tenantId: string, now = Date.now()): Promise<n
 export const opsDeskDailyCheck = onSchedule({ schedule: "0 9 * * *", timeZone: "Asia/Kolkata" }, async () => {
   const orgs = await db().collection("organizations").get();
   let total = 0;
+  let synced = 0;
   for (const o of orgs.docs) {
     try { total += await sweepStudio(o.id); } catch (e: any) { logger.error("[opsDesk] sweep failed", { tenant: o.id, message: e?.message }); }
+    /* And every desk booking checked against the project's meeting log (functions/src/meetingSync.ts). */
+    try { synced += await syncStudioMeetings(o.id); } catch (e: any) { logger.error("[opsDesk] meeting sync failed", { tenant: o.id, message: e?.message }); }
   }
-  logger.info("[opsDesk] daily check", { studios: orgs.size, raised: total });
+  logger.info("[opsDesk] daily check", { studios: orgs.size, raised: total, meetingsSynced: synced });
 });
 
 const LEADS = new Set(["Super Admin", "Owner", "Admin", "Ops Director"]);
@@ -160,6 +164,6 @@ export const opsDeskCheckNow = onCall({ cors: true }, async (request) => {
   if (!platform && (profile.tenantId !== tenantId || !LEADS.has(String(profile.role || "")))) {
     throw new HttpsError("permission-denied", "Only the studio's Owner, Admin or Ops Director can run this.");
   }
-  return { raised: await sweepStudio(tenantId) };
+  return { raised: await sweepStudio(tenantId), meetingsSynced: await syncStudioMeetings(tenantId) };
 });
 

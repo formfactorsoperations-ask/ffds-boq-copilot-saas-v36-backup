@@ -17,7 +17,7 @@ import {
   DESK_SCOPES, inDeskScope, scopeCounts, doneToday, dayRing, withSnoozes, liveSnoozes, teamRows, personQueue, weekNumbers, guideProgress,
   type DeskScope, type GuideStep, type GuideStepId,
 } from '../../lib/opsTeam';
-import { leadQueue, leadToProject, isOpen as leadIsOpen, type Lead } from '../../lib/leads';
+import { leadQueue, leadToProject, leadMeeting, isOpen as leadIsOpen, type Lead } from '../../lib/leads';
 import { loadProjectOps, loadStudioOps, markNextDone, closeEscalation, logFollowUp, type OpsMom } from '../../services/opsDeskService';
 import { loadLeads, saveLead, withTouch, deleteLead } from '../../services/leadsService';
 import {
@@ -35,6 +35,7 @@ import { handoverSlip } from '../../lib/opsAssist';
 import { clientContactOf } from '../../lib/minutes';
 import { CapturePanel, AskProjectPanel, MeetingPrepPanel } from './OpsAssist';
 import { CalendarAccountBar } from './MeetLink';
+import { mirrorVisitOf } from '../../lib/meetingSync';
 import { clientPulse, askPrompts, careQueue, type AskKind, type Checklist, type ChecklistKind, type VisitRequest, type VisitStatus } from '../../lib/clientCare';
 import { PulseList, AskSheet, ChecklistsView, VisitsView, VisitSheet, askReasonOf, type PulseRow } from './ClientCare';
 import {
@@ -229,7 +230,11 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
     /* "Later today" sends a row to the end of its day; the order is otherwise the desk's. */
     return shown.map((q, i) => ({ q, i })).sort((a, b) => order[a.q.group] - order[b.q.group] || Number(bumped.includes(a.q.id)) - Number(bumped.includes(b.q.id)) || a.i - b.i).map((x) => x.q);
   }, [now, myEmail, isLead, fu, waiting, mm, esc, careItems, leads, record?.snoozes, bumped]);
-  const allVisits = useMemo(() => Object.values(care).flatMap((c: ProjectCare) => c.visits), [care]);
+  /* The projects' meetings and visits, and the meetings booked with leads (lib/leads leadMeeting). */
+  const allVisits = useMemo(() => [
+    ...Object.values(care).flatMap((c: ProjectCare) => c.visits),
+    ...(leads.map(leadMeeting).filter(Boolean) as VisitRequest[]),
+  ], [care, leads]);
   const done = useMemo(() => doneToday(fu, myEmail, now), [fu, myEmail, now]);
   const ring = dayRing(queue, done);
 
@@ -238,7 +243,8 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
   const [escFor, setEscFor] = useState<LogPrefill | null>(null);
   const [deciding, setDeciding] = useState<Escalation | null>(null);
   const [reviewing, setReviewing] = useState<OpsMom | null>(null);
-  const [writingFor, setWritingFor] = useState<{ projectId: string; notes: string } | null>(null);
+  /* `visit`: the desk booking's meeting in the project's log (lib/meetingSync), so the minutes are tied to it. */
+  const [writingFor, setWritingFor] = useState<{ projectId: string; notes: string; visit?: ReturnType<typeof mirrorVisitOf> } | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [askFor, setAskFor] = useState<{ projectId: string; kind: AskKind } | null>(null);
   const [visitAct, setVisitAct] = useState<{ visit: VisitRequest | null; to: VisitStatus | null; projectId?: string } | null>(null);
@@ -666,7 +672,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
               <div className="flex flex-col gap-4">
                 {canWrite && <button type="button" className={`${btnSec} self-start`} onClick={() => setVisitAct({ visit: null, to: null })}><Plus className="w-4 h-4" />Log a request</button>}
                 {canWrite && <CalendarAccountBar onError={setError} />}
-                {loading && !allVisits.length ? <Loading /> : <VisitsView visits={allVisits} projects={deskProjects as DeskProject[]} canWrite={canWrite} now={now} onAct={(visit, to) => setVisitAct({ visit, to })} />}
+                {loading && !allVisits.length ? <Loading /> : <VisitsView visits={allVisits} projects={deskProjects as DeskProject[]} canWrite={canWrite} now={now} onAct={(visit, to) => setVisitAct({ visit, to })} onOpenLead={openLead} />}
               </div>
             </Panel>
           )}
@@ -726,7 +732,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
             setVisitAct(null);
             go('visits');
             load();
-            if (r.status === 'done' && canWrite) setWritingFor({ projectId: r.projectId, notes: r.notes });
+            if (r.status === 'done' && canWrite) setWritingFor({ projectId: r.projectId, notes: r.notes, visit: r.visit ? mirrorVisitOf(r.visit) : undefined });
           }} />
       )}
       {deciding && <DecideEscalationPanel escalation={deciding} me={me} onClose={() => setDeciding(null)} onSaved={() => { setDeciding(null); load(); }} />}
@@ -738,7 +744,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
       )}
       {writingFor && (
         <MomCaptureModal
-          visit={{ id: `ops-${Date.now()}`, type: 'client_meeting', title: 'Client meeting', date: Date.now(), notes: writingFor.notes, attendees: [] } as any}
+          visit={(writingFor.visit ? { ...writingFor.visit, notes: writingFor.notes } : { id: `ops-${Date.now()}`, type: 'client_meeting', title: 'Client meeting', date: Date.now(), notes: writingFor.notes, attendees: [] }) as any}
           projectId={writingFor.projectId} studioId={tenantId} projectContextName={projectName(writingFor.projectId)}
           onClose={() => setWritingFor(null)}
           onSuccess={async (momId) => {
