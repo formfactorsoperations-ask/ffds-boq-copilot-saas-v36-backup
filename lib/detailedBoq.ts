@@ -76,7 +76,7 @@ export interface DetailedBoqSnapshot {
 // ---------------------------------------------------------------------------
 
 /** What imports and templates write when they have no description to give. */
-const PLACEHOLDER = /^(imported( via excel| from excel| boq)?[.:]?|custom( \/)? (old|legacy) item|custom item|deliverable item|unnamed item|item|details missing from bank|standard commercial specification)$/i;
+const PLACEHOLDER = /^(imported( via excel| from excel| boq| via revised boq excel)?[.:]?|custom( \/)? (old|legacy) item|custom item|deliverable item|unnamed item|item|details missing from bank|standard commercial specification|replacement scope from excel|added from site ops calculator|standard scope details|scope details)$/i;
 
 export const isPlaceholderText = (s: unknown): boolean =>
   typeof s !== 'string' || !s.trim() || PLACEHOLDER.test(s.trim());
