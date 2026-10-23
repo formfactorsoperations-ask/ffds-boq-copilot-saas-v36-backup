@@ -26,6 +26,8 @@ export interface DetailedBoqLine {
   name: string;
   /** Client-facing description, or absent. Never an internal spec. */
   description?: string;
+  /** The client sheet's note on the line ("As actuals, paid directly to the vendor"), when it is not the description. */
+  note?: string;
   unit: string;
   qty: number;
   /** Net sell rate per unit. */
@@ -74,7 +76,7 @@ export interface DetailedBoqSnapshot {
 // ---------------------------------------------------------------------------
 
 /** What imports and templates write when they have no description to give. */
-const PLACEHOLDER = /^(imported( via excel| from excel| boq)?[.:]?|custom( \/)? (old|legacy) item|custom item|deliverable item|unnamed item|item|details missing from bank)$/i;
+const PLACEHOLDER = /^(imported( via excel| from excel| boq)?[.:]?|custom( \/)? (old|legacy) item|custom item|deliverable item|unnamed item|item|details missing from bank|standard commercial specification)$/i;
 
 export const isPlaceholderText = (s: unknown): boolean =>
   typeof s !== 'string' || !s.trim() || PLACEHOLDER.test(s.trim());
@@ -132,6 +134,14 @@ export function clientDescription(line: any, bankItem?: Item): string | undefine
     if (!isPlaceholderText(c)) return String(c).trim();
   }
   return undefined;
+}
+
+/** The line's note for the client, unless it is already standing in as the description. */
+export function clientNote(line: any, description?: string): string | undefined {
+  const n = line?.commercialNote;
+  if (isPlaceholderText(n)) return undefined;
+  const note = String(n).trim();
+  return note === description ? undefined : note;
 }
 
 // ---------------------------------------------------------------------------
@@ -211,10 +221,12 @@ export function buildDetailedBoqSnapshot(input: BuildDetailedBoqInput): Detailed
       rooms.push(room);
     }
     const bankItem = bankMap.get(b.bankId);
+    const description = clientDescription(b, bankItem);
     room.lines.push({
       id: String(b.id || `line-${idx}`),
       name,
-      description: clientDescription(b, bankItem),
+      description,
+      note: clientNote(b, description),
       unit: normaliseUnit(resolved.unit),
       qty: resolved.qty,
       rate: resolved.rate,

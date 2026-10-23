@@ -59,6 +59,7 @@ import {
 import { buildSignoffPatch, buildDisputePatch, resolveApprovals, AgreementKind } from '../services/clientApprovalEngine';
 import DocumentReadingRoom from './client/DocumentReadingRoom';
 import PortalScopePanel from './client/PortalScopePanel';
+import { LineSpecDetail, LineSpecSummary, SpecView, SpecViewSwitch, readSpec } from './client/PortalLineSpec';
 import PortalDesignRecord from './client/PortalDesignRecord';
 import { portalDesignRecord, type PortalDesignMeeting } from '../lib/designMeeting';
 import { watchMeetings } from '../services/designMeetingService';
@@ -480,6 +481,21 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const [boqSearchQuery, setBoqSearchQuery] = useState<string>('');
     const [boqRoomFilter, setBoqRoomFilter] = useState<string>('all');
     const [boqTradeFilter, setBoqTradeFilter] = useState<string>('all');
+    /* How much of each line's specification the scope table shows. Remembered
+       on this device only: it is a reading preference, not a record. */
+    const [specView, setSpecViewState] = useState<SpecView>(() => {
+        try { return localStorage.getItem('portal.specView') === 'full' ? 'full' : 'summary'; } catch { return 'summary'; }
+    });
+    const setSpecView = (v: SpecView) => {
+        setSpecViewState(v);
+        try { localStorage.setItem('portal.specView', v); } catch { /* private window: the choice lasts this visit */ }
+    };
+    const [openSpecs, setOpenSpecs] = useState<Set<string>>(() => new Set());
+    const toggleSpec = (key: string) => setOpenSpecs(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        return next;
+    });
     const [boqViewMode, setBoqViewMode] = useState<'table' | 'focus'>('table');
     const [focusedBoqItem, setFocusedBoqItem] = useState<any | null>(null);
     const [designTypeFilter, setDesignTypeFilter] = useState<string>('all');
@@ -819,6 +835,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                     rate: l.rate,
                     total: l.amount,
                     description: l.description,
+                    note: l.note,
                     inclusions: l.inclusions,
                     exclusions: l.exclusions,
                     status: 'Approved',
@@ -4130,6 +4147,9 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                 Filter by room, trade discipline, or search specific carpentry schedules.
                                             </p>
                                         </div>
+                                        {flatBoqList.some(it => readSpec(it.description)) && (
+                                            <SpecViewSwitch value={specView} onChange={setSpecView} />
+                                        )}
                                     </div>
 
                                     {/* Room Budget Distribution Chips */}
@@ -4307,11 +4327,14 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                                     const itemRate = Number(item.rate) || (item.qty > 0 ? itemTotal / item.qty : 0);
                                                                                     const isAdded = item.status === 'Added';
                                                                                     const isRevised = item.status === 'Revised';
+                                                                                    const spec = readSpec(item.description);
+                                                                                    const specKey = `${roomName}|${item.id || idx}`;
+                                                                                    const specOpen = !!spec && spec.sections.length > 0 && (specView === 'full' || openSpecs.has(specKey));
 
                                                                                     return (
+                                                                                        <React.Fragment key={item.id || idx}>
                                                                                         <tr 
-                                                                                            key={item.id || idx} 
-                                                                                            className="hover:bg-slate-50/70 transition-colors"
+                                                                                            className={`hover:bg-slate-50/70 transition-colors ${specOpen ? 'border-b-0' : ''}`}
                                                                                         >
                                                                                             <td className="px-4 py-3.5 text-center text-xs font-bold text-slate-400">
                                                                                                 {(idx + 1).toString().padStart(2, '0')}
@@ -4358,6 +4381,16 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                                                                 : `Was ${formatINR(item.change.from.rate)} per ${item.unit}`}
                                                                                                         {item.change.at ? ` · ${new Date(item.change.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}
                                                                                                     </p>
+                                                                                                )}
+                                                                                                {spec && (
+                                                                                                    <LineSpecSummary
+                                                                                                        spec={spec}
+                                                                                                        open={specOpen}
+                                                                                                        onToggle={specView === 'full' ? undefined : () => toggleSpec(specKey)}
+                                                                                                    />
+                                                                                                )}
+                                                                                                {item.note && !specOpen && (
+                                                                                                    <p className="mt-1 max-w-[520px] text-[11px] text-slate-500">Note · {item.note}</p>
                                                                                                 )}
                                                                                                 {/* The boundaries of the line, not decoration: the
                                                                                                     agreement makes inclusions and exclusions part of
@@ -4419,6 +4452,15 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                                                                 )}
                                                                                             </td>
                                                                                         </tr>
+                                                                                        {specOpen && spec && (
+                                                                                            <tr>
+                                                                                                <td></td>
+                                                                                                <td colSpan={6} className="px-4 pb-4 pt-0">
+                                                                                                    <LineSpecDetail spec={spec} note={item.note} />
+                                                                                                </td>
+                                                                                            </tr>
+                                                                                        )}
+                                                                                        </React.Fragment>
                                                                                     );
                                                                                 })}
                                                                             </tbody>

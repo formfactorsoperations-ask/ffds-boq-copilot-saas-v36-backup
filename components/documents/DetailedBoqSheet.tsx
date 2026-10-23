@@ -1,6 +1,30 @@
 import React from 'react';
 import { DetailedBoqSnapshot } from '../../lib/detailedBoq';
 import { SCOPE_DOC_CSS, inr2, amt, rateText, qtyText, longDate } from './scopeDocStyles';
+import { parseSpec, specLabel } from '../../lib/specText';
+
+/**
+ * A line's specification as the sheet wrote it: the summary, then each section
+ * (Scope, Material, Hardware, Excludes …) with its points one to a line. Text
+ * written in no particular shape prints as it always did.
+ */
+const SpecLines: React.FC<{ text: string }> = ({ text }) => {
+  const spec = parseSpec(text);
+  if (!spec.sections.length) return <small>{spec.summary || text}</small>;
+  return (
+    <small className="spec">
+      {spec.summary && <span className="sum">{spec.summary}</span>}
+      {spec.sections.map((sec, i) => (
+        <span key={i} className="sec">
+          {sec.label && <b>{specLabel(sec.label)}{sec.items.length === 1 ? ': ' : ''}</b>}
+          {sec.items.length === 1 && sec.label
+            ? sec.items[0]
+            : sec.items.map((it, j) => <span key={j} className="it">• {it}</span>)}
+        </span>
+      ))}
+    </small>
+  );
+};
 
 /**
  * The Detailed BOQ, as the client reads, signs and downloads it.
@@ -63,7 +87,8 @@ const DetailedBoqSheet: React.FC<Props> = ({ snapshot: s, studioName, contentHas
                   <td className="l">
                     <span className="nm">{l.name}</span>
                     {l.asActuals && <span className="tag">As actuals</span>}
-                    {l.description && <small>{l.description}</small>}
+                    {l.description && <SpecLines text={l.description} />}
+                    {l.note && <small>Note: {l.note}</small>}
                     {l.inclusions?.length ? <small>Includes: {l.inclusions.join('; ')}</small> : null}
                     {l.exclusions?.length ? <small>Excludes: {l.exclusions.join('; ')}</small> : null}
                   </td>
