@@ -120,17 +120,34 @@ const specOf = (l: { description?: string; inclusions?: string[]; exclusions?: s
   ].filter(Boolean).join('\n');
 
 /**
+ * A row tall enough for its wrapped text. Excel does not resize a row with
+ * wrapped text in a generated file until someone edits it, so a long
+ * specification would sit cut off at one line. Each column is [text, characters
+ * per line]; Excel's ceiling is 409 points.
+ */
+const wrappedHeight = (texts: [string, number][]): number => {
+  const lines = Math.max(1, ...texts.map(([t, per]) =>
+    String(t || '').split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / per)), 0)));
+  return Math.min(409, Math.max(15, Math.ceil(lines * 11.5 + 6)));
+};
+
+/**
  * The full BOQ sheet. Returns the row holding the grand total, so the Summary
  * can point at it with a formula.
  */
 function boqSheet(wb: any, name: string, boq: DetailedBoqSnapshot, heading: string, sub: string, marks?: Map<string, 'new' | 'changed'>): number {
   const ws = addSheet(wb, name);
+  /* The sheet's note on a line ("As actual to be paid directly to vendor") has
+     its own column, last, so no formula's column moves. Only when a line has one. */
+  const notes = boq.rooms.some(r => r.lines.some(l => l.note));
   ws.columns = [
     { width: 7 }, { width: 34 }, { width: 58 }, { width: 9 }, { width: 9 }, { width: 13 }, { width: 15 }, ...(marks ? [{ width: 12 }] : []),
+    ...(notes ? [{ width: 30 }] : []),
   ];
-  const cols = marks ? 8 : 7;
+  const cols = 7 + (marks ? 1 : 0) + (notes ? 1 : 0);
   title(ws, heading, sub, cols);
-  const h = header(ws, ['No.', 'Item', 'Specification', 'Unit', 'Qty', 'Rate (₹)', 'Amount (₹)', ...(marks ? ['vs signed'] : [])], 5);
+  const h = header(ws, ['No.', 'Item', 'Specification', 'Unit', 'Qty', 'Rate (₹)', 'Amount (₹)', ...(marks ? ['vs signed'] : []), ...(notes ? ['Note'] : [])], 5);
+  if (notes) h.getCell(cols).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
   ws.views = [{ state: 'frozen', ySplit: h.number, showGridLines: false }];
 
   const roomTotalCells: string[] = [];
@@ -140,19 +157,23 @@ function boqSheet(wb: any, name: string, boq: DetailedBoqSnapshot, heading: stri
     rr.eachCell({ includeEmpty: true }, (c: Cell) => { c.fill = fill(ROOM); c.font = { bold: true }; c.border = box; });
     const first = rr.number + 1;
     room.lines.forEach((l, li) => {
+      const spec = [specOf(l), l.asActuals ? 'Billed as actuals.' : ''].filter(Boolean).join('\n');
       const row = ws.addRow([
         `${ri + 1}.${li + 1}`,
         l.name,
-        [specOf(l), l.asActuals ? 'Billed as actuals.' : ''].filter(Boolean).join('\n'),
+        spec,
         l.unit,
         l.qty,
         l.rate,
         null,
         ...(marks ? [marks.get(l.id) === 'new' ? 'New' : marks.get(l.id) === 'changed' ? 'Changed' : ''] : []),
+        ...(notes ? [l.note || ''] : []),
       ]);
+      row.height = wrappedHeight([[l.name, 30], [spec, 66], [notes ? l.note || '' : '', 32]]);
       row.getCell(7).value = { formula: `E${row.number}*F${row.number}`, result: l.amount };
       row.eachCell({ includeEmpty: true }, (c: Cell) => { c.border = box; c.alignment = { vertical: 'top', wrapText: true }; });
       row.getCell(3).font = { size: 9, color: { argb: MUTED } };
+      if (notes) row.getCell(cols).font = { size: 9, color: { argb: MUTED } };
       row.getCell(5).numFmt = '#,##0.##';
       row.getCell(5).alignment = { horizontal: 'right', vertical: 'top' };
       money(row.getCell(6));

@@ -1,6 +1,7 @@
 import { Item } from '../types';
 import { resolveBoqLine, isBillable } from './boqPricing';
 import { displayName, normaliseUnit } from './detailedBoq';
+import { cleanSpec } from './specText';
 
 /**
  * SCOPE REVISION — how a revised BOQ becomes the client's scope.
@@ -39,7 +40,7 @@ export interface ImportedLine {
   /** The sheet's own rate — list basis, before the project's terms. */
   listRate: number;
   note?: string;
-  /** Specifications the sheet wrote under the name, in the same cell. */
+  /** Specifications: the sheet's Specifications column, or the lines under the name in the item cell. */
   description?: string;
   /** Per-unit cost to the studio, read from a costing sheet only. */
   unitCost?: number;
@@ -295,14 +296,20 @@ export function parseRevisionSheet(rows: any[][], sheetName: string): ParsedShee
   }
   const header = (rows[headerAt] || []).map(c => text(c).toLowerCase());
   const find = (re: RegExp, not?: RegExp) => header.findIndex(h => re.test(h) && !(not && not.test(h)));
+  const nameAt = find(/item|description|particular/);
   const col = {
     sr: find(/^sr|^s\.?\s?no|^#|^no\.?$/),
-    name: find(/item|description|particular/),
+    name: nameAt,
     unit: find(/unit of|^unit$|uom|measure/, /cost|rate|price/),
     qty: find(/qty|quantity/),
     rate: find(/unit cost|rate|unit price|price/, /total|margin|vendor|updated|%/),
     amount: find(/total cost to client|total|amount/, /profit|to me|margin/),
     note: find(/note|remark/),
+    /* The studio's Specifications column: what the line buys, cell by cell. */
+    spec: (() => {
+      const at = find(/specification|^specs?\b/);
+      return at >= 0 && at !== nameAt ? at : -1;
+    })(),
     /* A costing sheet's per-unit vendor cost. "UNIT COST" there is the cost;
        on a client sheet the same header is the client's rate. */
     cost: (() => {
@@ -349,6 +356,10 @@ export function parseRevisionSheet(rows: any[][], sheetName: string): ParsedShee
     const [firstLine, ...specLines] = cellText.split(/\r?\n/);
     const rawName = (firstLine || '').trim();
     const cellSpecs = specLines.map(x => x.trim()).filter(Boolean).join(' · ');
+    /* A Specifications column wins over specs in the item cell, and keeps its
+       line breaks: it is written in sections (SCOPE, MATERIAL, EXCLUDES …). */
+    const columnSpecs = col.spec >= 0 ? cleanSpec(r[col.spec]) : '';
+    const description = columnSpecs || cellSpecs;
     // A formula that returns 0 in the Item column is an empty cell, not an item called "0".
     const name = num(rawName) !== null ? '' : rawName;
     const qty = col.qty >= 0 ? num(r[col.qty]) : null;
@@ -361,7 +372,13 @@ export function parseRevisionSheet(rows: any[][], sheetName: string): ParsedShee
     // heading — headings carry the room's subtotal, which is never below zero.
     const amountHere = col.amount >= 0 ? num(r[col.amount]) : null;
     const credit = !internal && !!name && !qty && !rate && amountHere !== null && amountHere < 0;
-    const label = credit ? '' : name && !qty && !rate ? name : !name && first && num(first) === null ? first : '';
+    /* An item the sheet holds at zero — a unit, and a quantity or rate written
+       as 0 — is a line, not a heading. Read as a heading, every line after it
+       moved into a "room" named after it (Unique Vistas: "T.V. UNIT (TALL
+       STORAGE + DISPLAY)" took the living room's panelling and crockery unit). */
+    const unitHere = col.unit >= 0 ? text(r[col.unit]) : '';
+    const heldAtZero = !!name && !!unitHere && (qty === 0 || rate === 0);
+    const label = credit || heldAtZero ? '' : name && !qty && !rate ? name : !name && first && num(first) === null ? first : '';
     if (label && !qty && !rate) {
       section = label;
       if (!sections.includes(section)) sections.push(section);
@@ -419,7 +436,7 @@ export function parseRevisionSheet(rows: any[][], sheetName: string): ParsedShee
       qty: q,
       listRate,
       note: col.note >= 0 && text(r[col.note]) ? text(r[col.note]) : undefined,
-      ...(cellSpecs ? { description: cellSpecs } : {}),
+      ...(description ? { description } : {}),
       unitCost: internal && col.cost >= 0 ? (num(r[col.cost]) ?? undefined) : undefined,
       ...(heldOut ? { heldOut } : {}),
     });

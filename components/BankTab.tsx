@@ -5,6 +5,9 @@ import { useOrg } from '../contexts/OrgContext';
 import { useStudioSettings, CustomBundle } from '../hooks/useStudioSettings';
 import { INITIAL_BANK, UOM_OPTIONS } from '../constants';
 import BulkImportModal from './BulkImportModal';
+import BankSpecImportModal from './bank/BankSpecImportModal';
+import { applySpecs, buildSpecSheetWorkbook, specSheetName } from '../lib/bankSpecs';
+import { downloadWorkbook } from '../lib/scopeWorkbook';
 import BankSpreadsheetTable from './bank/BankSpreadsheetTable';
 import BankCategoryGroupedView from './bank/BankCategoryGroupedView';
 import BankBulkActionModal, { BulkActionType } from './bank/BankBulkActionModal';
@@ -102,6 +105,17 @@ const BankTab: React.FC<BankTabProps> = ({
 
   // Bulk Text/Excel Import Modal
   const [isTextImportOpen, setIsTextImportOpen] = useState(false);
+  // Specs in from Excel: one sheet for the whole bank, not one card at a time.
+  const [isSpecImportOpen, setIsSpecImportOpen] = useState(false);
+  const studioName = settings?.companyName || orgData?.orgName || 'Studio';
+  const handleExportSpecs = async () => {
+    try {
+      downloadWorkbook(await buildSpecSheetWorkbook(bank, studioName), specSheetName(studioName));
+    } catch (err) {
+      console.error('Spec sheet export failed:', err);
+      alert('The spec sheet could not be made. Please try again.');
+    }
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // AI synthesis states
@@ -596,6 +610,15 @@ const BankTab: React.FC<BankTabProps> = ({
             >
               <Upload className="w-3.5 h-3.5 text-slate-500" />
               Import Excel/CSV
+            </button>
+
+            <button
+              onClick={() => setIsSpecImportOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
+              title="Download the spec sheet, fill it in Excel and import it back"
+            >
+              <FileText className="w-3.5 h-3.5 text-slate-500" />
+              Specs from Excel
             </button>
 
             <button
@@ -1387,6 +1410,19 @@ const BankTab: React.FC<BankTabProps> = ({
         item={usageModalItem}
         projects={projects}
       />
+
+      {isSpecImportOpen && (
+        <BankSpecImportModal
+          bank={bank}
+          onExport={handleExportSpecs}
+          onClose={() => setIsSpecImportOpen(false)}
+          onApply={(updates) => {
+            setBank((prev) => applySpecs(prev, updates));
+            setIsSpecImportOpen(false);
+            alert(`Specifications updated on ${updates.size} item${updates.size === 1 ? '' : 's'}.`);
+          }}
+        />
+      )}
 
       {/* 8. BULK IMPORT MODAL (CSV/Excel) */}
       <BulkImportModal

@@ -257,7 +257,15 @@ export function mergeExcel(
   at = Date.now(),
 ): ScopeDraft {
   const result = computeRevision(signed, sheet.lines, settings);
-  const edits = draft.lines.filter(l => l.source === 'edit');
+  /* An edit decides the quantity and rate, not what the line is. A sheet's
+     specification still reaches an edited line that has none of its own. */
+  const sheetSpecs = new Map<string, string>();
+  result.rooms.forEach(room => room.lines.forEach(l => {
+    if (l.signed && l.imported?.description) sheetSpecs.set(l.signed.lineId, l.imported.description);
+  }));
+  const edits = draft.lines
+    .filter(l => l.source === 'edit')
+    .map(l => (!l.description && l.signedLineId && sheetSpecs.has(l.signedLineId) ? { ...l, description: sheetSpecs.get(l.signedLineId)! } : l));
   const editedSigned = new Set(edits.map(l => l.signedLineId).filter(Boolean) as string[]);
 
   const lines: DraftLine[] = [];

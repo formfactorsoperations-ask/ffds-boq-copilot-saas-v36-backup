@@ -29,14 +29,17 @@ const FastInput: React.FC<{
   className?: string;
   placeholder?: string;
   onBlur?: () => void;
-}> = ({ value, onChange, type = 'text', className = '', placeholder, onBlur }) => {
+  /* A specification is written in lines (summary, then SCOPE, MATERIAL …).
+     A one-line input drops line breaks the moment it is typed into. */
+  multiline?: boolean;
+}> = ({ value, onChange, type = 'text', className = '', placeholder, onBlur, multiline }) => {
   const [localValue, setLocalValue] = useState(value);
 
   useEffect(() => {
     setLocalValue(value);
   }, [value]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const val = e.target.value;
     setLocalValue(val);
     if (type === 'number') {
@@ -47,6 +50,19 @@ const FastInput: React.FC<{
       onChange(val);
     }
   };
+
+  if (multiline) {
+    return (
+      <textarea
+        value={localValue}
+        onChange={handleChange}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        rows={String(localValue || '').includes('\n') ? 4 : 1}
+        className={`bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-sky-400 focus:ring-2 focus:ring-sky-100 rounded px-1.5 py-0.5 outline-none transition-all w-full text-slate-800 placeholder:text-slate-300 resize-y ${className}`}
+      />
+    );
+  }
 
   return (
     <input
@@ -234,6 +250,7 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
         {/* Specs */}
         <FastInput
           value={item.specs}
+          multiline
           onChange={(v) => handleUpdate('specs', v)}
           className="text-[11px] text-slate-500 mb-1"
           placeholder="Public Concept Specs (L1/L2 Proposal)"

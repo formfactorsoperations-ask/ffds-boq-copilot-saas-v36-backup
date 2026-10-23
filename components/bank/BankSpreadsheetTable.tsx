@@ -546,7 +546,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = ({
                               value={item.specs || ''}
                               onChange={(e) => handleFieldChange(item, 'specs', e.target.value)}
                               placeholder="e.g. Commercial ply with 1mm laminate, Soft-close Hettich hinges..."
-                              className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#3D52A0] h-18 resize-none shadow-2xs"
+                              className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#3D52A0] h-40 resize-y shadow-2xs"
                             />
                           </div>
 
