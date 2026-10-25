@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, TrendingDown, Lock, ChevronDown, AlertTriangle, Wallet } from '@/lib/lucide-shim';
+import { TrendingUp, TrendingDown, Lock, ChevronDown, AlertTriangle, Wallet, EyeOff } from '@/lib/lucide-shim';
+import { useFiguresHidden } from '../ui/HideFigures';
 import { ProjectContext, FullBoqItem, PurchaseOrder } from '../../types';
 import { db } from '../../services/dbService';
 import { formatINR } from '../../lib/utils';
@@ -58,6 +59,7 @@ const ProjectPnlCard: React.FC<Props> = ({
 }) => {
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const figuresHidden = useFiguresHidden();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -99,6 +101,16 @@ const ProjectPnlCard: React.FC<Props> = ({
 
   /* Margin is the most sensitive number in the studio. Same gate the
      Financial Ledger uses, worded for this card. */
+  if (figuresHidden) {
+    return shell(
+      <div className="flex-1 flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed border-slate-200 p-6">
+        <EyeOff className="w-7 h-7 text-slate-400 mb-2.5" />
+        <h4 className="font-bold text-sm text-slate-800">Figures are hidden</h4>
+        <p className="text-xs text-slate-500 max-w-[240px] mt-1.5">Margin and cost stay covered while figures are hidden for a shared screen.</p>
+      </div>,
+    );
+  }
+
   if (currentUserRole === 'Designer') {
     return shell(
       <div className="flex-1 flex flex-col items-center justify-center py-8 text-center bg-[#FAF9F6]/50 rounded-2xl border border-dashed border-[#B5945B]/25 p-6">
@@ -151,7 +163,7 @@ const ProjectPnlCard: React.FC<Props> = ({
             <p className={`text-[10px] font-black uppercase tracking-widest ${
               estimateOnly ? 'text-slate-500' : worse && moved ? 'text-rose-700' : 'text-emerald-700'
             }`}>
-              {estimateOnly ? 'Expected margin, from the quote' : 'Margin as it stands'}
+              {estimateOnly ? 'Potential margin, from the BOQ' : 'Actual margin'}
             </p>
             <p className="text-2xl font-extrabold tracking-tight text-slate-900 mt-1 font-mono tabular-nums">
               {formatINR(estimateOnly ? pnl.quotedMargin : pnl.currentMargin)}
@@ -173,7 +185,7 @@ const ProjectPnlCard: React.FC<Props> = ({
         {estimateOnly ? (
           <div className="mt-3 pt-3 border-t border-slate-200/80">
             <p className="text-[11.5px] text-slate-600 leading-snug">
-              Nothing has been ordered, so this is what the BOQ <em>predicts</em>, not what the job made.
+              Nothing has been ordered or billed, so this is what the BOQ's margin <em>predicts</em>. The actual margin starts with the first purchase order or vendor bill.
             </p>
             {onOpenProcurement && (
               <button
@@ -187,8 +199,8 @@ const ProjectPnlCard: React.FC<Props> = ({
         ) : (
           <p className="text-[11px] text-slate-500 mt-2.5 leading-snug">
             {moved
-              ? <>Quoted at <strong className="text-slate-700">{formatINR(pnl.quotedMargin)}</strong> ({pnl.quotedMarginPct.toFixed(1)}%). {worse ? 'This job is behind its quote.' : 'This job is ahead of its quote.'}</>
-              : <>Level with the quote of <strong className="text-slate-700">{formatINR(pnl.quotedMargin)}</strong>.</>}
+              ? <>Potential <strong className="text-slate-700">{formatINR(pnl.quotedMargin)}</strong> ({pnl.quotedMarginPct.toFixed(1)}%). {worse ? 'This job is behind its BOQ.' : 'This job is ahead of its BOQ.'}</>
+              : <>Level with the potential of <strong className="text-slate-700">{formatINR(pnl.quotedMargin)}</strong>.</>}
           </p>
         )}
       </div>
@@ -223,7 +235,9 @@ const ProjectPnlCard: React.FC<Props> = ({
       <div className="mt-4">
         <Row label="Contracted, execution" value={pnl.contractedExecution} note="ex-GST, after discounts" />
         <Row label="Design fee" value={pnl.contractedDesign} note="ex-GST. No cost against it, so it is margin in full." tone="good" />
-        <Row label="Planned cost" value={pnl.plannedCost} note="materials and labour, from the BOQ" />
+        <Row label="Potential cost" value={pnl.plannedCost} note={pnl.boqMarginPct != null
+          ? `the BOQ's ${pnl.boqMarginPct.toFixed(1)}% margin, applied to the contract before discounts${pnl.uncostedLines ? `. ${pnl.uncostedLines === 1 ? '1 line has no cost and takes' : `${pnl.uncostedLines} lines have no cost and take`} that margin` : ''}`
+          : 'no BOQ line carries a cost yet, so cost is taken as the price'} />
         {pnl.hasProcurement ? (
           <>
             <Row label="Committed" value={pnl.committedCost} note={`${pnl.poCount} purchase order${pnl.poCount === 1 ? '' : 's'}`} tone={pnl.overspend > 0 ? 'bad' : 'plain'} />

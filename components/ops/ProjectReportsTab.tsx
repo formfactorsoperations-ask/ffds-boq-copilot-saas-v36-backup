@@ -210,12 +210,12 @@ const ProjectReportsTab: React.FC<Props> = ({
 
       {/* ── Money ────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Panel title="Margin" sub={pnl.hasProcurement ? 'Against actual committed cost' : 'Expected, from the quote'} icon={<Percent className="w-4 h-4" />}>
+        <Panel title="Margin" sub={pnl.hasProcurement ? 'Actual: against orders and vendor bills' : 'Potential: from the BOQ margin'} icon={<Percent className="w-4 h-4" />}>
           <div className="flex items-center gap-5">
             <Gauge
               pct={Math.max(0, marginPct)}
               label={`${marginPct.toFixed(1)}%`}
-              sub={pnl.hasProcurement ? 'now' : 'quoted'}
+              sub={pnl.hasProcurement ? 'actual' : 'potential'}
               tone={marginPct < 0 ? 'rose' : marginPct < 15 ? 'amber' : 'green'}
               size={116}
             />

@@ -335,7 +335,15 @@ function Home(p: ProjectHomeProps) {
   /* ───────────── KPIs ───────────── */
   const armed = useArmed(400);
   const collected = useCountUp(payments.collected, armed);
-  const marginVal = useCountUp(pnl ? pnl.currentMargin : 0, armed);
+  /* Potential margin (the BOQ's margin %) until something is ordered or billed; then the actual margin (lib/projectPnl). */
+  const actualMargin = !!pnl && pnl.hasProcurement;
+  const marginNow = pnl ? (actualMargin ? pnl.currentMargin : pnl.quotedMargin) : 0;
+  const marginNowPct = pnl ? (actualMargin ? pnl.currentMarginPct : pnl.quotedMarginPct) : 0;
+  const marginVal = useCountUp(marginNow, armed);
+  const marginSub = !pnl || !pnl.contractedTotal ? 'No contract yet'
+    : actualMargin ? `potential ${inr(pnl.quotedMargin)} · ${Math.round(pnl.coveragePct)}% ordered`
+    : pnl.marginBasis === 'boq' && pnl.boqMarginPct != null ? `${pnl.boqMarginPct.toFixed(1)}% margin on the BOQ`
+    : 'No costs in the BOQ yet';
   const collectedPct = payments.gross ? (payments.collected / payments.gross) * 100 : 0;
   const stepsDone = useCountUp(journey.overall.done, armed, 900);
   const pctDone = useCountUp(journey.overall.pct, armed, 900);
@@ -404,10 +412,10 @@ function Home(p: ProjectHomeProps) {
             )}
             {canSeeMoney && (
               <button className="ph-card ph-kpi ph-tilt ph-rise" style={{ animationDelay: '.09s' }} onClick={() => openInsight('cost')}>
-                <Ring pct={pnl ? pnl.currentMarginPct : 0} colour="#3D52A0" label={pnl && pnl.contractedTotal ? `${Math.round(pnl.currentMarginPct)}%` : '—'} />
-                <div><div className="l">Margin</div>
+                <Ring pct={marginNowPct} colour="#3D52A0" label={pnl && pnl.contractedTotal ? `${Math.round(marginNowPct)}%` : '—'} />
+                <div><div className="l">{actualMargin ? 'Actual margin' : 'Potential margin'}</div>
                   <div className="v ph-num">{pnl && pnl.contractedTotal ? `₹${(marginVal / 1e5).toFixed(2)}L` : '—'}</div>
-                  <div className="s">{pnl && pnl.contractedTotal ? (pnl.confidence === 'plan-only' ? 'BOQ estimate' : CONFIDENCE_LABEL[pnl.confidence]) : 'No contract yet'}</div></div>
+                  <div className="s">{marginSub}</div></div>
               </button>
             )}
             <button className="ph-card ph-kpi ph-tilt ph-rise" style={{ animationDelay: '.12s' }} onClick={() => openInsight('draw')}>
@@ -450,7 +458,9 @@ function Home(p: ProjectHomeProps) {
             programme={{ rows: programme.rows, pins, finishISO: programme.finishISO, stale: programmeStale }}
             cost={cost}
             marginLine={pnl && pnl.contractedTotal
-              ? <><b>{inr(pnl.currentMargin)} margin ({pnl.currentMarginPct.toFixed(1)}%)</b> on {inr(pnl.contractedTotal)} contracted. {pnl.confidence === 'plan-only' ? 'Nothing is ordered yet, so this is the BOQ’s estimate.' : `${CONFIDENCE_LABEL[pnl.confidence]}.`}</>
+              ? (actualMargin
+                ? <><b>{inr(pnl.currentMargin)} actual margin ({pnl.currentMarginPct.toFixed(1)}%)</b> on {inr(pnl.contractedTotal)} contracted, against a potential {inr(pnl.quotedMargin)} ({pnl.quotedMarginPct.toFixed(1)}%). {CONFIDENCE_LABEL[pnl.confidence]}.</>
+                : <><b>{inr(pnl.quotedMargin)} potential margin ({pnl.quotedMarginPct.toFixed(1)}%)</b> on {inr(pnl.contractedTotal)} contracted{pnl.boqMarginPct != null ? `, from the BOQ’s ${pnl.boqMarginPct.toFixed(1)}% margin` : ''}. The actual margin starts once purchase orders and vendor bills are entered.</>)
               : <>No contract value yet, so there is no margin to show.</>}
             pnlCard={<ProjectPnlCard projectContext={p.projectContext} boq={p.fullBoq} projectId={p.projectId} activeTier={p.activeTier}
               currentUserRole={p.currentUserRole} onOpenProcurement={() => go('materials')} />}

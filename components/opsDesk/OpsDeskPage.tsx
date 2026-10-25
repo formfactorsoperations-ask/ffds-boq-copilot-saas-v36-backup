@@ -47,7 +47,7 @@ import { ClientSheet } from './ClientSheet';
 import { FirstWeek, Spotlight, type AskPerson } from './FirstWeek';
 import { DayClose, type Rolled } from './DayClose';
 import { TeamView } from './TeamView';
-import { LeadsBoard, LeadPage, AddLeadSheet, OpenProjectSheet } from './LeadsView';
+import { LeadsBoard, LeadPage, AddLeadSheet, OpenProjectSheet, LeadMeetingsTable } from './LeadsView';
 
 /*
   THE OPS DESK (lib/opsDesk.ts, lib/opsTeam.ts, lib/leads.ts).
@@ -668,13 +668,17 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
           )}
 
           {section === 'visits' && (
-            <Panel icon={CalendarCheck} title="Meetings & visits" blurb="Every meeting and site visit a client asked for, or the studio needs, and the ones logged on each project's timeline: agree a time, confirm it, move it, and close it out with the minutes.">
-              <div className="flex flex-col gap-4">
-                {canWrite && <button type="button" className={`${btnSec} self-start`} onClick={() => setVisitAct({ visit: null, to: null })}><Plus className="w-4 h-4" />Log a request</button>}
-                {canWrite && <CalendarAccountBar onError={setError} />}
-                {loading && !allVisits.length ? <Loading /> : <VisitsView visits={allVisits} projects={deskProjects as DeskProject[]} canWrite={canWrite} now={now} onAct={(visit, to) => setVisitAct({ visit, to })} onOpenLead={openLead} />}
-              </div>
-            </Panel>
+            <div className="flex flex-col gap-5">
+              <Panel icon={CalendarCheck} title="Meetings & visits" blurb="Every meeting and site visit a client asked for on a project, or the studio needs, and the ones logged on each project's timeline: agree a time, confirm it, move it, and close it out with the minutes. Meetings with leads are in their own table below.">
+                <div className="flex flex-col gap-4">
+                  {canWrite && <button type="button" className={`${btnSec} self-start`} onClick={() => setVisitAct({ visit: null, to: null })}><Plus className="w-4 h-4" />Log a request</button>}
+                  {canWrite && <CalendarAccountBar onError={setError} />}
+                  {loading && !allVisits.length ? <Loading /> : <VisitsView visits={allVisits.filter((v) => v.source !== 'lead')} projects={deskProjects as DeskProject[]} canWrite={canWrite} now={now} onAct={(visit, to) => setVisitAct({ visit, to })} onOpenLead={openLead} />}
+                </div>
+              </Panel>
+              {/* Leads have no project yet, so their meetings are tracked apart, each marked as a lead's (lib/leads leadMeetingRows). */}
+              <LeadMeetingsTable onOpenLead={openLead} />
+            </div>
           )}
 
           {section === 'checklists' && (

@@ -9,7 +9,7 @@ import { Type } from './aiSchema';
 import { db, functions } from './firebaseClient';
 import { getAi, aiIsReachable } from './aiClient';
 import { FLASH_MODEL } from '../constants/aiModels';
-import { blankPerson, readChat, type Lead, type LeadDraft, type LeadStage, type LeadTouch, type Match, type TouchKind } from '../lib/leads';
+import { blankPerson, readChat, type Lead, type LeadDraft, type LeadStage, type LeadTouch, type LeadNote, type LeadMeetingLog, type Match, type TouchKind } from '../lib/leads';
 import type { Enquiry } from '../lib/leadForm';
 
 const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -40,8 +40,19 @@ function normalise(id: string, d: any): Lead {
     stage: (d?.stage || 'new') as LeadStage,
     lostReason: d?.lostReason ? clip(d.lostReason, 80) : null,
     know: { decides: clip(d?.know?.decides, 160), style: clip(d?.know?.style, 160), seenWork: !!d?.know?.seenWork },
-    next: d?.next?.text ? { text: clip(d.next.text, 200), due: String(d.next.due || ''), kind: d.next.kind || 'call' } : null,
+    /* The whole next step: a booked meeting keeps its time, how it is held and its Meet link and calendar event. */
+    next: d?.next?.text ? {
+      text: clip(d.next.text, 200), due: String(d.next.due || ''), kind: d.next.kind || 'call',
+      ...(d.next.kind === 'meeting' ? {
+        time: d.next.time ? String(d.next.time) : null, mode: d.next.mode || null, meetUrl: d.next.meetUrl || null,
+        calendarEventId: d.next.calendarEventId || null, calendarAccount: d.next.calendarAccount || null,
+      } : {}),
+    } : null,
     touches: (Array.isArray(d?.touches) ? d.touches : []) as LeadTouch[],
+    notes: (Array.isArray(d?.notes) ? d.notes : []).filter((n: any) => n && n.id && n.text).map((n: any) => ({
+      id: String(n.id), at: Number(n.at) || 0, by: String(n.by || ''), byName: String(n.byName || ''), text: clip(n.text, 1500), pinned: !!n.pinned, editedAt: n.editedAt ?? null,
+    })) as LeadNote[],
+    meetings: (Array.isArray(d?.meetings) ? d.meetings : []) as LeadMeetingLog[],
     firstTouchAt: d?.firstTouchAt ?? null,
     lastTouchAt: d?.lastTouchAt ?? null,
     openRequest: d?.openRequest || null,
@@ -65,11 +76,17 @@ export async function loadLeads(tenantId: string, me: string, everyone: boolean)
 /** What is stored: the lead without its id, every field present so the rules can check its shape. */
 const stored = (l: Lead) => {
   const { id, ...rest } = l;
-  return {
+  const out = {
     ...rest,
     people: l.people.map((p, i) => ({ id: p.id, name: clip(p.name, 80), role: clip(p.role, 60), phone: clip(p.phone, 30), email: clip(p.email, 120).toLowerCase(), main: i === 0 })),
     touches: l.touches.slice(-300),
+    /* Written only once there is one, so a lead without them stays the shape older rules allow. */
+    notes: (l.notes || []).slice(-200),
+    meetings: (l.meetings || []).slice(-200),
   };
+  if (!out.notes.length) delete (out as any).notes;
+  if (!out.meetings.length) delete (out as any).meetings;
+  return out;
 };
 
 export async function createLead(d: LeadDraft, x: { tenantId: string; me: { email: string; name: string }; owner: { email: string; name: string } }): Promise<Lead> {

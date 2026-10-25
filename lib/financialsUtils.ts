@@ -130,6 +130,8 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
         */
         taxableExecution: Math.round(taxableExecution),
         taxableDesign: Math.round(taxableDesign),
+        /* Execution before discounts. A discount has no cost behind it, so it comes off margin in full (lib/projectPnl). */
+        grossExecution: Math.round(rawExecutionTotal),
         gstOnExecution: Math.round(gstOnExecution),
         gstOnDesign: Math.round(gstOnDesign),
     };

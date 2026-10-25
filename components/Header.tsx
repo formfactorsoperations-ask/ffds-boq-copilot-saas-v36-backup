@@ -27,7 +27,8 @@ import {
 import { AIStatus } from '../types';
 import AIStatusIndicator from './AIStatusIndicator';
 import { useOrg } from '../contexts/OrgContext';
-import { mayOpenStudioTab } from '../lib/roleAccess';
+import { mayOpenStudioTab, holdsFinanceRole } from '../lib/roleAccess';
+import { HideFiguresButton } from './ui/HideFigures';
 import { roleLabel } from '../lib/roles';
 import { FFDSLogo } from './FFDSLogo';
 import { db } from '../services/dbService';
@@ -437,6 +438,9 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
           );
         })()}
+
+        {/* Hide margins, costs and collections while the screen is shared (lib/figuresPrivacy). */}
+        {holdsFinanceRole(currentRoles) && <HideFiguresButton />}
 
         {/* Everything that reached you (components/notify). */}
         <NotifyBell />

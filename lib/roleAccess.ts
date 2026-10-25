@@ -15,11 +15,19 @@
  * project as stored; separating the numbers themselves is a larger change.
  */
 import { hasRole, primaryRole, type RoleSet } from './roles';
+import { figuresHidden } from './figuresPrivacy';
 
 const FINANCE_ROLES = new Set(['Super Admin', 'Admin', 'Ops Director', 'Owner']);
 
 /* Every check here takes one role or all of a person's roles (lib/roles). */
-export const seesStudioFinance = (role?: RoleSet): boolean => hasRole(role, FINANCE_ROLES);
+/** Holds a role that runs the business. For what a person may DO (assign, open a project); not for what is shown. */
+export const holdsFinanceRole = (role?: RoleSet): boolean => hasRole(role, FINANCE_ROLES);
+
+/**
+ * Whether the studio's money is SHOWN. No while figures are hidden for a
+ * shared screen (lib/figuresPrivacy), whatever the role.
+ */
+export const seesStudioFinance = (role?: RoleSet): boolean => holdsFinanceRole(role) && !figuresHidden();
 
 /**
  * A Designer works drawings on the projects they are assigned to, and only

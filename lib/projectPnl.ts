@@ -1,6 +1,8 @@
 import { FullBoqItem, ProjectContext, PurchaseOrder, ProcurementMode } from '../types';
-import { buildEnvelopes, buildRoomMargins, Envelope, RoomMargin } from './procurement';
+import { buildEnvelopes, buildRoomMargins, effectiveMaterials, envelopeKey, Envelope, RoomMargin } from './procurement';
 import { calculateProjectFinancials } from './financialsUtils';
+import { isBillable } from './boqPricing';
+import { calculateSellPrice } from './utils';
 
 // ============================================================================
 // PROJECT P&L — did this job make money?
@@ -25,10 +27,95 @@ import { calculateProjectFinancials } from './financialsUtils';
 //      version of this file excluded the fee and understated margin badly:
 //      on a real project it read 9.3% when the true figure was 19.0%.
 //
+//   3. POTENTIAL MARGIN COMES FROM THE BOQ'S OWN MARGIN %. Cost used to be
+//      every BOQ line at cost, against the contract. That read 7% on real
+//      projects for three reasons: lines that are not in the scope (deleted,
+//      excluded, client-procured) were costed; lines imported with a sell rate
+//      and no cost behind it are stored at 0% margin, so they counted their
+//      whole price as cost; and the BOQ in use was not always the one the
+//      contract was priced from. Now the margin % of the billable lines that
+//      carry a cost is applied to what was sold, before discounts, and the
+//      discount comes off margin in full. Lines with no cost take the BOQ's
+//      margin %; the card says how many there are.
+//
+//   4. ACTUAL MARGIN COMES FROM VENDOR BILLS AND ORDERS. Where a package has
+//      purchase orders, its cost is the greater of what was ordered and what
+//      was billed; where it has none yet, it is still its share of the
+//      potential cost. So the actual figure firms up bill by bill.
+//
 // No I/O, no React. Purely a function of the data it is handed.
 // ============================================================================
 
 export type CostConfidence = 'plan-only' | 'partly-committed' | 'mostly-committed' | 'closed-out';
+
+/**
+ * Where the BOQ's cost is known. 'boq': some billable lines carry a cost, so the
+ * BOQ has a margin %. 'no-costs': every line is a sell rate with no cost behind
+ * it, so no margin can be read. 'empty': no billable lines at all.
+ */
+export type MarginBasis = 'boq' | 'no-costs' | 'empty';
+
+export interface BoqMarginBasis {
+  basis: MarginBasis;
+  /** Sell value of the billable lines, margin applied. */
+  sell: number;
+  /** Sell and cost of the billable lines that carry a cost. */
+  costedSell: number;
+  costedCost: number;
+  /** Margin as a share of sell, over the lines that carry a cost. Null when none do. */
+  marginPct: number | null;
+  /** Billable lines priced with no cost behind them (0% margin): legacy and imported lines. */
+  uncostedLines: number;
+  uncostedSell: number;
+  /** Cost per package: the line's cost where known, else its sell less the BOQ's margin %. */
+  estimateByEnvelope: Map<string, number>;
+  estimatedCost: number;
+}
+
+/**
+ * The BOQ's own margin: billable lines only, and only the lines that carry a
+ * cost decide the %. A line at 0% margin is how an imported sell rate with no
+ * cost is stored (lib/scopeDraft), so it is read as "cost not known", not as
+ * "sold at cost".
+ */
+export function boqMarginBasis(boq: FullBoqItem[]): BoqMarginBasis {
+  let sell = 0, costedSell = 0, costedCost = 0, uncostedSell = 0, uncostedLines = 0;
+  const lines: { key: string; sell: number; cost: number | null }[] = [];
+  (boq || []).forEach(i => {
+    if (!i || !isBillable(i as any)) return;
+    const qty = Number(i.qty) || 0;
+    if (qty <= 0) return;
+    const mat = Number(effectiveMaterials(i)) || 0;
+    const lab = Number(i.labor) || 0;
+    const margin = Number((i as any).marginOverride ?? i.margin ?? 0) || 0;
+    const lineSell = calculateSellPrice(mat, lab, margin) * qty;
+    const lineCost = (mat + lab) * qty;
+    if (lineSell <= 0) return;
+    sell += lineSell;
+    const key = envelopeKey(i.roomId || 'Unassigned', i.cat || 'Other');
+    if (margin !== 0 && lineCost > 0) {
+      costedSell += lineSell;
+      costedCost += lineCost;
+      lines.push({ key, sell: lineSell, cost: lineCost });
+    } else {
+      uncostedSell += lineSell;
+      uncostedLines += 1;
+      lines.push({ key, sell: lineSell, cost: null });
+    }
+  });
+  const marginPct = costedSell > 0 ? ((costedSell - costedCost) / costedSell) * 100 : null;
+  const estimateByEnvelope = new Map<string, number>();
+  let estimatedCost = 0;
+  lines.forEach(l => {
+    const c = l.cost != null ? l.cost : l.sell * (1 - (marginPct ?? 0) / 100);
+    estimateByEnvelope.set(l.key, (estimateByEnvelope.get(l.key) || 0) + c);
+    estimatedCost += c;
+  });
+  return {
+    basis: sell <= 0 ? 'empty' : marginPct == null ? 'no-costs' : 'boq',
+    sell, costedSell, costedCost, marginPct, uncostedLines, uncostedSell, estimateByEnvelope, estimatedCost,
+  };
+}
 
 export interface ProjectPnl {
   /** True once anything has actually been ordered. Below this, "current" is still the plan. */
@@ -38,7 +125,11 @@ export interface ProjectPnl {
   // ── Execution: the part with both a price and a cost ─────────────────────
   /** Contracted execution value, ex-GST, after discounts and any approved revision. */
   contractedExecution: number;
-  /** BOQ cost: materials + labour, ex-GST. */
+  /**
+   * Potential cost, ex-GST: what was sold before discounts, less the BOQ's
+   * margin % (`boqMarginPct`). Falls back to the BOQ's own cost when there is
+   * no contract yet.
+   */
   plannedCost: number;
   /** Issued purchase orders. Drafts and cancellations excluded. */
   committedCost: number;
@@ -60,10 +151,22 @@ export interface ProjectPnl {
   executionMarginQuoted: number;
   executionMarginCurrent: number;
 
+  /** Potential margin: the BOQ's margin % on what was sold, less discounts, plus the design fee. */
   quotedMargin: number;
   quotedMarginPct: number;
+  /** Actual margin: vendor bills and orders where there are any, the potential cost elsewhere. */
   currentMargin: number;
   currentMarginPct: number;
+  /** Where the potential margin's cost comes from (see MarginBasis). */
+  marginBasis: MarginBasis;
+  /** The BOQ's margin as a share of its sell value, over lines that carry a cost. */
+  boqMarginPct: number | null;
+  /** Billable lines with no cost behind them, which take the BOQ's margin %. */
+  uncostedLines: number;
+  /** Share of the BOQ's sell value on those lines. */
+  uncostedSharePct: number;
+  /** True once a vendor has billed anything. */
+  hasBills: boolean;
   /** Negative means this job is worse than quoted. This is the number that matters. */
   marginMovement: number;
   marginMovementPct: number;
@@ -121,23 +224,38 @@ export function buildProjectPnl(
   const rooms = buildRoomMargins(boq || [], pos || [], modes);
   const fin = calculateProjectFinancials(context, activeTier) as any;
 
-  const plannedCost   = envelopes.reduce((s, e) => s + e.budgetTotal, 0);
+  const basis = boqMarginBasis(boq || []);
   const committedCost = envelopes.reduce((s, e) => s + e.committedTotal, 0);
   const billedCost    = envelopes.reduce((s, e) => s + e.billedTotal, 0);
   const paidCost      = envelopes.reduce((s, e) => s + e.paidTotal, 0);
   const poCount       = envelopes.reduce((s, e) => s + e.poCount, 0);
-
-  // Per-envelope, so an unordered category still contributes its budget.
-  const effectiveCost = envelopes.reduce(
-    (s, e) => s + (e.committedTotal > 0 ? Math.max(e.committedTotal, e.billedTotal) : e.budgetTotal),
-    0,
-  );
 
   const overspentEnvelopes = envelopes.filter(e => e.overBy > 0);
   const overspend = overspentEnvelopes.reduce((s, e) => s + e.overBy, 0);
 
   const contractedExecution = fin.taxableExecution || 0;
   const contractedDesign    = fin.taxableDesign || 0;
+  const grossExecution      = fin.grossExecution ?? contractedExecution;
+
+  /*
+    Potential cost: the BOQ's margin % applied to what was sold before any
+    discount. When the contract figure is not the BOQ's own total (an approved
+    value typed in, a later option), the BOQ still says what share of it is
+    cost. With no contract yet, the BOQ's own cost estimate stands.
+  */
+  const plannedCost = grossExecution <= 0 ? basis.estimatedCost
+    : basis.marginPct != null ? grossExecution * (1 - basis.marginPct / 100)
+    /* No line carries a cost, so no margin can be read: cost is taken as what was sold. */
+    : grossExecution;
+
+  // Per-envelope, so an unordered package still contributes its share of the potential cost.
+  const scale = basis.estimatedCost > 0 ? plannedCost / basis.estimatedCost : 0;
+  const effectiveCost = envelopes.reduce(
+    (s, e) => s + (e.committedTotal > 0
+      ? Math.max(e.committedTotal, e.billedTotal)
+      : (basis.estimateByEnvelope.get(e.key) || 0) * scale),
+    0,
+  );
 
   /* Design fee carries no cost, so it is margin in full and simply adds. */
   const contractedTotal = contractedExecution + contractedDesign;
@@ -172,6 +290,11 @@ export function buildProjectPnl(
     currentMarginPct: pct(currentMargin, contractedTotal),
     marginMovement:   currentMargin - quotedMargin,
     marginMovementPct: pct(currentMargin - quotedMargin, contractedTotal),
+    marginBasis: basis.basis,
+    boqMarginPct: basis.marginPct,
+    uncostedLines: basis.uncostedLines,
+    uncostedSharePct: pct(basis.uncostedSell, basis.sell),
+    hasBills: billedCost > 0,
 
     coveragePct,
     confidence,
@@ -201,9 +324,9 @@ export const CONFIDENCE_LABEL: Record<CostConfidence, string> = {
 
 export const CONFIDENCE_NOTE: Record<CostConfidence, string> = {
   'plan-only':
-    'No purchase orders raised yet, so cost is still the BOQ estimate. Add POs to see what this job is really making.',
+    'No purchase orders or vendor bills yet, so this is the potential margin from the BOQ. Add POs and bills to see the actual margin.',
   'partly-committed':
-    'Only part of the cost is committed. The rest is still the BOQ estimate and can move.',
+    'Only part of the cost is ordered or billed. The rest is still the BOQ estimate and can move.',
   'mostly-committed':
     'Most of the cost is committed, so this figure is close to what the job will actually make.',
   'closed-out':

@@ -98,6 +98,43 @@ export interface LeadNext {
   calendarAccount?: string | null;
 }
 
+/**
+ * A note kept on the lead: what the studio knows that is not a touch (a
+ * preference, a warning, what was promised). Pinned notes sit at the top.
+ */
+export interface LeadNote {
+  id: string;
+  at: number;
+  by: string;
+  byName: string;
+  text: string;
+  pinned: boolean;
+  editedAt?: number | null;
+}
+
+export type LeadMeetingStatus = 'done' | 'missed' | 'cancelled';
+export const LEAD_MEETING_STATUS_LABEL: Record<LeadMeetingStatus, string> = { done: 'Held', missed: 'Did not happen', cancelled: 'Cancelled' };
+
+/**
+ * A meeting with the lead that is over: held, missed or cancelled. Booked
+ * meetings live in `next` until then; this keeps them once they are done, so
+ * the Ops Desk can show every meeting with a lead (leadMeetingRows).
+ */
+export interface LeadMeetingLog {
+  id: string;
+  /** YYYY-MM-DD. */
+  date: string;
+  time: string | null;
+  mode: VisitMode | null;
+  purpose: string;
+  status: LeadMeetingStatus;
+  /** What came of it, in a line. */
+  outcome: string;
+  at: number;
+  by: string;
+  byName: string;
+}
+
 export interface Lead {
   id: string;
   tenantId: string;
@@ -118,6 +155,10 @@ export interface Lead {
   know: LeadKnow;
   next: LeadNext | null;
   touches: LeadTouch[];
+  /** Notes kept on the lead, newest last. Missing on older leads and on ones from the website form. */
+  notes?: LeadNote[];
+  /** Meetings that are over, newest last. Missing until one is closed out. */
+  meetings?: LeadMeetingLog[];
   firstTouchAt: number | null;
   lastTouchAt: number | null;
   /** Client Relations asked a lead to open the project. */
@@ -305,6 +346,8 @@ export function leadToProject(l: Lead): Record<string, any> {
     l.know.decides ? `Who decides: ${l.know.decides}.` : '',
     l.home.possession ? `Possession: ${l.home.possession}.` : '',
     l.enquiry ? `First message: "${l.enquiry.slice(0, 400)}"` : '',
+    /* Pinned notes are what the team agreed matters; they go with the lead. */
+    (l.notes || []).some((n) => n.pinned) ? `Notes: ${(l.notes || []).filter((n) => n.pinned).map((n) => n.text.replace(/\s+/g, ' ').trim()).join(' · ').slice(0, 600)}` : '',
   ].filter(Boolean).join(' ');
   return {
     name: [leadName(l), l.home.where.split(/[·,]/)[0].trim()].filter(Boolean).join(' · ').slice(0, 120),
@@ -330,11 +373,14 @@ export function conversionLines(l: Lead): [string, string][] {
   const phones = people.filter((p) => p.phone.trim()).length;
   const calls = l.touches.filter((t) => t.kind !== 'stage' && t.kind !== 'note').length;
   const meetings = l.touches.filter((t) => t.kind === 'meeting').length;
+  const notes = (l.notes || []).length;
+  const pinned = (l.notes || []).filter((n) => n.pinned).length;
   return [
     ['People', `${people.map((p, i) => `${p.name}${i === 0 ? ' (main)' : ''}`).join(' · ')} · ${emails} email${emails === 1 ? '' : 's'}, ${phones} phone${phones === 1 ? '' : 's'}`],
     ['Home', [l.home.type, l.home.where, l.home.area ? `${nf.format(l.home.area)} sq ft` : ''].filter(Boolean).join(' · ') || 'Not filled in'],
     ['Brief', [l.home.scope.join(', '), l.know.style, l.home.possession ? `possession ${l.home.possession}` : ''].filter(Boolean).join(' · ') || 'Not filled in'],
     ['Touches', `${calls} calls and messages, ${meetings} meeting${meetings === 1 ? '' : 's'}, kept with the lead`],
+    ...(notes ? [['Notes', `${notes} note${notes === 1 ? '' : 's'} kept with the lead${pinned ? `; the ${pinned} pinned go into the brief` : ''}`] as [string, string]] : []),
   ];
 }
 
@@ -440,3 +486,120 @@ export function leadMeeting(l: Lead): VisitRequest | null {
     source: 'lead', leadId: l.id,
   };
 }
+
+/* ── Every meeting with a lead, for the Ops Desk ────────────────────────── */
+
+export type LeadMeetingRowStatus = 'upcoming' | 'needs_time' | 'to_close' | LeadMeetingStatus;
+export const LEAD_MEETING_ROW_LABEL: Record<LeadMeetingRowStatus, string> = {
+  upcoming: 'Coming up', needs_time: 'Needs a time', to_close: 'Past, to close out', ...LEAD_MEETING_STATUS_LABEL,
+};
+
+export interface LeadMeetingRow {
+  key: string;
+  leadId: string;
+  leadName: string;
+  home: string;
+  ownerName: string;
+  stage: LeadStage;
+  /** Set once the lead became a project. */
+  projectId: string | null;
+  purpose: string;
+  date: string;
+  time: string | null;
+  mode: VisitMode | null;
+  status: LeadMeetingRowStatus;
+  outcome: string;
+  meetUrl: string | null;
+}
+
+/**
+ * Every meeting with a lead, booked or over, newest past last: the one booked
+ * as the lead's next step, the ones closed out on the lead (`meetings`), and
+ * meetings logged as a touch. A lead has no project, so none of these is on a
+ * project's timeline; this is where they are tracked.
+ */
+export function leadMeetingRows(leads: Lead[], now: number, pastDays = 90): LeadMeetingRow[] {
+  const today = dayKey(now);
+  const since = addDays(today, -pastDays);
+  const rows: LeadMeetingRow[] = [];
+  for (const l of leads) {
+    const base = { leadId: l.id, leadName: leadName(l), home: homeLine(l.home), ownerName: l.ownerName || l.ownerEmail, stage: l.stage, projectId: l.projectId };
+    const n = l.next;
+    if (n && n.kind === 'meeting' && /^\d{4}-\d{2}-\d{2}$/.test(n.due) && isOpen(l)) {
+      const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(n.time || '')) ? String(n.time) : null;
+      rows.push({
+        ...base, key: `next:${l.id}`, purpose: n.text, date: n.due, time, mode: n.mode || null, outcome: '', meetUrl: n.meetUrl || null,
+        status: n.due < today ? 'to_close' : time ? 'upcoming' : 'needs_time',
+      });
+    }
+    for (const m of l.meetings || []) {
+      if (m.date < since) continue;
+      rows.push({ ...base, key: `log:${l.id}:${m.id}`, purpose: m.purpose, date: m.date, time: m.time, mode: m.mode, status: m.status, outcome: m.outcome, meetUrl: null });
+    }
+    /* A meeting logged as a touch ("Meeting: walked through the moodboard"), unless closing out a booked one wrote it. */
+    const closed = new Set((l.meetings || []).map((m) => m.at));
+    for (const t of l.touches || []) {
+      if (t.kind !== 'meeting' || closed.has(t.at)) continue;
+      const date = dayKey(t.at);
+      if (date < since) continue;
+      rows.push({ ...base, key: `touch:${l.id}:${t.id}`, purpose: t.text, date, time: null, mode: null, status: 'done', outcome: '', meetUrl: null });
+    }
+  }
+  const open = (r: LeadMeetingRow) => r.status === 'upcoming' || r.status === 'needs_time' || r.status === 'to_close';
+  const when = (r: LeadMeetingRow) => `${r.date}${r.time || ''}`;
+  return rows.sort((a, b) => (open(a) === open(b) ? (open(a) ? when(a).localeCompare(when(b)) : when(b).localeCompare(when(a))) : open(a) ? -1 : 1));
+}
+
+/**
+ * Close out the meeting booked as the lead's next step: it moves to the lead's
+ * meetings, and a held one is a touch too (it was contact). The caller saves.
+ */
+export function closeLeadMeeting(l: Lead, status: LeadMeetingStatus, outcome: string, me: { email: string; name: string }, at: number): Lead {
+  const n = l.next;
+  if (!n || n.kind !== 'meeting') return l;
+  const by = me.email.toLowerCase();
+  const id = `m${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const log: LeadMeetingLog = {
+    id, date: n.due, time: n.time || null, mode: n.mode || null, purpose: n.text.slice(0, 200), status, outcome: outcome.trim().slice(0, 300), at, by, byName: me.name,
+  };
+  const word = status === 'done' ? `${n.text}${log.outcome ? `: ${log.outcome}` : ''}` : `${LEAD_MEETING_STATUS_LABEL[status]}: ${n.text}${log.outcome ? ` (${log.outcome})` : ''}`;
+  const touch: LeadTouch = { id: `t${id}`, at, by, byName: me.name, kind: status === 'done' ? 'meeting' : 'note', text: word.slice(0, 500), reached: null };
+  const contact = status === 'done';
+  return {
+    ...l,
+    next: null,
+    meetings: [...(l.meetings || []), log].slice(-200),
+    touches: [...l.touches, touch].slice(-300),
+    firstTouchAt: contact && !l.firstTouchAt ? at : l.firstTouchAt,
+    lastTouchAt: contact ? at : l.lastTouchAt,
+    stage: contact && (l.stage === 'new' || l.stage === 'talking') ? 'meeting' : l.stage,
+  };
+}
+
+/* ── Notes ──────────────────────────────────────────────────────────────── */
+
+export const NOTE_MAX = 1500;
+
+/** Pinned first, then newest first. */
+export const sortedNotes = (notes: LeadNote[] | null | undefined): LeadNote[] =>
+  [...(notes || [])].sort((a, b) => (a.pinned === b.pinned ? b.at - a.at : a.pinned ? -1 : 1));
+
+export function addNote(l: Lead, text: string, me: { email: string; name: string }, at: number, pinned = false): Lead {
+  const t = text.trim().slice(0, NOTE_MAX);
+  if (!t) return l;
+  const note: LeadNote = { id: `n${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`, at, by: me.email.toLowerCase(), byName: me.name, text: t, pinned, editedAt: null };
+  return { ...l, notes: [...(l.notes || []), note].slice(-200) };
+}
+
+export function editNote(l: Lead, id: string, change: { text?: string; pinned?: boolean }, at: number): Lead {
+  return {
+    ...l,
+    notes: (l.notes || []).map((n) => (n.id !== id ? n : {
+      ...n,
+      ...(change.text != null ? { text: change.text.trim().slice(0, NOTE_MAX) || n.text, editedAt: at } : {}),
+      ...(change.pinned != null ? { pinned: change.pinned } : {}),
+    })),
+  };
+}
+
+export const removeNote = (l: Lead, id: string): Lead => ({ ...l, notes: (l.notes || []).filter((n) => n.id !== id) });

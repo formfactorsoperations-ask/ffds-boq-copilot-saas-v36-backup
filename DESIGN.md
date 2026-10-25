@@ -118,6 +118,16 @@ keeps it showing until the next click and never opens the project
 (`components/projects/MarginReveal.tsx`). The figure rolls up and comes into focus on a plain
 300ms transition, and stays still under reduced motion.
 
+### Hide figures
+
+For a pitch or a shared screen, the top bar and the project hub's row carry a "Hide figures" switch
+(`components/ui/HideFigures.tsx`, rules in `lib/figuresPrivacy.ts`, Alt+Shift+H), shown only to the
+roles that see the studio's money. Off, it is a secondary icon button; on, it is the brand fill and
+reads "Figures hidden". While it is on, `seesStudioFinance` answers no, so every screen hides what it
+hides from a Designer, and a screen that is wholly about money is covered by one `Panel`-style card
+with "Show figures". Client prices stay. New screens that show margin, cost or collections ask
+`seesStudioFinance`, and so follow the switch with no extra work.
+
 ## People motion (approved 11 Oct 2026)
 
 The studio owner asked for People (attendance and leave, `components/people/`)
