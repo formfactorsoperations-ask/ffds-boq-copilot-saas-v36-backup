@@ -20,6 +20,8 @@ interface BoqItemCardProps {
   onViewInBank: (bankId: string) => void;
   isSelected?: boolean;
   onSelectToggle?: () => void;
+  /** A frozen BOQ loses a line only through a change order (Excel view), never from a card. */
+  boqFrozen?: boolean;
 }
 
 const highlightText = (text: string, query?: string) => {
@@ -114,7 +116,7 @@ const EditableField: React.FC<{
     )
 }
 
-const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onUpdate, onDelete, onViewInBank, isSelected = false, onSelectToggle }) => {
+const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onUpdate, onDelete, onViewInBank, isSelected = false, onSelectToggle, boqFrozen = false }) => {
   const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingBreakdown, setIsGeneratingBreakdown] = useState(false);
   
@@ -197,7 +199,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
              <MotionButton whileHover={{scale: 1.05}} whileTap={{scale: 0.95}} onClick={() => onViewInBank(item.bankId)} className="p-1.5 bg-white text-slate-400 rounded-md shadow-sm border border-slate-200 hover:border-slate-300 hover:text-[#3D52A0]" title="View in Bank">
                 <LinkIcon className="w-3.5 h-3.5" />
             </MotionButton>
-            <MotionButton whileHover={{scale: 1.05}} whileTap={{scale: 0.95}} onClick={() => onDelete(item.id)} className="p-1.5 bg-white text-rose-400 rounded-md shadow-sm border border-slate-200 hover:border-rose-200 hover:text-rose-500 hover:bg-rose-50" title="Remove Item">
+            <MotionButton whileHover={boqFrozen ? undefined : {scale: 1.05}} whileTap={boqFrozen ? undefined : {scale: 0.95}} onClick={() => onDelete(item.id)} disabled={boqFrozen} aria-label={`Delete ${item.name}`} className="p-1.5 bg-white text-rose-400 rounded-md shadow-sm border border-slate-200 hover:border-rose-200 hover:text-rose-500 hover:bg-rose-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-rose-400 disabled:hover:border-slate-200" title={boqFrozen ? 'The BOQ is frozen: mark the line Deleted with a change order in the Excel view' : 'Delete line (you can undo)'}>
                 <DeleteIcon className="w-3.5 h-3.5" />
             </MotionButton>
         </div>

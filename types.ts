@@ -1401,6 +1401,8 @@ export interface ProposalTier {
     parentTierId?: string; // Links this tier to its parent for diffs
     lifecycleTag?: 'Draft' | 'Approved while booking' | 'Revised after design' | 'Superseded' | 'Current contract'; 
     assumedMargin?: number; // Used for What-if scenarios and discount headroom
+    /** Who made this option the baseline, and when (lib/tierApproval.ts). Missing on options approved before it was recorded. */
+    approval?: { at: number; by: string };
 }
 
 export interface ComparisonRow {

@@ -837,6 +837,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                                 onUpdate={handleUpdateItem}
                                 onBulkUpdate={handleBulkUpdateItems}
                                 onDelete={handleDeleteItem}
+                                boqFrozen={projectContext.boqFrozen}
                                 onAddItem={() => handleOpenAddModal(room.name)}
                                 onViewInBank={onViewInBank}
                                 selectedItemIds={selectedItemIds}
@@ -862,6 +863,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                                     onUpdate={handleUpdateItem}
                                     onBulkUpdate={handleBulkUpdateItems}
                                     onDelete={handleDeleteItem}
+                                    boqFrozen={projectContext.boqFrozen}
                                     onAddItem={() => handleOpenAddModal(bucket)}
                                     onViewInBank={onViewInBank}
                                     selectedItemIds={selectedItemIds}
@@ -883,6 +885,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                                 onUpdate={handleUpdateItem}
                                 onBulkUpdate={handleBulkUpdateItems}
                                 onDelete={handleDeleteItem}
+                                boqFrozen={projectContext.boqFrozen}
                                 onAddItem={() => handleOpenAddModal('Unassigned')}
                                 onViewInBank={onViewInBank}
                                 selectedItemIds={selectedItemIds}
@@ -958,34 +961,34 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                       <div className="w-full bg-white border border-slate-200 rounded-2xl shadow-sm p-5 text-sm flex flex-col lg:flex-row justify-between gap-6">
                           {/* Financials (Owners Only) */}
                           {isOwner ? (
-                              <div className="flex flex-1 gap-6">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 flex-1 gap-4 sm:gap-6">
                                   {/* Base Costs */}
-                                  <div className="flex flex-col flex-1 border-r border-slate-100 pr-6 justify-center">
+                                  <div className="flex flex-col justify-center sm:border-r sm:border-slate-100 sm:pr-6">
                                       <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">Project Base Cost</span>
                                       <span className="font-mono text-slate-800 font-bold text-lg tabular-nums">₹ {firmBaseCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                                       <div className="text-[10px] font-medium text-slate-500 mt-0.5">Materials + Labor</div>
                                   </div>
                                   {/* Margin */}
-                                  <div className="flex flex-col flex-1 border-r border-slate-100 pr-6 justify-center">
+                                  <div className="flex flex-col justify-center sm:border-r sm:border-slate-100 sm:pr-6">
                                       <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">Firm Margin</span>
                                       <span className="font-mono text-emerald-600 font-bold text-lg tabular-nums">₹ {firmMarginValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                                       <div className="mt-0.5"><span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{firmMarginPercent.toFixed(1)}% margin</span></div>
                                   </div>
                                   {/* Value */}
-                                  <div className="flex flex-col flex-1 border-r border-slate-100 pr-6 justify-center">
+                                  <div className="flex flex-col justify-center sm:border-r sm:border-slate-100 sm:pr-6">
                                       <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">Firm Scope Value</span>
                                       <span className="font-mono text-slate-900 font-bold text-lg tabular-nums">₹ {firmTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                                       <div className="text-[10px] font-medium text-slate-500 mt-0.5">Total Billable</div>
                                   </div>
                               </div>
                           ) : (
-                              <div className="flex flex-1 items-center justify-center border-r border-slate-100 pr-6">
+                              <div className="flex flex-1 items-center justify-center lg:border-r lg:border-slate-100 lg:pr-6">
                                   <span className="text-slate-400 text-xs font-medium italic">Financial details restricted to Owner role.</span>
                               </div>
                           )}
                           
                           {/* Item Counts (Everyone) */}
-                          <div className="flex flex-col flex-1 border-r border-slate-100 pr-6 justify-center gap-1.5">
+                          <div className="flex flex-col flex-1 justify-center gap-1.5 border-t border-slate-100 pt-4 lg:border-t-0 lg:pt-0 lg:border-r lg:pr-6">
                                <div className="flex justify-between items-center">
                                    <span className="text-slate-500 font-bold text-[10px] uppercase tracking-wider">Client-Procured</span>
                                    <span className="font-bold text-slate-700 text-xs">{clientProcuredCount} items</span>
@@ -1004,7 +1007,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                           </div>
 
                           {/* Grand Total — the same figure as Pricing & Tiers */}
-                          <div className="flex flex-col min-w-[200px] justify-center items-end">
+                          <div className="flex flex-col min-w-[200px] justify-center items-start lg:items-end border-t border-slate-100 pt-4 lg:border-t-0 lg:pt-0">
                               <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">Total Project Value</span>
                               {isOwner ? (<>
                                   <span className="font-mono text-sky-700 font-bold text-2xl tabular-nums" data-testid="boq-grand-total">₹ {grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>

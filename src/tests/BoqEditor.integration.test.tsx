@@ -11,7 +11,7 @@ import { render, screen, fireEvent, within, act, cleanup } from '@testing-librar
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../../contexts/OrgContext', () => ({
-  useOrg: () => ({ orgData: { tenantId: 'test-tenant' }, currentRole: 'Super Admin', currentRoles: ['Super Admin'] }),
+  useOrg: () => ({ orgData: { tenantId: 'test-tenant' }, currentRole: 'Super Admin', currentRoles: ['Super Admin'], currentUserAuth: { displayName: 'Priya Shah', email: 'priya@example.com' } }),
 }));
 vi.mock('../../hooks/useStudioSettings', () => ({ useStudioSettings: () => ({ settings: {}, updateSettings: vi.fn() }) }));
 vi.mock('../../services/firebaseClient', () => ({ db: null, functions: null, auth: null, storage: null }));
@@ -26,6 +26,7 @@ import StudioDashboard from '../../components/StudioDashboard';
 import TierManager from '../../components/TierManager';
 import { boqTotal, buildBankMap } from '../../lib/boqPricing';
 import { calculateSellPrice, formatCurrency } from '../../lib/utils';
+import { INITIAL_BANK } from '../../constants';
 
 const bank: any[] = [
   { id: 'wardrobe', name: 'Wardrobe', cat: 'Carpentry', unit: 'sq ft', specs: 'Laminate finish', materials: 1000, labor: 400, margin: 20 },
@@ -285,5 +286,114 @@ describe('Pricing & Tiers: one price per option', () => {
     render(<PricingHarness />);
     fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
     expect(screen.getByText(/0\.0% GM • 0 items/)).toBeTruthy();
+  });
+});
+
+/* The rest of Pricing & Tiers: figures that were invented, approvals nobody
+   recorded, a Sync that lost the booked contract, a Regenerate with no way back. */
+function TierHarness({ projects, useBank = bank, probe }: { projects?: any[]; useBank?: any[]; probe?: (s: { ctx: any; tiers: any[] }) => void }) {
+  const bankMap = useMemo(() => buildBankMap(useBank), [useBank]);
+  const [tiers, setTiers] = useState<any[]>(() => [
+    { id: 'ess', name: 'Essential Elegance', timestamp: 1, boq: [{ id: 'a', bankId: 'wardrobe', qty: 30 }] },
+    { id: 'com', name: 'Comfort Upgrade', timestamp: 2, boq: [{ id: 'c', bankId: 'wardrobe', qty: 40 }, { id: 'd', bankId: 'paint', qty: 300 }] },
+  ]);
+  const calc = useMemo(() => withSummaries(tiers, bankMap), [tiers, bankMap]);
+  const [ctx, setCtx] = useState<any>({ name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10, config: '1BHK' });
+  const [active, setActive] = useState<string | null>('ess');
+  probe?.({ ctx, tiers });
+  return (
+    <TierManager tiers={calc} setTiers={setTiers as any} activeTierId={active} setActiveTierId={setActive}
+      projectContext={ctx} setProjectContext={setCtx} bank={useBank} setActiveTab={() => undefined}
+      projects={projects} projectId="me" />
+  );
+}
+
+const otherProject = (id: string, name: string, area: number, gm: number) => ({
+  id, activeTierId: 't', context: { name, area },
+  tiers: [{ id: 't', name: 'T', timestamp: 1, boq: [], summary: { totalRevenue: 900000, totalSell: 820000, blendedGm: gm, itemCount: 14 } }],
+});
+
+describe('Pricing & Tiers: only real benchmarks', () => {
+  it('with no other projects it says so, and invents none', () => {
+    render(<TierHarness projects={[]} />);
+    expect(screen.queryByText(/median/i)).toBeNull();
+    expect(screen.queryByText(/Majiwada|Hiranandani/)).toBeNull();
+    expect(screen.getByText('No other priced projects to compare yet')).toBeTruthy();
+    expect(screen.getByText(/No other priced projects yet/)).toBeTruthy();
+  });
+
+  it("uses the studio's own projects for the median and the comparables, never this one", () => {
+    render(<TierHarness projects={[
+      otherProject('me', 'Test flat', 465, 99),
+      otherProject('p1', 'Andheri 2BHK', 700, 20),
+      otherProject('p2', 'Thane 1BHK', 480, 24),
+      otherProject('p3', 'Powai 3BHK', 1400, 30),
+    ]} />);
+    expect(screen.getByText('studio median 24.0%')).toBeTruthy();
+    expect(screen.getByText('Thane 1BHK')).toBeTruthy();
+    expect(screen.getByText('Andheri 2BHK')).toBeTruthy();
+    expect(screen.queryByText('Powai 3BHK')).toBeNull();
+    expect(screen.getByText(/pts vs studio median/)).toBeTruthy();
+  });
+});
+
+describe('Pricing & Tiers: approving and syncing', () => {
+  it('Approve records who approved it and when', () => {
+    let state: any;
+    render(<TierHarness probe={s => { state = s; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    const ess = state.tiers.find((t: any) => t.id === 'ess');
+    expect(ess.approval.by).toBe('Priya Shah');
+    expect(screen.getByText(/approved by Priya Shah on/)).toBeTruthy();
+    expect(screen.queryByText(/by Anish/)).toBeNull();
+  });
+
+  it('Sync to a different option keeps a snapshot of the booked contract', () => {
+    let state: any;
+    render(<TierHarness probe={s => { state = s; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    const booked = state.ctx.financials.approvedExecutionValue;
+    // Move to the other option and sync it.
+    fireEvent.click(screen.getAllByText('Comfort Upgrade')[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Sync to Payments & Revisions/ }));
+    expect(state.ctx.approvedTierId).toBe('com');
+    expect(state.ctx.financials.paymentSnapshots).toEqual([
+      expect.objectContaining({ tierId: 'ess', approvedExecutionValue: booked }),
+    ]);
+    expect(state.tiers.find((t: any) => t.id === 'ess').lifecycleTag).toBe('Superseded');
+  });
+});
+
+describe('Pricing & Tiers: Regenerate can be undone', () => {
+  it('puts the old options back', () => {
+    let state: any;
+    render(<TierHarness useBank={INITIAL_BANK as any} probe={s => { state = s; }} />);
+    const before = state.tiers.map((t: any) => t.id);
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
+    fireEvent.click(screen.getByRole('button', { name: /Regenerate and replace/ }));
+    expect(state.tiers.map((t: any) => t.id)).not.toEqual(before);
+    expect(screen.getByRole('status').textContent).toContain('Regenerated');
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(state.tiers.map((t: any) => t.id)).toEqual(before);
+  });
+});
+
+describe('Cards view on a frozen BOQ', () => {
+  it('the card delete is switched off and says why', () => {
+    render(<EditorHarness frozen />);
+    fireEvent.click(screen.getByRole('button', { name: 'Cards' }));
+    const del = screen.getByRole('button', { name: 'Delete Wardrobe' }) as HTMLButtonElement;
+    expect(del.disabled).toBe(true);
+    expect(del.title).toContain('change order');
+  });
+
+  it('on a live BOQ the card delete removes the line, with undo', () => {
+    let latest: any[] = [];
+    render(<EditorHarness probe={t => { latest = t; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Cards' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Wardrobe' }));
+    expect(lineIds(latest)).toEqual(['l2', 'l3']);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(lineIds(latest)).toEqual(['l1', 'l2', 'l3']);
   });
 });

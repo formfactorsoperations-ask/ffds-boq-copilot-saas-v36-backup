@@ -8,6 +8,9 @@ import { realRooms } from '../lib/scopeBuckets';
 import { isScopeFlowOn, lockedTierId } from '../lib/scopeFlow';
 import { buildBankMap } from '../lib/boqPricing';
 import { compareTiers, optionPrice } from '../lib/tierComparison';
+import { otherBenchmarks, medianGm, closestInSize } from '../lib/tierBenchmarks';
+import { contextWithApproved, tiersWithApproved, describeApproval } from '../lib/tierApproval';
+import { useOrg } from '../contexts/OrgContext';
 import { CompareIcon, DeleteIcon, PencilIcon, CheckBadgeIcon, SparklesIcon, SaveIcon, CheckIcon, FileSpreadsheetIcon, ArrowRightIcon } from './Icons';
 
 interface TierManagerProps {
@@ -21,15 +24,19 @@ interface TierManagerProps {
     setActiveTab: (tab: string) => void;
     onImportClick?: () => void;
     projects?: FullProjectData[];
+    /** This project's id, so it is not benchmarked against itself. */
+    projectId?: string;
     /** The studio's own typology templates. Falls back to the built-ins. */
     templates?: TemplateData;
 }
 
-const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId, setActiveTierId, projectContext, setProjectContext, bank, setActiveTab, onImportClick, projects, templates }) => {
+const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId, setActiveTierId, projectContext, setProjectContext, bank, setActiveTab, onImportClick, projects, projectId, templates }) => {
     /* Signed scope: the version the client signed changes only through a
        Scope Revision, so it cannot be synced, re-approved or deleted here. */
     const scopeFlowOn = isScopeFlowOn(projectContext);
     const signedTierId = lockedTierId(projectContext);
+    const { currentUserAuth, currentRole } = useOrg() as any;
+    const approverName = currentUserAuth?.displayName || currentUserAuth?.email || currentRole || 'Studio';
     const [editingTierId, setEditingTierId] = useState<string | null>(null);
     const [editingTierName, setEditingTierName] = useState('');
     const [discountHeadroom, setDiscountHeadroom] = useState<number>(0);
@@ -68,6 +75,9 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
     */
     const approvedTier = tiers.find(t => t.id === projectContext.approvedTierId);
 
+    /* What Regenerate replaced, so one click can put it back. */
+    const [regenUndo, setRegenUndo] = useState<{ tiers: ProposalTier[]; activeTierId: string | null; approvedTierId?: string } | null>(null);
+
     const handleRegenerate = () => {
         const fresh = generateStandardPackages(
             projectContext,
@@ -80,11 +90,26 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             setRegenOpen(false);
             return;
         }
+        setRegenUndo({ tiers, activeTierId, approvedTierId: projectContext.approvedTierId });
         setTiers(fresh);
         setActiveTierId((fresh.find(t => t.name === 'Comfort Upgrade') || fresh[0]).id);
         setProjectContext(prev => ({ ...prev, approvedTierId: undefined }));
         setRegenOpen(false);
-        showSuccessWithNext(`Regenerated ${fresh.length} options from the current brief.`);
+    };
+
+    /* The offer lapses: undoing much later would also throw away edits made since. */
+    React.useEffect(() => {
+        if (!regenUndo) return;
+        const t = setTimeout(() => setRegenUndo(null), 20000);
+        return () => clearTimeout(t);
+    }, [regenUndo]);
+
+    const handleUndoRegenerate = () => {
+        if (!regenUndo) return;
+        setTiers(regenUndo.tiers);
+        setActiveTierId(regenUndo.activeTierId);
+        setProjectContext(prev => ({ ...prev, approvedTierId: regenUndo.approvedTierId }));
+        setRegenUndo(null);
     };
 
     const activeTier = tiers.find(t => t.id === activeTierId) || tiers[0];
@@ -279,53 +304,16 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         return (newProfit / clientPays) * 100;
     }, [clientPays, activeTierCost]);
 
-    const comparableProjects = useMemo(() => {
-        if (!projects || projects.length <= 1) {
-            return [
-                { name: "Majiwada 2-BHK", value: 985600, gm: 25.6, itemsCount: 20 },
-                { name: "Hiranandani One", value: 1173843, gm: 24.2, itemsCount: 29 }
-            ];
-        }
-        
-        const currentProjectName = projectContext.name || '';
-        const others = projects.filter(p => p.context?.name !== currentProjectName);
-        
-        if (others.length === 0) {
-            return [
-                { name: "Majiwada 2-BHK", value: 985600, gm: 25.6, itemsCount: 20 },
-                { name: "Hiranandani One", value: 1173843, gm: 24.2, itemsCount: 29 }
-            ];
-        }
-
-        const currentArea = projectContext.area || 1000;
-        const mapped = others.map(p => {
-            const pArea = p.context?.area || 1000;
-            const distance = Math.abs(pArea - currentArea);
-            
-            let pValue = 0;
-            let pGm = 22.1;
-            let pItemsCount = 0;
-            
-            const activeTier = p.tiers?.find(t => t.id === p.activeTierId) || p.tiers?.[0];
-            if (activeTier) {
-                pValue = activeTier.summary?.totalRevenue || activeTier.summary?.totalSell || 0;
-                pGm = activeTier.summary?.blendedGm || 22.1;
-                pItemsCount = activeTier.boq?.length || 0;
-            }
-
-            return {
-                name: p.context?.name || "Other Project",
-                value: pValue,
-                gm: pGm,
-                itemsCount: pItemsCount,
-                distance
-            };
-        });
-
-        mapped.sort((a, b) => a.distance - b.distance);
-        
-        return mapped.slice(0, 2);
-    }, [projects, projectContext]);
+    /* The studio's own projects, never invented ones (lib/tierBenchmarks.ts). */
+    const benchmarks = useMemo(
+        () => otherBenchmarks(projects, { id: projectId, name: projectId ? undefined : projectContext.name }),
+        [projects, projectId, projectContext.name],
+    );
+    const studioMedianGm = useMemo(() => medianGm(benchmarks), [benchmarks]);
+    const comparableProjects = useMemo(
+        () => closestInSize(benchmarks, projectContext.area || 0),
+        [benchmarks, projectContext.area],
+    );
 
     const handleAddTier = () => {
         const newTier: ProposalTier = {
@@ -393,98 +381,26 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         setActiveTab('boq-editor');
     };
 
+    /* Approve and Sync are one rule (lib/tierApproval.ts): the replaced
+       contract is snapshotted, and the approval records who and when. */
+    const makeBaseline = (tier: ProposalTier) => {
+        const now = Date.now();
+        const previousApprovedId = projectContext.approvedTierId;
+        setProjectContext(prev => contextWithApproved(prev, tier, tiers, now));
+        setTiers(prev => tiersWithApproved(prev, tier.id, previousApprovedId, { at: now, by: approverName }));
+    };
+
     const handleSyncTier = () => {
         if (!activeTier) return;
-        setProjectContext(prev => {
-            const prevFinancials = prev.financials || {
-                initiationFeePaid: 0,
-                billablePercent: 100,
-                executionGstEnabled: true,
-                projectedCashValue: 0,
-                taxLimitYearly: 2000000,
-                goodwillDiscount: 0,
-                discounts: [],
-                paymentRevisions: [],
-            };
-            return {
-                ...prev,
-                approvedTierId: activeTier.id,
-                financials: {
-                    ...prevFinancials,
-                    approvedExecutionValue: activeTier.summary.totalSell || 0,
-                    approvedDesignValue: activeTier.summary.designFee || 0,
-                },
-                engagement: prev.engagement ? {
-                    ...prev.engagement,
-                    executionValue: activeTier.summary.totalSell || 0,
-                    designFee: activeTier.summary.designFee || 0,
-                } : prev.engagement
-            };
-        });
-        if (setActiveTierId) {
-            setActiveTierId(activeTier.id);
-        }
-        showSuccessWithNext(`Successfully synced ${activeTier.name} to Revision Studio and Payment Schedule as approved baseline.`);
+        makeBaseline(activeTier);
+        setActiveTierId(activeTier.id);
+        showSuccessWithNext(`Synced ${activeTier.name} to Revision Studio and Payment Schedule as the approved baseline.`);
     };
 
     const handleApproveTier = (tierId: string) => {
         const selectedTier = tiers.find(t => t.id === tierId);
         if (!selectedTier) return;
-
-        setProjectContext(prev => {
-            const prevFinancials = prev.financials || {
-                initiationFeePaid: 0,
-                billablePercent: 100,
-                executionGstEnabled: true,
-                projectedCashValue: 0,
-                taxLimitYearly: 2000000,
-                goodwillDiscount: 0,
-                discounts: [],
-                paymentRevisions: [],
-            };
-
-            // Capture snapshot of the previous version if one was approved
-            const snapshots = prevFinancials.paymentSnapshots || [];
-            const updatedSnapshots = [...snapshots];
-            if (prev.approvedTierId) {
-                const previousTier = tiers.find(t => t.id === prev.approvedTierId);
-                const previousName = previousTier?.name || "Previous Version";
-                if (!updatedSnapshots.some(s => s.tierId === prev.approvedTierId)) {
-                    updatedSnapshots.push({
-                        tierId: prev.approvedTierId,
-                        tierName: previousName,
-                        timestamp: Date.now(),
-                        approvedExecutionValue: prevFinancials.approvedExecutionValue ?? 0,
-                        approvedDesignValue: prevFinancials.approvedDesignValue ?? 0,
-                        milestones: prev.paymentMilestones || [],
-                        billablePercent: prevFinancials.billablePercent,
-                        executionGstEnabled: prevFinancials.executionGstEnabled,
-                    });
-                }
-            }
-
-            const newExecutionValue = selectedTier.summary.totalSell || 0;
-            const newDesignValue = selectedTier.summary.designFee || 0;
-
-            return {
-                ...prev,
-                approvedTierId: tierId,
-                financials: {
-                    ...prevFinancials,
-                    approvedExecutionValue: newExecutionValue,
-                    approvedDesignValue: newDesignValue,
-                    paymentSnapshots: updatedSnapshots,
-                },
-                engagement: prev.engagement ? {
-                    ...prev.engagement,
-                    executionValue: newExecutionValue,
-                    designFee: newDesignValue,
-                } : prev.engagement
-            };
-        });
-
-        // Also tag it
-        setTiers(prev => prev.map(t => t.id === tierId ? {...t, lifecycleTag: 'Current contract' } : (t.id === projectContext.approvedTierId ? {...t, lifecycleTag: 'Superseded'} : t)));
+        makeBaseline(selectedTier);
         showSuccessWithNext('Option set as current contract');
     }
 
@@ -846,7 +762,8 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                         <div className="flex flex-col md:items-end text-left md:text-right">
                             <h1 className="text-[40px] font-bold text-indigo-600 tracking-tight leading-none">{formatCurrency(displayValue)}</h1>
                             <p className="text-sm text-slate-500 mt-2">
-                                <span className="font-semibold text-amber-700">{(activeTier.summary.blendedGm ?? 0).toFixed(1)}% blended GM</span> <span className="text-slate-300 mx-1">·</span> median 22.75%
+                                <span className="font-semibold text-amber-700">{(activeTier.summary.blendedGm ?? 0).toFixed(1)}% blended GM</span>
+                                {studioMedianGm !== null && <><span className="text-slate-300 mx-1">·</span><span title={`Median of ${benchmarks.length} other priced ${benchmarks.length === 1 ? 'project' : 'projects'}`}>studio median {studioMedianGm.toFixed(1)}%</span></>}
                             </p>
                         </div>
                     </div>
@@ -871,7 +788,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                     <CheckIcon className="w-4 h-4" /> {isAnnexureOrRevision ? 'Approved after revision' : 'Frozen at approval'}
                                 </div>
                                 <p className="text-emerald-700/80 text-[13px]">
-                                    {formatCurrency(displayValue)} at {(activeTier.summary.blendedGm ?? 0).toFixed(1)}% · version of {new Date(activeTier.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}. {isAnnexureOrRevision ? 'BOQ updated after revision — editing opens a new version.' : 'BOQ locked — editing opens a new version.'}
+                                    {formatCurrency(displayValue)} at {(activeTier.summary.blendedGm ?? 0).toFixed(1)}%, {describeApproval(activeTier)}. {isAnnexureOrRevision ? 'BOQ updated after revision — editing opens a new version.' : 'BOQ locked — editing opens a new version.'}
                                 </p>
                             </div>
                         </div>
@@ -1216,13 +1133,15 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Blended GM</span>
                                 <h3 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">{(activeTier.summary.blendedGm ?? 0).toFixed(1)}%</h3>
                                 <span className="text-[11px] font-medium text-slate-500 mt-1">
-                                    {(activeTier.summary.blendedGm ?? 0) > 22.75 ? "▲" : "▼"} {Math.abs((activeTier.summary.blendedGm ?? 0) - 22.75).toFixed(1)} pts vs median
+                                    {studioMedianGm === null
+                                        ? 'No other priced projects to compare yet'
+                                        : <>{(activeTier.summary.blendedGm ?? 0) >= studioMedianGm ? "▲" : "▼"} {Math.abs((activeTier.summary.blendedGm ?? 0) - studioMedianGm).toFixed(1)} pts vs studio median</>}
                                 </span>
                             </div>
                             <div className="flex flex-col gap-1 pr-6 border-r border-slate-100">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Per Sq Ft</span>
-                                <h3 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">{formatCurrency(displayValue / Math.max(1, projectContext.area || 1000))}</h3>
-                                <span className="text-[11px] font-medium text-slate-500 mt-1">revenue basis</span>
+                                <h3 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">{(projectContext.area || 0) > 0 ? formatCurrency(displayValue / projectContext.area!) : '—'}</h3>
+                                <span className="text-[11px] font-medium text-slate-500 mt-1">{(projectContext.area || 0) > 0 ? 'revenue basis' : 'set the project area to see this'}</span>
                             </div>
                             <div className="flex flex-col gap-1">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Above Floor By</span>
@@ -1293,10 +1212,13 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                         <div className="flex flex-col gap-3 border-t border-slate-100 pt-5">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Comparable Past Projects</span>
                             <div className="flex flex-col gap-0">
+                                {comparableProjects.length === 0 && (
+                                    <p className="text-xs text-slate-500 py-2">No other priced projects yet. This fills in as the studio quotes more.</p>
+                                )}
                                 {comparableProjects.map((p, idx) => {
                                     const diffPct = (activeTier.summary.blendedGm ?? 0) - p.gm;
                                     return (
-                                        <div key={idx} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-b-0">
+                                        <div key={p.id || idx} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-b-0">
                                             <div className="flex flex-col gap-0.5">
                                                 <span className="text-sm font-semibold text-slate-800">{p.name}</span>
                                                 <span className="text-xs text-slate-400">{formatCurrency(p.value)} • {p.itemsCount} items</span>
@@ -1311,7 +1233,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                     );
                                 })}
                             </div>
-                            <span className="text-[11px] text-slate-400">Closest matches by size and item count.</span>
+                            {comparableProjects.length > 0 && <span className="text-[11px] text-slate-400">Your projects closest in size.</span>}
                         </div>
                     </div>
                 </div>
@@ -1439,6 +1361,14 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                 is safe — a brief that has moved on is the reason to, and three
                 hand-edited options are the reason to hesitate.
             */}
+            {regenUndo && (
+                <div role="status" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-4 rounded-xl bg-slate-900 text-white px-4 py-2.5 shadow-2xl hud-row-in no-print">
+                    <span className="text-sm font-semibold">Regenerated {tiers.length} options from the current brief</span>
+                    <button onClick={handleUndoRegenerate} className="text-sm font-bold underline underline-offset-2 hover:text-slate-200">Undo</button>
+                    <button onClick={() => setRegenUndo(null)} aria-label="Dismiss" className="text-slate-400 hover:text-white text-sm font-bold">✕</button>
+                </div>
+            )}
+
             {regenOpen && (
                 <div className="fixed inset-0 z-[220] bg-[#3D52A0]/90 backdrop-blur-md flex items-center justify-center p-5 no-print"
                     onClick={() => setRegenOpen(false)}>
@@ -1491,8 +1421,9 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                             {regenPreview.lines > 0 ? ` and ${regenPreview.lines} priced lines` : ''}
                                         </p>
                                         <p className="text-[11px] text-amber-800/80 mt-1 leading-relaxed">
-                                            Hand-edited quantities, margins and added items in them are discarded. Options built by
-                                            two different versions of the rules cannot sit side by side and mean anything.
+                                            Hand-edited quantities, margins and added items in them are replaced. Options built by
+                                            two different versions of the rules cannot sit side by side and mean anything. You can
+                                            undo this straight after.
                                         </p>
                                     </div>
                                 )}

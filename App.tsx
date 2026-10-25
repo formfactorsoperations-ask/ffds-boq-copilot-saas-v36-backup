@@ -3921,6 +3921,7 @@ export default function App() {
                           setBank={setBank} // NEW: Pass bank setter for dynamic creation
                           setActiveTab={setActiveTab}
                           projects={visibleProjects}
+                          projectId={activeInternalId || undefined}
                           templates={templates}
                         />
                       )}
@@ -4670,6 +4671,7 @@ export default function App() {
                           setBank={setBank} // NEW: Pass bank setter for dynamic creation
                           setActiveTab={setActiveTab}
                           projects={visibleProjects}
+                          projectId={activeInternalId || undefined}
                           templates={templates}
                         />
                       )}

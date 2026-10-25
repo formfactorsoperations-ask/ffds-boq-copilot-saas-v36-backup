@@ -343,7 +343,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
             </span>
           </div>
           <div className="text-xs text-slate-500 font-normal">
-            BOQ Total: <strong className="font-mono text-slate-900 text-sm font-bold tabular-nums">{formatCurrency(projectStats.grandTotal)}</strong>
+            <span title="The BOQ lines only. The project total with the design fee is at the foot of the editor.">Work total (before design fee):</span> <strong className="font-mono text-slate-900 text-sm font-bold tabular-nums">{formatCurrency(projectStats.grandTotal)}</strong>
           </div>
         </div>
 

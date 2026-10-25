@@ -21,6 +21,7 @@ interface RoomCardProps {
   selectedItemIds?: Set<string>;
   onSelectItemToggle?: (itemId: string) => void;
   onSaveAsBundle?: (itemIds: string[], defaultName?: string) => void;
+  boqFrozen?: boolean;
 }
 
 const RoomCard: React.FC<RoomCardProps> = ({ 
@@ -31,6 +32,7 @@ const RoomCard: React.FC<RoomCardProps> = ({
   onUpdate, 
   onBulkUpdate, 
   onDelete, 
+  boqFrozen,
   onAddItem, 
   onViewInBank,
   selectedItemIds,
@@ -296,6 +298,7 @@ const RoomCard: React.FC<RoomCardProps> = ({
                                 searchQuery={searchActive ? cleanSearchQuery : ''}
                                 onUpdate={onUpdate}
                                 onDelete={onDelete}
+                                boqFrozen={boqFrozen}
                                 onViewInBank={onViewInBank}
                                 isSelected={selectedItemIds?.has(item.id)}
                                 onSelectToggle={onSelectItemToggle ? () => onSelectItemToggle(item.id) : undefined}
