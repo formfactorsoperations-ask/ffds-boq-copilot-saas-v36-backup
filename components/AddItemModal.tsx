@@ -9,6 +9,7 @@ import { ADDON_BUNDLES, calculateQuantity, getSmartDefaultCoefficient } from '..
 import { INITIAL_BANK } from '../constants';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import { useOrg } from '../contexts/OrgContext';
+import NumberField from './NumberField';
 
 interface AddItemModalProps {
   isOpen: boolean;
@@ -298,7 +299,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <label className="text-xs font-semibold uppercase text-slate-400">Qty</label>
-                                    <input type="number" min="0" value={quantities[item.id]?.qty || 0} disabled={quantities[item.id]?.isLoading} onChange={e => handleQuantityChange(item.id, parseFloat(e.target.value))} className="w-20 p-1.5 border border-slate-300 rounded text-center font-bold text-slate-800" />
+                                    <NumberField min={0} value={quantities[item.id]?.qty || 0} disabled={quantities[item.id]?.isLoading} onCommit={v => handleQuantityChange(item.id, v ?? 0)} aria-label={`Quantity of ${item.name}`} className="w-20 p-1.5 border border-slate-300 rounded text-center font-bold text-slate-800" />
                                 </div>
                            </div>
                            <div className="mt-2 text-xs text-[#334486] italic bg-sky-50 border border-sky-100 p-2 rounded-md flex gap-2">

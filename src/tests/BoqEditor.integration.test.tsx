@@ -397,3 +397,144 @@ describe('Cards view on a frozen BOQ', () => {
     expect(lineIds(latest)).toEqual(['l1', 'l2', 'l3']);
   });
 });
+
+/*
+  Every number box in the editor, typed the way a keyboard types: clear the
+  box, then each key appends to what it shows. The Excel view's Cost used to
+  show the labour once cleared, so typing 3200 wrote ₹40,02,800 of material.
+*/
+const typeInto = (el: HTMLInputElement, text: string) => {
+  fireEvent.focus(el);
+  fireEvent.change(el, { target: { value: '' } });
+  for (const k of text) fireEvent.change(el, { target: { value: el.value + k } });
+  fireEvent.blur(el);
+};
+const unitCost = (l: any) => Math.round(((l.baseRate ?? 0) + (l.labor ?? 400)) * 100) / 100;
+
+describe('Number boxes keep what is typed', () => {
+  it('Excel Cost: clearing and typing 3200 sets the unit cost to 3200, split as before', () => {
+    let latest: any[] = [];
+    render(<EditorHarness probe={t => { latest = t; }} />);
+    openExcel();
+    const cost = screen.getByLabelText('Unit cost of Wardrobe') as HTMLInputElement;
+    expect(cost.value).toBe('1400');
+    typeInto(cost, '3200');
+    const w = latest[0].boq.find((l: any) => l.id === 'l1');
+    expect(unitCost(w)).toBe(3200);
+    // 1000 : 400 is kept.
+    expect(w.baseRate).toBeCloseTo(2285.71, 2);
+    expect(w.labor).toBeCloseTo(914.29, 2);
+    expect(cost.value).toBe('3200');
+  });
+
+  it('Excel Cost below the labour is taken as typed, not raised to the labour', () => {
+    let latest: any[] = [];
+    render(<EditorHarness probe={t => { latest = t; }} />);
+    openExcel();
+    typeInto(screen.getByLabelText('Unit cost of Wardrobe') as HTMLInputElement, '300');
+    expect(unitCost(latest[0].boq[0])).toBe(300);
+  });
+
+  it('Excel Cost reads "3,200"', () => {
+    let latest: any[] = [];
+    render(<EditorHarness probe={t => { latest = t; }} />);
+    openExcel();
+    typeInto(screen.getByLabelText('Unit cost of Wardrobe') as HTMLInputElement, '3,200');
+    expect(unitCost(latest[0].boq[0])).toBe(3200);
+  });
+
+  it('Excel Qty and Margin take decimals with no stray 0', () => {
+    let latest: any[] = [];
+    render(<EditorHarness probe={t => { latest = t; }} />);
+    openExcel();
+    const qty = screen.getByLabelText('Quantity of Wardrobe') as HTMLInputElement;
+    typeInto(qty, '2.5');
+    expect(qty.value).toBe('2.5');
+    const margin = screen.getByLabelText('Margin of Wardrobe') as HTMLInputElement;
+    typeInto(margin, '12.5');
+    expect(margin.value).toBe('12.5');
+    expect(latest[0].boq[0]).toMatchObject({ qty: 2.5, marginOverride: 12.5 });
+  });
+
+  it('Focus Editor: quantity, total unit cost, material and labour', () => {
+    let latest: any[] = [];
+    render(<EditorHarness probe={t => { latest = t; }} />);
+    clickLine('Wardrobe');
+    typeInto(screen.getByLabelText('Quantity') as HTMLInputElement, '7.5');
+    expect(latest[0].boq[0].qty).toBe(7.5);
+    // Decimals used to round away: 3200.5 became 3201.
+    typeInto(screen.getByLabelText('Total unit cost') as HTMLInputElement, '3200.5');
+    expect(unitCost(latest[0].boq[0])).toBe(3200.5);
+    typeInto(screen.getByLabelText('Material rate') as HTMLInputElement, '1999.5');
+    expect(latest[0].boq[0].baseRate).toBe(1999.5);
+    typeInto(screen.getByLabelText('Labour rate') as HTMLInputElement, '750');
+    expect(latest[0].boq[0].labor).toBe(750);
+  });
+
+  it('Focus Editor: the deck quantity', () => {
+    let latest: any[] = [];
+    render(<EditorHarness probe={t => { latest = t; }} />);
+    typeInto(screen.getByLabelText('Quantity of Wardrobe') as HTMLInputElement, '0.5');
+    expect(latest[0].boq[0].qty).toBe(0.5);
+  });
+
+  it('Size panel: a dimension under 1 keeps its 0', () => {
+    let latest: any[] = [];
+    render(<EditorHarness probe={t => { latest = t; }} />);
+    clickLine('Wardrobe');
+    const panel = screen.getByTestId('size-panel');
+    fireEvent.click(within(panel).getByRole('button', { name: 'm' }));
+    const w = within(panel).getByLabelText('Width (m)') as HTMLInputElement;
+    typeInto(w, '0.6');
+    expect(w.value).toBe('0.6');
+    typeInto(within(panel).getByLabelText('Height (m)') as HTMLInputElement, '0.9');
+    expect(latest[0].boq[0].qty).toBeCloseTo(5.81, 2);
+  });
+
+  it("Cards: the material cost box changes the line's price (it wrote a field nothing reads)", () => {
+    let latest: any[] = [];
+    render(<EditorHarness probe={t => { latest = t; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Cards' }));
+    fireEvent.click(screen.getAllByTitle('Advanced Settings')[0]);
+    fireEvent.click(screen.getByText('1000'));
+    const box = document.activeElement as HTMLInputElement;
+    for (const k of '1250') fireEvent.change(box, { target: { value: (box.value === '1000' ? '' : box.value) + k } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    const w = latest[0].boq.find((l: any) => l.id === 'l1');
+    expect(w.baseRate).toBe(1250);
+    expect(boqTotal([w], buildBankMap(bank))).toBeCloseTo(calculateSellPrice(1250, 400, 20) * 40, 6);
+  });
+
+  it('The global margin box can be cleared and retyped', () => {
+    let latest: any[] = [];
+    render(<EditorHarness probe={t => { latest = t; }} />);
+    fireEvent.click(screen.getByTitle('Set Global Margin'));
+    typeInto(screen.getByLabelText('Margin % for all items') as HTMLInputElement, '18');
+    fireEvent.click(screen.getByRole('button', { name: 'Apply All' }));
+    expect(latest[0].boq.every((l: any) => l.marginOverride === 18)).toBe(true);
+  });
+});
+
+describe('Keys inside an Excel cell belong to the cell', () => {
+  it('Enter in a cell saves it without ticking the row; Space is not swallowed', () => {
+    render(<EditorHarness />);
+    openExcel();
+    const cost = screen.getByLabelText('Unit cost of Wardrobe') as HTMLInputElement;
+    fireEvent.focus(cost);
+    const enter = fireEvent.keyDown(cost, { key: 'Enter' });
+    expect(enter).toBe(false); // the box handles Enter itself
+    const size = screen.getAllByRole('textbox', { name: 'Size' })[0];
+    const space = fireEvent.keyDown(size, { key: ' ' });
+    expect(space).toBe(true); // not prevented: the space reaches the box
+    const rowBox = screen.getAllByRole('checkbox')[1] as HTMLInputElement;
+    expect(rowBox.checked).toBe(false);
+  });
+
+  it('Space on the row itself still selects it', () => {
+    render(<EditorHarness />);
+    openExcel();
+    const row = document.getElementById('item-l1')!;
+    fireEvent.keyDown(row, { key: ' ' });
+    expect((screen.getAllByRole('checkbox')[1] as HTMLInputElement).checked).toBe(true);
+  });
+});

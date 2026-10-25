@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { BoqItem, Room, FullBoqItem } from '../types';
 import { formatCurrency, calculateSellPrice } from '../lib/utils';
 import BoqItemCard from './BoqItemCard';
+import NumberField from './NumberField';
 import { AddToCartIcon } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useOrg } from '../contexts/OrgContext';
@@ -147,10 +148,11 @@ const RoomCard: React.FC<RoomCardProps> = ({
                         {isMarkupOpen && (
                             <div className="absolute top-full right-0 mt-2 p-4 bg-white rounded-xl shadow-xl border border-slate-200 z-50 w-64 origin-top-right animate-in fade-in zoom-in duration-200">
                                 <label className="block text-xs font-bold text-slate-700 mb-2 whitespace-normal break-words">Set margin % for all items in this room</label>
-                                <input 
-                                   type="number" 
+                                <NumberField
+                                   min={0}
                                    value={markupValue}
-                                   onChange={e => setMarkupValue(Number(e.target.value))}
+                                   onCommit={v => setMarkupValue(v ?? 0)}
+                                   aria-label="Margin % for this room"
                                    className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 focus:outline-none focus:border-[#3D52A0]" 
                                 />
                                 <div className="flex justify-end gap-2 text-xs">
@@ -169,10 +171,11 @@ const RoomCard: React.FC<RoomCardProps> = ({
                                     <div className={`border-b border-slate-100 pb-3 ${finance ? '' : 'hidden'}`}>
                                         <label className="block font-bold text-slate-700 mb-1.5">Apply Margin % to Room Items</label>
                                         <div className="flex gap-2">
-                                            <input 
-                                               type="number" 
+                                            <NumberField
+                                               min={0}
                                                value={bulkMarkupValue}
-                                               onChange={e => setBulkMarkupValue(Number(e.target.value))}
+                                               onCommit={v => setBulkMarkupValue(v ?? 0)}
+                                               aria-label="Margin % for room items"
                                                className="w-20 border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:border-[#3D52A0]" 
                                             />
                                             <button 

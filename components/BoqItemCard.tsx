@@ -10,6 +10,7 @@ import { MarginDeviationIndicator } from './MarginDeviationIndicator';
 import { useOrg } from '../contexts/OrgContext';
 import { seesStudioFinance } from '../lib/roleAccess';
 import { SizePanel, sizeLabel } from './BoqSizeField';
+import NumberField from './NumberField';
 
 interface BoqItemCardProps {
   item: FullBoqItem;
@@ -92,6 +93,21 @@ const EditableField: React.FC<{
     const handleBlur = () => {
         setIsEditing(false);
         onBlur();
+    }
+
+    if (isEditing && inputType === 'number') {
+        // Numbers keep what is typed until the box is left (NumberField):
+        // an emptied box no longer becomes 0 under the cursor.
+        return (
+            <NumberField
+                autoFocus
+                value={value === '' || value === undefined || value === null ? undefined : Number(value)}
+                onCommit={v => onChange(v ?? 0)}
+                onDone={handleBlur}
+                className={`bg-white border border-sky-400 rounded-md outline-none ring-2 ring-sky-100 text-center shadow-sm ${className}`}
+                placeholder={placeholder}
+            />
+        )
     }
 
     if (isEditing) {
@@ -342,7 +358,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                             <div className="flex gap-1">
                                 <EditableField 
                                     value={item.materials}
-                                    onChange={v => onUpdate(item.id, 'materials', v)}
+                                    onChange={v => onUpdate(item.id, 'baseRate', Number(v) || 0)}
                                     onBlur={() => {}}
                                     inputType="number"
                                     className="w-full text-[11px] bg-white border border-slate-200 rounded px-2 py-1 text-slate-700 font-medium text-center"
@@ -350,7 +366,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                                 />
                                 <EditableField 
                                     value={item.labor}
-                                    onChange={v => onUpdate(item.id, 'labor', v)}
+                                    onChange={v => onUpdate(item.id, 'labor', Number(v) || 0)}
                                     onBlur={() => {}}
                                     inputType="number"
                                     className="w-full text-[11px] bg-white border border-slate-200 rounded px-2 py-1 text-slate-700 font-medium text-center"
@@ -360,7 +376,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                         </div>
                         {/* Selected Rate */}
                         <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Selected Rate (₹)</label>
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 block" title="Prices only a line that is not in the bank. Bank lines are priced from cost and margin.">Selected Rate (₹)</label>
                             <EditableField 
                                 value={item.selectedRate}
                                 onChange={v => onUpdate(item.id, 'selectedRate', v)}
@@ -442,10 +458,11 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                                         />
                                         <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
                                             <span className="text-[10px] text-slate-400">₹</span>
-                                            <input 
-                                                type="number" 
-                                                value={breakdown.estimatedValue || ''} 
-                                                onChange={e => updateBreakdownItem(breakdown.id, 'estimatedValue', Number(e.target.value))}
+                                            <NumberField
+                                                min={0}
+                                                allowEmpty
+                                                value={breakdown.estimatedValue || undefined}
+                                                onCommit={v => updateBreakdownItem(breakdown.id, 'estimatedValue', v ?? 0)}
                                                 placeholder="Value"
                                                 className="w-16 text-[11px] outline-none bg-transparent text-right font-bold text-slate-700"
                                             />
@@ -496,8 +513,8 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                      </div>
                      <div className="flex items-center gap-1.5 font-bold text-emerald-600 text-xs">
                         <EditableField 
-                            value={item.margin.toFixed(1)} 
-                            onChange={v => onUpdate(item.id, 'marginOverride', v)} 
+                            value={Math.round((item.margin || 0) * 10) / 10} 
+                            onChange={v => onUpdate(item.id, 'marginOverride', Number(v) || 0)} 
                             onBlur={() => {}}
                             inputType="number"
                             className="w-12 text-center bg-white border border-emerald-200 hover:border-emerald-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded py-0.5 shadow-sm transition-all"
@@ -528,7 +545,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                     <div className="flex items-center gap-1">
                         <EditableField 
                             value={item.qty}
-                            onChange={v => onUpdate(item.id, 'qty', v)}
+                            onChange={v => onUpdate(item.id, 'qty', Math.max(0, Number(v) || 0))}
                             onBlur={() => {}}
                             inputType="number"
                             className="w-12 font-bold text-sm bg-sky-50/50 border border-transparent hover:border-sky-200 focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] focus:bg-white rounded text-center text-[#3D52A0] py-0.5 transition-all shadow-inner"
