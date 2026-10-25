@@ -24,7 +24,7 @@
 
 import type { jsPDF as JsPdf } from 'jspdf';
 import { prepareClonedDocForPdf } from './pdfUtils';
-import { stageForPdf, planSheetBreaks, keepWholeRanges, forcedBreaks, groupIntoChunks, type Range } from './classicPdf';
+import { stageForPdf, planSheetBreaks, keepWholeRanges, forcedBreaks, groupIntoChunks, optionLinkSpots, type Range, type Spot } from './classicPdf';
 
 export type PageOrientation = 'portrait' | 'landscape';
 
@@ -103,6 +103,9 @@ const capture = (html2canvas: Html2Canvas, el: HTMLElement, opts: Record<string,
     throw err;
   });
 
+/** The scale a classic band is printed at: 1, or a touch less when it took in a sliver (MAX_STRETCH). */
+const fitOf = (band: Range, bandH: number) => Math.min(1, bandH / (band.bottom - band.top));
+
 /** A region of `canvas` as a white-backed JPEG, ready for jsPDF. */
 function sliceToJpeg(canvas: HTMLCanvasElement, top: number, height: number): string {
   const slice = document.createElement('canvas');
@@ -155,14 +158,58 @@ async function addClassicSheets(
         const height = Math.max(1, Math.min(canvas.height - top, Math.round((band.bottom - band.top) * k)));
         if (!first) pdf.addPage();
         first = false;
-        pdf.addImage(sliceToJpeg(canvas, top, height), 'JPEG', 0, CLASSIC_MARGIN_MM, sheet.wMm, (band.bottom - band.top) / pxPerMm);
+        const fit = fitOf(band, bandH);
+        pdf.addImage(
+          sliceToJpeg(canvas, top, height), 'JPEG',
+          (sheet.wMm * (1 - fit)) / 2, CLASSIC_MARGIN_MM,
+          sheet.wMm * fit, ((band.bottom - band.top) / pxPerMm) * fit,
+        );
         onProgress({ done: ++done, total: bands.length });
       }
       canvas.width = canvas.height = 0;
     }
+
+    addOptionLinks(pdf, host, bands, pxPerMm, bandH, sheet);
   } finally {
     host.remove();
   }
+}
+
+/*
+  Make the option cards clickable in the PDF: each jumps to its own option's
+  scope, and each scope's "Back to all options" jumps back. Sheets are numbered
+  from 1 in the order the bands were added.
+*/
+function addOptionLinks(pdf: JsPdf, host: HTMLElement, bands: Range[], pxPerMm: number, bandH: number, sheet: Sheet) {
+  const spots = optionLinkSpots(host);
+  if (!spots) return;
+  const sheetAt = (y: number) => {
+    const i = bands.findIndex(b => y >= b.top && y < b.bottom);
+    return i < 0 ? bands.length : i + 1;
+  };
+  const link = (spot: Spot, toY: number) => {
+    const page = sheetAt(spot.top);
+    const band = bands[page - 1];
+    if (!band) return;
+    const bottom = Math.min(spot.bottom, band.bottom);
+    // Placed exactly as the band's image was: shrunk to fit and centred if it ran long.
+    const fit = fitOf(band, bandH);
+    pdf.setPage(page);
+    pdf.link(
+      (sheet.wMm * (1 - fit)) / 2 + (spot.left / pxPerMm) * fit,
+      CLASSIC_MARGIN_MM + ((spot.top - band.top) / pxPerMm) * fit,
+      (spot.width / pxPerMm) * fit,
+      ((bottom - spot.top) / pxPerMm) * fit,
+      // Sheet edges are whole pixels (lib/classicPdf.ts rounds them); a target a
+      // fraction above its edge would otherwise land on the sheet before.
+      { pageNumber: sheetAt(Math.round(toY) + 1), magFactor: 'Fit' },
+    );
+  };
+  spots.cards.forEach(card => link(card.spot, card.scopeTop));
+  // A one-line target is easy to miss, and html2canvas sets text a touch lower than
+  // the page lays it out: give the way back a generous click area.
+  spots.backs.forEach(back => link({ ...back, top: back.top - 8, bottom: back.bottom + 30 }, spots.optionsTop));
+  pdf.setPage(bands.length);
 }
 
 /*

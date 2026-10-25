@@ -23,6 +23,12 @@ export interface Range { top: number; bottom: number }
 const KEEP_WHOLE = 0.6;
 /** A sheet is never filled to less than this share just to keep something whole. */
 const MIN_FILL = 0.5;
+/*
+  How much taller than a sheet a band may run, to take in a sliver that would
+  otherwise print alone — the bottom edge of a card before a section that
+  starts a fresh sheet. The band is scaled down to fit, by at most this much.
+*/
+export const MAX_STRETCH = 0.06;
 /** How much of what follows a heading must share its sheet, in px. */
 const HEADING_TAIL = 140;
 /** Ceilings on the waits while the copy settles, so a stalled image cannot hang the export. */
@@ -80,9 +86,14 @@ export function planSheetBreaks(
   while (total - start > 1) {
     const limit = Math.min(total, start + sheetH);
     const hard = hardBreaks.find(y => y > start + 1 && y <= limit);
+    // The next place this sheet has to end anyway: a forced break or the end of the document.
+    const nextEdge = hardBreaks.find(y => y > limit) ?? total;
     let end: number;
     if (hard !== undefined) {
       end = hard;
+    } else if (nextEdge > limit && nextEdge <= start + sheetH * (1 + MAX_STRETCH)) {
+      // Only a sliver would be left for a sheet of its own: take it in.
+      end = nextEdge;
     } else if (limit >= total) {
       end = total;
     } else {
@@ -139,6 +150,77 @@ export function forcedBreaks(host: HTMLElement): number[] {
   return [...before, ...after];
 }
 
+/*
+  The options, made usable on paper.
+
+  On screen, clicking an option card swaps the "Detailed Scope Breakdown" to
+  that option. A PDF cannot run the page, so the PDF carries every option's
+  scope instead, each starting on its own sheet, and the cards become links:
+  click Option C and the reader jumps to Option C's scope; each scope carries
+  a link back to the options. The links themselves are added by
+  lib/proposalPdf.ts from the positions `optionLinkSpots` reports.
+*/
+const BACK_TO_OPTIONS = 'data-pdf-back-to-options';
+
+function expandOptionsForPdf(copy: HTMLElement) {
+  const scopes = Array.from(copy.querySelectorAll<HTMLElement>('.roomwise-content'));
+  const cards = copy.querySelectorAll<HTMLElement>('.tier-option-card[data-tier-id]');
+  if (scopes.length < 2 || cards.length < 2) return;
+
+  scopes.forEach((scope, i) => {
+    scope.style.display = 'block';
+    scope.classList.remove('hidden');
+    // The first follows its section heading; every other option starts a fresh sheet.
+    if (i > 0) scope.classList.add('page-break-before');
+    const back = document.createElement('p');
+    back.setAttribute(BACK_TO_OPTIONS, '');
+    back.className = 'mb-4 text-xs font-bold text-[#3D52A0]';
+    back.textContent = '↑ Back to all options';
+    scope.prepend(back);
+  });
+  // The scope section itself starts a sheet, so its heading is not left behind on the previous one.
+  copy.querySelector('[id="scope-breakdown"]')?.classList.add('page-break-before');
+
+  cards.forEach(card => {
+    // Every option is in the PDF, so none of them is "the one being viewed".
+    card.querySelector('.viewing-badge')?.remove();
+    const cta = card.querySelector('.cta-text');
+    if (cta) cta.textContent = 'See this option’s detailed scope →';
+  });
+}
+
+export interface Spot { top: number; bottom: number; left: number; width: number }
+export interface OptionLinkSpots {
+  /** Each option card, and where its scope starts. */
+  cards: { tierId: string; spot: Spot; scopeTop: number }[];
+  /** Each "Back to all options" line, and where the options start. */
+  backs: Spot[];
+  optionsTop: number;
+}
+
+/** Where the option cards, their scopes and the way back sit inside `host`, in px from its top-left. */
+export function optionLinkSpots(host: HTMLElement): OptionLinkSpots | null {
+  // `[id=…]`, not `#…`: the copy repeats the live page's ids, and an id lookup may answer from the live page.
+  const origin = host.getBoundingClientRect();
+  const spotOf = (el: Element): Spot => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top - origin.top, bottom: r.bottom - origin.top, left: r.left - origin.left, width: r.width };
+  };
+  const options = host.querySelector('[id="options"]');
+  if (!options) return null;
+  const cards = Array.from(host.querySelectorAll('.tier-option-card[data-tier-id]')).flatMap(card => {
+    const tierId = card.getAttribute('data-tier-id') || '';
+    const scope = Array.from(host.querySelectorAll('.roomwise-content')).find(el => el.id === `roomwise-content-${tierId}`);
+    return scope ? [{ tierId, spot: spotOf(card), scopeTop: spotOf(scope).top }] : [];
+  });
+  if (cards.length < 2) return null;
+  return {
+    cards,
+    backs: Array.from(host.querySelectorAll(`[${BACK_TO_OPTIONS}]`)).map(spotOf),
+    optionsTop: spotOf(options).top,
+  };
+}
+
 /* Resolve after `ms` whatever happens, so a wait can be capped with Promise.race. */
 const after = (ms: number) => new Promise<void>(done => setTimeout(done, ms));
 
@@ -165,6 +247,7 @@ export async function stageForPdf(root: HTMLElement, widthPx: number, sheetH: nu
     el.style.height = `${sheetH}px`;
     el.style.minHeight = '0';
   });
+  expandOptionsForPdf(copy);
   // A scroll box shows a window onto its list on screen; on paper the whole list prints.
   copy.querySelectorAll<HTMLElement>('[class*="max-h-"][class*="overflow-y-auto"], [class*="max-h-"][class*="overflow-auto"]').forEach(el => {
     el.style.maxHeight = 'none';
