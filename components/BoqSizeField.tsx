@@ -4,6 +4,7 @@ import {
   SizeUnit, LineSize, readSize, qtyFromSize, sizeUpdates, CLEAR_SIZE, formatSize,
   parseSize, basisOfUnit,
 } from '../lib/boqSize';
+import NumberField from './NumberField';
 
 /*
   The size of a piece, typed once, and the quantity that follows from it.
@@ -37,10 +38,8 @@ export function useSizeUnit(): [SizeUnit, (u: SizeUnit) => void] {
 /** Why a size gave no quantity. (The project is not strict, so the union does not narrow.) */
 const reasonOf = (r: ReturnType<typeof qtyFromSize>): string => ('reason' in r ? r.reason : '');
 
-const num = (v: string): number | undefined => {
-  const n = parseFloat(v);
-  return Number.isFinite(n) && n > 0 ? n : undefined;
-};
+/** A dimension of zero, or none, is no dimension. */
+const dim = (v: number | undefined): number | undefined => (v !== undefined && v > 0 ? v : undefined);
 
 const fieldCls = 'w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] disabled:bg-slate-50 tabular-nums';
 const labelCls = 'block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5';
@@ -85,11 +84,11 @@ export const SizePanel: React.FC<{
       <div className={`grid gap-2 items-end ${showSecond ? 'grid-cols-[1fr_auto_1fr_auto_72px]' : 'grid-cols-[1fr_auto_72px]'}`}>
         <div>
           <label className={labelCls}>{firstLabel}</label>
-          <input
-            type="number" inputMode="decimal" step="any" min="0" disabled={disabled}
+          <NumberField
+            disabled={disabled} min={0} allowEmpty decimals={4}
             aria-label={`${firstLabel} (${unit})`}
-            value={size.a ?? ''}
-            onChange={e => write({ a: num(e.target.value) })}
+            value={size.a}
+            onCommit={v => write({ a: dim(v) })}
             placeholder={unit}
             className={fieldCls}
           />
@@ -98,11 +97,11 @@ export const SizePanel: React.FC<{
           <span className="pb-2 text-slate-400 text-sm">×</span>
           <div>
             <label className={labelCls}>Height</label>
-            <input
-              type="number" inputMode="decimal" step="any" min="0" disabled={disabled}
+            <NumberField
+              disabled={disabled} min={0} allowEmpty decimals={4}
               aria-label={`Height (${unit})`}
-              value={size.b ?? ''}
-              onChange={e => write({ b: num(e.target.value) })}
+              value={size.b}
+              onCommit={v => write({ b: dim(v) })}
               placeholder={unit}
               className={fieldCls}
             />
@@ -111,11 +110,11 @@ export const SizePanel: React.FC<{
         <span className="pb-2 text-slate-400 text-sm">×</span>
         <div>
           <label className={labelCls} title="How many identical pieces">Nos</label>
-          <input
-            type="number" inputMode="decimal" step="any" min="0" disabled={disabled}
+          <NumberField
+            disabled={disabled} min={0} allowEmpty
             aria-label="Number of pieces"
-            value={line.calcMultiplier && line.calcMultiplier !== 1 ? line.calcMultiplier : ''}
-            onChange={e => write({ nos: num(e.target.value) })}
+            value={line.calcMultiplier && line.calcMultiplier !== 1 ? line.calcMultiplier : undefined}
+            onCommit={v => write({ nos: dim(v) })}
             placeholder="1"
             className={fieldCls}
           />

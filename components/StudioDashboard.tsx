@@ -10,6 +10,7 @@ import AddItemModal from './AddItemModal';
 import InteractiveBoqEditor from './InteractiveBoqEditor';
 import BulkImportModal from './BulkImportModal';
 import TakeoffPanel from './TakeoffPanel';
+import NumberField from './NumberField';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheckIcon, GridIcon, ListIcon, SaveIcon, CheckIcon, ExportIcon, CalculatorIcon } from './Icons';
 import { Search, X, CheckCircle2, AlertCircle, Sparkles, Lock, Plus } from 'lucide-react';
@@ -708,10 +709,11 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                   {isGlobalMarkupOpen && (
                       <div className="absolute top-full right-0 mt-2 p-4 bg-white rounded-xl shadow-xl border border-slate-200 z-50 w-64 origin-top-right animate-in fade-in zoom-in duration-200">
                           <label className="block text-xs font-bold text-slate-700 mb-2 whitespace-normal break-words">Set global margin % for ALL items</label>
-                          <input 
-                              type="number" 
+                          <NumberField
+                              min={0}
                               value={globalMarkupValue}
-                              onChange={e => setGlobalMarkupValue(Number(e.target.value))}
+                              onCommit={v => setGlobalMarkupValue(v ?? 0)}
+                              aria-label="Margin % for all items"
                               className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 focus:outline-none focus:border-[#3D52A0]" 
                           />
                           <div className="flex justify-end gap-2 text-xs">
