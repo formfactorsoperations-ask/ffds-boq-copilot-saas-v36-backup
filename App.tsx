@@ -3535,6 +3535,8 @@ export default function App() {
                           allProjects={visibleProjects}
                           currentUserRole={currentRole}
                           setActiveTab={setActiveTab}
+                          tiers={tiers}
+                          bank={bank}
                         />
                       )}
 
@@ -4289,6 +4291,8 @@ export default function App() {
                           allProjects={visibleProjects}
                           currentUserRole={currentRole}
                           setActiveTab={setActiveTab}
+                          tiers={tiers}
+                          bank={bank}
                         />
                       )}
 

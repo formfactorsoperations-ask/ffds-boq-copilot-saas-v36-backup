@@ -1,4 +1,4 @@
-import { FullBoqItem, ProjectContext, PurchaseOrder, ProcurementMode } from '../types';
+import { FullBoqItem, Item, ProjectContext, PurchaseOrder, ProcurementMode } from '../types';
 import { buildEnvelopes, buildRoomMargins, effectiveMaterials, envelopeKey, Envelope, RoomMargin } from './procurement';
 import { calculateProjectFinancials } from './financialsUtils';
 import { isBillable } from './boqPricing';
@@ -53,7 +53,64 @@ export type CostConfidence = 'plan-only' | 'partly-committed' | 'mostly-committe
  * BOQ has a margin %. 'no-costs': every line is a sell rate with no cost behind
  * it, so no margin can be read. 'empty': no billable lines at all.
  */
-export type MarginBasis = 'boq' | 'no-costs' | 'empty';
+export type MarginBasis = 'boq' | 'assumed' | 'no-costs' | 'empty';
+
+/**
+ * Where an assumed margin % comes from, when the BOQ carries no costs at all
+ * (a BOQ imported as sell rates only, which is how most legacy projects are):
+ *   'project' -- the owner set this project's margin on the P&L card;
+ *   'options' -- this project's other BOQ options that do carry costs;
+ *   'bank'    -- the studio's usual margin, the item bank's average.
+ */
+export type MarginSource = 'project' | 'options' | 'bank';
+export interface MarginAssumption { pct: number; source: MarginSource }
+
+export const MARGIN_SOURCE_LABEL: Record<MarginSource, string> = {
+  project: 'set for this project',
+  options: "from this project's other BOQ options",
+  bank: "the studio's usual margin, from the item bank",
+};
+
+/** The margin % the owner set for this project, if any. */
+export const projectMarginPct = (context: any): number | null => {
+  const v = Number(context?.financials?.expectedMarginPct);
+  return Number.isFinite(v) && v > 0 && v < 100 ? v : null;
+};
+
+/**
+ * What margin to assume when the BOQ in use has no costs: the project's own
+ * figure, else the margin on the project's other options that carry costs,
+ * else the item bank's average. Null when none of them says anything.
+ */
+export function marginAssumption(context: any, tiers: any[] | null | undefined, bank: Item[] | null | undefined): MarginAssumption | null {
+  const own = projectMarginPct(context);
+  if (own != null) return { pct: own, source: 'project' };
+
+  const bankMap = new Map<string, Item>((bank || []).map(i => [i.id, i]));
+  (context?.adHocItems || []).forEach((i: Item) => bankMap.set(i.id, i));
+  let sell = 0, cost = 0;
+  (tiers || []).forEach(t => (t?.boq || []).forEach((b: any) => {
+    if (!b || !isBillable(b)) return;
+    const qty = Number(b.qty) || 0;
+    if (qty <= 0) return;
+    const item = bankMap.get(b.bankId);
+    const mat = Number(b.baseRate !== undefined ? b.baseRate : item ? item.materials : b.materials) || 0;
+    const lab = Number(b.labor !== undefined ? b.labor : item ? item.labor : 0) || 0;
+    const margin = Number(b.marginOverride ?? item?.margin ?? 0) || 0;
+    const c = (mat + lab) * qty;
+    if (margin === 0 || c <= 0) return;
+    cost += c;
+    sell += calculateSellPrice(mat, lab, margin) * qty;
+  }));
+  if (sell > 0) return { pct: Math.round(((sell - cost) / sell) * 1000) / 10, source: 'options' };
+
+  /* The bank stores markup on cost; as a share of sell that is m / (100 + m). */
+  const shares = (bank || [])
+    .filter(i => (Number(i.margin) || 0) > 0 && ((Number(i.materials) || 0) + (Number(i.labor) || 0)) > 0)
+    .map(i => (Number(i.margin) / (100 + Number(i.margin))) * 100);
+  if (shares.length) return { pct: Math.round((shares.reduce((a, b) => a + b, 0) / shares.length) * 10) / 10, source: 'bank' };
+  return null;
+}
 
 export interface BoqMarginBasis {
   basis: MarginBasis;
@@ -159,6 +216,8 @@ export interface ProjectPnl {
   currentMarginPct: number;
   /** Where the potential margin's cost comes from (see MarginBasis). */
   marginBasis: MarginBasis;
+  /** The margin % assumed because the BOQ has no costs, and where it came from. Null otherwise. */
+  assumedMargin: MarginAssumption | null;
   /** The BOQ's margin as a share of its sell value, over lines that carry a cost. */
   boqMarginPct: number | null;
   /** Billable lines with no cost behind them, which take the BOQ's margin %. */
@@ -219,12 +278,28 @@ export function buildProjectPnl(
   pos: PurchaseOrder[],
   activeTier?: any,
   modes: Record<string, ProcurementMode> = {},
+  /** Used only when no BOQ line carries a cost (marginAssumption). */
+  assumption: MarginAssumption | null = null,
 ): ProjectPnl {
   const envelopes = buildEnvelopes(boq || [], pos || [], modes);
   const rooms = buildRoomMargins(boq || [], pos || [], modes);
   const fin = calculateProjectFinancials(context, activeTier) as any;
 
-  const basis = boqMarginBasis(boq || []);
+  const raw = boqMarginBasis(boq || []);
+  /*
+    A BOQ with no costs at all takes an assumed margin (the project's own
+    figure, its other options, or the studio's usual margin), so a legacy
+    project imported as sell rates still shows a real potential margin rather
+    than the design fee alone. A BOQ with some costs keeps its own %.
+  */
+  const assumed = raw.basis !== 'boq' && assumption && assumption.pct > 0 && assumption.pct < 100 ? assumption : null;
+  const basis: BoqMarginBasis = assumed
+    ? (() => {
+        const estimateByEnvelope = new Map<string, number>();
+        raw.estimateByEnvelope.forEach((v, k) => estimateByEnvelope.set(k, v * (1 - assumed.pct / 100)));
+        return { ...raw, basis: 'assumed' as MarginBasis, marginPct: assumed.pct, estimateByEnvelope, estimatedCost: raw.estimatedCost * (1 - assumed.pct / 100) };
+      })()
+    : raw;
   const committedCost = envelopes.reduce((s, e) => s + e.committedTotal, 0);
   const billedCost    = envelopes.reduce((s, e) => s + e.billedTotal, 0);
   const paidCost      = envelopes.reduce((s, e) => s + e.paidTotal, 0);
@@ -291,6 +366,7 @@ export function buildProjectPnl(
     marginMovement:   currentMargin - quotedMargin,
     marginMovementPct: pct(currentMargin - quotedMargin, contractedTotal),
     marginBasis: basis.basis,
+    assumedMargin: assumed,
     boqMarginPct: basis.marginPct,
     uncostedLines: basis.uncostedLines,
     uncostedSharePct: pct(basis.uncostedSell, basis.sell),

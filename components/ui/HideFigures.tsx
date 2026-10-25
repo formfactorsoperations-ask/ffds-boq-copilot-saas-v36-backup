@@ -26,10 +26,16 @@ export function useHideFiguresShortcut(enabled: boolean): void {
   }, [enabled]);
 }
 
-/** The switch. Shown only to the roles that see the studio's money in the first place. */
+/**
+ * The switch: an icon button the size and shape of the notification bell
+ * beside it, so the two read as a pair. Open eye when figures show; when they
+ * are hidden the eye closes (the two icons cross over on a plain 300ms
+ * transition), the button takes the brand tint and a brand dot sits on it.
+ * Shown only to the roles that see the studio's money in the first place.
+ */
 export const HideFiguresButton: React.FC<{ className?: string }> = ({ className = '' }) => {
   const hidden = useFiguresHidden();
-  const Icon = hidden ? EyeOff : Eye;
+  const swap = 'absolute inset-0 m-auto w-[18px] h-[18px] transition-all duration-300 ease-out motion-reduce:transition-none';
   return (
     <button
       type="button"
@@ -37,15 +43,18 @@ export const HideFiguresButton: React.FC<{ className?: string }> = ({ className 
       aria-pressed={hidden}
       aria-label={hidden ? 'Figures hidden. Show them' : 'Hide figures'}
       title={hidden
-        ? 'Margins, costs and collections are hidden. Click to show them (Alt+Shift+H).'
-        : 'Hide margins, costs and collections while you share your screen (Alt+Shift+H).'}
-      className={`inline-flex items-center gap-1.5 h-9 px-2.5 rounded-xl text-xs font-bold shrink-0 transition-colors outline-none
+        ? 'Figures hidden: margins, costs and collections are off the screen. Click to show them (Alt+Shift+H).'
+        : 'Hide figures while you share your screen: margins, costs and collections (Alt+Shift+H).'}
+      className={`relative w-10 h-10 shrink-0 grid place-items-center rounded-xl transition-colors cursor-pointer outline-none
         focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30 ${hidden
-          ? 'bg-[#3D52A0] text-white shadow-sm hover:bg-[#334486]'
-          : 'border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'} ${className}`}
+          ? 'bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/15'
+          : 'text-slate-500 hover:bg-sky-50 hover:text-slate-700'} ${className}`}
     >
-      <Icon className="w-4 h-4" />
-      <span className={hidden ? 'hidden sm:inline' : 'hidden xl:inline'}>{hidden ? 'Figures hidden' : 'Hide figures'}</span>
+      <span className="relative block w-[18px] h-[18px]" aria-hidden>
+        <Eye className={`${swap} ${hidden ? 'opacity-0 scale-75 -rotate-12' : 'opacity-100 scale-100 rotate-0'}`} />
+        <EyeOff className={`${swap} ${hidden ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-75 rotate-12'}`} />
+      </span>
+      {hidden && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#3D52A0] ring-2 ring-white" aria-hidden />}
     </button>
   );
 };

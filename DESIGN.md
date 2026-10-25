@@ -122,8 +122,9 @@ keeps it showing until the next click and never opens the project
 
 For a pitch or a shared screen, the top bar and the project hub's row carry a "Hide figures" switch
 (`components/ui/HideFigures.tsx`, rules in `lib/figuresPrivacy.ts`, Alt+Shift+H), shown only to the
-roles that see the studio's money. Off, it is a secondary icon button; on, it is the brand fill and
-reads "Figures hidden". While it is on, `seesStudioFinance` answers no, so every screen hides what it
+roles that see the studio's money. It is an icon button the size and shape of the bell beside it:
+an open eye while figures show; when they are hidden the eye closes (the icons cross over on a plain
+300ms transition, still under reduced motion), the button takes the brand tint and a brand dot. While it is on, `seesStudioFinance` answers no, so every screen hides what it
 hides from a Designer, and a screen that is wholly about money is covered by one `Panel`-style card
 with "Show figures". Client prices stay. New screens that show margin, cost or collections ask
 `seesStudioFinance`, and so follow the switch with no extra work.

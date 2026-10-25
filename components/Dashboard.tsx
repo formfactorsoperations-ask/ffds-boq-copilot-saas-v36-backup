@@ -44,7 +44,7 @@ const STAGE_DETAILS_FOR_SYNC = [
     { id: 6, name: "Handover & Closeout" }
 ];
 
-const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectContext, setActiveTab, setProjectContext, activeProject, tiers, projectId, projectArchitecture, onUpgradeArchitecture, onModifyBrief }) => {
+const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectContext, setActiveTab, setProjectContext, activeProject, tiers, bank, projectId, projectArchitecture, onUpgradeArchitecture, onModifyBrief }) => {
     const { orgData, currentRole } = useOrg();
     const studioId = orgData?.tenantId || 'demo-tenant-01';
     const [selections, setSelections] = useState<any[]>([]);
@@ -122,6 +122,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTier, fullBoq, projectConte
                 setActiveTab={setActiveTab}
                 activeTier={activeTier}
                 tiers={tiers}
+                bank={bank}
                 fullBoq={fullBoq}
                 currentUserRole={currentUserRole}
                 journey={journey}
