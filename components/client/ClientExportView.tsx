@@ -117,6 +117,9 @@ const ScanFirstSection: React.FC<{ title: string; cue: string; children: React.R
     </details>
 );
 
+/* "Option A", "Option B"… in the order the options are shown. */
+const optionLabel = (index: number) => `Option ${String.fromCharCode(65 + Math.max(0, index))}`;
+
 const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
     const { orgData, currentRole } = useOrg();
     const { settings: fetchedSettings, loading: settingsLoading } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
@@ -293,8 +296,12 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                         investmentMax={investmentMax} 
                                         timelinePhases={timelinePhases}
                                         content={content.snapshot}
-                                        designFee={tiers[0]?.summary?.designFee}
-                                        executionTotal={tiers[0]?.summary?.totalSell}
+                                        // The option picked under Strategic Options (the approved one until then), named on the summary.
+                                        designFee={activeTier?.summary?.designFee}
+                                        executionTotal={activeTier?.summary?.totalSell}
+                                        option={activeTier && { label: optionLabel(tiers.indexOf(activeTier)), name: activeTier.name }}
+                                        options={tiers.map((t, i) => ({ id: t.id, label: optionLabel(i), name: t.name, executionTotal: t.summary?.totalSell || 0, designFee: t.summary?.designFee || 0 }))}
+                                        activeOptionId={activeTier?.id}
                                     />
                                 </SectionWrapper>
                             </ScanFirstSection>
@@ -417,6 +424,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                     designFee={approvedTier.summary.designFee}
                                     executionTotal={approvedTier.summary.totalSell}
                                     projectContext={projectContext} // Pass context for discounts
+                                    option={{ label: 'Approved option', name: approvedTier.name }}
                                 />
                             </SectionWrapper>
                         </ScanFirstSection>
