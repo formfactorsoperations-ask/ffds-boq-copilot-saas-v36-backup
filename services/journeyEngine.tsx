@@ -465,10 +465,31 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
     const currentStage = projectContext.lifecycle?.stage || 1;
     const currentGates = (projectContext.lifecycle?.gates || {}) as any;
 
+    /*
+      A status chosen by hand in the Lifecycle & Status Studio holds against
+      the journey. First note where the journey stood when it was chosen; after
+      that the journey takes over again only once it has moved past both that
+      point and the stage the studio picked. A project marked Lost stays Lost.
+    */
+    const pin = projectContext.statusPin;
+    const pinActive = !!pin && pin.status === projectContext.status;
+    if (pinActive && pin.journeyStage == null && setProjectContext) {
+      setProjectContext((prev) => (
+        prev?.statusPin && prev.statusPin.journeyStage == null
+          ? { ...prev, statusPin: { ...prev.statusPin, journeyStage: suggestedStage } }
+          : prev
+      ));
+    }
+    const pinHolds = pinActive && (
+      pin.status === 'lost' || suggestedStage <= Math.max(pin.stage, pin.journeyStage ?? suggestedStage)
+    );
+
     const isAutoSyncEnabled = projectContext.autoStageCompletion !== false;
-    const needsStageUpdate = isAutoSyncEnabled 
-      ? suggestedStage !== currentStage 
-      : suggestedStage > currentStage;
+    const needsStageUpdate = pinHolds
+      ? false
+      : isAutoSyncEnabled
+        ? suggestedStage !== currentStage
+        : suggestedStage > currentStage;
     const needsGateUpdate = 
       !!proposalAcceptedDone !== !!currentGates.proposalAccepted?.done ||
       !!contractSignedDone !== !!currentGates.contractSigned?.done ||
@@ -515,6 +536,8 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
       };
 
       const finalStage = needsStageUpdate ? suggestedStage : currentStage;
+      // Under a pin only the gates move; the status stays the studio's.
+      const nextStatus = pinHolds ? projectContext.status : getLegacyStatusFromStage(finalStage);
 
       const updatedLifecycle = {
         ...projectContext.lifecycle,
@@ -548,7 +571,9 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
           }
           return {
             ...prev,
-            status: getLegacyStatusFromStage(finalStage) as any,
+            status: (pinHolds ? prev.status : nextStatus) as any,
+            // A pin the journey has moved past is spent.
+            ...(pinActive && !pinHolds ? { statusPin: null } : {}),
             currentStage: finalStage,
             lifecycle: updatedLifecycle,
             journeySummary: {
@@ -564,9 +589,10 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
 
       // 2. Write to Firestore
       const updatePayload = {
-        status: getLegacyStatusFromStage(finalStage),
+        status: nextStatus,
         currentStage: finalStage,
-        'context.status': getLegacyStatusFromStage(finalStage),
+        'context.status': nextStatus,
+        ...(pinActive && !pinHolds ? { 'context.statusPin': null } : {}),
         'context.lifecycle': updatedLifecycle,
         'context.journeySummary': {
           done: overall.done,

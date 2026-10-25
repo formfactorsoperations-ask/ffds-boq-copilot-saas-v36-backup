@@ -951,6 +951,14 @@ export interface ProjectContext {
     itemExecutionStatuses?: Record<string, 'pending' | 'in_progress' | 'completed'>;
     executionApprovedByFFDS?: boolean;
     autoStageCompletion?: boolean;
+    /**
+     * A status the studio chose by hand in the Lifecycle & Status Studio. The
+     * journey's auto-sync leaves status and stage alone while this matches the
+     * project's status, until the journey moves past both the stage chosen
+     * (`stage`) and where it stood when the choice was made (`journeyStage`,
+     * recorded by the journey engine the first time it sees the pin).
+     */
+    statusPin?: { status: ProjectStatus; stage: number; at: number; journeyStage: number | null } | null;
     /** Design → Execution handoff checkpoint (soft gate). Single source of truth. */
     designGate?: DesignGateState;
     /** Human-readable audit trail of meaningful project changes (capped ring buffer). */
