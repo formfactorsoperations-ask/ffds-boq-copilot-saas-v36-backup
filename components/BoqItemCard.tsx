@@ -9,6 +9,7 @@ import { refineItemSpecs, generateLumpsumBreakdown } from '../services/geminiSer
 import { MarginDeviationIndicator } from './MarginDeviationIndicator';
 import { useOrg } from '../contexts/OrgContext';
 import { seesStudioFinance } from '../lib/roleAccess';
+import { SizePanel, sizeLabel } from './BoqSizeField';
 
 interface BoqItemCardProps {
   item: FullBoqItem;
@@ -19,6 +20,8 @@ interface BoqItemCardProps {
   onViewInBank: (bankId: string) => void;
   isSelected?: boolean;
   onSelectToggle?: () => void;
+  /** A frozen BOQ loses a line only through a change order (Excel view), never from a card. */
+  boqFrozen?: boolean;
 }
 
 const highlightText = (text: string, query?: string) => {
@@ -113,7 +116,7 @@ const EditableField: React.FC<{
     )
 }
 
-const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onUpdate, onDelete, onViewInBank, isSelected = false, onSelectToggle }) => {
+const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onUpdate, onDelete, onViewInBank, isSelected = false, onSelectToggle, boqFrozen = false }) => {
   const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingBreakdown, setIsGeneratingBreakdown] = useState(false);
   
@@ -123,18 +126,6 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
   const finance = seesStudioFinance(currentRole);
   const totalLineItem = sellPrice * item.qty;
   const categoryStyle = getCategoryStyle(item.cat);
-
-  const getDefaultMultiplier = (itemName?: string, itemCat?: string) => {
-    const name = (itemName || '').toLowerCase();
-    const cat = (itemCat || '').toLowerCase();
-    if (cat.includes('paint') && !name.includes('ceiling')) return 3.5; // Wall Paint
-    if (cat.includes('paint') && name.includes('ceiling')) return 1.0; // Ceiling Paint
-    if (name.includes('false ceiling')) return 1.25; // Cove/Drop factor
-    if (name.includes('flooring') || name.includes('tile')) return 1.1; // Wastage/Skirting
-    return 1;
-  };
-
-  const defaultMultiplier = useMemo(() => getDefaultMultiplier(item.name, item.cat), [item.name, item.cat]);
 
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
@@ -146,26 +137,6 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
           onUpdate(item.id, 'rationale', `Spec Note: ${newSpecs}`);
       }
       setIsRefining(false);
-  }
-
-  const handleCalcChange = (field: 'l' | 'w' | 'm', val: number) => {
-      const l = field === 'l' ? val : item.calcLength || 0;
-      const w = field === 'w' ? val : item.calcWidth || 0;
-      const m = field === 'm' ? val : item.calcMultiplier || defaultMultiplier;
-      
-      const newQty = parseFloat((l * w * m).toFixed(2));
-      
-      const updates: Partial<BoqItem> = {
-          calcLength: l,
-          calcWidth: w,
-          calcMultiplier: m,
-      };
-
-      if (newQty > 0) {
-          updates.qty = newQty;
-      }
-
-      onUpdate(item.id, updates);
   }
 
   const handleArrayChange = (field: 'inclusions' | 'exclusions', val: string) => {
@@ -228,7 +199,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
              <MotionButton whileHover={{scale: 1.05}} whileTap={{scale: 0.95}} onClick={() => onViewInBank(item.bankId)} className="p-1.5 bg-white text-slate-400 rounded-md shadow-sm border border-slate-200 hover:border-slate-300 hover:text-[#3D52A0]" title="View in Bank">
                 <LinkIcon className="w-3.5 h-3.5" />
             </MotionButton>
-            <MotionButton whileHover={{scale: 1.05}} whileTap={{scale: 0.95}} onClick={() => onDelete(item.id)} className="p-1.5 bg-white text-rose-400 rounded-md shadow-sm border border-slate-200 hover:border-rose-200 hover:text-rose-500 hover:bg-rose-50" title="Remove Item">
+            <MotionButton whileHover={boqFrozen ? undefined : {scale: 1.05}} whileTap={boqFrozen ? undefined : {scale: 0.95}} onClick={() => onDelete(item.id)} disabled={boqFrozen} aria-label={`Delete ${item.name}`} className="p-1.5 bg-white text-rose-400 rounded-md shadow-sm border border-slate-200 hover:border-rose-200 hover:text-rose-500 hover:bg-rose-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-rose-400 disabled:hover:border-slate-200" title={boqFrozen ? 'The BOQ is frozen: mark the line Deleted with a change order in the Excel view' : 'Delete line (you can undo)'}>
                 <DeleteIcon className="w-3.5 h-3.5" />
             </MotionButton>
         </div>
@@ -435,48 +406,9 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                             />
                         </div>
                     </div>
-                    {/* Dimensions Calculator */}
-                    <div className="p-2.5 bg-white rounded-md border border-slate-200 shadow-sm mt-3">
-                        <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
-                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block flex items-center gap-1.5">
-                                <span className="text-[11px] bg-slate-100 p-0.5 rounded">📐</span> Auto-Calculate Quantity
-                            </label>
-                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-                                L × W × Mult = <span className="text-[#3D52A0]">Qty</span>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-3">
-                            <div>
-                                <label className="text-[9px] font-bold text-slate-400 mb-1 block uppercase tracking-wider">Length (L)</label>
-                                <input 
-                                    type="number"
-                                    value={item.calcLength || ''}
-                                    onChange={e => handleCalcChange('l', Number(e.target.value))}
-                                    placeholder="0"
-                                    className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 text-slate-700 font-medium outline-none focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] transition-all"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[9px] font-bold text-slate-400 mb-1 block uppercase tracking-wider">Width (W)</label>
-                                <input 
-                                    type="number"
-                                    value={item.calcWidth || ''}
-                                    onChange={e => handleCalcChange('w', Number(e.target.value))}
-                                    placeholder="0"
-                                    className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 text-slate-700 font-medium outline-none focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] transition-all"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[9px] font-bold text-slate-400 mb-1 block uppercase tracking-wider" title="Wastage or Area Multiplier">Multiplier (M)</label>
-                                <input 
-                                    type="number"
-                                    value={item.calcMultiplier || 1}
-                                    onChange={e => handleCalcChange('m', Number(e.target.value))}
-                                    step="0.1"
-                                    className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 text-slate-700 font-medium outline-none focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] transition-all"
-                                />
-                            </div>
-                        </div>
+                    {/* Size: typed once, and the quantity follows from it (lib/boqSize.ts). */}
+                    <div className="mt-3">
+                        <SizePanel line={item} onChange={updates => onUpdate(item.id, updates)} />
                     </div>
                     {/* Lumpsum Breakdown */}
                     {isLumpsum && (
@@ -603,6 +535,15 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                         />
                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{item.unit}</span>
                     </div>
+                    {/* The size sits next to the quantity it drives, one click from the panel. */}
+                    <button
+                        type="button"
+                        onClick={() => setIsAdvancedOpen(true)}
+                        className="text-[10px] font-bold text-[#3D52A0] hover:text-[#334486] whitespace-nowrap tabular-nums"
+                        title="Type the size and the quantity is worked out"
+                    >
+                        {sizeLabel(item) || '+ Size'}
+                    </button>
                 </div>
                 <div className="text-right">
                     <div className="text-[9px] font-bold uppercase text-slate-400 tracking-widest mb-0.5">Total Value</div>

@@ -1124,6 +1124,8 @@ export interface BoqItem {
     calcLength?: number;
     calcWidth?: number;
     calcMultiplier?: number;
+    /** The unit calcLength/calcWidth were typed in (lib/boqSize.ts). Missing on older lines: the item's own unit. */
+    sizeUnit?: 'ft' | 'in' | 'mm' | 'cm' | 'm';
     // Trust-First Revision System Fields
     baseRate?: number;
     baseLabor?: number;
@@ -1399,6 +1401,8 @@ export interface ProposalTier {
     parentTierId?: string; // Links this tier to its parent for diffs
     lifecycleTag?: 'Draft' | 'Approved while booking' | 'Revised after design' | 'Superseded' | 'Current contract'; 
     assumedMargin?: number; // Used for What-if scenarios and discount headroom
+    /** Who made this option the baseline, and when (lib/tierApproval.ts). Missing on options approved before it was recorded. */
+    approval?: { at: number; by: string };
 }
 
 export interface ComparisonRow {
