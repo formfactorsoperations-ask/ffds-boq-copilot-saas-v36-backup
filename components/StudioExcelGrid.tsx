@@ -4,6 +4,10 @@ import { FullBoqItem, Room, BoqItem } from '../types';
 import { calculateSellPrice, formatCurrency } from '../lib/utils';
 import { DeleteIcon, LinkIcon, PlusIcon, ChevronDownIcon } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
+import { isBillable } from '../lib/boqPricing';
+import { realRooms, SCOPE_BUCKETS } from '../lib/scopeBuckets';
+import { resolvedRoomId } from '../lib/scopeMigration';
+import { SizeCell, useSizeUnit } from './BoqSizeField';
 
 interface StudioExcelGridProps {
     items: FullBoqItem[];
@@ -11,6 +15,8 @@ interface StudioExcelGridProps {
     onUpdate: (itemId: string, fieldOrUpdates: keyof BoqItem | Partial<BoqItem>, value?: any) => void;
     onBulkUpdate?: (updates: {itemId: string, updates: Partial<BoqItem>}[]) => void;
     onDelete: (itemId: string) => void;
+    /** Removes several lines in one step, so one undo brings them all back. */
+    onDeleteMany?: (itemIds: string[]) => void;
     onViewInBank: (bankId: string) => void;
     onAddItem: (roomName: string) => void;
     isOwner?: boolean;
@@ -138,7 +144,7 @@ const HeadCell: React.FC<{
   );
 };
 
-const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdate, onBulkUpdate, onDelete, onViewInBank, onAddItem, isOwner, boqFrozen, highlightedItemIds = [], lensEnabled, marginAnalytics, searchQuery }) => {
+const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdate, onBulkUpdate, onDelete, onDeleteMany, onViewInBank, onAddItem, isOwner, boqFrozen, highlightedItemIds = [], lensEnabled, marginAnalytics, searchQuery }) => {
     /*
       What the grid shows, and why so little of it by default.
 
@@ -165,8 +171,9 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
       let firm = 0, excluded = 0, cost = 0, live = 0;
       items.forEach(i => {
         const value = calculateSellPrice(i.materials, i.labor, i.margin) * (i.qty || 0);
-        const out = i.boqStatus === 'deleted' || i.boqStatus === 'excluded' || i.boqStatus === 'client_procured';
-        if (out) { excluded += value; return; }
+        // isBillable is the rule the tier summary uses; substituted lines were
+        // counted here and nowhere else, so this total ran ahead of Pricing.
+        if (!isBillable(i)) { excluded += value; return; }
         firm += value;
         cost += ((i.materials || 0) + (i.labor || 0)) * (i.qty || 0);
         live += 1;
@@ -257,23 +264,21 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
       colW[key] ? { width: colW[key], minWidth: colW[key], maxWidth: colW[key] } : undefined;
 
     const [density, setDensity] = useState<'compact' | 'comfortable'>('compact');
-    const [dimsOverride, setDimsOverride] = useState<boolean | null>(null);
 
     /*
-      L, W and M are three narrow columns that are empty on most projects —
-      quantities usually arrive from the takeoff or by hand, not from
-      dimensions typed here. So they appear when the project actually uses
-      them, and the studio can force them on for one that is about to.
+      One Size column, always there.
+
+      L, W and M used to be three narrow columns hidden until a project already
+      used them — so nobody found them, and nothing converted units: 2100 typed
+      for a wardrobe meant 2100 sq ft. A size is now typed the way it is
+      written ("7 x 8", "2100 x 2400 mm", "7'6\" x 8'") and the quantity is
+      worked out in the item's own unit (lib/boqSize.ts).
     */
-    const projectUsesDims = React.useMemo(
-      () => items.some(i => (i.calcLength || 0) > 0 || (i.calcWidth || 0) > 0 || (i.calcMultiplier || 0) > 1),
-      [items],
-    );
-    const showDims = dimsOverride !== null ? dimsOverride : projectUsesDims;
+    const [sizeUnit, setSizeUnit] = useSizeUnit();
 
     /* colSpan has to follow the columns, or every group header and empty state
-       tears its row open by three cells. */
-    const COLS = 14 - (showDims ? 0 : 3);
+       tears its row open. */
+    const COLS = 11;
 
     const [coModal, setCoModal] = useState<{itemId: string, newStatus: string} | null>(null);
     const [bulkCoModal, setBulkCoModal] = useState<{itemIds: string[], newStatus: string} | null>(null);
@@ -306,7 +311,14 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                 label: linkageLabel
             }
         };
-        onUpdate(linkageModal, updates);
+        // "bulk" is the selection bar's linkage, not a line id: it used to be
+        // written to a line called "bulk", which does not exist.
+        if (linkageModal === 'bulk') {
+            onBulkUpdate?.(Array.from(selectedIds).map(id => ({ itemId: id, updates })));
+            setSelectedIds(new Set());
+        } else {
+            onUpdate(linkageModal, updates);
+        }
         setLinkageModal(null);
     };
 
@@ -452,23 +464,28 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
         });
     };
 
-    // Group items by room
+    /*
+      Group items by room — the room each line is shown under in the Focus
+      Editor and the cards, not the raw stored value. Reading roomId straight
+      put legacy "General Scope" lines in Unassigned here and under Others
+      everywhere else, so the same BOQ added up differently by view.
+    */
     const grouped: { [key: string]: FullBoqItem[] } = {};
     const unassigned: FullBoqItem[] = [];
-    const validRoomNames = new Set(rooms.map(r => r.name));
+    const spaceRooms = realRooms(rooms);
+    const validRoomNames = new Set(spaceRooms.map(r => r.name));
+    const roomOrder = [...spaceRooms.map(r => r.name), ...SCOPE_BUCKETS];
+    const knownGroups = new Set(roomOrder);
 
     filteredItems.forEach(item => {
-        const roomName = item.roomId;
-        if (roomName && validRoomNames.has(roomName)) {
+        const roomName = resolvedRoomId(item as any, item as any, validRoomNames);
+        if (roomName && knownGroups.has(roomName)) {
             if (!grouped[roomName]) grouped[roomName] = [];
             grouped[roomName].push(item);
         } else {
             unassigned.push(item);
         }
     });
-
-    // Determine room order (based on project context order)
-    const roomOrder = rooms.map(r => r.name);
 
     const handleUndo = () => {
         if (undoStack.length === 0 || !onBulkUpdate) return;
@@ -486,12 +503,18 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
     useEffect(() => {
         const handleGridKeyDown = (e: KeyboardEvent) => {
             // Ignore if focus is in an input field and it's not our keyboard layer input
-            if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+            const active = document.activeElement as HTMLElement | null;
+            if (active && (['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) || active.isContentEditable)) {
                 return;
             }
+            // A modal is open: its keys are its own.
+            if (coModal || bulkCoModal || linkageModal || statusModalId) return;
             if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
                 e.preventDefault();
                 toggleSelectAll();
+            } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size > 0) {
+                e.preventDefault();
+                requestDelete(Array.from(selectedIds));
             } else if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
                 e.preventDefault();
                 handleUndo();
@@ -501,33 +524,29 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
         };
         window.addEventListener('keydown', handleGridKeyDown);
         return () => window.removeEventListener('keydown', handleGridKeyDown);
-    }, [filteredItems, selectedIds, undoStack, onBulkUpdate]);
+    }, [filteredItems, selectedIds, undoStack, onBulkUpdate, onDeleteMany, boqFrozen, coModal, bulkCoModal, linkageModal, statusModalId]);
 
-    const handleCalcChange = (item: FullBoqItem, field: 'l' | 'w' | 'm', val: number) => {
-        const l = field === 'l' ? val : item.calcLength || 0;
-        const w = field === 'w' ? val : item.calcWidth || 0;
-        const m = field === 'm' ? val : item.calcMultiplier || 1;
+    /*
+      Deleting a line.
 
-        // Auto-calculate Qty if any dimension is entered. If only one is entered, treat the other as 1 (linear measurement)
-        let newQty = item.qty;
-        if (l > 0 || w > 0) {
-            const lEff = l > 0 ? l : 1;
-            const wEff = w > 0 ? w : 1;
-            const mEff = m > 0 ? m : 1;
-            newQty = parseFloat((lEff * wEff * mEff).toFixed(2));
+      A live BOQ removes the line outright, and the editor offers an undo. A
+      frozen one never loses a line silently: it is marked Deleted against a
+      change order, the same rule the status menu already enforces, so the
+      client's signed scope keeps a record of what went and why.
+    */
+    const requestDelete = (ids: string[]) => {
+        if (!ids.length) return;
+        if (boqFrozen) {
+            setBulkCoModal({ itemIds: ids, newStatus: 'deleted' });
+            return;
         }
-
-        const updates: Partial<BoqItem> = {
-            calcLength: l,
-            calcWidth: w,
-            calcMultiplier: m,
-        };
-
-        if (l > 0 || w > 0) {
-            updates.qty = newQty;
-        }
-
-        onUpdate(item.id, updates);
+        if (onDeleteMany) onDeleteMany(ids);
+        else ids.forEach(id => onDelete(id));
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            ids.forEach(id => next.delete(id));
+            return next;
+        });
     };
 
     const getStatusUI = (item: FullBoqItem) => {
@@ -714,49 +733,23 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                         {getLinkageUI(item)}
                     </td>
 
-                    {/* Dimensions (L x W x M) */}
-                    <td className="p-2 w-[50px] align-top pt-3 hidden print:table-cell text-[10px] text-slate-500 text-center">
-                        {(item.calcLength || 1) * (item.calcWidth || 1) * (item.calcMultiplier || 1) > 1 ?
-                        `${item.calcLength || 1} x ${item.calcWidth || 1} x ${item.calcMultiplier || 1}` : '-'}
-                    </td>
-                    {showDims && (<>
-                    <td className="p-2 w-[50px] align-top pt-2 print:hidden">
-                        <FastInput
-                            type="number"
-                            value={item.calcLength || ''}
-                            onChange={(v) => handleCalcChange(item, 'l', Number(v))}
-                            placeholder="L"
-                            className="text-center font-medium text-slate-500 bg-slate-50/50 rounded focus:bg-white text-xs"
+                    {/* Size: typed once, the quantity follows. */}
+                    <td className="p-2 w-[130px] align-top pt-2" style={wOf('size')}>
+                        <SizeCell
+                            line={item}
+                            defaultUnit={sizeUnit}
+                            onChange={updates => onUpdate(item.id, updates)}
                         />
                     </td>
-                    <td className="p-2 w-[50px] align-top pt-2 print:hidden">
-                        <FastInput
-                            type="number"
-                            value={item.calcWidth || ''}
-                            onChange={(v) => handleCalcChange(item, 'w', Number(v))}
-                            placeholder="W"
-                            className="text-center font-medium text-slate-500 bg-slate-50/50 rounded focus:bg-white text-xs"
-                        />
-                    </td>
-                    <td className="p-2 w-[50px] align-top pt-2 print:hidden">
-                        <FastInput
-                            type="number"
-                            value={item.calcMultiplier || ''}
-                            onChange={(v) => handleCalcChange(item, 'm', Number(v))}
-                            placeholder="M"
-                            className="text-center font-medium text-slate-500 bg-slate-50/50 rounded focus:bg-white text-xs text-[#3D52A0]"
-                        />
-                    </td>
-                    </>)}
 
                     {/* Qty & Unit */}
-                    <td className="p-2 w-[90px] align-top pt-2" style={wOf('qty')}>
+                    <td className="p-2 w-[120px] align-top pt-2" style={wOf('qty')}>
                         <div className="flex items-center">
                             <FastInput
                                 type="number"
                                 value={item.qty}
                                 onChange={(v) => onUpdate(item.id, 'qty', v)}
-                                className="text-center font-bold text-slate-800 bg-slate-100 rounded w-16"
+                                className="text-center font-bold text-slate-800 bg-slate-100 rounded w-20 tabular-nums"
                             />
                             <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap ml-1">{item.unit}</span>
                         </div>
@@ -804,11 +797,22 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                         {item.boqStatus === 'deleted' && <div className="text-[9px] text-rose-500 mt-1">₹0 Billed</div>}
                     </td>
 
-                    {/* Bank Link */}
-                    <td className="p-2 w-10 text-center align-top pt-3 print:hidden">
-                        <button onClick={() => onViewInBank(item.bankId)} className="text-sky-300 hover:text-[#3D52A0] opacity-0 group-hover:opacity-100 transition-opacity" title="Edit Master in Bank">
-                            <LinkIcon className="w-3.5 h-3.5" />
-                        </button>
+                    {/* Bank link and delete */}
+                    <td className="p-2 w-16 text-center align-top pt-2.5 print:hidden">
+                        <div className="flex items-center justify-center gap-1.5">
+                            <button onClick={() => onViewInBank(item.bankId)} className="text-slate-400 hover:text-[#3D52A0] opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Edit master in bank" aria-label={`Open ${item.name} in the bank`}>
+                                <LinkIcon className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); requestDelete([item.id]); }}
+                                className="p-1 rounded-lg text-slate-400 opacity-60 group-hover:opacity-100 focus:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all"
+                                title={boqFrozen ? 'Mark as deleted (needs a change order — the BOQ is frozen)' : 'Delete line (you can undo)'}
+                                aria-label={`Delete ${item.name}`}
+                            >
+                                <DeleteIcon className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
                     </td>
                 </tr>
                 {expandedRows[item.id] && (
@@ -925,23 +929,23 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                     ))}
                 </div>
 
-                <button
-                    type="button"
-                    onClick={() => setDimsOverride(showDims ? false : true)}
-                    aria-pressed={showDims}
-                    title={projectUsesDims
-                        ? 'This project has dimensions on some lines'
-                        : 'No line in this project uses L × W × M'}
-                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border rounded-lg transition-colors ${
-                        showDims
-                            ? 'bg-[#3D52A0] text-white border-[#3D52A0]'
-                            : 'text-slate-500 border-slate-200 bg-white hover:bg-sky-50'
-                    }`}
-                >L × W × M</button>
+                <div className="flex items-center gap-1.5" title="The unit a size is read in when you type plain numbers">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Size in</span>
+                    <div className="inline-flex p-0.5 rounded-lg bg-slate-100" role="group" aria-label="Size unit">
+                        {(['ft', 'in', 'mm', 'm'] as const).map(u => (
+                            <button
+                                key={u}
+                                type="button"
+                                aria-pressed={sizeUnit === u}
+                                onClick={() => setSizeUnit(u)}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-colors ${sizeUnit === u ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >{u}</button>
+                        ))}
+                    </div>
+                </div>
 
                 <span className="text-[10.5px] text-slate-400">
                     {filteredItems.length} of {items.length} lines
-                    {!projectUsesDims && !showDims && ' · dimension columns hidden, nothing uses them'}
                 </span>
 
                 <span className="w-px h-4 bg-slate-200 mx-0.5" aria-hidden="true" />
@@ -983,7 +987,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                 )}
             </div>
 
-            <table className="w-full text-left border-collapse min-w-[1000px]">
+            <table className="w-full text-left border-collapse min-w-[1120px]">
                 <thead className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 shadow-[0_1px_0_rgba(203,213,225,1)]">
                     <tr>
                         <th className="p-3 text-center w-14 print:hidden relative">
@@ -999,14 +1003,9 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                         <HeadCell label="Status" className="w-[140px]" {...headProps('status')} />
                         <HeadCell label="Drawing Ref" className="w-[120px] hidden lg:table-cell" {...headProps('drawing')} />
 
-                        <th className="p-3 w-[50px] text-center text-sky-400 hidden print:table-cell">Area</th>
-                        {showDims && (<>
-                        <th className="p-3 w-[50px] text-center text-sky-400 print:hidden">L</th>
-                        <th className="p-3 w-[50px] text-center text-sky-400 print:hidden">W</th>
-                        <th className="p-3 w-[50px] text-center text-sky-400 print:hidden">M</th>
-                        </>)}
+                        <HeadCell label={`Size (${sizeUnit})`} className="w-[130px]" {...headProps('size')} />
 
-                        <HeadCell label="Qty" sortKey="qty" align="center" className="w-[90px]" {...headProps('qty')} />
+                        <HeadCell label="Qty" sortKey="qty" align="center" className="w-[120px]" {...headProps('qty')} />
 
                         {isOwner ? (
                             <>
@@ -1018,13 +1017,13 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                             <th colSpan={3} className="p-3 text-center text-slate-400 hidden sm:table-cell">Financials</th>
                         )}
                         <HeadCell label="Total" sortKey="total" align="right" className="w-[120px]" {...headProps('total')} />
-                        <th className="p-3 w-10 print:hidden"></th>
+                        <th className="p-3 w-16 print:hidden"><span className="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody className="bg-white" key={`${sort?.key || 'none'}-${sort?.dir || ''}-${Array.from(flags).sort().join(',')}`}>
                     {roomOrder.map(roomName => {
                         const roomItems = grouped[roomName] || [];
-                        const roomTotal = roomItems.reduce((sum, i) => sum + (calculateSellPrice(i.materials, i.labor, i.margin) * i.qty), 0);
+                        const roomTotal = roomItems.filter(isBillable).reduce((sum, i) => sum + (calculateSellPrice(i.materials, i.labor, i.margin) * i.qty), 0);
 
                         return (
                             <React.Fragment key={roomName}>
@@ -1104,7 +1103,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                 {items.length > 0 && (
                     <tfoot className="sticky bottom-0 z-20">
                         <tr className="bg-slate-50/95 backdrop-blur-sm border-t-2 border-slate-300">
-                            <td colSpan={COLS - 1} className="px-4 py-2.5">
+                            <td colSpan={COLS - 2} className="px-4 py-2.5">
                                 <div className="flex items-center gap-4 flex-wrap text-[11px]">
                                     <span className="text-[9.5px] font-black uppercase tracking-[0.14em] text-slate-400">
                                         Firm scope
@@ -1134,6 +1133,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                             <td className="px-2 py-2.5 text-right font-mono tabular-nums font-bold text-slate-900 text-[15px] whitespace-nowrap">
                                 <FlashValue value={sheetTotals.firm}>{formatCurrency(sheetTotals.firm)}</FlashValue>
                             </td>
+                            <td className="print:hidden" />
                         </tr>
                     </tfoot>
                 )}
@@ -1168,14 +1168,29 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
 
                              <div className="flex flex-wrap gap-2">
                                  <button onClick={() => setBulkCoModal({ itemIds: Array.from(selectedIds), newStatus: 'included_ffds_scope' })} className="px-3 py-1.5 bg-sky-900 hover:bg-[#3D52A0] hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Set Status</button>
-                                 <button onClick={() => {/* TODO */}} className="px-3 py-1.5 bg-sky-900 hover:bg-[#3D52A0] hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Move Room</button>
+                                 <select
+                                     value=""
+                                     aria-label="Move selected lines to"
+                                     onChange={e => {
+                                         const to = e.target.value;
+                                         if (!to || !onBulkUpdate) return;
+                                         onBulkUpdate(Array.from(selectedIds).map(id => ({ itemId: id, updates: { roomId: to === 'Unassigned' ? undefined : to } })));
+                                         setSelectedIds(new Set());
+                                     }}
+                                     className="px-2 py-1.5 bg-sky-900 hover:bg-[#3D52A0] rounded-lg text-xs font-bold text-slate-200 outline-none cursor-pointer"
+                                 >
+                                     <option value="">Move to…</option>
+                                     {roomOrder.map(r => <option key={r} value={r}>{r}</option>)}
+                                     <option value="Unassigned">Unassigned</option>
+                                 </select>
                                  <button onClick={() => setLinkageModal('bulk')} className="px-3 py-1.5 bg-sky-900 hover:bg-[#3D52A0] hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Set Linkage</button>
-                                 {isOwner && (
-                                     <>
-                                        <button onClick={() => {/* TODO */}} className="px-3 py-1.5 bg-sky-900 hover:bg-[#3D52A0] hover:text-white rounded-lg text-xs font-bold text-slate-300 transition-colors">Adjust Margin</button>
-                                        <button onClick={() => {/* TODO */}} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${boqFrozen ? 'bg-sky-900 text-slate-500 cursor-not-allowed' : 'bg-sky-900 text-slate-300 hover:bg-[#3D52A0] hover:text-white'}`} disabled={boqFrozen} title={boqFrozen ? "Blocked: BOQ is frozen" : ""}>Refresh Rates</button>
-                                     </>
-                                 )}
+                                 <button
+                                     onClick={() => requestDelete(Array.from(selectedIds))}
+                                     className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 rounded-lg text-xs font-bold text-white transition-colors"
+                                     title={boqFrozen ? 'Mark as deleted against a change order' : 'Delete the selected lines (you can undo)'}
+                                 >
+                                     Delete {selectedIds.size}
+                                 </button>
                              </div>
                         </div>
                         {undoStack.length > 0 && (

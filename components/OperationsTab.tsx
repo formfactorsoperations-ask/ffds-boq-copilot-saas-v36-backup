@@ -16,12 +16,14 @@ interface OperationsTabProps {
     setBank?: React.Dispatch<React.SetStateAction<Item[]>>; // Optional for this tab usually, but needed for import
     setActiveTab: (tab: string) => void;
     projects?: FullProjectData[];
+    /** This project's id, so Pricing & Tiers does not benchmark it against itself. */
+    projectId?: string;
     /** The studio's own typology templates, for regenerating the BOQ. */
     templates?: TemplateData;
 }
 
 const OperationsTab: React.FC<OperationsTabProps> = (props) => {
-    const { tiers, setTiers, activeTierId, setActiveTierId, projectContext, setProjectContext, bank, setBank, setActiveTab, projects, templates } = props;
+    const { tiers, setTiers, activeTierId, setActiveTierId, projectContext, setProjectContext, bank, setBank, setActiveTab, projects, projectId, templates } = props;
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     const handleImportComplete = (newTier: ProposalTier, newBankItems: Item[]) => {
@@ -71,6 +73,7 @@ const OperationsTab: React.FC<OperationsTabProps> = (props) => {
                 setActiveTab={setActiveTab}
                 onImportClick={() => setIsImportModalOpen(true)}
                 projects={projects}
+                projectId={projectId}
                 templates={templates}
             />
 

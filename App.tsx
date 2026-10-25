@@ -1386,6 +1386,57 @@ export default function App() {
   */
   const autoSaveArmedFor = useRef<string | null>(null);
 
+  /*
+    What a save writes, built once for the auto-save and for "Save changes".
+
+    Fold in whatever the server last showed for the fields a client owns.
+    Without this, a save queued moments before a client's acknowledgement
+    arrived would still write the context it captured — and the signature the
+    client had just given would be gone. The merge keeps this session's own
+    work and refuses only to drop theirs.
+  */
+  const buildProjectToSave = (): FullProjectData => ({
+    id: activeInternalId!,
+    architecture: projectArchitecture,
+    lastModified: Date.now(),
+    context: projectContext,
+    tiers: tiersWithCalculatedSummaries, // SAVE CALCULATED TIERS
+    activeTierId: activeTierId,
+    activeProject: activeProject,
+    materials: materialSuggestions,
+    timeline: timelinePhases,
+    leadProfile: leadProfile,
+    decisionBrainOutput: decisionBrainOutput,
+  });
+
+  const persistProject = (projectToSave: FullProjectData) => {
+    const safeToSave = remoteClientOwnedRef.current
+      ? { ...projectToSave, context: mergeClientOwned(projectToSave.context as any, remoteClientOwnedRef.current) }
+      : projectToSave;
+    const saved = db.saveProject(safeToSave);
+    /*
+      Keep the library entry in step with what was just written.
+
+      Several handlers — status changes, quick field edits — build a whole
+      project payload from `projectLibrary` and save that. The auto-save
+      never updated the library, so its entry stayed at whatever was loaded
+      when the project was opened. Any one of those handlers would then
+      write that stale copy back over the cloud, and a document that had
+      gained two approved annexures reverted to the state it was in when the
+      project was opened.
+
+      The library is a cache of what is stored; it has to be updated when
+      what is stored changes.
+    */
+    setProjectLibrary((prev) =>
+      prev.map((p) => (p.id === projectToSave.id ? { ...p, ...projectToSave } : p)),
+    );
+    return saved;
+  };
+
+  /* The auto-save waiting to run, so "Save changes" can run it now instead. */
+  const pendingAutoSave = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Auto-save Project to DB
   useEffect(() => {
     if (activeInternalId && projectContext) {
@@ -1393,57 +1444,14 @@ export default function App() {
         autoSaveArmedFor.current = activeInternalId;
         return;
       }
-      console.log(
-        "Auto-save useEffect triggered for project:",
-        activeInternalId,
-      );
-        const projectToSave: FullProjectData = {
-        id: activeInternalId,
-        architecture: projectArchitecture,
-        lastModified: Date.now(),
-        context: projectContext,
-        tiers: tiersWithCalculatedSummaries, // SAVE CALCULATED TIERS
-        activeTierId: activeTierId,
-        activeProject: activeProject,
-        materials: materialSuggestions,
-        timeline: timelinePhases,
-        leadProfile: leadProfile,
-        decisionBrainOutput: decisionBrainOutput,
-      };
+      const projectToSave = buildProjectToSave();
 
       // Debounce save
       const timeout = setTimeout(() => {
-        console.log("Calling db.saveProject...");
-        /*
-          Fold in whatever the server last showed for the fields a client owns.
-
-          Without this, a save queued moments before a client's acknowledgement
-          arrived would still write the context it captured — and the signature
-          the client had just given would be gone. The merge keeps this
-          session's own work and refuses only to drop theirs.
-        */
-        const safeToSave = remoteClientOwnedRef.current
-          ? { ...projectToSave, context: mergeClientOwned(projectToSave.context as any, remoteClientOwnedRef.current) }
-          : projectToSave;
-        db.saveProject(safeToSave);
-        /*
-          Keep the library entry in step with what was just written.
-
-          Several handlers — status changes, quick field edits — build a whole
-          project payload from `projectLibrary` and save that. The auto-save
-          never updated the library, so its entry stayed at whatever was loaded
-          when the project was opened. Any one of those handlers would then
-          write that stale copy back over the cloud, and a document that had
-          gained two approved annexures reverted to the state it was in when the
-          project was opened.
-
-          The library is a cache of what is stored; it has to be updated when
-          what is stored changes.
-        */
-        setProjectLibrary((prev) =>
-          prev.map((p) => (p.id === activeInternalId ? { ...p, ...projectToSave } : p)),
-        );
+        pendingAutoSave.current = null;
+        persistProject(projectToSave);
       }, 2000);
+      pendingAutoSave.current = timeout;
 
       return () => clearTimeout(timeout);
     }
@@ -1459,6 +1467,21 @@ export default function App() {
     activeInternalId,
     projectArchitecture,
   ]);
+
+  /*
+    "Save changes" in the BOQ editor: write the project to the cloud now.
+
+    It used to download the project as a JSON backup on every click. Editing
+    is not exporting — the backup download lives in Studio settings.
+  */
+  const handleSaveNow = async () => {
+    if (!activeInternalId) return;
+    if (pendingAutoSave.current) {
+      clearTimeout(pendingAutoSave.current);
+      pendingAutoSave.current = null;
+    }
+    await persistProject(buildProjectToSave());
+  };
 
   // Auto-promote project to Stage 5 (Execution) ONLY if project is 'won' and all Stage 4 design gates are completed
   useEffect(() => {
@@ -3520,7 +3543,7 @@ export default function App() {
                           bank={bank}
                           aiStrategy={aiStrategy}
                           onViewInBank={handleViewInBank}
-                          onSaveProject={handleDownloadBackup}
+                          onSaveProject={handleSaveNow}
                           projectId={activeInternalId || ""}
                           projectArchitecture={projectArchitecture}
                           onUpgradeArchitecture={async () => {
@@ -3898,6 +3921,7 @@ export default function App() {
                           setBank={setBank} // NEW: Pass bank setter for dynamic creation
                           setActiveTab={setActiveTab}
                           projects={visibleProjects}
+                          projectId={activeInternalId || undefined}
                           templates={templates}
                         />
                       )}
@@ -4270,7 +4294,7 @@ export default function App() {
                           bank={bank}
                           aiStrategy={aiStrategy}
                           onViewInBank={handleViewInBank}
-                          onSaveProject={handleDownloadBackup}
+                          onSaveProject={handleSaveNow}
                           projectId={activeInternalId || ""}
                           projectArchitecture={projectArchitecture}
                           onUpgradeArchitecture={async () => {
@@ -4647,6 +4671,7 @@ export default function App() {
                           setBank={setBank} // NEW: Pass bank setter for dynamic creation
                           setActiveTab={setActiveTab}
                           projects={visibleProjects}
+                          projectId={activeInternalId || undefined}
                           templates={templates}
                         />
                       )}
