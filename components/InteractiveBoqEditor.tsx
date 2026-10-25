@@ -35,6 +35,8 @@ import { MarginDeviationIndicator } from './MarginDeviationIndicator';
 import { useOrg } from '../contexts/OrgContext';
 import { seesStudioFinance } from '../lib/roleAccess';
 import { SizePanel, sizeLabel } from './BoqSizeField';
+import NumberField from './NumberField';
+import { splitUnitCost } from '../lib/numberInput';
 
 interface InteractiveBoqEditorProps {
   items: FullBoqItem[];
@@ -642,25 +644,12 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                         </button>
                         
                         <div className="flex flex-col items-center justify-center min-w-[54px] max-w-[70px]">
-                          <input
-                            type="number"
-                            step="any"
+                          <NumberField
                             value={item.qty}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value);
-                              if (!isNaN(val) && val >= 0) {
-                                onUpdate(item.id, 'qty', val);
-                              } else if (e.target.value === '') {
-                                onUpdate(item.id, 'qty', 0);
-                              }
-                            }}
-                            onBlur={(e) => {
-                              const val = parseFloat(e.target.value);
-                              if (isNaN(val) || val <= 0) {
-                                onUpdate(item.id, 'qty', 1);
-                              }
-                            }}
-                            className="w-full text-center font-mono font-black text-xs text-slate-900 bg-transparent border-0 p-0 m-0 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            min={0}
+                            onCommit={(v) => onUpdate(item.id, 'qty', v ?? 0)}
+                            aria-label={`Quantity of ${item.name}`}
+                            className="w-full text-center font-mono font-black text-xs text-slate-900 bg-transparent border-0 p-0 m-0 focus:ring-0 focus:outline-none"
                             placeholder="0"
                           />
                           <span className="block text-[8px] uppercase font-bold text-slate-400 select-none pointer-events-none -mt-0.5 leading-none">{item.unit}</span>
@@ -815,25 +804,11 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     <label className="block text-[10px] font-black uppercase tracking-wider text-[#3D52A0] mb-1 font-extrabold">
                       Quantity
                     </label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0.01"
+                    <NumberField
                       value={activeSelectedItem.qty}
-                      onChange={e => {
-                        const val = parseFloat(e.target.value);
-                        if (!isNaN(val) && val >= 0) {
-                          onUpdate(activeSelectedItem.id, 'qty', val);
-                        } else if (e.target.value === '') {
-                          onUpdate(activeSelectedItem.id, 'qty', 0);
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const val = parseFloat(e.target.value);
-                        if (isNaN(val) || val <= 0) {
-                          onUpdate(activeSelectedItem.id, 'qty', 1);
-                        }
-                      }}
+                      min={0}
+                      onCommit={(v) => onUpdate(activeSelectedItem.id, 'qty', v ?? 0)}
+                      aria-label="Quantity"
                       className="w-full px-2.5 py-1.5 bg-sky-50/50 border border-sky-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-black text-slate-900 font-mono text-center"
                     />
                   </div>
@@ -856,36 +831,25 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                       Total Unit Cost (Combined Mat + Lab)
                     </label>
                     <span className="text-[9px] text-[#3D52A0] font-bold bg-sky-50/60 px-1.5 py-0.5 rounded-md">
-                      Auto-Splits 65:35 or Bank Ratio
+                      Keeps this line's material : labour split
                     </span>
                   </div>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">₹</span>
-                    <input
-                      type="number"
-                      value={Math.round((activeSelectedItem.materials || 0) + (activeSelectedItem.labor || 0)) || ''}
-                      onChange={e => {
-                        const totalVal = Number(e.target.value) || 0;
+                    {/* Saved on leaving the box: it feeds material and labour, so it
+                        must not rewrite itself while being typed. It was also rounded
+                        to whole rupees, so 3200.5 could not be entered. */}
+                    <NumberField
+                      value={(activeSelectedItem.materials || 0) + (activeSelectedItem.labor || 0)}
+                      live={false}
+                      min={0}
+                      onCommit={(v) => {
                         const bankItem = bank.find(i => i.id === activeSelectedItem.bankId);
-                        let materialRatio = 0.65;
-                        let laborRatio = 0.35;
-                        
-                        if (bankItem) {
-                          const bankTotal = (bankItem.materials || 0) + (bankItem.labor || 0);
-                          if (bankTotal > 0) {
-                            materialRatio = (bankItem.materials || 0) / bankTotal;
-                            laborRatio = (bankItem.labor || 0) / bankTotal;
-                          }
-                        }
-                        
-                        const newMaterials = parseFloat((totalVal * materialRatio).toFixed(2));
-                        const newLabor = parseFloat((totalVal * laborRatio).toFixed(2));
-                        
-                        onUpdate(activeSelectedItem.id, {
-                          baseRate: newMaterials,
-                          labor: newLabor
-                        });
+                        const bankTotal = bankItem ? (bankItem.materials || 0) + (bankItem.labor || 0) : 0;
+                        const split = splitUnitCost(v ?? 0, activeSelectedItem.materials, activeSelectedItem.labor, bankTotal > 0 ? (bankItem!.materials || 0) / bankTotal : 0.65);
+                        onUpdate(activeSelectedItem.id, { baseRate: split.materials, labor: split.labor });
                       }}
+                      aria-label="Total unit cost"
                       placeholder="Enter combined total cost to auto-split..."
                       className="w-full pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-mono font-black text-slate-900 shadow-inner"
                     />
@@ -900,10 +864,11 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">₹</span>
-                      <input
-                        type="number"
+                      <NumberField
                         value={activeSelectedItem.materials}
-                        onChange={e => onUpdate(activeSelectedItem.id, 'baseRate', Number(e.target.value) || 0)}
+                        min={0}
+                        onCommit={v => onUpdate(activeSelectedItem.id, 'baseRate', v ?? 0)}
+                        aria-label="Material rate"
                         className="w-full pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-mono font-bold text-slate-800 text-right shadow-inner"
                       />
                     </div>
@@ -915,10 +880,11 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">₹</span>
-                      <input
-                        type="number"
+                      <NumberField
                         value={activeSelectedItem.labor}
-                        onChange={e => onUpdate(activeSelectedItem.id, 'labor', Number(e.target.value) || 0)}
+                        min={0}
+                        onCommit={v => onUpdate(activeSelectedItem.id, 'labor', v ?? 0)}
+                        aria-label="Labour rate"
                         className="w-full pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-mono font-bold text-slate-800 text-right shadow-inner"
                       />
                     </div>

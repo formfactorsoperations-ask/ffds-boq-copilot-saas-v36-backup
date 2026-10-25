@@ -8,6 +8,8 @@ import { isBillable } from '../lib/boqPricing';
 import { realRooms, SCOPE_BUCKETS } from '../lib/scopeBuckets';
 import { resolvedRoomId } from '../lib/scopeMigration';
 import { SizeCell, useSizeUnit } from './BoqSizeField';
+import NumberField from './NumberField';
+import { splitUnitCost } from '../lib/numberInput';
 
 interface StudioExcelGridProps {
     items: FullBoqItem[];
@@ -27,20 +29,25 @@ interface StudioExcelGridProps {
     searchQuery?: string;
 }
 
+/** The look of an editable cell: quiet until pointed at or typed in. */
+const CELL = 'bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#3D52A0] focus:bg-white outline-none transition-all w-full px-1 py-0.5 text-sm';
+
+const formatNumberText = (n: number) => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-IN');
+
+/* Text cells only: numbers go through NumberField, which keeps what is typed. */
 const FastInput: React.FC<{
-    value: string | number;
-    onChange: (val: string | number) => void;
-    type?: 'text' | 'number';
+    value: string;
+    onChange: (val: string) => void;
     className?: string;
     placeholder?: string;
-}> = ({ value, onChange, type = 'text', className = "", placeholder }) => {
+}> = ({ value, onChange, className = "", placeholder }) => {
     return (
         <input
-            type={type}
+            type="text"
             value={value !== undefined ? value : ''}
-            onChange={(e) => onChange(type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
+            onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className={`bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#3D52A0] focus:bg-white outline-none transition-all w-full px-1 py-0.5 text-sm ${className}`}
+            className={`${CELL} ${className}`}
         />
     );
 };
@@ -676,6 +683,10 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                         toggleSelection(item.id);
                     }
                 }} onKeyDown={(e) => {
+                    /* Space and Enter select the row only when the row itself
+                       has focus. From a box inside it they belong to the box:
+                       Enter saves it, and Space is part of "7 x 8". */
+                    if (e.target !== e.currentTarget) return;
                     if (e.key === ' ' || e.key === 'Enter') {
                         e.preventDefault();
                         toggleSelection(item.id);
@@ -745,11 +756,12 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                     {/* Qty & Unit */}
                     <td className="p-2 w-[120px] align-top pt-2" style={wOf('qty')}>
                         <div className="flex items-center">
-                            <FastInput
-                                type="number"
+                            <NumberField
                                 value={item.qty}
-                                onChange={(v) => onUpdate(item.id, 'qty', v)}
-                                className="text-center font-bold text-slate-800 bg-slate-100 rounded w-20 tabular-nums"
+                                min={0}
+                                onCommit={(v) => onUpdate(item.id, 'qty', v ?? 0)}
+                                aria-label={`Quantity of ${item.name}`}
+                                className={`${CELL} text-center font-bold text-slate-800 bg-slate-100 rounded w-20`}
                             />
                             <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap ml-1">{item.unit}</span>
                         </div>
@@ -758,25 +770,33 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                     {/* Rate & Margin (Owner Only) */}
                     {isOwner ? (
                         <>
-                            <td className="p-2 w-[80px] text-right align-top pt-2 hidden sm:table-cell">
-                                <FastInput
-                                    type="number"
-                                    value={parseFloat((Number(item.baseRate !== undefined ? item.baseRate : item.materials) + Number(item.labor || 0)).toFixed(2))}
-                                    onChange={(v) => {
-                                        const newCost = Number(v);
-                                        const newBaseRate = Math.max(0, newCost - Number(item.labor || 0));
-                                        onUpdate(item.id, 'baseRate', parseFloat(newBaseRate.toFixed(2)));
-                                    }}
-                                    className="text-right font-medium text-slate-600"
+                            <td className="p-2 w-[100px] text-right align-top pt-2 hidden sm:table-cell" style={wOf('cost')}>
+                                {/* Cost is material + labour. It is saved when you leave the
+                                    cell, not per key: it used to put each keystroke on material
+                                    and floor it at zero, so clearing it showed the labour and
+                                    typing 3200 after that wrote ₹80,02,400. A new cost is split
+                                    in the line's own material : labour ratio. */}
+                                <NumberField
+                                    value={(Number(item.materials) || 0) + (Number(item.labor) || 0)}
+                                    live={false}
+                                    min={0}
+                                    onCommit={(v) => onUpdate(item.id, (() => {
+                                        const split = splitUnitCost(v ?? 0, item.materials, item.labor);
+                                        return { baseRate: split.materials, labor: split.labor };
+                                    })())}
+                                    title={`Material ₹${formatNumberText(item.materials)} + labour ₹${formatNumberText(item.labor)}. A new cost keeps that split.`}
+                                    aria-label={`Unit cost of ${item.name}`}
+                                    className={`${CELL} text-right font-medium text-slate-600`}
                                 />
                             </td>
-                            <td className="p-2 w-[70px] text-right align-top pt-2 hidden sm:table-cell">
+                            <td className="p-2 w-[80px] text-right align-top pt-2 hidden sm:table-cell" style={wOf('margin')}>
                                 <div className="flex items-center justify-end gap-0.5">
-                                    <FastInput
-                                        type="number"
+                                    <NumberField
                                         value={item.margin}
-                                        onChange={(v) => onUpdate(item.id, 'marginOverride', v)}
-                                        className={`text-right font-bold ${item.margin < 15 ? 'text-red-500' : 'text-emerald-600'}`}
+                                        min={0}
+                                        onCommit={(v) => onUpdate(item.id, 'marginOverride', v ?? 0)}
+                                        aria-label={`Margin of ${item.name}`}
+                                        className={`${CELL} text-right font-bold ${item.margin < 15 ? 'text-red-500' : 'text-emerald-600'}`}
                                     />
                                     <span className="text-xs text-slate-400">%</span>
                                 </div>
@@ -792,7 +812,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                     )}
 
                     {/* Total */}
-                    <td className="p-2 w-[120px] text-right font-bold text-slate-800 font-mono tabular-nums align-top pt-3" style={wOf('total')}>
+                    <td className="p-2 w-[120px] text-right font-bold text-slate-800 font-mono tabular-nums align-top pt-3 whitespace-nowrap" style={wOf('total')}>
                         <FlashValue value={total} className={strikeClass}>{formatCurrency(total)}</FlashValue>
                         {item.boqStatus === 'deleted' && <div className="text-[9px] text-rose-500 mt-1">₹0 Billed</div>}
                     </td>
@@ -1009,8 +1029,8 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
 
                         {isOwner ? (
                             <>
-                                <HeadCell label="Cost" sortKey="cost" align="right" className="w-[80px] hidden sm:table-cell" {...headProps('cost')} />
-                                <HeadCell label="Margin" sortKey="margin" align="right" className="w-[70px] hidden sm:table-cell" {...headProps('margin')} />
+                                <HeadCell label="Cost" sortKey="cost" align="right" className="w-[100px] hidden sm:table-cell" {...headProps('cost')} />
+                                <HeadCell label="Margin" sortKey="margin" align="right" className="w-[80px] hidden sm:table-cell" {...headProps('margin')} />
                                 <HeadCell label="Rate" sortKey="rate" align="right" className="w-[100px] hidden sm:table-cell" {...headProps('rate')} />
                             </>
                         ) : (
@@ -1247,11 +1267,11 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                             </div>
                                             <div>
                                                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Change Order Ref</label>
-                                                <FastInput value={coRef} onChange={v => setCoRef(String(v))} placeholder="e.g. CO-005" className="w-full border p-2 rounded-lg bg-slate-50" />
+                                                <FastInput value={coRef} onChange={setCoRef} placeholder="e.g. CO-005" className="w-full border p-2 rounded-lg bg-slate-50" />
                                             </div>
                                             <div>
                                                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Reason / Notes</label>
-                                                <FastInput value={coReason} onChange={v => setCoReason(String(v))} placeholder="Why is this change happening?" className="w-full border p-2 rounded-lg bg-slate-50" />
+                                                <FastInput value={coReason} onChange={setCoReason} placeholder="Why is this change happening?" className="w-full border p-2 rounded-lg bg-slate-50" />
                                             </div>
                                         </>
                                     )}
