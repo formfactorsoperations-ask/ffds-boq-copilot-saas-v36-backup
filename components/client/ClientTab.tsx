@@ -1,6 +1,6 @@
 
 import ProposalAcceptanceCard from '../ops/ProposalAcceptanceCard';
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { ProjectContext, FullBoqItem, ProposalTier, Item, AiComparisonResult, MaterialSuggestion, TimelinePhase, PaymentMilestone, ProposalContent, DecisionBrainOutput, LeadProfile, ProposalLevel, ProposalType } from '../../types';
 import ClientExportView from './ClientExportView';
 import ProposalSectionEditor from './ProposalSectionEditor';
@@ -9,14 +9,13 @@ import { Download } from '@/lib/lucide-shim';
 import { UI_STYLES, UI_CONSTANTS } from '../../lib/UIConstants';
  
 import { calculateSellPrice, generateDeterministicSchedule, formatINR } from '../../lib/utils';
-import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
-import { stageForPdf, planSheetBreaks, keepWholeRanges, forcedBreaks } from '../../lib/classicPdf';
+import { buildProposalPdf, PdfTimeoutError, withTimeout, type PageOrientation, type PdfProgress } from '../../lib/proposalPdf';
 import { onDownloadIntent } from '../../lib/downloadIntent';
 import { generateLocalComparison } from '../../lib/comparison';
 import { ExportIcon, PrintIcon, CheckBadgeIcon, PencilRulerIcon, BriefcaseIcon } from '../Icons';
 import { TEMPLATE_TURNKEY, TEMPLATE_DESIGN_ONLY, INITIAL_BANK } from '../../constants';
 
-export type PageOrientation = 'portrait' | 'landscape';
+export type { PageOrientation };
 
 /*
   The one place that decides the printed sheet.
@@ -146,7 +145,12 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
             margin: boqItem.marginOverride ?? 0,
             unit: (boqItem as any).unit || 'nos',
             specs: (boqItem as any).specs || 'Scope Details',
-            qty: boqItem.qty || 1
+            qty: boqItem.qty || 1,
+            // Kept so the scope is grouped by room, and the summary can tell options
+            // apart: the same item, and the spec it is built to.
+            roomId: boqItem.roomId,
+            bankId: boqItem.bankId,
+            rationale: (boqItem as any).rationale,
           } as FullBoqItem;
         }
         const effectiveMargin = boqItem.marginOverride ?? bankItem.margin;
@@ -271,6 +275,23 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
     return generateDeterministicSchedule(activeTier.fullBoq);
   }, [fullTiers, projectContext?.approvedTierId]);
 
+  /*
+    Export state lives above the early return below: a hook declared after a
+    conditional return crashes the page ("rendered more hooks") the moment the
+    options arrive after the first render.
+  */
+  const [exportOrientation, setExportOrientation] = useState<PageOrientation>('portrait');
+  const [pdfProgress, setPdfProgress] = useState<PdfProgress | null>(null);
+  const isBuildingPdf = pdfProgress !== null;
+  const buildingPdf = useRef(false);
+  // The Documents board's download intent fires a handler captured on mount; this keeps it current.
+  const downloadPdfRef = useRef<() => void>(() => {});
+
+  /* Download from the Documents board opens this page asking for the PDF. */
+  useEffect(() => {
+    return onDownloadIntent('client', '.vnext-proposal-wrapper .ff-page, .vnext-proposal-wrapper.ff-classic', () => downloadPdfRef.current());
+  }, []);
+
   if (!projectContext || validTiers.length === 0) return <div>No data available to generate a proposal. Please set up the project first.</div>;
 
   const handleUpdateContent = (newContent: ProposalContent) => {
@@ -390,9 +411,6 @@ const MODEL_SWITCHER = [
         return `${activeMode}_${proposalLevel}_${safeProjectName}`;
   }
 
-  const [exportOrientation, setExportOrientation] = useState<PageOrientation>('portrait');
-  const [isBuildingPdf, setIsBuildingPdf] = useState(false);
-
   const handlePrint = () => {
       // Logic to generate HTML string
       const clientViewNode = document.querySelector('.vnext-proposal-wrapper');
@@ -449,10 +467,7 @@ const MODEL_SWITCHER = [
     handed the client visibly different papers. Both now produce the same
     booklet at the same page geometry, honouring the same orientation toggle.
 
-    Rendered a page at a time, deliberately. Handing the whole 25,000px booklet
-    to html2canvas in one go returns a canvas that is structurally valid and
-    entirely blank; one A4 page at a time renders correctly, and it also lets a
-    long scope table be sliced across as many sheets as it needs.
+    How the pages are captured, and why it stays quick, is in lib/proposalPdf.ts.
 
     The remaining difference from Save PDF is the pipeline, not the layout:
     this route rasterises, so text in the file is not selectable. Save PDF goes
@@ -460,170 +475,29 @@ const MODEL_SWITCHER = [
     that when the client needs to search or copy from the document.
   */
   const handleDownloadPdf = async () => {
+    if (buildingPdf.current) return;
     const root = document.querySelector('.vnext-proposal-wrapper') as HTMLElement | null;
     if (!root) {
       alert('Proposal content is still loading. Please try again in a moment.');
       return;
     }
-    // The Luxe Booklet is built from sheets; Classic Digital has none.
-    const pages = Array.from(root.querySelectorAll<HTMLElement>('.ff-page'));
-
-    const landscape = exportOrientation === 'landscape';
-    // The sheet, in millimetres and in CSS pixels at 96dpi.
-    const sheet = landscape
-      ? { wMm: 297, hMm: 210, padMm: 14, wPx: 1123 }
-      : { wMm: 210, hMm: 297, padMm: 16, wPx: 794 };
-
-    setIsBuildingPdf(true);
+    buildingPdf.current = true;
+    setPdfProgress({ done: 0, total: 0 });
     try {
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import('html2canvas'),
-        import('jspdf'),
-      ]);
-
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: exportOrientation });
-      let firstSheet = true;
-
-      if (pages.length === 0) {
-        /*
-          Classic Digital: one long document. Lay it out off screen at the
-          sheet's width and print it a sheet-high band at a time, with a
-          margin top and bottom. lib/classicPdf.ts explains the cuts.
-        */
-        const marginMm = 10;
-        const pxPerMmCss = sheet.wPx / sheet.wMm;
-        const bandH = Math.floor((sheet.hMm - marginMm * 2) * pxPerMmCss);
-        const host = await stageForPdf(root, sheet.wPx, bandH);
-        try {
-          const bands = planSheetBreaks(
-            Math.ceil(host.scrollHeight),
-            bandH,
-            keepWholeRanges(host, bandH),
-            forcedBreaks(host),
-          );
-          for (const band of bands) {
-            const canvas = await html2canvas(host, {
-              scale: 2,
-              useCORS: true,
-              logging: false,
-              backgroundColor: '#ffffff',
-              y: band.top,
-              width: sheet.wPx,
-              height: band.bottom - band.top,
-              onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc),
-            });
-            if (!firstSheet) pdf.addPage();
-            firstSheet = false;
-            pdf.addImage(
-              canvas.toDataURL('image/jpeg', 0.95),
-              'JPEG', 0, marginMm, sheet.wMm, (band.bottom - band.top) / pxPerMmCss,
-            );
-          }
-        } finally {
-          host.remove();
-        }
-      }
-
-      for (const page of pages) {
-        const canvas = await html2canvas(page, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          /*
-            Pin the layout width to the sheet. Without this the PDF is laid out
-            at whatever width the studio's browser window happens to be, so the
-            same proposal exports differently on two machines.
-          */
-          windowWidth: sheet.wPx,
-          width: sheet.wPx,
-          onclone: (clonedDoc: Document) => {
-            /*
-              Tailwind v4 writes its palette in oklch()/oklab(), which
-              html2canvas cannot parse — it throws before drawing anything.
-              Rewrite those to rgb on the throwaway clone first.
-            */
-            prepareClonedDocForPdf(clonedDoc);
-
-            const st = clonedDoc.createElement('style');
-            st.textContent = `
-              .ff-page {
-                box-sizing: border-box;
-                width: ${sheet.wMm}mm; padding: ${sheet.padMm}mm;
-                margin: 0; border: 0; box-shadow: none; overflow: visible;
-              }
-              .ff-page:not(.ff-page-flow) { height: ${sheet.hMm}mm; }
-              .ff-page-flow { height: auto; min-height: ${sheet.hMm}mm; }
-              .proposal-container, .vnext-proposal-wrapper {
-                box-shadow: none; border: 0; border-radius: 0;
-                margin: 0; padding: 0; background: #fff;
-              }
-              .ff-ed { background: none !important; box-shadow: none !important; }
-              /* html2canvas rasterises under screen media, so @media print
-                 never runs here — the editing furniture has to be hidden
-                 explicitly or it prints into the client's PDF. */
-              .ff-edlist-tools, .ff-edlist-item-tools { display: none !important; }
-              .no-print { display: none !important; }
-            `;
-            clonedDoc.head.appendChild(st);
-          },
-        });
-
-        const pxPerMm = canvas.width / sheet.wMm;
-        const sliceHpx = Math.max(1, Math.floor(sheet.hMm * pxPerMm));
-
-        /*
-          Walk the page in sheet-high slices, and stop when what is left is a
-          sliver rather than a sheet.
-
-          A 297mm page rounds to a canvas a pixel or two taller than the
-          computed slice height, so dividing with ceil() emitted a second,
-          essentially empty sheet after every single page — the booklet came out
-          with a blank between each leaf. Anything under 2% of a sheet is
-          rounding noise, not content.
-        */
-        const MIN_SLICE = Math.max(4, Math.round(sliceHpx * 0.02));
-        let offset = 0;
-
-        while (canvas.height - offset > MIN_SLICE) {
-          const hpx = Math.min(sliceHpx, canvas.height - offset);
-
-          const slice = document.createElement('canvas');
-          slice.width = canvas.width;
-          slice.height = hpx;
-          const ctx = slice.getContext('2d');
-          if (!ctx) break;
-          // Paint white first: a slice shorter than a full sheet would
-          // otherwise carry transparent pixels into the PDF as black.
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, slice.width, slice.height);
-          ctx.drawImage(canvas, 0, offset, canvas.width, hpx, 0, 0, canvas.width, hpx);
-
-          if (!firstSheet) pdf.addPage();
-          firstSheet = false;
-          pdf.addImage(
-            slice.toDataURL('image/jpeg', 0.95),
-            'JPEG', 0, 0, sheet.wMm, hpx / pxPerMm,
-          );
-
-          offset += hpx;
-        }
-      }
-
+      // A ceiling on the whole build, on top of the ones on each step inside it.
+      const pdf = await withTimeout(buildProposalPdf(root, exportOrientation, setPdfProgress), 180_000, 'Building the PDF');
       pdf.save(`${getExportFileName()}.pdf`);
     } catch (err) {
       console.error('PDF generation failed', err);
-      alert('PDF download failed. Use Save PDF to print to PDF instead.');
+      alert(err instanceof PdfTimeoutError
+        ? `The PDF is taking too long (${err.message}). Use Save PDF to print it to PDF instead.`
+        : 'PDF download failed. Use Save PDF to print to PDF instead.');
     } finally {
-      setIsBuildingPdf(false);
+      buildingPdf.current = false;
+      setPdfProgress(null);
     }
   };
-
-  /* Download from the Documents board opens this page asking for the PDF. */
-  useEffect(() => {
-    return onDownloadIntent('client', '.vnext-proposal-wrapper .ff-page, .vnext-proposal-wrapper.ff-classic', () => { handleDownloadPdf(); });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  downloadPdfRef.current = handleDownloadPdf;
 
   return (
     <div className={`transition-all ${isClientViewOnly ? '' : 'p-4 bg-slate-200/50 pattern-bg rounded-2xl print:p-0 print:bg-white print:rounded-none'}`}>
@@ -689,7 +563,7 @@ const MODEL_SWITCHER = [
                              disabled={isBuildingPdf}
                              className="flex items-center gap-2 px-4 py-2 bg-[#3D52A0] text-white font-bold text-sm rounded-lg shadow-sm hover:bg-[#334486] transition-all disabled:opacity-60 disabled:cursor-wait"
                          >
-                             <Download className="w-4 h-4" /> {isBuildingPdf ? 'Building PDF…' : 'Download PDF'}
+                             <Download className="w-4 h-4" /> {pdfProgress ? (pdfProgress.total ? `Building PDF… ${pdfProgress.done}/${pdfProgress.total}` : 'Building PDF…') : 'Download PDF'}
                          </button>
 
                          <button 

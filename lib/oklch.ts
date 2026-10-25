@@ -239,6 +239,13 @@ export const flattenOklchColors = (doc: Document): number => {
   if (!view) return 0;
   let changed = 0;
 
+  /*
+    Read every element, then write. Writing between reads forces a full style
+    recalculation on the next getComputedStyle, once per element; collecting
+    the writes first costs one. The result is the same: an element that would
+    have inherited a parent's new rgb gets the same rgb inline instead.
+  */
+  const writes: [HTMLElement, string, string][] = [];
   const visit = (el: Element) => {
     const cs = view.getComputedStyle(el);
 
@@ -264,13 +271,14 @@ export const flattenOklchColors = (doc: Document): number => {
       // rejects — doing that put 281 unconverted colours onto the clone as
       // inline styles, which is worse than leaving the original rule to apply.
       if (MODERN_COLOR_RE.test(next)) continue;
-      (el as HTMLElement).style.setProperty(prop, next, 'important');
-      changed++;
+      writes.push([el as HTMLElement, prop, next]);
     }
   };
 
   visit(doc.documentElement);
   doc.querySelectorAll('*').forEach(visit);
+  writes.forEach(([el, prop, next]) => el.style.setProperty(prop, next, 'important'));
+  changed += writes.length;
 
   /*
     Then the style attribute itself.
