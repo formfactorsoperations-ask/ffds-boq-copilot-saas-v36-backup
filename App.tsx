@@ -2166,6 +2166,17 @@ export default function App() {
         updatedAt: Date.now(),
       },
       history: newHistory,
+      /*
+        A status set by hand is the studio's decision. Without this pin the
+        journey engine re-derived status from its own stage on the next render
+        and wrote it straight back: Won → Drafting came back as Won.
+      */
+      statusPin: {
+        status: sanitizedStatus,
+        stage: targetStage > 0 ? targetStage : (prevContext?.lifecycle?.stage || 1),
+        at: Date.now(),
+        journeyStage: null,
+      },
       ...(sanitizedStatus === 'proposal_sent' && !prevContext?.proposalSentAt ? { proposalSentAt: new Date().toISOString() } : {}),
       ...(sanitizedStatus === 'completed' ? { handoverDate: Date.now(), journeySummary: { ...(prevContext?.journeySummary || { done: 10, total: 10, pct: 100, active: 0, phaseProgress: [] }), pct: 100 } } : {}),
       ...(sanitizedStatus === 'execution' ? { executionApprovedByFFDS: true } : {}),

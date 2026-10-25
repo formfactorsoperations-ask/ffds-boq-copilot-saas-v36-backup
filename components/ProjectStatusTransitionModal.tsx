@@ -303,6 +303,12 @@ interface ProjectStatusTransitionModalProps {
   onClose: () => void;
   project: FullProjectData;
   onStatusChange: (projectId: string, newStatus: ProjectStatus, note?: string) => Promise<void> | void;
+  /**
+   * Inside an open project the classification goes into its live state and
+   * the auto-save writes it. Without this the modal saves `project` itself,
+   * which is only safe when that is the whole stored project (Projects list).
+   */
+  onClassificationChange?: (isDummy: boolean) => void;
   currentUserRole?: string;
 }
 
@@ -311,6 +317,7 @@ export const ProjectStatusTransitionModal: React.FC<ProjectStatusTransitionModal
   onClose,
   project,
   onStatusChange,
+  onClassificationChange,
   currentUserRole = 'Ops Director'
 }) => {
   const rawStatus = project.context?.status;
@@ -386,6 +393,16 @@ export const ProjectStatusTransitionModal: React.FC<ProjectStatusTransitionModal
     }
     setIsSubmitting(true);
     try {
+      if (onClassificationChange) {
+        // Status first: its handler replaces the live context, and the
+        // classification is then applied on top of that.
+        if (isStatusChanged) {
+          await onStatusChange(project.id, selectedStatus, transitionNote.trim() || undefined);
+        }
+        if (isDummyChanged) onClassificationChange(isDummy);
+        onClose();
+        return;
+      }
       if (isDummyChanged) {
         const updatedProject: FullProjectData = {
           ...project,
