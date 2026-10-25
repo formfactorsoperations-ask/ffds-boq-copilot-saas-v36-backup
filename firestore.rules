@@ -1196,8 +1196,17 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
       allow write: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
       
+      /*
+        The studio's standing settings (settings/main): its name, contact
+        details and logo, the design process, standard terms and the message
+        templates -- what its clients already see in proposals and agreements,
+        and nothing behind them. Client Relations and Site Supervisors of the
+        studio read it too (their emails and screens use the studio's own
+        templates and process, not the defaults); only staff change it.
+      */
       match /settings/{docId} {
-        allow read: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin() || isTenantDesigner(studioId));
+        allow read: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin() || isTenantDesigner(studioId)
+          || (getUserData().get('tenantId', '') == studioId && myTeamKind() != ''));
         allow write: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
       }
       match /projects/{projectId} {
