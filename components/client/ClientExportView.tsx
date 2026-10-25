@@ -94,8 +94,9 @@ const SectionWrapper: React.FC<{ id: string; onEdit?: (id: string) => void; chil
     </div>
 );
 
-const ScanFirstSection: React.FC<{ title: string; cue: string; children: React.ReactNode; defaultOpen?: boolean }> = ({ title, cue, children, defaultOpen = false }) => (
+const ScanFirstSection: React.FC<{ title: string; cue: string; children: React.ReactNode; defaultOpen?: boolean; id?: string }> = ({ title, cue, children, defaultOpen = false, id }) => (
     <details 
+        id={id}
         open={defaultOpen} 
         className="group scan-first mb-4 print:mb-8 scroll-mt-24 break-inside-avoid"
     >
@@ -117,7 +118,7 @@ const ScanFirstSection: React.FC<{ title: string; cue: string; children: React.R
 );
 
 const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
-    const { orgData } = useOrg();
+    const { orgData, currentRole } = useOrg();
     const { settings: fetchedSettings, loading: settingsLoading } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
     const [paymentStructure, setPaymentStructure] = useState<any>(null);
 
@@ -182,6 +183,14 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
     // For L2, we focus on the approved tier
     const approvedTier = tiers.find(t => t.id === projectContext.approvedTierId) || tiers[0];
     const [previewTierId, setPreviewTierId] = useState<string>(approvedTier?.id || '');
+    // The same rule as the Luxe Booklet: the studio's choice, never shown to a Designer.
+    const showScopePricing = !!projectContext.showScopePricing && currentRole !== 'Designer';
+
+    /* Picking an option shows its scope: the card says "Showing Room-wise Scope Below ↓", so make it true. */
+    const selectOption = (tierId: string) => {
+        setPreviewTierId(tierId);
+        document.getElementById('scope-breakdown')?.setAttribute('open', '');
+    };
 
     // --- CALCULATE TOTALS FOR PAYMENTS COMPONENT ---
     // Extract Discounts & Taxes Logic (Same as Snapshot Ledger)
@@ -320,16 +329,16 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                         comparisonData={props.comparisonData} 
                                         content={content.options}
                                         activeTierId={previewTierId}
-                                        onSelectTier={setPreviewTierId}
+                                        onSelectTier={selectOption}
                                     />
                                 </SectionWrapper>
                             </ScanFirstSection>
                         )}
 
                         {/* Roomwise Breakdown - Now wrapped in accordion */}
-                        <ScanFirstSection title="Detailed Scope Breakdown" cue="Room-by-Room">
+                        <ScanFirstSection id="scope-breakdown" title="Detailed Scope Breakdown" cue="Room-by-Room">
                             <div className="break-inside-avoid">
-                                <ClientRoomwise tiers={tiers} mode="advisory" activeTierId={previewTierId} />
+                                <ClientRoomwise tiers={tiers} mode="advisory" activeTierId={previewTierId} showPricing={showScopePricing} />
                             </div>
                         </ScanFirstSection>
 

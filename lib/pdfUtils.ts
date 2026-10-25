@@ -91,22 +91,32 @@ export function freezeMotionForPdf(clonedDoc: Document): void {
 export function neutraliseHtml2CanvasQuirks(clonedDoc: Document): void {
   const view = clonedDoc.defaultView;
   if (!view) return;
+  const all = Array.from(clonedDoc.querySelectorAll<HTMLElement>('*'));
 
-  clonedDoc.querySelectorAll('*').forEach((el) => {
+  /*
+    Each fix is read for every element first and written afterwards. Writing
+    an inline style between two getComputedStyle calls makes the next read
+    recalculate the styles of the whole document, so reading and writing in
+    turn cost a full recalculation per element — over a second per capture on
+    a proposal. The inline-flex pass runs first because it changes what the
+    border pass reads (a flex item's display), exactly as before.
+  */
+  const flexes = all.filter(el => view.getComputedStyle(el).display === 'inline-flex');
+  flexes.forEach(el => el.style.setProperty('display', 'inline-block', 'important'));
+
+  const underlines: [HTMLElement, string][] = [];
+  all.forEach((el) => {
     const cs = view.getComputedStyle(el);
-
-    if (cs.display === 'inline-flex') {
-      (el as HTMLElement).style.setProperty('display', 'inline-block', 'important');
-    }
-
     const bw = parseFloat(cs.borderBottomWidth || '0');
     if (cs.display === 'inline' && bw > 0 && cs.borderBottomStyle !== 'none') {
-      const colour = cs.borderBottomColor;
-      (el as HTMLElement).style.setProperty('border-bottom', 'none', 'important');
-      (el as HTMLElement).style.setProperty('text-decoration', 'underline', 'important');
-      (el as HTMLElement).style.setProperty('text-decoration-color', colour, 'important');
-      (el as HTMLElement).style.setProperty('text-underline-offset', '3px', 'important');
+      underlines.push([el, cs.borderBottomColor]);
     }
+  });
+  underlines.forEach(([el, colour]) => {
+    el.style.setProperty('border-bottom', 'none', 'important');
+    el.style.setProperty('text-decoration', 'underline', 'important');
+    el.style.setProperty('text-decoration-color', colour, 'important');
+    el.style.setProperty('text-underline-offset', '3px', 'important');
   });
 }
 

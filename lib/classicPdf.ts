@@ -1,21 +1,20 @@
 /**
- * Download PDF for the Classic Digital proposal.
+ * Download PDF for the Classic Digital proposal: laying it out and cutting it
+ * into sheets. lib/proposalPdf.ts does the capturing.
  *
  * The Luxe Booklet is built from fixed `.ff-page` sheets, so its PDF is one
  * sheet per page. The classic proposal is one long scrolling document with no
- * sheets in it at all, which is why Download PDF used to stop at "Proposal
- * content is still loading" for every classic proposal: it found no pages.
+ * sheets in it at all.
  *
  * So the classic document is laid out once, off screen, at the sheet's width,
  * with every collapsed section opened and the screen-only furniture taken out
  * (the same things Save PDF hides through print CSS). That copy is then cut
- * into sheet-high bands, and each band is rasterised on its own. Handing the
- * whole document to html2canvas in one go returns a blank canvas at this
- * length, which the booklet export found out first.
+ * into sheet-high bands.
  *
  * The cuts are placed between things, not through them: a cut never lands
  * inside an element shorter than most of a sheet, so a paragraph, a table row
- * or a card moves whole to the next page.
+ * or a card moves whole to the next page, and a heading moves with the start
+ * of what it heads.
  */
 
 export interface Range { top: number; bottom: number }
@@ -26,6 +25,39 @@ const KEEP_WHOLE = 0.6;
 const MIN_FILL = 0.5;
 /** How much of what follows a heading must share its sheet, in px. */
 const HEADING_TAIL = 140;
+/** Ceilings on the waits while the copy settles, so a stalled image cannot hang the export. */
+const IMAGES_TIMEOUT_MS = 10_000;
+const FONTS_TIMEOUT_MS = 3_000;
+const BLANK_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
+/**
+ * Merge spans that overlap into one, so "is this position inside something?"
+ * is a binary search. Spans that only touch stay separate: the point where
+ * one card ends and the next begins is a fine place to cut.
+ */
+export function mergeRanges(ranges: Range[]): Range[] {
+  const sorted = ranges.filter(r => r.bottom > r.top).sort((a, b) => a.top - b.top);
+  const out: Range[] = [];
+  for (const r of sorted) {
+    const last = out[out.length - 1];
+    if (last && r.top < last.bottom) last.bottom = Math.max(last.bottom, r.bottom);
+    else out.push({ ...r });
+  }
+  return out;
+}
+
+/** The merged span `y` falls strictly inside, if any. */
+function spanAround(merged: Range[], y: number): Range | undefined {
+  let lo = 0, hi = merged.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const r = merged[mid];
+    if (y <= r.top) hi = mid - 1;
+    else if (y >= r.bottom) lo = mid + 1;
+    else return r;
+  }
+  return undefined;
+}
 
 /**
  * Where each sheet starts and ends, in px from the top of the document.
@@ -40,16 +72,13 @@ export function planSheetBreaks(
   forced: number[] = [],
 ): Range[] {
   if (total <= 0 || sheetH <= 0) return [];
-  const fits = (y: number) => !keepWhole.some(r => r.top < y - 0.5 && r.bottom > y + 0.5);
-  const candidates = Array.from(new Set(keepWhole.flatMap(r => [r.top, r.bottom])))
-    .filter(y => y > 0 && y < total)
-    .sort((a, b) => b - a);
+  const merged = mergeRanges(keepWhole);
   const hardBreaks = forced.filter(y => y > 0 && y < total).sort((a, b) => a - b);
 
   const sheets: Range[] = [];
   let start = 0;
   while (total - start > 1) {
-    let limit = Math.min(total, start + sheetH);
+    const limit = Math.min(total, start + sheetH);
     const hard = hardBreaks.find(y => y > start + 1 && y <= limit);
     let end: number;
     if (hard !== undefined) {
@@ -57,13 +86,29 @@ export function planSheetBreaks(
     } else if (limit >= total) {
       end = total;
     } else {
-      const floor = start + sheetH * MIN_FILL;
-      end = candidates.find(y => y <= limit && y >= floor && fits(y)) ?? limit;
+      // Cut at the limit unless that splits something; then cut above it,
+      // unless that would leave the sheet mostly empty.
+      const around = spanAround(merged, limit);
+      end = around && around.top >= start + sheetH * MIN_FILL ? around.top : limit;
     }
     sheets.push({ top: start, bottom: end });
     start = end;
   }
   return sheets;
+}
+
+/**
+ * Consecutive sheets grouped so each group is at most `maxH` tall, to capture
+ * a group in one go. A sheet taller than `maxH` (it cannot be) still gets a group.
+ */
+export function groupIntoChunks(sheets: Range[], maxH: number): Range[][] {
+  const chunks: Range[][] = [];
+  for (const s of sheets) {
+    const current = chunks[chunks.length - 1];
+    if (current && s.bottom - current[0].top <= maxH) current.push(s);
+    else chunks.push([s]);
+  }
+  return chunks;
 }
 
 /** The spans inside `host` that should not be cut, relative to its top. */
@@ -94,6 +139,9 @@ export function forcedBreaks(host: HTMLElement): number[] {
   return [...before, ...after];
 }
 
+/* Resolve after `ms` whatever happens, so a wait can be capped with Promise.race. */
+const after = (ms: number) => new Promise<void>(done => setTimeout(done, ms));
+
 /**
  * Lay a copy of the proposal out off screen at `widthPx`, as it should print.
  * `sheetH` is the printable height of one sheet, in px.
@@ -117,16 +165,35 @@ export async function stageForPdf(root: HTMLElement, widthPx: number, sheetH: nu
     el.style.height = `${sheetH}px`;
     el.style.minHeight = '0';
   });
+  // A scroll box shows a window onto its list on screen; on paper the whole list prints.
+  copy.querySelectorAll<HTMLElement>('[class*="max-h-"][class*="overflow-y-auto"], [class*="max-h-"][class*="overflow-auto"]').forEach(el => {
+    el.style.maxHeight = 'none';
+    el.style.overflow = 'visible';
+  });
 
   host.appendChild(copy);
   document.body.appendChild(host);
 
-  const images = Array.from(host.querySelectorAll('img'));
-  await Promise.all(images.map(img => (img.complete ? null : new Promise(done => {
+  const images = Array.from(host.querySelectorAll('img')).filter(img => !img.complete);
+  const loaded = Promise.all(images.map(img => new Promise(done => {
     img.addEventListener('load', done, { once: true });
     img.addEventListener('error', done, { once: true });
-  }))));
-  if (document.fonts?.ready) await document.fonts.ready;
+  })));
+  await Promise.race([loaded, after(IMAGES_TIMEOUT_MS)]);
+  /*
+    html2canvas waits, with no limit of its own, for its copy of the page to
+    finish loading. An image that is still loading now would hold that up
+    indefinitely, so it is left out of the PDF instead. Embedded frames hold
+    it up the same way and cannot be drawn anyway.
+  */
+  images.filter(img => !img.complete).forEach(img => {
+    img.removeAttribute('srcset');
+    img.src = BLANK_PIXEL;
+  });
+  host.querySelectorAll('iframe, object, embed').forEach(el => el.remove());
+  if (document.fonts?.ready) await Promise.race([document.fonts.ready, after(FONTS_TIMEOUT_MS)]);
+  // Let layout settle. A timer, not requestAnimationFrame: rAF never fires in a background tab.
+  await after(50);
 
   /*
     Headings are sized by the browser window, not the sheet, so on a narrow
@@ -142,6 +209,5 @@ export async function stageForPdf(root: HTMLElement, widthPx: number, sheetH: nu
       h.style.fontSize = `${size}px`;
     }
   });
-  await new Promise(done => requestAnimationFrame(() => done(null)));
   return host;
 }
