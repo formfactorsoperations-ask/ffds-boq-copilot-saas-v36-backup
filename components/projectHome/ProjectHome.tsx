@@ -25,7 +25,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db as fsDb } from '../../services/firebaseClient';
 import { db as storageDb } from '../../services/dbService';
-import type { ProjectContext, FullBoqItem, DrawingTrackerItem, MOM, ProjectSchedule, PurchaseOrder } from '../../types';
+import type { ProjectContext, FullBoqItem, DrawingTrackerItem, MOM, ProjectSchedule, PurchaseOrder, Item } from '../../types';
 import type { JourneyContextType } from '../../services/journeyEngine';
 import type { NextAction } from '../../services/nextActionEngine';
 import { PHASES, STAGE_LABELS } from '../../constants/journeyConstants';
@@ -33,7 +33,7 @@ import { computeSchedule as computePayments } from '../../lib/paymentSchedule';
 import { computeSchedule as computeProgramme } from '../../lib/schedule';
 import { buildScheduleFromProject } from '../../lib/scheduleBuilder';
 import { useTimelinePhases } from '../../hooks/useTimelinePhases';
-import { buildProjectPnl, CONFIDENCE_LABEL } from '../../lib/projectPnl';
+import { buildProjectPnl, marginAssumption, CONFIDENCE_LABEL, MARGIN_SOURCE_LABEL } from '../../lib/projectPnl';
 import { resolveDocumentState } from '../../services/documentIssueEngine';
 import { issuePortalAccess } from '../../services/portalAccessService';
 import { readPortalView } from '../../services/portalViewService';
@@ -60,6 +60,8 @@ export interface ProjectHomeProps {
   setActiveTab: (tab: string) => void;
   activeTier: any;
   tiers: any[];
+  /** The item bank: the studio's usual margin when a BOQ carries no costs (lib/projectPnl marginAssumption). */
+  bank?: Item[];
   fullBoq: FullBoqItem[];
   currentUserRole: string;
   journey: JourneyContextType;
@@ -181,9 +183,14 @@ function Home(p: ProjectHomeProps) {
   const programmeStale = designDone && programme.rows.some(r => r.kind === 'design' && r.status !== 'completed');
 
   const cost = useMemo(() => costModel(p.fullBoq, ctx.rooms || []), [p.fullBoq, ctx.rooms]);
+  /* The margin to assume when the BOQ carries no costs: this project's own figure, its other options, or the item bank's average. */
+  const assumption = useMemo(() => marginAssumption(ctx, p.tiers, p.bank), [ctx, p.tiers, p.bank]);
   const pnl = useMemo(() => {
-    try { return buildProjectPnl(ctx, p.fullBoq, pos, p.activeTier, ctx.procurementModes || {}); } catch { return null; }
-  }, [ctx, p.fullBoq, pos, p.activeTier]);
+    try { return buildProjectPnl(ctx, p.fullBoq, pos, p.activeTier, ctx.procurementModes || {}, assumption); } catch { return null; }
+  }, [ctx, p.fullBoq, pos, p.activeTier, assumption]);
+  const setMarginPct = (pct: number | null) => p.setProjectContext((prev: any) => ({
+    ...prev, financials: { ...(prev?.financials || {}), expectedMarginPct: pct },
+  }));
 
   const paidAmounts = useMemo(() => new Map((payResult?.amounts || []).filter(a => a.status === 'paid').map(a => [a.id, a.invoiceTotal])), [payResult]);
   const activity = useMemo(() => activityItems({
@@ -335,7 +342,16 @@ function Home(p: ProjectHomeProps) {
   /* ───────────── KPIs ───────────── */
   const armed = useArmed(400);
   const collected = useCountUp(payments.collected, armed);
-  const marginVal = useCountUp(pnl ? pnl.currentMargin : 0, armed);
+  /* Potential margin (the BOQ's margin %) until something is ordered or billed; then the actual margin (lib/projectPnl). */
+  const actualMargin = !!pnl && pnl.hasProcurement;
+  const marginNow = pnl ? (actualMargin ? pnl.currentMargin : pnl.quotedMargin) : 0;
+  const marginNowPct = pnl ? (actualMargin ? pnl.currentMarginPct : pnl.quotedMarginPct) : 0;
+  const marginVal = useCountUp(marginNow, armed);
+  const marginSub = !pnl || !pnl.contractedTotal ? 'No contract yet'
+    : actualMargin ? `potential ${inr(pnl.quotedMargin)} · ${Math.round(pnl.coveragePct)}% ordered`
+    : pnl.marginBasis === 'boq' && pnl.boqMarginPct != null ? `${pnl.boqMarginPct.toFixed(1)}% margin on the BOQ`
+    : pnl.marginBasis === 'assumed' && pnl.assumedMargin ? `${pnl.assumedMargin.pct.toFixed(1)}% assumed · no costs in the BOQ`
+    : 'No costs in the BOQ yet';
   const collectedPct = payments.gross ? (payments.collected / payments.gross) * 100 : 0;
   const stepsDone = useCountUp(journey.overall.done, armed, 900);
   const pctDone = useCountUp(journey.overall.pct, armed, 900);
@@ -404,10 +420,10 @@ function Home(p: ProjectHomeProps) {
             )}
             {canSeeMoney && (
               <button className="ph-card ph-kpi ph-tilt ph-rise" style={{ animationDelay: '.09s' }} onClick={() => openInsight('cost')}>
-                <Ring pct={pnl ? pnl.currentMarginPct : 0} colour="#3D52A0" label={pnl && pnl.contractedTotal ? `${Math.round(pnl.currentMarginPct)}%` : '—'} />
-                <div><div className="l">Margin</div>
+                <Ring pct={marginNowPct} colour="#3D52A0" label={pnl && pnl.contractedTotal ? `${Math.round(marginNowPct)}%` : '—'} />
+                <div><div className="l">{actualMargin ? 'Actual margin' : 'Potential margin'}</div>
                   <div className="v ph-num">{pnl && pnl.contractedTotal ? `₹${(marginVal / 1e5).toFixed(2)}L` : '—'}</div>
-                  <div className="s">{pnl && pnl.contractedTotal ? (pnl.confidence === 'plan-only' ? 'BOQ estimate' : CONFIDENCE_LABEL[pnl.confidence]) : 'No contract yet'}</div></div>
+                  <div className="s">{marginSub}</div></div>
               </button>
             )}
             <button className="ph-card ph-kpi ph-tilt ph-rise" style={{ animationDelay: '.12s' }} onClick={() => openInsight('draw')}>
@@ -450,9 +466,12 @@ function Home(p: ProjectHomeProps) {
             programme={{ rows: programme.rows, pins, finishISO: programme.finishISO, stale: programmeStale }}
             cost={cost}
             marginLine={pnl && pnl.contractedTotal
-              ? <><b>{inr(pnl.currentMargin)} margin ({pnl.currentMarginPct.toFixed(1)}%)</b> on {inr(pnl.contractedTotal)} contracted. {pnl.confidence === 'plan-only' ? 'Nothing is ordered yet, so this is the BOQ’s estimate.' : `${CONFIDENCE_LABEL[pnl.confidence]}.`}</>
+              ? (actualMargin
+                ? <><b>{inr(pnl.currentMargin)} actual margin ({pnl.currentMarginPct.toFixed(1)}%)</b> on {inr(pnl.contractedTotal)} contracted, against a potential {inr(pnl.quotedMargin)} ({pnl.quotedMarginPct.toFixed(1)}%). {CONFIDENCE_LABEL[pnl.confidence]}.</>
+                : <><b>{inr(pnl.quotedMargin)} potential margin ({pnl.quotedMarginPct.toFixed(1)}%)</b> on {inr(pnl.contractedTotal)} contracted{pnl.marginBasis === 'assumed' && pnl.assumedMargin ? `, assuming ${pnl.assumedMargin.pct.toFixed(1)}% on execution (${MARGIN_SOURCE_LABEL[pnl.assumedMargin.source]}), as the BOQ carries no costs` : pnl.boqMarginPct != null ? `, from the BOQ’s ${pnl.boqMarginPct.toFixed(1)}% margin` : ''}. The actual margin starts once purchase orders and vendor bills are entered.</>)
               : <>No contract value yet, so there is no margin to show.</>}
             pnlCard={<ProjectPnlCard projectContext={p.projectContext} boq={p.fullBoq} projectId={p.projectId} activeTier={p.activeTier}
+              assumption={assumption} onSetMarginPct={setMarginPct}
               currentUserRole={p.currentUserRole} onOpenProcurement={() => go('materials')} />}
             activity={activity}
             activitySummary={activitySummary}

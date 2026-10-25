@@ -6,7 +6,7 @@ import { Lock, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, 
 import { NAV_CONFIG, ALWAYS_ON_BAND } from './navConfig';
 import { useProjectJourney } from '../hooks/useProjectJourney';
 import { useOrg } from '../contexts/OrgContext';
-import { seesStudioFinance, isDesignerRole, isLimitedRole, DESIGNER_EDITABLE_TABS, limitedMayOpen, limitedHomeTab } from '../lib/roleAccess';
+import { seesStudioFinance, holdsFinanceRole, isDesignerRole, isLimitedRole, DESIGNER_EDITABLE_TABS, limitedMayOpen, limitedHomeTab } from '../lib/roleAccess';
 import { FFDSLogo } from './FFDSLogo';
 import ViewOnlyGuard from './ViewOnlyGuard';
 import ProjectTeamButton from './projectHeader/ProjectTeamButton';
@@ -18,6 +18,7 @@ import ProjectStatusTransitionModal from './ProjectStatusTransitionModal';
 import { FloatingDock, FloatingDockItem } from './ui/floating-dock';
 import { useHubAlerts } from './ops/useHubAlerts';
 import NotifyBell from './notify/NotifyBell';
+import { HideFiguresButton } from './ui/HideFigures';
 import LiveStamp from './notify/LiveStamp';
 import { useInbox } from './notify/NotifyContext';
 import { Count } from './notify/NotifyBits';
@@ -679,6 +680,8 @@ export function ProjectWorkspace({
           */}
           <div className="ml-auto shrink-0 flex items-center gap-2">
             <LiveStamp match={(n) => n.projectId === projectId} className="hidden lg:inline-flex" />
+            {/* Hide margins, costs and collections while the screen is shared (lib/figuresPrivacy). */}
+            {holdsFinanceRole(currentRole) && <HideFiguresButton />}
             {/* One bell: what reached you, and first what this project is waiting on. Those alerts lead to screens a Designer does not have. */}
             <NotifyBell project={!isLimited ? {
               name: [projectContext?.name || 'This project', projectContext?.clientName].filter(Boolean).join(' · '),

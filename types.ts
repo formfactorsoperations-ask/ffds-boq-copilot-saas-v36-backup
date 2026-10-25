@@ -371,6 +371,8 @@ export interface FinancialConfig {
     approvedExecutionValue?: number; // Revised/approved execution value
     approvedDesignValue?: number; // Revised/approved design fee
     designFeePercentage?: number; // Persist design fee percentage for revisions
+    /** The margin % the owner expects on this project, used when its BOQ carries no costs (lib/projectPnl). */
+    expectedMarginPct?: number | null;
     paymentRevisions?: PaymentRevision[];
     paymentSnapshots?: PaymentSnapshot[];
 }

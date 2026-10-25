@@ -1336,11 +1336,14 @@ service cloud.firestore {
     function leadShapeOk(d) {
       return d.keys().hasOnly(['tenantId', 'createdAt', 'createdBy', 'createdByName', 'ownerEmail', 'ownerName', 'people', 'home', 'source',
                'sourceNote', 'enquiry', 'stage', 'lostReason', 'know', 'next', 'touches', 'firstTouchAt', 'lastTouchAt', 'openRequest',
-               'projectId', 'updatedAt', 'updatedBy'])
+               'projectId', 'updatedAt', 'updatedBy', 'notes', 'meetings'])
         && d.tenantId is string && d.ownerEmail is string && d.ownerEmail.size() > 3
         && d.stage in ['new', 'talking', 'meeting', 'measured', 'proposal', 'won', 'lost']
         && d.people is list && d.people.size() >= 1 && d.people.size() <= 8
         && d.touches is list && d.touches.size() <= 300
+        /* Notes kept on the lead, and the meetings with it that are over (lib/leads). Absent until the first one. */
+        && (!('notes' in d) || (d.notes is list && d.notes.size() <= 200))
+        && (!('meetings' in d) || (d.meetings is list && d.meetings.size() <= 200))
         && d.enquiry is string && d.enquiry.size() <= 2000
         && d.updatedBy == myEmail();
     }

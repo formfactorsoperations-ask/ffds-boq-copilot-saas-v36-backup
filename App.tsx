@@ -136,7 +136,8 @@ import { issuePortalAccess, projectIdFromToken } from "./services/portalAccessSe
 import { readPortalView } from "./services/portalViewService";
 import { syncStudioAccess, portalDoor } from "./services/studioAccess";
 import { publishProjectDirectory } from "./services/projectTeam";
-import { seesStudioFinance, FINANCE_TABS, isLimitedRole, limitedMayOpen, limitedHomeTab, mayOpenStudioTab, STUDIO_TABS, visibleToRole } from "./lib/roleAccess";
+import { useFiguresHidden, useHideFiguresShortcut, FiguresHiddenCover } from "./components/ui/HideFigures";
+import { seesStudioFinance, holdsFinanceRole, FINANCE_TABS, isLimitedRole, limitedMayOpen, limitedHomeTab, mayOpenStudioTab, STUDIO_TABS, visibleToRole } from "./lib/roleAccess";
 import { functions as firebaseFunctions } from "./services/firebaseClient";
 import { httpsCallable } from "firebase/functions";
 import { roleLabel } from "./lib/roles";
@@ -186,6 +187,9 @@ export default function App() {
   // Global State
   const { orgData, currentUserAuth, currentRole, currentRoles, setCurrentRole, teamMembers } = useOrg();
   const [activeTab, setActiveTab] = useState("home");
+  /* Hide figures for a shared screen: the whole app redraws when it is flipped, so every finance check reads it afresh. */
+  const figuresHidden = useFiguresHidden();
+  useHideFiguresShortcut(holdsFinanceRole(currentRoles));
   const [showWizardOverride, setShowWizardOverride] = useState(false);
   useEffect(() => {
     const handleTabChange = (e: any) => {
@@ -876,7 +880,8 @@ export default function App() {
       setActiveTab(STUDIO_TABS.has(activeTab) ? "projects" : limitedHomeTab(currentRole));
       return;
     }
-    if (!(FINANCE_TABS.has(activeTab) && !seesStudioFinance(currentRole))) return;
+    /* By role: while figures are hidden the screen is covered instead (FiguresHiddenCover), so nobody is moved off it. */
+    if (!(FINANCE_TABS.has(activeTab) && !holdsFinanceRole(currentRole))) return;
     const studioWide = ["reports", "admin-templates-bank", "clients", "studio-settings", "saas-dashboard"];
     setActiveTab(studioWide.includes(activeTab) ? "projects" : "dashboard");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1966,7 +1971,7 @@ export default function App() {
    * desk; the project is in the library and opens from the lead.
    */
   const handleCreateFromLead = async (fromLead: Record<string, any>): Promise<string> => {
-    if (!seesStudioFinance(currentRole)) throw new Error("Only an Owner, Admin or Ops Director opens a project.");
+    if (!holdsFinanceRole(currentRole)) throw new Error("Only an Owner, Admin or Ops Director opens a project.");
     const newId = generateId();
     const project: FullProjectData = {
       id: newId,
@@ -3199,7 +3204,9 @@ export default function App() {
                     stalled, the new tab never appeared and the page stayed blank with
                     nothing in the console. A CSS entrance (hud-swap) needs no exit.
                   */}
-                  <div key={activeTab} className="hud-swap">
+                  <div key={activeTab} className="hud-swap relative">
+                  {/* Hide figures (lib/figuresPrivacy): a screen wholly about money is covered while a screen is shared. */}
+                  {figuresHidden && FINANCE_TABS.has(activeTab) && <FiguresHiddenCover />}
                   <Suspense fallback={
                     <div className="p-12 flex flex-col items-center justify-center text-slate-400 space-y-3">
                       <div className="w-6 h-6 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
@@ -3528,6 +3535,8 @@ export default function App() {
                           allProjects={visibleProjects}
                           currentUserRole={currentRole}
                           setActiveTab={setActiveTab}
+                          tiers={tiers}
+                          bank={bank}
                         />
                       )}
 
@@ -3966,7 +3975,9 @@ export default function App() {
                     stalled, the new tab never appeared and the page stayed blank with
                     nothing in the console. A CSS entrance (hud-swap) needs no exit.
                   */}
-                  <div key={activeTab} className="hud-swap">
+                  <div key={activeTab} className="hud-swap relative">
+                  {/* Hide figures (lib/figuresPrivacy): a screen wholly about money is covered while a screen is shared. */}
+                  {figuresHidden && FINANCE_TABS.has(activeTab) && <FiguresHiddenCover />}
                   <Suspense fallback={
                     <div className="p-12 flex flex-col items-center justify-center text-slate-400 space-y-3">
                       <div className="w-6 h-6 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
@@ -4280,6 +4291,8 @@ export default function App() {
                           allProjects={visibleProjects}
                           currentUserRole={currentRole}
                           setActiveTab={setActiveTab}
+                          tiers={tiers}
+                          bank={bank}
                         />
                       )}
 

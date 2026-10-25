@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, TrendingDown, Lock, ChevronDown, AlertTriangle, Wallet } from '@/lib/lucide-shim';
+import { TrendingUp, TrendingDown, Lock, ChevronDown, AlertTriangle, Wallet, EyeOff } from '@/lib/lucide-shim';
+import { useFiguresHidden } from '../ui/HideFigures';
 import { ProjectContext, FullBoqItem, PurchaseOrder } from '../../types';
 import { db } from '../../services/dbService';
 import { formatINR } from '../../lib/utils';
-import { buildProjectPnl, CONFIDENCE_LABEL, CONFIDENCE_NOTE } from '../../lib/projectPnl';
+import { buildProjectPnl, CONFIDENCE_LABEL, CONFIDENCE_NOTE, MARGIN_SOURCE_LABEL, projectMarginPct, type MarginAssumption } from '../../lib/projectPnl';
 
 /**
  * PROJECT P&L — the one question an owner actually asks.
@@ -29,6 +30,10 @@ interface Props {
   currentUserRole: string;
   variants?: any;
   onOpenProcurement?: () => void;
+  /** The margin to assume when the BOQ carries no costs (lib/projectPnl marginAssumption). */
+  assumption?: MarginAssumption | null;
+  /** Set this project's own margin %, or null to go back to the studio's. Absent: no editing. */
+  onSetMarginPct?: (pct: number | null) => void;
 }
 
 const Row: React.FC<{
@@ -54,10 +59,13 @@ const Row: React.FC<{
 );
 
 const ProjectPnlCard: React.FC<Props> = ({
-  projectContext, boq, projectId, activeTier, currentUserRole, variants, onOpenProcurement,
+  projectContext, boq, projectId, activeTier, currentUserRole, variants, onOpenProcurement, assumption = null, onSetMarginPct,
 }) => {
+  const [editingMargin, setEditingMargin] = useState(false);
+  const [marginInput, setMarginInput] = useState('');
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const figuresHidden = useFiguresHidden();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -72,8 +80,8 @@ const ProjectPnlCard: React.FC<Props> = ({
   }, [projectId]);
 
   const pnl = useMemo(
-    () => buildProjectPnl(projectContext, boq, pos, activeTier, projectContext?.procurementModes || {}),
-    [projectContext, boq, pos, activeTier],
+    () => buildProjectPnl(projectContext, boq, pos, activeTier, projectContext?.procurementModes || {}, assumption),
+    [projectContext, boq, pos, activeTier, assumption],
   );
 
   const shell = (children: React.ReactNode) => (
@@ -99,6 +107,16 @@ const ProjectPnlCard: React.FC<Props> = ({
 
   /* Margin is the most sensitive number in the studio. Same gate the
      Financial Ledger uses, worded for this card. */
+  if (figuresHidden) {
+    return shell(
+      <div className="flex-1 flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed border-slate-200 p-6">
+        <EyeOff className="w-7 h-7 text-slate-400 mb-2.5" />
+        <h4 className="font-bold text-sm text-slate-800">Figures are hidden</h4>
+        <p className="text-xs text-slate-500 max-w-[240px] mt-1.5">Margin and cost stay covered while figures are hidden for a shared screen.</p>
+      </div>,
+    );
+  }
+
   if (currentUserRole === 'Designer') {
     return shell(
       <div className="flex-1 flex flex-col items-center justify-center py-8 text-center bg-[#FAF9F6]/50 rounded-2xl border border-dashed border-[#B5945B]/25 p-6">
@@ -151,7 +169,7 @@ const ProjectPnlCard: React.FC<Props> = ({
             <p className={`text-[10px] font-black uppercase tracking-widest ${
               estimateOnly ? 'text-slate-500' : worse && moved ? 'text-rose-700' : 'text-emerald-700'
             }`}>
-              {estimateOnly ? 'Expected margin, from the quote' : 'Margin as it stands'}
+              {estimateOnly ? (pnl.marginBasis === 'assumed' ? 'Potential margin, at an assumed rate' : 'Potential margin, from the BOQ') : 'Actual margin'}
             </p>
             <p className="text-2xl font-extrabold tracking-tight text-slate-900 mt-1 font-mono tabular-nums">
               {formatINR(estimateOnly ? pnl.quotedMargin : pnl.currentMargin)}
@@ -173,7 +191,7 @@ const ProjectPnlCard: React.FC<Props> = ({
         {estimateOnly ? (
           <div className="mt-3 pt-3 border-t border-slate-200/80">
             <p className="text-[11.5px] text-slate-600 leading-snug">
-              Nothing has been ordered, so this is what the BOQ <em>predicts</em>, not what the job made.
+              Nothing has been ordered or billed, so this is what the BOQ's margin <em>predicts</em>. The actual margin starts with the first purchase order or vendor bill.
             </p>
             {onOpenProcurement && (
               <button
@@ -187,11 +205,50 @@ const ProjectPnlCard: React.FC<Props> = ({
         ) : (
           <p className="text-[11px] text-slate-500 mt-2.5 leading-snug">
             {moved
-              ? <>Quoted at <strong className="text-slate-700">{formatINR(pnl.quotedMargin)}</strong> ({pnl.quotedMarginPct.toFixed(1)}%). {worse ? 'This job is behind its quote.' : 'This job is ahead of its quote.'}</>
-              : <>Level with the quote of <strong className="text-slate-700">{formatINR(pnl.quotedMargin)}</strong>.</>}
+              ? <>Potential <strong className="text-slate-700">{formatINR(pnl.quotedMargin)}</strong> ({pnl.quotedMarginPct.toFixed(1)}%). {worse ? 'This job is behind its BOQ.' : 'This job is ahead of its BOQ.'}</>
+              : <>Level with the potential of <strong className="text-slate-700">{formatINR(pnl.quotedMargin)}</strong>.</>}
           </p>
         )}
       </div>
+
+      {/*
+        A BOQ with no costs (imported as sell rates) has no margin of its own,
+        so one is assumed; the owner can set this project's figure here.
+      */}
+      {(pnl.marginBasis === 'assumed' || pnl.marginBasis === 'no-costs' || pnl.marginBasis === 'empty') && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5">
+          <p className="text-[11px] text-amber-900 leading-snug">
+            {pnl.marginBasis === 'empty' ? 'The BOQ has no priced lines' : 'No BOQ line carries a cost'}
+            {pnl.assumedMargin
+              ? <>, so <strong>{pnl.assumedMargin.pct.toFixed(1)}%</strong> is assumed: {MARGIN_SOURCE_LABEL[pnl.assumedMargin.source]}.</>
+              : <>, so there is no margin to read. Set the margin you expect on this project.</>}
+          </p>
+          {onSetMarginPct && (editingMargin ? (
+            <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => {
+              e.preventDefault();
+              const v = Number(marginInput);
+              if (Number.isFinite(v) && v > 0 && v < 100) { onSetMarginPct(Math.round(v * 10) / 10); setEditingMargin(false); }
+            }}>
+              <label className="sr-only" htmlFor="pnl-margin">Margin on execution, % of the price</label>
+              <input id="pnl-margin" autoFocus type="number" min={1} max={90} step={0.5} value={marginInput} onChange={(e) => setMarginInput(e.target.value)}
+                className="w-20 px-2 py-1 rounded-lg border border-slate-300 bg-white text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]" />
+              <span className="text-xs text-slate-500">% of the price</span>
+              <button type="submit" className="px-3 py-1 rounded-lg bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486]">Save</button>
+              <button type="button" className="px-3 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50" onClick={() => setEditingMargin(false)}>Cancel</button>
+            </form>
+          ) : (
+            <div className="mt-1.5 flex flex-wrap gap-3">
+              <button type="button" className="text-xs font-bold text-[#3D52A0] hover:underline"
+                onClick={() => { setMarginInput(String(pnl.assumedMargin?.pct ?? 25)); setEditingMargin(true); }}>
+                {projectMarginPct(projectContext) != null ? 'Change this project’s margin' : 'Set this project’s margin'}
+              </button>
+              {projectMarginPct(projectContext) != null && (
+                <button type="button" className="text-xs font-bold text-slate-500 hover:underline" onClick={() => onSetMarginPct(null)}>Clear it</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* How much of that is known rather than assumed. */}
       <div className="mt-3 flex items-center gap-2.5">
@@ -223,7 +280,11 @@ const ProjectPnlCard: React.FC<Props> = ({
       <div className="mt-4">
         <Row label="Contracted, execution" value={pnl.contractedExecution} note="ex-GST, after discounts" />
         <Row label="Design fee" value={pnl.contractedDesign} note="ex-GST. No cost against it, so it is margin in full." tone="good" />
-        <Row label="Planned cost" value={pnl.plannedCost} note="materials and labour, from the BOQ" />
+        <Row label="Potential cost" value={pnl.plannedCost} note={pnl.marginBasis === 'assumed' && pnl.assumedMargin
+          ? `${pnl.assumedMargin.pct.toFixed(1)}% margin assumed (${MARGIN_SOURCE_LABEL[pnl.assumedMargin.source]}), applied to the contract before discounts`
+          : pnl.boqMarginPct != null
+          ? `the BOQ's ${pnl.boqMarginPct.toFixed(1)}% margin, applied to the contract before discounts${pnl.uncostedLines ? `. ${pnl.uncostedLines === 1 ? '1 line has no cost and takes' : `${pnl.uncostedLines} lines have no cost and take`} that margin` : ''}`
+          : 'no BOQ line carries a cost yet, so cost is taken as the price'} />
         {pnl.hasProcurement ? (
           <>
             <Row label="Committed" value={pnl.committedCost} note={`${pnl.poCount} purchase order${pnl.poCount === 1 ? '' : 's'}`} tone={pnl.overspend > 0 ? 'bad' : 'plain'} />

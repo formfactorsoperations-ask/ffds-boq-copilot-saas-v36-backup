@@ -89,6 +89,13 @@ describe('leads', () => {
     await assertFails(updateDoc(doc(admin(), 'leads/theirs'), { createdBy: 'admin@a.com', updatedBy: 'admin@a.com' }));
     await assertSucceeds(deleteDoc(doc(admin(), 'leads/mine')));
   });
+  it('keeps notes and closed-out meetings, as lists of a bounded size', async () => {
+    const note = { id: 'n1', at: 2, by: 'cr@a.com', byName: 'R', text: 'Prefers calls after 7 pm', pinned: true, editedAt: null };
+    const met = { id: 'm1', date: '2026-10-20', time: '11:00', mode: 'in_person', purpose: 'Studio meeting', status: 'done', outcome: '', at: 2, by: 'cr@a.com', byName: 'R' };
+    await assertSucceeds(updateDoc(doc(cr(), 'leads/mine'), { notes: [note], meetings: [met], updatedAt: 2 }));
+    await assertFails(updateDoc(doc(cr(), 'leads/mine'), { notes: 'not a list', updatedAt: 3 }));
+    await assertFails(updateDoc(doc(cr(), 'leads/mine'), { notes: Array.from({ length: 201 }, (_, i) => ({ ...note, id: `n${i}` })), updatedAt: 3 }));
+  });
 });
 
 describe('each person’s desk', () => {

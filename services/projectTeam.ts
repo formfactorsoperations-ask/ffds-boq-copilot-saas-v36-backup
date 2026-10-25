@@ -1,6 +1,6 @@
 import { useSyncExternalStore, useCallback } from 'react';
 import { useOrg } from '../contexts/OrgContext';
-import { assignedDesignersFor, ProjectDesignersMap, seesStudioFinance } from '../lib/roleAccess';
+import { assignedDesignersFor, ProjectDesignersMap, holdsFinanceRole } from '../lib/roleAccess';
 
 /**
  * Who works on which project, read and changed from three places: the team
@@ -57,7 +57,7 @@ export function useProjectTeam() {
     .map((m) => ({ email: String(m.email).trim().toLowerCase(), name: m.name || m.email, role: m.role }));
 
   /** Only the studio's senior roles hand out projects. */
-  const canAssign = seesStudioFinance(currentRole);
+  const canAssign = holdsFinanceRole(currentRole);
 
   const designersOn = useCallback(
     (project: { id?: string; context?: any } | null | undefined) => assignedDesignersFor(project, map),

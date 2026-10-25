@@ -3,6 +3,7 @@ import { AnimatePresence, LayoutGroup, motion, useDragControls } from 'framer-mo
 import {
   UserPlus, Phone, MessageCircle, CalendarCheck, Ruler, FileText, Plus, Trophy, ThumbsDown, Filter, Check, X, AlertTriangle, Target,
   Hourglass, CircleCheck, CircleDot, Clock, Sparkles, Globe, MapPin, Building2, Wallet, AtSign, Send, ArrowLeft, Trash2, Search, Lock, ShieldCheck,
+  StickyNote, Pin, PinOff, Pencil,
 } from '@/lib/lucide-shim';
 import { Dot, CountUp } from '../ui/HudBits';
 import { Glide, IconTile, Tilt, DoneTick, Notice, listV, rowV } from '../people/PeopleBits';
@@ -10,7 +11,8 @@ import { dayKey, addDays } from '../../lib/opsDesk';
 import {
   BOARD_STAGES, LEAD_STAGES, LEAD_SOURCES, SCOPES, LOST_REASONS, FIRST_CALL_MINUTES, QUIET_DAYS, QUIET_DAYS_LEAD,
   leadName, homeLine, leadUrgency, waitedLabel, sourceLabel, mainPerson, findMatches, conversionLines, leadStats, lostReasons, phoneKey, emailKey,
-  blankDraft, blankPerson, draftProblems, isOpen,
+  blankDraft, blankPerson, draftProblems, isOpen, leadMeetingRows, LEAD_MEETING_ROW_LABEL, closeLeadMeeting, sortedNotes, addNote, editNote, removeNote, NOTE_MAX,
+  type LeadMeetingRow, type LeadMeetingRowStatus, type LeadMeetingStatus, type LeadNote,
   type Lead, type LeadDraft, type LeadStage, type LeadSource, type TouchKind, type FirstStep, type LeadNext,
 } from '../../lib/leads';
 import { VISIT_MODES, visitCalendarEvent, visitCalendarMove, guestEmails, type VisitMode } from '../../lib/clientCare';
@@ -19,7 +21,8 @@ import { addCalendarAccount, isCalendarAccountLive } from '../../services/google
 import { CalendarStep, MeetLinkRow, calendarError, useCalendarAccounts } from './MeetLink';
 import { createLead, saveLead, withTouch, readLeadChat, studioMatches, type StudioMatch } from '../../services/leadsService';
 import { btnPri, btnSec, btnSm, input, Label, Seg } from './OpsDeskPanels';
-import { useDesk, Panel, Chip, Avatar, Empty, EYEBROW, BRAND_EYEBROW, fmtDay, fmtWhen, dialable, waLink, cardV } from './DeskBits';
+import { useDesk, Panel, Chip, Avatar, Empty, EYEBROW, BRAND_EYEBROW, fmtDay, fmtWhen, dialable, waLink, cardV, type ChipTone } from './DeskBits';
+import { clock12 } from '../../lib/peopleDesk';
 import type { Person } from './OpsDeskPanels';
 import { FormLinkSheet } from './FormLink';
 import '../projectHeader/projectHeader.css';
@@ -509,6 +512,9 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
   const [guests, setGuests] = useState(mainPerson(l)?.email || '');
   useEffect(() => { setCalOn(booked ? true : next.mode === 'video'); }, [next.mode, !!booked]); // eslint-disable-line react-hooks/exhaustive-deps
   const [losing, setLosing] = useState(false);
+  /* Closing out a booked meeting: held, did not happen, or cancelled, with what came of it. */
+  const [closing, setClosing] = useState<LeadMeetingStatus | null>(null);
+  const [outcome, setOutcome] = useState('');
   const main = mainPerson(l);
   const u = leadUrgency(l, d.now);
   const mine = l.ownerEmail === d.me.email;
@@ -628,6 +634,7 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
       {error && <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1fr_1fr_340px] gap-5 items-start">
+        <div className="flex flex-col gap-5 min-w-0">
         <Panel icon={CircleCheck} title="What we know" blurb="Ask these on the first call; the project brief fills from them">
           <motion.ul variants={listV} initial="hidden" animate="show" className="flex flex-col gap-2 text-sm">
             {know.map(([k, v, ok, apply]) => (
@@ -659,16 +666,18 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
             </div>
           )}
         </Panel>
+        <LeadNotes lead={l} canEdit={canEdit} busy={busy} onChange={commit} />
+        </div>
 
-        <Panel icon={Clock} title="Every touch" blurb="Calls, messages and meetings, newest first">
+        <Panel icon={Clock} title="Every touch" blurb="Calls, messages and meetings, newest first. Notes have their own card.">
           {canEdit && isOpen(l) && (
             <div className="rounded-xl border-2 border-dashed border-slate-300 p-3 mb-4 flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <Glide id="touch-kind" label="What it was" value={touchKind} onChange={setTouchKind}
-                  options={[{ id: 'call', label: 'Call' }, { id: 'whatsapp', label: 'WhatsApp' }, { id: 'meeting', label: 'Meeting' }, { id: 'note', label: 'Note' }]} />
+                  options={[{ id: 'call', label: 'Call' }, { id: 'whatsapp', label: 'WhatsApp' }, { id: 'meeting', label: 'Meeting' }]} />
                 {touchKind === 'call' && <Glide id="touch-reached" label="Answered" value={reached ? 'yes' : 'no'} onChange={(v) => setReached(v === 'yes')} options={[{ id: 'yes', label: 'Reached' }, { id: 'no', label: 'No answer' }]} />}
               </div>
-              <input aria-label="What was said" className={`${input} !py-1.5`} placeholder={touchKind === 'call' ? 'Brief and budget, 12 min' : 'Log a call or a note…'} value={text} onChange={(e) => setText(e.target.value)}
+              <input aria-label="What was said" className={`${input} !py-1.5`} placeholder={touchKind === 'call' ? 'Brief and budget, 12 min' : touchKind === 'meeting' ? 'Walked through the moodboard at the studio' : 'What was said'} value={text} onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') logTouch(); }} />
               <button type="button" className={`${btnSm} self-end`} disabled={busy || (!text.trim() && touchKind !== 'call')} onClick={logTouch}><Check className="w-3.5 h-3.5" />Save to the lead</button>
             </div>
@@ -715,9 +724,38 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
             ) : (
               <>
                 <p className="text-sm font-semibold text-slate-800">{l.next.text}</p>
-                <p className="text-xs text-slate-500">{l.ownerName} · {l.next.kind === 'meeting' && l.next.time ? `${fmtDay(l.next.due)}, ${l.next.time}${l.next.mode ? ` · ${VISIT_MODES.find((m) => m.id === l.next!.mode)?.label}` : ''}` : `by ${fmtDay(l.next.due)}`} {u.tone === 'bad' && <Chip tone="rose">Overdue</Chip>}</p>
+                <p className="text-xs text-slate-500">{l.ownerName} · {l.next.kind === 'meeting' && l.next.time ? `${fmtDay(l.next.due)}, ${clock12(l.next.time)}${l.next.mode ? ` · ${VISIT_MODES.find((m) => m.id === l.next!.mode)?.label}` : ''}` : `by ${fmtDay(l.next.due)}`} {u.tone === 'bad' && <Chip tone="rose">Overdue</Chip>}</p>
                 {l.next.meetUrl && <div className="mt-2"><MeetLinkRow url={l.next.meetUrl} onError={setError} /></div>}
-                {canEdit && (
+                {canEdit && l.next.kind === 'meeting' && (
+                  /* A meeting is closed out, not ticked: it stays on the Ops Desk's table of meetings with leads. */
+                  closing ? (
+                    <form className="flex flex-col gap-2 mt-3" onSubmit={(e) => {
+                      e.preventDefault();
+                      const status = closing;
+                      setClosing(null);
+                      setNext({ text: '', due: addDays(dayKey(d.now), 2), kind: 'call' });
+                      setEditNext(true);
+                      commit(closeLeadMeeting(l, status, outcome, d.me, Date.now()));
+                      setOutcome('');
+                    }}>
+                      <Label htmlFor="lead-outcome">{closing === 'done' ? 'What came of it' : 'Why'} <span className="normal-case font-semibold text-slate-400">(optional)</span></Label>
+                      <input id="lead-outcome" autoFocus className={input} value={outcome} maxLength={300} onChange={(e) => setOutcome(e.target.value)}
+                        placeholder={closing === 'done' ? 'Liked the samples; wants a site measure next week' : closing === 'missed' ? 'They did not turn up; called, no answer' : 'They asked to call off for now'} />
+                      <div className="flex gap-2">
+                        <button type="submit" className={btnSm} disabled={busy}><Check className="w-3.5 h-3.5" />Save</button>
+                        <button type="button" className={btnSm} onClick={() => { setClosing(null); setOutcome(''); }}>Back</button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      <button type="button" className={btnSm} disabled={busy} onClick={() => setClosing('done')}><Check className="w-3.5 h-3.5" />Held</button>
+                      <button type="button" className={btnSm} disabled={busy} onClick={() => setClosing('missed')}>Did not happen</button>
+                      <button type="button" className={btnSm} disabled={busy} onClick={() => setClosing('cancelled')}>Cancelled</button>
+                      <button type="button" className={btnSm} onClick={() => { setNext(l.next!); setEditNext(true); }}>Change</button>
+                    </div>
+                  )
+                )}
+                {canEdit && l.next.kind !== 'meeting' && (
                   <div className="flex gap-2 mt-3">
                     <button type="button" className={btnSm} disabled={busy} onClick={() => { setNext({ text: '', due: addDays(dayKey(d.now), 2), kind: 'call' }); setEditNext(true); commit(withTouch({ ...l, next: null }, { kind: 'note', text: `Done: ${l.next!.text}` }, d.me)); }}><Check className="w-3.5 h-3.5" />Done</button>
                     <button type="button" className={btnSm} onClick={() => { setNext(l.next!); setEditNext(true); }}>Change</button>
@@ -755,6 +793,152 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
         </div>
       </div>
     </div>
+  );
+}
+
+/* ── Notes on a lead ─────────────────────────────────────────────────────── */
+
+/**
+ * What the studio knows about a lead that is not a touch: what they care
+ * about, what was promised, who not to call before noon. Pinned notes stay on
+ * top; anyone who works the lead adds one, and its writer or a lead edits it.
+ */
+function LeadNotes({ lead: l, canEdit, busy, onChange }: { lead: Lead; canEdit: boolean; busy: boolean; onChange: (l: Lead) => void }) {
+  const d = useDesk();
+  const [text, setText] = useState('');
+  const [pin, setPin] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const notes = sortedNotes(l.notes);
+  const mayChange = (n: LeadNote) => canEdit && (d.isLead || n.by === d.me.email);
+  const save = () => {
+    if (!text.trim()) return;
+    onChange(addNote(l, text, d.me, Date.now(), pin));
+    setText('');
+    setPin(false);
+  };
+  return (
+    <Panel icon={StickyNote} title="Notes" blurb="What to remember about them: preferences, promises, who decides what. Pinned notes stay on top."
+      right={notes.length ? <Chip>{notes.length}</Chip> : undefined}>
+      {canEdit && (
+        <div className="flex flex-col gap-2 mb-4">
+          <textarea aria-label="A note on the lead" rows={3} maxLength={NOTE_MAX} className={`${input} resize-y`} value={text} onChange={(e) => setText(e.target.value)}
+            placeholder="Wife decides on the kitchen; wants Italian marble; call after 7 pm"
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save(); }} />
+          <div className="flex items-center gap-2">
+            <button type="button" aria-pressed={pin} onClick={() => setPin((x) => !x)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${pin ? 'bg-[#3D52A0]/10 text-[#3D52A0] border-[#3D52A0]/30' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50'}`}>
+              <Pin className="w-3.5 h-3.5" />{pin ? 'Pinned' : 'Pin it'}
+            </button>
+            <span className="flex-1" />
+            <button type="button" className={btnSm} disabled={busy || !text.trim()} onClick={save}><Check className="w-3.5 h-3.5" />Save note</button>
+          </div>
+        </div>
+      )}
+      {!notes.length ? <p className="text-xs text-slate-500">No notes yet.</p> : (
+        <motion.ul variants={listV} initial="hidden" animate="show" className="flex flex-col gap-2">
+          {notes.map((n) => (
+            <motion.li variants={rowV} key={n.id} className={`rounded-xl border px-3 py-2.5 ${n.pinned ? 'border-[#3D52A0]/30 bg-[#3D52A0]/5' : 'border-slate-200'}`}>
+              {editing === n.id ? (
+                <form className="flex flex-col gap-2" onSubmit={(e) => { e.preventDefault(); setEditing(null); onChange(editNote(l, n.id, { text: editText }, Date.now())); }}>
+                  <textarea autoFocus aria-label="Edit the note" rows={3} maxLength={NOTE_MAX} className={`${input} resize-y`} value={editText} onChange={(e) => setEditText(e.target.value)} />
+                  <div className="flex gap-2 justify-end">
+                    <button type="button" className={btnSm} onClick={() => setEditing(null)}>Cancel</button>
+                    <button type="submit" className={btnSm} disabled={busy || !editText.trim()}><Check className="w-3.5 h-3.5" />Save</button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-800 whitespace-pre-wrap break-words">{n.pinned && <Pin className="inline w-3.5 h-3.5 text-[#3D52A0] mr-1 -mt-0.5" />}{n.text}</p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                    <span className="text-[11px] text-slate-500">{n.byName} · {fmtWhen(n.at)}{n.editedAt ? ' · edited' : ''}</span>
+                    <span className="flex-1" />
+                    {mayChange(n) && (
+                      <span className="flex items-center gap-1">
+                        <button type="button" disabled={busy} className="p-1 rounded-md text-slate-400 hover:text-[#3D52A0] hover:bg-slate-100" title={n.pinned ? 'Unpin' : 'Pin to the top'} aria-label={n.pinned ? 'Unpin' : 'Pin to the top'}
+                          onClick={() => onChange(editNote(l, n.id, { pinned: !n.pinned }, Date.now()))}>{n.pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}</button>
+                        <button type="button" disabled={busy} className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100" title="Edit" aria-label="Edit the note"
+                          onClick={() => { setEditing(n.id); setEditText(n.text); }}><Pencil className="w-3.5 h-3.5" /></button>
+                        <button type="button" disabled={busy} className="p-1 rounded-md text-slate-400 hover:text-rose-700 hover:bg-rose-50" title="Delete" aria-label="Delete the note"
+                          onClick={() => { if (window.confirm('Delete this note?')) onChange(removeNote(l, n.id)); }}><Trash2 className="w-3.5 h-3.5" /></button>
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </motion.li>
+          ))}
+        </motion.ul>
+      )}
+    </Panel>
+  );
+}
+
+/* ── Every meeting with a lead, on Meetings & visits ──────────────────────── */
+
+const ROW_TONE: Record<LeadMeetingRowStatus, ChipTone> = {
+  upcoming: 'brand', needs_time: 'amber', to_close: 'rose', done: 'emerald', missed: 'amber', cancelled: 'slate',
+};
+
+/**
+ * The meetings with people who are not clients yet. A lead has no project, so
+ * none of these is on a project's timeline: this table is where they are
+ * tracked, booked and over, each marked as a lead's (lib/leads leadMeetingRows).
+ */
+export function LeadMeetingsTable({ onOpenLead }: { onOpenLead: (leadId: string) => void }) {
+  const d = useDesk();
+  const [show, setShow] = useState<'open' | 'over' | 'all'>('all');
+  const [whose, setWhose] = useState<'mine' | 'everyone'>(d.isLead ? 'everyone' : 'mine');
+  const all = useMemo(() => leadMeetingRows(d.leads, d.now), [d.leads, d.now]);
+  const isOpenRow = (r: LeadMeetingRow) => r.status === 'upcoming' || r.status === 'needs_time' || r.status === 'to_close';
+  const mineOnly = (r: LeadMeetingRow) => whose === 'everyone' || d.leads.find((l) => l.id === r.leadId)?.ownerEmail === d.me.email;
+  const rows = all.filter((r) => mineOnly(r) && (show === 'all' || (show === 'open') === isOpenRow(r)));
+  const openCount = all.filter((r) => mineOnly(r) && isOpenRow(r)).length;
+  return (
+    <Panel icon={UserPlus} title="Meetings with leads" tour="lead-meetings"
+      blurb="People who are not clients yet: every meeting booked with a lead, and the ones that are over. They are not on any project's timeline, so they are tracked here. Book, move or close one out on the lead."
+      right={openCount > 0 ? <Chip tone="brand">{openCount} booked</Chip> : undefined}>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <Glide id="lead-meet-show" label="Show" value={show} onChange={setShow} options={[{ id: 'all', label: 'All' }, { id: 'open', label: 'Booked' }, { id: 'over', label: 'Over' }]} />
+        {d.isLead && <Glide id="lead-meet-whose" label="Whose" value={whose} onChange={setWhose} options={[{ id: 'mine', label: 'Mine' }, { id: 'everyone', label: 'Everyone' }]} />}
+        <span className="flex-1" />
+        <span className="text-[11px] text-slate-500">Last 90 days, and everything still to come.</span>
+      </div>
+      {!rows.length ? <Empty icon={CalendarCheck} text={show === 'over' ? 'No meetings with leads in the last 90 days.' : 'No meetings booked with leads. Book one from a lead with "Book a meeting".'} /> : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead className="bg-slate-50"><tr className={`${EYEBROW} text-left`}>
+              <th className="py-2 px-3">Lead</th><th className="px-3">Meeting</th><th className="px-3">When</th><th className="px-3">How</th><th className="px-3">Owner</th><th className="px-3">Status</th><th className="px-3" aria-label="Actions" />
+            </tr></thead>
+            <motion.tbody variants={listV} initial="hidden" animate="show" className="divide-y divide-slate-100">
+              {rows.map((r) => (
+                <motion.tr variants={rowV} key={r.key} className="align-top hover:bg-slate-50">
+                  <td className="py-2.5 px-3">
+                    <b className="font-semibold text-slate-800">{r.leadName}</b>
+                    <span className="block text-[11px] text-slate-500">{r.home || 'Home not filled in'}</span>
+                    <span className="mt-1 inline-flex">{r.projectId ? <Chip tone="emerald">Now a project</Chip> : r.stage === 'lost' ? <Chip>Lead · lost</Chip> : <Chip tone="brand">Lead · no project yet</Chip>}</span>
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <span className="text-slate-800">{r.purpose || 'Meeting'}</span>
+                    {r.outcome && <span className="block text-[11px] text-slate-500">{r.outcome}</span>}
+                  </td>
+                  <td className="py-2.5 px-3 text-xs text-slate-600 whitespace-nowrap">{fmtDay(r.date)}{r.time ? `, ${clock12(r.time)}` : ''}</td>
+                  <td className="py-2.5 px-3 text-xs text-slate-600">{r.mode ? VISIT_MODES.find((m) => m.id === r.mode)?.label : '—'}</td>
+                  <td className="py-2.5 px-3 text-xs text-slate-600">{r.ownerName}</td>
+                  <td className="py-2.5 px-3"><Chip tone={ROW_TONE[r.status]}>{LEAD_MEETING_ROW_LABEL[r.status]}</Chip></td>
+                  <td className="py-2.5 px-3">
+                    <span className="flex justify-end gap-2">
+                      {isOpenRow(r) && r.meetUrl && <a href={r.meetUrl} target="_blank" rel="noopener noreferrer" className={btnSm}>Join</a>}
+                      <button type="button" className={btnSm} onClick={() => onOpenLead(r.leadId)}>Open lead</button>
+                    </span>
+                  </td>
+                </motion.tr>
+              ))}
+            </motion.tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
   );
 }
 

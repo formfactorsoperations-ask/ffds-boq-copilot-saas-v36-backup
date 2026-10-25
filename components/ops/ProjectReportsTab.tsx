@@ -4,11 +4,11 @@ import {
   TrendingUp, TrendingDown, Wallet, Ruler, Percent, FileCheck,
   Compass, AlertTriangle, Lock, ShieldCheck, ArrowRight, Activity,
 } from '@/lib/lucide-shim';
-import { FullProjectData, ProjectContext, FullBoqItem, PurchaseOrder } from '../../types';
+import { FullProjectData, ProjectContext, FullBoqItem, PurchaseOrder, Item } from '../../types';
 import { db } from '../../services/dbService';
 import { formatINR } from '../../lib/utils';
 import { calculateProjectFinancials } from '../../lib/financialsUtils';
-import { buildProjectPnl } from '../../lib/projectPnl';
+import { buildProjectPnl, marginAssumption } from '../../lib/projectPnl';
 import { buildProjectRisk, RISK_TONE } from '../../lib/projectRisk';
 import { Gauge, MarginWaterfall, CostSpine, RoomMarginChart, CollectionBar } from './ReportCharts';
 import DocumentMeter from './DocumentMeter';
@@ -39,6 +39,9 @@ interface Props {
   allProjects?: FullProjectData[];
   currentUserRole?: string;
   setActiveTab?: (tab: string) => void;
+  /** For the margin to assume when the BOQ carries no costs (lib/projectPnl marginAssumption). */
+  tiers?: any[];
+  bank?: Item[];
 }
 
 /* Same shell as the Project P&L card: 24px radius, gold hairline, milky-white
@@ -71,7 +74,7 @@ const Stat: React.FC<{ label: string; value: React.ReactNode; foot?: React.React
 );
 
 const ProjectReportsTab: React.FC<Props> = ({
-  projectContext, boq, projectId, activeTier, allProjects, currentUserRole = 'Admin', setActiveTab,
+  projectContext, boq, projectId, activeTier, allProjects, currentUserRole = 'Admin', setActiveTab, tiers, bank,
 }) => {
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,8 +91,8 @@ const ProjectReportsTab: React.FC<Props> = ({
 
   const fin = useMemo(() => calculateProjectFinancials(projectContext, activeTier) as any, [projectContext, activeTier]);
   const pnl = useMemo(
-    () => buildProjectPnl(projectContext, boq, pos, activeTier, projectContext?.procurementModes || {}),
-    [projectContext, boq, pos, activeTier],
+    () => buildProjectPnl(projectContext, boq, pos, activeTier, projectContext?.procurementModes || {}, marginAssumption(projectContext, tiers, bank)),
+    [projectContext, boq, pos, activeTier, tiers, bank],
   );
   const risk = useMemo(() => buildProjectRisk(projectContext, pnl), [projectContext, pnl]);
   const docs = useMemo(() => buildDocumentCompleteness(projectContext), [projectContext]);
@@ -210,12 +213,12 @@ const ProjectReportsTab: React.FC<Props> = ({
 
       {/* ── Money ────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Panel title="Margin" sub={pnl.hasProcurement ? 'Against actual committed cost' : 'Expected, from the quote'} icon={<Percent className="w-4 h-4" />}>
+        <Panel title="Margin" sub={pnl.hasProcurement ? 'Actual: against orders and vendor bills' : 'Potential: from the BOQ margin'} icon={<Percent className="w-4 h-4" />}>
           <div className="flex items-center gap-5">
             <Gauge
               pct={Math.max(0, marginPct)}
               label={`${marginPct.toFixed(1)}%`}
-              sub={pnl.hasProcurement ? 'now' : 'quoted'}
+              sub={pnl.hasProcurement ? 'actual' : 'potential'}
               tone={marginPct < 0 ? 'rose' : marginPct < 15 ? 'amber' : 'green'}
               size={116}
             />
