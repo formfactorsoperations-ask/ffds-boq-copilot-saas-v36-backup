@@ -15,6 +15,7 @@ import { ShieldCheckIcon, GridIcon, ListIcon, SaveIcon, CheckIcon, ExportIcon, C
 import { Search, X, CheckCircle2, AlertCircle, Sparkles, Lock, Plus } from 'lucide-react';
 import { keepLockedTier, lockedTierId, scopeInForce, detailedBoqForTier, detailedBoqVersion } from '../lib/scopeFlow';
 import { resolveBoqLine, isBillable } from '../lib/boqPricing';
+import { removeLines, restoreLines, RemovedLine } from '../lib/boqEdits';
 import { useOrg } from '../contexts/OrgContext';
 import { seesStudioFinance } from '../lib/roleAccess';
 import { useStudioSettings } from '../hooks/useStudioSettings';
@@ -34,7 +35,8 @@ interface StudioDashboardProps {
     bank: Item[];
     aiStrategy: AIStrategy;
     onViewInBank: (bankId: string) => void;
-    onSaveProject: () => void;
+    /** Writes the project to the cloud now, rather than waiting for the auto-save. */
+    onSaveProject: () => void | Promise<unknown>;
     projectId?: string;
     projectArchitecture?: 'legacy' | 'canonical';
     onUpgradeArchitecture?: () => void;
@@ -215,21 +217,19 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Save State
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState<Date>(new Date());
-  
-  // Ref to track the save timeout to prevent updates on unmount
-  const saveTimeoutRef = useRef<any>(null);
+  /*
+    Save state.
 
-  useEffect(() => {
-      // Cleanup timeout on unmount
-      return () => {
-          if (saveTimeoutRef.current) {
-              clearTimeout(saveTimeoutRef.current);
-          }
-      };
-  }, []);
+    "Save Changes" used to wait 600ms for show and then download the whole
+    project as a JSON backup — a file in Downloads on every click, and nothing
+    written anywhere else. Edits already auto-save two seconds after they stop;
+    the button now writes the project to the cloud at once and says when it
+    did. The backup download stays where it belongs, in Studio settings.
+  */
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
 
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -433,14 +433,42 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
       setIsGlobalMarkupOpen(false);
   };
 
-  const handleDeleteItem = (itemId: string) => {
-    setTiers(prev => prev.map(tier => {
-        if (tier.id !== activeTierId) return tier;
-        return {
-            ...tier,
-            boq: tier.boq.filter(item => item.id !== itemId)
-        };
-    }));
+  /*
+    Deleting lines — one path for every view, with an undo.
+
+    A frozen BOQ never loses a line this way: the Excel view marks it Deleted
+    against a change order instead, so the signed scope keeps the record.
+  */
+  const [lastDeleted, setLastDeleted] = useState<{ tierId: string; lines: RemovedLine<BoqItem>[] } | null>(null);
+  const [editNotice, setEditNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+      if (!lastDeleted && !editNotice) return;
+      const t = setTimeout(() => { setLastDeleted(null); setEditNotice(null); }, 8000);
+      return () => clearTimeout(t);
+  }, [lastDeleted, editNotice]);
+
+  const handleDeleteItems = (itemIds: string[]) => {
+    if (!activeTierId || !itemIds.length) return;
+    if (projectContext.boqFrozen) {
+        setEditNotice('The BOQ is frozen. Mark the line Deleted with a change order in the Excel view.');
+        return;
+    }
+    const tier = tiers.find(t => t.id === activeTierId);
+    const { removed } = removeLines(tier?.boq || [], itemIds);
+    if (!removed.length) return;
+    setTiers(prev => prev.map(t => t.id !== activeTierId ? t : { ...t, boq: removeLines(t.boq || [], itemIds).boq }));
+    setLastDeleted({ tierId: activeTierId, lines: removed });
+    setEditNotice(null);
+  };
+
+  const handleDeleteItem = (itemId: string) => handleDeleteItems([itemId]);
+
+  const handleUndoDelete = () => {
+    if (!lastDeleted) return;
+    const { tierId, lines } = lastDeleted;
+    setTiers(prev => prev.map(t => t.id !== tierId ? t : { ...t, boq: restoreLines(t.boq || [], lines) }));
+    setLastDeleted(null);
   };
 
   const handleOpenAddModal = (roomName: string) => {
@@ -466,23 +494,18 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   };
 
 
-  const handleManualSave = () => {
-      // Clear any existing timeout
-      if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-      }
-
-      setIsSaving(true);
-      
-      // Simulate save delay to give feedback
-      saveTimeoutRef.current = setTimeout(() => {
-          setIsSaving(false);
+  const handleManualSave = async () => {
+      if (!onSaveProject || saveState === 'saving') return;
+      setSaveState('saving');
+      try {
+          await onSaveProject();
+          if (!mounted.current) return;
+          setSaveState('saved');
           setLastSaved(new Date());
-          saveTimeoutRef.current = null;
-          if (onSaveProject) {
-              onSaveProject();
-          }
-      }, 600);
+      } catch (err) {
+          console.error('Save failed', err);
+          if (mounted.current) setSaveState('error');
+      }
   }
 
   const handleExportExcelWithFormulas = () => {
@@ -647,13 +670,21 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
 
           {/* Action Buttons: Save Changes, Global Margin, Import Excel, Export CSV */}
           <div className="flex items-center gap-2 shrink-0 w-full lg:w-auto justify-end">
+              {saveState === 'saved' && lastSaved && (
+                  <span className="text-[11px] text-slate-500 whitespace-nowrap" role="status">
+                      Saved {lastSaved.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+              )}
+              {saveState === 'error' && (
+                  <span className="text-[11px] font-semibold text-rose-600 whitespace-nowrap" role="alert">Couldn't save. Try again.</span>
+              )}
               <button 
                   onClick={handleManualSave}
-                  disabled={isSaving}
-                  className={`px-3 py-1.5 text-xs border font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 ${isSaving ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'}`}
-                  title="Save current changes locally"
+                  disabled={saveState === 'saving'}
+                  className={`px-3 py-1.5 text-xs border font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 ${saveState === 'saving' ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'}`}
+                  title="Edits save on their own a moment after you stop. This saves to the cloud now."
               >
-                  {isSaving ? (
+                  {saveState === 'saving' ? (
                       <>
                           <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-white rounded-full animate-spin"></div>
                           <span>Saving...</span>
@@ -661,7 +692,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                   ) : (
                       <>
                           <CheckIcon className="w-3.5 h-3.5" />
-                          <span>Save Changes</span>
+                          <span>Save changes</span>
                       </>
                   )}
               </button>
@@ -749,6 +780,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                         onUpdate={handleUpdateItem}
                         onBulkUpdate={handleBulkUpdateItems}
                         onDelete={handleDeleteItem}
+                        onDeleteMany={handleDeleteItems}
                         onViewInBank={onViewInBank}
                         onAddItem={handleOpenAddModal}
                         isOwner={isOwner}
@@ -905,8 +937,21 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                   }
               });
               
-              const grandTotal = firmTotal + estimateExposure;
-              const firmMarginPercent = firmTotal > 0 ? ((firmTotal - firmBaseCost) / firmBaseCost) * 100 : 0;
+              /*
+                The figures Pricing & Tiers shows, not a second reckoning.
+
+                This strip summed the work and stopped, while Pricing showed the
+                same option with its design fee — ₹7,78,086 here, ₹8,55,895 there,
+                for one BOQ. The work value, fee and total now come from the tier
+                summary App computes once, so the two screens print the same
+                number. "% Avg" divided by cost (markup) beside figures that
+                divide by sell; it is now a margin, like the rest of the app.
+              */
+              const summary: any = (activeTier as any).summary || {};
+              const workValue = Number(summary.totalSell ?? (firmTotal + estimateExposure)) || 0;
+              const designFee = Number(summary.designFee) || 0;
+              const grandTotal = Number(summary.totalRevenue ?? (workValue + designFee)) || 0;
+              const firmMarginPercent = firmTotal > 0 ? ((firmTotal - firmBaseCost) / firmTotal) * 100 : 0;
               
               return (
                   <div className="pt-4">
@@ -924,7 +969,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                                   <div className="flex flex-col flex-1 border-r border-slate-100 pr-6 justify-center">
                                       <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">Firm Margin</span>
                                       <span className="font-mono text-emerald-600 font-bold text-lg tabular-nums">₹ {firmMarginValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-                                      <div className="mt-0.5"><span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{firmMarginPercent.toFixed(1)}% Avg</span></div>
+                                      <div className="mt-0.5"><span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{firmMarginPercent.toFixed(1)}% margin</span></div>
                                   </div>
                                   {/* Value */}
                                   <div className="flex flex-col flex-1 border-r border-slate-100 pr-6 justify-center">
@@ -958,12 +1003,16 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                                </div>
                           </div>
 
-                          {/* Grand Total */}
-                          <div className="flex flex-col min-w-[180px] justify-center items-end">
+                          {/* Grand Total — the same figure as Pricing & Tiers */}
+                          <div className="flex flex-col min-w-[200px] justify-center items-end">
                               <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">Total Project Value</span>
-                              {isOwner ? (
-                                  <span className="font-mono text-sky-700 font-bold text-2xl tabular-nums">₹ {grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-                              ) : (
+                              {isOwner ? (<>
+                                  <span className="font-mono text-sky-700 font-bold text-2xl tabular-nums" data-testid="boq-grand-total">₹ {grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                                  <span className="text-[11px] text-slate-500 tabular-nums mt-0.5" data-testid="boq-total-split">
+                                      Work ₹ {workValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                      {designFee > 0 && <> + design fee ₹ {designFee.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</>}
+                                  </span>
+                              </>) : (
                                   <span className="font-mono text-slate-300 font-bold text-2xl tabular-nums">₹ --</span>
                               )}
                           </div>
@@ -996,6 +1045,24 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
         rooms={projectContext.rooms}
         isOwner={isOwner}
       />
+
+      {/* Undo a delete, or say why one was refused. */}
+      {(lastDeleted || editNotice) && (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-4 rounded-xl bg-slate-900 text-white px-4 py-2.5 shadow-2xl hud-row-in print:hidden"
+        >
+          <span className="text-sm font-semibold">
+            {lastDeleted
+              ? `Deleted ${lastDeleted.lines.length} ${lastDeleted.lines.length === 1 ? 'line' : 'lines'}`
+              : editNotice}
+          </span>
+          {lastDeleted && (
+            <button onClick={handleUndoDelete} className="text-sm font-bold text-white underline underline-offset-2 hover:text-slate-200">Undo</button>
+          )}
+          <button onClick={() => { setLastDeleted(null); setEditNotice(null); }} aria-label="Dismiss" className="text-slate-400 hover:text-white"><X className="w-4 h-4" /></button>
+        </div>
+      )}
 
       {/* Floating Action Bar for Selected Items */}
       <AnimatePresence>

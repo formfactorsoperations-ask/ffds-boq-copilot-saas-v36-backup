@@ -1116,6 +1116,8 @@ export interface BoqItem {
     calcLength?: number;
     calcWidth?: number;
     calcMultiplier?: number;
+    /** The unit calcLength/calcWidth were typed in (lib/boqSize.ts). Missing on older lines: the item's own unit. */
+    sizeUnit?: 'ft' | 'in' | 'mm' | 'cm' | 'm';
     // Trust-First Revision System Fields
     baseRate?: number;
     baseLabor?: number;

@@ -34,6 +34,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MarginDeviationIndicator } from './MarginDeviationIndicator';
 import { useOrg } from '../contexts/OrgContext';
 import { seesStudioFinance } from '../lib/roleAccess';
+import { SizePanel, sizeLabel } from './BoqSizeField';
 
 interface InteractiveBoqEditorProps {
   items: FullBoqItem[];
@@ -174,12 +175,19 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
     return [...custom, ...standard];
   }, [customBundles]);
 
+  /* The list shows a line under the same room its card counts it in. Reading
+     the stored roomId here while the cards read the resolved one put "3 items"
+     on a legacy scope card above an empty list. */
+  const inSelectedRoom = (item: FullBoqItem) => {
+    if (selectedRoomId === 'All Rooms') return true;
+    const home = resolvedRoomId(item as any, item as any, roomNameSet) || 'Unassigned';
+    return home === selectedRoomId;
+  };
+
   // Filter items for the active view
   const filteredItems = useMemo(() => {
     return items.filter(item => {
-      // Room match
-      const roomMatch = selectedRoomId === 'All Rooms' || item.roomId === selectedRoomId || (selectedRoomId === 'Unassigned' && !item.roomId);
-      if (!roomMatch) return false;
+      if (!inSelectedRoom(item)) return false;
 
       // Category match
       const catMatch = activeCategory === 'All' || item.cat === activeCategory;
@@ -196,7 +204,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
 
       return true;
     });
-  }, [items, selectedRoomId, activeCategory, searchQuery]);
+  }, [items, selectedRoomId, activeCategory, searchQuery, roomNameSet]);
 
   // Get active selected item details
   const activeSelectedItem = useMemo(() => {
@@ -208,13 +216,12 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
   const uniqueCategories = useMemo(() => {
     const categories = new Set<string>();
     items.forEach(item => {
-      const roomMatch = selectedRoomId === 'All Rooms' || item.roomId === selectedRoomId || (selectedRoomId === 'Unassigned' && !item.roomId);
-      if (roomMatch && item.cat) {
+      if (inSelectedRoom(item) && item.cat) {
         categories.add(item.cat);
       }
     });
     return ['All', ...Array.from(categories)];
-  }, [items, selectedRoomId]);
+  }, [items, selectedRoomId, roomNameSet]);
 
   // Bank search/filters
   const filteredBank = useMemo(() => {
@@ -594,6 +601,11 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                         <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
                           {item.specs || 'Click card to edit detailed finishes and specifications...'}
                         </p>
+                        {sizeLabel(item) && (
+                          <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#3D52A0]/10 text-[#3D52A0] tabular-nums" title="Size of the piece — the quantity is worked out from it">
+                            {sizeLabel(item)}
+                          </span>
+                        )}
                         
                         {/* Compact Rate Tag */}
                         <div className="text-[10px] text-slate-400 mt-1 font-medium flex items-center gap-1.5">
@@ -683,8 +695,10 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                           e.stopPropagation();
                           onDelete(item.id);
                         }}
-                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                        title="Delete component"
+                        disabled={boqFrozen}
+                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-300"
+                        title={boqFrozen ? 'The BOQ is frozen: mark the line Deleted with a change order in the Excel view' : 'Delete line (you can undo)'}
+                        aria-label={`Delete ${item.name}`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -765,6 +779,12 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                   />
                 </div>
 
+                {/* Size: typed once, and the quantity follows from it. */}
+                <SizePanel
+                  line={activeSelectedItem}
+                  onChange={updates => onUpdate(activeSelectedItem.id, updates)}
+                />
+
                 {/* Grid 3-cols: Category, Unit, & Quantity */}
                 <div className="grid grid-cols-3 gap-3">
                   <div>
@@ -774,7 +794,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     <input
                       type="text"
                       value={activeSelectedItem.cat || ''}
-                      onChange={e => onUpdate(activeSelectedItem.id, 'category', e.target.value)}
+                      onChange={e => onUpdate(activeSelectedItem.id, 'cat' as keyof BoqItem, e.target.value)}
                       className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-bold text-slate-800"
                     />
                   </div>
@@ -959,7 +979,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     Reassign to Design Space
                   </label>
                   <select
-                    value={activeSelectedItem.roomId || 'Unassigned'}
+                    value={resolvedRoomId(activeSelectedItem as any, activeSelectedItem as any, roomNameSet) || 'Unassigned'}
                     onChange={e => {
                       const value = e.target.value === 'Unassigned' ? undefined : e.target.value;
                       onUpdate(activeSelectedItem.id, 'roomId', value);
@@ -967,8 +987,11 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] rounded-xl text-xs font-bold text-slate-800"
                   >
                     <option value="Unassigned">Unassigned Items</option>
-                    {rooms.map(r => (
+                    {spaceRooms.map(r => (
                       <option key={r.name} value={r.name}>{r.name}</option>
+                    ))}
+                    {SCOPE_BUCKETS.map(b => (
+                      <option key={b} value={b}>{b} (project-wide)</option>
                     ))}
                   </select>
                 </div>

@@ -6,6 +6,8 @@ import { generateStandardPackages, TemplateData, INITIAL_TEMPLATES } from '../li
 import { resolveCivilScope, describeCivilScope } from '../lib/civilScope';
 import { realRooms } from '../lib/scopeBuckets';
 import { isScopeFlowOn, lockedTierId } from '../lib/scopeFlow';
+import { buildBankMap } from '../lib/boqPricing';
+import { compareTiers, optionPrice } from '../lib/tierComparison';
 import { CompareIcon, DeleteIcon, PencilIcon, CheckBadgeIcon, SparklesIcon, SaveIcon, CheckIcon, FileSpreadsheetIcon, ArrowRightIcon } from './Icons';
 
 interface TierManagerProps {
@@ -88,113 +90,15 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
     const activeTier = tiers.find(t => t.id === activeTierId) || tiers[0];
     const parentTier = activeTier?.parentTierId ? tiers.find(t => t.id === activeTier?.parentTierId) : null;
 
-    /*
-      What separates the options — as scope, not as a price list.
-
-      The first cut of this was a spreadsheet: every item, every option, a
-      currency figure in each cell. It looked like a price list because that is
-      all it could be. Sixteen rows of identical carpentry at identical
-      quantities, differing by two percent, told a reader nothing about what
-      they were choosing between.
-
-      So the model answers the question a client actually asks, in four parts:
-
-        coverage    what trades each option covers, and for how much
-        only        items in some options and not others — the visible choice
-        extent      the same item, a different amount of it
-        spec        the same item and amount, built to a different grade
-
-      Everything left over is identical everywhere and is stated as a count, not
-      as forty rows nobody reads.
-    */
+    /* What separates the options (lib/tierComparison.ts), priced line for
+       line as the tier summary is, so its totals reconcile with the sidebar. */
     const [compareOpen, setCompareOpen] = useState(true);
     const [showIdentical, setShowIdentical] = useState(false);
 
-    const comparison = useMemo(() => {
-        const bankMap = new Map<string, Item>((bank || []).map(i => [i.id, i]));
-
-        interface Row {
-            bankId: string; name: string; cat: string; unit: string;
-            cells: Record<string, { qty: number; value: number; rate: number }>;
-        }
-        const rows = new Map<string, Row>();
-
-        tiers.forEach(tier => {
-            (tier.boq || []).forEach(line => {
-                const item = bankMap.get(line.bankId);
-                if (!item) return;
-                if (!rows.has(line.bankId)) {
-                    rows.set(line.bankId, {
-                        bankId: line.bankId, name: item.name,
-                        cat: item.cat || 'Other', unit: item.unit || '', cells: {},
-                    });
-                }
-                const row = rows.get(line.bankId)!;
-                const margin = line.marginOverride !== undefined ? line.marginOverride : (item.margin || 20);
-                const base = line.baseRate !== undefined ? line.baseRate : (item.materials || 0);
-                const rate = line.selectedRate || calculateSellPrice(base, item.labor || 0, margin);
-                const cell = row.cells[tier.id] || { qty: 0, value: 0, rate: 0 };
-                // The same item priced in three bedrooms is three BOQ lines and
-                // one row here.
-                cell.qty += line.qty || 0;
-                cell.value += rate * (line.qty || 0);
-                cell.rate = rate;
-                row.cells[tier.id] = cell;
-            });
-        });
-
-        const all = Array.from(rows.values());
-        const ids = tiers.map(t => t.id);
-        const round = (n: number) => Math.round(n * 100) / 100;
-
-        const only: Row[] = [];
-        const extent: Row[] = [];
-        const spec: Row[] = [];
-        const same: Row[] = [];
-
-        all.forEach(r => {
-            const cells = ids.map(id => r.cells[id]);
-            if (cells.some(c => !c)) { only.push(r); return; }
-            if (new Set(cells.map(c => round(c!.qty))).size > 1) { extent.push(r); return; }
-            if (new Set(cells.map(c => Math.round(c!.rate))).size > 1) { spec.push(r); return; }
-            same.push(r);
-        });
-
-        const byName = (a: Row, z: Row) => a.cat.localeCompare(z.cat) || a.name.localeCompare(z.name);
-        [only, extent, spec, same].forEach(g => g.sort(byName));
-
-        // Coverage: what each option spends per trade. The bar is share of that
-        // option's own total, so a narrow bar means "a small part of this
-        // option", not "less than the option beside it".
-        const cats = Array.from(new Set(all.map(r => r.cat))).sort();
-        const totals: Record<string, number> = {};
-        ids.forEach(id => { totals[id] = all.reduce((sum, r) => sum + (r.cells[id]?.value || 0), 0); });
-
-        const coverage = cats.map(cat => ({
-            cat,
-            cells: Object.fromEntries(ids.map(id => {
-                const rowsIn = all.filter(r => r.cat === cat && r.cells[id]);
-                const value = rowsIn.reduce((sum, r) => sum + r.cells[id]!.value, 0);
-                return [id, { value, lines: rowsIn.length, share: totals[id] > 0 ? value / totals[id] : 0 }];
-            })),
-        })).filter(c => Object.values(c.cells).some((v: any) => v.lines > 0));
-
-        /* The tier's own specification, read back off the rationale its
-           generator wrote — the studio never types this, and it is the sentence
-           that explains why two identical items are priced differently. */
-        const specLabel: Record<string, string> = {};
-        tiers.forEach(t => {
-            const counts = new Map<string, number>();
-            (t.boq || []).forEach(l => {
-                const head = (l.rationale || '').split(' · ')[0].trim();
-                if (head) counts.set(head, (counts.get(head) || 0) + 1);
-            });
-            const best = Array.from(counts.entries()).sort((a, z) => z[1] - a[1])[0];
-            specLabel[t.id] = best ? best[0] : '';
-        });
-
-        return { all, only, extent, spec, same, coverage, totals, specLabel };
-    }, [tiers, bank]);
+    const comparison = useMemo(
+        () => compareTiers(tiers, buildBankMap(bank || [], projectContext?.adHocItems)),
+        [tiers, bank, projectContext?.adHocItems],
+    );
 
     const displayValue = activeTier ? (activeTier.summary.totalRevenue || activeTier.summary.totalSell) : 0;
 
@@ -208,7 +112,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
 
     const activeTierCost = useMemo(() => {
         if (!activeTier) return 0;
-        return activeTier.summary.totalCost || (displayValue * 0.78);
+        return activeTier.summary.totalCost || 0;
     }, [activeTier, displayValue]);
 
     const simulatedSellValue = useMemo(() => {
@@ -602,12 +506,12 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             
             // Diff calculation for sidebar label
             let diffLabel = null;
+            let nodeDiff = 0;
             if (tier.parentTierId) {
                 const parent = tiers.find(t => t.id === tier.parentTierId);
                 if (parent) {
-                    const diffValue = displayValue - (parent.summary.totalRevenue || parent.summary.totalSell);
-                    const isPositive = diffValue > 0;
-                    diffLabel = diffValue !== 0 ? `${isPositive ? '+' : '-'}${formatCurrency(Math.abs(diffValue))} vs ${parent.name}` : null;
+                    nodeDiff = displayValue - (parent.summary.totalRevenue || parent.summary.totalSell);
+                    diffLabel = nodeDiff !== 0 ? `${nodeDiff > 0 ? '+' : '-'}${formatCurrency(Math.abs(nodeDiff))} vs ${parent.name}` : null;
                 }
             }
 
@@ -665,10 +569,10 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                     )}
                                 </div>
                                 <p className="text-[12px] text-slate-500 font-medium leading-tight">
-                                    {formatCurrency(displayValue)} • {(tier.summary.blendedGm || 22.1).toFixed(1)}% GM • {tier.boq?.length || 20} items • {formattedDate}
+                                    {formatCurrency(displayValue)} • {(tier.summary.blendedGm ?? 0).toFixed(1)}% GM • {tier.summary.itemCount ?? tier.boq?.length ?? 0} items • {formattedDate}
                                 </p>
                                 {diffLabel && (
-                                    <p className={`text-[11px] font-semibold mt-0.5 ${diffValue > 0 ? 'text-amber-600' : diffValue < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                    <p className={`text-[11px] font-semibold mt-0.5 ${nodeDiff > 0 ? 'text-amber-600' : nodeDiff < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
                                         {diffLabel}
                                     </p>
                                 )}
@@ -719,7 +623,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                 
                 // Find matching tier for exact GM if possible
                 const matchingTier = tiers.find(t => t.id === snap.tierId);
-                const gm = matchingTier?.summary?.blendedGm || matchingTier?.summary?.totalGm || 21.8;
+                const gm = matchingTier?.summary?.blendedGm ?? matchingTier?.summary?.totalGm ?? 0;
 
                 points.push({
                     id: snap.tierId || `snap-${idx}`,
@@ -755,7 +659,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             if (bookingTier) {
                 const bookingAmount = bookingTier.summary.totalRevenue || bookingTier.summary.totalSell || 0;
                 const bookingDate = bookingTier.timestamp ? new Date(bookingTier.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '12 Jun 2026';
-                const bookingGm = bookingTier.summary.blendedGm || 21.8;
+                const bookingGm = bookingTier.summary.blendedGm ?? 0;
 
                 points.push({
                     id: bookingTier.id,
@@ -769,7 +673,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                 if (activeTier && activeTier.id !== bookingTier.id) {
                     const activeAmount = activeTier.summary.totalRevenue || activeTier.summary.totalSell || 0;
                     const activeDate = activeTier.timestamp ? new Date(activeTier.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '22 Jul 2026';
-                    const activeGm = activeTier.summary.blendedGm || 22.1;
+                    const activeGm = activeTier.summary.blendedGm ?? 0;
                     const delta = activeAmount - bookingAmount;
 
                     points.push({
@@ -796,8 +700,8 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
 
     const parentValue = parentTier ? (parentTier.summary.totalRevenue || parentTier.summary.totalSell) : 0;
     const diffValue = parentTier ? displayValue - parentValue : 0;
-    const diffGm = parentTier ? (activeTier.summary.blendedGm || 22.1) - (parentTier.summary.blendedGm || 22.1) : 0;
-    const diffItems = parentTier ? (activeTier.boq?.length || 0) - (parentTier.boq?.length || 0) : 0;
+    const diffGm = parentTier ? (activeTier.summary.blendedGm ?? 0) - (parentTier.summary.blendedGm ?? 0) : 0;
+    const diffItems = parentTier ? (activeTier.summary.itemCount ?? activeTier.boq?.length ?? 0) - (parentTier.summary.itemCount ?? parentTier.boq?.length ?? 0) : 0;
     const isApproved = projectContext.approvedTierId === activeTier.id;
     const isAnnexureOrRevision = activeTier.name.toLowerCase().includes('annexure') || 
         activeTier.name.toLowerCase().includes('revision') || 
@@ -936,13 +840,13 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                 </button>}
                             </div>
                             <p className="text-[13px] text-slate-500 mt-1">
-                                {activeTier.boq?.length || 0} items • cost {formatCurrency(activeTier.summary.totalCost || (displayValue * 0.78))} • created {new Date(activeTier.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                {activeTier.summary.itemCount ?? activeTier.boq?.length ?? 0} items • cost {formatCurrency(activeTier.summary.totalCost || 0)}{(activeTier.summary.designFee || 0) > 0 && <> • work {formatCurrency(activeTier.summary.totalSell || 0)} + design fee {formatCurrency(activeTier.summary.designFee || 0)}</>} • created {new Date(activeTier.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                             </p>
                         </div>
                         <div className="flex flex-col md:items-end text-left md:text-right">
                             <h1 className="text-[40px] font-bold text-indigo-600 tracking-tight leading-none">{formatCurrency(displayValue)}</h1>
                             <p className="text-sm text-slate-500 mt-2">
-                                <span className="font-semibold text-amber-700">{(activeTier.summary.blendedGm || 22.1).toFixed(1)}% blended GM</span> <span className="text-slate-300 mx-1">·</span> median 22.75%
+                                <span className="font-semibold text-amber-700">{(activeTier.summary.blendedGm ?? 0).toFixed(1)}% blended GM</span> <span className="text-slate-300 mx-1">·</span> median 22.75%
                             </p>
                         </div>
                     </div>
@@ -967,7 +871,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                     <CheckIcon className="w-4 h-4" /> {isAnnexureOrRevision ? 'Approved after revision' : 'Frozen at approval'}
                                 </div>
                                 <p className="text-emerald-700/80 text-[13px]">
-                                    {formatCurrency(displayValue)} at {(activeTier.summary.blendedGm || 22.1).toFixed(1)}% by Anish on {new Date(activeTier.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}. {isAnnexureOrRevision ? 'BOQ updated after revision — editing opens a new version.' : 'BOQ locked — editing opens a new version.'}
+                                    {formatCurrency(displayValue)} at {(activeTier.summary.blendedGm ?? 0).toFixed(1)}% · version of {new Date(activeTier.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}. {isAnnexureOrRevision ? 'BOQ updated after revision — editing opens a new version.' : 'BOQ locked — editing opens a new version.'}
                                 </p>
                             </div>
                         </div>
@@ -1039,9 +943,10 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                 {/* The options themselves, side by side. */}
                                 <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(tiers.length, 3)}, minmax(0, 1fr))` }}>
                                     {tiers.map(t => {
-                                        const total = comparison.totals[t.id] || 0;
+                                        const price = optionPrice(t);
+                                        const total = price.total;
                                         const area = projectContext.area || 0;
-                                        const cheapest = Math.min(...tiers.map(x => comparison.totals[x.id] || 0));
+                                        const cheapest = Math.min(...tiers.map(x => optionPrice(x).total).filter(v => v > 0));
                                         const isActive = t.id === activeTierId;
                                         return (
                                             <button
@@ -1064,13 +969,18 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                                 </div>
                                                 <div className="text-[11px] text-slate-500 font-medium tabular-nums">
                                                     {area > 0 && <>₹{Math.round(total / area).toLocaleString('en-IN')}/sq ft · </>}
-                                                    {(t.summary.blendedGm || 0).toFixed(1)}% GM
-                                                    {total > cheapest && (
+                                                    {(t.summary.blendedGm ?? 0).toFixed(1)}% GM
+                                                    {cheapest > 0 && total > cheapest && (
                                                         <span className="text-amber-600 font-semibold">
                                                             {' '}· +{Math.round(((total / cheapest) - 1) * 100)}%
                                                         </span>
                                                     )}
                                                 </div>
+                                                {price.designFee > 0 && (
+                                                    <div className="text-[11px] text-slate-400 tabular-nums mt-0.5" data-testid="option-split">
+                                                        work {formatCurrency(Math.round(price.work))} + design fee {formatCurrency(Math.round(price.designFee))}
+                                                    </div>
+                                                )}
                                                 {/* The one sentence explaining why two identical
                                                     items are priced differently. */}
                                                 {comparison.specLabel[t.id] && (
@@ -1123,6 +1033,28 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                                     </tr>
                                                 ))}
                                             </tbody>
+                                            <tfoot>
+                                                <tr className="border-t border-slate-200">
+                                                    <td className="px-4 py-2 font-bold text-slate-500 whitespace-nowrap">Work</td>
+                                                    {tiers.map(t => (
+                                                        <td key={t.id} className={`px-4 py-2 font-semibold text-slate-700 tabular-nums ${t.id === activeTierId ? 'bg-indigo-50/40' : ''}`}>{formatCurrency(Math.round(comparison.totals[t.id] || 0))}</td>
+                                                    ))}
+                                                </tr>
+                                                {tiers.some(t => optionPrice(t).designFee > 0) && (
+                                                    <tr>
+                                                        <td className="px-4 py-2 font-bold text-slate-500 whitespace-nowrap">Design fee</td>
+                                                        {tiers.map(t => (
+                                                            <td key={t.id} className={`px-4 py-2 font-semibold text-slate-700 tabular-nums ${t.id === activeTierId ? 'bg-indigo-50/40' : ''}`}>{formatCurrency(Math.round(optionPrice(t).designFee))}</td>
+                                                        ))}
+                                                    </tr>
+                                                )}
+                                                <tr className="border-t border-slate-200 bg-slate-50/70">
+                                                    <td className="px-4 py-2.5 font-bold text-slate-800 whitespace-nowrap">Total</td>
+                                                    {tiers.map(t => (
+                                                        <td key={t.id} data-testid={`coverage-total-${t.id}`} className={`px-4 py-2.5 font-black text-slate-900 tabular-nums ${t.id === activeTierId ? 'bg-indigo-50/40' : ''}`}>{formatCurrency(Math.round(optionPrice(t).total))}</td>
+                                                    ))}
+                                                </tr>
+                                            </tfoot>
                                         </table>
                                     </div>
                                 </div>
@@ -1282,9 +1214,9 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="flex flex-col gap-1 pr-6 border-r border-slate-100">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Blended GM</span>
-                                <h3 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">{(activeTier.summary.blendedGm || 22.1).toFixed(1)}%</h3>
+                                <h3 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">{(activeTier.summary.blendedGm ?? 0).toFixed(1)}%</h3>
                                 <span className="text-[11px] font-medium text-slate-500 mt-1">
-                                    {(activeTier.summary.blendedGm || 22.1) > 22.75 ? "▲" : "▼"} {Math.abs((activeTier.summary.blendedGm || 22.1) - 22.75).toFixed(1)} pts vs median
+                                    {(activeTier.summary.blendedGm ?? 0) > 22.75 ? "▲" : "▼"} {Math.abs((activeTier.summary.blendedGm ?? 0) - 22.75).toFixed(1)} pts vs median
                                 </span>
                             </div>
                             <div className="flex flex-col gap-1 pr-6 border-r border-slate-100">
@@ -1294,7 +1226,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                             </div>
                             <div className="flex flex-col gap-1">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Above Floor By</span>
-                                <h3 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">{( (activeTier.summary.blendedGm || 22.1) - 20 ).toFixed(1)} pts</h3>
+                                <h3 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">{( (activeTier.summary.blendedGm ?? 0) - 20 ).toFixed(1)} pts</h3>
                                 <span className="text-[11px] font-medium text-slate-500 mt-1">floor 20%</span>
                             </div>
                         </div>
@@ -1362,7 +1294,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Comparable Past Projects</span>
                             <div className="flex flex-col gap-0">
                                 {comparableProjects.map((p, idx) => {
-                                    const diffPct = (activeTier.summary.blendedGm || 22.1) - p.gm;
+                                    const diffPct = (activeTier.summary.blendedGm ?? 0) - p.gm;
                                     return (
                                         <div key={idx} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-b-0">
                                             <div className="flex flex-col gap-0.5">
