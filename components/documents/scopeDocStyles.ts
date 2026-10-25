@@ -35,6 +35,11 @@ export const SCOPE_DOC_CSS = `
 .sdoc td.num,.sdoc th.num,.sdoc .num{font-variant-numeric:tabular-nums}
 .sdoc td .nm{font-weight:700;color:var(--ink)}
 .sdoc td small{display:block;color:var(--mut);font-size:8.5px;margin-top:1px;line-height:1.35}
+.sdoc td small.spec span{display:block}
+.sdoc td small.spec .sum{color:var(--ink2);font-weight:600}
+.sdoc td small.spec .sec{margin-top:3px}
+.sdoc td small.spec b{color:var(--ink2);font-weight:700}
+.sdoc td small.spec .it{padding-left:8px;text-indent:-6px}
 .sdoc .nw{white-space:nowrap}
 .sdoc tfoot td{font-weight:800;border-top:1.5px solid var(--brand);border-bottom:0;background:#fafbfd}
 .sdoc .tag{font-size:7px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--gold-ln);color:var(--gold);background:var(--gold-bg);border-radius:3px;padding:0 4px;margin-left:5px;white-space:nowrap;vertical-align:1px}
