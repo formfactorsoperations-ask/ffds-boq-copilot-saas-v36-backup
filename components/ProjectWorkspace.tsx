@@ -1363,6 +1363,9 @@ export function ProjectWorkspace({
             }
             setIsStatusModalOpen(false);
           }}
+          onClassificationChange={setProjectContext ? (isDummy) => {
+            setProjectContext((prev) => ({ ...prev, isDummy, projectCategory: isDummy ? 'dummy' : 'actual' }));
+          } : undefined}
         />
       )}
 
