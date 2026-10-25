@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ProposalDecision } from '../../types';
+import { ProposalDecision, ProposalContent } from '../../types';
 import { CheckIcon, ArrowRightIcon, ChevronDownIcon } from '../Icons';
 import { useOrg } from '../../contexts/OrgContext';
 
@@ -10,9 +10,11 @@ interface ClientDecisionLockProps {
     projectName: string;
     phoneNumber?: string;
     settings?: any; // The combined settings object
+    /* The heading and intro the studio set from the section's pencil. */
+    content?: ProposalContent['cta'];
 }
 
-const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ level, decision, projectName, phoneNumber, settings }) => {
+const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ level, decision, projectName, phoneNumber, settings, content }) => {
     const { orgData } = useOrg();
     
     // If explicitly disabled in settings, don't show. Default to show if undefined.
@@ -73,9 +75,9 @@ const ClientDecisionLock: React.FC<ClientDecisionLockProps> = ({ level, decision
             <div className="px-6 md:px-10">
                 <div className="mb-10 text-center md:text-left">
                     <span className="inline-block px-3 py-1 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white text-xs font-bold rounded-full mb-3 uppercase tracking-widest shadow-sm">Next Step</span>
-                    <h2 className="text-3xl font-extrabold text-slate-900 mb-2">Select Your Path Forward</h2>
+                    <h2 className="text-3xl font-extrabold text-slate-900 mb-2">{content?.title || 'Select Your Path Forward'}</h2>
                     <p className="text-slate-600 text-sm max-w-2xl mx-auto md:mx-0">
-                        To move from "Estimate" to "Action", please confirm your preferred engagement model. This allows us to allocate the right design team and resources immediately.
+                        {content?.subtitle || 'To move from "Estimate" to "Action", please confirm your preferred engagement model. This allows us to allocate the right design team and resources immediately.'}
                     </p>
                 </div>
 

@@ -193,8 +193,8 @@ export const TEMPLATE_TURNKEY: ProposalContent = {
         subtitle: "Payments are tied to clear progress. Detailed invoices are shared at each milestone."
     },
     cta: {
-        title: "What we are deciding right now",
-        subtitle: "At this stage, you are not locking final materials, exact quantities, or final vendor selections. The decision required now is whether we should proceed with design development and detailed planning, after which scope and final costing are frozen transparently.",
+        title: "Select Your Path Forward",
+        subtitle: 'To move from "Estimate" to "Action", please confirm your preferred engagement model. This allows us to allocate the right design team and resources immediately.',
         nextStepsTitle: "Next 3 steps",
         steps: [
             "Confirm intent to proceed",
@@ -228,7 +228,7 @@ export const TEMPLATE_TURNKEY: ProposalContent = {
     },
     l2_risk: { 
         title: "Execution Readiness", 
-        subtitle: "Protocols to ensure a seamless build.", 
+        subtitle: "By approving this Level 2 document, you confirm the scope and specifications are final.", 
         items: [{ title: "Decisions First", desc: "No material is ordered until drawings and specs are frozen." }, { title: "Stage-wise Approvals", desc: "Sign-offs required at key milestones (Design, Civil, Finishing)." }, { title: "Change Management", desc: "Scope changes are documented in a Change Note with cost impact." }] 
     },
     l2_finishes: { 
