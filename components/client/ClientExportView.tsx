@@ -84,7 +84,7 @@ const SectionWrapper: React.FC<{ id: string; onEdit?: (id: string) => void; chil
         {onEdit && (
             <button 
                 onClick={(e) => { e.stopPropagation(); onEdit(id); }}
-                className={`absolute z-20 p-2 bg-white/90 backdrop-blur rounded-full text-slate-400 hover:text-[#3D52A0] hover:bg-white shadow-sm border border-slate-200 transition-all opacity-0 group-hover/section:opacity-100 print:hidden ${editButtonClass}`}
+                className={`absolute z-20 p-2 bg-white/90 backdrop-blur rounded-full text-slate-400 hover:text-[#3D52A0] hover:bg-white shadow-sm border border-slate-200 transition-all opacity-0 group-hover/section:opacity-100 focus:opacity-100 print:hidden no-print ${editButtonClass}`}
                 title="Edit Section Text"
             >
                 <PencilIcon className="w-3.5 h-3.5" />
@@ -247,9 +247,9 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
     }
 
     return (
-        <div className="vnext-proposal-wrapper pb-10 md:pb-0 bg-white min-h-screen relative" style={{ '--color-primary': settings.primaryColor, '--color-accent': settings.accentColor } as React.CSSProperties}>
+        <div className="vnext-proposal-wrapper ff-classic pb-10 md:pb-0 bg-white min-h-screen relative" style={{ '--color-primary': settings.primaryColor, '--color-accent': settings.accentColor } as React.CSSProperties}>
             {settingsLoading && (
-                <div className="absolute inset-0 bg-white/80 z-[100] flex justify-center items-center backdrop-blur-sm">
+                <div className="no-print absolute inset-0 bg-white/80 z-[100] flex justify-center items-center backdrop-blur-sm">
                     <div className="flex flex-col items-center">
                         <div className="w-10 h-10 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
                         <p className="mt-4 text-slate-500 font-medium animate-pulse">Loading Studio Configuration...</p>
@@ -373,6 +373,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                 <SectionWrapper id="cta" onEdit={onEditSection}>
                                     <ClientDecisionLock level={level as any} decision={projectContext.proposalDecision} 
                                         projectName={projectContext.name}
+                                        content={content.cta}
                                     />
                                 </SectionWrapper>
                             </ScanFirstSection>
@@ -413,7 +414,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
 
                         {/* Detailed Roomwise - Standard Mode (Table) */}
                         <ScanFirstSection title="Detailed Scope" cue="Items">
-                            <SectionWrapper id="l2_scope" onEdit={onEditSection}>
+                            <SectionWrapper id="l2_scope">
                                 <ClientRoomwise 
                                     tiers={[approvedTier]} 
                                     mode="standard" 
@@ -468,8 +469,8 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                             <SectionWrapper id="l2_risk" onEdit={onEditSection}>
                                 {/* L2 Risk Content or Footer Actions */}
                                 <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200">
-                                    <h3 className="font-bold text-slate-800 mb-2">Execution Readiness</h3>
-                                    <p className="text-sm text-slate-600">By approving this Level 2 document, you confirm the scope and specifications are final.</p>
+                                    <h3 className="font-bold text-slate-800 mb-2">{content.l2_risk?.title || 'Execution Readiness'}</h3>
+                                    <p className="text-sm text-slate-600">{content.l2_risk?.subtitle || 'By approving this Level 2 document, you confirm the scope and specifications are final.'}</p>
                                 </div>
                             </SectionWrapper>
                         </ScanFirstSection>
@@ -536,7 +537,8 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
 
             {/* Footer */}
             <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-slate-400 py-12 text-center print:hidden">
-                <SectionWrapper id="footer" onEdit={onEditSection}>
+                {/* Name, tagline and footer line come from Studio settings, so there is nothing to edit here. */}
+                <SectionWrapper id="footer">
                     <p className="font-bold text-white text-lg mb-2">{settings.companyName}</p>
                     <p className="text-sm">{settings.tagline}</p>
                     <p className="text-xs mt-4 opacity-60">{settings.footerText}</p>

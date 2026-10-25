@@ -1,19 +1,19 @@
 
 import ProposalAcceptanceCard from '../ops/ProposalAcceptanceCard';
 import React, { useMemo, useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { motion } from 'framer-motion';
 import { ProjectContext, FullBoqItem, ProposalTier, Item, AiComparisonResult, MaterialSuggestion, TimelinePhase, PaymentMilestone, ProposalContent, DecisionBrainOutput, LeadProfile, ProposalLevel, ProposalType } from '../../types';
 import ClientExportView from './ClientExportView';
+import ProposalSectionEditor from './ProposalSectionEditor';
 import { useOrg } from '../../contexts/OrgContext';
 import { Download } from '@/lib/lucide-shim';
 import { UI_STYLES, UI_CONSTANTS } from '../../lib/UIConstants';
  
 import { calculateSellPrice, generateDeterministicSchedule, formatINR } from '../../lib/utils';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
+import { stageForPdf, planSheetBreaks, keepWholeRanges, forcedBreaks } from '../../lib/classicPdf';
 import { onDownloadIntent } from '../../lib/downloadIntent';
 import { generateLocalComparison } from '../../lib/comparison';
-import { CloseIcon, ExportIcon, PrintIcon, CheckBadgeIcon, PencilRulerIcon, BriefcaseIcon } from '../Icons';
+import { ExportIcon, PrintIcon, CheckBadgeIcon, PencilRulerIcon, BriefcaseIcon } from '../Icons';
 import { TEMPLATE_TURNKEY, TEMPLATE_DESIGN_ONLY, INITIAL_BANK } from '../../constants';
 
 export type PageOrientation = 'portrait' | 'landscape';
@@ -58,150 +58,6 @@ interface ClientTabProps {
   setProjectContext?: React.Dispatch<React.SetStateAction<ProjectContext>>;
   onExportHtml?: (fileName?: string, orientation?: PageOrientation) => void;
 }
-
-// Generic Field Renderer to handle any depth of content
-interface FieldRendererProps {
-    data: any;
-    path: string[];
-    onChange: (path: string[], value: any) => void;
-}
-
-function FieldRenderer({ data, path, onChange }: FieldRendererProps) {
-    return (
-        <div className="mb-4">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                {path[path.length - 1]}
-            </label>
-            <div className="text-sm text-slate-800">
-                {typeof data === 'object' ? 'Complex Data' : String(data)}
-            </div>
-        </div>
-    );
-}
-
-const ContentEditorModal: React.FC<{ 
-    isOpen: boolean; 
-    onClose: () => void; 
-    content: ProposalContent; 
-    onSave: (c: ProposalContent) => void;
-    initialSection?: string | null;
-}> = ({ isOpen, onClose, content, onSave, initialSection }) => {
-    // We initialize with the FULL content object to ensure we don't lose data
-    const [localContent, setLocalContent] = useState<ProposalContent>(content);
-    const [activeSection, setActiveSection] = useState<string>('cover');
-
-    // Update local state when prop changes
-    useEffect(() => {
-        if (isOpen) {
-            setLocalContent(JSON.parse(JSON.stringify(content))); // Deep copy
-        }
-    }, [content, isOpen]);
-
-    useEffect(() => {
-        if (isOpen && initialSection) {
-            setActiveSection(initialSection);
-        } else if (isOpen && !initialSection) {
-            setActiveSection('cover');
-        }
-    }, [isOpen, initialSection]);
-
-    const handleFieldChange = (path: string[], value: any) => {
-        setLocalContent(prev => {
-            const newData = JSON.parse(JSON.stringify(prev));
-            let current: any = newData;
-            for (let i = 0; i < path.length - 1; i++) {
-                current = current[path[i]];
-            }
-            const lastKey = path[path.length - 1];
-            if (Array.isArray(current)) {
-                current[parseInt(lastKey)] = value;
-            } else {
-                current[lastKey] = value;
-            }
-            return newData;
-        });
-    };
-
-    const MotionDiv: any = motion.div;
-
-    if (!isOpen) return null;
-
-    const sections = [
-        { id: 'cover', label: 'L1: Cover & Intro' },
-        { id: 'snapshot', label: 'L1: Snapshot' },
-        { id: 'process', label: 'L1: Process' },
-        { id: 'fees', label: 'L1: Fees' },
-        { id: 'options', label: 'L1: Options' },
-        { id: 'timeline', label: 'L1: Timeline' },
-        { id: 'payments', label: 'L1: Payments' },
-        { id: 'cta', label: 'L1: Call to Action' },
-        { id: 'l2_cover', label: 'L2: Context' },
-        { id: 'l2_snapshot', label: 'L2: Snapshot' },
-        { id: 'l2_fees', label: 'L2: Fees' },
-        { id: 'l2_scope', label: 'L2: Scope' },
-        { id: 'l2_risk', label: 'L2: Readiness' },
-        { id: 'l2_finishes', label: 'L2: Finishes' },
-        { id: 'l2_timeline', label: 'L2: Timeline' },
-        { id: 'footer', label: 'Footer' },
-    ];
-
-    const currentLabel = sections.find(s => s.id === activeSection)?.label || 'Edit Content';
-    // Extract the data for the active section safely
-    const sectionData = (localContent as any)[activeSection];
-
-    return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-md backdrop-blur-sm p-4">
-            <MotionDiv 
-                initial={{ opacity: 0, scale: 0.95 }} 
-                animate={{ opacity: 1, scale: 1 }} 
-                className={`bg-white w-full ${initialSection ? 'max-w-2xl h-auto max-h-[85vh]' : 'max-w-6xl h-[90vh]'} rounded-2xl shadow-2xl flex flex-col overflow-hidden`}
-            >
-                <div className="p-4 border-b flex justify-between items-center bg-slate-50">
-                    <h3 className="font-bold text-lg text-slate-800">{initialSection ? `Edit: ${currentLabel}` : 'Proposal Content Editor'}</h3>
-                    <button onClick={onClose}><CloseIcon className="w-6 h-6 text-slate-500 hover:text-slate-800" /></button>
-                </div>
-                
-                <div className="flex flex-grow overflow-hidden">
-                    {/* Sidebar - Only show if NO initialSection was passed (i.e. full editor mode) */}
-                    {!initialSection && (
-                        <div className="w-64 bg-slate-50 border-r border-slate-200 p-4 space-y-1 overflow-y-auto">
-                            {sections.map(section => (
-                                <button
-                                    key={section.id}
-                                    onClick={() => setActiveSection(section.id)}
-                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${activeSection === section.id ? 'bg-sky-100 text-[#334486]' : 'text-slate-500 hover:bg-slate-100'}`}
-                                >
-                                    {section.label}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Content Area */}
-                    <div className="flex-1 overflow-y-auto p-6 md:p-8">
-                        {!initialSection && <h4 className="font-bold text-lg text-slate-800 border-b pb-4 mb-6">{currentLabel}</h4>}
-                        
-                        {sectionData ? (
-                            <FieldRenderer 
-                                data={sectionData} 
-                                path={[activeSection]} 
-                                onChange={handleFieldChange} 
-                            />
-                        ) : (
-                            <p className="text-slate-400 italic">No configurable content for this section.</p>
-                        )}
-                    </div>
-                </div>
-
-                <div className="p-4 border-t bg-slate-50 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-200 rounded-lg">Cancel</button>
-                    <button onClick={() => onSave(localContent)} className="px-6 py-2 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white font-bold rounded-lg hover:bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 shadow-lg">Save Changes</button>
-                </div>
-            </MotionDiv>
-        </div>,
-        document.body
-    );
-};
 
 const ClientTab: React.FC<ClientTabProps> = (props) => {
   const { tiers, bank, materialSuggestions, timelinePhases, isClientViewOnly = false, projectContext: liveContext, setProjectContext, onExportHtml } = props;
@@ -605,11 +461,12 @@ const MODEL_SWITCHER = [
   */
   const handleDownloadPdf = async () => {
     const root = document.querySelector('.vnext-proposal-wrapper') as HTMLElement | null;
-    const pages = root ? Array.from(root.querySelectorAll<HTMLElement>('.ff-page')) : [];
-    if (!root || pages.length === 0) {
+    if (!root) {
       alert('Proposal content is still loading. Please try again in a moment.');
       return;
     }
+    // The Luxe Booklet is built from sheets; Classic Digital has none.
+    const pages = Array.from(root.querySelectorAll<HTMLElement>('.ff-page'));
 
     const landscape = exportOrientation === 'landscape';
     // The sheet, in millimetres and in CSS pixels at 96dpi.
@@ -626,6 +483,46 @@ const MODEL_SWITCHER = [
 
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: exportOrientation });
       let firstSheet = true;
+
+      if (pages.length === 0) {
+        /*
+          Classic Digital: one long document. Lay it out off screen at the
+          sheet's width and print it a sheet-high band at a time, with a
+          margin top and bottom. lib/classicPdf.ts explains the cuts.
+        */
+        const marginMm = 10;
+        const pxPerMmCss = sheet.wPx / sheet.wMm;
+        const bandH = Math.floor((sheet.hMm - marginMm * 2) * pxPerMmCss);
+        const host = await stageForPdf(root, sheet.wPx, bandH);
+        try {
+          const bands = planSheetBreaks(
+            Math.ceil(host.scrollHeight),
+            bandH,
+            keepWholeRanges(host, bandH),
+            forcedBreaks(host),
+          );
+          for (const band of bands) {
+            const canvas = await html2canvas(host, {
+              scale: 2,
+              useCORS: true,
+              logging: false,
+              backgroundColor: '#ffffff',
+              y: band.top,
+              width: sheet.wPx,
+              height: band.bottom - band.top,
+              onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc),
+            });
+            if (!firstSheet) pdf.addPage();
+            firstSheet = false;
+            pdf.addImage(
+              canvas.toDataURL('image/jpeg', 0.95),
+              'JPEG', 0, marginMm, sheet.wMm, (band.bottom - band.top) / pxPerMmCss,
+            );
+          }
+        } finally {
+          host.remove();
+        }
+      }
 
       for (const page of pages) {
         const canvas = await html2canvas(page, {
@@ -724,7 +621,7 @@ const MODEL_SWITCHER = [
 
   /* Download from the Documents board opens this page asking for the PDF. */
   useEffect(() => {
-    return onDownloadIntent('client', '.vnext-proposal-wrapper .ff-page', () => { handleDownloadPdf(); });
+    return onDownloadIntent('client', '.vnext-proposal-wrapper .ff-page, .vnext-proposal-wrapper.ff-classic', () => { handleDownloadPdf(); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -890,12 +787,11 @@ const MODEL_SWITCHER = [
             />
         </div>
 
-        <ContentEditorModal 
-            isOpen={!!editingSection} 
-            onClose={() => setEditingSection(null)} 
-            content={mergedContent} 
+        <ProposalSectionEditor
+            sectionId={editingSection}
+            content={mergedContent}
+            onClose={() => setEditingSection(null)}
             onSave={handleUpdateContent}
-            initialSection={editingSection} 
         />
     </div>
   );
