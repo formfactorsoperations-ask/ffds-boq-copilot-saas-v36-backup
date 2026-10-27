@@ -141,9 +141,18 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
           (projectContext as any).engagement?.status === 'signed' ||
           (projectContext as any).termsSignoff?.status === 'signed' ||
           !!projectContext.designAgreementSignoff ||
-          !!projectContext.lifecycle?.gates?.proposalAccepted?.done ||
-          currentStage >= 2 ||
-          projectContext.status !== 'lead';
+          /*
+            Only real evidence, or the project already past Contracting.
+
+            This used to also accept the proposalAccepted gate, any stage
+            from 2, and any status but 'lead'. All three are written by the
+            auto-sync below, so the step was reading its own output: a new
+            project has no status at all, which is "not lead", so the docket
+            counted as acknowledged, a Contracting step done put the project
+            at Stage 3 and status 'won', and Stage 3 then ticked every Design
+            step. Completing Discovery did the same through the gate.
+          */
+          isPastStage;
         
       case 'brief_frozen':
         return !!projectContext.briefFrozenAt || 
@@ -499,11 +508,13 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
     if (needsStageUpdate || needsGateUpdate) {
       const now = Date.now();
       
+       // The same stages the Lifecycle & Status Studio gives each status (App handleProjectStatusChange):
+       // a project is won once Contracting is through, not as soon as Discovery is.
        const getLegacyStatusFromStage = (stage: number): string => {
         switch (stage) {
           case 1: return 'lead';
-          case 2: return 'won';
-          case 3: return 'won';
+          case 2: return 'draft';
+          case 3: return 'proposal_sent';
           case 4: return 'won';
           case 5: return 'execution';
           case 6: return 'execution';
