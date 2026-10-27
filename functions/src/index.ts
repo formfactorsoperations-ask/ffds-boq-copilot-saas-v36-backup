@@ -7,7 +7,6 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
-import { GoogleGenAI } from "@google/genai";
 import { formatINR } from "../../lib/utils";
 import * as logger from "firebase-functions/logger";
 
@@ -35,7 +34,7 @@ export { onEscalationWritten, opsDeskDailyCheck, opsDeskCheckNow } from "./opsDe
 export { onVisitRequestWritten, onDeskMeetingWritten, onMinutesWritten, onDesignMeetingWritten } from "./meetingSync";
 export { leadForm, leadMatches } from "./leads";
 /* People: attendance and leave; see peopleDesk.ts. */
-export { peopleSnapshot, peopleCommand } from "./peopleDesk";
+export { peopleSnapshot, peopleCommand, peopleOutbox } from "./peopleDesk";
 export { peopleImport } from "./peopleImport";
 /* "New for you" in the client portal: a note for each thing the studio releases (lib/notify.ts portalDrafts). */
 export { onPortalViewWritten, onDecisionAnswered } from "./portalNotify";

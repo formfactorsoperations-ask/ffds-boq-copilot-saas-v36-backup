@@ -21,7 +21,7 @@ const OFFICE = { lat: 19.2183, lng: 72.9781, radiusM: 150 };
 const NEAR = { lat: 19.2185, lng: 72.9782, accuracyM: 20 };
 let env: RulesTestEnvironment;
 const apps: FirebaseApp[] = [];
-type U = { fs: any; snap: () => Promise<any>; cmd: (c: any) => Promise<any> };
+type U = { fs: any; snap: () => Promise<any>; cmd: (c: any) => Promise<any>; raw: (data: any) => Promise<any>; rawCmd: (data: any) => Promise<any> };
 const u: Record<string, U> = {};
 
 async function makeUser(key: string, email: string, profile: any) {
@@ -29,7 +29,8 @@ async function makeUser(key: string, email: string, profile: any) {
   apps.push(app);
   const auth = getAuth(app);
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
-  const fns = getFunctions(app);
+  /* The People functions run beside the database, in asia-south1. */
+  const fns = getFunctions(app, 'asia-south1');
   connectFunctionsEmulator(fns, '127.0.0.1', 5001);
   const fs = getFirestore(app);
   connectFirestoreEmulator(fs, '127.0.0.1', 8080);
@@ -37,7 +38,10 @@ async function makeUser(key: string, email: string, profile: any) {
   await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `users/${cred.user.uid}`), { email, ...profile }); });
   const snap = httpsCallable(fns, 'peopleSnapshot', { timeout: 60000 });
   const cmd = httpsCallable(fns, 'peopleCommand', { timeout: 60000 });
-  u[key] = { fs, snap: async () => ((await snap({})).data as any).snapshot, cmd: async (command) => (await cmd({ command })).data };
+  u[key] = {
+    fs, snap: async () => ((await snap({})).data as any).snapshot, cmd: async (command) => (await cmd({ command })).data,
+    raw: async (data) => (await snap(data)).data, rawCmd: async (data) => (await cmd(data)).data,
+  };
 }
 const code = async (p: Promise<any>) => { try { await p; return 'ok'; } catch (e: any) { return String(e.code || e.message); } };
 let n = 0;
@@ -139,5 +143,39 @@ describe('access', () => {
   it('lets only a lead change the People settings', async () => {
     expect(await code(updateDoc(doc(u.tanvi.fs, `organizations/${STUDIO}`), { 'peopleDesk.members.tm-tanvi.excluded': true }))).toBe('permission-denied');
     expect(await code(updateDoc(doc(u.mayuri.fs, `organizations/${STUDIO}`), { 'peopleDesk.policy.lateAfter': '11:15' }))).toBe('ok');
+  }, 60000);
+});
+
+describe('speed', () => {
+  it('answers "unchanged" while nothing has moved, and a new version once something has', async () => {
+    const first = await u.mayuri.raw({});
+    expect(first.snapshot.version).toBeTruthy();
+    expect(first.tenantId).toBe(STUDIO);
+    expect(await u.mayuri.raw({ since: first.snapshot.version })).toMatchObject({ ok: true, unchanged: true, tenantId: STUDIO });
+    await u.riya.cmd({ id: cid(), action: 'checkin', data: { mode: 'WFH' } });
+    const after = await u.mayuri.raw({ since: first.snapshot.version });
+    expect(after.unchanged).toBeUndefined();
+    expect(after.snapshot.version).not.toBe(first.snapshot.version);
+  }, 60000);
+
+  it('sends a browser that asks only the change, and lets the lead hear of it a moment later', async () => {
+    const before = (await u.anish.snap()).attendance.find((a: any) => a.employeeId === 'tm-riya' && !a.checkOut);
+    const res = await u.riya.rawCmd({ command: { id: cid(), action: 'checkout', data: { sessionId: before.id, version: before.version } }, delta: true });
+    expect(res.snapshot).toBeUndefined();
+    expect(res.change.session).toMatchObject({ id: before.id, employeeId: 'tm-riya' });
+    expect(res.change.session.checkOut).toBeTruthy();
+    /* peopleOutbox writes the note to Riya's manager, Anish, and clears its entry. */
+    let notes: any[] = [];
+    for (let i = 0; i < 40 && !notes.some((n) => n.kind === 'people.checkout'); i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const q = await ctx.firestore().collection('inbox/anish@p.in/notes').get();
+        notes = q.docs.map((d: any) => d.data());
+      });
+    }
+    expect(notes.some((n) => n.kind === 'people.checkout' && /Riya/.test(n.title))).toBe(true);
+    let left = -1;
+    await env.withSecurityRulesDisabled(async (ctx) => { left = (await ctx.firestore().collection(`peopleDesk/${STUDIO}/outbox`).get()).size; });
+    expect(left).toBe(0);
   }, 60000);
 });

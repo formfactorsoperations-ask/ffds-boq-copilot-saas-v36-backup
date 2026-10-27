@@ -149,8 +149,11 @@ other screens keep the motion listed above.
   - `pp-lift`: the hover lift on interactive cards.
   - `pp-tickover`: the blinking colon of the live clock.
 - framer-motion, already used across the app, for:
-  - lists that rise in one after another (`listV`, `rowV`);
-  - sections that swap in (`sectionV`);
+  - lists that rise in one after another (`listV`, `rowV`), quickly: a list of
+    thirty is all in within about three quarters of a second, with no blur
+    (27 Oct 2026, for speed);
+  - sections that swap in (`sectionV`), at once, without waiting for the old
+    section to leave;
   - the gliding segmented choice (`Glide`);
   - the rail's sliding highlight (`layoutId`).
 - Everything stops under `prefers-reduced-motion`.

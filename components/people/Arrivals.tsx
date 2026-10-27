@@ -104,7 +104,7 @@ export function StudioPulse({ s }: { s: Snapshot }) {
             return (
               <div key={p.id} className="relative flex flex-col items-center gap-1.5 text-center">
                 {fresh && <Confetti pieces={14} spread={52} />}
-                <Coin shown={!!a} delay={0.15 + i * 0.07} size={56}
+                <Coin shown={!!a} delay={0.15 + Math.min(i, 8) * 0.07} size={56}
                   front={
                     <span className={`relative w-full h-full rounded-full bg-gradient-to-br from-white to-slate-100 ring-4 ${tone} grid place-items-center text-sm font-black text-slate-800 shadow-[0_10px_20px_-12px_rgba(61,82,160,0.6)]`}>
                       {initials(p.name)}

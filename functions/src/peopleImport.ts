@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
-import { contextOf, fail, type Ctx } from "./peopleDesk";
+import { bumpRevision, contextOf, fail, type Ctx } from "./peopleDesk";
 import { BATCH_ID, IMPORT_PREFIX, checkImported } from "../../lib/peopleImport";
 import type { Attendance, RequestRecord } from "../../lib/peopleDesk";
 
@@ -135,6 +135,8 @@ export const peopleImport = onCall({ cors: true, timeoutSeconds: 120, memory: "5
         writer.set(refs[i], plain(rec));
         written++;
       });
+      /* Snapshots asking "anything new?" hear yes. */
+      if (written) bumpRevision(writer, ctx.tenantId, now);
       if (written) await writer.commit();
       await ref.update({ written: FieldValue.increment(written), skipped: FieldValue.increment(skipped.length) });
       return { ok: true, written, skipped };
@@ -159,6 +161,7 @@ export const peopleImport = onCall({ cors: true, timeoutSeconds: 120, memory: "5
           await writer.commit();
         }
       }
+      if (removed) { const w = db().batch(); bumpRevision(w, ctx.tenantId, now); await w.commit(); }
       await ref.update({ status: "undone", undoneAt: now, undoneBy: ctx.me.id, removed, kept });
       return { ok: true, removed, kept };
     }

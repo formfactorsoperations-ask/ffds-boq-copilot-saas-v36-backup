@@ -110,6 +110,8 @@ let db: Firestore | null = null;
 let auth: Auth | null = null;
 let storage: FirebaseStorage | null = null;
 let functions: Functions | null = null;
+/* Set when this session talks to the local emulators (below). */
+let usingEmulator = false;
 
 if (finalConfig) {
     try {
@@ -215,6 +217,7 @@ if (finalConfig) {
             connectFirestoreEmulator(db, 'localhost', 8080);
             connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
             connectFunctionsEmulator(functions, 'localhost', 5001);
+            usingEmulator = true;
             if (storage) connectStorageEmulator(storage, 'localhost', 9199);
             console.warn('Firebase EMULATOR mode — not talking to the live project.');
         }
@@ -226,6 +229,19 @@ if (finalConfig) {
 }
 
 export { db, auth, storage, functions };
+
+/* Functions deployed outside us-central1 (the People functions run beside the database, in asia-south1). */
+const regional = new Map<string, Functions>();
+export function functionsIn(region: string): Functions | null {
+    if (!functions) return null;
+    let f = regional.get(region);
+    if (!f) {
+        f = getFunctions(functions.app, region);
+        if (usingEmulator) connectFunctionsEmulator(f, 'localhost', 5001);
+        regional.set(region, f);
+    }
+    return f;
+}
 
 export const isFirebaseConfigured = (): boolean => {
     return !!db;

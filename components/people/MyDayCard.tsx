@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { MapPin, LogIn, LogOut, FolderOpen, ExternalLink, ArrowRight, Sun, CalendarDays, AlertTriangle } from '@/lib/lucide-shim';
 import { clock12, isLate, isOff, type Attendance, type Mode } from '../../lib/peopleDesk';
 import { myDay, minutesWorked, duration, dayProgress, whereLabel, mapLink, CHARGED, currentFy, leaveLabel } from '../../lib/peopleView';
-import { usePeople, readLocation } from '../../services/peopleService';
+import { usePeople, locate, warmLocation } from '../../services/peopleService';
 import { Ring, Glide, DoneTick, Skeleton, Notice, Confetti, Tilt, MODE_ICON, EASE } from './PeopleBits';
 import { Dot } from '../ui/HudBits';
 import { ArrivalStrip, ArrivalToasts } from './Arrivals';
@@ -61,6 +61,11 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   const [phase, setPhase] = useState<'idle' | 'locating' | 'saving' | 'done' | 'update'>('idle');
   const [problem, setProblem] = useState<string | null>(null);
   const [justDone, setJustDone] = useState<string | null>(null);
+  /* A check-in on its way to the server: shown at once, confirmed when it lands. */
+  const [pending, setPending] = useState<{ checkIn: string; mode: Mode; site: string } | null>(null);
+  /* Not checked in yet and working somewhere with a location: take a reading now, so the tap does not wait for one. */
+  const needsReading = !!snapshot && !myDay(snapshot).session && mode !== 'WFH';
+  useEffect(() => { if (needsReading) warmLocation(); }, [needsReading]);
 
   if (!snapshot) {
     return (
@@ -75,7 +80,8 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   }
 
   const policy = snapshot.policy;
-  const { today, session, stale } = myDay(snapshot);
+  const { today, session: saved, stale } = myDay(snapshot);
+  const session: Attendance | null = saved || (pending ? { id: 'pending', employeeId: snapshot.me.id, date: today, version: 0, ...pending } : null);
   const holiday = policy.holidays.includes(today) ? policy.holidayNames?.[today] || 'Studio holiday' : null;
   const off = !holiday && isOff(today, policy);
   const onLeave = snapshot.availability.find((a) => a.employeeId === snapshot.me.id && a.start <= today && a.end >= today && a.status !== 'Pending');
@@ -96,7 +102,8 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
     let location: { lat: number; lng: number; accuracyM: number } | null = null;
     if (mode !== 'WFH') {
       setPhase('locating');
-      const { reading, why } = await readLocation();
+      /* Good enough when it is as precise as the office circle (100 m at least); never more than ten seconds, or three when location is optional. */
+      const { reading, why } = await locate({ goodWithinM: Math.max(100, policy.office?.radiusM || 0), maxWaitMs: policy.requireLocation ? 10000 : 3000 });
       location = reading;
       if (!reading && policy.requireLocation) {
         setPhase('idle');
@@ -107,7 +114,9 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
       }
     }
     setPhase('saving');
+    setPending({ checkIn: new Date().toISOString(), mode, site: mode === 'Site' ? site : '' });
     const r = await run('checkin', { mode, site: mode === 'Site' ? site : '', ...(location ? { location } : {}) });
+    setPending(null);
     if ('error' in r) { setPhase('idle'); setProblem(r.error); return; }
     setPhase('done');
     setJustDone('Checked in. Have a good day.');
@@ -115,18 +124,19 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   };
 
   const checkOut = async () => {
-    if (!session) return;
+    if (!saved) return;
     setProblem(null);
     setPhase('saving');
-    const { reading } = session.mode === 'WFH' ? { reading: null } : await readLocation(6000);
-    const r = await run('checkout', { sessionId: session.id, version: session.version, ...(reading ? { location: reading } : {}) });
+    /* Optional at check-out: a reading from the last ten minutes, or whatever comes in a second and a half. */
+    const { reading } = saved.mode === 'WFH' ? { reading: null } : await locate({ goodWithinM: Infinity, maxWaitMs: 1500, freshMs: 600000 });
+    const r = await run('checkout', { sessionId: saved.id, version: saved.version, ...(reading ? { location: reading } : {}) });
     if ('error' in r) { setPhase('idle'); setProblem(r.error); return; }
     setPhase('done');
     setJustDone('Checked out. Enjoy your evening.');
     window.setTimeout(() => { setPhase('idle'); setJustDone(null); }, 2600);
   };
 
-  const status = session?.checkOut ? 'Day complete' : open ? (late ? 'Checked in, late' : 'Checked in') : holiday ? holiday : off ? 'Studio off day' : onLeave ? (onLeave.mode === 'WFH' ? 'Working from home today' : 'On leave today') : 'Ready when you are';
+  const status = pending && !saved ? 'Checked in · saving…' : session?.checkOut ? 'Day complete' : open ? (late ? 'Checked in, late' : 'Checked in') : holiday ? holiday : off ? 'Studio off day' : onLeave ? (onLeave.mode === 'WFH' ? 'Working from home today' : 'On leave today') : 'Ready when you are';
   const statusTone: 'ok' | 'warn' | 'bad' = session?.checkOut ? 'ok' : open ? (late ? 'warn' : 'ok') : 'warn';
   const pin = variant === 'pin';
   const compact = variant !== 'full';
@@ -168,10 +178,10 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
                 In {clock12(session.checkIn, policy.timezone)}{session.checkOut ? ` · out ${clock12(session.checkOut, policy.timezone)}` : ''} · {session.mode}{session.site ? ` · ${session.site}` : ''}
               </p>
             )}
-            {session && session.mode !== 'WFH' && (
+            {saved && saved.mode !== 'WFH' && (
               <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
                 <MapPin className="w-3 h-3" />
-                {session.checkInLocation ? <a className="hover:underline" href={mapLink(session.checkInLocation)} target="_blank" rel="noreferrer">{whereLabel(session.checkInLocation, session.mode)}</a> : whereLabel(null, session.mode)}
+                {saved.checkInLocation ? <a className="hover:underline" href={mapLink(saved.checkInLocation)} target="_blank" rel="noreferrer">{whereLabel(saved.checkInLocation, saved.mode)}</a> : whereLabel(null, saved.mode)}
               </p>
             )}
           </div>
