@@ -36,6 +36,8 @@ export { leadForm, leadMatches } from "./leads";
 /* People: attendance and leave; see peopleDesk.ts. */
 export { peopleSnapshot, peopleCommand, peopleOutbox } from "./peopleDesk";
 export { peopleImport } from "./peopleImport";
+/* People: the office guide, essentials, celebrations, kudos and emergency contacts; see peopleGuide.ts. */
+export { peopleGuide, peopleGuideCommand } from "./peopleGuide";
 /* "New for you" in the client portal: a note for each thing the studio releases (lib/notify.ts portalDrafts). */
 export { onPortalViewWritten, onDecisionAnswered } from "./portalNotify";
 import { confirmMeetingByClient, portalSheetFor } from "./designMeeting";

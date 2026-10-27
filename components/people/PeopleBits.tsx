@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { motion, useMotionValue, useReducedMotion, useSpring, useTransform, type Variants } from 'framer-motion';
-import { TreePalm, Thermometer, Coffee, Gift, House, Building2, HardHat } from '@/lib/lucide-shim';
+import { TreePalm, Thermometer, Coffee, Gift, House, Building2, HardHat, Sparkles } from '@/lib/lucide-shim';
 import type { LeaveType, Mode } from '../../lib/peopleDesk';
 import './peopleStyles';
 
@@ -116,6 +116,29 @@ export const IconTile: React.FC<{ icon: React.ComponentType<any>; tone?: RingTon
     const glyph = size === 'sm' ? 'w-4 h-4' : size === 'lg' ? 'w-6 h-6' : 'w-5 h-5';
     return <span className={`pp-tile shrink-0 ${box} ${TILE[tone]} ${className}`}><Icon className={glyph} strokeWidth={2.1} /></span>;
   };
+
+/** The People card (DESIGN.md "Panel"): an icon tile, a title and a blurb, with anything beside them. */
+export const Panel: React.FC<{ icon: React.ComponentType<any>; title: string; blurb: string; children: React.ReactNode; aside?: React.ReactNode }> = ({ icon: Icon, title, blurb, children, aside }) => (
+  <section className="group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in">
+    <div className="flex flex-wrap items-start gap-3 mb-5">
+      <IconTile icon={Icon} />
+      <div className="min-w-0 grow basis-52">
+        <h2 className="font-bold text-slate-800">{title}</h2>
+        <p className="text-xs text-slate-500 mt-0.5">{blurb}</p>
+      </div>
+      {aside}
+    </div>
+    {children}
+  </section>
+);
+/** Nothing to show yet, with an icon that floats. */
+export const Empty: React.FC<{ text: string; icon?: React.ComponentType<any>; children?: React.ReactNode }> = ({ text, icon: Icon = Sparkles, children }) => (
+  <div className="rounded-xl border border-dashed border-slate-300 px-4 py-6 flex flex-col items-center gap-2 text-center">
+    <span className="pp-float text-slate-300"><Icon className="w-6 h-6" /></span>
+    <p className="text-xs text-slate-500">{text}</p>
+    {children}
+  </div>
+);
 
 /**
  * A card that tilts towards the pointer in 3D, with a light that follows it.
