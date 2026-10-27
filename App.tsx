@@ -169,6 +169,9 @@ import { STUDIO_ROUTES, staffBox, clientBox, type Stored } from "./lib/notify";
 // Default Empty Context
 const DEFAULT_CONTEXT: ProjectContext = {
   name: "New Project",
+  // A new project is a lead until the journey says otherwise. Without a status the
+  // Ops Matrix read it as past the lead stage and marked it won (services/journeyEngine).
+  status: "lead",
   location: "Mumbai",
   area: 0,
   config: "2-BHK",
