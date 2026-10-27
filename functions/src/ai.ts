@@ -1,6 +1,5 @@
 import { onCall, HttpsError, CallableOptions } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
-import { GoogleGenAI } from "@google/genai";
 import { rateLimiter, requireStaff } from "./guards";
 
 /**
@@ -30,7 +29,10 @@ import { rateLimiter, requireStaff } from "./guards";
    needs the same. CORS is not the security boundary here -- requireAuth is. */
 const OPTS: CallableOptions = { secrets: ["GEMINI_API_KEY"], cors: true };
 
-const client = () => {
+/* The SDK is loaded on the first AI call, not when an instance starts: every
+   function shares this codebase, and none of the others needs it. */
+const client = async () => {
+  const { GoogleGenAI } = await import("@google/genai");
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     // Configuration fault, not a caller fault -- say so plainly rather than
@@ -108,7 +110,7 @@ export const aiGenerate = onCall(OPTS, async (request) => {
     throw new HttpsError("invalid-argument", "`model` and `contents` are required.");
   }
   return await explain("aiGenerate", async () => {
-    const res = await client().models.generateContent({ model, contents, config } as any);
+    const res = await (await client()).models.generateContent({ model, contents, config } as any);
     return { text: res.text ?? "" };
   });
 });
@@ -124,7 +126,7 @@ export const aiCountTokens = onCall(OPTS, async (request) => {
     throw new HttpsError("invalid-argument", "`model` and `contents` are required.");
   }
   return await explain("aiCountTokens", async () => {
-    const res = await client().models.countTokens({ model, contents } as any);
+    const res = await (await client()).models.countTokens({ model, contents } as any);
     return { totalTokens: res.totalTokens ?? 0 };
   });
 });

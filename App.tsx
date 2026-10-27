@@ -445,6 +445,16 @@ export default function App() {
   >(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  /* People opens without waiting for its code: fetched in the background once the studio app is up and the browser is idle. */
+  useEffect(() => {
+    if (appMode !== "ops" || !mayOpenStudioTab("people", currentRoles?.length ? currentRoles : currentRole)) return;
+    const w: any = window;
+    const go = () => { import("./components/people/PeoplePage").catch(() => undefined); };
+    if (w.requestIdleCallback) { const id = w.requestIdleCallback(go, { timeout: 5000 }); return () => w.cancelIdleCallback(id); }
+    const t = window.setTimeout(go, 3000);
+    return () => window.clearTimeout(t);
+  }, [appMode, currentRole, currentRoles]);
+
   // Ref to access active ID inside async effects without stale closures
   const activeIdRef = useRef(activeInternalId);
   useEffect(() => {

@@ -14,11 +14,11 @@ import './peopleStyles';
 
 export const EASE = [0.22, 1, 0.36, 1] as const;
 
-/** A list whose rows rise in one after another. */
-export const listV: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.045, delayChildren: 0.04 } } };
+/** A list whose rows rise in one after another: thirty rows are all in within about three quarters of a second (no blur: it is costly to paint on phones). */
+export const listV: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.015, delayChildren: 0.02 } } };
 export const rowV: Variants = {
-  hidden: { opacity: 0, y: 10, filter: 'blur(4px)' },
-  show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.42, ease: EASE } },
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: EASE } },
 };
 /** A section swapping in. */
 export const sectionV: Variants = {

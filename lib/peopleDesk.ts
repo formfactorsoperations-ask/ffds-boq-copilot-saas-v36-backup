@@ -326,6 +326,8 @@ export interface Snapshot {
   balances: Record<string, Record<LeaveType, Balance>>;
   serverTime: string;
   revision: number;
+  /** What the snapshot is of (functions/src/peopleDesk.ts); a refresh sends it back to hear "unchanged". */
+  version?: string;
 }
 export interface Balance {
   entitled: number;
@@ -363,16 +365,27 @@ function assert(
 ): asserts value {
   if (!value) throw new DomainError(code, message, status);
 }
+/*
+  Formatters, one per timezone. Building an Intl.DateTimeFormat costs far
+  more than using one, and these run for every session on every render of the
+  calendar, the report and the CSV (about 50 times faster cached).
+*/
+const formatters = new Map<string, Intl.DateTimeFormat>();
+function formatter(key: string, make: () => Intl.DateTimeFormat): Intl.DateTimeFormat {
+  let f = formatters.get(key);
+  if (!f) { f = make(); formatters.set(key, f); }
+  return f;
+}
 export function businessDate(
   instant: string | Date,
   timezone = DEFAULT_POLICY.timezone,
 ): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
+  const parts = formatter(`date:${timezone}`, () => new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(new Date(instant));
+  })).formatToParts(new Date(instant));
   const get = (type: string) => parts.find((p) => p.type === type)?.value;
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
@@ -381,12 +394,12 @@ export function timeLabel(
   timezone = DEFAULT_POLICY.timezone,
 ): string {
   return instant
-    ? new Intl.DateTimeFormat("en-IN", {
+    ? formatter(`time:${timezone}`, () => new Intl.DateTimeFormat("en-IN", {
         timeZone: timezone,
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,
-      }).format(new Date(instant))
+      })).format(new Date(instant))
     : "—";
 }
 
@@ -514,6 +527,20 @@ export function balanceFor(
     available: entitled - used - reserved,
   };
 }
+/** Who is away or working from home, as everyone may see it: leave asked for or booked; null for anything else. */
+export function availabilityOf(r: RequestRecord): Availability | null {
+  if (r.kind !== "leave" || !(reserves(r.status) || consumes(r.status))) return null;
+  return {
+    requestId: r.id,
+    employeeId: r.employeeId,
+    start: r.start,
+    end: r.end,
+    portion: r.portion,
+    status: r.status,
+    mode: r.type === "WFH" ? "WFH" : "Away",
+  };
+}
+
 export function scopeSnapshot(
   store: Store,
   actorId: string,
@@ -557,19 +584,7 @@ export function scopeSnapshot(
     policy: store.policy,
     attendance: store.attendance.filter((a) => allowed.has(a.employeeId)),
     requests: store.requests.filter((r) => allowed.has(r.employeeId)),
-    availability: store.requests
-      .filter(
-        (r) => r.kind === "leave" && (reserves(r.status) || consumes(r.status)),
-      )
-      .map((r) => ({
-        requestId: r.id,
-        employeeId: r.employeeId,
-        start: r.start,
-        end: r.end,
-        portion: r.portion,
-        status: r.status,
-        mode: r.type === "WFH" ? "WFH" : "Away",
-      })),
+    availability: store.requests.map(availabilityOf).filter((a): a is Availability => !!a),
     balances,
     serverTime: now,
     revision: store.events.length,

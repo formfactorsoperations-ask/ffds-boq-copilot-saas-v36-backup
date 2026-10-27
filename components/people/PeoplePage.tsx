@@ -59,7 +59,7 @@ const Empty: React.FC<{ text: string; icon?: React.ComponentType<any> }> = ({ te
 );
 
 export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
-  const { snapshot, loading, error, refresh } = usePeople();
+  const { snapshot, loading, error, stale, at, refresh } = usePeople();
   const [section, setSection] = useState<Section>('today');
   const [leaveOpen, setLeaveOpen] = useState<{ start?: string } | null>(null);
   const [correcting, setCorrecting] = useState<Attendance | null>(null);
@@ -151,8 +151,9 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
         <div className="min-w-0 space-y-6">
           <AnimatePresence>{notice && <Notice text={notice} onClose={() => setNotice(null)} />}</AnimatePresence>
           {error && <Notice text={error} tone="bad" />}
-          <AnimatePresence mode="wait">
-            <motion.div key={section} variants={sectionV} initial="hidden" animate="show" exit="exit" className="space-y-6">
+          {stale && !error && <Notice text={`Could not refresh just now. Showing People as of ${new Date(at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}; trying again shortly.`} tone="bad" />}
+          {/* The new section swaps in at once: waiting for the old one's exit (mode="wait") delayed every switch and could stall on a blank section, as App's tabs once did. */}
+          <motion.div key={section} variants={sectionV} initial="hidden" animate="show" className="space-y-6">
               {section === 'today' && <TodaySection s={s} sites={sites} onCorrect={setCorrecting} onLeave={(start) => setLeaveOpen({ start })} onGo={setSection} waiting={waiting.length} />}
               {section === 'attendance' && <AttendanceSection s={s} onCorrect={setCorrecting} approver={approver} />}
               {section === 'leave' && <LeaveSection s={s} onApply={() => setLeaveOpen({})} onDone={setNotice} />}
@@ -160,8 +161,7 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
               {section === 'calendar' && <PeopleCalendar s={s} onLeave={(start) => setLeaveOpen({ start })} />}
               {section === 'directory' && <DirectorySection s={s} />}
               {section === 'report' && approver && <ReportSection s={s} />}
-            </motion.div>
-          </AnimatePresence>
+          </motion.div>
         </div>
       </div>
 
@@ -243,9 +243,14 @@ function TodaySection({ s, sites, onCorrect, onLeave, onGo, waiting }: { s: Snap
 function AttendanceSection({ s, onCorrect, approver }: { s: Snapshot; onCorrect: (a: Attendance) => void; approver: boolean }) {
   const [whose, setWhose] = useState<'mine' | 'team'>('mine');
   const [shown, setShown] = useState(30);
-  const list = s.attendance.filter((a) => (whose === 'mine' ? a.employeeId === s.me.id : a.employeeId !== s.me.id))
-    .sort((a, b) => b.date.localeCompare(a.date) || personName(s, a.employeeId).localeCompare(personName(s, b.employeeId)));
-  const pendingFix = new Set(s.requests.filter((r) => r.kind === 'correction' && r.status === 'Pending').map((r) => r.correction?.sessionId));
+  /* Sorted once per snapshot, not on every render; names looked up once each. */
+  const list = useMemo(() => {
+    const names = new Map(s.people.map((p) => [p.id, personName(s, p.id)]));
+    const nameOf = (id: string) => names.get(id) ?? personName(s, id);
+    return s.attendance.filter((a) => (whose === 'mine' ? a.employeeId === s.me.id : a.employeeId !== s.me.id))
+      .sort((a, b) => b.date.localeCompare(a.date) || nameOf(a.employeeId).localeCompare(nameOf(b.employeeId)));
+  }, [s, whose]);
+  const pendingFix = useMemo(() => new Set(s.requests.filter((r) => r.kind === 'correction' && r.status === 'Pending').map((r) => r.correction?.sessionId)), [s]);
   return (
     <Panel icon={Fingerprint} title="Attendance" blurb="The last four months. A day can be corrected once your approver agrees."
       aside={approver ? <Glide id="att-whose" label="Whose" value={whose} onChange={(v) => { setWhose(v); setShown(30); }} options={[{ id: 'mine', label: 'Mine' }, { id: 'team', label: 'My people' }]} /> : undefined}>
@@ -486,7 +491,7 @@ function ReportSection({ s }: { s: Snapshot }) {
     return () => { live = false; };
   }, [month, old]);
   const source = old ? (older?.month === month ? older.s : null) : s;
-  const rows = source ? monthReport(source, month) : [];
+  const rows = useMemo(() => (source ? monthReport(source, month) : []), [source, month]);
   const label = new Date(`${month}-15T12:00:00+05:30`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
   const download = () => {
     if (!source) return;

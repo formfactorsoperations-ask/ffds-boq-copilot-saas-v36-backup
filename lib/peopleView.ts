@@ -5,7 +5,7 @@
   and its CSV. Pure, so the tests run it.
 */
 import {
-  LEAVE_LABELS, addDays, businessDate, fiscalYear, isLate, isOff, timeLabel,
+  LEAVE_LABELS, addDays, availabilityOf, businessDate, fiscalYear, isLate, isOff, timeLabel,
   type Attendance, type LeaveType, type Located, type Mode, type Person, type Policy, type RequestRecord, type Snapshot,
 } from './peopleDesk';
 
@@ -227,4 +227,23 @@ export function newCommandId(): string {
   const c: any = (globalThis as any).crypto;
   if (c?.randomUUID) return c.randomUUID();
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/**
+ * A command's change put into the snapshot already on screen: the session it
+ * opened or closed, the request it made or decided. Everything else stays as
+ * it was; leave balances move only with a fresh snapshot, so a changed
+ * request is followed by a refresh (services/peopleService.ts).
+ */
+export function mergeChange(s: Snapshot, change: { session?: Attendance | null; request?: RequestRecord | null }): Snapshot {
+  let { attendance, requests, availability } = s;
+  const a = change.session;
+  if (a) attendance = [...attendance.filter((x) => x.id !== a.id), a];
+  const r = change.request;
+  if (r) {
+    requests = [...requests.filter((x) => x.id !== r.id), r];
+    const seen = availabilityOf(r);
+    availability = [...availability.filter((x) => x.requestId !== r.id), ...(seen ? [seen] : [])];
+  }
+  return a || r ? { ...s, attendance, requests, availability } : s;
 }
