@@ -134,9 +134,11 @@ export const generateLocalComparison = (tiers: ProposalTier[], bankItems: any[])
         let hasData = false;
 
         tiers.forEach(tier => {
-            // Priority 1: Check Predefined Specs for exact match
-            if (PREDEFINED_SPECS[tier.name] && PREDEFINED_SPECS[tier.name][extractor.key]) {
-                row[tier.name] = PREDEFINED_SPECS[tier.name][extractor.key];
+            // Priority 1: Check Predefined Specs for exact match — by the name it
+            // was created with too, so renaming a standard option keeps its specs.
+            const preset = PREDEFINED_SPECS[tier.name] || (tier.originalName ? PREDEFINED_SPECS[tier.originalName] : undefined);
+            if (preset && preset[extractor.key]) {
+                row[tier.name] = preset[extractor.key];
                 hasData = true;
                 return;
             }

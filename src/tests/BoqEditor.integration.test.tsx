@@ -291,14 +291,14 @@ describe('Pricing & Tiers: one price per option', () => {
 
 /* The rest of Pricing & Tiers: figures that were invented, approvals nobody
    recorded, a Sync that lost the booked contract, a Regenerate with no way back. */
-function TierHarness({ projects, useBank = bank, probe }: { projects?: any[]; useBank?: any[]; probe?: (s: { ctx: any; tiers: any[] }) => void }) {
+function TierHarness({ projects, useBank = bank, probe, ctx: extraCtx }: { projects?: any[]; useBank?: any[]; probe?: (s: { ctx: any; tiers: any[] }) => void; ctx?: any }) {
   const bankMap = useMemo(() => buildBankMap(useBank), [useBank]);
   const [tiers, setTiers] = useState<any[]>(() => [
     { id: 'ess', name: 'Essential Elegance', timestamp: 1, boq: [{ id: 'a', bankId: 'wardrobe', qty: 30 }] },
     { id: 'com', name: 'Comfort Upgrade', timestamp: 2, boq: [{ id: 'c', bankId: 'wardrobe', qty: 40 }, { id: 'd', bankId: 'paint', qty: 300 }] },
   ]);
   const calc = useMemo(() => withSummaries(tiers, bankMap), [tiers, bankMap]);
-  const [ctx, setCtx] = useState<any>({ name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10, config: '1BHK' });
+  const [ctx, setCtx] = useState<any>({ name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10, config: '1BHK', ...extraCtx });
   const [active, setActive] = useState<string | null>('ess');
   probe?.({ ctx, tiers });
   return (
@@ -428,6 +428,28 @@ describe('Pricing & Tiers: renaming an option', () => {
     fireEvent.blur(input);
     expect(state.tiers.find((t: any) => t.id === 'ess').name).toBe('Comfort Final');
     expect(state.ctx.approvedTierId).toBe('ess');
+  });
+
+  it('keeps the option\'s material spec edits, and the name it was created with', () => {
+    let state: any;
+    // An edit saved under the option's name, as edits were before they were kept by id.
+    const overrides = { 'Hardware System': { 'Essential Elegance': 'Hettich soft-close', 'Comfort Upgrade': 'Ebco' } };
+    render(<TierHarness probe={s => { state = s; }} ctx={{ proposalContent: { materials: { overrides } }, proposalContentByMode: { TURNKEY: { materials: { overrides } } } }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    const input = screen.getByRole('textbox', { name: 'Option name' });
+    fireEvent.change(input, { target: { value: 'Essential Plus' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    const ess = state.tiers.find((t: any) => t.id === 'ess');
+    expect(ess).toMatchObject({ name: 'Essential Plus', originalName: 'Essential Elegance' });
+    for (const content of [state.ctx.proposalContent, state.ctx.proposalContentByMode.TURNKEY]) {
+      expect(content.materials.overrides['Hardware System']).toEqual({ ess: 'Hettich soft-close', 'Comfort Upgrade': 'Ebco' });
+    }
+    // A second rename keeps the first name as the one it was created with.
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    const again = screen.getByRole('textbox', { name: 'Option name' });
+    fireEvent.change(again, { target: { value: 'Essential Max' } });
+    fireEvent.keyDown(again, { key: 'Enter' });
+    expect(state.tiers.find((t: any) => t.id === 'ess').originalName).toBe('Essential Elegance');
   });
 
   it('a blank name, or Escape, keeps the old name', () => {

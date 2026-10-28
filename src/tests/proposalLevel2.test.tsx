@@ -22,6 +22,8 @@ vi.mock('../../components/ops/ProposalAcceptanceCard', () => ({ default: () => n
 
 import ClientTab from '../../components/client/ClientTab';
 import { proposalOption, forOption } from '../../lib/proposalOption';
+import { specOverride, withSpecOverride, contextWithTierRenamed } from '../../lib/specOverrides';
+import { generateLocalComparison } from '../../lib/comparison';
 
 afterEach(cleanup);
 
@@ -134,5 +136,47 @@ describe('forOption', () => {
   it('does not mistake one name for a longer one', () => {
     expect(forOption('for the Comfort Upgrade (Copy) package.', 'Comfort Upgrade (Copy)', ['Comfort Upgrade', 'Comfort Upgrade (Copy)'], true))
       .toBe('for the Comfort Upgrade (Copy) package.');
+  });
+});
+
+describe('material specs follow the option, not its name', () => {
+  it('an edit kept by id shows after a rename; an edit kept by name still shows', () => {
+    const renamed = [{ ...TIERS[0] }, { ...TIERS[1], name: 'Comfort Upgrade - Optimized', originalName: 'Comfort Upgrade' }];
+    const overrides = { 'Hardware System': { com: 'Hettich soft-close' }, 'Paint Finish': { 'Essential Elegance': 'Royale Shyne' } };
+    function Renamed() {
+      const [ctx, setCtx] = useState<any>({ name: 'Flat', activeProposalLevel: 'LEVEL_1', proposalContent: { materials: { overrides } } });
+      return <ClientTab tiers={renamed} bank={[]} materialSuggestions={[]} timelinePhases={[]} setTimelinePhases={() => undefined} projectContext={ctx} setProjectContext={setCtx} />;
+    }
+    render(<Renamed />);
+    const rows = Object.fromEntries(specRows().map(r => [r[0], r.slice(1)]));
+    expect(rows['Hardware System'][1]).toBe('Hettich soft-close');
+    expect(rows['Paint Finish'][0]).toBe('Royale Shyne');
+    // The built-in specs of the name it was created with.
+    expect(rows['Plywood (Kitchen & Bath)'][1]).not.toBe('-');
+  });
+
+  it('a renamed standard option keeps its built-in specs', () => {
+    const before = generateLocalComparison([TIERS[1]], []).materialMatrix.find(r => r.feature === 'Plywood (Kitchen & Bath)')!;
+    const after = generateLocalComparison([{ ...TIERS[1], name: 'Comfort Plus', originalName: 'Comfort Upgrade' }], []).materialMatrix.find(r => r.feature === 'Plywood (Kitchen & Bath)')!;
+    expect(before['Comfort Upgrade']).toBeTruthy();
+    expect(after['Comfort Plus']).toBe(before['Comfort Upgrade']);
+  });
+
+  it('withSpecOverride stores by id and drops the copy under the name', () => {
+    const out = withSpecOverride({ Paint: { 'Comfort Upgrade': 'old', ess: 'x' } }, 'Paint', { id: 'com', name: 'Comfort Upgrade' }, 'new');
+    expect(out).toEqual({ Paint: { com: 'new', ess: 'x' } });
+    expect(specOverride(out, 'Paint', { id: 'com', name: 'Anything' })).toBe('new');
+  });
+
+  it('a rename moves name-keyed edits to the id, in every proposal mode, without overwriting one already there', () => {
+    const ctx: any = {
+      proposalContent: { materials: { overrides: { Paint: { Old: 'a' }, Hardware: { Old: 'b', t1: 'kept' } } } },
+      proposalContentByMode: { DESIGN_ONLY: { materials: { overrides: { Paint: { Old: 'c' } } } }, TURNKEY: { title: 'x' } },
+    };
+    const out: any = contextWithTierRenamed(ctx, 't1', 'Old');
+    expect(out.proposalContent.materials.overrides).toEqual({ Paint: { t1: 'a' }, Hardware: { t1: 'kept' } });
+    expect(out.proposalContentByMode.DESIGN_ONLY.materials.overrides).toEqual({ Paint: { t1: 'c' } });
+    expect(out.proposalContentByMode.TURNKEY).toBe(ctx.proposalContentByMode.TURNKEY);
+    expect(contextWithTierRenamed(ctx, 't9', 'Nobody')).toBe(ctx);
   });
 });

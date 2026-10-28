@@ -1405,6 +1405,8 @@ export interface ProposalTier {
     executionTotal?: number; // Optional extended prop for views
     groupedBoq?: { [key: string]: FullBoqItem[] }; // Optional extended prop for views
     parentTierId?: string; // Links this tier to its parent for diffs
+    /** The name the option had before it was first renamed; its built-in material specs are found by it (lib/comparison.ts). */
+    originalName?: string;
     lifecycleTag?: 'Draft' | 'Approved while booking' | 'Revised after design' | 'Superseded' | 'Current contract'; 
     assumedMargin?: number; // Used for What-if scenarios and discount headroom
     /** Who made this option the baseline, and when (lib/tierApproval.ts). Missing on options approved before it was recorded. */
