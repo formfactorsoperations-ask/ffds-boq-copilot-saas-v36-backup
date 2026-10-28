@@ -70,6 +70,22 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
         return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
     };
 
+    /*
+      What Level 2 prints under an item: the specification someone wrote for it,
+      and nothing in its place when nobody has.
+
+      The grey line it used to print was the line's rationale — a note the app
+      writes for itself ("Mid spec: 1mm laminate, soft-close hardware" from the
+      option generator, "Added from Bundle: …", a takeoff derivation). On the
+      planning document it read as a specification the client was agreeing to.
+      Only a commercial basis that changes what is billed is still stated.
+    */
+    const getBillingNote = (item: FullBoqItem) => {
+        if (item.name.toLowerCase().includes('actual')) return 'As Actuals';
+        if (item.materials === 0 && item.labor > 0) return 'Labour Only';
+        return '';
+    };
+
     const getCleanSpecs = (specs: string) => {
         if (!specs) return '';
         // Filter out the default Excel import placeholder
@@ -159,7 +175,7 @@ const ClientRoomwise: React.FC<ClientRoomwiseProps> = ({ tiers, mode = 'standard
                                                         {items.map((item, iIdx) => {
                                                             const sellRate = calculateSellPrice(item.materials, item.labor, item.margin);
                                                             const lineTotal = sellRate * item.qty;
-                                                            const remark = getRemark(item);
+                                                            const remark = getBillingNote(item);
                                                             const cleanSpecs = getCleanSpecs(item.specs);
                                                             
                                                             return (

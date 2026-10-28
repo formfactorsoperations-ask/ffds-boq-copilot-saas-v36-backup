@@ -117,6 +117,45 @@ describe('Level 2: material specifications match Level 1', () => {
   });
 });
 
+describe('Classic Digital terms page', () => {
+  const termsPage = () => document.getElementById('terms')!;
+
+  it('prints the Luxe Booklet\'s Annexure A, not the old six clauses', () => {
+    render(<Harness ctx={{ activeProposalLevel: 'LEVEL_1' }} />);
+    const terms = termsPage();
+    expect(terms.textContent).toContain('Commercial Terms & Conditions');
+    expect(terms.textContent).toContain('1 · ENGAGEMENT MODEL AND BASIS OF VALUE');
+    expect(terms.textContent).toContain('12 · ACKNOWLEDGEMENT');
+    expect(terms.textContent).not.toContain('Standard Terms & Conditions');
+    expect(terms.textContent).not.toContain('Validity of Proposal');
+  });
+
+  it('carries the studio\'s edits to the booklet\'s terms, read-only', () => {
+    const blocks = { d0bdccbc: 'Only items listed in this proposal are included.' };
+    const lists = { 'annex.4-payment-terms': ['Stage payments are due on invoice.'] };
+    render(<Harness ctx={{ activeProposalLevel: 'LEVEL_2', proposalContent: { blocks, lists } }} />);
+    const terms = termsPage();
+    expect(terms.textContent).toContain('Only items listed in this proposal are included.');
+    expect(terms.textContent).toContain('Stage payments are due on invoice.');
+    expect(terms.querySelector('[contenteditable="true"]')).toBeNull();
+  });
+
+  it('keeps the Classic Digital look rather than the booklet\'s', () => {
+    render(<Harness ctx={{ activeProposalLevel: 'LEVEL_2' }} />);
+    const terms = termsPage();
+    const html = terms.innerHTML;
+    expect(html).toContain('border-[#334486]');
+    expect(html).toContain('md:columns-2');
+    expect(html).not.toContain('#C5A880');
+    expect(html).not.toContain('#0F172A]');
+  });
+
+  it('adds no booklet sheet, so Download PDF still captures the whole classic proposal', () => {
+    render(<Harness ctx={{ activeProposalLevel: 'LEVEL_1' }} />);
+    expect(document.querySelector('.vnext-proposal-wrapper .ff-page')).toBeNull();
+  });
+});
+
 describe('proposalOption', () => {
   const tiers = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
   it('takes the pick, then the approved option, then the first', () => {
@@ -219,5 +258,31 @@ describe('a copy has the specs of the option it was copied from', () => {
     const out: any = contextWithTierCopied(ctx, { id: 'com', name: 'Comfort Upgrade' }, 'copy');
     expect(out.proposalContent.materials.overrides).toEqual({ Paint: { com: 'a', copy: 'a' }, Hardware: { 'Comfort Upgrade': 'b', copy: 'own' }, Other: { ess: 'z' } });
     expect(contextWithTierCopied({ name: 'x' } as any, { id: 'com', name: 'C' }, 'copy')).toEqual({ name: 'x' });
+  });
+});
+
+describe('Level 2 scope: the line under each item', () => {
+  const withItems: any[] = [{
+    ...TIERS[0],
+    boq: [
+      { id: 'i1', bankId: 'none-1', name: 'STUDY UNIT WITH SHELVES', qty: 5, unit: 'sq ft', baseRate: 2188, roomId: 'M. Bedroom',
+        rationale: 'Mid spec: 1mm laminate, soft-close hardware' },
+      { id: 'i2', bankId: 'none-2', name: 'WARDROBE WITH LOFT', qty: 48.6, unit: 'sq ft', baseRate: 2188, roomId: 'M. Bedroom',
+        specs: '18mm BWP ply carcass, Hettich soft-close hinges', rationale: 'Added from Bundle: AI Master Bedroom Suite' },
+      { id: 'i3', bankId: 'none-3', name: 'Electrical fittings (as actuals)', qty: 1, unit: 'lot', baseRate: 0, roomId: 'M. Bedroom' },
+    ],
+  }];
+  function Scope() {
+    const [ctx, setCtx] = useState<any>({ name: 'Flat', activeProposalLevel: 'LEVEL_2' });
+    return <ClientTab tiers={withItems} bank={[]} materialSuggestions={[]} timelinePhases={[]} setTimelinePhases={() => undefined} projectContext={ctx} setProjectContext={setCtx} />;
+  }
+
+  it('shows the specification someone wrote, and nothing where nobody has', () => {
+    render(<Scope />);
+    expect(screen.getByText('18mm BWP ply carcass, Hettich soft-close hinges')).toBeTruthy();
+    expect(screen.queryByText(/Mid spec: 1mm laminate/)).toBeNull();
+    expect(screen.queryByText(/Added from Bundle/)).toBeNull();
+    // A commercial basis that changes what is billed is still stated.
+    expect(screen.getByText('As Actuals')).toBeTruthy();
   });
 });

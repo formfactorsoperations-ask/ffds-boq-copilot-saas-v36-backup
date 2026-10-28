@@ -469,6 +469,48 @@ const EdList: React.FC<{
   );
 };
 
+/*
+  How Annexure A looks in each format. The clauses are the same; the booklet
+  keeps its own sheet styling, and the Classic Digital proposal prints them the
+  way its terms page always looked: a grey kicker, a title over a blue rule,
+  small uppercase headings and two columns.
+*/
+type AnnexLook = 'booklet' | 'classic';
+const ANNEX_LOOK: Record<AnnexLook, Record<string, string>> = {
+    booklet: {
+        head: 'border-b-2 border-[#0F172A] pb-4',
+        kicker: 'text-[11px] font-bold text-[#C5A880] uppercase tracking-wider block',
+        title: 'text-3xl font-extrabold tracking-tight text-[#0F172A] mt-1',
+        subtitle: 'text-xs text-slate-500 mt-1',
+        note: 'p-5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 leading-relaxed flex items-start gap-3 max-w-4xl',
+        noteIcon: 'p-1 bg-[#C5A880]/10 rounded text-[#C5A880] shrink-0 mt-0.5',
+        accentText: 'font-bold text-[#C5A880]',
+        body: 'space-y-8 text-slate-700 text-xs leading-relaxed max-w-4xl',
+        section: '',
+        sectionWide: '',
+        h4: 'font-extrabold text-[#0F172A] uppercase tracking-wider mb-2',
+        totalRow: 'bg-slate-900 text-white font-bold',
+        pair: 'grid grid-cols-1 md:grid-cols-2 gap-6 mt-2',
+        strong: 'text-[#0F172A]',
+    },
+    classic: {
+        head: 'border-b-2 border-[#334486] pb-4',
+        kicker: 'text-[11px] font-bold text-slate-500 uppercase tracking-wider block',
+        title: 'mt-2 text-2xl font-extrabold tracking-tight text-slate-900',
+        subtitle: 'text-xs text-slate-500 mt-1',
+        note: 'mt-8 p-6 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-600 leading-relaxed flex items-start gap-3',
+        noteIcon: 'p-1 bg-[#3D52A0]/10 rounded text-[#3D52A0] shrink-0 mt-0.5',
+        accentText: 'font-bold text-[#334486]',
+        body: 'mt-8 md:columns-2 gap-12 text-xs text-slate-600 leading-relaxed',
+        section: 'break-inside-avoid mb-6',
+        sectionWide: 'break-inside-avoid mb-6 [column-span:all] pt-2',
+        h4: 'font-bold text-slate-900 uppercase tracking-wide mb-2',
+        totalRow: 'bg-[#334486] text-white font-bold',
+        pair: 'grid grid-cols-1 gap-4 mt-2',
+        strong: 'text-slate-900',
+    },
+};
+
 interface ClientBookletProposalProps {
     tiers: ProposalTier[];
     projectContext: ProjectContext;
@@ -480,6 +522,8 @@ interface ClientBookletProposalProps {
     onEditSection?: (sectionId: string) => void;
     setProjectContext?: React.Dispatch<React.SetStateAction<ProjectContext>>;
     isClientViewOnly?: boolean;
+    /** Render only Annexure A, read-only — the Classic Digital proposal's terms page. */
+    termsOnly?: boolean;
 }
 
 export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
@@ -492,7 +536,8 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
     paymentStructure,
     onEditSection,
     setProjectContext,
-    isClientViewOnly = false
+    isClientViewOnly = false,
+    termsOnly = false
 }) => {
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     const { currentRole } = useOrg();
@@ -693,14 +738,14 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
     /* Editable for the studio, never for the client, and never in a print or
        PDF pass — a caret outline has no business on a document a client signs. */
     const edCtl: EdCtl = React.useMemo(() => ({
-        on: !!setProjectContext && !isClientViewOnly,
+        on: !!setProjectContext && !isClientViewOnly && !termsOnly,
         ov: blockOverrides,
         save: saveBlock,
         clear: clearBlock,
         lists: listOverrides,
         saveList,
         clearList,
-    }), [setProjectContext, isClientViewOnly, blockOverrides, saveBlock, clearBlock, listOverrides, saveList, clearList]);
+    }), [setProjectContext, isClientViewOnly, termsOnly, blockOverrides, saveBlock, clearBlock, listOverrides, saveList, clearList]);
 
     /*
       Page numbers, counted rather than typed.
@@ -1434,6 +1479,297 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
             maximumFractionDigits: 0
         }).format(val);
     };
+
+    /*
+      Annexure A — the Commercial Terms & Conditions, as the booklet prints them.
+
+      Built once, here, and printed both as the booklet's last sheet and, through
+      `termsOnly`, as the Classic Digital proposal's terms page: one set of
+      clauses, with the studio's edits to them, wherever the client reads them.
+      The wording is shared; the look follows the format (ANNEX_LOOK).
+    */
+    const renderAnnexure = (look: AnnexLook) => {
+        const T = ANNEX_LOOK[look];
+        return (
+        <>
+            <div className={T.head}>
+                <span className={T.kicker}><Ed k="43ec7149" ctl={edCtl}>ANNEXURE A</Ed></span>
+                <h2 className={T.title}><Ed k="e555dbd3" ctl={edCtl}>Commercial Terms & Conditions</Ed></h2>
+                <p className={T.subtitle}><Ed k="530cebd7" ctl={edCtl}>Forms part of the Design-led Turnkey Proposal booklet and is to be read together with it.</Ed></p>
+            </div>
+
+            {latestDocket ? (
+                <div className={T.note}>
+                    <div className={T.noteIcon}>
+                        <ShieldCheckIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                        <strong className="text-slate-800 font-bold block mb-1">Contractual Integration & Alignment Note</strong>
+                        This commercial Annexure forms part of the master contractual framework and is verbally and legally integrated with <strong className="text-slate-900 font-semibold">Master Terms Docket {latestDocket.docketRef}</strong> (Status: <span className={T.accentText}>{latestDocket.status.toUpperCase()}</span>), issued for this project. The Master Terms Docket governs overarching service level agreements, legal boundaries, and liabilities, and shall take precedence in case of any operational discrepancies.
+                    </div>
+                </div>
+            ) : (
+                <div className={T.note}>
+                    <div className={T.noteIcon}>
+                        <ShieldCheckIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                        <strong className="text-slate-800 font-bold block mb-1">Contractual Integration & Alignment Note</strong>
+                        These Commercial Terms & Conditions are legally integrated with the Master Terms Docket once issued for this project. The Master Terms Docket serves as the overarching master service agreement and defines all legal, structural, and liability parameters.
+                    </div>
+                </div>
+            )}
+
+            <div className={T.body}>
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="7d2f6696" ctl={edCtl}>1 · ENGAGEMENT MODEL AND BASIS OF VALUE</Ed></h4>
+                    <EdList k="annex.1-engagement-model-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1.5 text-slate-600">
+                        <li>This engagement is a <strong className={T.strong}>single design-led turnkey engagement</strong>. FFDS contracts, procures, executes and supervises the scope listed in the proposal booklet, and carries contractual execution responsibility for that scope.</li>
+                        <li>The figure stated in the booklet is the <strong className={T.strong}>Current Proposed Project Value</strong>, based on the scope, quantities and specifications presently recorded.</li>
+                        <li>The <strong className={T.strong}>Final Turnkey Order Value</strong> will be issued after site validation, design freeze, Schedule of Finishes approval and final BOQ sign-off. Once accepted in writing, it becomes the contracted value for execution.</li>
+                        <li><Ed k="324fa782" ctl={edCtl}>Rates underlying the proposal are held for the validity period stated above.</Ed></li>
+                    </EdList>
+                </div>
+
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="f5dd5c3b" ctl={edCtl}>2 · COMMERCIAL SUMMARY</Ed></h4>
+                    <table className="w-full text-left border-collapse border border-slate-200 text-slate-600">
+                        <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 font-bold">
+                                <th className="p-2">Component</th>
+                                <th className="p-2">Basis</th>
+                                <th className="p-2 text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            <tr>
+                                <td className="p-2"><Ed k="1c9dfb1a_2" ctl={edCtl}>Turnkey Execution Value</Ed></td>
+                                <td className="p-2"><Ed k="277d53ce_2" ctl={edCtl}>As listed scope</Ed></td>
+                                <td className="p-2 text-right font-mono">{formatINR(taxableExecution)}</td>
+                            </tr>
+                            <tr>
+                                <td className="p-2"><Ed k="b7b78706_2" ctl={edCtl}>Design & Coordination Fee</Ed></td>
+                                <td className="p-2">{designFeeBasis}</td>
+                                <td className="p-2 text-right font-mono">{formatINR(taxableDesign)}</td>
+                            </tr>
+                            <tr className="bg-slate-50 font-bold border-t border-slate-300">
+                                <td className="p-2"><Ed k="857af574_2" ctl={edCtl}>Net Taxable Value</Ed></td>
+                                <td className="p-2"></td>
+                                <td className="p-2 text-right font-mono">{formatINR(netTaxableValue)}</td>
+                            </tr>
+                            <tr>
+                                <td className="p-2"><Ed k="a6bbe567_2" ctl={edCtl}>Applicable GST</Ed></td>
+                                <td className="p-2"><Ed k="a7652052" ctl={edCtl}>18% on FFDS invoiced value</Ed></td>
+                                <td className="p-2 text-right font-mono">{formatINR(gstOnDesign + chargedGstOnExecution)}</td>
+                            </tr>
+                            <tr className={T.totalRow}>
+                                <td className="p-2"><Ed k="b41f3f00" ctl={edCtl}>Total Proposed Project Investment</Ed></td>
+                                <td className="p-2"></td>
+                                <td className="p-2 text-right font-mono">{formatINR(totalProposedInvestment)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p className="text-[10px] text-slate-400 mt-2 italic"><Ed k="58ea405d" ctl={edCtl}>This is the only commercial summary; no other figure in any document supersedes it.</Ed></p>
+                </div>
+
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="0f056cbb" ctl={edCtl}>3 · TAXES</Ed></h4>
+                    <p><Ed k="5a972bbe" ctl={edCtl}>GST shall be applicable on amounts invoiced by Form Factors Design Studio at the prevailing statutory rate, currently 18%, on both the execution value and the design and coordination fee.</Ed></p>
+                    <p className="mt-2"><Ed k="6277da00" ctl={edCtl}>Where a direct client purchase or a payment to a third-party supplier is specifically agreed and documented in writing, that item shall be invoiced separately by the respective supplier and falls outside the FFDS contracted value.</Ed></p>
+                    <p className="mt-2"><Ed k="951a9977" ctl={edCtl}>Any change in statutory rates or the introduction of any new levy after the date of this proposal shall apply to invoices raised thereafter.</Ed></p>
+                </div>
+
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="d794fc18" ctl={edCtl}>4 · PAYMENT TERMS</Ed></h4>
+                    <EdList k="annex.4-payment-terms" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
+                        <li><Ed k="e5896545" ctl={edCtl}>All stage payments are payable in advance of the corresponding stage. Material orders are placed only against cleared funds.</Ed></li>
+                        <li>Design fee shares are percentages of {formatINR(taxableDesign)}; execution shares are percentages of {formatINR(taxableExecution)}. Stage amounts are rounded to the nearest rupee, with Execution 1 carrying the rounding adjustment so that stages sum exactly to the net taxable value.</li>
+                        <li><Ed k="7ed2b5a5" ctl={edCtl}>GST is added on each invoice at the prevailing rate.</Ed></li>
+                        <li><Ed k="12eac516" ctl={edCtl}>The Project Initiation Fee of ₹4,999 is adjusted against the Design 1 invoice and is not additional to the total above.</Ed></li>
+                        <li><Ed k="db32bcf7" ctl={edCtl}>Delays in approvals or payments will proportionately revise the project programme.</Ed></li>
+                    </EdList>
+                </div>
+
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="73f70e57" ctl={edCtl}>5 · PROJECT INITIATION FEE</Ed></h4>
+                    <div className="grid grid-cols-2 gap-4 border border-slate-200 rounded p-4 bg-slate-50">
+                        <div>
+                            <strong className="text-slate-800 text-xs block mb-1">Covered by the fee</strong>
+                            <EdList k="annex.5-project-initiation-fee" ctl={edCtl} as="ul" className="list-disc pl-4 text-slate-500">
+                                <li><Ed k="c7d19951" ctl={edCtl}>Site measurement</Ed></li>
+                                <li><Ed k="c944f2ce" ctl={edCtl}>Requirement documentation</Ed></li>
+                                <li><Ed k="a2587158" ctl={edCtl}>Preliminary scope validation</Ed></li>
+                            </EdList>
+                        </div>
+                        <div>
+                            <strong className="text-slate-800 text-xs block mb-1 font-bold">Not covered by the fee</strong>
+                            <EdList k="annex.5-project-initiation-fee.2" ctl={edCtl} as="ul" className="list-disc pl-4 text-slate-400">
+                                <li><Ed k="dcaf0421" ctl={edCtl}>✕ Layouts and space planning</Ed></li>
+                                <li><Ed k="0a39764b" ctl={edCtl}>✕ 3D visualisation</Ed></li>
+                                <li><Ed k="ef057aa4" ctl={edCtl}>✕ GFC and joinery drawings</Ed></li>
+                                <li><Ed k="596fda86" ctl={edCtl}>✕ Schedule of Finishes</Ed></li>
+                                <li><Ed k="ea7bccb7" ctl={edCtl}>✕ Final BOQ</Ed></li>
+                            </EdList>
+                        </div>
+                    </div>
+                </div>
+
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="ec65632e" ctl={edCtl}>6 · SCOPE, QUANTITIES AND VARIATIONS</Ed></h4>
+                    <EdList k="annex.6-scope-quantities-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
+                        <li><Ed k="d0bdccbc" ctl={edCtl}>Only items listed in the proposal booklet are included. Any item not written into the scope is not included.</Ed></li>
+                        <li><Ed k="49611ff2" ctl={edCtl}>Quantities are as presently measured or estimated and are re-verified at site validation. Variation of more than 5% on any line will be notified in writing with the revised value before the affected work is ordered or commenced. Quantities are then adjusted to actual measured quantity at the rates underlying this proposal.</Ed></li>
+                        <li><Ed k="f8a0f6fc" ctl={edCtl}>Any addition, deletion or specification change after design freeze will be quoted as a written variation and becomes payable with the next stage invoice once approved.</Ed></li>
+                        <li><Ed k="844cdbdf" ctl={edCtl}>Items marked as actuals are billed at actual supplier cost against the client's approved selection and are not part of the fixed value. An indicative allowance for electrical fittings will be issued with the Schedule of Finishes for budgeting.</Ed></li>
+                        {/*
+                          This clause used to assert flatly that no carpentry
+                          was priced, on every proposal — including ones whose
+                          scope table carried nine lakh rupees of it. A clause
+                          the client signs cannot contradict the priced scope
+                          two pages earlier, so it now follows the BOQ.
+                        */}
+                        <li>{hasAnyCarpentryIncluded
+                            ? <>Carpentry priced in this proposal is limited to the items listed in the scope of works. Any kitchen, wardrobe, bed, loft or bathroom carpentry not listed there is not priced. If required, {settings?.companyName || 'the studio'} will issue a priced addendum with quantities and specifications for approval, and the order value will be revised.</>
+                            : <>Kitchen, wardrobes, beds, lofts and bathroom carpentry are not priced in this proposal. If required, {settings?.companyName || 'the studio'} will issue a priced addendum with quantities and specifications for approval, and the order value will be revised.</>
+                        }</li>
+                    </EdList>
+                </div>
+
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="beca6efc" ctl={edCtl}>7 · EXCLUSIONS</Ed></h4>
+
+                    {/* Studio-only. `no-print` keeps it out of print, and the
+                        PDF clone hides the same class, so a client never sees it. */}
+                    {edCtl.on && scopeContradictions.length > 0 && (
+                        <div className="no-print mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                            <span className="font-bold uppercase tracking-wider block mb-1">
+                                Check before sending — {scopeContradictions.length} exclusion{scopeContradictions.length > 1 ? 's' : ''} the BOQ may contradict
+                            </span>
+                            <ul className="space-y-0.5">
+                                {scopeContradictions.map(c => (
+                                    <li key={c.key}>
+                                        <span className="font-semibold">{c.label}</span> is listed as excluded, but the BOQ prices{' '}
+                                        {c.evidence.map(e => `"${e}"`).join(', ')}.
+                                    </li>
+                                ))}
+                            </ul>
+                            <span className="block mt-1 opacity-80">
+                                Edit the list below if the exclusion is wrong. This note is never shown to the client.
+                            </span>
+                        </div>
+                    )}
+                    {/*
+                      One list, laid out in two columns by CSS rather than
+                      split into two arrays. Splitting it meant adding an
+                      exclusion to the left column could never rebalance
+                      into the right, and the two halves were separately
+                      overridable — so a studio edit could leave the section
+                      half derived and half hand-written.
+
+                      The ✕ is a CSS marker, not content: it must not end up
+                      inside an editable run where it can be deleted or
+                      duplicated.
+                    */}
+                    <EdList
+                        k="annex.7-exclusions"
+                        ctl={edCtl}
+                        as="ul"
+                        className="ff-x-list text-slate-500 text-[11px] space-y-1"
+                    >
+                        {[...annexureExclusionsList.col1, ...annexureExclusionsList.col2].map((exc, idx) => (
+                            <li key={idx}>{exc}</li>
+                        ))}
+                    </EdList>
+                </div>
+
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="32cbf8a9" ctl={edCtl}>8 · PROGRAMME AND START CONDITIONS</Ed></h4>
+                    <p><Ed k="annex.8-programme-intro" ctl={edCtl}>The site programme is {totalDays} working days, excluding Sundays and public holidays. Design and planning runs for approximately {designDays} working days before it and is not counted within it. The site programme is calculated from the date on which all four of the following are in place:</Ed></p>
+                    <EdList k="annex.8-programme-and-start" ctl={edCtl} as="ul" className="list-disc pl-6 text-slate-600 mt-2">
+                        <li><Ed k="234b3c76" ctl={edCtl}>Design and material selection freeze, with the Schedule of Finishes approved in writing</Ed></li>
+                        <li><Ed k="8ce93c71" ctl={edCtl}>Receipt of the required stage payment</Ed></li>
+                        <li><Ed k="eccf2fa5" ctl={edCtl}>Availability of the site for uninterrupted work, vacant and free of stored goods</Ed></li>
+                        <li><Ed k="74529f93" ctl={edCtl}>Society permissions, work timings and lift or hoist access confirmed</Ed></li>
+                    </EdList>
+                </div>
+
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="1ecb13b3" ctl={edCtl}>9 · ASSUMPTIONS AND CLIENT RESPONSIBILITIES</Ed></h4>
+                    <div className={T.pair}>
+                        <div>
+                            <span className="font-bold text-slate-800 block mb-1"><Ed k="8b593995" ctl={edCtl}>Assumptions</Ed></span>
+                            <EdList k="annex.9-assumptions-and-client" ctl={edCtl} as="ul" className="list-disc pl-4 space-y-1 text-slate-500">
+                                <li><Ed k="290937c5" ctl={edCtl}>Single continuous mobilisation, flat vacant and available</Ed></li>
+                                <li><Ed k="3fd1e7c5" ctl={edCtl}>Existing walls, slab, flooring and plumbing sound and reusable as-is</Ed></li>
+                                <li><Ed k="1f030dd5" ctl={edCtl}>Existing distribution board adequate for the proposed load</Ed></li>
+                                <li><Ed k="bc0d9cf4" ctl={edCtl}>Normal society working hours, lift or hoist access available</Ed></li>
+                                <li><Ed k="9281477b" ctl={edCtl}>Water and power available at site for construction use</Ed></li>
+                                <li><Ed k="a515cc89" ctl={edCtl}>No structural alteration, waterproofing or slab work required</Ed></li>
+                            </EdList>
+                        </div>
+                        <div>
+                            <span className="font-bold text-slate-800 block mb-1"><Ed k="6f91b73a" ctl={edCtl}>Client responsibilities</Ed></span>
+                            <EdList k="annex.9-assumptions-and-client.2" ctl={edCtl} as="ul" className="list-disc pl-4 space-y-1 text-slate-500">
+                                <li><Ed k="98841019" ctl={edCtl}>Timely approval of layouts, 3D views, samples and the Schedule of Finishes</Ed></li>
+                                <li><Ed k="fe404b04" ctl={edCtl}>Society intimation, permissions and any refundable deposits</Ed></li>
+                                <li><Ed k="8b9f6596" ctl={edCtl}>Statutory, municipal and society charges</Ed></li>
+                                <li><Ed k="3ac27417" ctl={edCtl}>Vacant possession of the flat for the execution period</Ed></li>
+                                <li><Ed k="bc982e1e" ctl={edCtl}>Selection of electrical fittings and appliances within the agreed window</Ed></li>
+                                <li><Ed k="bb5a4459" ctl={edCtl}>Stage payments in advance of each stage</Ed></li>
+                                <li><Ed k="454e9d53" ctl={edCtl}>Attendance at the joint snag inspection before handover</Ed></li>
+                            </EdList>
+                        </div>
+                    </div>
+                </div>
+
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="054a2193" ctl={edCtl}>10 · MATERIALS, SAMPLES AND WORKMANSHIP</Ed></h4>
+                    <EdList k="annex.10-materials-samples-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
+                        <li><Ed k="012d8dd8" ctl={edCtl}>Final brands, shades and finishes are selected against physical samples during the Schedule of Finishes stage and recorded in writing.</Ed></li>
+                        <li>Where a specified brand is unavailable, {settings?.companyName || 'FFDS'} will propose an equivalent of the same or higher grade for written approval before ordering. No substitution will be made without approval.</li>
+                        <li><Ed k="03e3b121" ctl={edCtl}>Carpentry is built to approved GFC drawings. Exposed surfaces are laminated, edges banded and carcass interiors finished. Electrical points are tested and recorded before ceiling closure.</Ed></li>
+                    </EdList>
+                </div>
+
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="c6725020" ctl={edCtl}>11 · HANDOVER, WARRANTY AND VALIDITY</Ed></h4>
+                    <EdList k="annex.11-handover-warranty-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
+                        <li><Ed k="f5d39714" ctl={edCtl}>Handover follows closure of the joint snag list, deep cleaning of the worked areas, and release of the handover dossier and warranty note.</Ed></li>
+                        <li>{settings?.companyName || 'FFDS'} provides a workmanship warranty of 6 months from handover on carpentry executed under this contract, covering manufacturing and installation defects.</li>
+                        <li><Ed k="27cd97b9" ctl={edCtl}>Manufacturer warranties on hardware, laminates, paint and electrical fittings apply as issued by the respective brand.</Ed></li>
+                        <li><Ed k="992a1058" ctl={edCtl}>Warranty excludes damage arising from misuse, water ingress, alteration by others and normal wear.</Ed></li>
+                        <li>This proposal is valid for 15 days from {today} and supersedes all prior estimates, verbal indications and written communication on this project. Where any earlier document conflicts, the proposal booklet and this Annexure prevail.</li>
+                        <li><Ed k="9dbf30b1" ctl={edCtl}>On confirmation, the turnkey agreement and the final BOQ together form the contract; the proposal booklet forms the basis of scope.</Ed></li>
+                    </EdList>
+                </div>
+
+                <div className={T.sectionWide}>
+                    <h4 className={T.h4}><Ed k="1db9c1f6" ctl={edCtl}>12 · ACKNOWLEDGEMENT</Ed></h4>
+                    <p><Ed k="d8bdaf37" ctl={edCtl}>The client acknowledges having read and accepted these Commercial Terms & Conditions together with the Design-led Turnkey Proposal booklet for the project named above.</Ed></p>
+                    
+                    <div className="grid grid-cols-2 gap-8 mt-6 pt-6 border-t border-slate-200">
+                        <div>
+                            <span className="text-[10px] text-slate-400 block font-bold">FOR {(settings?.companyName || 'FORM FACTORS DESIGN STUDIO').toUpperCase()}</span>
+                            <div className="h-8 border-b border-slate-200 my-2"></div>
+                            <span className="text-[8px] text-slate-400"><Ed k="300d015e" ctl={edCtl}>AUTHORISED SIGNATORY</Ed></span>
+                        </div>
+                        <div>
+                            <span className="text-[10px] text-slate-400 block font-bold"><Ed k="865936f7_2" ctl={edCtl}>ACCEPTED & APPROVED BY CLIENT</Ed></span>
+                            <div className="h-8 border-b border-slate-200 my-2"></div>
+                            <span className="text-[8px] text-slate-400">{projectContext.clientName?.toUpperCase() || 'CLIENT'}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </>
+        );
+    };
+
+    /* The terms on their own, in the Classic Digital proposal's own format. No
+       `ff-page`: the PDF builder reads any sheet as a booklet and would print only this one. */
+    if (termsOnly) {
+        return <div className="ff-classic-terms">{renderAnnexure('classic')}</div>;
+    }
 
     return (
         <div ref={wrapperRef} className="vnext-proposal-wrapper bg-white min-h-screen text-slate-800 font-sans print:bg-white print:text-black">
@@ -2459,275 +2795,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
             {/* ================= ANNEXURE A: TERMS & CONDITIONS ================= */}
             <div className="ff-page ff-page-flow p-20 bg-white space-y-8">
-                <div className="border-b-2 border-[#0F172A] pb-4">
-                    <span className="text-[11px] font-bold text-[#C5A880] uppercase tracking-wider block"><Ed k="43ec7149" ctl={edCtl}>ANNEXURE A</Ed></span>
-                    <h2 className="text-3xl font-extrabold tracking-tight text-[#0F172A] mt-1"><Ed k="e555dbd3" ctl={edCtl}>Commercial Terms & Conditions</Ed></h2>
-                    <p className="text-xs text-slate-500 mt-1"><Ed k="530cebd7" ctl={edCtl}>Forms part of the Design-led Turnkey Proposal booklet and is to be read together with it.</Ed></p>
-                </div>
-
-                {latestDocket ? (
-                    <div className="p-5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 leading-relaxed flex items-start gap-3 max-w-4xl">
-                        <div className="p-1 bg-[#C5A880]/10 rounded text-[#C5A880] shrink-0 mt-0.5">
-                            <ShieldCheckIcon className="w-4 h-4" />
-                        </div>
-                        <div>
-                            <strong className="text-slate-800 font-bold block mb-1">Contractual Integration & Alignment Note</strong>
-                            This commercial Annexure forms part of the master contractual framework and is verbally and legally integrated with <strong className="text-slate-900 font-semibold">Master Terms Docket {latestDocket.docketRef}</strong> (Status: <span className="font-bold text-[#C5A880]">{latestDocket.status.toUpperCase()}</span>), issued for this project. The Master Terms Docket governs overarching service level agreements, legal boundaries, and liabilities, and shall take precedence in case of any operational discrepancies.
-                        </div>
-                    </div>
-                ) : (
-                    <div className="p-5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 leading-relaxed flex items-start gap-3 max-w-4xl">
-                        <div className="p-1 bg-[#C5A880]/10 rounded text-[#C5A880] shrink-0 mt-0.5">
-                            <ShieldCheckIcon className="w-4 h-4" />
-                        </div>
-                        <div>
-                            <strong className="text-slate-800 font-bold block mb-1">Contractual Integration & Alignment Note</strong>
-                            These Commercial Terms & Conditions are legally integrated with the Master Terms Docket once issued for this project. The Master Terms Docket serves as the overarching master service agreement and defines all legal, structural, and liability parameters.
-                        </div>
-                    </div>
-                )}
-
-                <div className="space-y-8 text-slate-700 text-xs leading-relaxed max-w-4xl">
-                    <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="7d2f6696" ctl={edCtl}>1 · ENGAGEMENT MODEL AND BASIS OF VALUE</Ed></h4>
-                        <EdList k="annex.1-engagement-model-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1.5 text-slate-600">
-                            <li>This engagement is a <strong className="text-[#0F172A]">single design-led turnkey engagement</strong>. FFDS contracts, procures, executes and supervises the scope listed in the proposal booklet, and carries contractual execution responsibility for that scope.</li>
-                            <li>The figure stated in the booklet is the <strong className="text-[#0F172A]">Current Proposed Project Value</strong>, based on the scope, quantities and specifications presently recorded.</li>
-                            <li>The <strong className="text-[#0F172A]">Final Turnkey Order Value</strong> will be issued after site validation, design freeze, Schedule of Finishes approval and final BOQ sign-off. Once accepted in writing, it becomes the contracted value for execution.</li>
-                            <li><Ed k="324fa782" ctl={edCtl}>Rates underlying the proposal are held for the validity period stated above.</Ed></li>
-                        </EdList>
-                    </div>
-
-                    <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="f5dd5c3b" ctl={edCtl}>2 · COMMERCIAL SUMMARY</Ed></h4>
-                        <table className="w-full text-left border-collapse border border-slate-200 text-slate-600">
-                            <thead>
-                                <tr className="bg-slate-50 border-b border-slate-200 font-bold">
-                                    <th className="p-2">Component</th>
-                                    <th className="p-2">Basis</th>
-                                    <th className="p-2 text-right">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                <tr>
-                                    <td className="p-2"><Ed k="1c9dfb1a_2" ctl={edCtl}>Turnkey Execution Value</Ed></td>
-                                    <td className="p-2"><Ed k="277d53ce_2" ctl={edCtl}>As listed scope</Ed></td>
-                                    <td className="p-2 text-right font-mono">{formatINR(taxableExecution)}</td>
-                                </tr>
-                                <tr>
-                                    <td className="p-2"><Ed k="b7b78706_2" ctl={edCtl}>Design & Coordination Fee</Ed></td>
-                                    <td className="p-2">{designFeeBasis}</td>
-                                    <td className="p-2 text-right font-mono">{formatINR(taxableDesign)}</td>
-                                </tr>
-                                <tr className="bg-slate-50 font-bold border-t border-slate-300">
-                                    <td className="p-2"><Ed k="857af574_2" ctl={edCtl}>Net Taxable Value</Ed></td>
-                                    <td className="p-2"></td>
-                                    <td className="p-2 text-right font-mono">{formatINR(netTaxableValue)}</td>
-                                </tr>
-                                <tr>
-                                    <td className="p-2"><Ed k="a6bbe567_2" ctl={edCtl}>Applicable GST</Ed></td>
-                                    <td className="p-2"><Ed k="a7652052" ctl={edCtl}>18% on FFDS invoiced value</Ed></td>
-                                    <td className="p-2 text-right font-mono">{formatINR(gstOnDesign + chargedGstOnExecution)}</td>
-                                </tr>
-                                <tr className="bg-slate-900 text-white font-bold">
-                                    <td className="p-2"><Ed k="b41f3f00" ctl={edCtl}>Total Proposed Project Investment</Ed></td>
-                                    <td className="p-2"></td>
-                                    <td className="p-2 text-right font-mono">{formatINR(totalProposedInvestment)}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <p className="text-[10px] text-slate-400 mt-2 italic"><Ed k="58ea405d" ctl={edCtl}>This is the only commercial summary; no other figure in any document supersedes it.</Ed></p>
-                    </div>
-
-                    <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="0f056cbb" ctl={edCtl}>3 · TAXES</Ed></h4>
-                        <p><Ed k="5a972bbe" ctl={edCtl}>GST shall be applicable on amounts invoiced by Form Factors Design Studio at the prevailing statutory rate, currently 18%, on both the execution value and the design and coordination fee.</Ed></p>
-                        <p className="mt-2"><Ed k="6277da00" ctl={edCtl}>Where a direct client purchase or a payment to a third-party supplier is specifically agreed and documented in writing, that item shall be invoiced separately by the respective supplier and falls outside the FFDS contracted value.</Ed></p>
-                        <p className="mt-2"><Ed k="951a9977" ctl={edCtl}>Any change in statutory rates or the introduction of any new levy after the date of this proposal shall apply to invoices raised thereafter.</Ed></p>
-                    </div>
-
-                    <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="d794fc18" ctl={edCtl}>4 · PAYMENT TERMS</Ed></h4>
-                        <EdList k="annex.4-payment-terms" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
-                            <li><Ed k="e5896545" ctl={edCtl}>All stage payments are payable in advance of the corresponding stage. Material orders are placed only against cleared funds.</Ed></li>
-                            <li>Design fee shares are percentages of {formatINR(taxableDesign)}; execution shares are percentages of {formatINR(taxableExecution)}. Stage amounts are rounded to the nearest rupee, with Execution 1 carrying the rounding adjustment so that stages sum exactly to the net taxable value.</li>
-                            <li><Ed k="7ed2b5a5" ctl={edCtl}>GST is added on each invoice at the prevailing rate.</Ed></li>
-                            <li><Ed k="12eac516" ctl={edCtl}>The Project Initiation Fee of ₹4,999 is adjusted against the Design 1 invoice and is not additional to the total above.</Ed></li>
-                            <li><Ed k="db32bcf7" ctl={edCtl}>Delays in approvals or payments will proportionately revise the project programme.</Ed></li>
-                        </EdList>
-                    </div>
-
-                    <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="73f70e57" ctl={edCtl}>5 · PROJECT INITIATION FEE</Ed></h4>
-                        <div className="grid grid-cols-2 gap-4 border border-slate-200 rounded p-4 bg-slate-50">
-                            <div>
-                                <strong className="text-slate-800 text-xs block mb-1">Covered by the fee</strong>
-                                <EdList k="annex.5-project-initiation-fee" ctl={edCtl} as="ul" className="list-disc pl-4 text-slate-500">
-                                    <li><Ed k="c7d19951" ctl={edCtl}>Site measurement</Ed></li>
-                                    <li><Ed k="c944f2ce" ctl={edCtl}>Requirement documentation</Ed></li>
-                                    <li><Ed k="a2587158" ctl={edCtl}>Preliminary scope validation</Ed></li>
-                                </EdList>
-                            </div>
-                            <div>
-                                <strong className="text-slate-800 text-xs block mb-1 font-bold">Not covered by the fee</strong>
-                                <EdList k="annex.5-project-initiation-fee.2" ctl={edCtl} as="ul" className="list-disc pl-4 text-slate-400">
-                                    <li><Ed k="dcaf0421" ctl={edCtl}>✕ Layouts and space planning</Ed></li>
-                                    <li><Ed k="0a39764b" ctl={edCtl}>✕ 3D visualisation</Ed></li>
-                                    <li><Ed k="ef057aa4" ctl={edCtl}>✕ GFC and joinery drawings</Ed></li>
-                                    <li><Ed k="596fda86" ctl={edCtl}>✕ Schedule of Finishes</Ed></li>
-                                    <li><Ed k="ea7bccb7" ctl={edCtl}>✕ Final BOQ</Ed></li>
-                                </EdList>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="ec65632e" ctl={edCtl}>6 · SCOPE, QUANTITIES AND VARIATIONS</Ed></h4>
-                        <EdList k="annex.6-scope-quantities-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
-                            <li><Ed k="d0bdccbc" ctl={edCtl}>Only items listed in the proposal booklet are included. Any item not written into the scope is not included.</Ed></li>
-                            <li><Ed k="49611ff2" ctl={edCtl}>Quantities are as presently measured or estimated and are re-verified at site validation. Variation of more than 5% on any line will be notified in writing with the revised value before the affected work is ordered or commenced. Quantities are then adjusted to actual measured quantity at the rates underlying this proposal.</Ed></li>
-                            <li><Ed k="f8a0f6fc" ctl={edCtl}>Any addition, deletion or specification change after design freeze will be quoted as a written variation and becomes payable with the next stage invoice once approved.</Ed></li>
-                            <li><Ed k="844cdbdf" ctl={edCtl}>Items marked as actuals are billed at actual supplier cost against the client's approved selection and are not part of the fixed value. An indicative allowance for electrical fittings will be issued with the Schedule of Finishes for budgeting.</Ed></li>
-                            {/*
-                              This clause used to assert flatly that no carpentry
-                              was priced, on every proposal — including ones whose
-                              scope table carried nine lakh rupees of it. A clause
-                              the client signs cannot contradict the priced scope
-                              two pages earlier, so it now follows the BOQ.
-                            */}
-                            <li>{hasAnyCarpentryIncluded
-                                ? <>Carpentry priced in this proposal is limited to the items listed in the scope of works. Any kitchen, wardrobe, bed, loft or bathroom carpentry not listed there is not priced. If required, {settings?.companyName || 'the studio'} will issue a priced addendum with quantities and specifications for approval, and the order value will be revised.</>
-                                : <>Kitchen, wardrobes, beds, lofts and bathroom carpentry are not priced in this proposal. If required, {settings?.companyName || 'the studio'} will issue a priced addendum with quantities and specifications for approval, and the order value will be revised.</>
-                            }</li>
-                        </EdList>
-                    </div>
-
-                    <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="beca6efc" ctl={edCtl}>7 · EXCLUSIONS</Ed></h4>
-
-                        {/* Studio-only. `no-print` keeps it out of print, and the
-                            PDF clone hides the same class, so a client never sees it. */}
-                        {edCtl.on && scopeContradictions.length > 0 && (
-                            <div className="no-print mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
-                                <span className="font-bold uppercase tracking-wider block mb-1">
-                                    Check before sending — {scopeContradictions.length} exclusion{scopeContradictions.length > 1 ? 's' : ''} the BOQ may contradict
-                                </span>
-                                <ul className="space-y-0.5">
-                                    {scopeContradictions.map(c => (
-                                        <li key={c.key}>
-                                            <span className="font-semibold">{c.label}</span> is listed as excluded, but the BOQ prices{' '}
-                                            {c.evidence.map(e => `"${e}"`).join(', ')}.
-                                        </li>
-                                    ))}
-                                </ul>
-                                <span className="block mt-1 opacity-80">
-                                    Edit the list below if the exclusion is wrong. This note is never shown to the client.
-                                </span>
-                            </div>
-                        )}
-                        {/*
-                          One list, laid out in two columns by CSS rather than
-                          split into two arrays. Splitting it meant adding an
-                          exclusion to the left column could never rebalance
-                          into the right, and the two halves were separately
-                          overridable — so a studio edit could leave the section
-                          half derived and half hand-written.
-
-                          The ✕ is a CSS marker, not content: it must not end up
-                          inside an editable run where it can be deleted or
-                          duplicated.
-                        */}
-                        <EdList
-                            k="annex.7-exclusions"
-                            ctl={edCtl}
-                            as="ul"
-                            className="ff-x-list text-slate-500 text-[11px] space-y-1"
-                        >
-                            {[...annexureExclusionsList.col1, ...annexureExclusionsList.col2].map((exc, idx) => (
-                                <li key={idx}>{exc}</li>
-                            ))}
-                        </EdList>
-                    </div>
-
-                    <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="32cbf8a9" ctl={edCtl}>8 · PROGRAMME AND START CONDITIONS</Ed></h4>
-                        <p><Ed k="annex.8-programme-intro" ctl={edCtl}>The site programme is {totalDays} working days, excluding Sundays and public holidays. Design and planning runs for approximately {designDays} working days before it and is not counted within it. The site programme is calculated from the date on which all four of the following are in place:</Ed></p>
-                        <EdList k="annex.8-programme-and-start" ctl={edCtl} as="ul" className="list-disc pl-6 text-slate-600 mt-2">
-                            <li><Ed k="234b3c76" ctl={edCtl}>Design and material selection freeze, with the Schedule of Finishes approved in writing</Ed></li>
-                            <li><Ed k="8ce93c71" ctl={edCtl}>Receipt of the required stage payment</Ed></li>
-                            <li><Ed k="eccf2fa5" ctl={edCtl}>Availability of the site for uninterrupted work, vacant and free of stored goods</Ed></li>
-                            <li><Ed k="74529f93" ctl={edCtl}>Society permissions, work timings and lift or hoist access confirmed</Ed></li>
-                        </EdList>
-                    </div>
-
-                    <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="1ecb13b3" ctl={edCtl}>9 · ASSUMPTIONS AND CLIENT RESPONSIBILITIES</Ed></h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
-                            <div>
-                                <span className="font-bold text-slate-800 block mb-1"><Ed k="8b593995" ctl={edCtl}>Assumptions</Ed></span>
-                                <EdList k="annex.9-assumptions-and-client" ctl={edCtl} as="ul" className="list-disc pl-4 space-y-1 text-slate-500">
-                                    <li><Ed k="290937c5" ctl={edCtl}>Single continuous mobilisation, flat vacant and available</Ed></li>
-                                    <li><Ed k="3fd1e7c5" ctl={edCtl}>Existing walls, slab, flooring and plumbing sound and reusable as-is</Ed></li>
-                                    <li><Ed k="1f030dd5" ctl={edCtl}>Existing distribution board adequate for the proposed load</Ed></li>
-                                    <li><Ed k="bc0d9cf4" ctl={edCtl}>Normal society working hours, lift or hoist access available</Ed></li>
-                                    <li><Ed k="9281477b" ctl={edCtl}>Water and power available at site for construction use</Ed></li>
-                                    <li><Ed k="a515cc89" ctl={edCtl}>No structural alteration, waterproofing or slab work required</Ed></li>
-                                </EdList>
-                            </div>
-                            <div>
-                                <span className="font-bold text-slate-800 block mb-1"><Ed k="6f91b73a" ctl={edCtl}>Client responsibilities</Ed></span>
-                                <EdList k="annex.9-assumptions-and-client.2" ctl={edCtl} as="ul" className="list-disc pl-4 space-y-1 text-slate-500">
-                                    <li><Ed k="98841019" ctl={edCtl}>Timely approval of layouts, 3D views, samples and the Schedule of Finishes</Ed></li>
-                                    <li><Ed k="fe404b04" ctl={edCtl}>Society intimation, permissions and any refundable deposits</Ed></li>
-                                    <li><Ed k="8b9f6596" ctl={edCtl}>Statutory, municipal and society charges</Ed></li>
-                                    <li><Ed k="3ac27417" ctl={edCtl}>Vacant possession of the flat for the execution period</Ed></li>
-                                    <li><Ed k="bc982e1e" ctl={edCtl}>Selection of electrical fittings and appliances within the agreed window</Ed></li>
-                                    <li><Ed k="bb5a4459" ctl={edCtl}>Stage payments in advance of each stage</Ed></li>
-                                    <li><Ed k="454e9d53" ctl={edCtl}>Attendance at the joint snag inspection before handover</Ed></li>
-                                </EdList>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="054a2193" ctl={edCtl}>10 · MATERIALS, SAMPLES AND WORKMANSHIP</Ed></h4>
-                        <EdList k="annex.10-materials-samples-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
-                            <li><Ed k="012d8dd8" ctl={edCtl}>Final brands, shades and finishes are selected against physical samples during the Schedule of Finishes stage and recorded in writing.</Ed></li>
-                            <li>Where a specified brand is unavailable, {settings?.companyName || 'FFDS'} will propose an equivalent of the same or higher grade for written approval before ordering. No substitution will be made without approval.</li>
-                            <li><Ed k="03e3b121" ctl={edCtl}>Carpentry is built to approved GFC drawings. Exposed surfaces are laminated, edges banded and carcass interiors finished. Electrical points are tested and recorded before ceiling closure.</Ed></li>
-                        </EdList>
-                    </div>
-
-                    <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="c6725020" ctl={edCtl}>11 · HANDOVER, WARRANTY AND VALIDITY</Ed></h4>
-                        <EdList k="annex.11-handover-warranty-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
-                            <li><Ed k="f5d39714" ctl={edCtl}>Handover follows closure of the joint snag list, deep cleaning of the worked areas, and release of the handover dossier and warranty note.</Ed></li>
-                            <li>{settings?.companyName || 'FFDS'} provides a workmanship warranty of 6 months from handover on carpentry executed under this contract, covering manufacturing and installation defects.</li>
-                            <li><Ed k="27cd97b9" ctl={edCtl}>Manufacturer warranties on hardware, laminates, paint and electrical fittings apply as issued by the respective brand.</Ed></li>
-                            <li><Ed k="992a1058" ctl={edCtl}>Warranty excludes damage arising from misuse, water ingress, alteration by others and normal wear.</Ed></li>
-                            <li>This proposal is valid for 15 days from {today} and supersedes all prior estimates, verbal indications and written communication on this project. Where any earlier document conflicts, the proposal booklet and this Annexure prevail.</li>
-                            <li><Ed k="9dbf30b1" ctl={edCtl}>On confirmation, the turnkey agreement and the final BOQ together form the contract; the proposal booklet forms the basis of scope.</Ed></li>
-                        </EdList>
-                    </div>
-
-                    <div>
-                        <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="1db9c1f6" ctl={edCtl}>12 · ACKNOWLEDGEMENT</Ed></h4>
-                        <p><Ed k="d8bdaf37" ctl={edCtl}>The client acknowledges having read and accepted these Commercial Terms & Conditions together with the Design-led Turnkey Proposal booklet for the project named above.</Ed></p>
-                        
-                        <div className="grid grid-cols-2 gap-8 mt-6 pt-6 border-t border-slate-200">
-                            <div>
-                                <span className="text-[10px] text-slate-400 block font-bold">FOR {(settings?.companyName || 'FORM FACTORS DESIGN STUDIO').toUpperCase()}</span>
-                                <div className="h-8 border-b border-slate-200 my-2"></div>
-                                <span className="text-[8px] text-slate-400"><Ed k="300d015e" ctl={edCtl}>AUTHORISED SIGNATORY</Ed></span>
-                            </div>
-                            <div>
-                                <span className="text-[10px] text-slate-400 block font-bold"><Ed k="865936f7_2" ctl={edCtl}>ACCEPTED & APPROVED BY CLIENT</Ed></span>
-                                <div className="h-8 border-b border-slate-200 my-2"></div>
-                                <span className="text-[8px] text-slate-400">{projectContext.clientName?.toUpperCase() || 'CLIENT'}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                {renderAnnexure('booklet')}
             </div>
 
             {/* ================= MODAL: EDIT SPECIFICATIONS ================= */}
