@@ -22,6 +22,9 @@ vi.mock('../../components/ops/ProposalAcceptanceCard', () => ({ default: () => n
 
 import ClientTab from '../../components/client/ClientTab';
 import { proposalOption, forOption } from '../../lib/proposalOption';
+import { specOverride, withSpecOverride, contextWithTierRenamed } from '../../lib/specOverrides';
+import { generateLocalComparison, builtInSpecsFor } from '../../lib/comparison';
+import { contextWithTierCopied } from '../../lib/specOverrides';
 
 afterEach(cleanup);
 
@@ -134,5 +137,87 @@ describe('forOption', () => {
   it('does not mistake one name for a longer one', () => {
     expect(forOption('for the Comfort Upgrade (Copy) package.', 'Comfort Upgrade (Copy)', ['Comfort Upgrade', 'Comfort Upgrade (Copy)'], true))
       .toBe('for the Comfort Upgrade (Copy) package.');
+  });
+});
+
+describe('material specs follow the option, not its name', () => {
+  it('an edit kept by id shows after a rename; an edit kept by name still shows', () => {
+    const renamed = [{ ...TIERS[0] }, { ...TIERS[1], name: 'Comfort Upgrade - Optimized', originalName: 'Comfort Upgrade' }];
+    const overrides = { 'Hardware System': { com: 'Hettich soft-close' }, 'Paint Finish': { 'Essential Elegance': 'Royale Shyne' } };
+    function Renamed() {
+      const [ctx, setCtx] = useState<any>({ name: 'Flat', activeProposalLevel: 'LEVEL_1', proposalContent: { materials: { overrides } } });
+      return <ClientTab tiers={renamed} bank={[]} materialSuggestions={[]} timelinePhases={[]} setTimelinePhases={() => undefined} projectContext={ctx} setProjectContext={setCtx} />;
+    }
+    render(<Renamed />);
+    const rows = Object.fromEntries(specRows().map(r => [r[0], r.slice(1)]));
+    expect(rows['Hardware System'][1]).toBe('Hettich soft-close');
+    expect(rows['Paint Finish'][0]).toBe('Royale Shyne');
+    // The built-in specs of the name it was created with.
+    expect(rows['Plywood (Kitchen & Bath)'][1]).not.toBe('-');
+  });
+
+  it('a renamed standard option keeps its built-in specs', () => {
+    const before = generateLocalComparison([TIERS[1]], []).materialMatrix.find(r => r.feature === 'Plywood (Kitchen & Bath)')!;
+    const after = generateLocalComparison([{ ...TIERS[1], name: 'Comfort Plus', originalName: 'Comfort Upgrade' }], []).materialMatrix.find(r => r.feature === 'Plywood (Kitchen & Bath)')!;
+    expect(before['Comfort Upgrade']).toBeTruthy();
+    expect(after['Comfort Plus']).toBe(before['Comfort Upgrade']);
+  });
+
+  it('withSpecOverride stores by id and drops the copy under the name', () => {
+    const out = withSpecOverride({ Paint: { 'Comfort Upgrade': 'old', ess: 'x' } }, 'Paint', { id: 'com', name: 'Comfort Upgrade' }, 'new');
+    expect(out).toEqual({ Paint: { com: 'new', ess: 'x' } });
+    expect(specOverride(out, 'Paint', { id: 'com', name: 'Anything' })).toBe('new');
+  });
+
+  it('a rename moves name-keyed edits to the id, in every proposal mode, without overwriting one already there', () => {
+    const ctx: any = {
+      proposalContent: { materials: { overrides: { Paint: { Old: 'a' }, Hardware: { Old: 'b', t1: 'kept' } } } },
+      proposalContentByMode: { DESIGN_ONLY: { materials: { overrides: { Paint: { Old: 'c' } } } }, TURNKEY: { title: 'x' } },
+    };
+    const out: any = contextWithTierRenamed(ctx, 't1', 'Old');
+    expect(out.proposalContent.materials.overrides).toEqual({ Paint: { t1: 'a' }, Hardware: { t1: 'kept' } });
+    expect(out.proposalContentByMode.DESIGN_ONLY.materials.overrides).toEqual({ Paint: { t1: 'c' } });
+    expect(out.proposalContentByMode.TURNKEY).toBe(ctx.proposalContentByMode.TURNKEY);
+    expect(contextWithTierRenamed(ctx, 't9', 'Nobody')).toBe(ctx);
+  });
+});
+
+describe('a copy has the specs of the option it was copied from', () => {
+  const original: any = { ...TIERS[1] };
+  const copy: any = { ...TIERS[1], id: 'copy', name: 'Comfort Upgrade (Copy)', parentTierId: 'com' };
+  const renamedCopy: any = { ...copy, name: 'Comfort Upgrade - Optimized', originalName: 'Comfort Upgrade (Copy)' };
+  const copyOfCopy: any = { ...TIERS[1], id: 'copy2', name: 'Comfort Upgrade - Optimized (Copy)', parentTierId: 'copy' };
+  const plywood = (tiers: any[], name: string) =>
+    generateLocalComparison(tiers, []).materialMatrix.find(r => r.feature === 'Plywood (Kitchen & Bath)')![name];
+
+  it('a copy, a renamed copy, and a copy of a copy show the original package\'s built-in specs', () => {
+    const builtIn = plywood([original], 'Comfort Upgrade');
+    expect(builtIn).toBeTruthy();
+    expect(plywood([original, copy], 'Comfort Upgrade (Copy)')).toBe(builtIn);
+    expect(plywood([original, renamedCopy], 'Comfort Upgrade - Optimized')).toBe(builtIn);
+    expect(plywood([original, renamedCopy, copyOfCopy], 'Comfort Upgrade - Optimized (Copy)')).toBe(builtIn);
+  });
+
+  it('without the original, or in a loop of copies, there is nothing to inherit', () => {
+    expect(builtInSpecsFor(copy, [copy])).toBeUndefined();
+    const a: any = { id: 'a', name: 'A', parentTierId: 'b' };
+    const b: any = { id: 'b', name: 'B', parentTierId: 'a' };
+    expect(builtInSpecsFor(a, [a, b])).toBeUndefined();
+  });
+
+  it('on the proposal, the copy\'s column matches the original\'s', () => {
+    function Copies() {
+      const [ctx, setCtx] = useState<any>({ name: 'Flat', activeProposalLevel: 'LEVEL_1' });
+      return <ClientTab tiers={[original, renamedCopy]} bank={[]} materialSuggestions={[]} timelinePhases={[]} setTimelinePhases={() => undefined} projectContext={ctx} setProjectContext={setCtx} />;
+    }
+    render(<Copies />);
+    specRows().forEach(r => expect(r[2]).toBe(r[1]));
+  });
+
+  it('contextWithTierCopied snapshots the edits; one already on the copy stays', () => {
+    const ctx: any = { proposalContent: { materials: { overrides: { Paint: { com: 'a' }, Hardware: { 'Comfort Upgrade': 'b', copy: 'own' }, Other: { ess: 'z' } } } } };
+    const out: any = contextWithTierCopied(ctx, { id: 'com', name: 'Comfort Upgrade' }, 'copy');
+    expect(out.proposalContent.materials.overrides).toEqual({ Paint: { com: 'a', copy: 'a' }, Hardware: { 'Comfort Upgrade': 'b', copy: 'own' }, Other: { ess: 'z' } });
+    expect(contextWithTierCopied({ name: 'x' } as any, { id: 'com', name: 'C' }, 'copy')).toEqual({ name: 'x' });
   });
 });

@@ -6,6 +6,7 @@ import { groupPhasesIntoStages } from '../../lib/programmeStages';
 import { CheckIcon, XIcon, ShieldCheckIcon, HelpCircleIcon, Pencil, Save } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { proposalOption } from '../../lib/proposalOption';
+import { specOverride, withSpecOverride } from '../../lib/specOverrides';
 
 /*
   An editable run of prose inside the proposal.
@@ -1108,7 +1109,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                 if (normOverrideKey.includes(normKey) || normKey.includes(normOverrideKey)) {
                     const overrideObj = overrides[key];
                     if (overrideObj) {
-                        overriddenValue = overrideObj['material'] || overrideObj[activeTier.name] || overrideObj['Specified Standard'] || '';
+                        overriddenValue = overrideObj['material'] || specOverride(overrides, key, activeTier) || overrideObj['Specified Standard'] || '';
                         break;
                     }
                 }
@@ -1158,13 +1159,13 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
             const activeMode = prev.activeProposalMode || 'TURNKEY';
             const modeContent = prev.proposalContentByMode?.[activeMode] || prev.proposalContent || {};
             const materials = modeContent.materials || {};
-            const overs = materials.overrides ? { ...materials.overrides } : {};
+            let overs = materials.overrides ? { ...materials.overrides } : {};
 
             Object.entries(editedValues).forEach(([category, val]) => {
-                if (!overs[category]) overs[category] = {};
+                // Kept with the option, not its name, so a rename keeps it (lib/specOverrides.ts).
+                overs = withSpecOverride(overs, category, activeTier, String(val));
                 overs[category]['material'] = val;
                 overs[category]['Specified Standard'] = val;
-                overs[category][activeTier.name] = val;
             });
 
             const updatedModeContent = {

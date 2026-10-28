@@ -124,6 +124,27 @@ const FEATURE_EXTRACTORS = [
     }
 ];
 
+/*
+  The built-in specs an option is shown with: those of its own name, or the
+  name it was created with, or — for a copy — those of the option it was
+  copied from, and so on up. A duplicate ("Comfort Upgrade (Copy)") is the
+  same package until the studio says otherwise, so it was wrong for it to
+  fall back to specs guessed from its BOQ while the original showed the
+  package's own.
+*/
+export const builtInSpecsFor = (tier: ProposalTier, tiers: ProposalTier[]): Record<string, string> | undefined => {
+    const seen = new Set<string>();
+    let t: ProposalTier | undefined = tier;
+    while (t && !seen.has(t.id)) {
+        seen.add(t.id);
+        const preset = PREDEFINED_SPECS[t.name] || (t.originalName ? PREDEFINED_SPECS[t.originalName] : undefined);
+        if (preset) return preset;
+        const parentId: string | undefined = t.parentTierId;
+        t = parentId ? tiers.find(x => x.id === parentId) : undefined;
+    }
+    return undefined;
+};
+
 export const generateLocalComparison = (tiers: ProposalTier[], bankItems: any[]): AiComparisonResult => {
     const materialRows: any[] = [];
     const scopeRows: any[] = [];
@@ -134,9 +155,10 @@ export const generateLocalComparison = (tiers: ProposalTier[], bankItems: any[])
         let hasData = false;
 
         tiers.forEach(tier => {
-            // Priority 1: Check Predefined Specs for exact match
-            if (PREDEFINED_SPECS[tier.name] && PREDEFINED_SPECS[tier.name][extractor.key]) {
-                row[tier.name] = PREDEFINED_SPECS[tier.name][extractor.key];
+            // Priority 1: the package's built-in specs, through a rename or a copy.
+            const preset = builtInSpecsFor(tier, tiers);
+            if (preset && preset[extractor.key]) {
+                row[tier.name] = preset[extractor.key];
                 hasData = true;
                 return;
             }

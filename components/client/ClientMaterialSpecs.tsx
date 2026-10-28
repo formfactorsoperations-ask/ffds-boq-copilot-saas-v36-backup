@@ -1,10 +1,11 @@
 
 import React from 'react';
-import { AiComparisonResult, ProposalTier, FullBoqItem } from '../../types';
+import { AiComparisonResult, FullBoqItem } from '../../types';
+import { specOverride, withSpecOverride } from '../../lib/specOverrides';
 
 interface ClientMaterialSpecsProps {
     comparisonData: AiComparisonResult;
-    tiers: { name: string, executionTotal: number, fullBoq?: FullBoqItem[] }[];
+    tiers: { id?: string, name: string, executionTotal?: number, fullBoq?: FullBoqItem[] }[];
     isLevel2?: boolean;
     projectContext?: any;
     setProjectContext?: any;
@@ -49,15 +50,14 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
 
     const overrides = projectContext?.proposalContent?.materials?.overrides || {};
 
-    const handleOverride = (category: string, colKey: string, newValue: string) => {
+    /* Edits are kept with the option, not its name, so a rename keeps them (lib/specOverrides.ts). */
+    const handleOverride = (category: string, option: { id?: string; name: string }, newValue: string) => {
         if (!setProjectContext) return;
         setProjectContext((prev: any) => {
             const activeMode = prev.activeProposalMode || 'TURNKEY';
             const modeContent = prev.proposalContentByMode?.[activeMode] || prev.proposalContent || {};
             const materials = modeContent.materials || {};
-            const overs = materials.overrides ? { ...materials.overrides } : {};
-            if (!overs[category]) overs[category] = {};
-            overs[category][colKey] = newValue;
+            const overs = withSpecOverride(materials.overrides, category, option, newValue);
 
             const updatedModeContent = {
                 ...modeContent,
@@ -111,7 +111,7 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                         <tr className="bg-slate-50 border-b border-slate-200">
                             <th className={`py-4 px-6 font-bold text-slate-800 border-r border-slate-200 ${isSingleTier ? 'w-1/3' : 'w-1/4'}`}>Category</th>
                                     {tiers.map((tier, idx) => (
-                                        <th key={tier.id} className={`py-4 px-6 font-bold text-slate-800 min-w-[200px] ${idx !== tiers.length - 1 ? 'border-r border-slate-200' : ''}`}>
+                                        <th key={tier.id || tier.name} className={`py-4 px-6 font-bold text-slate-800 min-w-[200px] ${idx !== tiers.length - 1 ? 'border-r border-slate-200' : ''}`}>
                                             {!isSingleTier && (
                                                 <span className="block text-[10px] font-normal text-slate-500 uppercase tracking-wide mb-1">Option {String.fromCharCode(65 + idx)}</span>
                                             )}
@@ -127,13 +127,13 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                     {row.category}
                                 </td>
                                 {tiers.map((tier, tIdx) => (
-                                        <td key={tier.id} className={`py-4 px-6 text-slate-700 leading-relaxed align-top ${tIdx !== tiers.length - 1 ? 'border-r border-slate-100' : ''}`}>
+                                        <td key={tier.id || tier.name} className={`py-4 px-6 text-slate-700 leading-relaxed align-top ${tIdx !== tiers.length - 1 ? 'border-r border-slate-100' : ''}`}>
                                             <div 
                                                contentEditable={!!setProjectContext} 
                                                suppressContentEditableWarning
-                                               onBlur={(e) => handleOverride(row.category, tier.name, e.currentTarget.innerText)}
+                                               onBlur={(e) => handleOverride(row.category, tier, e.currentTarget.innerText)}
                                                className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-[#3D52A0]' : ''}`}
-                                            >{overrides[row.category]?.[tier.name] ?? row[tier.name]}</div>
+                                            >{specOverride(overrides, row.category, tier) ?? row[tier.name]}</div>
                                         </td>
                                     ))}
                             </tr>
@@ -149,14 +149,14 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                         <h4 className="font-bold text-slate-900 text-sm mb-4 border-b border-slate-200 pb-2">{row.category}</h4>
                         <div className="space-y-4">
                             {tiers.map((tier) => (
-                                    <div key={tier.id} className="flex flex-col gap-1">
+                                    <div key={tier.id || tier.name} className="flex flex-col gap-1">
                                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{tier.name}</span>
                                         <div 
                                            contentEditable={!!setProjectContext} 
                                            suppressContentEditableWarning
-                                           onBlur={(e) => handleOverride(row.category, tier.name, e.currentTarget.innerText)}
+                                           onBlur={(e) => handleOverride(row.category, tier, e.currentTarget.innerText)}
                                            className={`text-sm text-slate-800 font-medium bg-white p-2 rounded-lg border border-slate-100 shadow-sm whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 outline-none focus:ring-2 focus:ring-[#3D52A0]' : ''}`}
-                                        >{overrides[row.category]?.[tier.name] ?? row[tier.name]}</div>
+                                        >{specOverride(overrides, row.category, tier) ?? row[tier.name]}</div>
                                     </div>
                                 ))}
                         </div>

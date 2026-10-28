@@ -11,6 +11,7 @@ import { compareTiers, optionPrice } from '../lib/tierComparison';
 import { otherBenchmarks, medianGm, closestInSize } from '../lib/tierBenchmarks';
 import { contextWithApproved, tiersWithApproved, describeApproval, contextWithoutApproved, tiersWithoutApproved, previousBaseline } from '../lib/tierApproval';
 import { useOrg } from '../contexts/OrgContext';
+import { contextWithTierRenamed, contextWithTierCopied } from '../lib/specOverrides';
 import { CompareIcon, DeleteIcon, PencilIcon, CheckBadgeIcon, SparklesIcon, SaveIcon, CheckIcon, FileSpreadsheetIcon, ArrowRightIcon } from './Icons';
 
 interface TierManagerProps {
@@ -349,6 +350,8 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             lifecycleTag: 'Draft'
         };
         setTiers(prev => [...prev, newTier]);
+        // The copy starts with the original's material spec edits (lib/specOverrides.ts).
+        setProjectContext(prev => contextWithTierCopied(prev, tierToDuplicate, newTier.id));
         setActiveTierId(newTier.id);
     };
 
@@ -369,11 +372,17 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         setEditingSpot(spot);
     }
     
-    /* A blank name is not saved: the option keeps the one it had. */
+    /* A blank name is not saved: the option keeps the one it had. Its
+       material specs and the studio's edits to them follow it (lib/specOverrides.ts). */
     const handleSaveEdit = () => {
         if (!editingTierId) return;
         const name = editingTierName.trim();
-        if (name) setTiers(prev => prev.map(t => t.id === editingTierId ? {...t, name } : t));
+        const tier = tiers.find(t => t.id === editingTierId);
+        if (name && tier && name !== tier.name) {
+            const oldName = tier.name;
+            setTiers(prev => prev.map(t => t.id === tier.id ? { ...t, name, originalName: t.originalName ?? oldName } : t));
+            setProjectContext(prev => contextWithTierRenamed(prev, tier.id, oldName));
+        }
         setEditingTierId(null);
     }
 
