@@ -4,6 +4,7 @@ import { ProjectContext, ProposalLevel } from '../../types';
 import { formatClientValue } from '../../lib/utils';
 import { ArrowRightIcon } from '../Icons';
 import { useOrg } from '../../contexts/OrgContext';
+import { TEMPLATE_TURNKEY } from '../../constants';
 
 interface ClientCoverProps {
     projectContext: ProjectContext;
@@ -12,6 +13,8 @@ interface ClientCoverProps {
     level?: ProposalLevel;
     designFee?: number;
     executionTotal?: number;
+    /** Level 2: the option the proposal is for, and whether the client has approved it (lib/proposalOption.ts). */
+    l2Option?: { name: string; approved: boolean };
 }
 
 const THEME_IMAGES: Record<string, string> = {
@@ -25,7 +28,7 @@ const THEME_IMAGES: Record<string, string> = {
 
 const LEVEL_2_IMAGE = "https://images.unsplash.com/photo-1503387762-592deb58ef4e?q=80&w=2531&auto=format&fit=crop"; 
 
-const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin, investmentMax, level = 'LEVEL_1', designFee, executionTotal }) => {
+const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin, investmentMax, level = 'LEVEL_1', designFee, executionTotal, l2Option }) => {
     const { orgData } = useOrg();
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     const [imgError, setImgError] = useState(false);
@@ -54,10 +57,14 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
         text: "Thank you for your continued collaboration. Since our initial conceptual alignment, we have further refined the scope and design direction. This interim proposal captures the updated scope based on our recent discussions, providing clarity on the revised investment value before we move into final material selections and execution readiness.\n\nPlease review this snapshot to ensure we are aligned before proceeding."
     };
 
-    const l2Content = projectContext.proposalContent?.l2_cover || {
+    const l2Locked = projectContext.proposalContent?.l2_cover || {
         title: "Execution Readiness & Scope Lock",
         text: "We have transitioned from design concepts to a production-ready plan. This document creates a definitive baseline for the **Execution Scope**, specifying exactly what will be built, the materials to be used, and the final investment value.\n\nThis is the blueprint for your project. Approving this document freezes the scope, allowing us to generate technical GFC drawings and initiate material procurement with zero ambiguity."
     };
+    /* An option the client has not approved is presented for review, not described as locked. */
+    const l2Proposed = projectContext.proposalContent?.l2_cover_proposed || TEMPLATE_TURNKEY.l2_cover_proposed!;
+    const l2Raw = l2Option && !l2Option.approved ? l2Proposed : l2Locked;
+    const l2Content = { ...l2Raw, text: (l2Raw.text || '').split('[Tier Name]').join(l2Option?.name || 'selected') };
 
     const RenderCoverPage = () => {
         const brandColor = orgData?.themeColor || '#0f172a';
@@ -228,7 +235,7 @@ const ClientCover: React.FC<ClientCoverProps> = ({ projectContext, investmentMin
                             </div>
                             
                             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                {isFixedPrice ? 'Locked Scope Value' : 'Investment Snapshot'}
+                                {isFixedPrice ? (l2Option && !l2Option.approved ? 'Proposed Scope Value' : 'Locked Scope Value') : 'Investment Snapshot'}
                             </div>
                             <div className="text-sm font-bold text-slate-600 mb-1">
                                 {isFixedPrice ? 'Project Investment (Design-led)' : 'Typical Range'}

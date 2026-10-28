@@ -5,6 +5,7 @@ import { detectAllScopes, findScopeContradictions } from '../../lib/scopeDetect'
 import { groupPhasesIntoStages } from '../../lib/programmeStages';
 import { CheckIcon, XIcon, ShieldCheckIcon, HelpCircleIcon, Pencil, Save } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
+import { proposalOption } from '../../lib/proposalOption';
 
 /*
   An editable run of prose inside the proposal.
@@ -508,19 +509,19 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
     const [isEditingSpecs, setIsEditingSpecs] = useState(false);
     const [editedValues, setEditedValues] = useState<Record<string, string>>({});
     
-    // Determine the active tier based on approved tier or first tier
+    // Level 2 is written for the option the studio picked, approved or not (lib/proposalOption.ts)
     const isL2 = level === 'LEVEL_2';
     const isL15 = level === 'LEVEL_1_5';
-    const approvedTier = useMemo(() => {
-        return tiers.find(t => t.id === projectContext.approvedTierId) || tiers[0] || {
+    const l2Tier = useMemo(() => {
+        return proposalOption(tiers, projectContext).tier || {
             name: "Standard Package",
             summary: { totalSell: 0, designFee: 0 },
             fullBoq: [],
             groupedBoq: {}
         };
-    }, [tiers, projectContext.approvedTierId]);
+    }, [tiers, projectContext.approvedTierId, projectContext.proposalOptionId]);
 
-    const activeTier = isL2 ? approvedTier : (tiers[0] || {
+    const activeTier = isL2 ? l2Tier : (tiers[0] || {
         name: "Standard Package",
         summary: { totalSell: 0, designFee: 0 },
         fullBoq: [],
@@ -572,8 +573,8 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
     const gstRate = projectContext?.gstRate || 18;
     const isExecutionGstWaived = financials?.executionGstEnabled === false;
 
-    const baseExecution = isL2 ? (approvedTier.summary?.totalSell || 0) : (activeTier.summary?.totalSell || 0);
-    const baseDesign = isL2 ? (approvedTier.summary?.designFee || 0) : (activeTier.summary?.designFee || 0);
+    const baseExecution = isL2 ? (l2Tier.summary?.totalSell || 0) : (activeTier.summary?.totalSell || 0);
+    const baseDesign = isL2 ? (l2Tier.summary?.designFee || 0) : (activeTier.summary?.designFee || 0);
 
     const executionSavings = discounts
         .filter(d => d.target === 'execution')
