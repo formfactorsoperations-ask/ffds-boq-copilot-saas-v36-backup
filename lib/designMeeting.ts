@@ -186,36 +186,46 @@ export interface PresentableRoom {
   ready: boolean;
   /** Why not, in a line, when it is not ready. */
   why: string;
-  /** The client's sheets in the room: the ones a meeting shows. */
+  /** The approved client sheets in the room: the ones a meeting shows. */
   sheets: RoomDrawing[];
+  /** The room's other client sheets, not approved yet: left out of a meeting until they are. */
+  later: RoomDrawing[];
 }
 
 export const roomOf = (d: { roomName?: string | null }) => d.roomName || GENERAL_ROOM;
 const forClient = (d: RoomDrawing) => (d.review?.audience || guessAudience(d.name)) === 'client';
+const approved = (d: RoomDrawing) => stateOf(d.review as ReviewSummary) === 'APPROVED' && !!d.review?.versionId;
+
+/** A client sheet's state, in a line, for a room that cannot be presented yet. */
+function notReady(d: RoomDrawing): string {
+  const s = stateOf(d.review as ReviewSummary);
+  return d.review?.clientChanges?.pending ? `${d.name} has client changes waiting for the Design Head`
+    : s === 'NONE' || !d.review?.versionId ? `${d.name} has no PDF yet`
+    : s === 'IN_REVIEW' ? `${d.name} is with the Design Head`
+    : s === 'CHANGES_REQUESTED' ? `${d.name} is back with the designer`
+    : `${d.name} is not sent for review yet`;
+}
 
 /**
- * Every room with client sheets, and whether it can be presented: all its
- * client sheets approved by the Design Head, and none of them waiting on
- * client changes from an earlier meeting. Studio-only sheets are never shown.
+ * Every room with client sheets, and whether it can be presented: at least
+ * one client sheet approved by the Design Head, and none of them waiting on
+ * client changes from an earlier meeting. A meeting shows the approved
+ * sheets; the rest (not started, or still with the designer or the Design
+ * Head) wait for a later meeting, so a sheet nobody has drawn yet does not
+ * hold back the ones that are signed off. Studio-only sheets are never shown.
  */
 export function presentableRooms(drawings: RoomDrawing[]): PresentableRoom[] {
   const by = new Map<string, RoomDrawing[]>();
   drawings.forEach((d) => by.set(roomOf(d), [...(by.get(roomOf(d)) || []), d]));
   const out: PresentableRoom[] = [];
   by.forEach((list, room) => {
-    const sheets = list.filter(forClient).sort((a, b) => a.name.localeCompare(b.name));
-    if (!sheets.length) return;
-    const blocker = sheets.find((d) => stateOf(d.review as ReviewSummary) !== 'APPROVED' || !d.review?.versionId || d.review?.clientChanges?.pending);
-    let why = '';
-    if (blocker) {
-      const s = stateOf(blocker.review as ReviewSummary);
-      why = blocker.review?.clientChanges?.pending ? `${blocker.name} has client changes waiting for the Design Head`
-        : s === 'NONE' || !blocker.review?.versionId ? `${blocker.name} has no PDF yet`
-        : s === 'IN_REVIEW' ? `${blocker.name} is with the Design Head`
-        : s === 'CHANGES_REQUESTED' ? `${blocker.name} is back with the designer`
-        : `${blocker.name} is not sent for review yet`;
-    }
-    out.push({ room, ready: !blocker, why, sheets });
+    const client = list.filter(forClient).sort((a, b) => a.name.localeCompare(b.name));
+    if (!client.length) return;
+    const pending = client.find((d) => d.review?.clientChanges?.pending);
+    const sheets = pending ? [] : client.filter(approved);
+    const later = client.filter((d) => !sheets.includes(d));
+    const ready = sheets.length > 0;
+    out.push({ room, ready, why: ready ? '' : notReady(pending || later[0]), sheets, later });
   });
   return out.sort((a, b) => Number(b.ready) - Number(a.ready) || (a.room === GENERAL_ROOM ? 1 : b.room === GENERAL_ROOM ? -1 : a.room.localeCompare(b.room)));
 }

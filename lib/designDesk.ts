@@ -1,4 +1,5 @@
-import { stateOf, guessAudience, type ReviewState, type ReviewSummary } from './drawingReview';
+import { stateOf, type ReviewState, type ReviewSummary } from './drawingReview';
+import { presentableRooms } from './designMeeting';
 
 /*
   DESIGN DESK: what each person should look at first.
@@ -102,19 +103,11 @@ export function statsOf(rows: DeskRow[]): Stats {
 export const GENERAL_ROOM = 'General / Project-Wide';
 export const roomOf = (d: DeskRow) => d.roomName || GENERAL_ROOM;
 
-/** Rooms where every client sheet is approved: ready to show in the design meeting. */
+/** Rooms with approved client sheets to show in the design meeting (lib/designMeeting: presentableRooms). */
 export function readyRooms(rows: DeskRow[]): { projectId: string; room: string }[] {
-  const groups = new Map<string, DeskRow[]>();
-  rows.forEach((d) => { const k = `${d.projectId}\u0000${roomOf(d)}`; groups.set(k, [...(groups.get(k) || []), d]); });
-  const out: { projectId: string; room: string }[] = [];
-  groups.forEach((list, k) => {
-    const client = list.filter((d) => (d.review?.audience || guessAudience(d.name)) === 'client');
-    if (client.length && client.every((d) => stateOf(d.review) === 'APPROVED')) {
-      const [projectId, room] = k.split('\u0000');
-      out.push({ projectId, room });
-    }
-  });
-  return out;
+  const by = new Map<string, DeskRow[]>();
+  rows.forEach((d) => by.set(d.projectId, [...(by.get(d.projectId) || []), d]));
+  return [...by.entries()].flatMap(([projectId, list]) => presentableRooms(list).filter((r) => r.ready).map((r) => ({ projectId, room: r.room })));
 }
 
 /* ------------------------------------------------------------ search */
@@ -256,7 +249,7 @@ export function suggestions(input: {
   const present = readyRooms(scope)[0];
   if (present) out.push({ key: `present:${present.projectId}:${present.room}`, kind: 'present', tone: 'green', projectId: present.projectId, room: present.room,
     title: `${present.room === GENERAL_ROOM ? 'The whole-home sheets are' : `${present.room} is`} ready to present`,
-    sub: `Every client sheet${present.room === GENERAL_ROOM ? '' : ` for the ${present.room.toLowerCase()}`} in ${projectName(present.projectId) || 'this project'} is approved.` });
+    sub: `The approved client sheets${present.room === GENERAL_ROOM ? '' : ` for the ${present.room.toLowerCase()}`} in ${projectName(present.projectId) || 'this project'} can go to the next design meeting.` });
 
   return out.filter((x) => !input.isDismissed?.(x.key)).slice(0, input.limit ?? 3);
 }

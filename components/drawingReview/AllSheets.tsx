@@ -105,7 +105,7 @@ export default function AllSheets(props: Props) {
           </button>
           {rooms.map((r) => (
             <button key={r.name} type="button" onClick={() => setRoom(room === r.name ? null : r.name)} aria-pressed={room === r.name}
-              title={r.present ? 'Every client sheet in this room is approved: ready to present' : undefined}
+              title={r.present ? 'Client sheets in this room are approved: ready to present' : undefined}
               className={`inline-flex min-h-[38px] items-center gap-2 rounded-full border px-3.5 text-[13px] font-bold transition-colors ${chip(room === r.name)}`}>
               {pill(room === r.name, 'dd-room-pill')}<span className={`${inner} gap-2`}>{roomLabel(r.name)}<span className="text-[12px] font-semibold opacity-80">{r.approved}/{r.total}</span>
               {r.present && <span className="inline-flex h-5 items-center gap-1 rounded-full bg-[#1F7A57] px-1.5 text-[10.5px] text-white"><Presentation size={11} />Ready to present</span>}</span>

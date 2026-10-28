@@ -56,12 +56,13 @@ describe('who needs what', () => {
 });
 
 describe('rooms and search', () => {
-  it('a room is ready to present when every client sheet in it is approved', () => {
+  it('a room is ready to present when it has approved client sheets, matching the Meetings tab', () => {
     const rows = [
       sheet('APPROVED', { roomName: 'Kitchen' }), sheet('DRAFT', { roomName: 'Kitchen', name: 'Kitchen carpentry details', review: { audience: 'studio' } }),
       sheet('APPROVED', { roomName: 'Foyer' }), sheet('IN_REVIEW', { roomName: 'Foyer' }),
+      sheet('IN_REVIEW', { roomName: 'Study' }),
     ];
-    expect(readyRooms(rows)).toEqual([{ projectId: 'p1', room: 'Kitchen' }]);
+    expect(readyRooms(rows)).toEqual([{ projectId: 'p1', room: 'Foyer' }, { projectId: 'p1', room: 'Kitchen' }]);
   });
 
   it('finds sheets by name, room, designer or project, every word', () => {
