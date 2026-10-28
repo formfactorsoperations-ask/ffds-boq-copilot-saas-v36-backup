@@ -11,10 +11,10 @@ import ClientSign from './ClientSign';
 /*
   MEETINGS: presenting approved rooms to the client.
 
-  Pick the rooms that are ready (every client sheet approved by the Design
-  Head), start, and present them one by one. Below: the revision rounds past
-  the included ones, with their fee and whether they were billed or waived,
-  and the meetings already held.
+  Pick the rooms that are ready (client sheets approved by the Design Head;
+  the room's other sheets wait for a later meeting), start, and present them
+  one by one. Below: the revision rounds past the included ones, with their
+  fee and whether they were billed or waived, and the meetings already held.
 */
 
 interface Props {
@@ -115,7 +115,7 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
       )}
 
       <section className="dd-rise rounded-[18px] border border-[#E4E4DE] bg-white px-2.5 pb-3 pt-2">
-        <SectionHead icon={Presentation} tone="indigo" title="Next design meeting" sub={`${projectName}: rooms whose client drawings are all approved`} />
+        <SectionHead icon={Presentation} tone="indigo" title="Next design meeting" sub={`${projectName}: rooms with client drawings approved`} />
         {rooms.length === 0 ? (
           <div className="px-3 pb-3 pt-2 text-[13px] text-[#5F636D]">No drawings for the client in this project yet.</div>
         ) : (
@@ -127,7 +127,7 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
                   className="h-[18px] w-[18px] accent-[#4146C8]" aria-label={`Present ${roomLabel(r.room)}`} />
                 <span className="min-w-0 flex-1">
                   <span className="block font-bold">{roomLabel(r.room)}</span>
-                  <span className="block truncate text-[12.5px] text-[#5F636D]">{r.ready ? r.sheets.map((d) => `${d.name} v${d.review?.versionNo}`).join(' · ') : r.why}</span>
+                  <span className="block truncate text-[12.5px] text-[#5F636D]">{r.ready ? r.sheets.map((d) => `${d.name} v${d.review?.versionNo}`).join(' · ') + (r.later.length ? ` · ${plural(r.later.length, 'sheet')} not approved yet, left out` : '') : r.why}</span>
                 </span>
                 <Chip tone={r.ready ? 'indigo' : 'grey'}>{r.ready ? 'Ready to present' : 'Not ready'}</Chip>
               </label>

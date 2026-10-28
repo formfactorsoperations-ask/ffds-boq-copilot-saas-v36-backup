@@ -15,10 +15,10 @@ const meeting = (id: string, state: DesignMeeting['state'], rooms: MeetingRoom[]
 });
 
 describe('rooms ready to present', () => {
-  it('a room is ready when every client sheet is approved; studio sheets do not count', () => {
+  it('a room is ready when its client sheets are approved; studio sheets do not count', () => {
     const rooms = presentableRooms([
       sheet('a', 'Kitchen', 'APPROVED'), sheet('b', 'Kitchen', 'DRAFT', { audience: 'studio', name: 'Kitchen carpentry details' }),
-      sheet('c', 'Foyer', 'APPROVED'), sheet('d', 'Foyer', 'IN_REVIEW', { name: 'Foyer ceiling' }),
+      sheet('c', 'Foyer', 'IN_REVIEW', { name: 'Foyer ceiling' }), sheet('d', 'Foyer', 'CHANGES_REQUESTED', { name: 'Foyer elevation' }),
       sheet('e', 'Kids', null, { name: 'Kids elevation' }),
       sheet('f', 'Utility', 'DRAFT', { audience: 'studio' }),
     ]);
@@ -26,6 +26,20 @@ describe('rooms ready to present', () => {
     expect(rooms.find((r) => r.room === 'Kitchen')!.sheets.map((s) => s.id)).toEqual(['a']);
     expect(rooms.find((r) => r.room === 'Foyer')!.why).toBe('Foyer ceiling is with the Design Head');
     expect(rooms.find((r) => r.room === 'Kids')!.why).toBe('Kids elevation has no PDF yet');
+  });
+
+  it('approved sheets are presented while the room\'s other sheets are not started or still in review', () => {
+    const rooms = presentableRooms([
+      sheet('a', 'Kids Bedroom 2', 'APPROVED', { name: 'Elevation - Kids Room' }), sheet('b', 'Kids Bedroom 2', null, { name: 'Elevation - Room Kids Bedroom 2' }),
+      sheet('c', 'Kids Bedroom 2', 'IN_REVIEW', { name: 'False Ceiling - Kids' }),
+      sheet('d', '', 'APPROVED', { name: 'Furniture Layout - Floor Plan' }), sheet('e', '', null, { name: 'Sanitary Layout' }),
+      sheet('f', 'Parents Bedroom 3', 'APPROVED', { name: 'Carpentry Detail - Parents Bedroom 3', audience: 'studio' }),
+    ]);
+    expect(rooms.map((r) => [r.room, r.ready])).toEqual([['Kids Bedroom 2', true], ['General / Project-Wide', true]]);
+    const kids = rooms[0];
+    expect(kids.sheets.map((s) => s.id)).toEqual(['a']);
+    expect(kids.later.map((s) => s.id)).toEqual(['b', 'c']);
+    expect(rooms[1].sheets.map((s) => s.id)).toEqual(['d']);
   });
 
   it('a room waiting on client changes from an earlier meeting cannot be presented again yet', () => {
