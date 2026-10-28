@@ -21,6 +21,7 @@ import ClientMaterials from './ClientMaterials';
 import ClientBookletProposal from './ClientBookletProposal';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
+import { proposalOption, optionLabel, forOption } from '../../lib/proposalOption';
 
 interface ClientExportViewProps {
     tiers: ProposalTier[];
@@ -117,9 +118,6 @@ const ScanFirstSection: React.FC<{ title: string; cue: string; children: React.R
     </details>
 );
 
-/* "Option A", "Option B"… in the order the options are shown. */
-const optionLabel = (index: number) => `Option ${String.fromCharCode(65 + Math.max(0, index))}`;
-
 const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
     const { orgData, currentRole } = useOrg();
     const { settings: fetchedSettings, loading: settingsLoading } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
@@ -183,8 +181,16 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
     const isL2 = level === 'LEVEL_2';
     const isL3 = level === 'LEVEL_3'; 
     
-    // For L2, we focus on the approved tier
+    // L3 is the contract: the approved tier.
     const approvedTier = tiers.find(t => t.id === projectContext.approvedTierId) || tiers[0];
+    // L2 is written for the option the studio picked, approved or not (lib/proposalOption.ts).
+    const l2 = proposalOption(tiers, projectContext);
+    const l2Tier = l2.tier || approvedTier;
+    const l2OptionTag = { label: l2.approved ? 'Approved option' : optionLabel(l2.index), name: l2Tier?.name };
+    const l2SnapshotContent = content.l2_snapshot && {
+        ...content.l2_snapshot,
+        subtitle: forOption(content.l2_snapshot.subtitle || '', l2Tier?.name || '', tiers.map(t => t.name), l2.approved),
+    };
     const [previewTierId, setPreviewTierId] = useState<string>(approvedTier?.id || '');
     // The same rule as the Luxe Booklet: the studio's choice, never shown to a Designer.
     const showScopePricing = !!projectContext.showScopePricing && currentRole !== 'Designer';
@@ -202,8 +208,8 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
     const gstRate = projectContext?.gstRate || 18;
     const isExecutionGstWaived = financials?.executionGstEnabled === false;
 
-    // Use approvedTier values for Level 2 (or active for L1)
-    const activeTier = isL2 ? approvedTier : (tiers.find(t => t.id === previewTierId) || tiers[0]);
+    // The Level 2 option's values for Level 2 (or the previewed one for L1)
+    const activeTier = isL2 ? l2Tier : (tiers.find(t => t.id === previewTierId) || tiers[0]);
     const baseExecution = activeTier.summary.totalSell || 0;
     const baseDesign = activeTier.summary.designFee || 0;
 
@@ -401,30 +407,31 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
             {/* L2: PLANNING VIEW */}
             {isL2 && (
                 <>
-                    <SectionWrapper id="l2_cover" onEdit={onEditSection}>
+                    <SectionWrapper id={l2.approved ? 'l2_cover' : 'l2_cover_proposed'} onEdit={onEditSection}>
                         <ClientCover 
                             projectContext={projectContext} 
-                            investmentMin={approvedTier.summary.totalRevenue || approvedTier.summary.totalSell} 
-                            investmentMax={approvedTier.summary.totalRevenue || approvedTier.summary.totalSell} 
+                            investmentMin={l2Tier.summary.totalRevenue || l2Tier.summary.totalSell} 
+                            investmentMax={l2Tier.summary.totalRevenue || l2Tier.summary.totalSell} 
                             level="LEVEL_2"
-                            designFee={approvedTier.summary.designFee}
-                            executionTotal={approvedTier.summary.totalSell}
+                            designFee={l2Tier.summary.designFee}
+                            executionTotal={l2Tier.summary.totalSell}
+                            l2Option={{ name: l2Tier.name, approved: l2.approved }}
                         />
                     </SectionWrapper>
 
                     <div className="max-w-6xl mx-auto px-4 md:px-8 space-y-6 py-8">
                         {/* L2 Snapshot */}
-                        <ScanFirstSection title="Scope Lock" cue="Snapshot" defaultOpen={true}>
+                        <ScanFirstSection title={l2.approved ? 'Scope Lock' : 'Scope Summary'} cue="Snapshot" defaultOpen={true}>
                             <SectionWrapper id="l2_snapshot" onEdit={onEditSection}>
                                 <ClientSnapshot 
-                                    investmentMin={approvedTier.summary.totalSell} 
-                                    investmentMax={approvedTier.summary.totalSell} 
+                                    investmentMin={l2Tier.summary.totalSell} 
+                                    investmentMax={l2Tier.summary.totalSell} 
                                     timelinePhases={timelinePhases}
-                                    content={content.l2_snapshot}
-                                    designFee={approvedTier.summary.designFee}
-                                    executionTotal={approvedTier.summary.totalSell}
+                                    content={l2SnapshotContent}
+                                    designFee={l2Tier.summary.designFee}
+                                    executionTotal={l2Tier.summary.totalSell}
                                     projectContext={projectContext} // Pass context for discounts
-                                    option={{ label: 'Approved option', name: approvedTier.name }}
+                                    option={l2OptionTag}
                                 />
                             </SectionWrapper>
                         </ScanFirstSection>
@@ -433,9 +440,9 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                         <ScanFirstSection title="Detailed Scope" cue="Items">
                             <SectionWrapper id="l2_scope">
                                 <ClientRoomwise 
-                                    tiers={[approvedTier]} 
+                                    tiers={[l2Tier]} 
                                     mode="standard" 
-                                    activeTierId={approvedTier.id} 
+                                    activeTierId={l2Tier.id} 
                                 />
                             </SectionWrapper>
                         </ScanFirstSection>
@@ -444,7 +451,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                         <ScanFirstSection title="Technical Specifications" cue="Materials">
                             <ClientMaterialSpecs 
                                 comparisonData={props.comparisonData} 
-                                tiers={[approvedTier]} 
+                                tiers={[l2Tier]} 
                                 isLevel2={true}
                                 projectContext={projectContext}
                                 setProjectContext={setProjectContext}
@@ -458,7 +465,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                     content={content.l2_fees || content.fees} 
                                     projectContext={projectContext}
                                     setProjectContext={setProjectContext}
-                                    fixedFee={approvedTier.summary.designFee} // PASS FIXED FEE HERE
+                                    fixedFee={l2Tier.summary.designFee} // PASS FIXED FEE HERE
                                     settings={settings}
                                 />
                             </SectionWrapper>

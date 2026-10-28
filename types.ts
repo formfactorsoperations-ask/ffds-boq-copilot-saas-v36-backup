@@ -270,6 +270,8 @@ export interface ProposalContent {
        is only frozen once someone actually restructures it. */
     lists?: Record<string, Array<string | { title: string; desc?: string; meta?: string }>>;
     l2_cover?: { title: string; text: string };
+    /** The Level 2 cover for an option that is not approved yet. */
+    l2_cover_proposed?: { title: string; text: string };
     l2_snapshot?: { title: string; subtitle: string };
     l2_fees?: { title: string; subtitle: string };
     l2_scope?: { title: string; subtitle: string };
@@ -778,6 +780,8 @@ export interface ProjectContext {
     logoImage?: string;
     logoHeight?: number;
     approvedTierId?: string;
+    /** The option the Level 2 proposal is written for (lib/proposalOption.ts). Absent: the approved option, then the first. */
+    proposalOptionId?: string;
 
     /**
      * The client's acceptance of the commercial proposal.

@@ -23,7 +23,8 @@ export const SECTION_LABELS: Record<string, string> = {
   timeline: 'Timeline',
   payments: 'Payment terms',
   cta: 'Next steps',
-  l2_cover: 'Level 2 cover',
+  l2_cover: 'Level 2 cover (approved option)',
+  l2_cover_proposed: 'Level 2 cover (option not yet approved)',
   l2_snapshot: 'Level 2 snapshot',
   l2_fees: 'Level 2 commercial terms',
   l2_scope: 'Level 2 scope',
@@ -41,6 +42,8 @@ const HIDDEN_FIELDS: Record<string, string[]> = {
 };
 
 const SECTION_NOTES: Record<string, string> = {
+  l2_cover: 'Shown when the option this Level 2 proposal is for has been approved. [Tier Name] is filled in with the option\'s name.',
+  l2_cover_proposed: 'Shown while the option this Level 2 proposal is for is not approved yet. [Tier Name] is filled in with the option\'s name.',
   process: 'The steps come from Studio settings. A process summary set there is shown in place of this description.',
 };
 

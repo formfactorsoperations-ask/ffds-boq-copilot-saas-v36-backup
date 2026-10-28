@@ -14,6 +14,7 @@ import { onDownloadIntent } from '../../lib/downloadIntent';
 import { generateLocalComparison } from '../../lib/comparison';
 import { ExportIcon, PrintIcon, CheckBadgeIcon, PencilRulerIcon, BriefcaseIcon } from '../Icons';
 import { TEMPLATE_TURNKEY, TEMPLATE_DESIGN_ONLY, INITIAL_BANK } from '../../constants';
+import { proposalOption, optionLabel } from '../../lib/proposalOption';
 
 export type { PageOrientation };
 
@@ -100,6 +101,14 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
   const setProposalFormat = (format: 'classic' | 'booklet') => {
       if (setProjectContext) {
           setProjectContext(prev => ({ ...prev, activeProposalFormat: format }));
+      }
+  };
+
+  /* The option the Level 2 proposal is written for; the approved one until the studio picks another. */
+  const l2Option = proposalOption(validTiers, projectContext);
+  const setProposalOption = (tierId: string) => {
+      if (setProjectContext) {
+          setProjectContext(prev => ({ ...prev, proposalOptionId: tierId }));
       }
   };
 
@@ -343,10 +352,6 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
   };
 
   // --- Dynamic Defaults Construction Logic ---
-  const approvedTier = tiers.find(t => t.id === projectContext.approvedTierId);
-  const activeTier = approvedTier || tiers[0];
-  const tierName = activeTier ? activeTier.name : 'selected option';
-
   // 1. Select the base template based on the current ACTIVE VIEW MODE
   let baseTemplate = TEMPLATE_TURNKEY;
   if (activeMode === 'DESIGN_ONLY') baseTemplate = TEMPLATE_DESIGN_ONLY;
@@ -366,13 +371,9 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
       ...savedModeContent
   };
 
-  // Now apply dynamic replacement to specific fields IF they still contain the placeholder
-  if (mergedContent.l2_snapshot && mergedContent.l2_snapshot.subtitle && mergedContent.l2_snapshot.subtitle.includes('[Tier Name]')) {
-      mergedContent.l2_snapshot = {
-          ...mergedContent.l2_snapshot,
-          subtitle: mergedContent.l2_snapshot.subtitle.replace('[Tier Name]', tierName)
-      };
-  }
+  /* "[Tier Name]" stays in the saved text and is filled in where it is shown,
+     with the option the Level 2 proposal is for (lib/proposalOption.ts). Baking
+     a name in here saved it with the text, so it outlived a change of option. */
 
   // --- CIVIL WORKS DURATION WARNING INJECTION ---
   if (projectContext.propertyStatus === 'raw_shell' && activeMode === 'TURNKEY') {
@@ -607,6 +608,23 @@ const MODEL_SWITCHER = [
 
                      {true && (
                          <div className="flex items-center gap-4 flex-wrap">
+                             {proposalLevel === 'LEVEL_2' && validTiers.length > 0 && (
+                                 <label className="flex items-center gap-2 bg-white pl-3 pr-1 py-1 rounded-lg border border-slate-300 shadow-sm text-xs font-bold text-slate-700 no-print">
+                                     <span className="text-slate-500">Proposal for</span>
+                                     <select
+                                         value={l2Option.tier?.id || ''}
+                                         onChange={e => setProposalOption(e.target.value)}
+                                         aria-label="Option the Level 2 proposal is for"
+                                         className="text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
+                                     >
+                                         {validTiers.map((t, i) => (
+                                             <option key={t.id} value={t.id}>
+                                                 {optionLabel(i)} · {t.name}{t.id === projectContext.approvedTierId ? ' (approved)' : ''}
+                                             </option>
+                                         ))}
+                                     </select>
+                                 </label>
+                             )}
                              {!isDesigner && (
                                  <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-300 shadow-sm text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all select-none no-print">
                                      <input 

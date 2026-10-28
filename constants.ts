@@ -214,6 +214,11 @@ export const TEMPLATE_TURNKEY: ProposalContent = {
         title: "Project Blueprint & Scope Lock", 
         text: "We have translated your vision into a definitive execution roadmap. This document serves as the single source of truth for the project, locking in the scope, material specifications, and commercial value.\n\nApproving this plan transitions us from 'Design' to 'Production', allowing us to release technical drawings and initiate procurement with complete clarity." 
     },
+    // The same cover for an option the client has not approved yet: it presents the plan rather than locking it.
+    l2_cover_proposed: {
+        title: "Project Blueprint for Your Review",
+        text: "We have translated your vision into a detailed execution roadmap for the [Tier Name] option. This document sets out its scope, material specifications and commercial value in full, so you can review exactly what will be built and what it will cost.\n\nOnce you approve this option, it becomes the single source of truth for the project: the scope and value are locked, and we move from 'Design' to 'Production', releasing technical drawings and initiating procurement with complete clarity."
+    },
     l2_snapshot: { 
         title: "Investment Summary", 
         subtitle: "A consolidated commercial view of the approved scope for the [Tier Name] package." 
