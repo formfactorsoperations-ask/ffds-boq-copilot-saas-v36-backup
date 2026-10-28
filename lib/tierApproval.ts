@@ -91,3 +91,55 @@ export function describeApproval(tier: Pick<ProposalTier, 'approval'>): string {
   const date = new Date(a.at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   return a.by ? `approved by ${a.by} on ${date}` : `approved on ${date}`;
 }
+
+/**
+ * Taking an approval back — the undo for "Approve Option".
+ *
+ * If approving this option replaced an earlier baseline, that one is the
+ * contract again: its booked values come back from the snapshot taken when it
+ * was replaced, and the snapshot goes, since it no longer records a change.
+ * Otherwise nothing is approved. The payment milestones are left as they are:
+ * approving never changed them, and they may have been edited since.
+ */
+export function previousBaseline(ctx: ProjectContext, tiers: ProposalTier[]): any | null {
+  const snapshots: any[] = (ctx.financials as any)?.paymentSnapshots || [];
+  for (let i = snapshots.length - 1; i >= 0; i--) {
+    const s = snapshots[i];
+    if (s.tierId && s.tierId !== ctx.approvedTierId && tiers.some(t => t.id === s.tierId)) return s;
+  }
+  return null;
+}
+
+/** The project context once the current approval is taken back. */
+export function contextWithoutApproved(prev: ProjectContext, tiers: ProposalTier[]): ProjectContext {
+  if (!prev.approvedTierId) return prev;
+  const back = previousBaseline(prev, tiers);
+  if (!back) return { ...prev, approvedTierId: undefined };
+
+  const prevFinancials: any = prev.financials || DEFAULT_FINANCIALS;
+  const executionValue = back.approvedExecutionValue ?? 0;
+  const designValue = back.approvedDesignValue ?? 0;
+  return {
+    ...prev,
+    approvedTierId: back.tierId,
+    financials: {
+      ...prevFinancials,
+      approvedExecutionValue: executionValue,
+      approvedDesignValue: designValue,
+      paymentSnapshots: (prevFinancials.paymentSnapshots || []).filter((s: any) => s !== back),
+    },
+    engagement: prev.engagement ? { ...prev.engagement, executionValue, designFee: designValue } : prev.engagement,
+  };
+}
+
+/** The options once `revertedId` is a draft again, and `restoredId` (if any) the contract once more. */
+export function tiersWithoutApproved(tiers: ProposalTier[], revertedId: string, restoredId?: string): ProposalTier[] {
+  return tiers.map(t => {
+    if (t.id === revertedId) {
+      const { approval, ...rest } = t;
+      return { ...rest, lifecycleTag: 'Draft' };
+    }
+    if (restoredId && t.id === restoredId) return { ...t, lifecycleTag: 'Current contract' };
+    return t;
+  });
+}

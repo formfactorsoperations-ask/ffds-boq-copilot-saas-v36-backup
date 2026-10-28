@@ -9,7 +9,7 @@ import { isScopeFlowOn, lockedTierId } from '../lib/scopeFlow';
 import { buildBankMap } from '../lib/boqPricing';
 import { compareTiers, optionPrice } from '../lib/tierComparison';
 import { otherBenchmarks, medianGm, closestInSize } from '../lib/tierBenchmarks';
-import { contextWithApproved, tiersWithApproved, describeApproval } from '../lib/tierApproval';
+import { contextWithApproved, tiersWithApproved, describeApproval, contextWithoutApproved, tiersWithoutApproved, previousBaseline } from '../lib/tierApproval';
 import { useOrg } from '../contexts/OrgContext';
 import { CompareIcon, DeleteIcon, PencilIcon, CheckBadgeIcon, SparklesIcon, SaveIcon, CheckIcon, FileSpreadsheetIcon, ArrowRightIcon } from './Icons';
 
@@ -39,6 +39,9 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
     const approverName = currentUserAuth?.displayName || currentUserAuth?.email || currentRole || 'Studio';
     const [editingTierId, setEditingTierId] = useState<string | null>(null);
     const [editingTierName, setEditingTierName] = useState('');
+    /* Where the name is being edited: its card in the rail, or the Selected heading. */
+    const [editingSpot, setEditingSpot] = useState<'rail' | 'header'>('rail');
+    const [revertOpen, setRevertOpen] = useState(false);
     const [discountHeadroom, setDiscountHeadroom] = useState<number>(0);
     const [marginShiftAmount, setMarginShiftAmount] = useState<number>(0);
 
@@ -360,15 +363,23 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         }
     };
     
-    const handleStartEditing = (tier: ProposalTier) => {
+    const handleStartEditing = (tier: ProposalTier, spot: 'rail' | 'header' = 'rail') => {
         setEditingTierId(tier.id);
         setEditingTierName(tier.name);
+        setEditingSpot(spot);
     }
     
+    /* A blank name is not saved: the option keeps the one it had. */
     const handleSaveEdit = () => {
         if (!editingTierId) return;
-        setTiers(prev => prev.map(t => t.id === editingTierId ? {...t, name: editingTierName } : t));
+        const name = editingTierName.trim();
+        if (name) setTiers(prev => prev.map(t => t.id === editingTierId ? {...t, name } : t));
         setEditingTierId(null);
+    }
+
+    const handleNameKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') handleSaveEdit();
+        if (e.key === 'Escape') setEditingTierId(null);
     }
 
     const handleEditTier = (tierId: string) => {
@@ -404,9 +415,26 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         showSuccessWithNext('Option set as current contract');
     }
 
-    const handleUnapproveTier = () => {
-        setProjectContext(prev => ({ ...prev, approvedTierId: undefined }));
+    /* Undo an approval (lib/tierApproval.ts): the option goes back to a draft,
+       and the contract it replaced, if there was one, is the baseline again. */
+    const revertTo = useMemo(() => {
+        const back = previousBaseline(projectContext, tiers);
+        return back ? tiers.find(t => t.id === back.tierId) || null : null;
+    }, [projectContext, tiers]);
+
+    const handleRevertApproval = () => {
+        const revertedId = projectContext.approvedTierId;
+        if (!revertedId || revertedId === signedTierId) return;
+        const reverted = tiers.find(t => t.id === revertedId);
+        setProjectContext(prev => contextWithoutApproved(prev, tiers));
+        setTiers(prev => tiersWithoutApproved(prev, revertedId, revertTo?.id));
+        setRevertOpen(false);
+        showSuccessWithNext(revertTo
+            ? `${reverted?.name || 'The option'} is a draft again. ${revertTo.name} is the approved baseline.`
+            : `${reverted?.name || 'The option'} is a draft again. Nothing is approved.`);
     }
+
+    React.useEffect(() => { setRevertOpen(false); }, [activeTierId]);
 
     // Lineage nesting logic for sidebar
     const renderTierTree = () => {
@@ -454,15 +482,17 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                         <div className="flex items-start justify-between gap-2">
                             <div className="flex flex-col gap-1.5 w-full">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                    {editingTierId === tier.id ? (
+                                    {editingTierId === tier.id && editingSpot === 'rail' ? (
                                         <div className="flex items-center gap-2 w-full">
                                             <input 
                                                 type="text"
                                                 value={editingTierName}
                                                 onChange={(e) => setEditingTierName(e.target.value)}
                                                 onBlur={handleSaveEdit}
-                                                onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                                                onKeyDown={handleNameKey}
+                                                onClick={(e) => e.stopPropagation()}
                                                 autoFocus
+                                                aria-label="Option name"
                                                 className="font-medium p-1 px-2 border border-slate-300 rounded bg-white text-slate-900 text-sm w-full outline-none"
                                             />
                                         </div>
@@ -499,6 +529,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                             <div className="flex items-center gap-2 mt-3.5 pt-3 border-t border-indigo-100/80 flex-wrap">
                                 <button onClick={(e) => { e.stopPropagation(); handleDuplicateTier(tier.id); }} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs">Duplicate</button>
                                 <button onClick={(e) => { e.stopPropagation(); handleEditTier(tier.id); }} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs">Edit BOQ</button>
+                                <button onClick={(e) => { e.stopPropagation(); handleStartEditing(tier, 'rail'); }} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs">Rename</button>
                                 {onImportClick && <button onClick={(e) => { e.stopPropagation(); onImportClick(); }} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs">Import</button>}
                                 <div className="flex-1" />
                                 {tier.id !== signedTierId && <button onClick={(e) => { e.stopPropagation(); handleDeleteTier(tier.id); }} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors rounded-lg" title="Delete Option"><DeleteIcon className="w-4 h-4" /></button>}
@@ -735,7 +766,25 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                         <div className="flex flex-col gap-2">
                             <h4 className="text-xs font-bold tracking-widest uppercase text-slate-400">Selected</h4>
                             <div className="flex items-center gap-3">
-                                <h2 className="text-3xl font-bold text-slate-900 tracking-tight">{activeTier.name}</h2>
+                                {editingTierId === activeTier.id && editingSpot === 'header' ? (
+                                    <input
+                                        type="text"
+                                        value={editingTierName}
+                                        onChange={(e) => setEditingTierName(e.target.value)}
+                                        onBlur={handleSaveEdit}
+                                        onKeyDown={handleNameKey}
+                                        autoFocus
+                                        aria-label="Option name"
+                                        className="text-3xl font-bold text-slate-900 tracking-tight px-2 py-0.5 -ml-2 border border-slate-300 rounded-lg bg-white outline-none focus:border-indigo-400 w-full min-w-0"
+                                    />
+                                ) : (
+                                    <>
+                                        <h2 className="text-3xl font-bold text-slate-900 tracking-tight" onDoubleClick={() => handleStartEditing(activeTier, 'header')}>{activeTier.name}</h2>
+                                        <button onClick={() => handleStartEditing(activeTier, 'header')} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors shrink-0" title="Rename option" aria-label="Rename option">
+                                            <PencilIcon className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                )}
                             </div>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                                 {isApproved && (
@@ -790,7 +839,22 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                                 <p className="text-emerald-700/80 text-[13px]">
                                     {formatCurrency(displayValue)} at {(activeTier.summary.blendedGm ?? 0).toFixed(1)}%, {describeApproval(activeTier)}. {isAnnexureOrRevision ? 'BOQ updated after revision — editing opens a new version.' : 'BOQ locked — editing opens a new version.'}
                                 </p>
+                                {revertOpen && (
+                                    <p className="text-slate-700 text-[13px] mt-1" data-testid="revert-approval-confirm">
+                                        {activeTier.name} goes back to a draft. {revertTo
+                                            ? <><b className="text-slate-900">{revertTo.name}</b> becomes the approved baseline again, at the value it was booked at.</>
+                                            : <>Nothing will be approved until you approve an option again.</>}
+                                    </p>
+                                )}
                             </div>
+                            {revertOpen ? (
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <button onClick={() => setRevertOpen(false)} className="px-4 py-2 bg-white text-slate-700 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">Keep approval</button>
+                                    <button onClick={handleRevertApproval} className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-indigo-700 transition-colors">Revert to draft</button>
+                                </div>
+                            ) : (
+                                <button onClick={() => setRevertOpen(true)} className="px-4 py-2 bg-white text-slate-700 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors shrink-0">Revert approval</button>
+                            )}
                         </div>
                     ) : (
                         <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col md:flex-row justify-between md:items-center gap-3 mt-2">
