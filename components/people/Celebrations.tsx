@@ -158,7 +158,7 @@ export function CelebrationBanner({ view, onOpen }: { view: GuideView | null; on
       <span className="pp-glow" />
       <Confetti pieces={18} spread={110} />
       <span className="relative"><Face name={name} here size="lg" /></span>
-      <div className="relative flex-1 min-w-[220px]">
+      <div className="relative min-w-0 grow basis-[220px]">
         <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700 flex items-center gap-1.5">
           {c.kind === 'birthday' ? <Cake className="w-3.5 h-3.5" /> : <Star className="w-3.5 h-3.5" />}{c.kind === 'birthday' ? 'Birthday today' : 'Work anniversary today'}
         </p>

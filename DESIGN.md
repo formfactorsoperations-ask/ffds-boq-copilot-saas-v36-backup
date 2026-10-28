@@ -248,6 +248,10 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
 - **Emergency contacts** (`EmergencyContacts.tsx`): private to the person and
   admins; opening one asks why, and the person is told.
 - Birth years and personal numbers are never asked for or shown.
+- The People rail is grouped (owner, 28 Oct 2026): My day (Today, Attendance, Leave,
+  Approvals), Team (Calendar, Office guide, Celebrations, Kudos), Studio (Essentials,
+  Emergency contacts) and Admin (Monthly report). Group names are field labels, shown
+  from `lg` up; a group with nothing in it for that person is left out.
 
 ### Ops Desk motion (approved 21 Oct 2026)
 

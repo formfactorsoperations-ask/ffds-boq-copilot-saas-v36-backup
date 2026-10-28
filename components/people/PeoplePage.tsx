@@ -88,18 +88,27 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   const { session } = myDay(s);
   const fy = currentFy(s);
   const bal = s.balances[fy];
-  const SECTIONS: { id: Section; label: string; icon: React.ComponentType<any>; n?: number; show: boolean }[] = [
-    { id: 'today', label: 'Today', icon: Sunrise, show: true },
-    { id: 'attendance', label: 'Attendance', icon: Fingerprint, show: true },
-    { id: 'leave', label: 'Leave', icon: TreePalm, n: s.requests.filter((r) => r.employeeId === s.me.id && r.status === 'Pending').length, show: true },
-    { id: 'approvals', label: 'Approvals', icon: Stamp, n: waiting.length, show: approver },
-    { id: 'calendar', label: 'Team calendar', icon: CalendarDays, show: true },
-    { id: 'guide', label: 'Office guide', icon: BookUser, show: true },
-    { id: 'celebrations', label: 'Celebrations', icon: PartyPopper, n: (guide.view?.cards || []).filter((c) => c.days === 0 && !c.mine && !c.signed).length, show: true },
-    { id: 'kudos', label: 'Kudos wall', icon: HandHeart, show: true },
-    { id: 'essentials', label: 'Office essentials', icon: Building2, show: true },
-    { id: 'emergency', label: 'Emergency contacts', icon: HeartPulse, show: true },
-    { id: 'report', label: 'Monthly report', icon: ChartColumn, show: approver },
+  /* The rail in four groups (the owner, 28 Oct 2026): your own day, the team, the studio, and what admins run. */
+  const GROUPS: { label: string; items: { id: Section; label: string; icon: React.ComponentType<any>; n?: number; show: boolean }[] }[] = [
+    { label: 'My day', items: [
+      { id: 'today', label: 'Today', icon: Sunrise, show: true },
+      { id: 'attendance', label: 'Attendance', icon: Fingerprint, show: true },
+      { id: 'leave', label: 'Leave', icon: TreePalm, n: s.requests.filter((r) => r.employeeId === s.me.id && r.status === 'Pending').length, show: true },
+      { id: 'approvals', label: 'Approvals', icon: Stamp, n: waiting.length, show: approver },
+    ] },
+    { label: 'Team', items: [
+      { id: 'calendar', label: 'Calendar', icon: CalendarDays, show: true },
+      { id: 'guide', label: 'Office guide', icon: BookUser, show: true },
+      { id: 'celebrations', label: 'Celebrations', icon: PartyPopper, n: (guide.view?.cards || []).filter((c) => c.days === 0 && !c.mine && !c.signed).length, show: true },
+      { id: 'kudos', label: 'Kudos', icon: HandHeart, show: true },
+    ] },
+    { label: 'Studio', items: [
+      { id: 'essentials', label: 'Essentials', icon: Building2, show: true },
+      { id: 'emergency', label: 'Emergency contacts', icon: HeartPulse, show: true },
+    ] },
+    { label: 'Admin', items: [
+      { id: 'report', label: 'Monthly report', icon: ChartColumn, show: approver },
+    ] },
   ];
   const done = (msg: string) => { setLeaveOpen(null); setCorrecting(null); setNotice(msg); };
 
@@ -128,20 +137,28 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6 items-start">
         <nav aria-label="People sections" className="lg:sticky lg:top-4 flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible">
-          {SECTIONS.filter((x) => x.show).map((x, i) => {
-            const Icon = x.icon;
-            const on = section === x.id;
+          {GROUPS.map((g) => ({ ...g, items: g.items.filter((x) => x.show) })).filter((g) => g.items.length).map((g, gi, all) => {
+            const before = all.slice(0, gi).reduce((n, x) => n + x.items.length, 0);
             return (
-              <button key={x.id} type="button" onClick={() => setSection(x.id)} aria-current={on ? 'page' : undefined}
-                className={`relative lg:w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-colors hud-row-in whitespace-nowrap ${on ? 'text-white' : 'text-slate-700 hover:bg-slate-100'}`}
-                style={{ animationDelay: `${i * 30}ms` }}>
-                {on && <motion.span layoutId="people-rail" className="absolute inset-0 rounded-xl bg-[#3D52A0] shadow-sm" transition={{ type: 'spring', stiffness: 420, damping: 36 }} />}
-                <motion.span className="relative inline-flex" whileHover={{ rotateY: 180 }} transition={{ duration: 0.5 }} style={{ transformPerspective: 300 }}>
-                  <Icon className={`w-4 h-4 shrink-0 ${on ? 'text-white' : 'text-slate-400'}`} />
-                </motion.span>
-                <span className="relative text-sm font-semibold flex-1 min-w-0 truncate">{x.label}</span>
-                {!!x.n && <span className={`relative text-[10px] font-black px-1.5 py-0.5 rounded-full ${on ? 'bg-white/20 text-white' : x.id === 'approvals' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{x.n}</span>}
-              </button>
+              <div key={g.label} role="group" aria-label={g.label} className={`flex lg:flex-col gap-1 ${gi ? 'lg:mt-3' : ''}`}>
+                <p className="hidden lg:block px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">{g.label}</p>
+                {g.items.map((x, i) => {
+                  const Icon = x.icon;
+                  const on = section === x.id;
+                  return (
+                    <button key={x.id} type="button" onClick={() => setSection(x.id)} aria-current={on ? 'page' : undefined}
+                      className={`relative lg:w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-colors hud-row-in whitespace-nowrap ${on ? 'text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+                      style={{ animationDelay: `${(before + gi + i + 1) * 30}ms` }}>
+                      {on && <motion.span layoutId="people-rail" className="absolute inset-0 rounded-xl bg-[#3D52A0] shadow-sm" transition={{ type: 'spring', stiffness: 420, damping: 36 }} />}
+                      <motion.span className="relative inline-flex" whileHover={{ rotateY: 180 }} transition={{ duration: 0.5 }} style={{ transformPerspective: 300 }}>
+                        <Icon className={`w-4 h-4 shrink-0 ${on ? 'text-white' : 'text-slate-400'}`} />
+                      </motion.span>
+                      <span className="relative text-sm font-semibold flex-1 min-w-0 truncate">{x.label}</span>
+                      {!!x.n && <span className={`relative text-[10px] font-black px-1.5 py-0.5 rounded-full ${on ? 'bg-white/20 text-white' : x.id === 'approvals' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{x.n}</span>}
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
