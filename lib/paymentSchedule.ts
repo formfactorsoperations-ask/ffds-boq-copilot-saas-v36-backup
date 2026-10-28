@@ -1,3 +1,5 @@
+import { lockedTierId } from './scopeFlow';
+
 /**
  * What every milestone on a project is worth, worked out once.
  *
@@ -117,6 +119,37 @@ export function resolveFinancials(raw: any): ScheduleFinancials {
   };
 }
 
+/*
+  Whose figures are billed: the contract's, or the selected option's.
+
+  `approvedExecutionValue` / `approvedDesignValue` are the contract — once the
+  studio approves an option, the client signs the scope or their acceptance is
+  recorded, Money bills those values even if the BOQ moves afterwards. But the
+  fields also outlive the contract: an approval taken back, an approved option
+  deleted or regenerated, a BOQ edit on an unapproved option all left a stored
+  figure behind with nothing approved. Money then billed that leftover while
+  its header showed the selected option — ₹10,15,536 against ₹9,79,383 on
+  1-BHK Kalpataru Expansia. With no contract in force, the selected option's
+  own figures are billed.
+*/
+export function contractInForce(ctx: any): boolean {
+  return !!ctx?.approvedTierId || !!lockedTierId(ctx) || !!ctx?.proposalAcceptance?.accepted;
+}
+
+export function billingBase(
+  ctx: any,
+  tierSummary: { totalSell?: number; designFee?: number } | undefined,
+  financials: Pick<ScheduleFinancials, 'approvedExecutionValue' | 'approvedDesignValue'>,
+): { execution: number; design: number; contract: boolean } {
+  const optionExec = tierSummary?.totalSell || 0;
+  const optionDes = tierSummary?.designFee || 0;
+  // Without an option to bill there is nothing else to show but what is stored.
+  const contract = contractInForce(ctx) || !tierSummary;
+  return contract
+    ? { execution: financials.approvedExecutionValue ?? optionExec, design: financials.approvedDesignValue ?? optionDes, contract: true }
+    : { execution: optionExec, design: optionDes, contract: false };
+}
+
 /** Which fields a stored record is missing, for the repair sweep to report. */
 export function missingFinancialFields(raw: any): string[] {
   if (!raw) return [];               // absent entirely is a different case
@@ -220,8 +253,9 @@ export function computeSchedule(args: {
 
   const origExec = args.tierSummary?.totalSell || 0;
   const origDes = args.tierSummary?.designFee || 0;
-  const rawExec = financials.approvedExecutionValue ?? origExec;
-  const rawDes = financials.approvedDesignValue ?? origDes;
+  const base = billingBase(ctx, args.tierSummary, financials);
+  const rawExec = base.execution;
+  const rawDes = base.design;
   const ds = financials.discounts;
 
   const originalNetExecution = Math.max(0, origExec - deduction(origExec, 'execution', ds));

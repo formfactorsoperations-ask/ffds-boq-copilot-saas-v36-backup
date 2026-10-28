@@ -8,6 +8,7 @@ import { realRooms } from '../lib/scopeBuckets';
 import { isScopeFlowOn, lockedTierId } from '../lib/scopeFlow';
 import { buildBankMap } from '../lib/boqPricing';
 import { compareTiers, optionPrice } from '../lib/tierComparison';
+import { builtInSpecsName } from '../lib/comparison';
 import { otherBenchmarks, medianGm, closestInSize } from '../lib/tierBenchmarks';
 import { contextWithApproved, tiersWithApproved, describeApproval, contextWithoutApproved, tiersWithoutApproved, previousBaseline } from '../lib/tierApproval';
 import { useOrg } from '../contexts/OrgContext';
@@ -355,8 +356,25 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         setActiveTierId(newTier.id);
     };
 
+    /*
+      Its copies stay. They used to keep pointing at the deleted option, so the
+      rail — which shows options with no parent and the children of those —
+      showed them nowhere, though they were still in the proposal. They now
+      hang off the deleted option's own parent, or become options of their own,
+      and keep the built-in specs they had through it (lib/comparison.ts).
+    */
     const handleDeleteTier = (tierId: string) => {
-        setTiers(prev => prev.filter(t => t.id !== tierId));
+        const deleted = tiers.find(t => t.id === tierId);
+        const keptSpecs = deleted ? builtInSpecsName(deleted, tiers) : undefined;
+        setTiers(prev => prev.filter(t => t.id !== tierId).map(t => {
+            if (t.parentTierId !== tierId) return t;
+            const { parentTierId, ...rest } = t;
+            return {
+                ...rest,
+                ...(deleted?.parentTierId ? { parentTierId: deleted.parentTierId } : {}),
+                ...(keptSpecs && !t.specsFrom ? { specsFrom: keptSpecs } : {}),
+            };
+        }));
         if (projectContext.approvedTierId === tierId) {
             setProjectContext(prev => ({...prev, approvedTierId: undefined}));
         }
@@ -447,8 +465,8 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
 
     // Lineage nesting logic for sidebar
     const renderTierTree = () => {
-        // Find roots (no parent)
-        const roots = tiers.filter(t => !t.parentTierId);
+        // Roots: no parent, or a parent that is no longer there (deleted before copies were re-attached).
+        const roots = tiers.filter(t => !t.parentTierId || !tiers.some(p => p.id === t.parentTierId));
         
         const renderNode = (tier: ProposalTier, depth = 0) => {
             const children = tiers.filter(t => t.parentTierId === tier.id);

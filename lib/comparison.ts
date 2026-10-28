@@ -132,17 +132,22 @@ const FEATURE_EXTRACTORS = [
   fall back to specs guessed from its BOQ while the original showed the
   package's own.
 */
-export const builtInSpecsFor = (tier: ProposalTier, tiers: ProposalTier[]): Record<string, string> | undefined => {
+export const builtInSpecsName = (tier: ProposalTier, tiers: ProposalTier[]): string | undefined => {
     const seen = new Set<string>();
     let t: ProposalTier | undefined = tier;
     while (t && !seen.has(t.id)) {
         seen.add(t.id);
-        const preset = PREDEFINED_SPECS[t.name] || (t.originalName ? PREDEFINED_SPECS[t.originalName] : undefined);
-        if (preset) return preset;
+        const own = [t.name, t.originalName, t.specsFrom].find(n => !!n && !!PREDEFINED_SPECS[n]);
+        if (own) return own;
         const parentId: string | undefined = t.parentTierId;
         t = parentId ? tiers.find(x => x.id === parentId) : undefined;
     }
     return undefined;
+};
+
+export const builtInSpecsFor = (tier: ProposalTier, tiers: ProposalTier[]): Record<string, string> | undefined => {
+    const name = builtInSpecsName(tier, tiers);
+    return name ? PREDEFINED_SPECS[name] : undefined;
 };
 
 export const generateLocalComparison = (tiers: ProposalTier[], bankItems: any[]): AiComparisonResult => {

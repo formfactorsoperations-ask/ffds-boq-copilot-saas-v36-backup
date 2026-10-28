@@ -1,3 +1,5 @@
+import { billingBase } from './paymentSchedule';
+
 export function calculateProjectFinancials(context: any, activeTier?: any) {
     const financials = context?.financials || {
         // Optional: a retainer exists only when somebody entered one.
@@ -26,8 +28,10 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
         originalDesignFee = context?.originalDesignFee || 0;
     }
 
-    const rawExecutionTotal = financials.approvedExecutionValue ?? originalExecutionTotal;
-    const rawDesignFee = financials.approvedDesignValue ?? originalDesignFee;
+    // The contract's figures while one is in force, else the option's (lib/paymentSchedule.ts).
+    const base = billingBase(context, activeTier?.summary, financials);
+    const rawExecutionTotal = activeTier ? base.execution : (financials.approvedExecutionValue ?? originalExecutionTotal);
+    const rawDesignFee = activeTier ? base.design : (financials.approvedDesignValue ?? originalDesignFee);
 
     const calculateDiscountValue = (base: number, target: 'execution' | 'design') => {
         const targetDiscounts = discounts.filter((d: any) => d.target === target);
