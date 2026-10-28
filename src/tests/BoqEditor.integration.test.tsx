@@ -364,6 +364,88 @@ describe('Pricing & Tiers: approving and syncing', () => {
   });
 });
 
+describe('Pricing & Tiers: an approval can be reverted', () => {
+  it('with nothing approved before, the option is a draft again and nothing is approved', () => {
+    let state: any;
+    render(<TierHarness probe={s => { state = s; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revert approval' }));
+    expect(screen.getByTestId('revert-approval-confirm').textContent).toMatch(/Nothing will be approved/);
+    fireEvent.click(screen.getByRole('button', { name: 'Revert to draft' }));
+    expect(state.ctx.approvedTierId).toBeUndefined();
+    const ess = state.tiers.find((t: any) => t.id === 'ess');
+    expect(ess.lifecycleTag).toBe('Draft');
+    expect(ess.approval).toBeUndefined();
+    expect(screen.getByRole('button', { name: 'Approve Option' })).toBeTruthy();
+  });
+
+  it('after a re-approval, the contract it replaced is the baseline again', () => {
+    let state: any;
+    render(<TierHarness probe={s => { state = s; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    const booked = state.ctx.financials.approvedExecutionValue;
+    fireEvent.click(screen.getAllByText('Comfort Upgrade')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revert approval' }));
+    expect(screen.getByTestId('revert-approval-confirm').textContent).toMatch(/Essential Elegance becomes the approved baseline again/);
+    fireEvent.click(screen.getByRole('button', { name: 'Revert to draft' }));
+    expect(state.ctx.approvedTierId).toBe('ess');
+    expect(state.ctx.financials.approvedExecutionValue).toBe(booked);
+    expect(state.ctx.financials.paymentSnapshots).toEqual([]);
+    expect(state.tiers.find((t: any) => t.id === 'ess').lifecycleTag).toBe('Current contract');
+    expect(state.tiers.find((t: any) => t.id === 'com').lifecycleTag).toBe('Draft');
+  });
+
+  it('Keep approval leaves it approved', () => {
+    let state: any;
+    render(<TierHarness probe={s => { state = s; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revert approval' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep approval' }));
+    expect(state.ctx.approvedTierId).toBe('ess');
+    expect(screen.queryByTestId('revert-approval-confirm')).toBeNull();
+  });
+});
+
+describe('Pricing & Tiers: renaming an option', () => {
+  it('the Rename button on the card renames it', () => {
+    let state: any;
+    render(<TierHarness probe={s => { state = s; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    const input = screen.getByRole('textbox', { name: 'Option name' });
+    fireEvent.change(input, { target: { value: '  Essential Plus  ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(state.tiers.find((t: any) => t.id === 'ess').name).toBe('Essential Plus');
+  });
+
+  it('the pencil by the heading renames it, and an approved option can be renamed', () => {
+    let state: any;
+    render(<TierHarness probe={s => { state = s; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rename option' }));
+    const input = screen.getByRole('textbox', { name: 'Option name' });
+    fireEvent.change(input, { target: { value: 'Comfort Final' } });
+    fireEvent.blur(input);
+    expect(state.tiers.find((t: any) => t.id === 'ess').name).toBe('Comfort Final');
+    expect(state.ctx.approvedTierId).toBe('ess');
+  });
+
+  it('a blank name, or Escape, keeps the old name', () => {
+    let state: any;
+    render(<TierHarness probe={s => { state = s; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    let input = screen.getByRole('textbox', { name: 'Option name' });
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(state.tiers.find((t: any) => t.id === 'ess').name).toBe('Essential Elegance');
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    input = screen.getByRole('textbox', { name: 'Option name' });
+    fireEvent.change(input, { target: { value: 'Something else' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(state.tiers.find((t: any) => t.id === 'ess').name).toBe('Essential Elegance');
+  });
+});
+
 describe('Pricing & Tiers: Regenerate can be undone', () => {
   it('puts the old options back', () => {
     let state: any;

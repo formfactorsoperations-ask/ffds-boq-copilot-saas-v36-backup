@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { contextWithApproved, tiersWithApproved, describeApproval } from '../../lib/tierApproval';
+import { contextWithApproved, tiersWithApproved, describeApproval, contextWithoutApproved, tiersWithoutApproved, previousBaseline } from '../../lib/tierApproval';
 import { projectBenchmark, otherBenchmarks, medianGm, closestInSize } from '../../lib/tierBenchmarks';
 
 const tier = (id: string, totalSell: number, designFee = totalSell * 0.1, extra: any = {}): any => ({
@@ -60,6 +60,41 @@ describe('tiersWithApproved', () => {
     const approved = tier('a', 1, 0, { approval: { at: 1, by: 'Priya' } });
     const out = tiersWithApproved([approved], 'a', 'a', { at: 9, by: 'Rahul' });
     expect(out[0].approval).toEqual({ at: 1, by: 'Priya' });
+  });
+});
+
+describe('reverting an approval', () => {
+  const a = tier('a', 500000);
+  const b = tier('b', 700000);
+
+  it('with nothing approved before, leaves nothing approved', () => {
+    const booked = contextWithApproved({ name: 'Flat' } as any, a, [a, b], 1);
+    const undone = contextWithoutApproved(booked, [a, b]);
+    expect(undone.approvedTierId).toBeUndefined();
+    expect(previousBaseline(booked, [a, b])).toBeNull();
+  });
+
+  it('puts the replaced contract back, with its booked values, and drops its snapshot', () => {
+    const booked = contextWithApproved({ name: 'Flat', engagement: { executionValue: 0, designFee: 0 } } as any, a, [a, b], 1);
+    const revised = contextWithApproved(booked, b, [a, b], 2);
+    const undone = contextWithoutApproved(revised, [a, b]);
+    expect(undone.approvedTierId).toBe('a');
+    expect(undone.financials).toMatchObject({ approvedExecutionValue: 500000, approvedDesignValue: 50000, paymentSnapshots: [] });
+    expect(undone.engagement).toMatchObject({ executionValue: 500000, designFee: 50000 });
+  });
+
+  it('skips a replaced contract whose option has since been deleted', () => {
+    const booked = contextWithApproved({ name: 'Flat' } as any, a, [a, b], 1);
+    const revised = contextWithApproved(booked, b, [a, b], 2);
+    expect(contextWithoutApproved(revised, [b]).approvedTierId).toBeUndefined();
+  });
+
+  it('makes the option a draft again and the restored one the contract', () => {
+    const approved = tiersWithApproved([tier('a', 1, 0, { approval: { at: 1, by: 'Priya' } }), tier('b', 1)], 'b', 'a', { at: 5, by: 'Rahul' });
+    const out = tiersWithoutApproved(approved, 'b', 'a');
+    expect(out[1].lifecycleTag).toBe('Draft');
+    expect(out[1].approval).toBeUndefined();
+    expect(out[0]).toMatchObject({ lifecycleTag: 'Current contract', approval: { at: 1, by: 'Priya' } });
   });
 });
 
