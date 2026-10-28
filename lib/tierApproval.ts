@@ -98,7 +98,8 @@ export function describeApproval(tier: Pick<ProposalTier, 'approval'>): string {
  * If approving this option replaced an earlier baseline, that one is the
  * contract again: its booked values come back from the snapshot taken when it
  * was replaced, and the snapshot goes, since it no longer records a change.
- * Otherwise nothing is approved. The payment milestones are left as they are:
+ * Otherwise nothing is approved, and the approved values are cleared with it.
+ * The payment milestones are left as they are:
  * approving never changed them, and they may have been edited since.
  */
 export function previousBaseline(ctx: ProjectContext, tiers: ProposalTier[]): any | null {
@@ -114,7 +115,13 @@ export function previousBaseline(ctx: ProjectContext, tiers: ProposalTier[]): an
 export function contextWithoutApproved(prev: ProjectContext, tiers: ProposalTier[]): ProjectContext {
   if (!prev.approvedTierId) return prev;
   const back = previousBaseline(prev, tiers);
-  if (!back) return { ...prev, approvedTierId: undefined };
+  if (!back) {
+    // Nothing is approved, so there is no approved value either: Money bills
+    // the selected option (billingBase in lib/paymentSchedule.ts).
+    if (!prev.financials) return { ...prev, approvedTierId: undefined };
+    const { approvedExecutionValue, approvedDesignValue, ...financials } = prev.financials as any;
+    return { ...prev, approvedTierId: undefined, financials };
+  }
 
   const prevFinancials: any = prev.financials || DEFAULT_FINANCIALS;
   const executionValue = back.approvedExecutionValue ?? 0;

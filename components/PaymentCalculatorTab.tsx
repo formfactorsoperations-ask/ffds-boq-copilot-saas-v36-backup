@@ -9,7 +9,7 @@ import { RotateCcw, Coins, CheckCircle, TrendingUp, Info, AlertTriangle, Sparkle
 import Card from './shared/Card';
 import { CalculatorIcon, ShieldCheckIcon, AlertIcon, CheckIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon, DeleteIcon, PlusIcon, ScissorsIcon, ClockIcon, CalendarIcon } from './Icons';
 import { useOrg } from '../contexts/OrgContext';
-import { computeSchedule, outstandingInvoices, resolveFinancials, sameFinancials } from '../lib/paymentSchedule';
+import { computeSchedule, outstandingInvoices, resolveFinancials, sameFinancials, billingBase } from '../lib/paymentSchedule';
 import { resolveDocumentState } from '../services/documentIssueEngine';
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import { FFDS_PAYMENT_STRUCTURE_DEFAULTS, getPaymentStructure, setPaymentStructure } from '../services/engagementService';
@@ -251,6 +251,12 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
       undefined put a literal "NaN% of limit" on the cash gauge.
     */
     const financials = resolveFinancials(projectContext.financials);
+    /* What is billed: the contract's figures while one is in force, otherwise
+       the selected option's own (lib/paymentSchedule.ts). The header, the
+       versions list and the schedule all read it, so they cannot disagree. */
+    const liveBase = billingBase(projectContext, activeTier?.summary, financials);
+    const contractExecution = liveBase.contract ? financials.approvedExecutionValue : undefined;
+    const contractDesign = liveBase.contract ? financials.approvedDesignValue : undefined;
 
     const [localGstRate, setGstRate] = useState<number>(projectContext.gstRate || 18);
     const [localInitiationFee, setInitiationFee] = useState<number>(financials.initiationFeePaid);
@@ -289,12 +295,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         }> = [];
 
         // 1. Live Current Tier
-        const liveExec = (activeTier?.summary?.totalSell !== undefined && activeTier?.summary?.totalSell > 0)
-            ? activeTier.summary.totalSell
-            : (financials.approvedExecutionValue ?? (activeTier?.summary?.totalRevenue || 0));
-        const liveDesign = (activeTier?.summary?.designFee !== undefined && activeTier?.summary?.designFee > 0)
-            ? activeTier.summary.designFee
-            : (financials.approvedDesignValue ?? 0);
+        const liveExec = liveBase.execution;
+        const liveDesign = liveBase.design;
         list.push({
             id: activeTier?.id || 'live-current',
             name: activeTier?.name || 'Current Active Billing',
@@ -358,7 +360,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         });
 
         return list;
-    }, [activeTier, tiers, projectContext.tiers, projectContext.approvedTierId, projectContext.paymentMilestones, snapshots, financials.approvedExecutionValue, financials.approvedDesignValue, localBillablePercent, localExecutionGstEnabled]);
+    }, [activeTier, tiers, projectContext.tiers, projectContext.approvedTierId, projectContext.paymentMilestones, snapshots, financials.approvedExecutionValue, financials.approvedDesignValue, liveBase.execution, liveBase.design, localBillablePercent, localExecutionGstEnabled]);
 
     const selectedHistoricalEntry = selectedSnapshotId ? availableVersions.find(v => v.id === selectedSnapshotId) : null;
     const activeSnapshot = selectedHistoricalEntry;
@@ -387,15 +389,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     // Computed vitals for header bar
     const displayDesign = selectedHistoricalEntry
         ? selectedHistoricalEntry.designValue
-        : ((activeTier?.summary?.designFee !== undefined && activeTier?.summary?.designFee > 0)
-            ? activeTier.summary.designFee
-            : (financials.approvedDesignValue || 0));
+        : liveBase.design;
 
     const displayExec = selectedHistoricalEntry
         ? selectedHistoricalEntry.executionValue
-        : ((activeTier?.summary?.totalSell !== undefined && activeTier?.summary?.totalSell > 0)
-            ? activeTier.summary.totalSell
-            : (financials.approvedExecutionValue || 0));
+        : liveBase.execution;
 
     usePageHeader({
         vitals: [
@@ -411,14 +409,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
       `approvedDesignValue` / `approvedExecutionValue` the first time anyone
       opened the Money tab. Three live projects were rewritten that way in a
       single afternoon just by being looked at. Worse than the unrequested
-      write was what it wrote: `displayExec` above prefers the tier total OVER
-      the stored approved value, so a contract negotiated away from the BOQ was
-      silently replaced by the BOQ's own number whenever the BOQ moved.
+      write was what it wrote: the tier total, so a contract negotiated away
+      from the BOQ was silently replaced by the BOQ's own number whenever the
+      BOQ moved.
 
-      Nothing needed it. `displayDesign` / `displayExec` already fall back to
-      the stored value, and `computeSchedule` receives `rawExecutionTotal` /
-      `rawDesignFee`, which fall back to the tier. The approved values now
-      change only when somebody sets them.
+      Nothing needed it. The header, the versions list and `computeSchedule`
+      all read `liveBase` (billingBase in lib/paymentSchedule.ts): the stored
+      values while a contract is in force, the selected option's otherwise.
+      The approved values now change only when somebody sets them.
     */
 
     // Reset Confirm State
@@ -1097,11 +1095,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
     const rawExecutionTotal = selectedHistoricalEntry
         ? selectedHistoricalEntry.executionValue
-        : (financials.approvedExecutionValue ?? originalExecutionTotal);
+        : liveBase.execution;
 
     const rawDesignFee = selectedHistoricalEntry
         ? selectedHistoricalEntry.designValue
-        : (financials.approvedDesignValue ?? originalDesignFee);
+        : liveBase.design;
 
     // 1. Apply Discounts (Pre-Tax)
     const calculateDiscountValue = (base: number, target: 'execution' | 'design') => {
@@ -5073,8 +5071,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                         <div className="bg-[#EDE8F5] p-4 border-b border-[#DDE3F5]">
                                             <h3 className="font-bold text-slate-800 text-center">Current Live Billing</h3>
                                             <div className="flex justify-between mt-2 text-sm">
-                                                <span className="text-[#334486]">Execution: <span className="font-bold text-slate-800">{formatCurrency(financials.approvedExecutionValue || originalNetExecution)}</span></span>
-                                                <span className="text-[#334486]">Design: <span className="font-bold text-slate-800">{formatCurrency(financials.approvedDesignValue || originalNetDesign)}</span></span>
+                                                <span className="text-[#334486]">Execution: <span className="font-bold text-slate-800">{formatCurrency(contractExecution || originalNetExecution)}</span></span>
+                                                <span className="text-[#334486]">Design: <span className="font-bold text-slate-800">{formatCurrency(contractDesign || originalNetDesign)}</span></span>
                                             </div>
                                         </div>
                                         <div className="p-4">
@@ -5082,7 +5080,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             <div className="space-y-2 max-h-[360px] overflow-y-auto">
                                                 {milestones.map(m => {
                                                     const isCleared = m.status === 'paid' || m.status === 'invoiced';
-                                                    const baseAmount = m.type === 'execution' ? (financials.approvedExecutionValue || originalNetExecution) : (financials.approvedDesignValue || originalNetDesign);
+                                                    const baseAmount = m.type === 'execution' ? (contractExecution || originalNetExecution) : (contractDesign || originalNetDesign);
                                                     const origBase = m.type === 'execution' ? originalNetExecution : originalNetDesign;
                                                     
                                                     let amount = 0;
