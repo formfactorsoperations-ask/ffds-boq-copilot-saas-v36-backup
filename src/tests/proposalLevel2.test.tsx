@@ -112,29 +112,8 @@ describe('Level 2: material specifications match Level 1', () => {
 
     render(<Harness ctx={{ proposalOptionId: 'com', proposalContent: content }} />);
     const l2 = specRows();
-    // The same values; a dash on Level 1 ("nothing found") is an empty cell on Level 2.
-    expect(l2).toEqual(l1.map(([c, v]) => [c, v === '-' ? '' : v]));
+    expect(l2).toEqual(l1);
     expect(l2.find(r => r[0] === 'Hardware System')![1]).toBe('Hettich soft-close, as agreed');
-  });
-
-  it('leaves a specification nobody has filled in blank on Level 2, and the filled ones as they are', () => {
-    // An option with no built-in specs and an empty BOQ: nothing is found for any row.
-    const custom = [{ ...TIERS[0], id: 'cus', name: 'Custom Package' }];
-    const overrides = { 'Paint Finish': { cus: 'Asian Paints Royale' }, 'Hardware System': { cus: ' - ' } };
-    function Custom({ level }: { level: string }) {
-      const [ctx, setCtx] = useState<any>({ name: 'Flat', activeProposalLevel: level, proposalContent: { materials: { overrides } } });
-      return <ClientTab tiers={custom} bank={[]} materialSuggestions={[]} timelinePhases={[]} setTimelinePhases={() => undefined} projectContext={ctx} setProjectContext={setCtx} />;
-    }
-    render(<Custom level="LEVEL_2" />);
-    const l2 = Object.fromEntries(specRows().map(r => [r[0], r[1]]));
-    expect(l2['Paint Finish']).toBe('Asian Paints Royale');
-    expect(l2['Hardware System']).toBe('');
-    expect(l2['Plywood (Kitchen & Bath)']).toBe('');
-    cleanup();
-
-    render(<Custom level="LEVEL_1" />);
-    const l1 = Object.fromEntries(specRows().map(r => [r[0], r[1]]));
-    expect(l1['Plywood (Kitchen & Bath)']).toBe('-');
   });
 });
 
@@ -159,6 +138,16 @@ describe('Classic Digital terms page', () => {
     expect(terms.textContent).toContain('Only items listed in this proposal are included.');
     expect(terms.textContent).toContain('Stage payments are due on invoice.');
     expect(terms.querySelector('[contenteditable="true"]')).toBeNull();
+  });
+
+  it('keeps the Classic Digital look rather than the booklet\'s', () => {
+    render(<Harness ctx={{ activeProposalLevel: 'LEVEL_2' }} />);
+    const terms = termsPage();
+    const html = terms.innerHTML;
+    expect(html).toContain('border-[#334486]');
+    expect(html).toContain('md:columns-2');
+    expect(html).not.toContain('#C5A880');
+    expect(html).not.toContain('#0F172A]');
   });
 
   it('adds no booklet sheet, so Download PDF still captures the whole classic proposal', () => {
@@ -269,5 +258,31 @@ describe('a copy has the specs of the option it was copied from', () => {
     const out: any = contextWithTierCopied(ctx, { id: 'com', name: 'Comfort Upgrade' }, 'copy');
     expect(out.proposalContent.materials.overrides).toEqual({ Paint: { com: 'a', copy: 'a' }, Hardware: { 'Comfort Upgrade': 'b', copy: 'own' }, Other: { ess: 'z' } });
     expect(contextWithTierCopied({ name: 'x' } as any, { id: 'com', name: 'C' }, 'copy')).toEqual({ name: 'x' });
+  });
+});
+
+describe('Level 2 scope: the line under each item', () => {
+  const withItems: any[] = [{
+    ...TIERS[0],
+    boq: [
+      { id: 'i1', bankId: 'none-1', name: 'STUDY UNIT WITH SHELVES', qty: 5, unit: 'sq ft', baseRate: 2188, roomId: 'M. Bedroom',
+        rationale: 'Mid spec: 1mm laminate, soft-close hardware' },
+      { id: 'i2', bankId: 'none-2', name: 'WARDROBE WITH LOFT', qty: 48.6, unit: 'sq ft', baseRate: 2188, roomId: 'M. Bedroom',
+        specs: '18mm BWP ply carcass, Hettich soft-close hinges', rationale: 'Added from Bundle: AI Master Bedroom Suite' },
+      { id: 'i3', bankId: 'none-3', name: 'Electrical fittings (as actuals)', qty: 1, unit: 'lot', baseRate: 0, roomId: 'M. Bedroom' },
+    ],
+  }];
+  function Scope() {
+    const [ctx, setCtx] = useState<any>({ name: 'Flat', activeProposalLevel: 'LEVEL_2' });
+    return <ClientTab tiers={withItems} bank={[]} materialSuggestions={[]} timelinePhases={[]} setTimelinePhases={() => undefined} projectContext={ctx} setProjectContext={setCtx} />;
+  }
+
+  it('shows the specification someone wrote, and nothing where nobody has', () => {
+    render(<Scope />);
+    expect(screen.getByText('18mm BWP ply carcass, Hettich soft-close hinges')).toBeTruthy();
+    expect(screen.queryByText(/Mid spec: 1mm laminate/)).toBeNull();
+    expect(screen.queryByText(/Added from Bundle/)).toBeNull();
+    // A commercial basis that changes what is billed is still stated.
+    expect(screen.getByText('As Actuals')).toBeTruthy();
   });
 });

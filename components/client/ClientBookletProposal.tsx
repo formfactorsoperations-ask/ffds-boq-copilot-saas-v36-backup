@@ -469,6 +469,48 @@ const EdList: React.FC<{
   );
 };
 
+/*
+  How Annexure A looks in each format. The clauses are the same; the booklet
+  keeps its own sheet styling, and the Classic Digital proposal prints them the
+  way its terms page always looked: a grey kicker, a title over a blue rule,
+  small uppercase headings and two columns.
+*/
+type AnnexLook = 'booklet' | 'classic';
+const ANNEX_LOOK: Record<AnnexLook, Record<string, string>> = {
+    booklet: {
+        head: 'border-b-2 border-[#0F172A] pb-4',
+        kicker: 'text-[11px] font-bold text-[#C5A880] uppercase tracking-wider block',
+        title: 'text-3xl font-extrabold tracking-tight text-[#0F172A] mt-1',
+        subtitle: 'text-xs text-slate-500 mt-1',
+        note: 'p-5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 leading-relaxed flex items-start gap-3 max-w-4xl',
+        noteIcon: 'p-1 bg-[#C5A880]/10 rounded text-[#C5A880] shrink-0 mt-0.5',
+        accentText: 'font-bold text-[#C5A880]',
+        body: 'space-y-8 text-slate-700 text-xs leading-relaxed max-w-4xl',
+        section: '',
+        sectionWide: '',
+        h4: 'font-extrabold text-[#0F172A] uppercase tracking-wider mb-2',
+        totalRow: 'bg-slate-900 text-white font-bold',
+        pair: 'grid grid-cols-1 md:grid-cols-2 gap-6 mt-2',
+        strong: 'text-[#0F172A]',
+    },
+    classic: {
+        head: 'border-b-2 border-[#334486] pb-4',
+        kicker: 'text-[11px] font-bold text-slate-500 uppercase tracking-wider block',
+        title: 'mt-2 text-2xl font-extrabold tracking-tight text-slate-900',
+        subtitle: 'text-xs text-slate-500 mt-1',
+        note: 'mt-8 p-6 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-600 leading-relaxed flex items-start gap-3',
+        noteIcon: 'p-1 bg-[#3D52A0]/10 rounded text-[#3D52A0] shrink-0 mt-0.5',
+        accentText: 'font-bold text-[#334486]',
+        body: 'mt-8 md:columns-2 gap-12 text-xs text-slate-600 leading-relaxed',
+        section: 'break-inside-avoid mb-6',
+        sectionWide: 'break-inside-avoid mb-6 [column-span:all] pt-2',
+        h4: 'font-bold text-slate-900 uppercase tracking-wide mb-2',
+        totalRow: 'bg-[#334486] text-white font-bold',
+        pair: 'grid grid-cols-1 gap-4 mt-2',
+        strong: 'text-slate-900',
+    },
+};
+
 interface ClientBookletProposalProps {
     tiers: ProposalTier[];
     projectContext: ProjectContext;
@@ -1444,28 +1486,31 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
       Built once, here, and printed both as the booklet's last sheet and, through
       `termsOnly`, as the Classic Digital proposal's terms page: one set of
       clauses, with the studio's edits to them, wherever the client reads them.
+      The wording is shared; the look follows the format (ANNEX_LOOK).
     */
-    const annexureBody = (
+    const renderAnnexure = (look: AnnexLook) => {
+        const T = ANNEX_LOOK[look];
+        return (
         <>
-            <div className="border-b-2 border-[#0F172A] pb-4">
-                <span className="text-[11px] font-bold text-[#C5A880] uppercase tracking-wider block"><Ed k="43ec7149" ctl={edCtl}>ANNEXURE A</Ed></span>
-                <h2 className="text-3xl font-extrabold tracking-tight text-[#0F172A] mt-1"><Ed k="e555dbd3" ctl={edCtl}>Commercial Terms & Conditions</Ed></h2>
-                <p className="text-xs text-slate-500 mt-1"><Ed k="530cebd7" ctl={edCtl}>Forms part of the Design-led Turnkey Proposal booklet and is to be read together with it.</Ed></p>
+            <div className={T.head}>
+                <span className={T.kicker}><Ed k="43ec7149" ctl={edCtl}>ANNEXURE A</Ed></span>
+                <h2 className={T.title}><Ed k="e555dbd3" ctl={edCtl}>Commercial Terms & Conditions</Ed></h2>
+                <p className={T.subtitle}><Ed k="530cebd7" ctl={edCtl}>Forms part of the Design-led Turnkey Proposal booklet and is to be read together with it.</Ed></p>
             </div>
 
             {latestDocket ? (
-                <div className="p-5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 leading-relaxed flex items-start gap-3 max-w-4xl">
-                    <div className="p-1 bg-[#C5A880]/10 rounded text-[#C5A880] shrink-0 mt-0.5">
+                <div className={T.note}>
+                    <div className={T.noteIcon}>
                         <ShieldCheckIcon className="w-4 h-4" />
                     </div>
                     <div>
                         <strong className="text-slate-800 font-bold block mb-1">Contractual Integration & Alignment Note</strong>
-                        This commercial Annexure forms part of the master contractual framework and is verbally and legally integrated with <strong className="text-slate-900 font-semibold">Master Terms Docket {latestDocket.docketRef}</strong> (Status: <span className="font-bold text-[#C5A880]">{latestDocket.status.toUpperCase()}</span>), issued for this project. The Master Terms Docket governs overarching service level agreements, legal boundaries, and liabilities, and shall take precedence in case of any operational discrepancies.
+                        This commercial Annexure forms part of the master contractual framework and is verbally and legally integrated with <strong className="text-slate-900 font-semibold">Master Terms Docket {latestDocket.docketRef}</strong> (Status: <span className={T.accentText}>{latestDocket.status.toUpperCase()}</span>), issued for this project. The Master Terms Docket governs overarching service level agreements, legal boundaries, and liabilities, and shall take precedence in case of any operational discrepancies.
                     </div>
                 </div>
             ) : (
-                <div className="p-5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 leading-relaxed flex items-start gap-3 max-w-4xl">
-                    <div className="p-1 bg-[#C5A880]/10 rounded text-[#C5A880] shrink-0 mt-0.5">
+                <div className={T.note}>
+                    <div className={T.noteIcon}>
                         <ShieldCheckIcon className="w-4 h-4" />
                     </div>
                     <div>
@@ -1475,19 +1520,19 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                 </div>
             )}
 
-            <div className="space-y-8 text-slate-700 text-xs leading-relaxed max-w-4xl">
-                <div>
-                    <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="7d2f6696" ctl={edCtl}>1 · ENGAGEMENT MODEL AND BASIS OF VALUE</Ed></h4>
+            <div className={T.body}>
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="7d2f6696" ctl={edCtl}>1 · ENGAGEMENT MODEL AND BASIS OF VALUE</Ed></h4>
                     <EdList k="annex.1-engagement-model-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1.5 text-slate-600">
-                        <li>This engagement is a <strong className="text-[#0F172A]">single design-led turnkey engagement</strong>. FFDS contracts, procures, executes and supervises the scope listed in the proposal booklet, and carries contractual execution responsibility for that scope.</li>
-                        <li>The figure stated in the booklet is the <strong className="text-[#0F172A]">Current Proposed Project Value</strong>, based on the scope, quantities and specifications presently recorded.</li>
-                        <li>The <strong className="text-[#0F172A]">Final Turnkey Order Value</strong> will be issued after site validation, design freeze, Schedule of Finishes approval and final BOQ sign-off. Once accepted in writing, it becomes the contracted value for execution.</li>
+                        <li>This engagement is a <strong className={T.strong}>single design-led turnkey engagement</strong>. FFDS contracts, procures, executes and supervises the scope listed in the proposal booklet, and carries contractual execution responsibility for that scope.</li>
+                        <li>The figure stated in the booklet is the <strong className={T.strong}>Current Proposed Project Value</strong>, based on the scope, quantities and specifications presently recorded.</li>
+                        <li>The <strong className={T.strong}>Final Turnkey Order Value</strong> will be issued after site validation, design freeze, Schedule of Finishes approval and final BOQ sign-off. Once accepted in writing, it becomes the contracted value for execution.</li>
                         <li><Ed k="324fa782" ctl={edCtl}>Rates underlying the proposal are held for the validity period stated above.</Ed></li>
                     </EdList>
                 </div>
 
-                <div>
-                    <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="f5dd5c3b" ctl={edCtl}>2 · COMMERCIAL SUMMARY</Ed></h4>
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="f5dd5c3b" ctl={edCtl}>2 · COMMERCIAL SUMMARY</Ed></h4>
                     <table className="w-full text-left border-collapse border border-slate-200 text-slate-600">
                         <thead>
                             <tr className="bg-slate-50 border-b border-slate-200 font-bold">
@@ -1517,7 +1562,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                 <td className="p-2"><Ed k="a7652052" ctl={edCtl}>18% on FFDS invoiced value</Ed></td>
                                 <td className="p-2 text-right font-mono">{formatINR(gstOnDesign + chargedGstOnExecution)}</td>
                             </tr>
-                            <tr className="bg-slate-900 text-white font-bold">
+                            <tr className={T.totalRow}>
                                 <td className="p-2"><Ed k="b41f3f00" ctl={edCtl}>Total Proposed Project Investment</Ed></td>
                                 <td className="p-2"></td>
                                 <td className="p-2 text-right font-mono">{formatINR(totalProposedInvestment)}</td>
@@ -1527,15 +1572,15 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     <p className="text-[10px] text-slate-400 mt-2 italic"><Ed k="58ea405d" ctl={edCtl}>This is the only commercial summary; no other figure in any document supersedes it.</Ed></p>
                 </div>
 
-                <div>
-                    <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="0f056cbb" ctl={edCtl}>3 · TAXES</Ed></h4>
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="0f056cbb" ctl={edCtl}>3 · TAXES</Ed></h4>
                     <p><Ed k="5a972bbe" ctl={edCtl}>GST shall be applicable on amounts invoiced by Form Factors Design Studio at the prevailing statutory rate, currently 18%, on both the execution value and the design and coordination fee.</Ed></p>
                     <p className="mt-2"><Ed k="6277da00" ctl={edCtl}>Where a direct client purchase or a payment to a third-party supplier is specifically agreed and documented in writing, that item shall be invoiced separately by the respective supplier and falls outside the FFDS contracted value.</Ed></p>
                     <p className="mt-2"><Ed k="951a9977" ctl={edCtl}>Any change in statutory rates or the introduction of any new levy after the date of this proposal shall apply to invoices raised thereafter.</Ed></p>
                 </div>
 
-                <div>
-                    <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="d794fc18" ctl={edCtl}>4 · PAYMENT TERMS</Ed></h4>
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="d794fc18" ctl={edCtl}>4 · PAYMENT TERMS</Ed></h4>
                     <EdList k="annex.4-payment-terms" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
                         <li><Ed k="e5896545" ctl={edCtl}>All stage payments are payable in advance of the corresponding stage. Material orders are placed only against cleared funds.</Ed></li>
                         <li>Design fee shares are percentages of {formatINR(taxableDesign)}; execution shares are percentages of {formatINR(taxableExecution)}. Stage amounts are rounded to the nearest rupee, with Execution 1 carrying the rounding adjustment so that stages sum exactly to the net taxable value.</li>
@@ -1545,8 +1590,8 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     </EdList>
                 </div>
 
-                <div>
-                    <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="73f70e57" ctl={edCtl}>5 · PROJECT INITIATION FEE</Ed></h4>
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="73f70e57" ctl={edCtl}>5 · PROJECT INITIATION FEE</Ed></h4>
                     <div className="grid grid-cols-2 gap-4 border border-slate-200 rounded p-4 bg-slate-50">
                         <div>
                             <strong className="text-slate-800 text-xs block mb-1">Covered by the fee</strong>
@@ -1569,8 +1614,8 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     </div>
                 </div>
 
-                <div>
-                    <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="ec65632e" ctl={edCtl}>6 · SCOPE, QUANTITIES AND VARIATIONS</Ed></h4>
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="ec65632e" ctl={edCtl}>6 · SCOPE, QUANTITIES AND VARIATIONS</Ed></h4>
                     <EdList k="annex.6-scope-quantities-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
                         <li><Ed k="d0bdccbc" ctl={edCtl}>Only items listed in the proposal booklet are included. Any item not written into the scope is not included.</Ed></li>
                         <li><Ed k="49611ff2" ctl={edCtl}>Quantities are as presently measured or estimated and are re-verified at site validation. Variation of more than 5% on any line will be notified in writing with the revised value before the affected work is ordered or commenced. Quantities are then adjusted to actual measured quantity at the rates underlying this proposal.</Ed></li>
@@ -1590,8 +1635,8 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     </EdList>
                 </div>
 
-                <div>
-                    <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="beca6efc" ctl={edCtl}>7 · EXCLUSIONS</Ed></h4>
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="beca6efc" ctl={edCtl}>7 · EXCLUSIONS</Ed></h4>
 
                     {/* Studio-only. `no-print` keeps it out of print, and the
                         PDF clone hides the same class, so a client never sees it. */}
@@ -1637,8 +1682,8 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     </EdList>
                 </div>
 
-                <div>
-                    <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="32cbf8a9" ctl={edCtl}>8 · PROGRAMME AND START CONDITIONS</Ed></h4>
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="32cbf8a9" ctl={edCtl}>8 · PROGRAMME AND START CONDITIONS</Ed></h4>
                     <p><Ed k="annex.8-programme-intro" ctl={edCtl}>The site programme is {totalDays} working days, excluding Sundays and public holidays. Design and planning runs for approximately {designDays} working days before it and is not counted within it. The site programme is calculated from the date on which all four of the following are in place:</Ed></p>
                     <EdList k="annex.8-programme-and-start" ctl={edCtl} as="ul" className="list-disc pl-6 text-slate-600 mt-2">
                         <li><Ed k="234b3c76" ctl={edCtl}>Design and material selection freeze, with the Schedule of Finishes approved in writing</Ed></li>
@@ -1648,9 +1693,9 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     </EdList>
                 </div>
 
-                <div>
-                    <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="1ecb13b3" ctl={edCtl}>9 · ASSUMPTIONS AND CLIENT RESPONSIBILITIES</Ed></h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="1ecb13b3" ctl={edCtl}>9 · ASSUMPTIONS AND CLIENT RESPONSIBILITIES</Ed></h4>
+                    <div className={T.pair}>
                         <div>
                             <span className="font-bold text-slate-800 block mb-1"><Ed k="8b593995" ctl={edCtl}>Assumptions</Ed></span>
                             <EdList k="annex.9-assumptions-and-client" ctl={edCtl} as="ul" className="list-disc pl-4 space-y-1 text-slate-500">
@@ -1677,8 +1722,8 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     </div>
                 </div>
 
-                <div>
-                    <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="054a2193" ctl={edCtl}>10 · MATERIALS, SAMPLES AND WORKMANSHIP</Ed></h4>
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="054a2193" ctl={edCtl}>10 · MATERIALS, SAMPLES AND WORKMANSHIP</Ed></h4>
                     <EdList k="annex.10-materials-samples-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
                         <li><Ed k="012d8dd8" ctl={edCtl}>Final brands, shades and finishes are selected against physical samples during the Schedule of Finishes stage and recorded in writing.</Ed></li>
                         <li>Where a specified brand is unavailable, {settings?.companyName || 'FFDS'} will propose an equivalent of the same or higher grade for written approval before ordering. No substitution will be made without approval.</li>
@@ -1686,8 +1731,8 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     </EdList>
                 </div>
 
-                <div>
-                    <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="c6725020" ctl={edCtl}>11 · HANDOVER, WARRANTY AND VALIDITY</Ed></h4>
+                <div className={T.section}>
+                    <h4 className={T.h4}><Ed k="c6725020" ctl={edCtl}>11 · HANDOVER, WARRANTY AND VALIDITY</Ed></h4>
                     <EdList k="annex.11-handover-warranty-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
                         <li><Ed k="f5d39714" ctl={edCtl}>Handover follows closure of the joint snag list, deep cleaning of the worked areas, and release of the handover dossier and warranty note.</Ed></li>
                         <li>{settings?.companyName || 'FFDS'} provides a workmanship warranty of 6 months from handover on carpentry executed under this contract, covering manufacturing and installation defects.</li>
@@ -1698,8 +1743,8 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     </EdList>
                 </div>
 
-                <div>
-                    <h4 className="font-extrabold text-[#0F172A] uppercase tracking-wider mb-2"><Ed k="1db9c1f6" ctl={edCtl}>12 · ACKNOWLEDGEMENT</Ed></h4>
+                <div className={T.sectionWide}>
+                    <h4 className={T.h4}><Ed k="1db9c1f6" ctl={edCtl}>12 · ACKNOWLEDGEMENT</Ed></h4>
                     <p><Ed k="d8bdaf37" ctl={edCtl}>The client acknowledges having read and accepted these Commercial Terms & Conditions together with the Design-led Turnkey Proposal booklet for the project named above.</Ed></p>
                     
                     <div className="grid grid-cols-2 gap-8 mt-6 pt-6 border-t border-slate-200">
@@ -1717,12 +1762,13 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                 </div>
             </div>
         </>
-    );
+        );
+    };
 
-    /* The terms on their own, for the Classic Digital proposal. No `ff-page`:
-       the PDF builder reads any sheet as a booklet and would print only this one. */
+    /* The terms on their own, in the Classic Digital proposal's own format. No
+       `ff-page`: the PDF builder reads any sheet as a booklet and would print only this one. */
     if (termsOnly) {
-        return <div className="ff-booklet-terms space-y-8">{annexureBody}</div>;
+        return <div className="ff-classic-terms">{renderAnnexure('classic')}</div>;
     }
 
     return (
@@ -2749,7 +2795,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
             {/* ================= ANNEXURE A: TERMS & CONDITIONS ================= */}
             <div className="ff-page ff-page-flow p-20 bg-white space-y-8">
-                {annexureBody}
+                {renderAnnexure('booklet')}
             </div>
 
             {/* ================= MODAL: EDIT SPECIFICATIONS ================= */}

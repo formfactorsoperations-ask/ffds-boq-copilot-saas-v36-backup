@@ -81,14 +81,6 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
         });
     };
 
-    /* A dash stands for "nothing found". Level 2 is the sheet the studio fills
-       in for one option, so there an empty cell stays empty, ready to be
-       filled, instead of printing a dash to the client. */
-    const cellText = (category: string, tier: { id?: string; name: string }, generated: string) => {
-        const value = specOverride(overrides, category, tier) ?? generated;
-        return isLevel2 && /^\s*[-—–]?\s*$/.test(value || '') ? '' : value;
-    };
-
     const isSingleTier = tiers.length === 1;
     const sectionTitle = isLevel2 ? "Material Specifications" : "Detailed Specifications & Differences";
     const finalRows = l1Rows;
@@ -140,8 +132,8 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                                contentEditable={!!setProjectContext} 
                                                suppressContentEditableWarning
                                                onBlur={(e) => handleOverride(row.category, tier, e.currentTarget.innerText)}
-                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] min-h-[1.75rem] outline-none focus:ring-2 focus:ring-[#3D52A0]' : ''}`}
-                                            >{cellText(row.category, tier, row[tier.name])}</div>
+                                               className={`whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 p-1 rounded min-w-[50px] outline-none focus:ring-2 focus:ring-[#3D52A0]' : ''}`}
+                                            >{specOverride(overrides, row.category, tier) ?? row[tier.name]}</div>
                                         </td>
                                     ))}
                             </tr>
@@ -163,8 +155,8 @@ const ClientMaterialSpecs: React.FC<ClientMaterialSpecsProps> = ({ comparisonDat
                                            contentEditable={!!setProjectContext} 
                                            suppressContentEditableWarning
                                            onBlur={(e) => handleOverride(row.category, tier, e.currentTarget.innerText)}
-                                           className={`text-sm text-slate-800 font-medium bg-white p-2 rounded-lg border border-slate-100 shadow-sm whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 min-h-[2.25rem] outline-none focus:ring-2 focus:ring-[#3D52A0]' : ''}`}
-                                        >{cellText(row.category, tier, row[tier.name])}</div>
+                                           className={`text-sm text-slate-800 font-medium bg-white p-2 rounded-lg border border-slate-100 shadow-sm whitespace-pre-line ${setProjectContext ? 'hover:bg-slate-100 outline-none focus:ring-2 focus:ring-[#3D52A0]' : ''}`}
+                                        >{specOverride(overrides, row.category, tier) ?? row[tier.name]}</div>
                                     </div>
                                 ))}
                         </div>
