@@ -112,8 +112,58 @@ describe('Level 2: material specifications match Level 1', () => {
 
     render(<Harness ctx={{ proposalOptionId: 'com', proposalContent: content }} />);
     const l2 = specRows();
-    expect(l2).toEqual(l1);
+    // The same values; a dash on Level 1 ("nothing found") is an empty cell on Level 2.
+    expect(l2).toEqual(l1.map(([c, v]) => [c, v === '-' ? '' : v]));
     expect(l2.find(r => r[0] === 'Hardware System')![1]).toBe('Hettich soft-close, as agreed');
+  });
+
+  it('leaves a specification nobody has filled in blank on Level 2, and the filled ones as they are', () => {
+    // An option with no built-in specs and an empty BOQ: nothing is found for any row.
+    const custom = [{ ...TIERS[0], id: 'cus', name: 'Custom Package' }];
+    const overrides = { 'Paint Finish': { cus: 'Asian Paints Royale' }, 'Hardware System': { cus: ' - ' } };
+    function Custom({ level }: { level: string }) {
+      const [ctx, setCtx] = useState<any>({ name: 'Flat', activeProposalLevel: level, proposalContent: { materials: { overrides } } });
+      return <ClientTab tiers={custom} bank={[]} materialSuggestions={[]} timelinePhases={[]} setTimelinePhases={() => undefined} projectContext={ctx} setProjectContext={setCtx} />;
+    }
+    render(<Custom level="LEVEL_2" />);
+    const l2 = Object.fromEntries(specRows().map(r => [r[0], r[1]]));
+    expect(l2['Paint Finish']).toBe('Asian Paints Royale');
+    expect(l2['Hardware System']).toBe('');
+    expect(l2['Plywood (Kitchen & Bath)']).toBe('');
+    cleanup();
+
+    render(<Custom level="LEVEL_1" />);
+    const l1 = Object.fromEntries(specRows().map(r => [r[0], r[1]]));
+    expect(l1['Plywood (Kitchen & Bath)']).toBe('-');
+  });
+});
+
+describe('Classic Digital terms page', () => {
+  const termsPage = () => document.getElementById('terms')!;
+
+  it('prints the Luxe Booklet\'s Annexure A, not the old six clauses', () => {
+    render(<Harness ctx={{ activeProposalLevel: 'LEVEL_1' }} />);
+    const terms = termsPage();
+    expect(terms.textContent).toContain('Commercial Terms & Conditions');
+    expect(terms.textContent).toContain('1 · ENGAGEMENT MODEL AND BASIS OF VALUE');
+    expect(terms.textContent).toContain('12 · ACKNOWLEDGEMENT');
+    expect(terms.textContent).not.toContain('Standard Terms & Conditions');
+    expect(terms.textContent).not.toContain('Validity of Proposal');
+  });
+
+  it('carries the studio\'s edits to the booklet\'s terms, read-only', () => {
+    const blocks = { d0bdccbc: 'Only items listed in this proposal are included.' };
+    const lists = { 'annex.4-payment-terms': ['Stage payments are due on invoice.'] };
+    render(<Harness ctx={{ activeProposalLevel: 'LEVEL_2', proposalContent: { blocks, lists } }} />);
+    const terms = termsPage();
+    expect(terms.textContent).toContain('Only items listed in this proposal are included.');
+    expect(terms.textContent).toContain('Stage payments are due on invoice.');
+    expect(terms.querySelector('[contenteditable="true"]')).toBeNull();
+  });
+
+  it('adds no booklet sheet, so Download PDF still captures the whole classic proposal', () => {
+    render(<Harness ctx={{ activeProposalLevel: 'LEVEL_1' }} />);
+    expect(document.querySelector('.vnext-proposal-wrapper .ff-page')).toBeNull();
   });
 });
 
