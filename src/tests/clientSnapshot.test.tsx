@@ -17,7 +17,7 @@ const options = [
 ];
 
 test('the ledger matches the proposal the studio sent (Essential Elegance, 18% GST)', () => {
-  const l = ledgerFor(632324, 75879, [], 18, false);
+  const l = ledgerFor(632324, 75879, [], { rate: 18, billablePercent: 100, executionGst: true, designGst: true });
   expect(Math.round(l.netTaxable)).toBe(708203);
   expect(Math.round(l.gstOnDesign)).toBe(13658);
   expect(Math.round(l.chargedGstOnExecution)).toBe(113818);
@@ -29,7 +29,7 @@ test('discounts and the execution GST waiver flow through the ledger', () => {
     { id: 'd1', name: 'Festive', target: 'design', type: 'percentage', value: 10 },
     { id: 'd2', name: 'Loyalty', target: 'execution', type: 'flat', value: 20000 },
   ] as any;
-  const l = ledgerFor(100000, 10000, discounts, 18, true);
+  const l = ledgerFor(100000, 10000, discounts, { rate: 18, billablePercent: 100, executionGst: false, designGst: true });
   expect(l.netTaxable).toBe(80000 + 9000);
   expect(l.chargedGstOnExecution).toBe(0);
   expect(l.potentialGstOnExecution).toBe(14400);

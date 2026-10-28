@@ -150,6 +150,71 @@ export function billingBase(
     : { execution: optionExec, design: optionDes, contract: false };
 }
 
+/*
+  The GST a client is charged, as Money bills it.
+
+  Money charges GST on execution only on the billable share of it
+  (billablePercent: "30% GST / 70% Cash"), and only while each GST switch is
+  on. The proposal worked its GST out separately, at the full rate on all of
+  execution, so on Lodha Splendora — billing 30% officially — the proposal
+  showed ₹1,87,255 of execution GST against the ₹56,176 Money bills. Every
+  document the client reads now takes its GST from here.
+*/
+export interface GstTerms {
+  /** Percent, e.g. 18. */
+  rate: number;
+  /** Percent of execution invoiced with GST, 0-100; the rest is billed without it. */
+  billablePercent: number;
+  executionGst: boolean;
+  designGst: boolean;
+}
+
+export function gstTermsOf(ctx: any): GstTerms {
+  const f = resolveFinancials(ctx?.financials);
+  return {
+    rate: ctx?.gstRate || 18,
+    billablePercent: f.billablePercent,
+    executionGst: f.executionGstEnabled,
+    designGst: f.designGstEnabled,
+  };
+}
+
+export function gstOn(taxableExecution: number, taxableDesign: number, t: GstTerms) {
+  const r = t.rate / 100;
+  const potentialExecution = taxableExecution * r;
+  const execution = t.executionGst ? taxableExecution * (t.billablePercent / 100) * r : 0;
+  return {
+    execution,
+    design: t.designGst ? taxableDesign * r : 0,
+    /** GST on all of execution, before the cash share or a waiver. */
+    potentialExecution,
+    /** No execution GST is charged at all: switched off, or billed entirely in cash. */
+    executionWaived: execution === 0 && potentialExecution > 0,
+  };
+}
+
+/** The one-line GST note under the payment terms, true to how execution is billed. */
+export function gstNoteFor(t: GstTerms): string {
+  const r = `GST @ ${t.rate}%`;
+  const design = t.designGst ? 'on Professional/Design Fees' : '';
+  if (!t.executionGst || t.billablePercent === 0) {
+    return design
+      ? `${r} applicable only ${design}. Execution billing is net of taxes (Vendor Direct / Cash).`
+      : 'No GST is charged. Execution billing is net of taxes (Vendor Direct / Cash).';
+  }
+  if (t.billablePercent < 100) {
+    return `${r} applicable ${design ? `${design} and ` : ''}on the ${t.billablePercent}% of execution invoiced; the remaining ${100 - t.billablePercent}% is billed net of taxes (Vendor Direct / Cash).`;
+  }
+  return design ? `${r} applicable on all invoices.` : `${r} applicable on execution invoices only.`;
+}
+
+/** "GST on Execution (18%)", or "(18% on the billable 30%)" when part is billed without GST. */
+export function executionGstLabel(t: GstTerms): string {
+  return t.executionGst && t.billablePercent > 0 && t.billablePercent < 100
+    ? `GST on Execution (${t.rate}% on the billable ${t.billablePercent}%)`
+    : `GST on Execution (${t.rate}%)`;
+}
+
 /** Which fields a stored record is missing, for the repair sweep to report. */
 export function missingFinancialFields(raw: any): string[] {
   if (!raw) return [];               // absent entirely is a different case
