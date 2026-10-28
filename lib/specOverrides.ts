@@ -69,3 +69,37 @@ export function contextWithTierRenamed(ctx: ProjectContext, tierId: string, oldN
   if (proposalContent === ctx.proposalContent && proposalContentByMode === byMode) return ctx;
   return { ...ctx, proposalContent, proposalContentByMode };
 }
+
+/**
+ * The project once `copyId` has been duplicated from `sourceId`: the copy
+ * starts with the source's spec edits, in every proposal mode. It is a
+ * snapshot — editing either option afterwards leaves the other alone.
+ */
+export function contextWithTierCopied(ctx: ProjectContext, source: { id: string; name: string }, copyId: string): ProjectContext {
+  const copyIn = (content: any) => {
+    const overrides: Overrides | undefined = content?.materials?.overrides;
+    if (!overrides) return content;
+    let changed = false;
+    const next: Overrides = {};
+    Object.entries(overrides).forEach(([category, row]) => {
+      const value = specOverride(overrides, category, source);
+      if (value !== undefined && row && !(copyId in row)) {
+        next[category] = { ...row, [copyId]: value };
+        changed = true;
+      } else {
+        next[category] = row;
+      }
+    });
+    return changed ? { ...content, materials: { ...content.materials, overrides: next } } : content;
+  };
+
+  const proposalContent = copyIn(ctx.proposalContent);
+  const byMode = ctx.proposalContentByMode;
+  let proposalContentByMode = byMode;
+  if (byMode) {
+    const entries = Object.entries(byMode).map(([mode, content]) => [mode, copyIn(content)] as const);
+    if (entries.some(([mode, content]) => content !== (byMode as any)[mode])) proposalContentByMode = Object.fromEntries(entries) as any;
+  }
+  if (proposalContent === ctx.proposalContent && proposalContentByMode === byMode) return ctx;
+  return { ...ctx, proposalContent, proposalContentByMode };
+}

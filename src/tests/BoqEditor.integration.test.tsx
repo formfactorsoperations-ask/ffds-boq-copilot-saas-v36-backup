@@ -452,6 +452,19 @@ describe('Pricing & Tiers: renaming an option', () => {
     expect(state.tiers.find((t: any) => t.id === 'ess').originalName).toBe('Essential Elegance');
   });
 
+  it('Duplicate gives the copy the original\'s material spec edits, as its own', () => {
+    let state: any;
+    const overrides = { 'Hardware System': { ess: 'Hettich soft-close' }, 'Paint Finish': { 'Essential Elegance': 'Royale Shyne' } };
+    render(<TierHarness probe={s => { state = s; }} ctx={{ proposalContent: { materials: { overrides } }, proposalContentByMode: { TURNKEY: { materials: { overrides } } } }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
+    const copy = state.tiers.find((t: any) => t.name === 'Essential Elegance (Copy)');
+    expect(copy.parentTierId).toBe('ess');
+    for (const content of [state.ctx.proposalContent, state.ctx.proposalContentByMode.TURNKEY]) {
+      expect(content.materials.overrides['Hardware System']).toEqual({ ess: 'Hettich soft-close', [copy.id]: 'Hettich soft-close' });
+      expect(content.materials.overrides['Paint Finish']).toEqual({ 'Essential Elegance': 'Royale Shyne', [copy.id]: 'Royale Shyne' });
+    }
+  });
+
   it('a blank name, or Escape, keeps the old name', () => {
     let state: any;
     render(<TierHarness probe={s => { state = s; }} />);

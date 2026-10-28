@@ -11,7 +11,7 @@ import { compareTiers, optionPrice } from '../lib/tierComparison';
 import { otherBenchmarks, medianGm, closestInSize } from '../lib/tierBenchmarks';
 import { contextWithApproved, tiersWithApproved, describeApproval, contextWithoutApproved, tiersWithoutApproved, previousBaseline } from '../lib/tierApproval';
 import { useOrg } from '../contexts/OrgContext';
-import { contextWithTierRenamed } from '../lib/specOverrides';
+import { contextWithTierRenamed, contextWithTierCopied } from '../lib/specOverrides';
 import { CompareIcon, DeleteIcon, PencilIcon, CheckBadgeIcon, SparklesIcon, SaveIcon, CheckIcon, FileSpreadsheetIcon, ArrowRightIcon } from './Icons';
 
 interface TierManagerProps {
@@ -350,6 +350,8 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             lifecycleTag: 'Draft'
         };
         setTiers(prev => [...prev, newTier]);
+        // The copy starts with the original's material spec edits (lib/specOverrides.ts).
+        setProjectContext(prev => contextWithTierCopied(prev, tierToDuplicate, newTier.id));
         setActiveTierId(newTier.id);
     };
 
