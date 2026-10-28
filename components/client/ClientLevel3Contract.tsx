@@ -10,6 +10,7 @@ import { httpsCallable } from 'firebase/functions';
 import { sendAgreementSignoffRequest } from '../../services/emailService';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 import { publicAppOrigin } from '../../lib/publicUrl';
+import { gstTermsOf, gstOn, gstNoteFor } from '../../lib/paymentSchedule';
 
 interface ClientLevel3ContractProps {
     projectId?: string;
@@ -652,10 +653,8 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
     const isShowingOperative = !!(operativeBoq?.itemsSnapshot && !isEditing);
 
     // Check GST Status
-    const isExecutionGstWaived = projectContext?.financials?.executionGstEnabled === false;
-    const gstNote = isExecutionGstWaived 
-        ? "GST @ 18% applicable only on Design Fees. Execution billing is net of taxes (Vendor Direct / Cash)." 
-        : "GST @ 18% applicable on all invoices.";
+    // As Money bills it (lib/paymentSchedule.ts): the billable share of execution and both switches.
+    const gstNote = gstNoteFor(gstTermsOf(projectContext));
 
     // Calculate smart duration
     const calculatedDuration = getEstimatedDuration(projectContext.config, timelinePhases);
@@ -923,15 +922,10 @@ const ClientLevel3Contract: React.FC<ClientLevel3ContractProps> = ({ projectId, 
           Execution was already checked below; design was not, and the rate
           itself was pinned at 18% however the project was configured.
         */
-        const gstRate = ((projectContext as any)?.gstRate ?? 18) / 100;
-        const isDesignGstEnabled = financials?.designGstEnabled !== false;
-        const designGST = isDesignGstEnabled ? netDesign * gstRate : 0;
-        
-        // Check if Execution GST is enabled (default to true if undefined, unless explicitly false)
-        // However, in this app, the toggle usually starts false or true. 
-        // Let's check the existing logic: const isExecutionGstWaived = projectContext?.financials?.executionGstEnabled === false;
-        const isExecGstEnabled = financials?.executionGstEnabled !== false; 
-        const execGST = isExecGstEnabled ? netExec * gstRate : 0;
+        // Execution GST only on its billable share, as Money bills it (lib/paymentSchedule.ts).
+        const gst = gstOn(netExec, netDesign, gstTermsOf(projectContext));
+        const designGST = gst.design;
+        const execGST = gst.execution;
 
         const gstTotal = designGST + execGST;
 

@@ -22,6 +22,7 @@ import ClientBookletProposal from './ClientBookletProposal';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
 import { proposalOption, optionLabel, forOption } from '../../lib/proposalOption';
+import { gstTermsOf, gstOn } from '../../lib/paymentSchedule';
 
 interface ClientExportViewProps {
     tiers: ProposalTier[];
@@ -205,8 +206,8 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
     // Extract Discounts & Taxes Logic (Same as Snapshot Ledger)
     const financials = projectContext?.financials;
     const discounts = financials?.discounts || [];
-    const gstRate = projectContext?.gstRate || 18;
-    const isExecutionGstWaived = financials?.executionGstEnabled === false;
+    // GST as Money bills it (lib/paymentSchedule.ts): the billable share of execution, each switch.
+    const gstTerms = gstTermsOf(projectContext);
 
     // The Level 2 option's values for Level 2 (or the previewed one for L1)
     const activeTier = isL2 ? l2Tier : (tiers.find(t => t.id === previewTierId) || tiers[0]);
@@ -226,8 +227,9 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
     const taxableDesign = Math.max(0, baseDesign - designSavings);
 
     // GST
-    const gstOnDesign = taxableDesign * (gstRate / 100);
-    const chargedGstOnExecution = isExecutionGstWaived ? 0 : (taxableExecution * (gstRate / 100));
+    const gst = gstOn(taxableExecution, taxableDesign, gstTerms);
+    const gstOnDesign = gst.design;
+    const chargedGstOnExecution = gst.execution;
 
     // Final Totals to pass to Payment Component
     const finalDesignTotal = taxableDesign + gstOnDesign;

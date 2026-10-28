@@ -6,6 +6,7 @@ import { groupPhasesIntoStages } from '../../lib/programmeStages';
 import { CheckIcon, XIcon, ShieldCheckIcon, HelpCircleIcon, Pencil, Save } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { proposalOption } from '../../lib/proposalOption';
+import { gstTermsOf, gstOn } from '../../lib/paymentSchedule';
 import { specOverride, withSpecOverride } from '../../lib/specOverrides';
 
 /*
@@ -616,8 +617,9 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
     // --- FINANCIAL CALCULATIONS ---
     const financials = projectContext?.financials;
     const discounts = financials?.discounts || [];
-    const gstRate = projectContext?.gstRate || 18;
-    const isExecutionGstWaived = financials?.executionGstEnabled === false;
+    // GST as Money bills it (lib/paymentSchedule.ts): the billable share of execution, each switch.
+    const gstTerms = gstTermsOf(projectContext);
+    const gstRate = gstTerms.rate;
 
     const baseExecution = isL2 ? (l2Tier.summary?.totalSell || 0) : (activeTier.summary?.totalSell || 0);
     const baseDesign = isL2 ? (l2Tier.summary?.designFee || 0) : (activeTier.summary?.designFee || 0);
@@ -768,8 +770,9 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
         setPageTotal((prev) => (prev === n ? prev : n));
     });
 
-    const gstOnDesign = taxableDesign * (gstRate / 100);
-    const chargedGstOnExecution = isExecutionGstWaived ? 0 : (taxableExecution * (gstRate / 100));
+    const gst = gstOn(taxableExecution, taxableDesign, gstTerms);
+    const gstOnDesign = gst.design;
+    const chargedGstOnExecution = gst.execution;
 
     const finalDesignTotal = taxableDesign + gstOnDesign;
     const finalExecutionTotal = taxableExecution + chargedGstOnExecution;
@@ -793,12 +796,11 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
             const taxExec = Math.max(0, baseExec - execSavings);
             const taxDes = Math.max(0, baseDes - desSavings);
             
-            const gstDes = taxDes * (gstRate / 100);
-            const gstExec = isExecutionGstWaived ? 0 : (taxExec * (gstRate / 100));
+            const g = gstOn(taxExec, taxDes, gstTerms);
             
-            return taxExec + taxDes + gstDes + gstExec;
+            return taxExec + taxDes + g.design + g.execution;
         });
-    }, [tiers, discounts, gstRate, isExecutionGstWaived, totalProposedInvestment]);
+    }, [tiers, discounts, gstTerms.rate, gstTerms.billablePercent, gstTerms.executionGst, gstTerms.designGst, totalProposedInvestment]);
 
     const investmentMin = useMemo(() => {
         if (tierInvestments.length === 0) return totalProposedInvestment;

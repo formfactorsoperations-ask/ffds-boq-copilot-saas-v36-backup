@@ -4,6 +4,7 @@ import { TimelinePhase, ProposalContent, ProjectContext, PaymentMilestone } from
 import { formatCurrency, formatClientValue } from '../../lib/utils';
 import ClientDiscountShowcase from './ClientDiscountShowcase';
 import { CheckBadgeIcon, ShieldCheckIcon } from '../Icons';
+import { gstTermsOf, gstOn, executionGstLabel, type GstTerms } from '../../lib/paymentSchedule';
 
 import { ProposalLevel } from '../../types';
 
@@ -29,18 +30,21 @@ type Discount = NonNullable<NonNullable<ProjectContext['financials']>['discounts
 /*
   The commercial ledger for one option: execution and design fee, less the
   studio's discounts, plus GST (or the execution GST waiver). The summary and
-  the comparison table both read from here, so they can never disagree.
+  the comparison table both read from here, so they can never disagree. GST is
+  charged as Money bills it (lib/paymentSchedule.ts gstOn): on the billable
+  share of execution, and only while each switch is on.
 */
-export function ledgerFor(baseExecution: number, baseDesign: number, discounts: Discount[], gstRate: number, executionGstWaived: boolean) {
+export function ledgerFor(baseExecution: number, baseDesign: number, discounts: Discount[], terms: GstTerms) {
     const savingOf = (d: Discount) => d.type === 'percentage' ? (d.target === 'execution' ? baseExecution : baseDesign) * (d.value / 100) : d.value;
     const executionSavings = discounts.filter(d => d.target === 'execution').reduce((sum, d) => sum + savingOf(d), 0);
     const designSavings = discounts.filter(d => d.target === 'design').reduce((sum, d) => sum + savingOf(d), 0);
     const taxableExecution = baseExecution - executionSavings;
     const taxableDesign = baseDesign - designSavings;
     const netTaxable = taxableExecution + taxableDesign;
-    const gstOnDesign = taxableDesign * (gstRate / 100);
-    const potentialGstOnExecution = taxableExecution * (gstRate / 100);
-    const chargedGstOnExecution = executionGstWaived ? 0 : potentialGstOnExecution;
+    const gst = gstOn(taxableExecution, taxableDesign, terms);
+    const gstOnDesign = gst.design;
+    const potentialGstOnExecution = gst.potentialExecution;
+    const chargedGstOnExecution = gst.execution;
     return {
         baseExecution, baseDesign, savingOf, executionSavings, designSavings,
         netTaxable, gstOnDesign, potentialGstOnExecution, chargedGstOnExecution,
@@ -110,15 +114,18 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ level, investmentMin, i
     const financials = projectContext?.financials;
     const discounts = financials?.discounts || [];
     
-    const gstRate = projectContext?.gstRate || 18;
-    // Execution GST is on unless the studio switched it off; off means it is waived, and the waiver is shown.
-    const isExecutionGstWaived = financials?.executionGstEnabled === false;
-    const ledger = ledgerFor(executionTotal || 0, designFee || 0, discounts, gstRate, isExecutionGstWaived);
+    // GST as Money bills it: the rate, the billable share of execution and the two switches.
+    const gstTerms = gstTermsOf(projectContext);
+    const gstRate = gstTerms.rate;
+    const ledger = ledgerFor(executionTotal || 0, designFee || 0, discounts, gstTerms);
+    // No execution GST is charged at all (switched off, or billed entirely in cash): the waiver is shown.
+    const isExecutionGstWaived = gstOn(1, 0, gstTerms).executionWaived;
+    const execGstLabel = executionGstLabel(gstTerms);
     const { baseExecution, baseDesign, netTaxable, gstOnDesign, potentialGstOnExecution, chargedGstOnExecution, finalPayable } = ledger;
 
     // Every option in the same format, side by side (Level 1 with more than one option).
     const comparison = showGrandTotal && options.length > 1
-        ? options.map(o => ({ ...o, ledger: ledgerFor(o.executionTotal, o.designFee, discounts, gstRate, isExecutionGstWaived) }))
+        ? options.map(o => ({ ...o, ledger: ledgerFor(o.executionTotal, o.designFee, discounts, gstTerms) }))
         : [];
 
     return (
@@ -189,7 +196,7 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ level, investmentMin, i
 
                                 {/* GST Design */}
                                 <div className="flex justify-between items-center text-sm">
-                                    <span className="text-slate-600 font-medium">3. GST on Design Fees ({gstRate}%)</span>
+                                    <span className="text-slate-600 font-medium">3. GST on Design Fees ({gstTerms.designGst ? `${gstRate}%` : 'not charged'})</span>
                                     <span className="font-mono text-slate-700">{formatCurrency(gstOnDesign)}</span>
                                 </div>
 
@@ -210,7 +217,7 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ level, investmentMin, i
                                     </>
                                 ) : (
                                     <div className="flex justify-between items-center text-sm">
-                                        <span className="text-slate-600 font-medium">4. GST on Execution ({gstRate}%)</span>
+                                        <span className="text-slate-600 font-medium">4. {execGstLabel}</span>
                                         <span className="font-mono text-slate-700">{formatCurrency(chargedGstOnExecution)}</span>
                                     </div>
                                 )}
@@ -365,8 +372,8 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ level, investmentMin, i
                                     ['2. Interior Design Fee', (l: typeof ledger) => l.baseDesign],
                                     ...discounts.map(d => [`Special Discount - ${d.name}`, (l: typeof ledger) => -l.savingOf(d)] as const),
                                     ['Net Taxable Value', (l: typeof ledger) => l.netTaxable],
-                                    [`3. GST on Design Fees (${gstRate}%)`, (l: typeof ledger) => l.gstOnDesign],
-                                    [isExecutionGstWaived ? `4. GST on Execution (${gstRate}%), waived` : `4. GST on Execution (${gstRate}%)`, (l: typeof ledger) => l.chargedGstOnExecution],
+                                    [`3. GST on Design Fees (${gstTerms.designGst ? `${gstRate}%` : 'not charged'})`, (l: typeof ledger) => l.gstOnDesign],
+                                    [isExecutionGstWaived ? `4. GST on Execution (${gstRate}%), waived` : `4. ${execGstLabel}`, (l: typeof ledger) => l.chargedGstOnExecution],
                                 ] as const).map(([label, value]) => (
                                     <tr key={label}>
                                         <td className={`py-2.5 px-6 font-medium ${label === 'Net Taxable Value' ? 'text-xs font-bold uppercase text-slate-500' : ''}`}>{label}</td>

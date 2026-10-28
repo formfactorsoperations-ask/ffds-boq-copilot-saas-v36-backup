@@ -5,6 +5,7 @@ import { CalendarIcon, PencilIcon, CheckIcon, ScissorsIcon, DeleteIcon, AlertIco
 import { formatCurrency } from '../../lib/utils';
 import { useOrg } from '../../contexts/OrgContext';
 import { FFDS_PAYMENT_STRUCTURE_DEFAULTS } from '../../services/engagementService';
+import { gstTermsOf, gstNoteFor } from '../../lib/paymentSchedule';
 
 interface ClientPaymentsProps {
     paymentMilestones: PaymentMilestone[];
@@ -28,7 +29,8 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
     const isOwner = currentRole === 'Super Admin' || currentRole === 'Admin';
     
     // Check GST Status
-    const isExecutionGstWaived = projectContext?.financials?.executionGstEnabled === false;
+    // The GST note follows how Money bills (lib/paymentSchedule.ts): billable share and both switches.
+    const gstNote = gstNoteFor(gstTermsOf(projectContext));
 
     const data = content || { title: "Payment Milestones", subtitle: "Payments are tied to clear progress." };
     
@@ -213,10 +215,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                 </h4>
                 <ul className="list-disc list-inside text-xs text-slate-700 space-y-2 font-medium leading-relaxed">
                     <li>
-                        {mode === 'design_only' || !isExecutionGstWaived 
-                            ? "GST @ 18% applicable on all invoices." 
-                            : "GST @ 18% applicable only on Professional/Design Fees. Execution billing is net of taxes (Vendor Direct / Cash)."
-                        }
+                        {mode === 'design_only' ? `GST @ ${gstTermsOf(projectContext).rate}% applicable on all invoices.` : gstNote}
                     </li>
                     <li>
                         Due dates are indicative and subject to change based on site conditions and approvals.
