@@ -230,6 +230,29 @@ question, gives the answer in plain sentences and names what it read
 person, through the studio's server-side AI proxy: money only for finance
 roles, a designer's own projects only.
 
+### People: the office guide and the studio's life (approved 27 Oct 2026)
+
+The owner approved mockups 1, B, C, E and I. They live in People, in the same
+fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
+
+- **Office guide** (`OfficeGuide.tsx`) replaced the Directory: one table of desk,
+  computer, office mobile, office email, extension, birthday and who is in today,
+  or cards that turn over. Rows rise in; a name opens a contact card that slides
+  in from the right with a slight turn. Copy buttons tick when used. Admins edit.
+- **Office essentials** (`OfficeEssentials.tsx`): tiles for Wi-Fi, address, hours
+  (from the People policy), printers, office help and emergencies (rose tile).
+- **Celebrations** (`Celebrations.tsx`): a card whose cover opens in 3D, with
+  wishes rising in and `Confetti` when signed; a glass banner on Today.
+- **Kudos wall** (`KudosWall.tsx`): notes hang tilted from a pin and straighten
+  on hover; paper in the brand and state tints only.
+- **Emergency contacts** (`EmergencyContacts.tsx`): private to the person and
+  admins; opening one asks why, and the person is told.
+- Birth years and personal numbers are never asked for or shown.
+- The People rail is grouped (owner, 28 Oct 2026): My day (Today, Attendance, Leave,
+  Approvals), Team (Calendar, Office guide, Celebrations, Kudos), Studio (Essentials,
+  Emergency contacts) and Admin (Monthly report). Group names are field labels, shown
+  from `lg` up; a group with nothing in it for that person is left out.
+
 ### Ops Desk motion (approved 21 Oct 2026)
 
 The owner asked for the Ops Desk to stop looking static and to work for a team

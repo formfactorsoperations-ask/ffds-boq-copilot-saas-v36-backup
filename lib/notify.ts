@@ -219,6 +219,24 @@ export function peopleDrafts(
   return [];
 }
 
+/* ── People: kudos and emergency contacts (lib/peopleGuide.ts) ──────────── */
+
+/** A thank-you pinned to the kudos wall: the person thanked hears of it. */
+export function kudosDraft(k: { tag: string; text: string }, p: { fromName: string; toEmail: string }): Draft {
+  return {
+    kind: 'guide.kudos', area: 'team', level: 'update', title: `${p.fromName} thanked you: ${k.tag.toLowerCase()}`, line: quote(k.text),
+    projectId: null, projectName: null, route: 'people', action: null, actor: p.fromName, group: null, to: { emails: [inboxKey(p.toEmail)] },
+  };
+}
+
+/** An admin opened someone's emergency contacts: the person is always told, with the reason given. */
+export function emergencyOpenedDraft(reason: string, p: { byName: string; toEmail: string }): Draft {
+  return {
+    kind: 'guide.emergency', area: 'team', level: 'update', title: `${p.byName} opened your emergency contacts`, line: quote(reason),
+    projectId: null, projectName: null, route: 'people', action: null, actor: p.byName, group: null, to: { emails: [inboxKey(p.toEmail)] },
+  };
+}
+
 /* ── Ops Desk escalations ────────────────────────────────────────────────── */
 
 export function escalationDraft(

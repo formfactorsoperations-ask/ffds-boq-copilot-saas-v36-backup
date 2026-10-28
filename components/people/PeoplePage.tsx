@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNoteArrivals } from '../notify/NotifyContext';
 import {
-  Sunrise, Fingerprint, TreePalm, Stamp, CalendarDays, Contact, ChartColumn, Plus, RefreshCw, ChevronLeft, ChevronRight, MapPin, Download, Check, X, Search,
-  PartyPopper, Inbox, Users, Sparkles, Wrench, History, RotateCcw,
+  Sunrise, Fingerprint, TreePalm, Stamp, CalendarDays, ChartColumn, Plus, RefreshCw, ChevronLeft, ChevronRight, MapPin, Download, Check, X, Search,
+  PartyPopper, Inbox, Users, Sparkles, Wrench, History, RotateCcw, BookUser, HandHeart, Building2, HeartPulse,
 } from '@/lib/lucide-shim';
 import { LEAVE_LABELS, addDays, clock12, isLate, type Attendance, type Balance, type LeaveType, type RequestRecord, type Snapshot, type Status } from '../../lib/peopleDesk';
 import {
@@ -15,21 +15,31 @@ import { StudioBar, BarStrip, BarButton } from '../ui/StudioBar';
 import { CountUp, Dot } from '../ui/HudBits';
 import MyDayCard from './MyDayCard';
 import { LeaveSheet, CorrectionSheet } from './PeopleSheets';
-import { Ring, Avatar, Skeleton, Glide, Notice, IconTile, Tilt, LEAVE_ICON, MODE_ICON, initials, listV, rowV, sectionV, EASE } from './PeopleBits';
+import { Ring, Avatar, Skeleton, Glide, Notice, IconTile, Tilt, Panel, Empty, LEAVE_ICON, MODE_ICON, initials, listV, rowV, sectionV, EASE } from './PeopleBits';
 import { StudioPulse, ArrivalToasts, useToday } from './Arrivals';
 import PeopleCalendar from './PeopleCalendar';
+import { useGuide } from '../../services/peopleGuideService';
+import { OfficeGuideSection } from './OfficeGuide';
+import { CelebrationsSection, CelebrationBanner } from './Celebrations';
+import { KudosWallSection } from './KudosWall';
+import { EssentialsSection } from './OfficeEssentials';
+import { EmergencySection } from './EmergencyContacts';
 import { btnPri, btnSec, btnSm, input } from '../opsDesk/OpsDeskPanels';
 
 /*
   PEOPLE (lib/peopleDesk.ts): attendance and leave for everyone in the
   studio. Each person has their day, their attendance and their leave;
   managers and admins also approve, see their people's attendance and the
-  monthly report. Everyone sees the team calendar and the directory, which
-  show only who is away, never why. Built to DESIGN.md, with the People
-  motion kit the owner approved ("People motion").
+  monthly report. Everyone sees the team calendar, which shows only who is
+  away, never why. Built to DESIGN.md, with the People motion kit the owner
+  approved ("People motion").
+
+  From 27 Oct 2026 People also holds the studio's own life (lib/peopleGuide.ts):
+  the office guide (which replaced the Directory), office essentials,
+  celebrations, the kudos wall and each person's emergency contacts.
 */
 
-type Section = 'today' | 'attendance' | 'leave' | 'approvals' | 'calendar' | 'directory' | 'report';
+type Section = 'today' | 'attendance' | 'leave' | 'approvals' | 'calendar' | 'guide' | 'celebrations' | 'kudos' | 'essentials' | 'emergency' | 'report';
 const chip = 'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap';
 const niceDay = (d: string) => new Date(`${d}T12:00:00+05:30`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 const range = (a: string, b: string) => (a === b ? niceDay(a) : `${niceDay(a)} – ${niceDay(b)}`);
@@ -38,28 +48,10 @@ const STATUS_TINT: Record<Status, string> = {
   Withdrawn: 'bg-slate-100 text-slate-600', 'Cancellation requested': 'bg-amber-100 text-amber-700', Cancelled: 'bg-slate-100 text-slate-600',
 };
 
-const Panel: React.FC<{ icon: React.ComponentType<any>; title: string; blurb: string; children: React.ReactNode; aside?: React.ReactNode }> = ({ icon: Icon, title, blurb, children, aside }) => (
-  <section className="group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in">
-    <div className="flex flex-wrap items-start gap-3 mb-5">
-      <IconTile icon={Icon} />
-      <div className="min-w-0 flex-1">
-        <h2 className="font-bold text-slate-800">{title}</h2>
-        <p className="text-xs text-slate-500 mt-0.5">{blurb}</p>
-      </div>
-      {aside}
-    </div>
-    {children}
-  </section>
-);
-const Empty: React.FC<{ text: string; icon?: React.ComponentType<any> }> = ({ text, icon: Icon = Sparkles }) => (
-  <div className="rounded-xl border border-dashed border-slate-300 px-4 py-6 flex flex-col items-center gap-2 text-center">
-    <span className="pp-float text-slate-300"><Icon className="w-6 h-6" /></span>
-    <p className="text-xs text-slate-500">{text}</p>
-  </div>
-);
-
 export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   const { snapshot, loading, error, stale, at, refresh } = usePeople();
+  /* The office guide, essentials, cards, kudos and emergency contacts (lib/peopleGuide.ts), loaded beside the snapshot. */
+  const guide = useGuide();
   const [section, setSection] = useState<Section>('today');
   const [leaveOpen, setLeaveOpen] = useState<{ start?: string } | null>(null);
   const [correcting, setCorrecting] = useState<Attendance | null>(null);
@@ -75,6 +67,8 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   }, [approving]);
   /* And at once, when a note says someone checked in or asked for leave: the arrivals board and approvals catch up (components/notify). The minute's refresh stays for what no note covers. */
   useNoteArrivals((n) => n.kind.startsWith('people.'), () => refresh());
+  /* A thank-you, or your emergency contacts opened: the guide catches up. */
+  useNoteArrivals((n) => n.kind.startsWith('guide.'), () => guide.refresh());
 
   if (!snapshot) {
     return (
@@ -94,14 +88,27 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   const { session } = myDay(s);
   const fy = currentFy(s);
   const bal = s.balances[fy];
-  const SECTIONS: { id: Section; label: string; icon: React.ComponentType<any>; n?: number; show: boolean }[] = [
-    { id: 'today', label: 'Today', icon: Sunrise, show: true },
-    { id: 'attendance', label: 'Attendance', icon: Fingerprint, show: true },
-    { id: 'leave', label: 'Leave', icon: TreePalm, n: s.requests.filter((r) => r.employeeId === s.me.id && r.status === 'Pending').length, show: true },
-    { id: 'approvals', label: 'Approvals', icon: Stamp, n: waiting.length, show: approver },
-    { id: 'calendar', label: 'Team calendar', icon: CalendarDays, show: true },
-    { id: 'directory', label: 'Directory', icon: Contact, show: true },
-    { id: 'report', label: 'Monthly report', icon: ChartColumn, show: approver },
+  /* The rail in four groups (the owner, 28 Oct 2026): your own day, the team, the studio, and what admins run. */
+  const GROUPS: { label: string; items: { id: Section; label: string; icon: React.ComponentType<any>; n?: number; show: boolean }[] }[] = [
+    { label: 'My day', items: [
+      { id: 'today', label: 'Today', icon: Sunrise, show: true },
+      { id: 'attendance', label: 'Attendance', icon: Fingerprint, show: true },
+      { id: 'leave', label: 'Leave', icon: TreePalm, n: s.requests.filter((r) => r.employeeId === s.me.id && r.status === 'Pending').length, show: true },
+      { id: 'approvals', label: 'Approvals', icon: Stamp, n: waiting.length, show: approver },
+    ] },
+    { label: 'Team', items: [
+      { id: 'calendar', label: 'Calendar', icon: CalendarDays, show: true },
+      { id: 'guide', label: 'Office guide', icon: BookUser, show: true },
+      { id: 'celebrations', label: 'Celebrations', icon: PartyPopper, n: (guide.view?.cards || []).filter((c) => c.days === 0 && !c.mine && !c.signed).length, show: true },
+      { id: 'kudos', label: 'Kudos', icon: HandHeart, show: true },
+    ] },
+    { label: 'Studio', items: [
+      { id: 'essentials', label: 'Essentials', icon: Building2, show: true },
+      { id: 'emergency', label: 'Emergency contacts', icon: HeartPulse, show: true },
+    ] },
+    { label: 'Admin', items: [
+      { id: 'report', label: 'Monthly report', icon: ChartColumn, show: approver },
+    ] },
   ];
   const done = (msg: string) => { setLeaveOpen(null); setCorrecting(null); setNotice(msg); };
 
@@ -124,26 +131,34 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
             {session?.checkOut ? 'Day complete' : session ? 'Checked in' : 'Not checked in'}
           </span>
         </BarStrip>
-        <BarButton onClick={refresh} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh</BarButton>
+        <BarButton onClick={() => { refresh(); guide.refresh(); }} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh</BarButton>
         <BarButton primary onClick={() => setLeaveOpen({})}><Plus className="w-4 h-4" />Apply for leave</BarButton>
       </StudioBar>
 
       <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6 items-start">
         <nav aria-label="People sections" className="lg:sticky lg:top-4 flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible">
-          {SECTIONS.filter((x) => x.show).map((x, i) => {
-            const Icon = x.icon;
-            const on = section === x.id;
+          {GROUPS.map((g) => ({ ...g, items: g.items.filter((x) => x.show) })).filter((g) => g.items.length).map((g, gi, all) => {
+            const before = all.slice(0, gi).reduce((n, x) => n + x.items.length, 0);
             return (
-              <button key={x.id} type="button" onClick={() => setSection(x.id)} aria-current={on ? 'page' : undefined}
-                className={`relative lg:w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-colors hud-row-in whitespace-nowrap ${on ? 'text-white' : 'text-slate-700 hover:bg-slate-100'}`}
-                style={{ animationDelay: `${i * 30}ms` }}>
-                {on && <motion.span layoutId="people-rail" className="absolute inset-0 rounded-xl bg-[#3D52A0] shadow-sm" transition={{ type: 'spring', stiffness: 420, damping: 36 }} />}
-                <motion.span className="relative inline-flex" whileHover={{ rotateY: 180 }} transition={{ duration: 0.5 }} style={{ transformPerspective: 300 }}>
-                  <Icon className={`w-4 h-4 shrink-0 ${on ? 'text-white' : 'text-slate-400'}`} />
-                </motion.span>
-                <span className="relative text-sm font-semibold flex-1 min-w-0 truncate">{x.label}</span>
-                {!!x.n && <span className={`relative text-[10px] font-black px-1.5 py-0.5 rounded-full ${on ? 'bg-white/20 text-white' : x.id === 'approvals' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{x.n}</span>}
-              </button>
+              <div key={g.label} role="group" aria-label={g.label} className={`flex lg:flex-col gap-1 ${gi ? 'lg:mt-3' : ''}`}>
+                <p className="hidden lg:block px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">{g.label}</p>
+                {g.items.map((x, i) => {
+                  const Icon = x.icon;
+                  const on = section === x.id;
+                  return (
+                    <button key={x.id} type="button" onClick={() => setSection(x.id)} aria-current={on ? 'page' : undefined}
+                      className={`relative lg:w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-colors hud-row-in whitespace-nowrap ${on ? 'text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+                      style={{ animationDelay: `${(before + gi + i + 1) * 30}ms` }}>
+                      {on && <motion.span layoutId="people-rail" className="absolute inset-0 rounded-xl bg-[#3D52A0] shadow-sm" transition={{ type: 'spring', stiffness: 420, damping: 36 }} />}
+                      <motion.span className="relative inline-flex" whileHover={{ rotateY: 180 }} transition={{ duration: 0.5 }} style={{ transformPerspective: 300 }}>
+                        <Icon className={`w-4 h-4 shrink-0 ${on ? 'text-white' : 'text-slate-400'}`} />
+                      </motion.span>
+                      <span className="relative text-sm font-semibold flex-1 min-w-0 truncate">{x.label}</span>
+                      {!!x.n && <span className={`relative text-[10px] font-black px-1.5 py-0.5 rounded-full ${on ? 'bg-white/20 text-white' : x.id === 'approvals' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{x.n}</span>}
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
@@ -154,12 +169,17 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
           {stale && !error && <Notice text={`Could not refresh just now. Showing People as of ${new Date(at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}; trying again shortly.`} tone="bad" />}
           {/* The new section swaps in at once: waiting for the old one's exit (mode="wait") delayed every switch and could stall on a blank section, as App's tabs once did. */}
           <motion.div key={section} variants={sectionV} initial="hidden" animate="show" className="space-y-6">
+              {section === 'today' && <CelebrationBanner view={guide.view} onOpen={() => setSection('celebrations')} />}
               {section === 'today' && <TodaySection s={s} sites={sites} onCorrect={setCorrecting} onLeave={(start) => setLeaveOpen({ start })} onGo={setSection} waiting={waiting.length} />}
               {section === 'attendance' && <AttendanceSection s={s} onCorrect={setCorrecting} approver={approver} />}
               {section === 'leave' && <LeaveSection s={s} onApply={() => setLeaveOpen({})} onDone={setNotice} />}
               {section === 'approvals' && approver && <ApprovalsSection s={s} list={waiting} onDone={setNotice} />}
               {section === 'calendar' && <PeopleCalendar s={s} onLeave={(start) => setLeaveOpen({ start })} />}
-              {section === 'directory' && <DirectorySection s={s} />}
+              {section === 'guide' && <OfficeGuideSection s={s} view={guide.view} loading={guide.loading} error={guide.error} onRefresh={guide.refresh} />}
+              {section === 'celebrations' && <CelebrationsSection view={guide.view} meId={s.me.id} error={guide.error} onRefresh={guide.refresh} />}
+              {section === 'kudos' && <KudosWallSection view={guide.view} meId={s.me.id} error={guide.error} onRefresh={guide.refresh} />}
+              {section === 'essentials' && <EssentialsSection view={guide.view} policy={s.policy} error={guide.error} onRefresh={guide.refresh} />}
+              {section === 'emergency' && <EmergencySection view={guide.view} meId={s.me.id} error={guide.error} onRefresh={guide.refresh} />}
               {section === 'report' && approver && <ReportSection s={s} />}
           </motion.div>
         </div>
@@ -422,52 +442,6 @@ function ApprovalsSection({ s, list, onDone }: { s: Snapshot; list: RequestRecor
               );
             })}
           </AnimatePresence>
-        </motion.div>
-      )}
-    </Panel>
-  );
-}
-
-/* ── Directory ───────────────────────────────────────────────────────────── */
-
-const TEAM: Record<string, string> = { leadership: 'Leadership', design: 'Design', site: 'Site', 'client-relations': 'Client relations', ops: 'Operations', studio: 'Studio' };
-
-function DirectorySection({ s }: { s: Snapshot }) {
-  const [q, setQ] = useState('');
-  const today = todayOf(s);
-  const awayToday = new Map(awayOn(s, today).map((a) => [a.personId, a]));
-  /* Who is in now, for the people whose attendance this person may see. */
-  const inToday = new Map(s.attendance.filter((a) => a.date === today).map((a) => [a.employeeId, a]));
-  const people = [...s.people].filter((p) => p.active).sort((a, b) => a.name.localeCompare(b.name))
-    .filter((p) => !q.trim() || `${p.name} ${p.title} ${TEAM[p.teamId] || ''}`.toLowerCase().includes(q.trim().toLowerCase()));
-  return (
-    <Panel icon={Contact} title="Directory" blurb="Everyone in the studio, who they report to, and whether they are away today."
-      aside={<label className="relative"><Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" /><input aria-label="Search people" className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 w-44" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /></label>}>
-      {people.length === 0 ? <Empty icon={Search} text="Nobody matches." /> : (
-        <motion.div variants={listV} initial="hidden" animate="show" key={q} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {people.map((p) => {
-            const away = awayToday.get(p.id);
-            const here = inToday.get(p.id);
-            const ModeIcon = here ? MODE_ICON[here.mode] : null;
-            return (
-              <motion.div key={p.id} variants={rowV} className="h-full">
-                <Tilt max={8} className="rounded-2xl h-full">
-                  <div className="h-full rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 flex items-center gap-3 hover:shadow-[0_18px_34px_-22px_rgba(61,82,160,0.6)] transition-shadow">
-                    <span className="relative inline-flex shrink-0" style={{ transform: 'translateZ(24px)' }}>
-                      <span className={`w-12 h-12 rounded-2xl grid place-items-center text-sm font-black shadow-[0_10px_18px_-12px_rgba(61,82,160,0.7)] ${here ? 'bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]'}`}>{initials(p.name)}</span>
-                      {here && !here.checkOut && <span className="absolute -top-1 -right-1 pp-live inline-flex"><Dot tone="ok" live /></span>}
-                    </span>
-                    <div className="min-w-0 flex-1" style={{ transform: 'translateZ(12px)' }}>
-                      <p className="text-sm font-bold text-slate-800 truncate">{p.name}{p.id === s.me.id ? ' (you)' : ''}</p>
-                      <p className="text-[11px] text-slate-500 truncate">{p.title || TEAM[p.teamId] || 'Studio'}{p.managerId ? ` · reports to ${personName(s, p.managerId)}` : ''}</p>
-                      {here && ModeIcon && <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5"><ModeIcon className="w-3 h-3" />{here.checkOut ? `In ${clock12(here.checkIn, s.policy.timezone)}–${clock12(here.checkOut, s.policy.timezone)}` : `In since ${clock12(here.checkIn, s.policy.timezone)}`}</p>}
-                    </div>
-                    {away && <span className={`${chip} inline-flex items-center gap-1 ${away.mode === 'WFH' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-amber-100 text-amber-700'}`}>{away.mode === 'WFH' ? <MODE_ICON.WFH className="w-3 h-3" /> : <TreePalm className="w-3 h-3" />}{away.mode === 'WFH' ? 'From home' : 'Away'}</span>}
-                  </div>
-                </Tilt>
-              </motion.div>
-            );
-          })}
         </motion.div>
       )}
     </Panel>

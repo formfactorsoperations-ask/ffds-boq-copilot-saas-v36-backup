@@ -96,7 +96,7 @@ const listeners = new Set<() => void>();
 const set = (patch: Partial<State>) => { state = { ...state, ...patch }; listeners.forEach((l) => l()); };
 const subscribe = (l: () => void) => { listeners.add(l); return () => listeners.delete(l); };
 
-const messageOf = (e: any): string => {
+export const messageOf = (e: any): string => {
   const code = String(e?.code || '');
   if (code.endsWith('unauthenticated')) return 'Please sign in again.';
   if (code.endsWith('deadline-exceeded')) return 'People is taking too long to answer. Check your connection and try again.';
@@ -104,7 +104,7 @@ const messageOf = (e: any): string => {
   if (code.endsWith('not-found') && /function/i.test(String(e?.message))) return 'People is not switched on yet. Ask an admin to deploy it.';
   return e?.message && !/^internal$/i.test(e.message) ? String(e.message) : 'People did not answer. Check your connection and try again.';
 };
-const transient = (e: any) => /unavailable|deadline-exceeded|internal/.test(String(e?.code || ''));
+export const transient = (e: any) => /unavailable|deadline-exceeded|internal/.test(String(e?.code || ''));
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /*
@@ -115,7 +115,7 @@ const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 */
 const PEOPLE_REGION = 'asia-south1';
 const notThere = (e: any) => /not-found/.test(String(e?.code || '')) || (/internal/.test(String(e?.code || '')) && /^internal$/i.test(String(e?.message || '')));
-async function callPeople(name: string, data: Record<string, unknown>, timeout: number): Promise<any> {
+export async function callPeople(name: string, data: Record<string, unknown>, timeout: number): Promise<any> {
   const near = functionsIn(PEOPLE_REGION);
   if (near) {
     try {
@@ -218,6 +218,9 @@ export async function peopleImportCall(studio: string, data: Record<string, unkn
     throw new Error(messageOf(e));
   }
 }
+
+/** The studio People is showing, for the office guide's calls (services/peopleGuideService.ts). */
+export const peopleStudio = () => tenantId;
 
 /** Start loading People before it is needed (after sign-in, or on the way to the People tab). */
 export function prefetchPeople(): void {
