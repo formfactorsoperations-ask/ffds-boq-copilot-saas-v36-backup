@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { AlertTriangle, BarChart3, CheckCircle2, Home, MessageSquare, Plus, Users } from '@/lib/lucide-shim';
+import { AlertTriangle, BarChart3, CheckCircle2, Home, ListChecks, MessageSquare, Phone, Plus, Users } from '@/lib/lucide-shim';
 import { HudDial } from '../HudCharts';
-import { deliveryReport, inr, pctText, monthShort, type OwnerReportInput } from '../../../lib/ownerReports';
+import { QUIET_DAYS } from '../../../lib/leads';
+import { deliveryReport, clientRelationsReport, inr, pctText, monthShort, type OwnerReportInput } from '../../../lib/ownerReports';
 import { ActionRow, BarRow, BRAND, Chip, Columns, Empty, Eyebrow, Figure, Panel, SmallButton, Stat, Swatch, Track } from './ReportBits';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -13,6 +14,7 @@ export default function DeliverySection({ input, onOpenProject }: {
   onOpenProject?: (id: string, tab?: string) => void;
 }) {
   const d = useMemo(() => deliveryReport(input), [input]);
+  const cr = useMemo(() => clientRelationsReport(input), [input]);
   const h = d.handovers;
   const w = d.window;
   const SEV: Record<string, string> = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -103,18 +105,18 @@ export default function DeliverySection({ input, onOpenProject }: {
         </Panel>
       </div>
 
-      <Panel icon={Users} title="Can the team take more work?" blurb="Live and signed projects per person, against how many each carries well." delay={400} lift={false}
+      <Panel icon={Users} title="Can the design and site team take more work?" blurb="Live and signed projects per Designer and Site Supervisor, against how many each carries well." delay={400} lift={false}
         aside={
           <div className="flex gap-8 flex-wrap">
             <div><Eyebrow>Team</Eyebrow><div className="mt-1.5 text-2xl font-black text-slate-800 tabular-nums">{d.headcount ?? '—'}</div><div className="text-[11px] text-slate-500">people</div></div>
-            <div><Eyebrow>Room for</Eyebrow><div className="mt-1.5 text-2xl font-black text-emerald-700 tabular-nums">{plural(d.room, 'project')}</div><div className="text-[11px] text-slate-500">before anyone is full</div></div>
+            <div><Eyebrow>Room for</Eyebrow><div className="mt-1.5 text-2xl font-black text-emerald-700 tabular-nums">{plural(d.room, 'project')}</div><div className="text-[11px] text-slate-500">before a Designer is full</div></div>
           </div>
         }
         foot={<>
-          The Designers, Client Relations and Site Supervisors on the studio team (Studio settings → Team), with the live and signed projects each is assigned to. How many one person carries is set in Set targets. Only the Owner, Admin and Ops Director see this.
+          The Designers and Site Supervisors on the studio team (Studio settings → Team), with the live and signed projects each is assigned to. Client Relations coordinate every project, so they are judged on their leads below instead. How many one person carries is set in Set targets. Only the Owner, Admin and Ops Director see this.
           {d.notOnTeam.length > 0 && <> <b className="text-amber-700">{plural(d.notOnTeam.length, 'address', 'addresses')} still assigned to projects {d.notOnTeam.length === 1 ? 'is' : 'are'} not on the team</b> ({d.notOnTeam.join(', ')}): take {d.notOnTeam.length === 1 ? 'it' : 'them'} off those projects from the project header.</>}
         </>}>
-        {d.team.length === 0 ? <Empty>No Designers, Client Relations or Site Supervisors are on the studio team yet. Add them in Studio settings → Team.</Empty> : (
+        {d.team.length === 0 ? <Empty>No Designers or Site Supervisors are on the studio team yet. Add them in Studio settings → Team.</Empty> : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -148,6 +150,64 @@ export default function DeliverySection({ input, onOpenProject }: {
             </table>
           </div>
         )}
+      </Panel>
+
+      <Panel icon={Phone} title="Is Client Relations keeping up?" delay={460} lift={false}
+        blurb="The leads each person owns, how fast they answer, and what they turn into. Load is open leads, not projects."
+        foot={`From the leads board on the Ops Desk: each lead's owner, first call, last touch and stage. Behind means a lead has waited over an hour for its first call, or more than five have gone quiet for ${QUIET_DAYS} days. How many open leads one person carries is set in Set targets (${input.targets.leadsPerClientRelations} now).`}>
+        {!cr.leadsRead ? <Empty>The leads on the Ops Desk could not be read, so Client Relations has nothing to count.</Empty>
+          : cr.rows.length === 0 ? <Empty>Nobody on the studio team is in Client Relations, and no lead has an owner yet.</Empty> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  {['Person', 'Open leads', 'Not called in an hour', `Quiet ${QUIET_DAYS}+ days`, 'First reply', 'Meetings held', 'Won', ''].map((x, i) => (
+                    <th key={i} className={`py-2 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-left ${i === 1 ? 'w-[22%]' : ''}`}>{x}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cr.rows.map((r, i) => {
+                  const load = r.open / r.capacity;
+                  return (
+                    <tr key={r.email} className="hud-row-in border-b border-slate-100 last:border-0" style={{ animationDelay: `${520 + i * 30}ms` }}>
+                      <td className="py-3 px-2">
+                        <span className="flex items-center gap-2.5">
+                          <span className="w-8 h-8 rounded-full bg-[#3D52A0]/10 text-[#3D52A0] text-xs font-bold flex items-center justify-center shrink-0">{initials(r.name)}</span>
+                          <span className="min-w-0"><span className="block font-semibold text-slate-800">{r.name}</span><span className="block text-[11px] text-slate-500">{r.role}</span></span>
+                        </span>
+                      </td>
+                      <td className="py-3 px-2">
+                        <span className="font-bold tabular-nums text-slate-800">{r.open} of {r.capacity}</span>
+                        <Track pct={load * 100} height="h-2" delay={560 + i * 30} className="mt-1.5" color={load > 1 ? '#E11D48' : load >= 0.85 ? '#D97706' : '#059669'} />
+                      </td>
+                      <td className="py-3 px-2"><Chip tone={r.notCalled ? 'bad' : 'none'}>{r.notCalled}</Chip></td>
+                      <td className="py-3 px-2"><Chip tone={r.quiet > 5 ? 'bad' : r.quiet ? 'warn' : 'none'}>{r.quiet}</Chip></td>
+                      <td className="py-3 px-2 tabular-nums text-slate-700">{r.firstReplyMin == null ? '—' : `${r.firstReplyMin} min`}</td>
+                      <td className="py-3 px-2 tabular-nums text-slate-700">{r.meetings}</td>
+                      <td className="py-3 px-2 tabular-nums text-slate-700">{r.decided ? `${r.won} of ${r.decided} · ${Math.round((r.won / r.decided) * 100)}%` : '—'}</td>
+                      <td className="py-3 px-2 text-right"><Chip tone={r.state === 'over' ? 'bad' : r.state === 'behind' ? 'warn' : 'ok'}>{r.state === 'over' ? 'Over' : r.state === 'behind' ? 'Behind' : 'On top'}</Chip></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <Panel icon={ListChecks} title="What Client Relations is chasing across all projects" delay={520} lift={false}
+        blurb="The studio-wide follow-ups that sit with them, whoever designs the project."
+        foot="Overdue invoices are in Money, decisions on each project, and quiet proposals on the Ops Desk leads board.">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Stat label="Overdue invoices" value={cr.chase.overdue} format="inr" tone={cr.chase.overdue > 0 ? 'bad' : undefined} delay={560}
+            line={cr.chase.overdueInvoices ? `${plural(cr.chase.overdueInvoices, 'invoice')}, oldest ${plural(cr.chase.oldestOverdueDays, 'day')}` : 'Nothing overdue'} />
+          <Stat label="Decisions waiting on clients" value={cr.chase.waiting} format="count" delay={590}
+            line={cr.chase.longestWait ? `Longest ${cr.chase.longestWait.days != null ? plural(cr.chase.longestWait.days, 'day') : ''}, ${cr.chase.longestWait.project}` : 'None waiting'} />
+          <Stat label="Proposals quiet 14 days" value={cr.chase.quietProposals} format="count" delay={620}
+            line={cr.chase.quietValue ? `${inr(cr.chase.quietValue)} waiting on an answer` : cr.chase.quietProposals ? 'Waiting on an answer' : 'All followed up'} />
+          <Stat label="Live clients" value={cr.chase.liveClients} format="count" delay={650} line="Signed and on site, all coordinated by Client Relations" />
+        </div>
       </Panel>
     </div>
   );

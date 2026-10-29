@@ -29,6 +29,7 @@ const toDraft = (t: ReportTargets): Draft => ({
   other: t.overheads.other ? String(t.overheads.other / LAKH) : '',
   projectsPerDesigner: String(t.projectsPerDesigner),
   sitesPerSupervisor: String(t.sitesPerSupervisor),
+  leadsPerClientRelations: String(t.leadsPerClientRelations),
 });
 const lakh = (s: string) => (s.trim() === '' ? null : Math.round(Number(s) * LAKH));
 const fromDraft = (d: Draft): ReportTargets => targetsOf({
@@ -41,6 +42,7 @@ const fromDraft = (d: Draft): ReportTargets => targetsOf({
   overheads: { salaries: lakh(d.salaries) || 0, rent: lakh(d.rent) || 0, other: lakh(d.other) || 0 },
   projectsPerDesigner: Number(d.projectsPerDesigner),
   sitesPerSupervisor: Number(d.sitesPerSupervisor),
+  leadsPerClientRelations: Number(d.leadsPerClientRelations),
 });
 
 const Field: React.FC<{ id: string; title: string; unit: string; value: string; onChange: (v: string) => void; placeholder?: string; step?: string }> = ({
@@ -112,9 +114,10 @@ export default function TargetsModal({ targets, onClose, onSave }: {
             <Field id="rent" title="Rent" unit="lakh" value={d.rent} onChange={set('rent')} />
             <Field id="other" title="Software and other" unit="lakh" value={d.other} onChange={set('other')} />
           </Section>
-          <Section title="What one person carries" blurb="Live and signed projects, for the team load on Delivery and team." delay={90}>
+          <Section title="What one person carries" blurb="Live and signed projects for design and site; open leads for Client Relations, who coordinate every project." delay={90}>
             <Field id="designer" title="Per Designer" unit="projects" value={d.projectsPerDesigner} onChange={set('projectsPerDesigner')} step="1" />
             <Field id="supervisor" title="Per Site Supervisor" unit="sites" value={d.sitesPerSupervisor} onChange={set('sitesPerSupervisor')} step="1" />
+            <Field id="clientRelations" title="Per Client Relations" unit="open leads" value={d.leadsPerClientRelations} onChange={set('leadsPerClientRelations')} step="1" />
           </Section>
         </div>
 

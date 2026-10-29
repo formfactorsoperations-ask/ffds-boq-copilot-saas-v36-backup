@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   periodWindow, projectFact, bookedIn, cashIn, overdueAt, marginOf, winRateIn, handoversIn, pipelineOf,
-  furthestStage, scorecard, headline, actionsOf, salesReport, moneyReport, deliveryReport, lateSites, inr,
+  furthestStage, scorecard, headline, actionsOf, salesReport, moneyReport, deliveryReport, lateSites, inr, clientRelationsReport,
   type OwnerReportInput,
 } from '../../lib/ownerReports';
 import { DEFAULT_TARGETS, targetsOf, storedTargets, overheadsMonthly } from '../../lib/reportTargets';
@@ -280,17 +280,42 @@ describe('the sections', () => {
   });
 
   it('Delivery: lists the team once each, and sets apart addresses that are not on it', () => {
-    const f = projectFact(project('a'), { designersByProject: { a: ['tanvi@studio.in', 'tanvi.old@gmail.com'] } });
+    const f = projectFact(project('a'), { designersByProject: { a: ['tanvi@studio.in', 'tanvi.old@gmail.com', 'anushka@studio.in'] } });
     const roster = [
       { email: 'Tanvi@studio.in', name: 'Tanvi', role: 'Designer' },
       { email: 'meera@studio.in', name: 'Meera', role: 'Designer' },
       { email: 'sana@studio.in', name: 'Sana', role: 'Site Supervisor' },
       { email: 'acc@studio.in', name: 'Accounts', role: 'Admin' },
+      { email: 'anushka@studio.in', name: 'Anushka', role: 'Client Relations' },
     ];
     const d = deliveryReport(input([f], { roster }));
     expect(d.team.map((r) => [r.name, r.live])).toEqual([['Tanvi', 1], ['Meera', 0], ['Sana', 0]]);
     expect(d.notOnTeam).toEqual(['tanvi.old@gmail.com']);
-    expect(d.room).toBe(3 + 4 + 3);
+    /* Client Relations coordinate every project: not in this table, and not an unknown address either. */
+    expect(d.room).toBe(3 + 4);
+  });
+
+  it('Client Relations: judged on the leads they own, and what they chase for the studio', () => {
+    const f = projectFact(project('a', {}, { paymentMilestones: [ms('1', { status: 'invoiced', invoiceDate: iso(2026, 9, 1) })] }), {
+      decisionsByProject: { a: [{ status: 'notified', title: 'Mandir layout', notifiedAt: at(2026, 9, 3) }] },
+    });
+    const roster = [{ email: 'anushka@studio.in', name: 'Anushka', role: 'Client Relations' }, { email: 'riya@studio.in', name: 'Riya', role: 'Client Relations' }];
+    const mine = (o: Partial<Lead>) => lead(Math.random().toString(36).slice(2), { ownerEmail: 'anushka@studio.in', ...o });
+    const leads = [
+      mine({ stage: 'new', createdAt: NOW - 3 * 3600000, firstTouchAt: null, lastTouchAt: null }),
+      mine({ stage: 'talking', createdAt: at(2026, 10, 1), firstTouchAt: at(2026, 10, 1) + 20 * 60000, lastTouchAt: at(2026, 10, 20) }),
+      mine({ stage: 'won', createdAt: at(2026, 10, 2), firstTouchAt: at(2026, 10, 2) + 10 * 60000, updatedAt: at(2026, 10, 15),
+        meetings: [{ id: 'm', date: iso(2026, 10, 8), time: null, mode: null, purpose: '', status: 'done', outcome: '', at: 1, by: '', byName: '' }] }),
+      mine({ stage: 'proposal', createdAt: at(2026, 9, 1), firstTouchAt: at(2026, 9, 1), lastTouchAt: at(2026, 10, 1) }),
+      lead('o', { ownerEmail: 'owner@studio.in', ownerName: 'Owner', stage: 'talking', firstTouchAt: NOW, lastTouchAt: NOW }),
+    ];
+    const r = clientRelationsReport(input([f], { roster, leads }));
+    const a = r.rows.find((x) => x.email === 'anushka@studio.in')!;
+    expect(a).toMatchObject({ open: 3, capacity: 25, notCalled: 1, quiet: 2, firstReplyMin: 15, meetings: 1, won: 1, decided: 1, state: 'behind' });
+    expect(r.rows.find((x) => x.email === 'riya@studio.in')).toMatchObject({ open: 0, state: 'ok' });
+    expect(r.rows.find((x) => x.email === 'owner@studio.in')).toMatchObject({ open: 1, role: 'Lead owner' });
+    expect(r.chase).toMatchObject({ overdue: 118000, overdueInvoices: 1, waiting: 1, quietProposals: 1, liveClients: 1 });
+    expect(r.chase.longestWait).toEqual({ project: 'Project a', title: 'Mandir layout', days: 56 });
   });
 });
 
@@ -302,7 +327,7 @@ describe('targets', () => {
     expect(t.winRatePct).toBe(100);
     expect(t.overheads).toEqual({ salaries: 680000, rent: 0, other: 0 });
     expect(overheadsMonthly(t)).toBe(680000);
-    expect(Object.keys(storedTargets(t, 'o@s.in', 1)).sort()).toEqual(['bookingsMonthly', 'collectionsMonthly', 'onTimePct', 'overheads', 'perPersonMonthly', 'pipelineMonths', 'projectsPerDesigner', 'sitesPerSupervisor', 'updatedAt', 'updatedBy', 'winRatePct']);
+    expect(Object.keys(storedTargets(t, 'o@s.in', 1)).sort()).toEqual(['bookingsMonthly', 'collectionsMonthly', 'leadsPerClientRelations', 'onTimePct', 'overheads', 'perPersonMonthly', 'pipelineMonths', 'projectsPerDesigner', 'sitesPerSupervisor', 'updatedAt', 'updatedBy', 'winRatePct']);
   });
   it('formats money the way the studio reads it', () => {
     expect(inr(4260000)).toBe('₹42.6L');

@@ -401,7 +401,7 @@ describe('report targets are for the roles that run the business', () => {
   const PATH = `organizations/${STUDIO}/ownerReports/targets`;
   const good = { bookingsMonthly: 5000000, collectionsMonthly: null, perPersonMonthly: null, winRatePct: 35, onTimePct: 90,
     pipelineMonths: 3, overheads: { salaries: 680000, rent: 160000, other: 110000 }, projectsPerDesigner: 4,
-    sitesPerSupervisor: 3, updatedAt: 1, updatedBy: 'm@a.com' };
+    sitesPerSupervisor: 3, leadsPerClientRelations: 25, updatedAt: 1, updatedBy: 'm@a.com' };
   const head = () => env.authenticatedContext('head', { email: 'h@a.com', email_verified: true }).firestore();
 
   beforeEach(async () => {

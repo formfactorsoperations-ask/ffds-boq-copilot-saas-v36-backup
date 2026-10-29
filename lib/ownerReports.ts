@@ -21,7 +21,7 @@
   Pure, and shared by the screens and the tests.
 */
 import { calculateProjectFinancials } from './financialsUtils';
-import { LOST_REASONS, LEAD_SOURCES, LEAD_STAGES, BOARD_STAGES, type Lead, type LeadSource, type LeadStage } from './leads';
+import { LOST_REASONS, LEAD_SOURCES, LEAD_STAGES, BOARD_STAGES, FIRST_CALL_MINUTES, QUIET_DAYS, isOpen, type Lead, type LeadSource, type LeadStage } from './leads';
 import type { ReportTargets } from './reportTargets';
 import { overheadsMonthly } from './reportTargets';
 
@@ -932,8 +932,11 @@ export function deliveryReport(i: OwnerReportInput) {
   */
   const load = new Map<string, TeamRow>();
   const fy = periodWindow('fy', i.now);
+  /* Client Relations coordinate every project, so a count of projects says
+     nothing about their load: they have their own panel (clientRelationsReport). */
   const kindOf = (role: string): TeamRow['kind'] | null =>
-    role === 'Designer' || role === 'Client Relations' ? 'design' : role === 'Site Supervisor' ? 'site' : null;
+    role === 'Designer' ? 'design' : role === 'Site Supervisor' ? 'site' : null;
+  const coordinators = new Set((i.roster || []).filter((m) => m.role === 'Client Relations').map((m) => m.email.trim().toLowerCase()));
   const rowFor = (email: string, kind: TeamRow['kind']): TeamRow => ({
     email, kind, name: i.names?.[email] || email.split('@')[0],
     role: i.roles?.[email] || (kind === 'design' ? 'Designer' : 'Site Supervisor'),
@@ -950,7 +953,7 @@ export function deliveryReport(i: OwnerReportInput) {
     let row = load.get(email);
     if (!row) {
       /* Without a team list to go by, everyone assigned is shown, as before. */
-      if (fromRoster) { unknown.add(email); return; }
+      if (fromRoster) { if (!coordinators.has(email)) unknown.add(email); return; }
       row = rowFor(email, kind);
       load.set(email, row);
     }
@@ -966,7 +969,8 @@ export function deliveryReport(i: OwnerReportInput) {
   const team = [...load.values()]
     .filter((r) => fromRoster || r.live > 0 || r.booked > 0)
     .sort((a, b) => (b.live / b.capacity) - (a.live / a.capacity) || a.name.localeCompare(b.name));
-  const room = team.reduce((s, r) => s + Math.max(0, r.capacity - r.live), 0);
+  /* Room is for new projects, which a Designer takes on. */
+  const room = team.filter((r) => r.kind === 'design').reduce((s, r) => s + Math.max(0, r.capacity - r.live), 0);
 
   return {
     window: w,
@@ -996,5 +1000,100 @@ export function deliveryReport(i: OwnerReportInput) {
     },
     team, room, notOnTeam: [...unknown],
     headcount: i.headcount,
+  };
+}
+
+/* ── Client Relations ───────────────────────────────────────────────────── */
+
+export interface CoordinatorRow {
+  email: string;
+  name: string;
+  role: string;
+  open: number;
+  capacity: number;
+  /** Open leads still waiting for their first call after the hour. */
+  notCalled: number;
+  /** Open leads with no touch for QUIET_DAYS or more. */
+  quiet: number;
+  firstReplyMin: number | null;
+  meetings: number;
+  won: number;
+  decided: number;
+  state: 'ok' | 'behind' | 'over';
+}
+
+/**
+ * Client Relations, judged on what they carry: the leads they own, how fast
+ * they answer, what those leads turn into, and the studio-wide follow-ups
+ * that sit with them because they coordinate every project.
+ *
+ * The rows are the Client Relations people on the team, plus anyone else who
+ * owns an open lead (an Owner taking enquiries), so no lead goes uncounted.
+ */
+export function clientRelationsReport(i: OwnerReportInput) {
+  const w = periodWindow(i.period, i.now);
+  const leads = i.leads || [];
+  const cap = i.targets.leadsPerClientRelations;
+  const rows = new Map<string, CoordinatorRow>();
+  const blank = (email: string, name: string, role: string): CoordinatorRow => ({
+    email, name, role, open: 0, capacity: cap, notCalled: 0, quiet: 0, firstReplyMin: null, meetings: 0, won: 0, decided: 0, state: 'ok',
+  });
+  for (const m of i.roster || []) {
+    const e = m.email.trim().toLowerCase();
+    if (m.role === 'Client Relations' && e && !rows.has(e)) rows.set(e, blank(e, i.names?.[e] || m.name || e.split('@')[0], m.role));
+  }
+  const replies = new Map<string, number[]>();
+  for (const l of leads) {
+    const e = String(l.ownerEmail || '').trim().toLowerCase();
+    if (!e) continue;
+    let row = rows.get(e);
+    if (!row) {
+      if (!isOpen(l)) continue;
+      row = blank(e, i.names?.[e] || l.ownerName || e.split('@')[0], i.roles?.[e] || 'Lead owner');
+      rows.set(e, row);
+    }
+    if (isOpen(l)) {
+      row.open++;
+      if (!l.firstTouchAt && i.now - l.createdAt > FIRST_CALL_MINUTES * 60000) row.notCalled++;
+      if (i.now - (l.lastTouchAt ?? l.createdAt) >= QUIET_DAYS * DAY) row.quiet++;
+    }
+    if (inRange(l.createdAt, w.cur) && l.firstTouchAt) {
+      replies.set(e, [...(replies.get(e) || []), Math.max(0, (l.firstTouchAt - l.createdAt) / 60000)]);
+    }
+    if ((l.stage === 'won' || l.stage === 'lost') && inRange(l.updatedAt, w.cur)) {
+      row.decided++;
+      if (l.stage === 'won') row.won++;
+    }
+    for (const m of l.meetings || []) {
+      if (m.status === 'done' && inRange(dateOf(m.date), w.cur)) row.meetings++;
+    }
+  }
+  for (const [e, row] of rows) {
+    const r = median(replies.get(e) || []);
+    row.firstReplyMin = r == null ? null : Math.round(r);
+    row.state = row.open > row.capacity ? 'over' : row.notCalled > 0 || row.quiet > 5 ? 'behind' : 'ok';
+  }
+
+  /* What they chase for the whole studio, whoever designs the project. */
+  const od = overdueAt(i.facts, i.now, i.lateAfterDays);
+  const debtors = debtorsOf(i.facts, i.now, i.lateAfterDays);
+  const active = i.facts.filter((f) => ['won', ...LIVE_STATUSES].includes(f.status));
+  const waiting = active.flatMap((f) => f.decisions.filter((d) => d.waiting).map((d) => ({
+    project: f.name, title: d.title, days: d.since != null ? Math.floor((i.now - d.since) / DAY) : null,
+  }))).sort((a, b) => (b.days ?? -1) - (a.days ?? -1));
+  const byId = new Map(i.facts.map((f) => [f.id, f]));
+  const quiet = leads.filter((l) => l.stage === 'proposal' && i.now - (l.lastTouchAt ?? l.createdAt) >= 14 * DAY);
+  const quietValue = quiet.reduce((s, l) => { const f = l.projectId ? byId.get(l.projectId) : undefined; return s + (f ? contract(f) : 0); }, 0);
+
+  return {
+    window: w,
+    leadsRead: !!i.leads,
+    rows: [...rows.values()].sort((a, b) => (b.open / b.capacity) - (a.open / a.capacity) || a.name.localeCompare(b.name)),
+    chase: {
+      overdue: od.value, overdueInvoices: od.invoices, oldestOverdueDays: debtors.reduce((m, d) => Math.max(m, d.oldestDays), 0),
+      waiting: waiting.length, longestWait: waiting[0] || null,
+      quietProposals: quiet.length, quietValue,
+      liveClients: active.length,
+    },
   };
 }

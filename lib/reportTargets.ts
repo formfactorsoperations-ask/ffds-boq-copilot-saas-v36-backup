@@ -27,6 +27,8 @@ export interface ReportTargets {
   projectsPerDesigner: number;
   /** Live sites one Site Supervisor carries well. */
   sitesPerSupervisor: number;
+  /** Open leads one Client Relations person carries well. They coordinate every project, so leads are their load. */
+  leadsPerClientRelations: number;
   updatedAt?: number;
   updatedBy?: string;
 }
@@ -41,6 +43,7 @@ export const DEFAULT_TARGETS: ReportTargets = {
   overheads: { salaries: 0, rent: 0, other: 0 },
   projectsPerDesigner: 4,
   sitesPerSupervisor: 3,
+  leadsPerClientRelations: 25,
 };
 
 const money = (v: unknown): number | null => {
@@ -67,6 +70,7 @@ export function targetsOf(raw: any): ReportTargets {
     overheads: { salaries: rupees(o.salaries), rent: rupees(o.rent), other: rupees(o.other) },
     projectsPerDesigner: Math.round(clamp(raw?.projectsPerDesigner, 1, 30, d.projectsPerDesigner)),
     sitesPerSupervisor: Math.round(clamp(raw?.sitesPerSupervisor, 1, 30, d.sitesPerSupervisor)),
+    leadsPerClientRelations: Math.round(clamp(raw?.leadsPerClientRelations, 1, 500, d.leadsPerClientRelations)),
     ...(raw?.updatedAt ? { updatedAt: Number(raw.updatedAt) } : {}),
     ...(raw?.updatedBy ? { updatedBy: String(raw.updatedBy) } : {}),
   };
@@ -88,6 +92,7 @@ export function storedTargets(t: ReportTargets, by: string, at: number) {
     overheads: clean.overheads,
     projectsPerDesigner: clean.projectsPerDesigner,
     sitesPerSupervisor: clean.sitesPerSupervisor,
+    leadsPerClientRelations: clean.leadsPerClientRelations,
     updatedAt: at,
     updatedBy: by,
   };

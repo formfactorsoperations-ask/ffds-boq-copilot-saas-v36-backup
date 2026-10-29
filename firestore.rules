@@ -379,7 +379,7 @@ service cloud.firestore {
         allow write: if isAuthenticated() && docId == 'targets' && (isSuperAdmin() ||
           (isSameTenant(orgId) && getUserData().get('role', '') in ['Owner', 'Admin', 'Ops Director']))
           && request.resource.data.keys().hasOnly(['bookingsMonthly', 'collectionsMonthly', 'perPersonMonthly',
-               'winRatePct', 'onTimePct', 'pipelineMonths', 'overheads', 'projectsPerDesigner', 'sitesPerSupervisor',
+               'winRatePct', 'onTimePct', 'pipelineMonths', 'overheads', 'projectsPerDesigner', 'sitesPerSupervisor', 'leadsPerClientRelations',
                'updatedAt', 'updatedBy']);
       }
 
