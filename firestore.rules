@@ -366,7 +366,23 @@ service cloud.firestore {
            getUserData().get('role', '') in ['Owner', 'Admin', 'Ops Director'])
       );
       allow delete: if isSuperAdmin();
-      
+
+      /*
+        The owner's report targets and the studio's monthly overheads
+        (lib/reportTargets.ts). The overheads are close to the salary bill, so
+        only the roles that run the business read or write them, and the
+        catch-all for the studio's other records below leaves this out.
+      */
+      match /ownerReports/{docId} {
+        allow read: if isAuthenticated() && (isSuperAdmin() ||
+          (isSameTenant(orgId) && getUserData().get('role', '') in ['Owner', 'Admin', 'Ops Director']));
+        allow write: if isAuthenticated() && docId == 'targets' && (isSuperAdmin() ||
+          (isSameTenant(orgId) && getUserData().get('role', '') in ['Owner', 'Admin', 'Ops Director']))
+          && request.resource.data.keys().hasOnly(['bookingsMonthly', 'collectionsMonthly', 'perPersonMonthly',
+               'winRatePct', 'onTimePct', 'pipelineMonths', 'overheads', 'projectsPerDesigner', 'sitesPerSupervisor', 'leadsPerClientRelations',
+               'updatedAt', 'updatedBy']);
+      }
+
       match /settings/{settingId} {
          allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin() || isTenantDesigner(orgId)
            || (getUserData().get('tenantId', '') == orgId && myTeamKind() != ''));
@@ -659,8 +675,9 @@ service cloud.firestore {
       the rules above said.
     */
     match /{collectionId}/{document=**} {
-         allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
-         allow write: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
+         /* Not ownerReports: its own rule above is narrower, and rules only ever widen. */
+         allow read: if collectionId != 'ownerReports' && isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+         allow write: if collectionId != 'ownerReports' && isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
            && reviewUntouched(string(document)) && minutesApprovalOk(string(document));
       }
     }

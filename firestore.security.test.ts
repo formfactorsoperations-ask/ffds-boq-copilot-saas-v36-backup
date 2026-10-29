@@ -396,3 +396,40 @@ describe('Zoho Books credentials are server-only', () => {
     await assertFails(setDoc(doc(member(), `zohoInvoiceLinks/${STUDIO}__p1__m9`), { invoiceId: 'X' }));
   });
 });
+
+describe('report targets are for the roles that run the business', () => {
+  const PATH = `organizations/${STUDIO}/ownerReports/targets`;
+  const good = { bookingsMonthly: 5000000, collectionsMonthly: null, perPersonMonthly: null, winRatePct: 35, onTimePct: 90,
+    pipelineMonths: 3, overheads: { salaries: 680000, rent: 160000, other: 110000 }, projectsPerDesigner: 4,
+    sitesPerSupervisor: 3, leadsPerClientRelations: 25, updatedAt: 1, updatedBy: 'm@a.com' };
+  const head = () => env.authenticatedContext('head', { email: 'h@a.com', email_verified: true }).firestore();
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'users/head'), { email: 'h@a.com', tenantId: STUDIO, role: 'Design Head' });
+      await setDoc(doc(db, PATH), good);
+    });
+  });
+
+  it('lets an Admin read and save them', async () => {
+    await assertSucceeds(getDoc(doc(member(), PATH)));
+    await assertSucceeds(setDoc(doc(member(), PATH), { ...good, winRatePct: 40 }));
+  });
+
+  it('keeps the overheads from other staff, a Designer, a client and another studio', async () => {
+    for (const db of [head(), designer(), client(), otherAdmin(), stranger(), anon()]) {
+      await assertFails(getDoc(doc(db, PATH)));
+      await assertFails(setDoc(doc(db, PATH), good));
+    }
+  });
+
+  it('stores only the targets, and only in the one document', async () => {
+    await assertFails(setDoc(doc(member(), PATH), { ...good, note: 'x' }));
+    await assertFails(setDoc(doc(member(), `organizations/${STUDIO}/ownerReports/other`), good));
+  });
+
+  it('leaves the studio\'s other records as they were for its staff', async () => {
+    await assertSucceeds(getDoc(doc(head(), `organizations/${STUDIO}/weeklyReports/w1`)));
+  });
+});

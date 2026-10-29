@@ -3274,9 +3274,9 @@ export default function App() {
                     <StudioReports
                       projects={visibleProjects}
                       onNavigate={setActiveTab}
-                      onOpenProject={(id) => {
+                      onOpenProject={(id, tab) => {
                         const p = projectLibrary.find(x => x.id === id);
-                        if (p) handleOpenProject(p, "project-reports");
+                        if (p) handleOpenProject(p, tab || "project-reports");
                       }}
                       onProjectsPatched={(updated) => {
                         /* Classification changed from the Reports screen. Merge
@@ -4030,9 +4030,9 @@ export default function App() {
                     <StudioReports
                       projects={visibleProjects}
                       onNavigate={setActiveTab}
-                      onOpenProject={(id) => {
+                      onOpenProject={(id, tab) => {
                         const p = projectLibrary.find(x => x.id === id);
-                        if (p) handleOpenProject(p, "project-reports");
+                        if (p) handleOpenProject(p, tab || "project-reports");
                       }}
                       onProjectsPatched={(updated) => {
                         /* Classification changed from the Reports screen. Merge

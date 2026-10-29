@@ -9,7 +9,11 @@
 
 import React, { useState, useEffect } from 'react';
 
-export const CountUp: React.FC<{ value: number; className?: string }> = ({ value, className }) => {
+/**
+ * `format` shows the figure as money or a percentage while it travels
+ * ("₹42.6L"); without it the count is whole numbers, as before.
+ */
+export const CountUp: React.FC<{ value: number; className?: string; format?: (v: number) => string }> = ({ value, className, format }) => {
   /*
     Seeded at zero, not at the value: the panels these sit in mount fresh every
     time the tab is opened, so seeding from the value meant the first render
@@ -47,7 +51,8 @@ export const CountUp: React.FC<{ value: number; className?: string }> = ({ value
       const t = Math.min(1, (now - start) / dur);
       // ease-out: fast first, settles precisely on the number
       const eased = 1 - Math.pow(1 - t, 3);
-      const next = Math.round(from + (value - from) * eased);
+      const travelled = from + (value - from) * eased;
+      const next = format ? (t < 1 ? travelled : value) : Math.round(travelled);
       shownRef.current = next;
       setShown(next);
       if (t < 1) raf = requestAnimationFrame(tick);
@@ -56,7 +61,7 @@ export const CountUp: React.FC<{ value: number; className?: string }> = ({ value
     return () => cancelAnimationFrame(raf);
   }, [value]);
 
-  return <span className={className}>{shown}</span>;
+  return <span className={className}>{format ? format(shown) : shown}</span>;
 };
 
 /*
