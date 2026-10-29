@@ -278,6 +278,20 @@ describe('the sections', () => {
     expect(d.team).toEqual([{ email: 'meera@s.in', name: 'Meera N.', role: 'Designer', kind: 'design', live: 1, capacity: 4, booked: 1100000 }]);
     expect(d.room).toBe(3);
   });
+
+  it('Delivery: lists the team once each, and sets apart addresses that are not on it', () => {
+    const f = projectFact(project('a'), { designersByProject: { a: ['tanvi@studio.in', 'tanvi.old@gmail.com'] } });
+    const roster = [
+      { email: 'Tanvi@studio.in', name: 'Tanvi', role: 'Designer' },
+      { email: 'meera@studio.in', name: 'Meera', role: 'Designer' },
+      { email: 'sana@studio.in', name: 'Sana', role: 'Site Supervisor' },
+      { email: 'acc@studio.in', name: 'Accounts', role: 'Admin' },
+    ];
+    const d = deliveryReport(input([f], { roster }));
+    expect(d.team.map((r) => [r.name, r.live])).toEqual([['Tanvi', 1], ['Meera', 0], ['Sana', 0]]);
+    expect(d.notOnTeam).toEqual(['tanvi.old@gmail.com']);
+    expect(d.room).toBe(3 + 4 + 3);
+  });
 });
 
 describe('targets', () => {

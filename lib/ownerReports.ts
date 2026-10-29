@@ -301,6 +301,8 @@ export interface OwnerReportInput {
   /** Email to name, and email to role, for the team table. */
   names?: Record<string, string>;
   roles?: Record<string, string>;
+  /** The studio's team list (Studio settings → Team): who the team table is made of. */
+  roster?: { email: string; name: string; role: string }[];
   targets: ReportTargets;
   /** Ops Desk: a payment is late this many days after its invoice. */
   lateAfterDays: number;
@@ -919,25 +921,51 @@ export function deliveryReport(i: OwnerReportInput) {
   const openOld = snags.filter((s) => s.open && i.now - s.raisedAt > 7 * DAY);
   const openBySeverity = ['high', 'medium', 'low'].map((sev) => ({ severity: sev, count: snags.filter((s) => s.open && s.severity === sev).length }));
 
-  /* Team load: who is on how many live projects, against what one person carries well. */
+  /*
+    Team load: who is on how many live projects, against what one person
+    carries well.
+
+    The rows are the studio's team, one per person, people with nothing
+    assigned included (they are the room). An assignment to an address that
+    is not on the team (an old address, someone who has left) is not a
+    person: it is counted apart, so the list never shows anyone twice.
+  */
   const load = new Map<string, TeamRow>();
   const fy = periodWindow('fy', i.now);
+  const kindOf = (role: string): TeamRow['kind'] | null =>
+    role === 'Designer' || role === 'Client Relations' ? 'design' : role === 'Site Supervisor' ? 'site' : null;
+  const rowFor = (email: string, kind: TeamRow['kind']): TeamRow => ({
+    email, kind, name: i.names?.[email] || email.split('@')[0],
+    role: i.roles?.[email] || (kind === 'design' ? 'Designer' : 'Site Supervisor'),
+    live: 0, capacity: kind === 'design' ? i.targets.projectsPerDesigner : i.targets.sitesPerSupervisor, booked: 0,
+  });
+  const roster = (i.roster || []).filter((m) => m.email && kindOf(m.role));
+  for (const m of roster) {
+    const email = m.email.trim().toLowerCase();
+    if (!load.has(email)) load.set(email, { ...rowFor(email, kindOf(m.role) as TeamRow['kind']), name: i.names?.[email] || m.name || email.split('@')[0], role: m.role });
+  }
+  const fromRoster = load.size > 0;
+  const unknown = new Set<string>();
   const add = (email: string, kind: TeamRow['kind'], f: ProjectFact) => {
-    const key = `${kind}:${email}`;
-    const row = load.get(key) || {
-      email, kind, name: i.names?.[email] || email.split('@')[0],
-      role: i.roles?.[email] || (kind === 'design' ? 'Designer' : 'Site Supervisor'),
-      live: 0, capacity: kind === 'design' ? i.targets.projectsPerDesigner : i.targets.sitesPerSupervisor, booked: 0,
-    };
+    let row = load.get(email);
+    if (!row) {
+      /* Without a team list to go by, everyone assigned is shown, as before. */
+      if (fromRoster) { unknown.add(email); return; }
+      row = rowFor(email, kind);
+      load.set(email, row);
+    }
     if (['won', ...LIVE_STATUSES].includes(f.status)) row.live++;
-    if (kind === 'design' && inRange(f.bookedAt, fy.cur)) row.booked += contract(f);
-    load.set(key, row);
+    if (row.kind === 'design' && inRange(f.bookedAt, fy.cur)) row.booked += contract(f);
   };
   for (const f of facts) {
-    for (const e of f.designers) add(e, 'design', f);
-    for (const e of f.supervisors) if (e.includes('@')) add(e, 'site', f);
+    /* One person once per project, whichever list names them. */
+    const seen = new Set<string>();
+    for (const e of f.designers) if (!seen.has(e)) { seen.add(e); add(e, 'design', f); }
+    for (const e of f.supervisors) if (e.includes('@') && !seen.has(e)) { seen.add(e); add(e, 'site', f); }
   }
-  const team = [...load.values()].filter((r) => r.live > 0 || r.booked > 0).sort((a, b) => (b.live / b.capacity) - (a.live / a.capacity));
+  const team = [...load.values()]
+    .filter((r) => fromRoster || r.live > 0 || r.booked > 0)
+    .sort((a, b) => (b.live / b.capacity) - (a.live / a.capacity) || a.name.localeCompare(b.name));
   const room = team.reduce((s, r) => s + Math.max(0, r.capacity - r.live), 0);
 
   return {
@@ -966,7 +994,7 @@ export function deliveryReport(i: OwnerReportInput) {
       open: snags.filter((s) => s.open).length,
       bySeverity: openBySeverity,
     },
-    team, room,
+    team, room, notOnTeam: [...unknown],
     headcount: i.headcount,
   };
 }

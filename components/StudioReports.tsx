@@ -107,11 +107,12 @@ export default function StudioReports({ projects, onNavigate, onOpenProject, onP
     headcount: data.headcount,
     names: data.names,
     roles: data.roles,
+    roster: data.roster,
     targets: data.targets,
     lateAfterDays: data.lateAfterDays,
     period,
     now,
-  }), [data.facts, data.leads, data.headcount, data.names, data.roles, data.targets, data.lateAfterDays, period, now]);
+  }), [data.facts, data.leads, data.headcount, data.names, data.roles, data.roster, data.targets, data.lateAfterDays, period, now]);
 
   /* What the bar counts: the things waiting on the owner, each a tap from its section. */
   const chips = useMemo(() => {

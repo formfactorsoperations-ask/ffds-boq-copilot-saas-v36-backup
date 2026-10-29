@@ -110,8 +110,11 @@ export default function DeliverySection({ input, onOpenProject }: {
             <div><Eyebrow>Room for</Eyebrow><div className="mt-1.5 text-2xl font-black text-emerald-700 tabular-nums">{plural(d.room, 'project')}</div><div className="text-[11px] text-slate-500">before anyone is full</div></div>
           </div>
         }
-        foot="Projects come from who is assigned to each one: Designers and Client Relations from the project team, Site Supervisors from the site team. How many one person carries is set in Set targets. Only the Owner, Admin and Ops Director see this.">
-        {d.team.length === 0 ? <Empty>Nobody is assigned to a live project yet. Assign people from a project's header.</Empty> : (
+        foot={<>
+          The Designers, Client Relations and Site Supervisors on the studio team (Studio settings → Team), with the live and signed projects each is assigned to. How many one person carries is set in Set targets. Only the Owner, Admin and Ops Director see this.
+          {d.notOnTeam.length > 0 && <> <b className="text-amber-700">{plural(d.notOnTeam.length, 'address', 'addresses')} still assigned to projects {d.notOnTeam.length === 1 ? 'is' : 'are'} not on the team</b> ({d.notOnTeam.join(', ')}): take {d.notOnTeam.length === 1 ? 'it' : 'them'} off those projects from the project header.</>}
+        </>}>
+        {d.team.length === 0 ? <Empty>No Designers, Client Relations or Site Supervisors are on the studio team yet. Add them in Studio settings → Team.</Empty> : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>

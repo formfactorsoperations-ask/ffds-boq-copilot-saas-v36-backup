@@ -118,7 +118,7 @@ export function useOwnerReportData(projects: FullProjectData[]) {
 
   /* Names and roles: People first, the studio's team list after it. */
   const team: any[] = ((orgData as any)?.team as any[]) || [];
-  const { names, roles, headcount } = useMemo(() => {
+  const { names, roles, headcount, roster } = useMemo(() => {
     const n: Record<string, string> = {};
     const r: Record<string, string> = {};
     for (const m of team) {
@@ -130,7 +130,11 @@ export function useOwnerReportData(projects: FullProjectData[]) {
     const staff = (people.snapshot?.people || []).filter((p: any) => p.active !== false);
     for (const p of staff) if (p.email && p.name) n[String(p.email).toLowerCase()] = p.name;
     const listed = team.filter((m) => m?.email && !['Client', 'Vendor'].includes(m.role)).length;
-    return { names: n, roles: r, headcount: staff.length || listed || null };
+    const seen = new Set<string>();
+    const roster = team
+      .map((m) => ({ email: String(m?.email || '').trim().toLowerCase(), name: String(m?.name || ''), role: String(m?.role || '') }))
+      .filter((m) => m.email && !seen.has(m.email) && seen.add(m.email));
+    return { names: n, roles: r, headcount: staff.length || listed || null, roster };
   }, [team, people.snapshot]);
 
   const facts: ProjectFact[] = useMemo(() => {
@@ -153,7 +157,7 @@ export function useOwnerReportData(projects: FullProjectData[]) {
     leadsLoading: leads === undefined,
     targets: targets || DEFAULT_TARGETS,
     targetsReadable: targets !== null,
-    names, roles, headcount,
+    names, roles, headcount, roster,
     peopleFromSnapshot: !!people.snapshot,
     lateAfterDays: opsSettingsOf(orgData).paymentDueDays,
     loading,
