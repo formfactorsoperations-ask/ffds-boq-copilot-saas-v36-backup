@@ -299,6 +299,12 @@ export interface PaymentMilestone {
     status?: PaymentStatus;
     invoiceNumber?: string;
     invoiceDate?: string;
+    /**
+     * The day the money was marked received, YYYY-MM-DD. Set when a milestone
+     * is marked paid and cleared if that is undone; older payments have none,
+     * and Reports falls back to the invoice date for them.
+     */
+    paidDate?: string;
     lockedTaxableBase?: number; // The taxable base amount at the time of invoicing
     /**
      * Set only when the studio uses the optional Zoho Books add-in and this

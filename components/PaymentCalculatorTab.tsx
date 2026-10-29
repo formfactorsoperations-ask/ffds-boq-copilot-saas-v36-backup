@@ -975,7 +975,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 setZohoRaise({ milestoneId: milestones[index].id, lockedTaxableBase });
             })();
         } else if (action === 'mark_paid') {
-            handleUpdateMilestone(index, { status: 'paid' });
+            /* The day it landed, for Reports: cash by month and days to get paid. */
+            handleUpdateMilestone(index, { status: 'paid', paidDate: new Date().toLocaleDateString('en-CA') });
         } else if (action === 'revert_payment') {
             /*
               Un-marking a payment is not the same as cancelling the invoice.
@@ -994,16 +995,17 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
               the second one, and from `pending` the edit controls return on
               their own.
             */
-            handleUpdateMilestone(index, { status: 'invoiced' });
+            handleUpdateMilestone(index, { status: 'invoiced', paidDate: undefined });
         } else if (action === 'revert_invoice') {
             if (milestones[index]?.zohoInvoiceId &&
                 !window.confirm('This takes the milestone back to pending here. The draft in Zoho Books is not deleted: remove or void it there, or raising again will hand you the same draft.')) {
                 return;
             }
             handleUpdateMilestone(index, { 
-                status: 'pending', 
-                invoiceNumber: undefined, 
+                status: 'pending',
+                invoiceNumber: undefined,
                 invoiceDate: undefined,
+                paidDate: undefined,
                 lockedTaxableBase: undefined,
                 zohoInvoiceId: undefined
             });

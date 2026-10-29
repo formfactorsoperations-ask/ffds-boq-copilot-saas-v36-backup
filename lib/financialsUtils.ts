@@ -91,16 +91,20 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
     let pendingAmt = 0;
     
     let isFirstDesign = true;
+    /* What each milestone actually asks the client for, offset included, so a
+       report placing payments in months adds up to totalPaid and pendingAmt. */
+    const milestoneAmounts: Record<string, number> = {};
 
     milestones.forEach((m: any) => {
         const amount = calculateMilestoneTotal(m);
         let finalAmount = amount;
-        
+
         // Handle initiation fee offset on first design milestone
         if (m.type === 'design' && isFirstDesign && initiationFee > 0) {
             finalAmount = Math.max(0, amount - initiationFee);
             isFirstDesign = false;
         }
+        if (m.id) milestoneAmounts[m.id] = finalAmount;
 
         if (m.status === 'paid') {
             totalPaid += finalAmount;
@@ -123,6 +127,8 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
         totalInvoicedBaseAmt: Math.round(totalInvoicedBaseAmt),
         pendingAmt: Math.round(pendingAmt),
         calculateMilestoneTotal,
+        milestoneAmounts,
+        initiationFee: Math.round(initiationFee),
 
         /*
           Taxable (ex-GST) values, exposed for margin work.
