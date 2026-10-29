@@ -60,7 +60,12 @@ export default function ProjectTeamButton({ project, size = 'md', align = 'right
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const shown = designers.filter((d) => !q.trim() || `${d.name} ${d.email}`.toLowerCase().includes(q.trim().toLowerCase()));
+  /* Someone ticked on who has since left the team (or an old address of theirs)
+     is not in the team list, so without this they could never be unticked. */
+  const former = on
+    .filter((email) => !designers.some((d) => d.email === email))
+    .map((email) => ({ email, name: email.split('@')[0], role: '', former: true }));
+  const shown = [...former, ...designers].filter((d) => !q.trim() || `${d.name} ${d.email}`.toLowerCase().includes(q.trim().toLowerCase()));
 
   return (
     <div ref={ref} className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -123,6 +128,9 @@ export default function ProjectTeamButton({ project, size = 'md', align = 'right
                   <span className="flex-1 min-w-0 leading-tight">
                     <span className="block text-[13px] font-bold text-slate-900 truncate">{d.name}</span>
                     <span className="block text-[11px] text-slate-500 truncate">{d.email}</span>
+                    {'former' in d && (
+                      <span className="block text-[11px] font-bold text-amber-700">No longer on the team{canAssign ? ': untick to remove' : ''}</span>
+                    )}
                   </span>
                   {canAssign && (
                     <span className={`w-5 h-5 rounded-md grid place-items-center border-2 transition-all ${isOn ? 'bg-[#1F4D45] border-[#1F4D45] text-white scale-105' : 'border-slate-300 text-transparent'}`}>
