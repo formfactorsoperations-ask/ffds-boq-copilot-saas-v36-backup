@@ -33,6 +33,7 @@ import {
 import { resolveApprovals } from './clientApprovalEngine';
 import { resolveBoqLine, isBillable, buildBankMap } from '../lib/boqPricing';
 import { displayName, normaliseUnit, clientDescription } from '../lib/detailedBoq';
+import { resolveAgreement } from '../lib/executionAgreement';
 
 // ---------------------------------------------------------------------------
 // CATALOGUE
@@ -232,7 +233,7 @@ export function getReleaseReadiness(
       }
       const approved = context.financials?.approvedExecutionValue;
       if (scope.priced && approved && Math.abs(approved - scope.total) > 1) {
-        warnings.push(`The approved execution value (₹${Math.round(approved).toLocaleString('en-IN')}) differs from the BOQ total (₹${Math.round(scope.total).toLocaleString('en-IN')}). The agreement states the BOQ total, so the two agree with each other.`);
+        warnings.push(`The approved execution value (₹${Math.round(approved).toLocaleString('en-IN')}) differs from the BOQ total in Annexure F (₹${Math.round(scope.total).toLocaleString('en-IN')}). The agreement states the approved value, which is what Money bills.`);
       }
       if (scope.source === 'detailed_boq') {
         warnings.push(`Annexure F is the signed ${scope.reference}.`);
@@ -469,52 +470,46 @@ export function buildSnapshot(
     }
 
     case 'execution_agreement': {
-      // Everything the shared ExecutionAgreementSheet needs, frozen — so the
-      // client's copy renders the studio's real agreement, not a summary.
+      /*
+        The agreement exactly as the studio's page shows it, frozen: the same
+        resolver (lib/executionAgreement) works out the money, the payment
+        rows, the people, the annexures and the studio's own clauses, so the
+        client signs what the studio read.
+
+        Without a calculated option here, the base is Money's approved value,
+        then the approved BOQ's total, then the engagement's figure.
+      */
       const scope = agreementScope(context, projectData);
-      const boq: any[] = scope.lines;
-
-      const groupedBoq: Record<string, any[]> = {};
-      boq.forEach((item: any) => {
-        const room = item.room || 'General Scope';
-        (groupedBoq[room] = groupedBoq[room] || []).push(item);
+      const execBase =
+        context.financials?.approvedExecutionValue ??
+        (scope.priced && scope.total > 0 ? scope.total : ctx.engagement?.executionValue ?? 0);
+      const designBase = context.financials?.approvedDesignValue ?? ctx.engagement?.designFee ?? 0;
+      const agreement = resolveAgreement(context, {
+        tierSummary: { totalSell: execBase, designFee: designBase },
+        scopeLines: scope.lines,
+        studioName: opts?.orgName || 'the Studio',
       });
-
-      const overrides = (context as any).executionAgreementOverrides || {};
-      const designFee = ctx.engagement?.designFee ?? context.financials?.approvedDesignValue ?? 0;
-      /* The figure the agreement states is the figure Annexure F adds up to.
-         A deliberate override on the agreement page still wins. */
-      const executionTotal =
-        overrides.executionTotal ??
-        (scope.priced && scope.total > 0
-          ? scope.total
-          : context.financials?.approvedExecutionValue ?? ctx.engagement?.executionValue ?? 0);
-      const gstRate = context.gstRate ?? 18;
-      const gstAmount = Math.round((designFee + executionTotal) * (gstRate / 100));
+      const { money } = agreement;
 
       return {
         ...base,
         termsSettings,
-        boq: JSON.parse(JSON.stringify(boq)),
-        groupedBoq,
-        boqItemSpecOverrides: (context as any).boqItemSpecOverrides || {},
-        overrides,
+        agreement: JSON.parse(JSON.stringify(agreement)),
+        projectId: ctx.projectId || projectData?.id || null,
+        /* The fields an older reader looks for, kept in step with the agreement. */
+        designFee: money.netDesign,
+        executionTotal: money.netExecution,
+        gstAmount: money.executionGst + money.designGst,
+        gstRate: money.gstRate,
+        grandTotal: money.grandTotal,
         milestonesList: JSON.parse(JSON.stringify(context.paymentMilestones || [])),
-        allAdvances: ctx.engagement?.lockedSnapshot?.advances || [],
-        designFee,
-        executionTotal,
-        gstAmount,
-        gstRate,
-        grandTotal: designFee + executionTotal + gstAmount,
-        agreementDate: overrides.agreementDate || null,
-        dateStr:
-          overrides.agreementDate ||
-          new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-        commencementTrigger: overrides.commencementTrigger || null,
-        estimatedDuration: overrides.estimatedDuration || null,
-        clientAddress: (context as any).clientAddress || null,
-        clientEmail: context.clientEmail || null,
-        clientPhone: context.clientPhone || null,
+        agreementDate: agreement.agreementDate,
+        dateStr: agreement.agreementDate,
+        commencementTrigger: agreement.commencementTrigger,
+        estimatedDuration: agreement.estimatedDuration,
+        clientAddress: agreement.parties.clientAddress || null,
+        clientEmail: agreement.parties.clientEmail || null,
+        clientPhone: agreement.parties.clientPhone || null,
         org: {
           orgName: opts?.orgName || null,
           officeAddress: opts?.officeAddress || null,

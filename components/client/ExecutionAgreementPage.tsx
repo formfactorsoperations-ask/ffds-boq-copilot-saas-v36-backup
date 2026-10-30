@@ -1,47 +1,25 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { getCurrentIssue } from '../../services/documentIssueEngine';
+import { agreementScope } from '../../services/documentReleaseEngine';
 import ExecutionStamp from '../documents/ExecutionStamp';
+import ExecutionAgreementSheet from '../documents/ExecutionAgreementSheet';
 import { ProjectContext, DigitalSignatureDocket } from '../../types';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
-import { FileText, Download, ShieldCheck, CheckCheck, KeyRound, Share2, Copy, ExternalLink, Tablet, Lock, Shield, Check } from '@/lib/lucide-shim';
-import { formatCurrency, calculateSellPrice } from '../../lib/utils';
-import { resolveFinancials } from '../../lib/paymentSchedule';
-import { ShieldCheckIcon, CheckBadgeIcon } from '../Icons';
+import { Download, Share2, Copy, ExternalLink, Tablet, KeyRound, Check, Pencil } from '@/lib/lucide-shim';
+import { calculateSellPrice } from '../../lib/utils';
+import { resolveAgreement, type AgreementOverrides } from '../../lib/executionAgreement';
+import { ShieldCheckIcon } from '../Icons';
 import { sendAgreementSignoffRequest } from '../../services/emailService';
 import { db as dbService } from '../../services/dbService';
 import { db as firestore } from '../../services/firebaseClient';
 import { doc, updateDoc } from 'firebase/firestore';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
-import { downloadSectionsAsPdf, PDF_CONTENT_WIDTH_PX } from '../../lib/documentPdf';
+import { downloadSectionsAsPdf } from '../../lib/documentPdf';
 import DigitalSignatureDocketView from '../common/DigitalSignatureDocket';
 import DigitalSignaturePad from '../common/DigitalSignaturePad';
 import ManualAcceptanceOverrideModal from '../ops/ManualAcceptanceOverrideModal';
 import { publicAppOrigin } from '../../lib/publicUrl';
-
-/*
-  GST comes from the project, per phase.
-
-  These annexures multiplied every line by a hard-coded 0.18, so a contract
-  annexure stated tax the studio does not charge. All nine real projects on this
-  studio have `executionGstEnabled: false` -- on Unique Vistas alone that is
-  ~2.95L of GST appearing on execution lines in a document a client signs.
-
-  `resolveFinancials` is the one place that answers "is GST on for this phase",
-  and `gstRate` is the project's own rate rather than a literal. A phase with
-  GST off now reads 0 on every line, and the Total equals the Amount -- stated
-  explicitly rather than omitted, because a missing column on a contract is a
-  question waiting to be asked.
-*/
-const phaseGstRate = (
-  phase: string | undefined,
-  fin: { executionGstEnabled?: boolean; designGstEnabled?: boolean },
-  rate: number,
-): number => {
-  const isExec = phase === 'execution' || phase === 'handover';
-  const on = isExec ? fin.executionGstEnabled !== false : fin.designGstEnabled !== false;
-  return on ? rate : 0;
-};
 
 interface ExecutionAgreementPageProps {
     projectContext: ProjectContext;
@@ -50,129 +28,75 @@ interface ExecutionAgreementPageProps {
     projectId?: string;
     activeTier?: any;
     fullBoq?: any[];
+    /** The project's options and rate bank, so Annexure F is the approved scope priced as the client's copy prices it. */
+    tiers?: any[];
+    bank?: any[];
 }
 
-export default function ExecutionAgreementPage({ projectContext, setProjectContext, tenantId, projectId: propProjectId, activeTier, fullBoq }: ExecutionAgreementPageProps) {
-    /* One answer to "is GST on for this phase", shared by both annexure paths. */
-    const annexFin = resolveFinancials(projectContext?.financials);
+/*
+  The page renders the same ExecutionAgreementSheet the client's issued copy
+  renders, from the same resolver (lib/executionAgreement). It used to carry
+  its own copy of all eleven pages, with its own figures: the money it stated
+  was whatever was typed into the agreement the first time, so Money's
+  discounts and GST never reached it.
+*/
+export default function ExecutionAgreementPage({ projectContext, setProjectContext, tenantId, projectId: propProjectId, activeTier, fullBoq, tiers, bank }: ExecutionAgreementPageProps) {
     const { orgData } = useOrg();
     /* Signature evidence lives on the issue. */
     const execIssue = getCurrentIssue(projectContext, 'execution_agreement');
     const { settings } = useStudioSettings(tenantId || '');
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
 
-    // Get the latest payment schedule for milestones
-    const paymentSchedules = projectContext.paymentSchedules || [];
-    let latestSchedule: any = null;
-    if (paymentSchedules.length > 0) {
-        latestSchedule = paymentSchedules.reduce((prev: any, curr: any) => (prev.version > curr.version) ? prev : curr);
-    }
-    const executionAdvances = latestSchedule?.advances?.filter((a: any) => a.phase === 'execution' || a.phase === 'handover') || null;
-    const allAdvances = latestSchedule?.advances || null;
-
-    const [isEditMode, setIsEditMode] = useState(false);
-
-    // Derived values with overrides support
-    const clientName = projectContext.clientName || 'Client Name';
-    const clientAddress = (projectContext as any).projectAddress || 'Client Address';
-    const clientEmail = projectContext.clientEmail || 'Client Email';
-    const clientPhone = projectContext.clientPhone || 'Client Mobile';
-    
     const studioName = settings?.companyName || orgData.orgName || 'Form Factors Design Studio';
     const studioAddress = orgData.officeAddress || '534, 5th Floor, Lodha Signet A, Kolshet Road, Thane West, Maharashtra 400607';
     const studioEmail = orgData.contactEmail || 'formfactors.operations@gmail.com';
     const repName = orgData.signatoryName || 'Principal Name';
-    
-    const projectName = projectContext.name || 'Project Name';
     const projectId = propProjectId || (projectContext as any).projectId || (projectContext as any).id || (projectContext.name ? projectContext.name.replace(/[^a-zA-Z0-9_-]/g, '_') : 'Project');
 
-    const overrides = (projectContext as any).executionAgreementOverrides || {};
-    
-    const dateStr = overrides.agreementDate || new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    const estimatedDuration = overrides.estimatedDuration !== undefined ? overrides.estimatedDuration : (settings?.procurementLeadTimeWeeks ? (settings.procurementLeadTimeWeeks * 7 + 45) : 60);
-    const commencementTrigger = overrides.commencementTrigger || 'Site Handover + Advance Clearance';
-
-    const executionTotal = overrides.executionTotal !== undefined ? overrides.executionTotal : (activeTier?.summary?.totalSell || activeTier?.executionTotal || (projectContext.contractContent as any)?.totalValue || 0);
-    const designFee = overrides.designFee !== undefined ? overrides.designFee : (activeTier?.summary?.designFee || (projectContext.contractContent as any)?.designFee || 0);
-    const gstRate = overrides.gstRate !== undefined ? overrides.gstRate : 18;
-    const gstAmount = (executionTotal + designFee) * (gstRate / 100);
-    const grandTotal = executionTotal + designFee + gstAmount;
-
-    // Helper to update overrides
-    const updateOverride = (field: string, value: any) => {
-        setProjectContext((prev: any) => {
-            const currentOverrides = prev.executionAgreementOverrides || {};
+    /*
+      Annexure F: the approved scope, priced and described as the client's
+      copy will be (agreementScope). The raw option lines this used to list
+      carried "Details missing from bank" for every line whose bank item had
+      moved. The calculated option is the fallback when there are no stored
+      options to read.
+    */
+    const scopeLines = useMemo(() => {
+        const scope = agreementScope(projectContext, { tiers: tiers || [], bank: bank || [] } as any);
+        if (scope.lines.length) return scope.lines;
+        return (fullBoq || []).map((item: any, i: number) => {
+            const rate = item.unitCost !== undefined ? item.unitCost : calculateSellPrice(item.materials, item.labor, item.margin);
             return {
-                ...prev,
-                executionAgreementOverrides: {
-                    ...currentOverrides,
-                    [field]: value
-                }
+                id: String(item.id || `line-${i}`),
+                name: item.name || item.description || 'Item',
+                room: item.roomId || 'General Scope',
+                cat: item.cat || item.category || item.roomId || '',
+                unit: item.unit,
+                qty: Number(item.qty) || 0,
+                unitCost: rate,
+                finalCost: item.finalCost !== undefined ? item.finalCost : rate * (Number(item.qty) || 0),
+                specs: item.internalSpecs || item.specs || item.commercialNote || '',
             };
         });
-    };
+    }, [projectContext, tiers, bank, fullBoq]);
 
-    // Helper to get and manage milestones
-    const getInitialMilestones = () => {
-        if (overrides.advances && overrides.advances.length > 0) {
-            return overrides.advances;
-        }
-        if (executionAdvances && executionAdvances.length > 0) {
-            return executionAdvances.map((m: any) => ({
-                label: m.label || m.name,
-                dueCondition: m.dueCondition || m.description || m.unlocks,
-                percentage: m.percentage,
-                amount: m.amount || (executionTotal * (m.percentage / 100))
-            }));
-        }
-        const filteredMilestones = projectContext.paymentMilestones?.filter((m: any) => m.type === 'execution') || [];
-        if (filteredMilestones.length > 0) {
-            return filteredMilestones.map((m: any) => ({
-                label: m.name,
-                dueCondition: m.description || m.unlocks || 'Before stage begins',
-                percentage: m.percentage,
-                amount: executionTotal * (m.percentage / 100)
-            }));
-        }
-        return [
-            { label: 'Execution Advance 1', dueCondition: 'Agreement acceptance / site mobilisation / procurement start', percentage: 10, amount: executionTotal * 0.10 },
-            { label: 'Execution Advance 2', dueCondition: 'Structural / carpentry / civil / procurement stage', percentage: 40, amount: executionTotal * 0.40 },
-            { label: 'Execution Advance 3', dueCondition: 'Finishing / installation / painting / final site stage', percentage: 40, amount: executionTotal * 0.40 },
-            { label: 'Final Advance', dueCondition: 'Substantial completion / pre-handover / handover readiness', percentage: 10, amount: executionTotal * 0.10 }
-        ];
-    };
-    const milestonesList = getInitialMilestones();
+    const agreement = useMemo(() => resolveAgreement(projectContext, {
+        tierSummary: activeTier?.summary,
+        scopeLines,
+        studioName,
+        defaultDuration: settings?.procurementLeadTimeWeeks ? settings.procurementLeadTimeWeeks * 7 + 45 : 60,
+    }), [projectContext, activeTier, scopeLines, studioName, settings?.procurementLeadTimeWeeks]);
 
-    const updateMilestone = (index: number, key: string, val: any) => {
-        const currentMilestones = [...milestonesList];
-        currentMilestones[index] = {
-            ...currentMilestones[index],
-            [key]: val
-        };
-        // Recalculate amount if percentage changed
-        if (key === 'percentage') {
-            const p = parseFloat(val) || 0;
-            currentMilestones[index].amount = executionTotal * (p / 100);
-        }
-        updateOverride('advances', currentMilestones);
-    };
-
-    const addMilestone = () => {
-        const currentMilestones = [...milestonesList];
-        currentMilestones.push({
-            label: `Execution Advance ${currentMilestones.length + 1}`,
-            dueCondition: 'Stage description',
-            percentage: 10,
-            amount: executionTotal * 0.1
+    /* Edits are saved on the project as they are typed. A key set to undefined goes back to the live value. */
+    const changeOverrides = (update: Partial<AgreementOverrides> | ((o: AgreementOverrides) => Partial<AgreementOverrides>)) => {
+        setProjectContext((prev: any) => {
+            const current: AgreementOverrides = prev.executionAgreementOverrides || {};
+            const patch = typeof update === 'function' ? update(current) : update;
+            const next: AgreementOverrides = { ...current, ...patch };
+            Object.keys(next).forEach((k) => { if (next[k] === undefined) delete next[k]; });
+            return { ...prev, executionAgreementOverrides: next };
         });
-        updateOverride('advances', currentMilestones);
-    };
-
-    const deleteMilestone = (index: number) => {
-        const currentMilestones = [...milestonesList];
-        currentMilestones.splice(index, 1);
-        updateOverride('advances', currentMilestones);
     };
 
     /*
@@ -222,38 +146,28 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
         }, 150);
     };
 
-    // Group BOQ
-    const groupedBoq: { [key: string]: any[] } = {};
-    (fullBoq || []).forEach((item: any) => {
-        const roomName = item.roomId || 'General';
-        if (!groupedBoq[roomName]) groupedBoq[roomName] = [];
-        groupedBoq[roomName].push(item);
-    });
-
     usePageHeader({
-        badge: isEditMode ? 'Editing Parameters' : undefined,
+        badge: isEditMode ? 'Editing' : undefined,
         actions: (
             <div className="flex items-center gap-2">
                 <button
+                    type="button"
                     onClick={() => setIsEditMode(!isEditMode)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer ${
-                        isEditMode 
-                        ? 'bg-[#3D52A0] border-[#334486] text-white hover:bg-[#334486]' 
-                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                    }`}
+                    className={isEditMode
+                        ? 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486]'
+                        : 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50'}
                 >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    {isEditMode ? 'Close Editor' : 'Edit Agreement'}
+                    <Pencil className="w-3.5 h-3.5" />
+                    {isEditMode ? 'Done editing' : 'Edit agreement'}
                 </button>
-                <button 
-                    onClick={handleDownloadPdf} 
+                <button
+                    type="button"
+                    onClick={handleDownloadPdf}
                     disabled={isGenerating}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#3D52A0] text-white rounded-lg text-xs font-bold shadow-xs hover:bg-[#334486] transition disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486] disabled:opacity-50"
                 >
                     <Download className="w-3.5 h-3.5" />
-                    {isGenerating ? 'Generating PDF...' : 'Download PDF'}
+                    {isGenerating ? 'Making the PDF…' : 'Download PDF'}
                 </button>
             </div>
         )
@@ -263,1128 +177,35 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
         <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in pb-16">
 
             {isEditMode && (
-                <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 flex items-start gap-3">
-                    <div className="bg-sky-100 text-[#334486] p-1.5 rounded-full mt-0.5">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-start gap-3 hud-panel-in">
+                    <div className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] flex items-center justify-center shrink-0">
+                        <Pencil className="w-4 h-4" />
                     </div>
                     <div>
-                        <h4 className="text-sm font-bold text-slate-900">Agreement Editor Active</h4>
-                        <p className="text-xs text-[#334486] mt-0.5 leading-relaxed">
-                            You can now edit the agreement's parameters (dates, estimated timeline, financial totals, and individual milestone stages) directly on the pages below. All edits are saved instantly. Close the editor when ready to preview or send the agreement to the client.
+                        <h4 className="font-bold text-slate-800">Editing this agreement</h4>
+                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                            Client and project details, the representatives, the payment schedule wording, Annexures B and C and each BOQ line's description can be changed on the pages below. Use "Add clause" at the end of any article to add your own clauses and sub-clauses. Figures come from Money and the approved BOQ as they stand now. Everything is saved as you type and goes into the copy the client receives when you next issue it.
                         </p>
                     </div>
                 </div>
             )}
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto p-4 sm:p-8 flex justify-center">
-                <div ref={contentRef} className="execution-agreement-container" style={{ width: '210mm', backgroundColor: '#ececf2' }}>
-                    <style dangerouslySetInnerHTML={{__html: `
-                        .ea-doc * { box-sizing: border-box; }
-                        .ea-doc {
-                            margin: 0;
-                            padding: 0;
-                            color: #334155;
-                            font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                            font-size: 13px;
-                            line-height: 1.6;
-                            text-align: left;
-                        }
-                        .ea-page {
-                            width: 210mm;
-                            min-height: 297mm;
-                            margin: 0 auto 18px auto;
-                            background: #fff;
-                            padding: 20mm 18mm;
-                            page-break-after: always;
-                            position: relative;
-                        }
-                        .ea-page:last-child { page-break-after: auto; margin-bottom: 0; }
-                        .ea-header {
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: flex-start;
-                            border-bottom: 4px solid #1e1b4b;
-                            padding-bottom: 16px;
-                            margin-bottom: 24px;
-                        }
-                        .ea-logo {
-                            letter-spacing: 5px;
-                            font-weight: 700;
-                            font-size: 16px;
-                            text-transform: uppercase;
-                            color: #1e1b4b;
-                        }
-                        .ea-tagline {
-                            color: #64748b;
-                            font-size: 11px;
-                            margin-top: 4px;
-                            letter-spacing: .2px;
-                        }
-                        .ea-meta {
-                            text-align: right;
-                            font-size: 10.5px;
-                            color: #64748b;
-                            text-transform: uppercase;
-                            letter-spacing: 1.2px;
-                        }
-                        .ea-doc h1, .ea-doc h2, .ea-doc h3 { margin: 0; color: #1e1b4b; font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-                        .ea-doc h1 {
-                            font-size: 26px;
-                            line-height: 1.2;
-                            margin: 24px 0 12px;
-                            letter-spacing: .2px;
-                            font-weight: 800;
-                        }
-                        .ea-doc h2 {
-                            font-size: 18px;
-                            margin: 24px 0 16px;
-                            text-transform: uppercase;
-                            letter-spacing: 1.5px;
-                            border-bottom: 2px solid #1e1b4b;
-                            padding-bottom: 8px;
-                            font-weight: 700;
-                        }
-                        .ea-doc h3 {
-                            font-size: 14px;
-                            margin: 16px 0 8px;
-                            text-transform: uppercase;
-                            letter-spacing: .8px;
-                            font-weight: 700;
-                        }
-                        .ea-doc p { margin: 0 0 10px; }
-                        .ea-lead { color: #475569; max-width: 620px; }
-                        .ea-grid-2 {
-                            display: grid;
-                            grid-template-columns: 1fr 1fr;
-                            gap: 16px;
-                            margin: 16px 0;
-                        }
-                        .ea-grid-3 {
-                            display: grid;
-                            grid-template-columns: 1fr 1fr 1fr;
-                            gap: 12px;
-                            margin: 16px 0;
-                        }
-                        .ea-box {
-                            border: 1px solid #e2e8f0;
-                            border-radius: 8px;
-                            padding: 16px;
-                            background: #fff;
-                        }
-                        .ea-box.soft { background: #f8fafc; }
-                        .ea-box.brand { background: #eff6ff; border-left: 4px solid #1e1b4b; }
-                        .ea-box.warn { background: #fefce8; border-left: 4px solid #eab308; }
-                        .ea-label {
-                            font-size: 10px;
-                            color: #64748b;
-                            text-transform: uppercase;
-                            letter-spacing: 1px;
-                            margin-bottom: 4px;
-                            font-weight: 700;
-                        }
-                        .ea-value { font-size: 14px; font-weight: 700; color: #1e1b4b; }
-                        .ea-placeholder {
-                            color: #1e1b4b;
-                            font-weight: 600;
-                        }
-                        .ea-doc table {
-                            width: 100%;
-                            border-collapse: collapse;
-                            margin: 12px 0 16px;
-                            font-size: 12px;
-                        }
-                        .ea-doc th {
-                            background: #1e1b4b;
-                            color: #fff;
-                            padding: 10px;
-                            text-align: left;
-                            font-size: 10px;
-                            text-transform: uppercase;
-                            letter-spacing: .8px;
-                        }
-                        .ea-doc td {
-                            border-bottom: 1px solid #f1f5f9;
-                            padding: 9px 10px;
-                            vertical-align: top;
-                            color: #475569;
-                        }
-                        .ea-doc tr:nth-child(even) {
-                            background: #fcfcfd;
-                        }
-                        .ea-doc tr:hover td {
-                            background: #f8fafc;
-                        }
-                        .ea-num { width: 40px; text-align: center; }
-                        .ea-right { text-align: right; }
-                        .ea-small { font-size: 11px; color: #64748b; }
-                        .ea-clause {
-                            display: grid;
-                            grid-template-columns: 42px 1fr;
-                            gap: 8px;
-                            margin: 8px 0;
-                        }
-                        .ea-clause .ea-no {
-                            color: #1e1b4b;
-                            font-weight: 700;
-                        }
-                        .ea-doc ul { margin: 8px 0 12px 0; padding-left: 24px; list-style-type: disc !important; list-style-position: outside !important; }
-                        .ea-doc ol { margin: 8px 0 12px 0; padding-left: 24px; list-style-type: decimal !important; list-style-position: outside !important; }
-                        .ea-doc li { margin: 6px 0; padding-left: 4px; display: list-item !important; }
-                        .ea-sig-grid {
-                            display: grid;
-                            grid-template-columns: 1fr 1fr;
-                            gap: 32px;
-                            margin-top: 32px;
-                        }
-                        .ea-sig-line {
-                            border-top: 1px solid #1e1b4b;
-                            padding-top: 10px;
-                            min-height: 70px;
-                        }
-                        .ea-footer {
-                            position: absolute;
-                            bottom: 10mm;
-                            left: 18mm;
-                            right: 18mm;
-                            display: flex;
-                            justify-content: space-between;
-                            color: #94a3b8;
-                            font-size: 9px;
-                            border-top: 1px solid #e2e8f0;
-                            padding-top: 7px;
-                        }
-                        .ea-avoid-break { break-inside: avoid; page-break-inside: avoid; }
-                        .ea-toc td:first-child { width: 42px; font-weight: 700; color: #1e1b4b; }
-                        .ea-annex-title {
-                            background: transparent;
-                            color: #1e1b4b;
-                            padding-bottom: 8px;
-                            border-bottom: 2px solid #1e1b4b;
-                            margin-top: 32px;
-                            margin-bottom: 16px;
-                            font-weight: 700;
-                            text-transform: uppercase;
-                            letter-spacing: 1px;
-                            font-size: 18px;
-                        }
-                        /* Print layout, used while the PDF is drawn (handleDownloadPdf). */
-                        .execution-agreement-container.ea-printing { width: ${PDF_CONTENT_WIDTH_PX}px !important; min-width: ${PDF_CONTENT_WIDTH_PX}px !important; flex-shrink: 0 !important; background: #fff !important; }
-                        /* Sections run on in the PDF; the running page header names the document, so the letterhead prints once. */
-                        .ea-printing .ea-page ~ .ea-page .ea-header { display: none; }
-                        .ea-printing .ea-page { width: auto; min-height: 0; margin: 0; padding: 0 0 6px 0; page-break-after: auto; }
-                        .ea-printing .ea-footer { display: none; }
-                        @media print {
-                            .ea-doc { background: #fff; }
-                            .ea-page { margin: 0; box-shadow: none; width: 210mm; min-height: 297mm; }
-                        }
-                    `}} />
-                    
-                    <div className="ea-doc">
-                        {/* Page 1 */}
-                        <section className="ea-page">
-                            <header className="ea-header">
-                                <div>
-                                    <div className="ea-logo">{studioName}</div>
-                                    <div className="ea-tagline">Minimal Design, Maximum Impact.</div>
-                                </div>
-                                <div className="ea-meta">
-                                    Integrated Agreement<br />Design-Led Turnkey Interior Execution<br />Version: FFDS-EA-2026-V2
-                                </div>
-                            </header>
-
-                            <h1>Integrated Interior Execution Agreement</h1>
-                            <p className="ea-lead">This Agreement is intended to govern the complete commercial, design, execution, payment, approval, handover, warranty, and dispute framework for the project described below. It is to be read together with the approved BOQ, drawings, payment schedule, and project annexures issued at the start of execution. Handover and snag records are to be created later during project close-out, and are not part of the pre-execution annexures.</p>
-
-                            <div className="ea-grid-2">
-                                <div className="ea-box">
-                                    <div className="ea-label">Client</div>
-                                    <div className="ea-value"><span className="ea-placeholder">{clientName}</span></div>
-                                    <p className="ea-small">Address: <span className="ea-placeholder">{clientAddress}</span></p>
-                                    <p className="ea-small">Email: <span className="ea-placeholder">{clientEmail}</span></p>
-                                    <p className="ea-small">Mobile: <span className="ea-placeholder">{clientPhone}</span></p>
-                                </div>
-                                <div className="ea-box">
-                                    <div className="ea-label">Service Partner / Studio</div>
-                                    <div className="ea-value">{studioName}</div>
-                                    <p className="ea-small">{studioAddress}</p>
-                                    <p className="ea-small">Email: {studioEmail}</p>
-                                    <p className="ea-small">Authorised Representative: <span className="ea-placeholder">{repName}</span></p>
-                                </div>
-                            </div>
-
-                            <div className="ea-grid-3">
-                                <div className="ea-box soft"><div className="ea-label">Project Name</div><div className="ea-value"><span className="ea-placeholder">{projectName}</span></div></div>
-                                <div className="ea-box soft"><div className="ea-label">Project Address</div><div className="ea-value"><span className="ea-placeholder">{clientAddress}</span></div></div>
-                                <div className="ea-box soft"><div className="ea-label">Project ID</div><div className="ea-value"><span className="ea-placeholder">{projectId}</span></div></div>
-                            </div>
-
-                            <div className="ea-grid-3">
-                                <div className="ea-box soft">
-                                    <div className="ea-label">Agreement Date</div>
-                                    <div className="ea-value">
-                                        {isEditMode ? (
-                                            <input 
-                                                type="text" 
-                                                value={dateStr} 
-                                                onChange={(e) => updateOverride('agreementDate', e.target.value)}
-                                                className="w-full text-xs p-1 border border-sky-200 rounded font-semibold text-slate-900 bg-white" 
-                                            />
-                                        ) : (
-                                            <span className="ea-placeholder">{dateStr}</span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="ea-box soft">
-                                    <div className="ea-label">Estimated Duration</div>
-                                    <div className="ea-value">
-                                        {isEditMode ? (
-                                            <div className="flex items-center gap-1.5">
-                                                <input 
-                                                    type="number" 
-                                                    value={estimatedDuration} 
-                                                    onChange={(e) => updateOverride('estimatedDuration', parseInt(e.target.value) || 0)}
-                                                    className="w-20 text-xs p-1 border border-sky-200 rounded font-bold text-slate-900 text-center bg-white" 
-                                                />
-                                                <span className="text-[11px] font-bold text-slate-900">Days</span>
-                                            </div>
-                                        ) : (
-                                            <span className="ea-placeholder">{estimatedDuration} Working Days</span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="ea-box soft">
-                                    <div className="ea-label">Commencement Trigger</div>
-                                    <div className="ea-value">
-                                        {isEditMode ? (
-                                            <input 
-                                                type="text" 
-                                                value={commencementTrigger} 
-                                                onChange={(e) => updateOverride('commencementTrigger', e.target.value)}
-                                                className="w-full text-xs p-1 border border-sky-200 rounded font-semibold text-slate-900 bg-white" 
-                                            />
-                                        ) : (
-                                            <span>{commencementTrigger}</span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <h2>Financial Summary</h2>
-                            <table>
-                                <thead>
-                                    <tr><th>Particulars</th><th className="ea-right">Amount</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Execution Works Value, excluding GST</td>
-                                        <td className="ea-right tabular-nums font-semibold">
-                                            {isEditMode ? (
-                                                <div className="flex items-center justify-end gap-1 font-sans">
-                                                    <span className="text-[11px] font-bold text-slate-500">₹</span>
-                                                    <input 
-                                                        type="number" 
-                                                        value={executionTotal} 
-                                                        onChange={(e) => {
-                                                            const val = parseFloat(e.target.value) || 0;
-                                                            updateOverride('executionTotal', val);
-                                                            // Recalculate milestones amounts to keep sync if percentage based
-                                                            if (overrides.advances) {
-                                                                const updated = overrides.advances.map((m: any) => ({
-                                                                    ...m,
-                                                                    amount: val * ((m.percentage || 0) / 100)
-                                                                }));
-                                                                updateOverride('advances', updated);
-                                                            }
-                                                        }}
-                                                        className="w-32 text-xs p-1 border border-sky-200 rounded font-bold text-slate-900 text-right bg-white animate-in zoom-in-95 duration-150" 
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <span>₹ {formatCurrency(executionTotal).replace('₹','')}</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>Design / Professional Fees, if billed under this Agreement</td>
-                                        <td className="ea-right tabular-nums font-semibold">
-                                            {isEditMode ? (
-                                                <div className="flex items-center justify-end gap-1 font-sans">
-                                                    <span className="text-[11px] font-bold text-slate-500">₹</span>
-                                                    <input 
-                                                        type="number" 
-                                                        value={designFee} 
-                                                        onChange={(e) => updateOverride('designFee', parseFloat(e.target.value) || 0)}
-                                                        className="w-32 text-xs p-1 border border-sky-200 rounded font-bold text-slate-900 text-right bg-white animate-in zoom-in-95 duration-150" 
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <span>₹ {formatCurrency(designFee).replace('₹','')}</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>
-                                            {isEditMode ? (
-                                                <div className="flex items-center gap-2">
-                                                    <span>GST Rate:</span>
-                                                    <input 
-                                                        type="number" 
-                                                        value={gstRate} 
-                                                        onChange={(e) => updateOverride('gstRate', parseFloat(e.target.value) || 0)}
-                                                        className="w-14 text-xs p-1 border border-sky-200 rounded font-bold text-slate-900 text-center bg-white" 
-                                                    />
-                                                    <span>%</span>
-                                                </div>
-                                            ) : (
-                                                <span>GST ({gstRate}%)</span>
-                                            )}
-                                        </td>
-                                        <td className="ea-right tabular-nums font-semibold">₹ {formatCurrency(gstAmount).replace('₹','')}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Grand Total</strong></td>
-                                        <td className="ea-right tabular-nums font-bold text-slate-900"><strong>₹ {formatCurrency(grandTotal).replace('₹','')}</strong></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            <p className="ea-small">Amounts, taxes, inclusions, exclusions, as-actuals, allowances, and provisional sums shall be governed by the final signed BOQ and invoice schedule.</p>
-
-                            <div className="ea-box warn ea-avoid-break">
-                                <strong>Client Acceptance Note:</strong> By signing this Agreement, approving it digitally, making payment against the invoice, or allowing commencement of work, the Client confirms that the Client has read, understood, and accepted this Agreement, the BOQ, payment schedule, approved drawings, material specifications, annexures, and the Terms of Engagement forming part of this document.
-                            </div>
-
-                            <h2>Document Index</h2>
-                            <table className="ea-toc">
-                                <tbody>
-                                    <tr><td>1</td><td>Preamble, Definitions, Contract Documents and Order of Precedence</td></tr>
-                                    <tr><td>2</td><td>Scope of Work, BOQ, Exclusions and As-Actuals</td></tr>
-                                    <tr><td>3</td><td>Design Deliverables, Approvals, Revisions and Change Requests</td></tr>
-                                    <tr><td>4</td><td>Payments, Taxes, Pause Rights and Material Ownership</td></tr>
-                                    <tr><td>5</td><td>Execution, Site Protocol, Timeline and Client Responsibilities</td></tr>
-                                    <tr><td>6</td><td>Materials, Site Conditions, Tolerances and Substitutions</td></tr>
-                                    <tr><td>7</td><td>Completion, Handover, Snag Closure and Warranty</td></tr>
-                                    <tr><td>8</td><td>Intellectual Property, Confidentiality and Portfolio Use</td></tr>
-                                    <tr><td>9</td><td>Termination, Liability, Indemnity, Force Majeure and Dispute Resolution</td></tr>
-                                    <tr><td>10</td><td>Acceptance, Digital Sign-Off and Annexures</td></tr>
-                                </tbody>
-                            </table>
-
-                            <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 1</span></div>
-                        </section>
-
-                        {/* Page 2 */}
-                        <section className="ea-page">
-                            <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Integrated Execution Agreement</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
-
-                            <h2>1. Preamble, Definitions and Contract Documents</h2>
-                            <div className="ea-clause"><div className="ea-no">1.1</div><div>This Interior Execution Agreement is entered into between <strong><span className="ea-placeholder">{clientName}</span></strong> and <strong>{studioName}</strong> for the design-led interior execution works at the project site described in this Agreement.</div></div>
-                            <div className="ea-clause"><div className="ea-no">1.2</div><div>{studioName} is a design-led interior design and execution studio. {studioName} shall act as the Client's design and execution coordination partner for the agreed scope. {studioName} may perform work through its own team, vendors, contractors, artisans, consultants, and service providers.</div></div>
-                            <div className="ea-clause"><div className="ea-no">1.3</div><div>The Client confirms that the project scope, commercial value, assumptions, exclusions, payment milestones, drawings, material specifications, and execution approach have been reviewed before acceptance of this Agreement.</div></div>
-
-                            <h3>1.4 Definitions</h3>
-                            <table>
-                                <thead>
-                                    <tr><th>Term</th><th>Meaning</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td>Agreement</td><td>This Integrated Interior Execution Agreement, including all annexures and documents incorporated by reference.</td></tr>
-                                    <tr><td>BOQ</td><td>The final bill of quantities approved by the Client, including quantities, unit rates, item descriptions, inclusions, exclusions, allowances, and as-actuals.</td></tr>
-                                    <tr><td>GFC Drawings</td><td>Good for Construction drawings issued by {studioName} for execution after design approvals.</td></tr>
-                                    <tr><td>As-Actuals</td><td>Items where the final payable value depends on actual vendor bill, site measurement, final selection, quantity, brand, model, or market cost.</td></tr>
-                                    <tr><td>Change Request</td><td>Any addition, deletion, modification, upgrade, rework, preference change, specification change, quantity change, design change, or site requirement arising after approval or commencement.</td></tr>
-                                    <tr><td>Substantial Completion</td><td>The stage at which major works under the agreed BOQ are completed and the premises can be functionally used, even if minor snags remain.</td></tr>
-                                    <tr><td>Snag</td><td>A minor workmanship defect, adjustment, alignment issue, touch-up, finishing issue, or rectification that does not prevent functional use of the space.</td></tr>
-                                    <tr><td>Incomplete Work</td><td>A BOQ item that has not been substantially installed or delivered at all, excluding snags, adjustments, third-party delays, manufacturer defects, and client-supplied item issues.</td></tr>
-                                </tbody>
-                            </table>
-
-                            <h3>1.5 Contract Documents</h3>
-                            <p>The following documents together constitute the complete agreement between the parties:</p>
-                            <ol>
-                                <li>This Integrated Interior Execution Agreement.</li>
-                                <li>Final approved BOQ and commercial summary.</li>
-                                <li>Payment Schedule and invoices issued by {studioName}.</li>
-                                <li>Approved design drawings, GFC drawings, 3D views, mood boards, and material/selection sheets.</li>
-                                <li>Approved Change Requests and revised BOQs issued after this Agreement.</li>
-                                <li>Future site notes, Minutes of Meeting, WhatsApp/email approvals, handover records, and snag records created during execution or close-out, to the extent consistent with this Agreement.</li>
-                            </ol>
-
-                            <h3>1.6 Order of Precedence</h3>
-                            <div className="ea-box brand ea-avoid-break">
-                                <p>In case of inconsistency between documents, the following order shall apply:</p>
-                                <ol>
-                                    <li>Approved Change Requests issued after this Agreement.</li>
-                                    <li>This Integrated Interior Execution Agreement.</li>
-                                    <li>Final approved BOQ, commercial summary, and payment schedule.</li>
-                                    <li>GFC drawings and approved material/finish sheets.</li>
-                                    <li>Earlier design presentations, 3D views, concept notes, estimates, discussions, WhatsApp messages, and verbal conversations.</li>
-                                </ol>
-                                <p>Earlier discussions, informal communications, verbal assurances, indicative estimates, and unapproved options shall not override the signed/approved contract documents.</p>
-                            </div>
-
-                            <h3>1.7 Authorised Client Representatives</h3>
-                            <div className="ea-clause"><div className="ea-no">1.7.1</div><div>Only the following persons are authorised to approve scope, design, materials, BOQ changes, Change Requests, site decisions, payment confirmations, and handover records:</div></div>
-                            <table>
-                                <thead>
-                                    <tr><th>Name</th><th>Relationship / Role</th><th>Email</th><th>Mobile</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td><span className="ea-placeholder">{clientName}</span></td><td><span className="ea-placeholder">Client</span></td><td><span className="ea-placeholder">{clientEmail}</span></td><td><span className="ea-placeholder">{clientPhone}</span></td></tr>
-                                    <tr><td><span className="ea-placeholder">Name 2</span></td><td><span className="ea-placeholder">Role</span></td><td><span className="ea-placeholder">Email</span></td><td><span className="ea-placeholder">Mobile</span></td></tr>
-                                </tbody>
-                            </table>
-                            <div className="ea-clause"><div className="ea-no">1.7.2</div><div>Instructions from relatives, residents, children, domestic help, society staff, contractors, vendors, neighbours, or any third party shall not be binding on {studioName} unless confirmed in writing by an authorised Client representative.</div></div>
-
-                            <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 2</span></div>
-                        </section>
-
-                        {/* Page 3 */}
-                        <section className="ea-page">
-                            <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Scope, BOQ and Exclusions</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
-
-                            <h2>2. Scope of Work, BOQ, Exclusions and As-Actuals</h2>
-                            <div className="ea-clause"><div className="ea-no">2.1</div><div>The scope of work shall be strictly limited to items expressly listed in the final approved BOQ and this Agreement. Any item not expressly mentioned as included shall be treated as excluded.</div></div>
-                            <div className="ea-clause"><div className="ea-no">2.2</div><div>The BOQ forms an integral part of this Agreement. Quantities, rates, brands, specifications, finishes, item descriptions, execution assumptions, and exclusions shall be read together with the approved drawings and material specifications.</div></div>
-                            <div className="ea-clause"><div className="ea-no">2.3</div><div>BOQ quantities are based on approved drawings and site assumptions available at the time of commercial finalisation. Final quantities may change due to site measurement, design changes, structural/site constraints, Client-requested changes, or actual work carried out. Such changes shall be billed or adjusted as applicable.</div></div>
-                            <div className="ea-clause"><div className="ea-no">2.4</div><div>Any addition, deletion, material change, specification upgrade, dimensional change, relocation, rework, redesign, or modification after BOQ/design approval shall be treated as a Change Request and may affect cost and timeline.</div></div>
-
-                            <h3>2.5 Room-Wise Included Scope</h3>
-                            <table>
-                                <thead>
-                                    <tr><th>Area</th><th>Included Items</th><th>Key Notes</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td>Living Room</td><td><span className="ea-placeholder">As per BOQ</span></td><td>Only approved carpentry, paneling, lighting, finishes, loose items, and decor expressly listed in BOQ are included.</td></tr>
-                                    <tr><td>Kitchen</td><td><span className="ea-placeholder">As per BOQ</span></td><td>Kitchen appliances, gas work, chimney duct, hob, sink, faucet, hardware upgrades, organisers, and countertop are included only if expressly listed.</td></tr>
-                                    <tr><td>Master Bedroom</td><td><span className="ea-placeholder">As per BOQ</span></td><td>Mattress, loose furniture, AC, curtains, bedding, decor, and electronics are excluded unless listed.</td></tr>
-                                    <tr><td>Bedroom 2 / Kids / Guest</td><td><span className="ea-placeholder">As per BOQ</span></td><td>Study units, wardrobes, beds, lofts, paneling, and electrical scope are governed by approved drawings and BOQ.</td></tr>
-                                    <tr><td>Bathrooms</td><td><span className="ea-placeholder">As per BOQ</span></td><td>Sanitaryware, CP fittings, geysers, exhaust fans, drains, waterproofing, tile work, and plumbing are included only if expressly listed.</td></tr>
-                                    <tr><td>Functional Works</td><td><span className="ea-placeholder">As per BOQ</span></td><td>Cut-outs, concealed conditions, additional points, repairs, and rewiring beyond BOQ are chargeable.</td></tr>
-                                    <tr><td>Site Services</td><td><span className="ea-placeholder">As per BOQ</span></td><td>Society deposits, penalties, lift charges, loading/unloading charges, security requirements, and special permissions are excluded unless listed.</td></tr>
-                                </tbody>
-                            </table>
-
-                            <h3>2.6 Standard Exclusions</h3>
-                            <p>Unless expressly included in the BOQ, the following are excluded:</p>
-                            <ul>
-                                <li>Society deposits, permissions, NOCs, move-in/move-out charges, lift protection, building penalties, working-hour penalties, and society-imposed charges.</li>
-                                <li>Major civil work, waterproofing, structural work, slab/beam modification, wall breaking, window/door frame replacement, aluminium/window work, grills, and external façade work.</li>
-                                <li>White goods, appliances, televisions, music systems, AC machines, geysers, exhaust fans, kitchen equipment, gas pipeline work, water purifiers, soft furnishings, mattresses, loose decor, curtains, plants, art, and accessories.</li>
-                                <li>Sanitaryware, CP fittings, tiles, stone, quartz, lights, fans, switches, automation, loose furniture, and hardware upgrades unless listed as included.</li>
-                                <li>Repairs arising from seepage, leakage, termite, pests, structural defects, voltage fluctuations, existing electrical/plumbing faults, building-source issues, or third-party work.</li>
-                                <li>Any work requested after handover, other than legitimate warranty-covered workmanship snags.</li>
-                            </ul>
-
-                            <h3>2.7 As-Actuals, Allowances and Provisional Sums</h3>
-                            <div className="ea-clause"><div className="ea-no">2.7.1</div><div>Items marked as As-Actuals, Provisional, Allowance, To Be Finalised, Client Selection, Vendor Actuals, or equivalent shall be billed based on actual cost, final selected model, brand, specification, quantity, vendor invoice, site measurement, transport, taxes, and handling/coordination charges if applicable.</div></div>
-                            <div className="ea-clause"><div className="ea-no">2.7.2</div><div>For client-procured or directly paid vendor items, {studioName}’s role is limited to design coordination and execution integration unless otherwise agreed in writing. {studioName} shall not be responsible for product quality, vendor delay, shortage, warranty, service, breakage, delivery, installation defect, compatibility, or after-sales support for such items.</div></div>
-                            <div className="ea-clause"><div className="ea-no">2.7.3</div><div>Any delay caused by client selections, vendor approvals, client-procured items, product availability, direct vendor delays, delayed payments to vendors, or defective/incorrect materials shall extend the project timeline and may result in remobilisation charges.</div></div>
-
-                            <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 3</span></div>
-                        </section>
-
-                        {/* Page 4 */}
-                        <section className="ea-page">
-                            <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Design, Approvals and Change Requests</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
-
-                            <h2>3. Design Deliverables, Approvals, Revisions and Change Requests</h2>
-
-                            <h3>3.1 Design Deliverables</h3>
-                            <table>
-                                <thead>
-                                    <tr><th>Deliverable</th><th>Included / Not Included</th><th>Notes</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td>Space Planning</td><td><span className="ea-placeholder">Included</span></td><td>Layouts as per agreed design scope.</td></tr>
-                                    <tr><td>3D Views</td><td><span className="ea-placeholder">Included</span></td><td>Number of views and rooms as per design scope. 3D views represent design intent.</td></tr>
-                                    <tr><td>GFC Drawings</td><td><span className="ea-placeholder">Included</span></td><td>Civil, electrical, ceiling, plumbing, carpentry, furniture, detail drawings, as applicable.</td></tr>
-                                    <tr><td>Material and Selection Sheets</td><td><span className="ea-placeholder">Included</span></td><td>Final finishes, materials, laminates, veneers, stone, paint, lights, fittings, hardware, etc.</td></tr>
-                                    <tr><td>BOQ and Payment Schedule</td><td>Included</td><td>Commercial document for execution and milestone billing.</td></tr>
-                                </tbody>
-                            </table>
-
-                            <h3>3.2 Design Visuals and Execution Reality</h3>
-                            <div className="ea-box brand ea-avoid-break">
-                                <p>3D views, mood boards, sketches, renders, and presentations are visual representations intended to communicate design intent. Final execution shall be governed by approved GFC drawings, site measurements, BOQ, material samples, technical feasibility, and available products.</p>
-                                <p>Minor variations in shade, texture, grain, lighting effect, proportions, depth, visibility, joinery lines, hardware placement, site fitment, and alignment due to site conditions, product availability, material behaviour, or execution practicality shall not be treated as defects if within commercially acceptable tolerance.</p>
-                            </div>
-
-                            <h3>3.3 Revision Policy</h3>
-                            <div className="ea-clause"><div className="ea-no">3.3.1</div><div>Unless otherwise stated in the design scope, {studioName} shall provide up to <strong>two design options/revision rounds per room or design area</strong> during the design phase.</div></div>
-                            <div className="ea-clause"><div className="ea-no">3.3.2</div><div>Additional revisions, preference changes, re-design, alternate design directions, repeated option development, or revisions after design sign-off shall be chargeable at the rates specified in Annexure B or as quoted by {studioName}.</div></div>
-                            <div className="ea-clause"><div className="ea-no">3.3.3</div><div>Any change requested after procurement, fabrication, cutting, ordering, installation, or site execution has commenced shall be treated as rework and shall be chargeable, even if the change arises from Client preference.</div></div>
-
-                            <h3>3.4 Approval Protocol</h3>
-                            <div className="ea-clause"><div className="ea-no">3.4.1</div><div>Approvals may be given through email, WhatsApp, signed document, digital approval link, payment against invoice, selection confirmation, or other written confirmation by an authorised Client representative.</div></div>
-                            <div className="ea-clause"><div className="ea-no">3.4.2</div><div>Verbal discussions, phone calls, site conversations, or instructions to contractors shall not constitute binding approvals unless confirmed in writing by an authorised Client representative and acknowledged by {studioName}.</div></div>
-                            <div className="ea-clause"><div className="ea-no">3.4.3</div><div>Client approvals shall be provided within 48 hours unless a different timeline is agreed. Delay in approval shall extend the project timeline and may affect material availability, vendor scheduling, and cost.</div></div>
-                            <div className="ea-clause"><div className="ea-no">3.4.4</div><div>Once drawings, materials, specifications, or BOQ are approved, {studioName} may proceed with procurement, fabrication, and execution. Any subsequent change shall be a Change Request.</div></div>
-
-                            <h3>3.5 Change Request Process</h3>
-                            <ol>
-                                <li>Client submits request through email or WhatsApp to {studioName}.</li>
-                                <li>{studioName} reviews feasibility, cost, timeline impact, procurement impact, design impact, and site constraints.</li>
-                                <li>{studioName} issues written quote/revised BOQ/payment requirement, where applicable.</li>
-                                <li>Client approves in writing and clears the applicable advance/payment.</li>
-                                <li>{studioName} schedules the change subject to labour, vendor, material, and site availability.</li>
-                            </ol>
-                            <div className="ea-clause"><div className="ea-no">3.5.1</div><div>No Change Request shall be executed unless approved in writing by the Client and accepted by {studioName}. {studioName} may refuse a Change Request if it is unsafe, technically unsuitable, commercially impractical, inconsistent with approved design intent, dependent on unavailable labour/material, or likely to compromise project quality.</div></div>
-                            <div className="ea-clause"><div className="ea-no">3.5.2</div><div>Any approved Change Request may result in a revised payment schedule. {studioName} is not required to proceed with the changed work unless the applicable advance has been received and cleared.</div></div>
-
-                            <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 4</span></div>
-                        </section>
-
-                        {/* Page 5 */}
-                        <section className="ea-page">
-                            <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Payments and Commercial Protection</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
-
-                            <h2>4. Payments, Taxes, Pause Rights and Material Ownership</h2>
-
-                            <h3>4.1 Advance Payment Principle</h3>
-                            <div className="ea-box warn ea-avoid-break">
-                                <p><strong>All {studioName} project payments are advance-linked.</strong> No stage of design, procurement, fabrication, site execution, installation, handover, warranty documentation, or snag rectification is required to commence or continue unless the corresponding invoice has been paid and cleared.</p>
-                                <p>Payment is treated as received only after funds are credited and cleared in {studioName}’s designated bank account.</p>
-                            </div>
-
-                            <h3>4.2 Execution Milestones</h3>
-                            {isEditMode ? (
-                                <div className="space-y-4 mb-4 border border-sky-100 p-4 rounded-xl bg-sky-50/25">
-                                    <table className="w-full text-xs">
-                                        <thead>
-                                            <tr className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white text-[10px] uppercase tracking-wider font-bold">
-                                                <th className="p-2 text-left">Milestone Name</th>
-                                                <th className="p-2 text-left">Due Trigger Condition</th>
-                                                <th className="p-2 text-left w-20">%</th>
-                                                <th className="p-2 text-right w-32">Amount</th>
-                                                <th className="p-2 text-center w-16">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {milestonesList.map((m: any, i: number) => (
-                                                <tr key={i} className="border-b border-sky-100/55">
-                                                    <td className="p-2">
-                                                        <input 
-                                                            type="text" 
-                                                            value={m.label} 
-                                                            onChange={(e) => updateMilestone(i, 'label', e.target.value)}
-                                                            className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#3D52A0] outline-none" 
-                                                        />
-                                                    </td>
-                                                    <td className="p-2">
-                                                        <textarea 
-                                                            rows={2}
-                                                            value={m.dueCondition} 
-                                                            onChange={(e) => updateMilestone(i, 'dueCondition', e.target.value)}
-                                                            className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#3D52A0] outline-none resize-none" 
-                                                        />
-                                                    </td>
-                                                    <td className="p-2">
-                                                        <div className="flex items-center gap-1">
-                                                            <input 
-                                                                type="number" 
-                                                                value={m.percentage} 
-                                                                onChange={(e) => updateMilestone(i, 'percentage', parseFloat(e.target.value) || 0)}
-                                                                className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-bold focus:border-[#3D52A0] outline-none text-center" 
-                                                            />
-                                                            <span className="text-[11px] font-bold text-slate-900">%</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-2 text-right tabular-nums font-bold text-slate-700">
-                                                        ₹ {formatCurrency(m.amount || (executionTotal * (m.percentage / 100))).replace('₹','')}
-                                                    </td>
-                                                    <td className="p-2 text-center">
-                                                        <button 
-                                                            onClick={() => deleteMilestone(i)}
-                                                            className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition cursor-pointer"
-                                                            title="Delete Milestone"
-                                                        >
-                                                            <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                    <div className="flex justify-between items-center pt-2 border-t border-sky-100">
-                                        <button 
-                                            onClick={addMilestone}
-                                            className="px-3 py-1.5 bg-sky-50 border border-sky-200 hover:bg-sky-100/50 text-[#334486] text-xs font-bold rounded-lg transition flex items-center gap-1 cursor-pointer"
-                                        >
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
-                                            Add Milestone
-                                        </button>
-                                        <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                                            <span>Sum of Percentages:</span>
-                                            <span className={`px-2 py-0.5 rounded text-[11px] ${Math.abs(milestonesList.reduce((acc: number, cur: any) => acc + (cur.percentage || 0), 0) - 100) < 0.01 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800 animate-pulse'}`}>
-                                                {milestonesList.reduce((acc: number, cur: any) => acc + (cur.percentage || 0), 0).toFixed(1)}%
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                <table>
-                                    <thead>
-                                        <tr><th>Stage</th><th>Trigger</th><th>%</th><th>Amount</th><th>Due</th></tr>
-                                    </thead>
-                                    <tbody>
-                                        {milestonesList.map((m: any, i: number) => {
-                                            const amount = m.amount || (executionTotal * (m.percentage / 100));
-                                            return (
-                                                <tr key={i}>
-                                                    <td className="font-semibold text-slate-900">{m.label}</td>
-                                                    <td>{m.dueCondition}</td>
-                                                    <td className="font-bold text-slate-700">{m.percentage}%</td>
-                                                    <td className="tabular-nums font-semibold text-slate-900">₹ {formatCurrency(amount).replace('₹','')}</td>
-                                                    <td>Before stage begins</td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            )}
-                            <p className="ea-small">Milestone percentages may be modified for a specific project in Annexure A. If there is a conflict, the signed Annexure A payment schedule shall apply.</p>
-
-                            <h3>4.3 Taxes and Statutory Charges</h3>
-                            <div className="ea-clause"><div className="ea-no">4.3.1</div><div>GST shall be applicable as per law on all taxable invoices unless expressly stated otherwise. Any future change in tax rate, cess, government levy, or statutory charge shall be borne by the Client.</div></div>
-                            <div className="ea-clause"><div className="ea-no">4.3.2</div><div>Bank charges, payment gateway charges, TDS implications, foreign remittance charges, and any withholding shall be addressed separately. Invoice value must be received in full unless TDS is legally applicable and proper certificate is provided.</div></div>
-
-                            <h3>4.4 Non-Payment, Pause Rights and Remobilisation</h3>
-                            <div className="ea-clause"><div className="ea-no">4.4.1</div><div>If any invoice remains unpaid beyond its due date, {studioName} may pause design work, procurement, fabrication, site execution, supervision, installation, handover, warranty documentation, and snag closure without liability for delay.</div></div>
-                            <div className="ea-clause"><div className="ea-no">4.4.2</div><div>Any payment delay shall automatically extend the project timeline by the actual delay period plus reasonable remobilisation time required to reschedule labour, vendors, materials, and site activity.</div></div>
-                            <div className="ea-clause"><div className="ea-no">4.4.3</div><div>Invoices unpaid for more than 7 calendar days from due date may carry delayed payment charges at 1.5% per month or the maximum legally permissible rate, whichever is lower, along with recovery costs, legal costs, and remobilisation costs if applicable.</div></div>
-                            <div className="ea-clause"><div className="ea-no">4.4.4</div><div>{studioName} may withhold non-installed materials, loose items, handover dossier, keys/access cards in {studioName} possession, warranty certificate, final drawings, vendor details, and project closure documents until full payment clearance.</div></div>
-
-                            <h3>4.5 Ownership of Materials and Work-in-Progress</h3>
-                            <div className="ea-clause"><div className="ea-no">4.5.1</div><div>Materials, fittings, hardware, loose items, work-in-progress, drawings, documentation, and products procured or created by {studioName} shall remain the property of {studioName} until full payment for the relevant stage/item has been received and cleared.</div></div>
-                            <div className="ea-clause"><div className="ea-no">4.5.2</div><div>If the Client terminates, delays, or defaults after procurement or fabrication has commenced, {studioName} may recover committed costs, vendor cancellation charges, labour charges, storage charges, remobilisation charges, and value of completed work before releasing any project material or deliverable.</div></div>
-
-                            <h3>4.6 No Set-Off Against Snags</h3>
-                            <div className="ea-clause"><div className="ea-no">4.6.1</div><div>The Client may not withhold milestone payments or final advance against snag items. Snags are post-completion rectifications covered under snag/warranty protocol and do not constitute grounds to delay payment unless the item is an incomplete work item as defined in this Agreement.</div></div>
-
-                            <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 5</span></div>
-                        </section>
-
-                        {/* Page 6 */}
-                        <section className="ea-page">
-                            <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Execution and Site Protocol</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
-
-                            <h2>5. Execution, Site Protocol, Timeline and Client Responsibilities</h2>
-
-                            <h3>5.1 Commencement Conditions</h3>
-                            <p>{studioName} shall commence execution only after all of the following are completed:</p>
-                            <ol>
-                                <li>Agreement acceptance and payment of applicable advance.</li>
-                                <li>Client provides vacant/uninterrupted site access as required for the agreed scope.</li>
-                                <li>Society/building permissions, deposits, work timings, lift access, and site rules are confirmed by the Client.</li>
-                                <li>Power, water, toilet access, storage space, and work area availability are provided.</li>
-                                <li>Critical design drawings, material selections, and BOQ are approved.</li>
-                            </ol>
-
-                            <h3>5.2 Client Responsibilities</h3>
-                            <ul>
-                                <li>Provide timely approvals, decisions, information, site access, permissions, and payments.</li>
-                                <li>Ensure society/building permissions and compliance with building rules.</li>
-                                <li>Ensure no unauthorised person gives instructions to {studioName} contractors/vendors.</li>
-                                <li>Clear direct vendor payments, as-actuals, client-procured items, and third-party invoices on time.</li>
-                                <li>Keep valuables, personal belongings, documents, fragile items, and existing loose items removed or protected before work starts.</li>
-                                <li>Inform {studioName} in writing of any known leakage, seepage, termite, electrical, plumbing, structural, or society-related restriction before commencement.</li>
-                            </ul>
-
-                            <h3>5.3 Site Access and Safety</h3>
-                            <div className="ea-clause"><div className="ea-no">5.3.1</div><div>All Client site visits during execution shall be coordinated in advance with {studioName}. Unannounced visits during active construction are discouraged for safety, workflow, and liability reasons.</div></div>
-                            <div className="ea-clause"><div className="ea-no">5.3.2</div><div>The Client shall not directly instruct, supervise, argue with, or interfere with {studioName} contractors, labour, vendors, or artisans. Any instruction must be routed through {studioName}.</div></div>
-                            <div className="ea-clause"><div className="ea-no">5.3.3</div><div>Any rework, rectification, damage, delay, or cost arising from unauthorised Client instructions to contractors/vendors shall be charged to the Client.</div></div>
-                            <div className="ea-clause"><div className="ea-no">5.3.4</div><div>{studioName} may restrict site access during high-risk activities, wet work, electrical work, carpentry cutting, polishing, painting, ceiling work, or active installation.</div></div>
-
-                            <h3>5.4 Timeline</h3>
-                            <div className="ea-clause"><div className="ea-no">5.4.1</div><div>The project duration is an estimated working-day schedule, not a fixed-date guarantee, unless specifically agreed in writing. The timeline starts only after commencement conditions are fulfilled.</div></div>
-                            <div className="ea-clause"><div className="ea-no">5.4.2</div><div>Timeline excludes Sundays, public holidays, labour holidays, building/society restricted days, force majeure events, and days on which work cannot be performed due to reasons beyond {studioName}’s control.</div></div>
-
-                            <h3>5.5 Timeline Exclusions and Extensions</h3>
-                            <p>The project timeline shall be extended for delays caused by:</p>
-                            <ul>
-                                <li>Client approval delays, payment delays, scope changes, design changes, selection delays, or late information.</li>
-                                <li>Society permissions, lift access, restricted working hours, noise restrictions, building shutdowns, security restrictions, or neighbour complaints.</li>
-                                <li>Client-supplied items, direct vendors, vendor delays, material shortage, product discontinuation, market availability, transport delay, or manufacturer service delays.</li>
-                                <li>Concealed site conditions, seepage, leakage, structural/plumbing/electrical defects, termite, uneven surfaces, building defects, or required corrective works.</li>
-                                <li>Force majeure, public disruption, weather, strikes, government action, accidents, illness, labour shortages, supply chain disruption, or any cause beyond {studioName}’s reasonable control.</li>
-                            </ul>
-                            <div className="ea-clause"><div className="ea-no">5.5.1</div><div>Any such delay shall extend the timeline by the actual delay period plus reasonable remobilisation time.</div></div>
-
-                            <h3>5.6 Supervision and Updates</h3>
-                            <div className="ea-clause"><div className="ea-no">5.6.1</div><div>{studioName} shall provide periodic supervision as required for the execution stage. Continuous full-time site presence is not included unless separately agreed and billed.</div></div>
-                            <div className="ea-clause"><div className="ea-no">5.6.2</div><div>Weekly or periodic updates shall be shared through the agreed communication channel. Urgent operational decisions may be communicated by WhatsApp/email.</div></div>
-
-                            <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 6</span></div>
-                        </section>
-
-                        {/* Page 7 */}
-                        <section className="ea-page">
-                            <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Materials, Site Conditions and Tolerances</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
-
-                            <h2>6. Materials, Site Conditions, Tolerances and Substitutions</h2>
-
-                            <h3>6.1 Site Measurement and Existing Conditions</h3>
-                            <div className="ea-clause"><div className="ea-no">6.1.1</div><div>{studioName}’s scope and estimate are based on visible and reasonably assessable site conditions at the time of proposal and measurement. Concealed or latent defects discovered later shall be treated as additional work.</div></div>
-                            <div className="ea-clause"><div className="ea-no">6.1.2</div><div>Concealed issues may include seepage, leakage, dampness, termite damage, pest infestation, uneven walls/floors, slab/beam deviations, weak plaster, structural cracks, plumbing faults, electrical faults, voltage instability, waterproofing failure, building-source defects, or previous contractor defects.</div></div>
-                            <div className="ea-clause"><div className="ea-no">6.1.3</div><div>Any additional work, material, testing, rectification, waiting period, or redesign required due to such conditions shall be charged separately and may affect timeline.</div></div>
-
-                            <h3>6.2 Material Selection and Batch Variation</h3>
-                            <div className="ea-clause"><div className="ea-no">6.2.1</div><div>Natural and manufactured materials, including veneer, wood, laminate, stone, tiles, fabric, leatherette, metal, paint, polish, wallpaper, glass, mirror, and hardware, may have shade, grain, texture, reflection, batch, and finish variations.</div></div>
-                            <div className="ea-clause"><div className="ea-no">6.2.2</div><div>Commercially acceptable variations, manufacturer batch differences, natural material behaviour, polish/paint shade variation due to lighting/site conditions, and minor finish variations shall not be treated as defects.</div></div>
-                            <div className="ea-clause"><div className="ea-no">6.2.3</div><div>The Client is responsible for reviewing and approving samples, catalogues, product specifications, and selection sheets before procurement wherever samples are provided or made available.</div></div>
-
-                            <h3>6.3 Material Availability and Substitution</h3>
-                            <div className="ea-clause"><div className="ea-no">6.3.1</div><div>If an approved material, product, model, colour, finish, hardware, appliance, fitting, or vendor item becomes unavailable, discontinued, delayed, defective, or commercially impractical, {studioName} may propose an equivalent or commercially reasonable alternative for Client approval.</div></div>
-                            <div className="ea-clause"><div className="ea-no">6.3.2</div><div>Any cost or timeline impact from such substitution, waiting period, or reselection shall be borne by the Client unless caused solely by {studioName}’s wilful default.</div></div>
-
-                            <h3>6.4 Execution Tolerances</h3>
-                            <p>The Client acknowledges that interior execution is site-specific and subject to practical tolerances. The following shall not be considered defects if within normal industry standards and not affecting functional use:</p>
-                            <ul>
-                                <li>Minor dimensional variation due to wall/floor/ceiling unevenness or site constraints.</li>
-                                <li>Minor shutter gaps, alignment adjustments, hardware tuning, and settlement adjustments.</li>
-                                <li>Minor paint/polish/laminate shade variation due to batch, lighting, reflection, or viewing angle.</li>
-                                <li>Visible joints where technically necessary or as per material size limitations.</li>
-                                <li>Minor variation between 3D/renders and actual site execution due to site measurement, technical feasibility, or material availability.</li>
-                                <li>Cut-outs, service access panels, grooves, profiles, and technical modifications required for lights, AC, electrical, plumbing, hardware, and maintenance access.</li>
-                            </ul>
-
-                            <h3>6.5 Third-Party and Manufacturer Products</h3>
-                            <div className="ea-clause"><div className="ea-no">6.5.1</div><div>Products such as appliances, lights, fans, switches, sanitaryware, CP fittings, hardware, modular accessories, laminates, wallpapers, glass, mirrors, loose furniture, and decor items are subject to manufacturer warranty and vendor terms.</div></div>
-                            <div className="ea-clause"><div className="ea-no">6.5.2</div><div>{studioName} shall not be liable for manufacturer defects, product failure, service delays, spare part issues, warranty refusal, colour variation, delivery damage, incorrect product supply, or after-sales service for third-party products. {studioName} may assist in coordination as a professional courtesy or chargeable service, as applicable.</div></div>
-
-                            <h3>6.6 Existing Items and Retained Client Materials</h3>
-                            <div className="ea-clause"><div className="ea-no">6.6.1</div><div>If existing doors, windows, flooring, furniture, plumbing, wiring, walls, or fittings are retained and modified, {studioName} shall not be responsible for hidden weaknesses, age-related damage, incompatibility, finish mismatch, or reduced life of the existing item.</div></div>
-                            <div className="ea-clause"><div className="ea-no">6.6.2</div><div>Polishing, relamination, refitting, reusing, or modifying existing items carries inherent risk. Any additional repair, replacement, or rework required shall be chargeable unless expressly included.</div></div>
-
-                            <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 7</span></div>
-                        </section>
-
-                        {/* Page 8 */}
-                        <section className="ea-page">
-                            <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Completion, Handover and Warranty</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
-
-                            <h2>7. Completion, Handover, Snag Closure and Warranty</h2>
-
-                            <h3>7.1 Substantial Completion</h3>
-                            <div className="ea-clause"><div className="ea-no">7.1.1</div><div>Works shall be considered substantially complete when major installation and finishing works under the agreed BOQ are completed and the premises can be functionally used, even if minor snag items, adjustments, touch-ups, manufacturer service visits, or third-party pending items remain.</div></div>
-                            <div className="ea-clause"><div className="ea-no">7.1.2</div><div>Minor snags, polish touch-ups, paint touch-ups, shutter alignment, hardware tuning, replacement of defective third-party product, manufacturer service call, pending client-supplied item, or vendor delayed item shall not be treated as incomplete execution.</div></div>
-
-                            <h3>7.2 Pre-Handover Inspection and Snag List</h3>
-                            <div className="ea-clause"><div className="ea-no">7.2.1</div><div>Upon substantial completion, {studioName} shall invite the Client for a pre-handover inspection. A joint snag list shall be prepared and recorded through email, WhatsApp, site note, or digital record.</div></div>
-                            <div className="ea-clause"><div className="ea-no">7.2.2</div><div>The Client must identify and record all visible snag items within 7 calendar days of handover or {studioName}’s written handover readiness communication, whichever is earlier. Items raised after this period shall be treated as warranty/maintenance requests, subject to coverage.</div></div>
-                            <div className="ea-clause"><div className="ea-no">7.2.3</div><div>{studioName} shall address legitimate snag items within a reasonable timeline, subject to payment clearance, site access, vendor availability, product availability, and nature of rectification. Standard snags are targeted within 14 working days unless dependent on vendors/materials/manufacturer service.</div></div>
-
-                            <h3>7.3 Final Advance and Handover Release</h3>
-                            <div className="ea-box warn ea-avoid-break">
-                                <p>The final advance is due upon substantial completion / handover readiness. It releases the handover dossier, warranty certificate, final closure documents, keys/access cards held by {studioName}, and any final deliverables. The final advance is not conditional upon complete closure of snag items.</p>
-                                <p>Withholding the final advance against snag items shall be treated as breach of payment terms. {studioName} remains committed to addressing legitimate snag items in accordance with this Agreement after payment clearance and site access.</p>
-                            </div>
-
-                            <h3>7.4 Deemed Handover</h3>
-                            <div className="ea-clause"><div className="ea-no">7.4.1</div><div>The project shall be deemed handed over if the Client takes possession of the premises, shifts belongings, starts using the premises, permits third-party work, restricts {studioName} access, delays inspection after {studioName} offers handover, or otherwise assumes control of the site.</div></div>
-                            <div className="ea-clause"><div className="ea-no">7.4.2</div><div>Warranty period, final payment obligation, site-risk transfer, and post-handover responsibilities shall begin from the date of actual or deemed handover, whichever is earlier.</div></div>
-
-                            <h3>7.5 Warranty</h3>
-                            <table>
-                                <thead>
-                                    <tr><th>Category</th><th>Standard Warranty</th><th>Coverage</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td>{studioName} Workmanship</td><td>6 months from handover / deemed handover unless a project-specific warranty certificate states otherwise</td><td>Workmanship defects in {studioName}-executed carpentry, installation, finishing, and agreed trade works under normal usage.</td></tr>
-                                    <tr><td>Third-Party Products</td><td>As per manufacturer/vendor warranty</td><td>Lights, appliances, hardware, fittings, sanitaryware, loose products, modular accessories, and similar products.</td></tr>
-                                    <tr><td>Client-Supplied Items</td><td>No {studioName} warranty</td><td>{studioName} may assist with coordination where separately agreed.</td></tr>
-                                </tbody>
-                            </table>
-                            <div className="ea-clause"><div className="ea-no">7.5.1</div><div>Warranty shall be valid only after all outstanding payments, including Change Requests, as-actuals, and final advance, have been cleared in full.</div></div>
-                            <div className="ea-clause"><div className="ea-no">7.5.2</div><div>Warranty claims must be submitted in writing with clear photos/videos and description. {studioName} shall assess the reported issue within a reasonable time, subject to availability and site access.</div></div>
-
-                            <h3>7.6 Warranty Exclusions</h3>
-                            <p>Warranty does not cover:</p>
-                            <ul>
-                                <li>Misuse, negligence, overloading, impact damage, scratches, dents, stains, burns, chemical damage, water damage, pest/termite damage, unauthorised modifications, or third-party work.</li>
-                                <li>Seepage, leakage, dampness, mould, building-source water issues, plumbing line failure, waterproofing failure, structural movement, cracks, or society/building defects.</li>
-                                <li>Voltage fluctuations, electrical supply issues, earthing issues, appliance failures, product defects, manufacturer defects, or normal wear and tear.</li>
-                                <li>Natural material movement, minor shade variation, fading, polish ageing, hardware settlement, routine maintenance, cleaning, or adjustment required due to use.</li>
-                                <li>Issues caused by AC leakage, plants, wet mopping, water stagnation, improper cleaning, lack of ventilation, or high humidity.</li>
-                            </ul>
-
-                            <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 8</span></div>
-                        </section>
-
-                        {/* Page 9 */}
-                        <section className="ea-page">
-                            <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">IP, Termination and Liability</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
-
-                            <h2>8. Intellectual Property, Confidentiality and Portfolio Use</h2>
-                            <div className="ea-clause"><div className="ea-no">8.1</div><div>All design concepts, layouts, 3D views, drawings, BOQs, specifications, design documents, schedules, checklists, methods, templates, and documentation prepared by {studioName} remain the intellectual property of {studioName}.</div></div>
-                            <div className="ea-clause"><div className="ea-no">8.2</div><div>Upon full payment clearance, the Client receives a non-exclusive, non-transferable licence to use the final approved design and documents only for the agreed project site. The Client may not reuse, reproduce, share, sell, adapt, or execute the design at another site without written permission from {studioName}.</div></div>
-                            <div className="ea-clause"><div className="ea-no">8.3</div><div>Unpaid or partially paid drawings, BOQs, designs, and deliverables may be withheld and shall not be used by the Client or any third party.</div></div>
-                            <div className="ea-clause"><div className="ea-no">8.4</div><div>Each party shall keep confidential the other party’s non-public commercial, personal, design, and project information. This obligation does not prevent {studioName} from maintaining internal records, legal records, vendor coordination records, or statutory/tax documentation.</div></div>
-                            <div className="ea-clause"><div className="ea-no">8.5</div><div>{studioName} may photograph or video record the project for internal documentation, quality records, portfolio, website, social media, case studies, awards, and marketing, provided personal/private items are not intentionally displayed. If the Client requires privacy restrictions, the Client must notify {studioName} in writing before shoot scheduling.</div></div>
-
-                            <h2>9. Termination, Liability, Indemnity, Force Majeure and Dispute Resolution</h2>
-
-                            <h3>9.1 Termination by Client</h3>
-                            <div className="ea-clause"><div className="ea-no">9.1.1</div><div>The Client may terminate this Agreement by written notice. On termination, {studioName} shall be entitled to payment for all completed work, work-in-progress, design work, procurement, committed vendor costs, cancellation charges, labour charges, site costs, supervision, documentation, storage, taxes, and demobilisation/remobilisation costs up to the date of termination.</div></div>
-                            <div className="ea-clause"><div className="ea-no">9.1.2</div><div>Advances for stages already commenced, procured, fabricated, scheduled, or committed are non-refundable to the extent of work done and costs committed. Refund, if any, shall be calculated only after reconciliation and deduction of all dues.</div></div>
-                            <div className="ea-clause"><div className="ea-no">9.1.3</div><div>{studioName} shall not be required to hand over unpaid drawings, documents, vendor details, non-installed materials, or work-in-progress unless all outstanding amounts are settled.</div></div>
-
-                            <h3>9.2 Termination or Suspension by {studioName}</h3>
-                            <div className="ea-clause"><div className="ea-no">9.2.1</div><div>{studioName} may suspend or terminate the engagement if payments remain unpaid, Client repeatedly delays approvals, site access is denied, Client or representatives interfere with contractors/vendors, unsafe or unlawful conditions exist, Client conduct becomes abusive/threatening, or continuation becomes commercially/operationally impractical.</div></div>
-                            <div className="ea-clause"><div className="ea-no">9.2.2</div><div>Before termination, {studioName} shall provide written notice and reasonable opportunity to cure the breach, unless the issue involves safety, abuse, threat, illegality, or non-payment beyond a reasonable period.</div></div>
-
-                            <h3>9.3 Limitation of Liability</h3>
-                            <div className="ea-clause"><div className="ea-no">9.3.1</div><div>{studioName}’s aggregate liability under this Agreement shall not exceed the amount actually received by {studioName} for the specific affected work item giving rise to the claim, except where liability cannot be excluded under applicable law.</div></div>
-                            <div className="ea-clause"><div className="ea-no">9.3.2</div><div>{studioName} shall not be liable for indirect, incidental, consequential, punitive, remote, or special losses, including loss of rent, loss of business, mental distress, alternate accommodation costs, loss of opportunity, delay damages, third-party claims, or inconvenience, except where such exclusion is not permitted by law.</div></div>
-                            <div className="ea-clause"><div className="ea-no">9.3.3</div><div>{studioName} shall not be liable for defects, delays, or losses arising from client-supplied materials, direct vendors, manufacturer products, building-source defects, society restrictions, concealed site conditions, third-party work, Client instructions, or post-handover modifications.</div></div>
-
-                            <h3>9.4 Client Indemnity</h3>
-                            <div className="ea-clause"><div className="ea-no">9.4.1</div><div>The Client shall indemnify and hold {studioName} harmless against claims, costs, losses, damages, penalties, and liabilities arising from incorrect Client information, unauthorised instructions, delayed payments, society violations, third-party interference, client-supplied materials, direct vendors, unlawful site conditions, or Client breach of this Agreement.</div></div>
-
-                            <h3>9.5 Force Majeure</h3>
-                            <div className="ea-clause"><div className="ea-no">9.5.1</div><div>Neither party shall be liable for delay or failure caused by events beyond reasonable control, including natural events, labour unrest, strikes, accidents, illness, epidemic, government action, transport disruption, material shortage, vendor disruption, civil disturbance, power/water failure, fire, flood, or building restrictions. Timelines shall extend by the period of disruption plus remobilisation time.</div></div>
-
-                            <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 9</span></div>
-                        </section>
-
-                        {/* Page 10 */}
-                        <section className="ea-page">
-                            <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Legal Terms and Acceptance</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
-
-                            <h2>9.6 Governing Law, Dispute Resolution and Jurisdiction</h2>
-                            <div className="ea-clause"><div className="ea-no">9.6.1</div><div>This Agreement shall be governed by the laws of India.</div></div>
-                            <div className="ea-clause"><div className="ea-no">9.6.2</div><div>In the event of any dispute, the parties shall first attempt amicable resolution for 15 working days from the date of written dispute notice.</div></div>
-                            <div className="ea-clause"><div className="ea-no">9.6.3</div><div>If unresolved, the dispute shall be referred to arbitration by a sole arbitrator mutually appointed by the parties. The arbitration shall be conducted in accordance with the Arbitration and Conciliation Act, 1996, as amended. The seat and venue of arbitration shall be Thane, Maharashtra. The language of arbitration shall be English.</div></div>
-                            <div className="ea-clause"><div className="ea-no">9.6.4</div><div>Subject to the arbitration clause and without prejudice to any non-excludable statutory remedies available under applicable law, courts at Thane/Mumbai, Maharashtra shall have jurisdiction.</div></div>
-
-                            <h2>10. Notices, Digital Sign-Off and Acceptance</h2>
-
-                            <h3>10.1 Notices</h3>
-                            <div className="ea-clause"><div className="ea-no">10.1.1</div><div>Project notices, invoices, approvals, Change Requests, payment reminders, site communications, and dispute notices may be sent by email, WhatsApp, courier, hand delivery, or digital project platform to the contact details stated in this Agreement.</div></div>
-                            <div className="ea-clause"><div className="ea-no">10.1.2</div><div>The Client shall promptly notify {studioName} of any change in contact details. Communications sent to the last provided email/mobile shall be treated as validly delivered unless bounced or returned.</div></div>
-
-                            <h3>10.2 Digital Sign-Off and Electronic Records</h3>
-                            <div className="ea-clause"><div className="ea-no">10.2.1</div><div>This Agreement may be accepted by physical signature, digital signature, electronic sign-off link, email confirmation, WhatsApp confirmation, payment against invoice, or commencement permission. Electronic records, timestamps, email records, IP logs, WhatsApp confirmations, and payment records may be used as evidence of acceptance.</div></div>
-                            <div className="ea-clause"><div className="ea-no">10.2.2</div><div>If the Agreement is accepted digitally, {studioName} should retain the final PDF/HTML version, acceptance timestamp, Client email/mobile, sign-off log, invoice/payment record, and document version as part of the project record.</div></div>
-
-                            <h3>10.3 Entire Agreement</h3>
-                            <div className="ea-clause"><div className="ea-no">10.3.1</div><div>This Agreement, together with the final BOQ, approved drawings, payment schedule, annexures, and approved Change Requests, constitutes the entire understanding between the parties and supersedes all earlier proposals, quotations, discussions, estimates, presentations, and communications to the extent inconsistent with this Agreement.</div></div>
-                            <div className="ea-clause"><div className="ea-no">10.3.2</div><div>No waiver, amendment, or relaxation shall be valid unless recorded in writing by {studioName}. A one-time goodwill gesture or exception shall not create a precedent or waiver of {studioName}’s contractual rights.</div></div>
-
-                            <h2>Acceptance and Sign-Off</h2>
-                            <p>The parties confirm that they have read, understood, and agreed to the terms of this Agreement and its annexures.</p>
-
-                            <div className="ea-grid-2">
-                                <div className="ea-box soft">
-                                    <div className="ea-label">Place of Signing</div>
-                                    <div className="ea-value"><span className="ea-placeholder">Mumbai / Thane / Other</span></div>
-                                </div>
-                                <div className="ea-box soft">
-                                    <div className="ea-label">Date</div>
-                                    <div className="ea-value"><span className="ea-placeholder">{dateStr}</span></div>
-                                </div>
-                            </div>
-
-                            {/* Once executed, the record — not the blank rule.
-                                The placeholder printed the client's name and
-                                today's date whether or not anyone had signed. */}
-                            {execIssue?.clientSignature || execIssue?.counterSignature ? (
-                                <ExecutionStamp issue={execIssue} mode="signature" />
-                            ) : (
-                            <div className="ea-sig-grid">
-                                <div className="ea-sig-line">
-                                    <div className="ea-label">Client Signature</div>
-                                    <p>Name: <span className="ea-placeholder">{clientName}</span></p>
-                                    <p>Email/Mobile: <span className="ea-placeholder">{clientEmail} / {clientPhone}</span></p>
-                                    <p>Date: <span className="ea-placeholder">{dateStr}</span></p>
-                                </div>
-                                <div className="ea-sig-line">
-                                    <div className="ea-label">For {studioName}</div>
-                                    <p>Authorised Signatory: <span className="ea-placeholder">{repName}</span></p>
-                                    <p>Designation: <span className="ea-placeholder">{orgData.signatoryTitle || 'Authorized Signatory'}</span></p>
-                                    <p>Date: <span className="ea-placeholder">{dateStr}</span></p>
-                                </div>
-                            </div>
-                            )}
-
-                            <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 10</span></div>
-                        </section>
-
-                        {/* Page 11 */}
-                        <section className="ea-page">
-                            <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Annexures</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
-
-                            <div data-pdf-keep-next className="ea-annex-title">Annexure A: Payment Schedule</div>
-                            <table>
-                                <thead>
-                                    <tr><th>Invoice / Stage</th><th>Trigger</th><th>Amount</th><th>GST</th><th>Total</th><th>Due Date</th><th>Unlocks</th></tr>
-                                </thead>
-                                <tbody>
-                                    {allAdvances ? allAdvances.map((m: any, i: number) => {
-                                        const amount = m.amount || ((m.phase === 'execution' || m.phase === 'handover' ? executionTotal : designFee) * (m.percentage / 100));
-                                        const gst = amount * (phaseGstRate(m.phase, annexFin, gstRate) / 100);
-                                        const total = amount + gst;
-                                        return (
-                                            <tr key={i}>
-                                                <td>{m.label}</td>
-                                                <td>{m.dueCondition}</td>
-                                                <td>₹{formatCurrency(amount).replace('₹','')}</td>
-                                                <td>₹{formatCurrency(gst).replace('₹','')}</td>
-                                                <td>₹{formatCurrency(total).replace('₹','')}</td>
-                                                <td><span className="ea-placeholder">Before Stage</span></td>
-                                                <td><span className="ea-placeholder">{m.unlocks || m.label + ' progression'}</span></td>
-                                            </tr>
-                                        );
-                                    }) : projectContext.paymentMilestones?.map((m: any, i) => {
-                                        const amount = (m.type === 'execution' ? executionTotal : designFee) * (m.percentage / 100);
-                                        const gst = amount * (phaseGstRate(m.type, annexFin, gstRate) / 100);
-                                        const total = amount + gst;
-                                        return (
-                                            <tr key={i}>
-                                                <td>{m.name}</td>
-                                                <td>{m.description}</td>
-                                                <td>₹{formatCurrency(amount).replace('₹','')}</td>
-                                                <td>₹{formatCurrency(gst).replace('₹','')}</td>
-                                                <td>₹{formatCurrency(total).replace('₹','')}</td>
-                                                <td><span className="ea-placeholder">Before Stage</span></td>
-                                                <td><span className="ea-placeholder">{m.name} progression</span></td>
-                                            </tr>
-                                        );
-                                    }) || (
-                                        <>
-                                            <tr><td>Execution Advance 1</td><td>Start / Mobilisation</td><td>₹</td><td>₹</td><td>₹</td><td><span className="ea-placeholder">Date</span></td><td>Mobilisation, procurement planning, site preparation</td></tr>
-                                            <tr><td>Execution Advance 2</td><td>Structural / Procurement</td><td>₹</td><td>₹</td><td>₹</td><td><span className="ea-placeholder">Date</span></td><td>Carpentry/civil/procurement stage</td></tr>
-                                            <tr><td>Execution Advance 3</td><td>Finishing</td><td>₹</td><td>₹</td><td>₹</td><td><span className="ea-placeholder">Date</span></td><td>Finishing, installation, painting, final works</td></tr>
-                                            <tr><td>Final Advance</td><td>Substantial Completion / Handover Readiness</td><td>₹</td><td>₹</td><td>₹</td><td><span className="ea-placeholder">Date</span></td><td>Handover dossier, warranty certificate, final release</td></tr>
-                                        </>
-                                    )}
-                                </tbody>
-                            </table>
-
-                            <div data-pdf-keep-next className="ea-annex-title">Annexure B: Revision and Change Request Charges</div>
-                            <table>
-                                <thead>
-                                    <tr><th>Item</th><th>Included</th><th>Charge Beyond Included Scope</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td>Design Options / Revisions</td><td>Up to 2 per room / area, unless otherwise agreed</td><td>₹ <span className="ea-placeholder">Rate</span> per revision / room / drawing</td></tr>
-                                    <tr><td>Site Revisit for Client Change</td><td>As per agreed schedule</td><td>₹ <span className="ea-placeholder">Rate</span> per visit</td></tr>
-                                    <tr><td>Rework After Approval</td><td>Not included</td><td>Actual cost + labour + material + vendor charges + coordination fee</td></tr>
-                                    <tr><td>Additional Drawings</td><td>As per design scope</td><td>₹ <span className="ea-placeholder">Rate</span> per drawing / package</td></tr>
-                                </tbody>
-                            </table>
-
-                            <div data-pdf-keep-next className="ea-annex-title">Annexure C: As-Actuals and Client-Procured Items</div>
-                            <table>
-                                <thead>
-                                    <tr><th>Category</th><th>Procurement By</th><th>Payment By</th><th>{studioName} Responsibility</th><th>Notes</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td>Lights / Fans / Switches</td><td><span className="ea-placeholder">Client / {studioName} / Vendor</span></td><td><span className="ea-placeholder">Client / {studioName}</span></td><td>Design coordination and installation only if included</td><td>Product warranty by manufacturer</td></tr>
-                                    <tr><td>Sanitaryware / CP Fittings</td><td><span className="ea-placeholder">Client / {studioName} / Vendor</span></td><td><span className="ea-placeholder">Client / {studioName}</span></td><td>Coordination only unless BOQ includes supply</td><td>Vendor delay extends timeline</td></tr>
-                                    <tr><td>Tiles / Stone / Countertop</td><td><span className="ea-placeholder">Client / {studioName} / Vendor</span></td><td><span className="ea-placeholder">Client / {studioName}</span></td><td>Selection support and integration</td><td>Batch variation applies</td></tr>
-                                    <tr><td>Appliances</td><td>Client</td><td>Client</td><td>Design provision only unless otherwise stated</td><td>Installation by brand/vendor unless included</td></tr>
-                                    <tr><td>Loose Furniture / Decor</td><td><span className="ea-placeholder">Client / {studioName}</span></td><td><span className="ea-placeholder">Client / {studioName}</span></td><td>As per BOQ</td><td>Delivery damage/warranty by vendor unless supplied by {studioName}</td></tr>
-                                </tbody>
-                            </table>
-
-                            <div data-pdf-keep-next className="ea-annex-title">Annexure D: Scope Exclusion Checklist</div>
-                            <table>
-                                <thead>
-                                    <tr><th className="ea-num">No.</th><th>Item</th><th>Included?</th><th>Remarks</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td className="ea-num">1</td><td>Society permissions, deposits, lift charges and penalties</td><td>No, unless stated</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">2</td><td>Major civil, waterproofing, structural, window/façade work</td><td>No, unless stated</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">3</td><td>Appliances, AC, geysers, exhaust, white goods</td><td>No, unless stated</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">4</td><td>Loose furniture, mattresses, curtains, decor, art</td><td>No, unless stated</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">5</td><td>Repairs due to seepage, leakage, termite, voltage or building defects</td><td>No</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">6</td><td>Rework due to client preference after approval</td><td>No</td><td>Chargeable Change Request</td></tr>
-                                </tbody>
-                            </table>
-
-                            <div data-pdf-keep-next className="ea-annex-title">Annexure E: Execution Start Readiness Checklist</div>
-                            <p className="ea-small">This annexure is to be completed before site mobilisation. It records pre-execution dependencies so that delays caused by missing approvals, access, selections, permissions, or client-supplied items are clearly attributable.</p>
-                            <table>
-                                <thead>
-                                    <tr><th className="ea-num">No.</th><th>Readiness Item</th><th>Status</th><th>Responsibility</th><th>Target / Remarks</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td className="ea-num">1</td><td>Site handover date confirmed</td><td><span className="ea-placeholder">Pending / Done</span></td><td>Client / {studioName}</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">2</td><td>Society permissions, work timings, lift rules, deposits and access protocols confirmed</td><td><span className="ea-placeholder">Pending / Done</span></td><td>Client</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">3</td><td>Keys, access cards, parking/loading access, power and water availability confirmed</td><td><span className="ea-placeholder">Pending / Done</span></td><td>Client</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">4</td><td>Approved BOQ, scope exclusions and payment schedule signed off</td><td><span className="ea-placeholder">Pending / Done</span></td><td>Client / {studioName}</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">5</td><td>Initial execution advance received and cleared</td><td><span className="ea-placeholder">Pending / Done</span></td><td>Client</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">6</td><td>GFC drawings / execution drawings issued for relevant starting works</td><td><span className="ea-placeholder">Pending / Done</span></td><td>{studioName}</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">7</td><td>Critical material selections and finish approvals locked for starting works</td><td><span className="ea-placeholder">Pending / Done</span></td><td>Client / {studioName}</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">8</td><td>Client-procured / as-actual items required for starting works identified</td><td><span className="ea-placeholder">Pending / Done</span></td><td>Client / {studioName}</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">9</td><td>Existing site conditions, concealed-risk areas and dependencies recorded, wherever visible</td><td><span className="ea-placeholder">Pending / Done</span></td><td>{studioName} / Client</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                    <tr><td className="ea-num">10</td><td>Authorised client representatives and official communication channel confirmed</td><td><span className="ea-placeholder">Pending / Done</span></td><td>Client / {studioName}</td><td><span className="ea-placeholder">Remarks</span></td></tr>
-                                </tbody>
-                            </table>
-
-                            <div data-pdf-keep-next className="ea-annex-title mt-6">Annexure F: Final Approved BOQ & Technical Specifications</div>
-                            <p className="ea-small mb-3">The execution shall strictly follow the approved Bill of Quantities (BOQ) version listed below. Any variations must be documented as Change Requests.</p>
-                            
-                            {Object.entries(groupedBoq).map(([room, items]) => (
-                                <div key={`boq-${room}`} className="ea-avoid-break mb-6">
-                                    <h4 className="ea-label" style={{ background: '#f7f7fa', padding: '6px', borderBottom: '2px solid #28216f' }}>{room}</h4>
-                                    <table>
-                                        <thead>
-                                            <tr>
-                                                <th className="ea-num">No.</th>
-                                                <th>Category</th>
-                                                <th>Description & Specifications</th>
-                                                <th className="ea-num">Qty</th>
-                                                <th className="ea-num">Unit</th>
-                                                <th className="ea-right">Rate</th>
-                                                <th className="ea-right">Amount</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {items.map((item: any, index: number) => {
-                                                const rate = item.unitCost !== undefined ? item.unitCost : calculateSellPrice(item.materials, item.labor, item.margin);
-                                                const amount = item.finalCost !== undefined ? item.finalCost : rate * item.qty;
-                                                const currentSpec = projectContext.contractContent?.boqItemSpecOverrides?.[item.id] !== undefined 
-                                                    ? projectContext.contractContent.boqItemSpecOverrides[item.id] 
-                                                    : (item.internalSpecs || item.specs || item.commercialNote || '');
-                                                return (
-                                                    <tr key={item.id}>
-                                                        <td className="ea-num">{index + 1}</td>
-                                                        <td style={{fontSize: '9.5px', fontWeight: 'bold'}}>{item.cat || item.category || '-'}</td>
-                                                        <td>
-                                                            <strong>{item.name || item.description || 'Item'}</strong>
-                                                            {currentSpec && <div className="ea-small" style={{marginTop: '4px'}}>{currentSpec}</div>}
-                                                        </td>
-                                                        <td className="ea-num">{item.qty}</td>
-                                                        <td className="ea-num" style={{fontSize: '9px'}}>{item.unit}</td>
-                                                        <td className="ea-right">{formatCurrency(rate).replace('₹','')}</td>
-                                                        <td className="ea-right" style={{fontWeight: 'bold'}}>{formatCurrency(amount).replace('₹','')}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ))}
-                            
-                            <div className="ea-box ea-avoid-break mt-6" style={{ background: '#f1f0fb', borderLeft: '4px solid #28216f', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '12px' }}>Total Execution Value</div>
-                                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#28216f' }}>₹{formatCurrency(executionTotal).replace('₹','')}</div>
-                            </div>
-
-                            <div className="ea-box warn ea-avoid-break mt-6">
-                                <strong>Close-Out Records:</strong> Handover checklists, snag lists, warranty claims, and closure records shall be prepared separately at substantial completion / handover stage. They are not pre-filled annexures to this Agreement because they arise only after execution has progressed.
-                            </div>
-
-                            <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 11</span></div>
-                        </section>
-
-                    </div>
-                </div>
+                <ExecutionAgreementSheet
+                    agreement={agreement}
+                    studioName={studioName}
+                    studioAddress={studioAddress}
+                    studioEmail={studioEmail}
+                    repName={repName}
+                    repTitle={orgData.signatoryTitle}
+                    projectId={projectId}
+                    contentRef={contentRef}
+                    signature={execIssue?.clientSignature || execIssue?.counterSignature
+                        ? <ExecutionStamp issue={execIssue} mode="signature" />
+                        : undefined}
+                    isEditMode={isEditMode}
+                    onChange={changeOverrides}
+                />
             </div>
             
             {/* Sign-off & Execution Protocol */}
@@ -1394,12 +215,12 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                 </h3>
                 
                 <ExecutionAgreementSignoffBlock 
-                    clientName={clientName} 
+                    clientName={agreement.parties.clientName || 'Client'} 
                     location={projectContext.location || 'Site'} 
                     projectId={projectId} 
                     setProjectContext={setProjectContext} 
                     projectContext={projectContext} 
-                    grandTotal={grandTotal} 
+                    grandTotal={agreement.money.grandTotal} 
                     tenantId={tenantId}
                 />
             </div>
