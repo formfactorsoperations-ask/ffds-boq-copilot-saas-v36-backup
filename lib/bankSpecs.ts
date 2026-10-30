@@ -270,3 +270,32 @@ export async function buildSpecSheetWorkbook(bank: Item[], studioName: string): 
 
 export const specSheetName = (studioName: string, at = new Date()): string =>
   `${studioName.replace(/[\\/:*?"<>|]+/g, ' ').trim()} - Item specs ${at.toISOString().slice(0, 10)}.xlsx`;
+
+/**
+ * The bank item a BOQ line stands for: its own bank id, else the one bank item
+ * with the same name. Lines imported from a sheet often carry an id the bank
+ * never had, and they printed "Details missing from bank" although the bank
+ * holds the item under the same name.
+ */
+export function bankItemForLine(
+  line: { bankId?: string; name?: string; item?: string } | null | undefined,
+  bankMap: Map<string, Item>,
+  bank: Item[],
+): Item | undefined {
+  const own = line?.bankId ? bankMap.get(line.bankId) : undefined;
+  if (own) return own;
+  const n = normName(line?.name || line?.item);
+  if (!n) return undefined;
+  const same = (bank || []).filter(i => normName(i.name) === n);
+  return same.length === 1 ? same[0] : undefined;
+}
+
+/** The bank's specification for a BOQ line, or '' when the bank has none worth printing. */
+export function bankSpecForLine(
+  line: { bankId?: string; name?: string; item?: string } | null | undefined,
+  bankMap: Map<string, Item>,
+  bank: Item[],
+): string {
+  const spec = cleanSpec(bankItemForLine(line, bankMap, bank)?.specs);
+  return isPlaceholderText(spec) ? '' : spec;
+}

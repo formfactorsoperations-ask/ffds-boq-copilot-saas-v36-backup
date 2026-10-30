@@ -30,6 +30,8 @@
 */
 
 import { billingBase, computeSchedule, gstTermsOf, resolveFinancials } from './paymentSchedule';
+import { asActualsTotal, boqTotal, buildBankMap, designFeeFor } from './boqPricing';
+import { lockedTierId } from './scopeFlow';
 import { clientPeople } from './clientContacts';
 import { isPlaceholderText } from './detailedBoq';
 
@@ -199,6 +201,11 @@ export interface AgreementMoney {
   /** True where the figure is the studio's, not Money's. */
   executionManual: boolean;
   designManual: boolean;
+  /** What Money bills on, so the studio is told when it is not the approved option. */
+  moneyExecution?: number;
+  moneyDesign?: number;
+  /** The approved option the figures were read from. */
+  optionName?: string;
   /** An agreement issued before the split: one GST line over both fees. */
   combinedGst?: boolean;
 }
@@ -227,27 +234,57 @@ const discountLabel = (fin: any, target: 'execution' | 'design') => {
   return names.length ? names.join(', ') : '';
 };
 
+/** The approved option's own figures, as Pricing & Tiers shows them. */
+export interface ApprovedOption {
+  id: string;
+  name: string;
+  execution: number;
+  design: number;
+}
+
 /**
- * The figures, as Money bills them unless the studio set a figure by hand.
+ * The option the client approved: the signed one when signed scope is on,
+ * else the one approved in Pricing & Tiers. Its figures are its summary when
+ * it carries one, otherwise priced here exactly as Pricing & Tiers prices it.
+ */
+export function approvedOption(ctx: any, tiers: any[] | undefined, bank: any[] = []): ApprovedOption | null {
+  const id = lockedTierId(ctx) || ctx?.approvedTierId;
+  const tier = id ? (tiers || []).find((t) => t?.id === id) : null;
+  if (!tier) return null;
+  const s = tier.summary;
+  if (s && typeof s.totalSell === 'number') {
+    return { id: tier.id, name: tier.name || '', execution: s.totalSell, design: Number(s.designFee) || 0 };
+  }
+  const map = buildBankMap(bank, ctx?.adHocItems);
+  const work = boqTotal(tier.boq || [], map);
+  return { id: tier.id, name: tier.name || '', execution: work, design: designFeeFor(ctx, work, asActualsTotal(tier.boq || [], map)) };
+}
+
+/**
+ * The figures.
  *
- * `tierSummary` is the active option's summary (what Money passes). Without
- * one, Money's approved values are the contract.
+ * The execution value and the design fee are the approved option's (Pricing
+ * & Tiers / BOQ Editor); without one, Money's billing base. Discounts, GST,
+ * the billable split and the milestones are Money's, applied to those figures,
+ * so Annexure A adds up to the Financial Summary. A figure the studio types on
+ * the agreement wins over both.
  */
 export function agreementMoney(
   ctx: any,
   tierSummary: { totalSell?: number; designFee?: number } | undefined,
   o: AgreementOverrides = agreementOverrides(ctx),
+  option?: ApprovedOption | null,
 ): { money: AgreementMoney; schedule: AgreementScheduleRow[] } {
   const fin = resolveFinancials(ctx?.financials);
   const base = billingBase(ctx, tierSummary, fin);
   const manualExec = num(o.executionValueOverride);
   const manualDesign = num(o.designFeeOverride);
-  const manual = manualExec !== undefined || manualDesign !== undefined;
-  const grossExecution = manualExec ?? base.execution;
-  const grossDesign = manualDesign ?? base.design;
+  const grossExecution = manualExec ?? option?.execution ?? base.execution;
+  const grossDesign = manualDesign ?? option?.design ?? base.design;
+  const ownFigures = Math.abs(grossExecution - base.execution) > 0.5 || Math.abs(grossDesign - base.design) > 0.5;
 
-  /* A figure set by hand is the contract, for the schedule as much as the summary. */
-  const sched = computeSchedule(manual
+  /* Figures other than Money's are the contract, for the schedule as much as the summary. */
+  const sched = computeSchedule(ownFigures
     ? {
         context: ctx,
         tierSummary: { totalSell: grossExecution, designFee: grossDesign },
@@ -275,6 +312,9 @@ export function agreementMoney(
     grandTotal: R(t.grossProjectValue),
     executionManual: manualExec !== undefined,
     designManual: manualDesign !== undefined,
+    moneyExecution: R(base.execution),
+    moneyDesign: R(base.design),
+    optionName: option?.name || undefined,
   };
 
   return { money, schedule: agreementSchedule(ctx, sched, money, o) };
@@ -396,6 +436,8 @@ export interface AgreementBoqLine {
   rate: number;
   amount: number;
   spec: string;
+  /** Paid by the client to the vendor directly: listed with its estimate, never in the total. */
+  asActuals?: boolean;
 }
 
 /**
@@ -427,6 +469,7 @@ export function agreementBoqLines(
       rate,
       amount: Number(l.finalCost ?? l.amount ?? rate * qty) || 0,
       spec: String(spec).trim(),
+      asActuals: l.asActuals ? true : undefined,
     };
   });
 }
@@ -467,11 +510,13 @@ export function resolveAgreement(
     studioName: string;
     /** Days, from the studio's procurement lead time, when the studio has not set one. */
     defaultDuration?: number;
+    /** The approved option (approvedOption), whose figures the agreement states. */
+    option?: ApprovedOption | null;
   },
 ): ResolvedAgreement {
   const o = agreementOverrides(ctx);
   const parties = agreementParties(ctx, o);
-  const { money, schedule } = agreementMoney(ctx, opts.tierSummary, o);
+  const { money, schedule } = agreementMoney(ctx, opts.tierSummary, o, opts.option);
   const boq = agreementBoqLines(opts.scopeLines || [], ctx, o);
   const duration = o.estimatedDuration !== undefined && o.estimatedDuration !== ''
     ? o.estimatedDuration
@@ -485,7 +530,7 @@ export function resolveAgreement(
     annexC: Array.isArray(o.annexC) ? o.annexC : defaultAnnexC(opts.studioName),
     clauses: o.clauses && typeof o.clauses === 'object' ? o.clauses : {},
     boq,
-    boqTotal: R(boq.reduce((s, l) => s + l.amount, 0)),
+    boqTotal: R(boq.filter((l) => !l.asActuals).reduce((s, l) => s + l.amount, 0)),
     agreementDate: text(o.agreementDate) || todayAgreementDate(),
     estimatedDuration: String(duration),
     commencementTrigger: typeof o.commencementTrigger === 'string' ? o.commencementTrigger : 'Site Handover + Advance Clearance',

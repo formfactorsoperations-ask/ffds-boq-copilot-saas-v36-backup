@@ -8,7 +8,7 @@ import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
 import { Download, Share2, Copy, ExternalLink, Tablet, KeyRound, Check, Pencil } from '@/lib/lucide-shim';
 import { calculateSellPrice } from '../../lib/utils';
-import { resolveAgreement, type AgreementOverrides } from '../../lib/executionAgreement';
+import { approvedOption, resolveAgreement, type AgreementOverrides } from '../../lib/executionAgreement';
 import { ShieldCheckIcon } from '../Icons';
 import { sendAgreementSignoffRequest } from '../../services/emailService';
 import { db as dbService } from '../../services/dbService';
@@ -28,7 +28,7 @@ interface ExecutionAgreementPageProps {
     projectId?: string;
     activeTier?: any;
     fullBoq?: any[];
-    /** The project's options and rate bank, so Annexure F is the approved scope priced as the client's copy prices it. */
+    /** The project's options (with their Pricing & Tiers summaries) and the item bank: the approved option's figures, Annexure F, and its specifications. */
     tiers?: any[];
     bank?: any[];
 }
@@ -81,12 +81,15 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
         });
     }, [projectContext, tiers, bank, fullBoq]);
 
+    const option = useMemo(() => approvedOption(projectContext, tiers, bank || []), [projectContext, tiers, bank]);
+
     const agreement = useMemo(() => resolveAgreement(projectContext, {
         tierSummary: activeTier?.summary,
+        option,
         scopeLines,
         studioName,
         defaultDuration: settings?.procurementLeadTimeWeeks ? settings.procurementLeadTimeWeeks * 7 + 45 : 60,
-    }), [projectContext, activeTier, scopeLines, studioName, settings?.procurementLeadTimeWeeks]);
+    }), [projectContext, activeTier, option, scopeLines, studioName, settings?.procurementLeadTimeWeeks]);
 
     /* Edits are saved on the project as they are typed. A key set to undefined goes back to the live value. */
     const changeOverrides = (update: Partial<AgreementOverrides> | ((o: AgreementOverrides) => Partial<AgreementOverrides>)) => {

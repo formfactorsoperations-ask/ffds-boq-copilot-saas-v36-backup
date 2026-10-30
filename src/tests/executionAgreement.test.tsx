@@ -11,6 +11,7 @@ import React from 'react';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { describe, it, expect, afterEach } from 'vitest';
 import {
+  approvedOption,
   agreementBoqLines,
   agreementFromLegacySnapshot,
   agreementMoney,
@@ -18,7 +19,8 @@ import {
   resolveAgreement,
 } from '../../lib/executionAgreement';
 import { computeSchedule } from '../../lib/paymentSchedule';
-import { buildSnapshot } from '../../services/documentReleaseEngine';
+import { agreementScope, buildSnapshot } from '../../services/documentReleaseEngine';
+import { bankSpecForLine } from '../../lib/bankSpecs';
 import ExecutionAgreementSheet from '../../components/documents/ExecutionAgreementSheet';
 
 afterEach(cleanup);
@@ -181,5 +183,58 @@ describe('the client\'s copy', () => {
     }, 'FFDS');
     expect(a.money.grandTotal).toBe(1100000);
     expect(a.schedule[0]).toMatchObject({ name: 'E1', amount: 500000, gst: 0 });
+  });
+});
+
+describe('the approved option and the item bank', () => {
+  const bank: any[] = [
+    { id: 'door', name: 'New main door (double) with security door features', cat: 'Entrance', unit: 'sqft', materials: 1000, labor: 0, margin: 25, specs: 'Teak frame, 40mm flush shutter, digital lock' },
+    { id: 'panel', name: 'Panelling', cat: 'Entrance', unit: 'sqft', materials: 1000, labor: 0, margin: 25, specs: 'Details missing from bank' },
+  ];
+  const bankMap = new Map(bank.map((i) => [i.id, i]));
+
+  it('finds a line\'s spec by its bank item, else by the same name; never a placeholder', () => {
+    expect(bankSpecForLine({ bankId: 'door' }, bankMap, bank)).toBe('Teak frame, 40mm flush shutter, digital lock');
+    expect(bankSpecForLine({ bankId: 'gone', name: 'NEW MAIN DOOR (DOUBLE) WITH SECURITY DOOR FEATURES' }, bankMap, bank))
+      .toBe('Teak frame, 40mm flush shutter, digital lock');
+    expect(bankSpecForLine({ bankId: 'panel' }, bankMap, bank)).toBe('');
+  });
+
+  it('Annexure F of a signed BOQ takes its descriptions from the bank', () => {
+    const signed: any = {
+      ...ctx,
+      scopeFlow: { enabled: true },
+      documents: { issues: [{
+        kind: 'detailed_boq', version: 2, reference: 'FFDS-BQ-2026-UV-v2', recordedApproval: { at: 1 },
+        snapshot: { tierId: 'rev1', total: 81000, rooms: [{ name: 'Entrance', lines: [
+          { id: 'l1', name: 'New main door (double) with security door features', unit: 'sq ft', qty: 37.5, rate: 2160, amount: 81000 },
+        ] }] },
+      }] },
+    };
+    const tiers = [{ id: 'rev1', name: 'Detailed BOQ v2', boq: [{ id: 'l1', bankId: 'imported-123', name: 'NEW MAIN DOOR (DOUBLE) WITH SECURITY DOOR FEATURES', qty: 37.5 }] }];
+    const scope = agreementScope(signed, { tiers, bank } as any);
+    expect(scope.lines[0].specs).toBe('Teak frame, 40mm flush shutter, digital lock');
+  });
+
+  it('the agreement states the approved option, priced with Money\'s discounts, GST and milestones', () => {
+    const option = approvedOption({ ...ctx, approvedTierId: 'rev1' }, [
+      { id: 'rev1', name: 'Detailed BOQ v2 · Scope Revision 1', boq: [], summary: { totalSell: 2285121, designFee: 169492 } },
+    ]);
+    expect(option).toMatchObject({ execution: 2285121, design: 169492 });
+    const { money, schedule } = agreementMoney(ctx, undefined, {}, option);
+    expect(money.grossExecution).toBe(2285121);
+    expect(money.netExecution).toBe(2285121 - 30121);
+    expect(money.moneyExecution).toBe(2430121);
+    expect(money.optionName).toBe('Detailed BOQ v2 · Scope Revision 1');
+    const exec = schedule.filter((r) => r.phase === 'execution').reduce((s, r) => s + r.amount, 0);
+    expect(Math.abs(exec - money.netExecution)).toBeLessThanOrEqual(1);
+  });
+
+  it('an option without a summary is priced from its BOQ as Pricing & Tiers prices it', () => {
+    const option = approvedOption({ approvedTierId: 't', designFee: 10 }, [
+      { id: 't', name: 'Option A', boq: [{ id: 'a', bankId: 'door', qty: 10 }] },
+    ], bank);
+    expect(option!.execution).toBeGreaterThan(0);
+    expect(option!.design).toBeCloseTo(option!.execution * 0.1, 0);
   });
 });
