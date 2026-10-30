@@ -48,6 +48,20 @@ describe('reading a spec sheet', () => {
     expect(p.rows[0].id).toBeUndefined();
   });
 
+  it('reads the specification, not a status column beside it, in a review sheet', () => {
+    // A review sheet: a status column ("Spec source") ahead of the real one, and a "Bank item" column.
+    const p = parseSpecSheet([
+      ['SR NO', 'Bank item', 'ITEM', 'Spec source', 'UNIT', 'SPECIFICATIONS'],
+      [1, 'Yes', 'EXISTING DOOR SHIFTING CHARGES', 'Project-specific (new)', 'LUMPSUM', 'Existing main door shifted · removal, re-fixing and alignment\n\nSCOPE: Removing the existing main door'],
+      [2, 'Yes', 'NEW SECURITY DOOR (LAMINATE)', 'Bank', 'SQFT.', DOOR_SPEC],
+    ]);
+    expect(p.columns).toEqual({ name: 'ITEM', spec: 'SPECIFICATIONS' });
+    expect(p.rows.map(r => [r.name, r.spec.split('\n')[0]])).toEqual([
+      ['EXISTING DOOR SHIFTING CHARGES', 'Existing main door shifted · removal, re-fixing and alignment'],
+      ['NEW SECURITY DOOR (LAMINATE)', '35 mm laminated safety door · MS grill'],
+    ]);
+  });
+
   it('says so when the sheet has no Specification column', () => {
     expect(parseSpecSheet([['Item', 'Qty']]).error).toMatch(/Specification column/);
   });

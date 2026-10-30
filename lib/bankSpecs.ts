@@ -29,6 +29,8 @@ export interface SpecSheetRow {
 
 export interface ParsedSpecSheet {
   rows: SpecSheetRow[];
+  /** The headers read as the item, the specification and the item ID, so the studio can see them. */
+  columns?: { name: string; spec: string; id?: string };
   /** Why nothing could be read, when nothing could. */
   error?: string;
 }
@@ -59,9 +61,18 @@ export function parseSpecSheet(rows: any[][]): ParsedSpecSheet {
   let col = { id: -1, name: -1, spec: -1 };
   for (let i = 0; i < Math.min(rows.length, 15); i++) {
     const h = (rows[i] || []).map(c => text(c).toLowerCase());
-    const spec = h.findIndex(c => /specification|^specs?\b/.test(c));
     const id = h.findIndex(c => /^(item\s*)?id$/.test(c));
-    const name = h.findIndex((c, j) => j !== spec && j !== id && /item|particular|description/.test(c));
+    /* A review sheet can carry several "spec" columns ("Spec source",
+       "Spec status", "Specification"). The specification is the one with the
+       words in it: of the columns whose header says spec, the one holding the
+       most text below the header. */
+    const specCols = h.map((c, j) => (j !== id && /spec/.test(c) ? j : -1)).filter(j => j >= 0);
+    const textIn = (j: number) => rows.slice(i + 1).reduce((n, r) => n + cleanSpec((r || [])[j]).length, 0);
+    const spec = specCols.sort((a, b) => textIn(b) - textIn(a) || a - b)[0] ?? -1;
+    /* The item column: a plain "Item" / "Particulars" header first, so "Bank
+       item" or "Item status" beside it is not taken for the name. */
+    const nameCols = h.map((c, j) => (j !== spec && j !== id && !/spec/.test(c) && /item|particular|description/.test(c) ? j : -1)).filter(j => j >= 0);
+    const name = nameCols.find(j => /^(items?|item name|item description|particulars?|description)$/.test(h[j])) ?? nameCols[0] ?? -1;
     if (spec >= 0 && name >= 0) {
       at = i;
       col = { id, name, spec };
@@ -80,7 +91,11 @@ export function parseSpecSheet(rows: any[][]): ParsedSpecSheet {
     const id = col.id >= 0 ? text(r[col.id]) : '';
     out.push({ row: i + 1, ...(id ? { id } : {}), name, spec });
   }
-  return { rows: out };
+  const header = rows[at] || [];
+  return {
+    rows: out,
+    columns: { name: text(header[col.name]), spec: text(header[col.spec]), ...(col.id >= 0 ? { id: text(header[col.id]) } : {}) },
+  };
 }
 
 export type SpecMatchStatus = 'update' | 'same' | 'unmatched' | 'ambiguous' | 'conflict' | 'skipped';
