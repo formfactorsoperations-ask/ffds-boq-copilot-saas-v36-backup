@@ -6,9 +6,10 @@ import ExecutionAgreementSheet from '../documents/ExecutionAgreementSheet';
 import { ProjectContext, DigitalSignatureDocket } from '../../types';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
-import { Download, Share2, Copy, ExternalLink, Tablet, KeyRound, Check, Pencil } from '@/lib/lucide-shim';
+import { Download, Share2, Copy, ExternalLink, Tablet, KeyRound, Check, Pencil, GitCompare } from '@/lib/lucide-shim';
 import { calculateSellPrice } from '../../lib/utils';
 import { approvedOption, resolveAgreement, type AgreementOverrides } from '../../lib/executionAgreement';
+import { pendingRevision } from '../../lib/revisionMoneyPreview';
 import { ShieldCheckIcon } from '../Icons';
 import { sendAgreementSignoffRequest } from '../../services/emailService';
 import { db as dbService } from '../../services/dbService';
@@ -82,6 +83,20 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
     }, [projectContext, tiers, bank, fullBoq]);
 
     const option = useMemo(() => approvedOption(projectContext, tiers, bank || []), [projectContext, tiers, bank]);
+
+    /*
+      The agreement states the scope in force. A revision still open (with the
+      client, or signed and not yet applied) is not in it yet, and a studio
+      reading a newer Revised BOQ elsewhere needs to be told why the two differ.
+    */
+    const openRevision = useMemo(() => {
+        try {
+            const r = pendingRevision(projectContext, (tiers || []) as any, (bank || []) as any);
+            return r && r.state !== 'draft' ? r : null;
+        } catch {
+            return null;
+        }
+    }, [projectContext, tiers, bank]);
 
     const agreement = useMemo(() => resolveAgreement(projectContext, {
         tierSummary: activeTier?.summary,
@@ -188,6 +203,26 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
                         <h4 className="font-bold text-slate-800">Editing this agreement</h4>
                         <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
                             Client and project details, the representatives, the payment schedule wording, Annexures B and C and each BOQ line's description can be changed on the pages below. Use "Add clause" at the end of any article to add your own clauses and sub-clauses. Figures come from Money and the approved BOQ as they stand now. Everything is saved as you type and goes into the copy the client receives when you next issue it.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {openRevision && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-start gap-3 hud-panel-in">
+                    <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                        <GitCompare className="w-4 h-4" />
+                    </div>
+                    <div>
+                        <h4 className="font-bold text-slate-800">
+                            Scope Revision {openRevision.number}{openRevision.reference ? ` (${openRevision.reference})` : ''} is not in this agreement yet
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                            {openRevision.state === 'approved'
+                                ? 'It is signed but not applied. Apply it in Scope & Strategy, then Annexure F, its specifications and the figures here follow the revised BOQ.'
+                                : openRevision.state === 'sent_back'
+                                    ? 'The client sent it back. Until a revision is signed and applied, this agreement states the scope in force.'
+                                    : 'It is with the client. Once it is signed and applied, Annexure F, its specifications and the figures here follow the revised BOQ.'}
                         </p>
                     </div>
                 </div>
