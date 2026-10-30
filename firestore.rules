@@ -383,6 +383,22 @@ service cloud.firestore {
                'updatedAt', 'updatedBy']);
       }
 
+      /*
+        The founders' goals: their household costs and the studio's cash, so
+        only the two founders, by verified address, and only within their own
+        studio. Not the Owner role: a role can be handed to someone else.
+      */
+      match /founderGoals/{docId} {
+        function isFounder() {
+          return request.auth.token.email_verified == true
+            && myEmail() in ['formfactors.operations@gmail.com', 'formfactorsdesignstudio@gmail.com'];
+        }
+        allow read: if isAuthenticated() && isFounder() && (isSameTenant(orgId) || isSuperAdmin());
+        allow write: if isAuthenticated() && docId == 'plan' && isFounder() && (isSameTenant(orgId) || isSuperAdmin())
+          && request.resource.data.keys().hasOnly(['bands', 'funnel', 'studio', 'home', 'cash', 'cashAt',
+               'buffer', 'rebuild', 'growth', 'tier', 'updatedAt', 'updatedBy']);
+      }
+
       match /settings/{settingId} {
          allow read: if isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin() || isTenantDesigner(orgId)
            || (getUserData().get('tenantId', '') == orgId && myTeamKind() != ''));
@@ -675,9 +691,9 @@ service cloud.firestore {
       the rules above said.
     */
     match /{collectionId}/{document=**} {
-         /* Not ownerReports: its own rule above is narrower, and rules only ever widen. */
-         allow read: if collectionId != 'ownerReports' && isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
-         allow write: if collectionId != 'ownerReports' && isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
+         /* Not ownerReports or founderGoals: their own rules above are narrower, and rules only ever widen. */
+         allow read: if !(collectionId in ['ownerReports', 'founderGoals']) && isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
+         allow write: if !(collectionId in ['ownerReports', 'founderGoals']) && isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
            && reviewUntouched(string(document)) && minutesApprovalOk(string(document));
       }
     }

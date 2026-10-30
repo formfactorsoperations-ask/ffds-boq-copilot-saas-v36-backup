@@ -433,3 +433,39 @@ describe('report targets are for the roles that run the business', () => {
     await assertSucceeds(getDoc(doc(head(), `organizations/${STUDIO}/weeklyReports/w1`)));
   });
 });
+
+describe("the founders' goals are for the two founders only", () => {
+  const PATH = `organizations/${STUDIO}/founderGoals/plan`;
+  const good = { bands: null, funnel: null, studio: null, home: [{ name: 'EMIs', amount: 35000 }], cash: 1200000, cashAt: 1,
+    buffer: 6, rebuild: 4, growth: 15, tier: null, updatedAt: 1, updatedBy: OWNER_EMAIL };
+  const cofounder = (verified = true) => env.authenticatedContext('cofounder', { email: 'FormFactorsDesignStudio@gmail.com', email_verified: verified }).firestore();
+  const cofounderElsewhere = () => env.authenticatedContext('cofounder2', { email: 'formfactorsdesignstudio@gmail.com', email_verified: true }).firestore();
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'users/cofounder'), { email: 'formfactorsdesignstudio@gmail.com', tenantId: STUDIO, role: 'Owner' });
+      await setDoc(doc(db, 'users/cofounder2'), { email: 'formfactorsdesignstudio@gmail.com', tenantId: OTHER, role: 'Owner' });
+      await setDoc(doc(db, PATH), good);
+    });
+  });
+
+  it('lets both founders read and save the plan', async () => {
+    for (const db of [owner(), cofounder()]) {
+      await assertSucceeds(getDoc(doc(db, PATH)));
+      await assertSucceeds(setDoc(doc(db, PATH), { ...good, cash: 900000 }));
+    }
+  });
+
+  it('keeps it from an Admin, a Designer, a client, another studio and an unverified address', async () => {
+    for (const db of [member(), designer(), client(), otherAdmin(), stranger(), anon(), cofounder(false), owner(false), cofounderElsewhere()]) {
+      await assertFails(getDoc(doc(db, PATH)));
+      await assertFails(setDoc(doc(db, PATH), good));
+    }
+  });
+
+  it('stores only the plan, and only in the one document', async () => {
+    await assertFails(setDoc(doc(owner(), PATH), { ...good, note: 'x' }));
+    await assertFails(setDoc(doc(owner(), `organizations/${STUDIO}/founderGoals/other`), good));
+  });
+});
