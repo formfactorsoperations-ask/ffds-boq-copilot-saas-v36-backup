@@ -3098,7 +3098,7 @@ export default function App() {
 
   return (
     <PageHeaderProvider route={activeTab}>
-      <NotifyProvider box={staffBox(currentUserAuth?.email)} onOpen={openNoteTarget}>
+      <NotifyProvider box={staffBox(currentUserAuth?.email)} tab={activeTab} onOpen={openNoteTarget}>
       <NeedsYouBar />
       <CatchUp />
       <div className={`min-h-screen overflow-x-hidden relative ${isProjectTab && hasProjectData ? "md:h-screen md:overflow-hidden" : ""}`}>

@@ -22,6 +22,7 @@ import {
   PenTool,
   Inbox,
   UserCheck,
+  RefreshCw,
   X
 } from '@/lib/lucide-shim';
 import { AIStatus } from '../types';
@@ -29,6 +30,8 @@ import AIStatusIndicator from './AIStatusIndicator';
 import { useOrg } from '../contexts/OrgContext';
 import { mayOpenStudioTab, holdsFinanceRole } from '../lib/roleAccess';
 import { HideFiguresButton } from './ui/HideFigures';
+import { RefreshAppButton } from './ui/RefreshApp';
+import { hardRefresh } from '../lib/appVersion';
 import { roleLabel } from '../lib/roles';
 import { FFDSLogo } from './FFDSLogo';
 import { db } from '../services/dbService';
@@ -439,6 +442,9 @@ const Sidebar: React.FC<SidebarProps> = ({
           );
         })()}
 
+        {/* Load the latest StudioDesk; lit when a newer version is out (lib/appVersion). */}
+        <RefreshAppButton />
+
         {/* Hide margins, costs and collections while the screen is shared (lib/figuresPrivacy). */}
         {holdsFinanceRole(currentRoles) && <HideFiguresButton />}
 
@@ -617,6 +623,16 @@ const Sidebar: React.FC<SidebarProps> = ({
           >
             {isCloud ? <Cloud className="w-4 h-4 opacity-70" /> : <HardDrive className="w-4 h-4 opacity-70" />}
             Storage &amp; sync
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { hardRefresh(); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-semibold
+                       text-slate-600 hover:bg-white hover:text-[#334486] border border-transparent hover:border-slate-200 transition-colors cursor-pointer"
+          >
+            <RefreshCw className="w-4 h-4 opacity-70" />
+            Refresh StudioDesk
           </button>
 
           {onLogout && (

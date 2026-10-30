@@ -5,14 +5,24 @@ console.log('1. Cleaning dist...');
 fs.rmSync('dist', { recursive: true, force: true });
 fs.mkdirSync('dist/assets', { recursive: true });
 
+/*
+  Every deploy gets an id. index.js and index.css keep their names (the chunks
+  carry hashes, these two do not), so a browser could keep running last week's
+  copy until somebody hard-refreshed. The page now asks for them as
+  index.js?v=<id>, a new address on every deploy, and dist/version.json names
+  the id so an open StudioDesk can tell that a newer one is out
+  (lib/appVersion.ts, the refresh button in the top bar).
+*/
+const BUILD_ID = String(process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 12) || Date.now().toString(36);
+
 console.log('2. Preparing dist/index.html...');
 let html = fs.readFileSync('index.html', 'utf8');
-html = html.replace('<script type="module" src="/index.tsx"></script>', '<script type="module" src="/assets/index.js"></script>');
+html = html.replace('<script type="module" src="/index.tsx"></script>', `<script type="module" src="/assets/index.js?v=${BUILD_ID}"></script>`);
 if (html.includes('src="/index.tsx"')) {
-  html = html.replace('src="/index.tsx"', 'src="/assets/index.js"');
+  html = html.replace('src="/index.tsx"', `src="/assets/index.js?v=${BUILD_ID}"`);
 }
 if (!html.includes('/assets/index.css')) {
-  html = html.replace('</head>', '  <link rel="stylesheet" href="/assets/index.css">\n  </head>');
+  html = html.replace('</head>', `  <link rel="stylesheet" href="/assets/index.css?v=${BUILD_ID}">\n  </head>`);
 }
 fs.writeFileSync('dist/index.html', html, 'utf8');
 
@@ -20,13 +30,15 @@ console.log('3. Copying public assets...');
 if (fs.existsSync('public')) {
   fs.cpSync('public', 'dist', { recursive: true });
 }
+fs.writeFileSync('dist/version.json', JSON.stringify({ build: BUILD_ID }), 'utf8');
 
 console.log('4. Gathering client environment variables...');
 const clientEnv = {
   DEV: false,
   PROD: true,
   MODE: 'production',
-  BASE_URL: '/'
+  BASE_URL: '/',
+  VITE_BUILD_ID: BUILD_ID
 };
 
 /*

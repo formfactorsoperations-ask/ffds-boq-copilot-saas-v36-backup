@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { counted, foldGroups, interrupts, isOpen, tabCounts, type NotifyPrefs, type Stored } from '../../lib/notify';
+import { counted, foldGroups, interrupts, isOpen, tabCounts, tabOf, type NotifyPrefs, type Stored } from '../../lib/notify';
 import { listenInbox, markDone, markRead, snooze as snoozeNotes, undoDone } from '../../services/inboxService';
 import { cachedPrefs, readPrefs, savePrefs } from '../../services/notifyPrefsService';
 import { chime, inFront, setIconDot, showDesktop } from './notifyChannels';
@@ -27,6 +27,10 @@ import { onPhoneTap, refreshPhone } from './notifyPush';
   the box differs (lib/notify.ts staffBox, clientBox). A phone notification
   that is tapped opens its note here, from the worker's message or from
   ?note= when it opened StudioDesk fresh (notifyPush.ts).
+
+  `tab` is the top-bar tab on screen. Its notes are read as soon as it is
+  open, and as they land while it stays open, so its badge clears once you
+  have been there: the screen itself shows what came in.
 */
 
 export const NOTE_EVENT = 'studiodesk:note';
@@ -76,8 +80,8 @@ const Ctx = createContext<InboxState | null>(null);
 /** The inbox, or nothing when nobody is signed in (the login screen, a shared link). */
 export const useInbox = () => useContext(Ctx);
 
-export const NotifyProvider: React.FC<{ box: string | null | undefined; audience?: InboxAudience; onOpen: (n: Stored) => void; children: React.ReactNode }> =
-  ({ box: rawBox, audience = 'studio', onOpen, children }) => {
+export const NotifyProvider: React.FC<{ box: string | null | undefined; audience?: InboxAudience; tab?: string; onOpen: (n: Stored) => void; children: React.ReactNode }> =
+  ({ box: rawBox, audience = 'studio', tab, onOpen, children }) => {
     const box = rawBox || null;
     const [prefs, setPrefsState] = useState<NotifyPrefs>(() => cachedPrefs(box));
     const prefsRef = useRef(prefs);
@@ -167,6 +171,12 @@ export const NotifyProvider: React.FC<{ box: string | null | undefined; audience
       markRead(box, fresh).catch(() => {});
     }, [box, notes]);
     const readAll = useCallback(() => read(openNotes.filter((n) => !n.readAt).map((n) => n.id)), [openNotes, read]);
+    /* The tab on screen: its badge clears (lib/notify tabCounts). */
+    useEffect(() => {
+      if (!tab || !ready) return;
+      const seen = openNotes.filter((n) => !n.readAt && tabOf(n) === tab).map((n) => n.id);
+      if (seen.length) read(seen);
+    }, [tab, ready, openNotes, read]);
     const openNote = useCallback((n: Stored) => { read([n.id]); setDismissed((d) => [...d, n.id]); openRef.current(n); }, [read]);
     openNoteRef.current = openNote;
 
