@@ -3716,6 +3716,8 @@ export default function App() {
                           projectId={activeInternalId || (projectContext as any).id || ''}
                           activeTier={activeCalculatedTier}
                           fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
+                          tiers={tiers}
+                          bank={bank}
                         />
                       )}
                       {activeTab === "design-gate" && (
@@ -4470,6 +4472,8 @@ export default function App() {
                           projectId={activeInternalId || (projectContext as any).id || ''}
                           activeTier={activeCalculatedTier}
                           fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
+                          tiers={tiers}
+                          bank={bank}
                         />
                       )}
                       {activeTab === "design-gate" && (

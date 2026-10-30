@@ -1,137 +1,281 @@
 /**
  * MASTER EXECUTION AGREEMENT SHEET
  *
- * The studio's real 11-page execution agreement, lifted verbatim out of
- * ExecutionAgreementPage so it can render in more than one place.
+ * The studio's real 11-page execution agreement. The studio's agreement page
+ * and the client's issued copy both render THIS component, so the two can no
+ * longer drift apart. They used to be two copies of the same eleven pages, and
+ * a fix made on one never reached the other.
  *
- * The app is the source of truth for every client document. The client portal
- * renders THIS component from a frozen snapshot — it never rebuilds a document
- * of its own. Same clauses, same annexures, same milestone tables on both sides.
+ * What it states comes in as one `ResolvedAgreement` (lib/executionAgreement):
+ * the studio page resolves it live, the portal reads it from the frozen
+ * snapshot.
  *
- * Edit affordances are opt-in: the studio passes isEditMode and the mutation
- * handlers, the portal passes neither, so the client sees a read-only sheet.
+ * Edit affordances are opt-in: the studio passes isEditMode and onChange, the
+ * portal passes neither, so the client sees a read-only sheet.
  */
 
 import React from 'react';
-import { ProjectContext } from '../../types';
-import { resolveFinancials } from '../../lib/paymentSchedule';
+import { Plus, Trash2, RotateCcw } from '@/lib/lucide-shim';
+import { formatCurrency } from '../../lib/utils';
+import { AGREEMENT_ARTICLES, agreementId, groupBoqLines } from '../../lib/executionAgreement';
+import { PDF_CONTENT_WIDTH_PX } from '../../lib/documentPdf';
+import type {
+  AgreementClause,
+  AgreementOverrides,
+  AgreementRep,
+  AnnexBRow,
+  AnnexCRow,
+  ResolvedAgreement,
+  ScheduleRowText,
+} from '../../lib/executionAgreement';
 
-export /*
-  GST comes from the project, per phase.
-
-  These annexures multiplied every line by a hard-coded 0.18, so a contract
-  annexure stated tax the studio does not charge. All nine real projects on this
-  studio have `executionGstEnabled: false` -- on Unique Vistas alone that is
-  ~2.95L of GST appearing on execution lines in a document a client signs.
-
-  `resolveFinancials` is the one place that answers "is GST on for this phase",
-  and `gstRate` is the project's own rate rather than a literal. A phase with
-  GST off now reads 0 on every line, and the Total equals the Amount -- stated
-  explicitly rather than omitted, because a missing column on a contract is a
-  question waiting to be asked.
-*/
-const phaseGstRate = (
-  phase: string | undefined,
-  fin: { executionGstEnabled?: boolean; designGstEnabled?: boolean },
-  rate: number,
-): number => {
-  const isExec = phase === 'execution' || phase === 'handover';
-  const on = isExec ? fin.executionGstEnabled !== false : fin.designGstEnabled !== false;
-  return on ? rate : 0;
-};
+type OverridesUpdate = Partial<AgreementOverrides> | ((o: AgreementOverrides) => Partial<AgreementOverrides>);
 
 interface ExecutionAgreementSheetProps {
-  projectContext: ProjectContext;
-  /** Studio letterhead + signatory, frozen at issue. */
-  orgData: any;
+  agreement: ResolvedAgreement;
   studioName: string;
   studioAddress?: string;
   studioEmail?: string;
   repName?: string;
-
-  clientName: string;
-  clientAddress?: string;
-  clientEmail?: string;
-  clientPhone?: string;
-  projectName: string;
+  repTitle?: string;
   projectId?: string;
+  /** The studio page captures the PDF from this. */
+  contentRef?: React.Ref<HTMLDivElement>;
+  /** Shown in place of the blank signature lines once the agreement is executed. */
+  signature?: React.ReactNode;
 
-  agreementDate?: string;
-  dateStr?: string;
-  commencementTrigger?: string;
-  estimatedDuration?: string | number;
-
-  designFee: number;
-  executionTotal: number;
-  grandTotal: number;
-  gstAmount?: number;
-  gstRate: number;
-
-  /** Advance milestones shown in the payment annexure. */
-  milestonesList: any[];
-  allAdvances?: any[];
-  /** Frozen BOQ rows for the scope annexure. */
-  boq?: any[];
-  boqItemSpecOverrides?: Record<string, any>;
-  /** BOQ grouped by room for the scope annexure. */
-  groupedBoq?: Record<string, any[]>;
-  /** Studio-authored overrides to agreement fields. */
-  overrides?: Record<string, any>;
-  calculateSellPrice: (materials: any, labor: any, margin: any) => number;
-
-  formatCurrency: (n: number) => string;
-
-  /** Studio-only editing. The portal passes none of these. */
+  /** Studio-only editing. The portal passes neither. */
   isEditMode?: boolean;
-  addMilestone?: () => void;
-  updateMilestone?: (index: number, field: string, value: any) => void;
-  deleteMilestone?: (index: number) => void;
-  updateOverride?: (field: string, value: any) => void;
+  onChange?: (update: OverridesUpdate) => void;
 }
 
+/* ── Studio editing controls (DESIGN.md "Controls", sized for a document table) ── */
+
+const FIELD = 'w-full px-2 py-1 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]';
+
+const EditText: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+  placeholder?: string;
+  rows?: number;
+  className?: string;
+}> = ({ value, onChange, label, placeholder, rows, className = '' }) =>
+  rows ? (
+    <textarea
+      rows={rows}
+      aria-label={label}
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      className={`${FIELD} resize-y ${className}`}
+    />
+  ) : (
+    <input
+      type="text"
+      aria-label={label}
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      className={`${FIELD} ${className}`}
+    />
+  );
+
+const MoneyInput: React.FC<{
+  value: number;
+  manual: boolean;
+  label: string;
+  onSet: (n: number) => void;
+  onReset: () => void;
+}> = ({ value, manual, label, onSet, onReset }) => (
+  <div className="flex items-center justify-end gap-1.5">
+    {manual && (
+      <button
+        type="button"
+        onClick={onReset}
+        title="Go back to the figure in Money"
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 hover:bg-amber-200"
+      >
+        <RotateCcw className="w-3 h-3" />
+        Edited · use Money's
+      </button>
+    )}
+    <span className="text-[11px] font-bold text-slate-500">₹</span>
+    <input
+      type="number"
+      aria-label={label}
+      value={value}
+      onChange={(e) => {
+        const n = parseFloat(e.target.value);
+        onSet(isFinite(n) ? n : 0);
+      }}
+      className={`${FIELD} w-32 text-right tabular-nums`}
+    />
+  </div>
+);
+
+const AddButton: React.FC<{ onClick: () => void; children: React.ReactNode }> = ({ onClick, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50"
+  >
+    <Plus className="w-3.5 h-3.5" />
+    {children}
+  </button>
+);
+
+const RemoveButton: React.FC<{ onClick: () => void; label: string }> = ({ onClick, label }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    title={label}
+    className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+  >
+    <Trash2 className="w-3.5 h-3.5" />
+  </button>
+);
+
+/** A line for the studio only: never on the client's copy, never in the PDF. */
+const StudioNote: React.FC<{ children: React.ReactNode; warn?: boolean }> = ({ children, warn }) => (
+  <p className={`mt-1 mb-2 text-[11px] font-semibold ${warn ? 'text-amber-700' : 'text-slate-500'}`}>{children}</p>
+);
+
+const updateAt = <T,>(list: T[], i: number, patch: Partial<NoInfer<T>>): T[] =>
+  list.map((x, j) => (j === i ? { ...x, ...patch } : x));
+const removeAt = <T,>(list: T[], i: number): T[] => list.filter((_, j) => j !== i);
+
 const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
-  projectContext,
-  orgData,
+  agreement,
   studioName,
   studioAddress,
   studioEmail,
   repName,
-  clientName,
-  clientAddress,
-  clientEmail,
-  clientPhone,
-  projectName,
+  repTitle,
   projectId,
-  agreementDate,
-  dateStr,
-  commencementTrigger,
-  estimatedDuration,
-  designFee,
-  executionTotal,
-  grandTotal,
-  gstAmount,
-  gstRate,
-  milestonesList,
-  allAdvances,
-  boq,
-  boqItemSpecOverrides,
-  groupedBoq = {} as Record<string, any[]>,
-  overrides = {} as any,
-  calculateSellPrice,
-  formatCurrency,
+  contentRef,
+  signature,
   isEditMode = false,
-  addMilestone,
-  updateMilestone,
-  deleteMilestone,
-  updateOverride
+  onChange,
 }) => {
-  /* One answer to "is GST on for this phase", shared by both annexure paths. */
-  const annexFin = resolveFinancials((projectContext as any)?.financials);
-  // Forwarded only when the studio page needs it for PDF capture.
-  const contentRef = React.useRef<HTMLDivElement | null>(null);
+  const editing = isEditMode && !!onChange;
+  const set = (update: OverridesUpdate) => onChange?.(update);
+  const { parties, money, schedule } = agreement;
+
+  const clientName = parties.clientName || 'Client Name';
+  const clientEmail = parties.clientEmail || 'Client Email';
+  const clientPhone = parties.clientPhone || 'Client Mobile';
+  const projectName = parties.projectName || 'Project Name';
+  const dateStr = agreement.agreementDate;
+  const inr = (n: number) => formatCurrency(n).replace('₹ ', '');
+  const executionRows = schedule.filter((r) => r.phase === 'execution');
+
+  const executionGstLabel = !money.executionGstOn
+    ? 'GST on Execution (not charged)'
+    : money.billablePercent < 100
+      ? `GST on Execution (${money.gstRate}% on the billable ${money.billablePercent}%)`
+      : `GST on Execution (${money.gstRate}%)`;
+  const designGstLabel = money.designGstOn ? `GST on Design Fees (${money.gstRate}%)` : 'GST on Design Fees (not charged)';
+
+  const setReps = (next: AgreementRep[]) => set({ reps: next });
+  const setAnnexB = (next: AnnexBRow[]) => set({ annexB: next });
+  const setAnnexC = (next: AnnexCRow[]) => set({ annexC: next });
+  const setRowText = (key: string, patch: ScheduleRowText) =>
+    set((o) => ({ scheduleText: { ...(o.scheduleText || {}), [key]: { ...(o.scheduleText?.[key] || {}), ...patch } } }));
+  const setSpec = (lineId: string, v: string) => set((o) => ({ specs: { ...(o.specs || {}), [lineId]: v } }));
+
+  /*
+    Clauses the studio added to an article, numbered on from the article's own
+    last number, each with its own sub-clauses.
+  */
+  const extraClauses = (no: string) => {
+    const last = AGREEMENT_ARTICLES.find((a) => a.no === no)?.last || 0;
+    const list: AgreementClause[] = agreement.clauses[no] || [];
+    const setList = (next: AgreementClause[]) =>
+      set((o) => ({ clauses: { ...(o.clauses || {}), [no]: next } }));
+    if (!editing && !list.length) return null;
+    return (
+      <>
+        {list.map((c, i) => {
+          const ref = `${no}.${last + i + 1}`;
+          const subs = c.subClauses || [];
+          if (editing) {
+            return (
+              <div key={c.id} className="my-3 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-12 shrink-0 text-xs font-bold text-slate-700">{ref}</span>
+                  <EditText
+                    label={`Heading for clause ${ref}`}
+                    value={c.heading || ''}
+                    placeholder="Heading (optional)"
+                    onChange={(v) => setList(updateAt(list, i, { heading: v }))}
+                  />
+                  <RemoveButton label={`Remove clause ${ref}`} onClick={() => setList(removeAt(list, i))} />
+                </div>
+                <div className="pl-14">
+                  <EditText
+                    rows={3}
+                    label={`Text of clause ${ref}`}
+                    value={c.text}
+                    placeholder="Clause text"
+                    onChange={(v) => setList(updateAt(list, i, { text: v }))}
+                  />
+                </div>
+                {subs.map((s, j) => (
+                  <div key={s.id} className="flex items-start gap-2 pl-14">
+                    <span className="w-14 shrink-0 pt-1.5 text-xs font-bold text-slate-700">{ref}.{j + 1}</span>
+                    <EditText
+                      rows={2}
+                      label={`Sub-clause ${ref}.${j + 1}`}
+                      value={s.text}
+                      placeholder="Sub-clause text"
+                      onChange={(v) => setList(updateAt(list, i, { subClauses: updateAt(subs, j, { text: v }) }))}
+                    />
+                    <RemoveButton
+                      label={`Remove sub-clause ${ref}.${j + 1}`}
+                      onClick={() => setList(updateAt(list, i, { subClauses: removeAt(subs, j) }))}
+                    />
+                  </div>
+                ))}
+                <div className="pl-14">
+                  <AddButton
+                    onClick={() => setList(updateAt(list, i, { subClauses: [...subs, { id: agreementId('sub'), text: '' }] }))}
+                  >
+                    Add sub-clause {ref}.{subs.length + 1}
+                  </AddButton>
+                </div>
+              </div>
+            );
+          }
+          const printed = subs.filter((s) => s.text.trim());
+          return (
+            <React.Fragment key={c.id}>
+              {c.heading?.trim() ? (
+                <>
+                  <h3>{ref} {c.heading.trim()}</h3>
+                  {c.text.trim() && <p style={{ whiteSpace: 'pre-line' }}>{c.text.trim()}</p>}
+                </>
+              ) : (
+                <div className="ea-clause"><div className="ea-no">{ref}</div><div style={{ whiteSpace: 'pre-line' }}>{c.text.trim()}</div></div>
+              )}
+              {printed.map((s, j) => (
+                <div key={s.id} className="ea-clause"><div className="ea-no">{ref}.{j + 1}</div><div style={{ whiteSpace: 'pre-line' }}>{s.text.trim()}</div></div>
+              ))}
+            </React.Fragment>
+          );
+        })}
+        {editing && (
+          <AddButton onClick={() => setList([...list, { id: agreementId('clause'), heading: '', text: '', subClauses: [] }])}>
+            Add clause {no}.{last + list.length + 1} to Article {no}
+          </AddButton>
+        )}
+      </>
+    );
+  };
 
   return (
-    <div ref={contentRef as any} className="execution-agreement-container" style={{ width: '210mm', backgroundColor: '#ececf2' }}>
+    <div ref={contentRef} className="execution-agreement-container" style={{ width: '210mm', backgroundColor: '#ececf2' }}>
         <style dangerouslySetInnerHTML={{__html: `
             .ea-doc * { box-sizing: border-box; }
             .ea-doc {
@@ -321,6 +465,12 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 letter-spacing: 1px;
                 font-size: 18px;
             }
+            /* Print layout, used while the studio page draws the PDF. */
+            .execution-agreement-container.ea-printing { width: ${PDF_CONTENT_WIDTH_PX}px !important; min-width: ${PDF_CONTENT_WIDTH_PX}px !important; flex-shrink: 0 !important; background: #fff !important; }
+            /* Sections run on in the PDF; the running page header names the document, so the letterhead prints once. */
+            .ea-printing .ea-page ~ .ea-page .ea-header { display: none; }
+            .ea-printing .ea-page { width: auto; min-height: 0; margin: 0; padding: 0 0 6px 0; page-break-after: auto; }
+            .ea-printing .ea-footer { display: none; }
             @media print {
                 .ea-doc { background: #fff; }
                 .ea-page { margin: 0; box-shadow: none; width: 210mm; min-height: 297mm; }
@@ -346,10 +496,21 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 <div className="ea-grid-2">
                     <div className="ea-box">
                         <div className="ea-label">Client</div>
-                        <div className="ea-value"><span className="ea-placeholder">{clientName}</span></div>
-                        <p className="ea-small">Address: <span className="ea-placeholder">{clientAddress}</span></p>
-                        <p className="ea-small">Email: <span className="ea-placeholder">{clientEmail}</span></p>
-                        <p className="ea-small">Mobile: <span className="ea-placeholder">{clientPhone}</span></p>
+                        {editing ? (
+                            <div className="space-y-1.5">
+                                <EditText label="Client name" value={parties.clientName} placeholder="Client name" onChange={(v) => set({ clientName: v })} />
+                                <EditText label="Client address" rows={2} value={parties.clientAddress} placeholder="Client's address" onChange={(v) => set({ clientAddress: v })} />
+                                <EditText label="Client email" value={parties.clientEmail} placeholder="Email" onChange={(v) => set({ clientEmail: v })} />
+                                <EditText label="Client mobile" value={parties.clientPhone} placeholder="Mobile" onChange={(v) => set({ clientPhone: v })} />
+                            </div>
+                        ) : (
+                            <>
+                                <div className="ea-value"><span className="ea-placeholder">{clientName}</span></div>
+                                <p className="ea-small">Address: <span className="ea-placeholder">{parties.clientAddress || parties.projectAddress || '—'}</span></p>
+                                <p className="ea-small">Email: <span className="ea-placeholder">{clientEmail}</span></p>
+                                <p className="ea-small">Mobile: <span className="ea-placeholder">{clientPhone}</span></p>
+                            </>
+                        )}
                     </div>
                     <div className="ea-box">
                         <div className="ea-label">Service Partner / Studio</div>
@@ -361,8 +522,30 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 </div>
 
                 <div className="ea-grid-3">
-                    <div className="ea-box soft"><div className="ea-label">Project Name</div><div className="ea-value"><span className="ea-placeholder">{projectName}</span></div></div>
-                    <div className="ea-box soft"><div className="ea-label">Project Address</div><div className="ea-value"><span className="ea-placeholder">{clientAddress}</span></div></div>
+                    <div className="ea-box soft">
+                        <div className="ea-label">Project Name</div>
+                        {editing ? (
+                            <EditText label="Project name" value={parties.projectName} onChange={(v) => set({ projectName: v })} />
+                        ) : (
+                            <div className="ea-value"><span className="ea-placeholder">{projectName}</span></div>
+                        )}
+                        {(parties.config || parties.area > 0) && (
+                            <p className="ea-small" style={{ margin: '4px 0 0' }}>
+                                {[parties.config, parties.area > 0 ? `${parties.area.toLocaleString('en-IN')} sq ft` : ''].filter(Boolean).join(' · ')}
+                            </p>
+                        )}
+                    </div>
+                    <div className="ea-box soft">
+                        <div className="ea-label">Project Address</div>
+                        {editing ? (
+                            <>
+                                <EditText label="Project address" rows={3} value={parties.projectAddress} placeholder="Flat, building, street, city" onChange={(v) => set({ projectAddress: v })} />
+                                <StudioNote>Reads the project's location until you type the full address.</StudioNote>
+                            </>
+                        ) : (
+                            <div className="ea-value"><span className="ea-placeholder">{parties.projectAddress || '—'}</span></div>
+                        )}
+                    </div>
                     <div className="ea-box soft"><div className="ea-label">Project ID</div><div className="ea-value"><span className="ea-placeholder">{projectId}</span></div></div>
                 </div>
 
@@ -370,13 +553,8 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     <div className="ea-box soft">
                         <div className="ea-label">Agreement Date</div>
                         <div className="ea-value">
-                            {isEditMode ? (
-                                <input 
-                                    type="text" 
-                                    value={dateStr} 
-                                    onChange={(e) => updateOverride('agreementDate', e.target.value)}
-                                    className="w-full text-xs p-1 border border-sky-200 rounded font-semibold text-slate-900 bg-white" 
-                                />
+                            {editing ? (
+                                <EditText label="Agreement date" value={dateStr} onChange={(v) => set({ agreementDate: v })} />
                             ) : (
                                 <span className="ea-placeholder">{dateStr}</span>
                             )}
@@ -385,33 +563,23 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     <div className="ea-box soft">
                         <div className="ea-label">Estimated Duration</div>
                         <div className="ea-value">
-                            {isEditMode ? (
+                            {editing ? (
                                 <div className="flex items-center gap-1.5">
-                                    <input 
-                                        type="number" 
-                                        value={estimatedDuration} 
-                                        onChange={(e) => updateOverride('estimatedDuration', parseInt(e.target.value) || 0)}
-                                        className="w-20 text-xs p-1 border border-sky-200 rounded font-bold text-slate-900 text-center bg-white" 
-                                    />
-                                    <span className="text-[11px] font-bold text-slate-900">Days</span>
+                                    <EditText label="Estimated duration in working days" value={agreement.estimatedDuration} className="w-20 text-center" onChange={(v) => set({ estimatedDuration: v })} />
+                                    <span className="text-[11px] font-bold text-slate-700 whitespace-nowrap">Working days</span>
                                 </div>
                             ) : (
-                                <span className="ea-placeholder">{estimatedDuration} Working Days</span>
+                                <span className="ea-placeholder">{agreement.estimatedDuration} Working Days</span>
                             )}
                         </div>
                     </div>
                     <div className="ea-box soft">
                         <div className="ea-label">Commencement Trigger</div>
                         <div className="ea-value">
-                            {isEditMode ? (
-                                <input 
-                                    type="text" 
-                                    value={commencementTrigger} 
-                                    onChange={(e) => updateOverride('commencementTrigger', e.target.value)}
-                                    className="w-full text-xs p-1 border border-sky-200 rounded font-semibold text-slate-900 bg-white" 
-                                />
+                            {editing ? (
+                                <EditText label="Commencement trigger" rows={2} value={agreement.commencementTrigger} onChange={(v) => set({ commencementTrigger: v })} />
                             ) : (
-                                <span>{commencementTrigger}</span>
+                                <span>{agreement.commencementTrigger}</span>
                             )}
                         </div>
                     </div>
@@ -425,76 +593,76 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     <tbody>
                         <tr>
                             <td>Execution Works Value, excluding GST</td>
-                            <td className="ea-right font-mono font-semibold">
-                                {isEditMode ? (
-                                    <div className="flex items-center justify-end gap-1 font-sans">
-                                        <span className="text-[11px] font-bold text-slate-500">₹</span>
-                                        <input 
-                                            type="number" 
-                                            value={executionTotal} 
-                                            onChange={(e) => {
-                                                const val = parseFloat(e.target.value) || 0;
-                                                updateOverride('executionTotal', val);
-                                                // Recalculate milestones amounts to keep sync if percentage based
-                                                if (overrides.advances) {
-                                                    const updated = overrides.advances.map((m: any) => ({
-                                                        ...m,
-                                                        amount: val * ((m.percentage || 0) / 100)
-                                                    }));
-                                                    updateOverride('advances', updated);
-                                                }
-                                            }}
-                                            className="w-32 text-xs p-1 border border-sky-200 rounded font-bold text-slate-900 text-right bg-white animate-in zoom-in-95 duration-150" 
-                                        />
-                                    </div>
+                            <td className="ea-right tabular-nums font-semibold">
+                                {editing ? (
+                                    <MoneyInput
+                                        label="Execution works value"
+                                        value={money.grossExecution}
+                                        manual={money.executionManual}
+                                        onSet={(n) => set({ executionValueOverride: n })}
+                                        onReset={() => set({ executionValueOverride: undefined })}
+                                    />
                                 ) : (
-                                    <span>₹ {formatCurrency(executionTotal).replace('₹','')}</span>
+                                    <span>₹ {inr(money.grossExecution)}</span>
                                 )}
                             </td>
                         </tr>
+                        {money.executionDiscount > 0 && (
+                            <tr>
+                                <td>Less: Discount on Execution{money.executionDiscountLabel ? ` (${money.executionDiscountLabel})` : ''}</td>
+                                <td className="ea-right tabular-nums font-semibold">− ₹ {inr(money.executionDiscount)}</td>
+                            </tr>
+                        )}
                         <tr>
                             <td>Design / Professional Fees, if billed under this Agreement</td>
-                            <td className="ea-right font-mono font-semibold">
-                                {isEditMode ? (
-                                    <div className="flex items-center justify-end gap-1 font-sans">
-                                        <span className="text-[11px] font-bold text-slate-500">₹</span>
-                                        <input 
-                                            type="number" 
-                                            value={designFee} 
-                                            onChange={(e) => updateOverride('designFee', parseFloat(e.target.value) || 0)}
-                                            className="w-32 text-xs p-1 border border-sky-200 rounded font-bold text-slate-900 text-right bg-white animate-in zoom-in-95 duration-150" 
-                                        />
-                                    </div>
+                            <td className="ea-right tabular-nums font-semibold">
+                                {editing ? (
+                                    <MoneyInput
+                                        label="Design fees"
+                                        value={money.grossDesign}
+                                        manual={money.designManual}
+                                        onSet={(n) => set({ designFeeOverride: n })}
+                                        onReset={() => set({ designFeeOverride: undefined })}
+                                    />
                                 ) : (
-                                    <span>₹ {formatCurrency(designFee).replace('₹','')}</span>
+                                    <span>₹ {inr(money.grossDesign)}</span>
                                 )}
                             </td>
                         </tr>
-                        <tr>
-                            <td>
-                                {isEditMode ? (
-                                    <div className="flex items-center gap-2">
-                                        <span>GST Rate:</span>
-                                        <input 
-                                            type="number" 
-                                            value={gstRate} 
-                                            onChange={(e) => updateOverride('gstRate', parseFloat(e.target.value) || 0)}
-                                            className="w-14 text-xs p-1 border border-sky-200 rounded font-bold text-slate-900 text-center bg-white" 
-                                        />
-                                        <span>%</span>
-                                    </div>
-                                ) : (
-                                    <span>GST ({gstRate}%)</span>
-                                )}
-                            </td>
-                            <td className="ea-right font-mono font-semibold">₹ {formatCurrency(gstAmount).replace('₹','')}</td>
-                        </tr>
+                        {money.designDiscount > 0 && (
+                            <tr>
+                                <td>Less: Discount on Design Fees{money.designDiscountLabel ? ` (${money.designDiscountLabel})` : ''}</td>
+                                <td className="ea-right tabular-nums font-semibold">− ₹ {inr(money.designDiscount)}</td>
+                            </tr>
+                        )}
+                        {money.combinedGst ? (
+                            <tr>
+                                <td>GST ({money.gstRate}%)</td>
+                                <td className="ea-right tabular-nums font-semibold">₹ {inr(money.executionGst + money.designGst)}</td>
+                            </tr>
+                        ) : (
+                            <>
+                                <tr>
+                                    <td>{executionGstLabel}</td>
+                                    <td className="ea-right tabular-nums font-semibold">₹ {inr(money.executionGst)}</td>
+                                </tr>
+                                <tr>
+                                    <td>{designGstLabel}</td>
+                                    <td className="ea-right tabular-nums font-semibold">₹ {inr(money.designGst)}</td>
+                                </tr>
+                            </>
+                        )}
                         <tr>
                             <td><strong>Grand Total</strong></td>
-                            <td className="ea-right font-mono font-bold text-slate-900"><strong>₹ {formatCurrency(grandTotal).replace('₹','')}</strong></td>
+                            <td className="ea-right tabular-nums font-bold text-slate-900"><strong>₹ {inr(money.grandTotal)}</strong></td>
                         </tr>
                     </tbody>
                 </table>
+                {editing && (
+                    <StudioNote>
+                        Values, discounts and GST are read from Money as they stand now. Type a figure here only if this agreement must state a different one; discounts and the GST switches are changed in Money.
+                    </StudioNote>
+                )}
                 <p className="ea-small">Amounts, taxes, inclusions, exclusions, as-actuals, allowances, and provisional sums shall be governed by the final signed BOQ and invoice schedule.</p>
 
                 <div className="ea-box warn ea-avoid-break">
@@ -574,14 +742,36 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 <div className="ea-clause"><div className="ea-no">1.7.1</div><div>Only the following persons are authorised to approve scope, design, materials, BOQ changes, Change Requests, site decisions, payment confirmations, and handover records:</div></div>
                 <table>
                     <thead>
-                        <tr><th>Name</th><th>Relationship / Role</th><th>Email</th><th>Mobile</th></tr>
+                        <tr><th>Name</th><th>Relationship / Role</th><th>Email</th><th>Mobile</th>{editing && <th aria-label="Remove" />}</tr>
                     </thead>
                     <tbody>
-                        <tr><td><span className="ea-placeholder">{clientName}</span></td><td><span className="ea-placeholder">Client</span></td><td><span className="ea-placeholder">{clientEmail}</span></td><td><span className="ea-placeholder">{clientPhone}</span></td></tr>
-                        <tr><td><span className="ea-placeholder">Name 2</span></td><td><span className="ea-placeholder">Role</span></td><td><span className="ea-placeholder">Email</span></td><td><span className="ea-placeholder">Mobile</span></td></tr>
+                        {agreement.reps.map((r, i) => editing ? (
+                            <tr key={r.id}>
+                                <td><EditText label={`Representative ${i + 1} name`} value={r.name} placeholder="Name" onChange={(v) => setReps(updateAt(agreement.reps, i, { name: v }))} /></td>
+                                <td><EditText label={`Representative ${i + 1} role`} value={r.role} placeholder="Role" onChange={(v) => setReps(updateAt(agreement.reps, i, { role: v }))} /></td>
+                                <td><EditText label={`Representative ${i + 1} email`} value={r.email} placeholder="Email" onChange={(v) => setReps(updateAt(agreement.reps, i, { email: v }))} /></td>
+                                <td><EditText label={`Representative ${i + 1} mobile`} value={r.phone} placeholder="Mobile" onChange={(v) => setReps(updateAt(agreement.reps, i, { phone: v }))} /></td>
+                                <td><RemoveButton label={`Remove ${r.name || 'this representative'}`} onClick={() => setReps(removeAt(agreement.reps, i))} /></td>
+                            </tr>
+                        ) : (
+                            <tr key={r.id}>
+                                <td><span className="ea-placeholder">{r.name || '—'}</span></td>
+                                <td><span className="ea-placeholder">{r.role || '—'}</span></td>
+                                <td><span className="ea-placeholder">{r.email || '—'}</span></td>
+                                <td><span className="ea-placeholder">{r.phone || '—'}</span></td>
+                            </tr>
+                        ))}
                     </tbody>
                 </table>
+                {editing && (
+                    <>
+                        <AddButton onClick={() => setReps([...agreement.reps, { id: agreementId('rep'), name: '', role: '', email: '', phone: '' }])}>Add a representative</AddButton>
+                        <StudioNote>Filled from the client and everyone on the client's side of the project. Changes here apply to this agreement only.</StudioNote>
+                    </>
+                )}
                 <div className="ea-clause"><div className="ea-no">1.7.2</div><div>Instructions from relatives, residents, children, domestic help, society staff, contractors, vendors, neighbours, or any third party shall not be binding on {studioName} unless confirmed in writing by an authorised Client representative.</div></div>
+
+                {extraClauses('1')}
 
                 <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 2</span></div>
             </section>
@@ -627,6 +817,8 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 <div className="ea-clause"><div className="ea-no">2.7.1</div><div>Items marked as As-Actuals, Provisional, Allowance, To Be Finalised, Client Selection, Vendor Actuals, or equivalent shall be billed based on actual cost, final selected model, brand, specification, quantity, vendor invoice, site measurement, transport, taxes, and handling/coordination charges if applicable.</div></div>
                 <div className="ea-clause"><div className="ea-no">2.7.2</div><div>For client-procured or directly paid vendor items, {studioName}’s role is limited to design coordination and execution integration unless otherwise agreed in writing. {studioName} shall not be responsible for product quality, vendor delay, shortage, warranty, service, breakage, delivery, installation defect, compatibility, or after-sales support for such items.</div></div>
                 <div className="ea-clause"><div className="ea-no">2.7.3</div><div>Any delay caused by client selections, vendor approvals, client-procured items, product availability, direct vendor delays, delayed payments to vendors, or defective/incorrect materials shall extend the project timeline and may result in remobilisation charges.</div></div>
+
+                {extraClauses('2')}
 
                 <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 3</span></div>
             </section>
@@ -679,6 +871,8 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 <div className="ea-clause"><div className="ea-no">3.5.1</div><div>No Change Request shall be executed unless approved in writing by the Client and accepted by {studioName}. {studioName} may refuse a Change Request if it is unsafe, technically unsuitable, commercially impractical, inconsistent with approved design intent, dependent on unavailable labour/material, or likely to compromise project quality.</div></div>
                 <div className="ea-clause"><div className="ea-no">3.5.2</div><div>Any approved Change Request may result in a revised payment schedule. {studioName} is not required to proceed with the changed work unless the applicable advance has been received and cleared.</div></div>
 
+                {extraClauses('3')}
+
                 <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 4</span></div>
             </section>
 
@@ -695,100 +889,26 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 </div>
 
                 <h3>4.2 Execution Milestones</h3>
-                {isEditMode ? (
-                    <div className="space-y-4 mb-4 border border-sky-100 p-4 rounded-xl bg-sky-50/25">
-                        <table className="w-full text-xs">
-                            <thead>
-                                <tr className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white text-[10px] uppercase tracking-wider font-bold">
-                                    <th className="p-2 text-left">Milestone Name</th>
-                                    <th className="p-2 text-left">Due Trigger Condition</th>
-                                    <th className="p-2 text-left w-20">%</th>
-                                    <th className="p-2 text-right w-32">Amount</th>
-                                    <th className="p-2 text-center w-16">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {milestonesList.map((m: any, i: number) => (
-                                    <tr key={i} className="border-b border-sky-100/55">
-                                        <td className="p-2">
-                                            <input 
-                                                type="text" 
-                                                value={m.label} 
-                                                onChange={(e) => updateMilestone(i, 'label', e.target.value)}
-                                                className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#3D52A0] outline-none" 
-                                            />
-                                        </td>
-                                        <td className="p-2">
-                                            <textarea 
-                                                rows={2}
-                                                value={m.dueCondition} 
-                                                onChange={(e) => updateMilestone(i, 'dueCondition', e.target.value)}
-                                                className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-medium focus:border-[#3D52A0] outline-none resize-none" 
-                                            />
-                                        </td>
-                                        <td className="p-2">
-                                            <div className="flex items-center gap-1">
-                                                <input 
-                                                    type="number" 
-                                                    value={m.percentage} 
-                                                    onChange={(e) => updateMilestone(i, 'percentage', parseFloat(e.target.value) || 0)}
-                                                    className="w-full text-xs p-1.5 border border-sky-200/60 rounded bg-white font-bold focus:border-[#3D52A0] outline-none text-center" 
-                                                />
-                                                <span className="text-[11px] font-bold text-slate-900">%</span>
-                                            </div>
-                                        </td>
-                                        <td className="p-2 text-right font-mono font-bold text-slate-700">
-                                            ₹ {formatCurrency(m.amount || (executionTotal * (m.percentage / 100))).replace('₹','')}
-                                        </td>
-                                        <td className="p-2 text-center">
-                                            <button 
-                                                onClick={() => deleteMilestone(i)}
-                                                className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition cursor-pointer"
-                                                title="Delete Milestone"
-                                            >
-                                                <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        <div className="flex justify-between items-center pt-2 border-t border-sky-100">
-                            <button 
-                                onClick={addMilestone}
-                                className="px-3 py-1.5 bg-sky-50 border border-sky-200 hover:bg-sky-100/50 text-[#334486] text-xs font-bold rounded-lg transition flex items-center gap-1 cursor-pointer"
-                            >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
-                                Add Milestone
-                            </button>
-                            <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                                <span>Sum of Percentages:</span>
-                                <span className={`px-2 py-0.5 rounded text-[11px] ${Math.abs(milestonesList.reduce((acc: number, cur: any) => acc + (cur.percentage || 0), 0) - 100) < 0.01 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800 animate-pulse'}`}>
-                                    {milestonesList.reduce((acc: number, cur: any) => acc + (cur.percentage || 0), 0).toFixed(1)}%
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <table>
-                        <thead>
-                            <tr><th>Stage</th><th>Trigger</th><th>%</th><th>Amount</th><th>Due</th></tr>
-                        </thead>
-                        <tbody>
-                            {milestonesList.map((m: any, i: number) => {
-                                const amount = m.amount || (executionTotal * (m.percentage / 100));
-                                return (
-                                    <tr key={i}>
-                                        <td className="font-semibold text-slate-900">{m.label}</td>
-                                        <td>{m.dueCondition}</td>
-                                        <td className="font-bold text-slate-700">{m.percentage}%</td>
-                                        <td className="font-mono font-semibold text-slate-900">₹ {formatCurrency(amount).replace('₹','')}</td>
-                                        <td>Before stage begins</td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                <table>
+                    <thead>
+                        <tr><th>Stage</th><th>Trigger</th><th>%</th><th className="ea-right">Amount</th><th>Due</th></tr>
+                    </thead>
+                    <tbody>
+                        {executionRows.length ? executionRows.map((r) => (
+                            <tr key={r.key}>
+                                <td className="font-semibold text-slate-900">{r.name}</td>
+                                <td>{r.trigger}</td>
+                                <td className="font-bold text-slate-700">{r.percentage === null ? 'Fixed' : `${r.percentage}%`}</td>
+                                <td className="ea-right tabular-nums font-semibold text-slate-900">₹ {inr(r.amount)}</td>
+                                <td>{r.due}</td>
+                            </tr>
+                        )) : (
+                            <tr><td colSpan={5}>As per the payment schedule in Annexure A.</td></tr>
+                        )}
+                    </tbody>
+                </table>
+                {editing && (
+                    <StudioNote>These are the execution milestones in Money, at today's figures. Reword a stage in Annexure A; percentages and amounts are changed in Money.</StudioNote>
                 )}
                 <p className="ea-small">Milestone percentages may be modified for a specific project in Annexure A. If there is a conflict, the signed Annexure A payment schedule shall apply.</p>
 
@@ -808,6 +928,8 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
 
                 <h3>4.6 No Set-Off Against Snags</h3>
                 <div className="ea-clause"><div className="ea-no">4.6.1</div><div>The Client may not withhold milestone payments or final advance against snag items. Snags are post-completion rectifications covered under snag/warranty protocol and do not constitute grounds to delay payment unless the item is an incomplete work item as defined in this Agreement.</div></div>
+
+                {extraClauses('4')}
 
                 <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 5</span></div>
             </section>
@@ -863,6 +985,8 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 <div className="ea-clause"><div className="ea-no">5.6.1</div><div>{studioName} shall provide periodic supervision as required for the execution stage. Continuous full-time site presence is not included unless separately agreed and billed.</div></div>
                 <div className="ea-clause"><div className="ea-no">5.6.2</div><div>Weekly or periodic updates shall be shared through the agreed communication channel. Urgent operational decisions may be communicated by WhatsApp/email.</div></div>
 
+                {extraClauses('5')}
+
                 <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 6</span></div>
             </section>
 
@@ -904,6 +1028,8 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 <h3>6.6 Existing Items and Retained Client Materials</h3>
                 <div className="ea-clause"><div className="ea-no">6.6.1</div><div>If existing doors, windows, flooring, furniture, plumbing, wiring, walls, or fittings are retained and modified, {studioName} shall not be responsible for hidden weaknesses, age-related damage, incompatibility, finish mismatch, or reduced life of the existing item.</div></div>
                 <div className="ea-clause"><div className="ea-no">6.6.2</div><div>Polishing, relamination, refitting, reusing, or modifying existing items carries inherent risk. Any additional repair, replacement, or rework required shall be chargeable unless expressly included.</div></div>
+
+                {extraClauses('6')}
 
                 <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 7</span></div>
             </section>
@@ -957,6 +1083,8 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     <li>Issues caused by AC leakage, plants, wet mopping, water stagnation, improper cleaning, lack of ventilation, or high humidity.</li>
                 </ul>
 
+                {extraClauses('7')}
+
                 <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 8</span></div>
             </section>
 
@@ -970,6 +1098,8 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 <div className="ea-clause"><div className="ea-no">8.3</div><div>Unpaid or partially paid drawings, BOQs, designs, and deliverables may be withheld and shall not be used by the Client or any third party.</div></div>
                 <div className="ea-clause"><div className="ea-no">8.4</div><div>Each party shall keep confidential the other party’s non-public commercial, personal, design, and project information. This obligation does not prevent {studioName} from maintaining internal records, legal records, vendor coordination records, or statutory/tax documentation.</div></div>
                 <div className="ea-clause"><div className="ea-no">8.5</div><div>{studioName} may photograph or video record the project for internal documentation, quality records, portfolio, website, social media, case studies, awards, and marketing, provided personal/private items are not intentionally displayed. If the Client requires privacy restrictions, the Client must notify {studioName} in writing before shoot scheduling.</div></div>
+
+                {extraClauses('8')}
 
                 <h2 id="sec-9" data-section-ref="9">9. Termination, Liability, Indemnity, Force Majeure and Dispute Resolution</h2>
 
@@ -1006,6 +1136,8 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 <div className="ea-clause"><div className="ea-no">9.6.3</div><div>If unresolved, the dispute shall be referred to arbitration by a sole arbitrator mutually appointed by the parties. The arbitration shall be conducted in accordance with the Arbitration and Conciliation Act, 1996, as amended. The seat and venue of arbitration shall be Thane, Maharashtra. The language of arbitration shall be English.</div></div>
                 <div className="ea-clause"><div className="ea-no">9.6.4</div><div>Subject to the arbitration clause and without prejudice to any non-excludable statutory remedies available under applicable law, courts at Thane/Mumbai, Maharashtra shall have jurisdiction.</div></div>
 
+                {extraClauses('9')}
+
                 <h2 id="sec-10" data-section-ref="10">10. Notices, Digital Sign-Off and Acceptance</h2>
 
                 <h3>10.1 Notices</h3>
@@ -1020,13 +1152,21 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 <div className="ea-clause"><div className="ea-no">10.3.1</div><div>This Agreement, together with the final BOQ, approved drawings, payment schedule, annexures, and approved Change Requests, constitutes the entire understanding between the parties and supersedes all earlier proposals, quotations, discussions, estimates, presentations, and communications to the extent inconsistent with this Agreement.</div></div>
                 <div className="ea-clause"><div className="ea-no">10.3.2</div><div>No waiver, amendment, or relaxation shall be valid unless recorded in writing by {studioName}. A one-time goodwill gesture or exception shall not create a precedent or waiver of {studioName}’s contractual rights.</div></div>
 
+                {extraClauses('10')}
+
                 <h2>Acceptance and Sign-Off</h2>
                 <p>The parties confirm that they have read, understood, and agreed to the terms of this Agreement and its annexures.</p>
 
                 <div className="ea-grid-2">
                     <div className="ea-box soft">
                         <div className="ea-label">Place of Signing</div>
-                        <div className="ea-value"><span className="ea-placeholder">Mumbai / Thane / Other</span></div>
+                        <div className="ea-value">
+                            {editing ? (
+                                <EditText label="Place of signing" value={agreement.placeOfSigning} onChange={(v) => set({ placeOfSigning: v })} />
+                            ) : (
+                                <span className="ea-placeholder">{agreement.placeOfSigning}</span>
+                            )}
+                        </div>
                     </div>
                     <div className="ea-box soft">
                         <div className="ea-label">Date</div>
@@ -1034,6 +1174,8 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     </div>
                 </div>
 
+                {/* Once executed, the record — not the blank rule. */}
+                {signature || (
                 <div className="ea-sig-grid">
                     <div className="ea-sig-line">
                         <div className="ea-label">Client Signature</div>
@@ -1044,10 +1186,11 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     <div className="ea-sig-line">
                         <div className="ea-label">For {studioName}</div>
                         <p>Authorised Signatory: <span className="ea-placeholder">{repName}</span></p>
-                        <p>Designation: <span className="ea-placeholder">{orgData.signatoryTitle || 'Authorized Signatory'}</span></p>
+                        <p>Designation: <span className="ea-placeholder">{repTitle || 'Authorized Signatory'}</span></p>
                         <p>Date: <span className="ea-placeholder">{dateStr}</span></p>
                     </div>
                 </div>
+                )}
 
                 <div className="ea-footer"><span>{studioName} Integrated Execution Agreement</span><span>Page 10</span></div>
             </section>
@@ -1056,81 +1199,145 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
             <section className="ea-page">
                 <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Annexures</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
 
-                <div className="ea-annex-title">Annexure A: Payment Schedule</div>
+                <div data-pdf-keep-next className="ea-annex-title">Annexure A: Payment Schedule</div>
+                {editing && schedule.length > 0 && (
+                    <div className="space-y-2 mb-3">
+                        {schedule.map((r) => (
+                            <div key={r.key} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                <div className="flex items-center gap-3">
+                                    <EditText label={`Stage name for ${r.name}`} value={r.name} onChange={(v) => setRowText(r.key, { name: v })} />
+                                    <span className="shrink-0 text-xs font-bold text-slate-700 tabular-nums">₹{inr(r.amount)} + GST ₹{inr(r.gst)} = ₹{inr(r.total)}</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 mt-2">
+                                    <div>
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Trigger</div>
+                                        <EditText label={`Trigger for ${r.name}`} rows={2} value={r.trigger} onChange={(v) => setRowText(r.key, { trigger: v })} />
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Due date</div>
+                                        <EditText label={`Due date for ${r.name}`} rows={2} value={r.due} onChange={(v) => setRowText(r.key, { due: v })} />
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Unlocks</div>
+                                        <EditText label={`What ${r.name} unlocks`} rows={2} value={r.unlocks} onChange={(v) => setRowText(r.key, { unlocks: v })} />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {!(editing && schedule.length > 0) && (
                 <table>
                     <thead>
-                        <tr><th>Invoice / Stage</th><th>Trigger</th><th>Amount</th><th>GST</th><th>Total</th><th>Due Date</th><th>Unlocks</th></tr>
+                        <tr><th>Invoice / Stage</th><th>Trigger</th><th className="ea-right">Amount</th><th className="ea-right">GST</th><th className="ea-right">Total</th><th>Due Date</th><th>Unlocks</th></tr>
                     </thead>
                     <tbody>
-                        {allAdvances ? allAdvances.map((m: any, i: number) => {
-                            const amount = m.amount || ((m.phase === 'execution' || m.phase === 'handover' ? executionTotal : designFee) * (m.percentage / 100));
-                            const gst = amount * (phaseGstRate(m.phase, annexFin, gstRate) / 100);
-                            const total = amount + gst;
-                            return (
-                                <tr key={i}>
-                                    <td>{m.label}</td>
-                                    <td>{m.dueCondition}</td>
-                                    <td>₹{formatCurrency(amount).replace('₹','')}</td>
-                                    <td>₹{formatCurrency(gst).replace('₹','')}</td>
-                                    <td>₹{formatCurrency(total).replace('₹','')}</td>
-                                    <td><span className="ea-placeholder">Before Stage</span></td>
-                                    <td><span className="ea-placeholder">{m.unlocks || m.label + ' progression'}</span></td>
-                                </tr>
-                            );
-                        }) : projectContext.paymentMilestones?.map((m: any, i) => {
-                            const amount = (m.type === 'execution' ? executionTotal : designFee) * (m.percentage / 100);
-                            const gst = amount * (phaseGstRate(m.type, annexFin, gstRate) / 100);
-                            const total = amount + gst;
-                            return (
-                                <tr key={i}>
-                                    <td>{m.name}</td>
-                                    <td>{m.description}</td>
-                                    <td>₹{formatCurrency(amount).replace('₹','')}</td>
-                                    <td>₹{formatCurrency(gst).replace('₹','')}</td>
-                                    <td>₹{formatCurrency(total).replace('₹','')}</td>
-                                    <td><span className="ea-placeholder">Before Stage</span></td>
-                                    <td><span className="ea-placeholder">{m.name} progression</span></td>
-                                </tr>
-                            );
-                        }) || (
-                            <>
-                                <tr><td>Execution Advance 1</td><td>Start / Mobilisation</td><td>₹</td><td>₹</td><td>₹</td><td><span className="ea-placeholder">Date</span></td><td>Mobilisation, procurement planning, site preparation</td></tr>
-                                <tr><td>Execution Advance 2</td><td>Structural / Procurement</td><td>₹</td><td>₹</td><td>₹</td><td><span className="ea-placeholder">Date</span></td><td>Carpentry/civil/procurement stage</td></tr>
-                                <tr><td>Execution Advance 3</td><td>Finishing</td><td>₹</td><td>₹</td><td>₹</td><td><span className="ea-placeholder">Date</span></td><td>Finishing, installation, painting, final works</td></tr>
-                                <tr><td>Final Advance</td><td>Substantial Completion / Handover Readiness</td><td>₹</td><td>₹</td><td>₹</td><td><span className="ea-placeholder">Date</span></td><td>Handover dossier, warranty certificate, final release</td></tr>
-                            </>
+                        {schedule.map((r) => (
+                            <tr key={r.key}>
+                                <td>{r.name}</td>
+                                <td>{r.trigger}</td>
+                                <td className="ea-right tabular-nums">₹{inr(r.amount)}</td>
+                                <td className="ea-right tabular-nums">₹{inr(r.gst)}</td>
+                                <td className="ea-right tabular-nums">₹{inr(r.total)}</td>
+                                <td><span className="ea-placeholder">{r.due}</span></td>
+                                <td><span className="ea-placeholder">{r.unlocks || '—'}</span></td>
+                            </tr>
+                        ))}
+                        {schedule.length > 0 ? (
+                            <tr>
+                                <td colSpan={2}><strong>Total</strong></td>
+                                <td className="ea-right tabular-nums"><strong>₹{inr(schedule.reduce((s, r) => s + r.amount, 0))}</strong></td>
+                                <td className="ea-right tabular-nums"><strong>₹{inr(schedule.reduce((s, r) => s + r.gst, 0))}</strong></td>
+                                <td className="ea-right tabular-nums"><strong>₹{inr(schedule.reduce((s, r) => s + r.total, 0))}</strong></td>
+                                <td colSpan={2} />
+                            </tr>
+                        ) : (
+                            <tr><td colSpan={7}>The payment schedule is issued separately and forms part of this Agreement.</td></tr>
                         )}
                     </tbody>
                 </table>
+                )}
+                {editing && (
+                    <StudioNote>
+                        Each milestone as Money bills it today. You can reword the stage, trigger, due date and what it unlocks; percentages and amounts are changed in Money.
+                    </StudioNote>
+                )}
 
-                <div className="ea-annex-title">Annexure B: Revision and Change Request Charges</div>
+                <div data-pdf-keep-next className="ea-annex-title">Annexure B: Revision and Change Request Charges</div>
                 <table>
                     <thead>
-                        <tr><th>Item</th><th>Included</th><th>Charge Beyond Included Scope</th></tr>
+                        <tr><th>Item</th><th>Included</th><th>Charge Beyond Included Scope</th>{editing && <th aria-label="Remove" />}</tr>
                     </thead>
                     <tbody>
-                        <tr><td>Design Options / Revisions</td><td>Up to 2 per room / area, unless otherwise agreed</td><td>₹ <span className="ea-placeholder">Rate</span> per revision / room / drawing</td></tr>
-                        <tr><td>Site Revisit for Client Change</td><td>As per agreed schedule</td><td>₹ <span className="ea-placeholder">Rate</span> per visit</td></tr>
-                        <tr><td>Rework After Approval</td><td>Not included</td><td>Actual cost + labour + material + vendor charges + coordination fee</td></tr>
-                        <tr><td>Additional Drawings</td><td>As per design scope</td><td>₹ <span className="ea-placeholder">Rate</span> per drawing / package</td></tr>
+                        {agreement.annexB.map((r, i) => editing ? (
+                            <tr key={r.id}>
+                                <td><EditText label={`Annexure B item ${i + 1}`} rows={2} value={r.item} placeholder="Item" onChange={(v) => setAnnexB(updateAt(agreement.annexB, i, { item: v }))} /></td>
+                                <td><EditText label={`What is included for ${r.item || `item ${i + 1}`}`} rows={2} value={r.included} placeholder="Included" onChange={(v) => setAnnexB(updateAt(agreement.annexB, i, { included: v }))} /></td>
+                                <td><EditText label={`Charge for ${r.item || `item ${i + 1}`}`} rows={2} value={r.charge} placeholder="e.g. ₹5,000 per revision" onChange={(v) => setAnnexB(updateAt(agreement.annexB, i, { charge: v }))} /></td>
+                                <td><RemoveButton label={`Remove ${r.item || 'this row'}`} onClick={() => setAnnexB(removeAt(agreement.annexB, i))} /></td>
+                            </tr>
+                        ) : (
+                            <tr key={r.id}><td>{r.item}</td><td>{r.included}</td><td><span className="ea-placeholder">{r.charge}</span></td></tr>
+                        ))}
                     </tbody>
                 </table>
+                {editing && (
+                    <AddButton onClick={() => setAnnexB([...agreement.annexB, { id: agreementId('b'), item: '', included: '', charge: '' }])}>Add a charge</AddButton>
+                )}
 
-                <div className="ea-annex-title">Annexure C: As-Actuals and Client-Procured Items</div>
+                <div data-pdf-keep-next className="ea-annex-title">Annexure C: As-Actuals and Client-Procured Items</div>
+                {editing ? (
+                    <div className="space-y-2">
+                        {agreement.annexC.map((r, i) => {
+                            const name = r.category || `row ${i + 1}`;
+                            const field = (key: keyof AnnexCRow, label: string, placeholder?: string) => (
+                                <div>
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{label}</div>
+                                    <EditText label={`${label}, ${name}`} rows={2} value={r[key]} placeholder={placeholder} onChange={(v) => setAnnexC(updateAt(agreement.annexC, i, { [key]: v } as Partial<AnnexCRow>))} />
+                                </div>
+                            );
+                            return (
+                                <div key={r.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                    <div className="flex items-center gap-2">
+                                        <EditText label={`Annexure C category ${i + 1}`} value={r.category} placeholder="Category" onChange={(v) => setAnnexC(updateAt(agreement.annexC, i, { category: v }))} />
+                                        <RemoveButton label={`Remove ${r.category || 'this row'}`} onClick={() => setAnnexC(removeAt(agreement.annexC, i))} />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 mt-2">
+                                        {field('procurementBy', 'Procurement by', 'Client / Studio / Vendor')}
+                                        {field('paymentBy', 'Payment by', 'Client / Studio')}
+                                        {field('responsibility', `${studioName} responsibility`)}
+                                        {field('notes', 'Notes')}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
                 <table>
                     <thead>
                         <tr><th>Category</th><th>Procurement By</th><th>Payment By</th><th>{studioName} Responsibility</th><th>Notes</th></tr>
                     </thead>
                     <tbody>
-                        <tr><td>Lights / Fans / Switches</td><td><span className="ea-placeholder">Client / {studioName} / Vendor</span></td><td><span className="ea-placeholder">Client / {studioName}</span></td><td>Design coordination and installation only if included</td><td>Product warranty by manufacturer</td></tr>
-                        <tr><td>Sanitaryware / CP Fittings</td><td><span className="ea-placeholder">Client / {studioName} / Vendor</span></td><td><span className="ea-placeholder">Client / {studioName}</span></td><td>Coordination only unless BOQ includes supply</td><td>Vendor delay extends timeline</td></tr>
-                        <tr><td>Tiles / Stone / Countertop</td><td><span className="ea-placeholder">Client / {studioName} / Vendor</span></td><td><span className="ea-placeholder">Client / {studioName}</span></td><td>Selection support and integration</td><td>Batch variation applies</td></tr>
-                        <tr><td>Appliances</td><td>Client</td><td>Client</td><td>Design provision only unless otherwise stated</td><td>Installation by brand/vendor unless included</td></tr>
-                        <tr><td>Loose Furniture / Decor</td><td><span className="ea-placeholder">Client / {studioName}</span></td><td><span className="ea-placeholder">Client / {studioName}</span></td><td>As per BOQ</td><td>Delivery damage/warranty by vendor unless supplied by {studioName}</td></tr>
+                        {agreement.annexC.map((r) => (
+                            <tr key={r.id}>
+                                <td>{r.category}</td>
+                                <td><span className="ea-placeholder">{r.procurementBy}</span></td>
+                                <td><span className="ea-placeholder">{r.paymentBy}</span></td>
+                                <td>{r.responsibility}</td>
+                                <td>{r.notes}</td>
+                            </tr>
+                        ))}
                     </tbody>
                 </table>
+                )}
+                {editing && (
+                    <>
+                        <AddButton onClick={() => setAnnexC([...agreement.annexC, { id: agreementId('c'), category: '', procurementBy: '', paymentBy: '', responsibility: '', notes: '' }])}>Add a category</AddButton>
+                        <StudioNote>Say who buys and who pays for each category on this project, for example "Client" or "{studioName}".</StudioNote>
+                    </>
+                )}
 
-                <div className="ea-annex-title">Annexure D: Scope Exclusion Checklist</div>
+                <div data-pdf-keep-next className="ea-annex-title">Annexure D: Scope Exclusion Checklist</div>
                 <table>
                     <thead>
                         <tr><th className="ea-num">No.</th><th>Item</th><th>Included?</th><th>Remarks</th></tr>
@@ -1145,7 +1352,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     </tbody>
                 </table>
 
-                <div className="ea-annex-title">Annexure E: Execution Start Readiness Checklist</div>
+                <div data-pdf-keep-next className="ea-annex-title">Annexure E: Execution Start Readiness Checklist</div>
                 <p className="ea-small">This annexure is to be completed before site mobilisation. It records pre-execution dependencies so that delays caused by missing approvals, access, selections, permissions, or client-supplied items are clearly attributable.</p>
                 <table>
                     <thead>
@@ -1165,10 +1372,13 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     </tbody>
                 </table>
 
-                <div className="ea-annex-title mt-6">Annexure F: Final Approved BOQ & Technical Specifications</div>
+                <div data-pdf-keep-next className="ea-annex-title mt-6">Annexure F: Final Approved BOQ & Technical Specifications</div>
                 <p className="ea-small mb-3">The execution shall strictly follow the approved Bill of Quantities (BOQ) version listed below. Any variations must be documented as Change Requests.</p>
-            
-                {Object.entries(groupedBoq).map(([room, items]) => (
+                {!agreement.boq.length && (
+                    <p className="ea-small">The approved BOQ is issued separately and forms part of this Agreement.</p>
+                )}
+
+                {Object.entries(groupBoqLines(agreement.boq)).map(([room, items]) => (
                     <div key={`boq-${room}`} className="ea-avoid-break mb-6">
                         <h4 className="ea-label" style={{ background: '#f7f7fa', padding: '6px', borderBottom: '2px solid #28216f' }}>{room}</h4>
                         <table>
@@ -1184,36 +1394,48 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                                 </tr>
                             </thead>
                             <tbody>
-                                {items.map((item: any, index: number) => {
-                                    const rate = item.unitCost !== undefined ? item.unitCost : calculateSellPrice(item.materials, item.labor, item.margin);
-                                    const amount = item.finalCost !== undefined ? item.finalCost : rate * item.qty;
-                                    const currentSpec = projectContext.contractContent?.boqItemSpecOverrides?.[item.id] !== undefined 
-                                        ? projectContext.contractContent.boqItemSpecOverrides[item.id] 
-                                        : (item.internalSpecs || item.specs || item.commercialNote || '');
-                                    return (
-                                        <tr key={item.id}>
-                                            <td className="ea-num">{index + 1}</td>
-                                            <td style={{fontSize: '9.5px', fontWeight: 'bold'}}>{item.cat || item.category || '-'}</td>
-                                            <td>
-                                                <strong>{item.name || item.description || 'Item'}</strong>
-                                                {currentSpec && <div className="ea-small" style={{marginTop: '4px'}}>{currentSpec}</div>}
-                                            </td>
-                                            <td className="ea-num">{item.qty}</td>
-                                            <td className="ea-num" style={{fontSize: '9px'}}>{item.unit}</td>
-                                            <td className="ea-right">{formatCurrency(rate).replace('₹','')}</td>
-                                            <td className="ea-right" style={{fontWeight: 'bold'}}>{formatCurrency(amount).replace('₹','')}</td>
-                                        </tr>
-                                    );
-                                })}
+                                {items.map((item, index) => (
+                                    <tr key={item.id}>
+                                        <td className="ea-num">{index + 1}</td>
+                                        <td style={{ fontSize: '10px', fontWeight: 'bold' }}>{item.cat || '-'}</td>
+                                        <td>
+                                            <strong>{item.name}</strong>
+                                            {editing ? (
+                                                <div className="mt-1">
+                                                    <EditText
+                                                        label={`Specification for ${item.name}`}
+                                                        rows={2}
+                                                        value={item.spec}
+                                                        placeholder="Description and specification"
+                                                        onChange={(v) => setSpec(item.id, v)}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                item.spec && <div className="ea-small" style={{ marginTop: '4px', whiteSpace: 'pre-line' }}>{item.spec}</div>
+                                            )}
+                                        </td>
+                                        <td className="ea-num tabular-nums">{item.qty}</td>
+                                        <td className="ea-num" style={{ fontSize: '10px' }}>{item.unit}</td>
+                                        <td className="ea-right tabular-nums">{inr(item.rate)}</td>
+                                        <td className="ea-right tabular-nums" style={{ fontWeight: 'bold' }}>{inr(item.amount)}</td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>
                 ))}
-            
-                <div className="ea-box ea-avoid-break mt-6" style={{ background: '#f1f0fb', borderLeft: '4px solid #28216f', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '12px' }}>Total Execution Value</div>
-                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#28216f' }}>₹{formatCurrency(executionTotal).replace('₹','')}</div>
-                </div>
+
+                {agreement.boq.length > 0 && (
+                    <div className="ea-box ea-avoid-break mt-6" style={{ background: '#f1f0fb', borderLeft: '4px solid #28216f', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '12px' }}>Total of Approved BOQ</div>
+                        <div className="tabular-nums" style={{ fontSize: '16px', fontWeight: 'bold', color: '#28216f' }}>₹{inr(agreement.boqTotal)}</div>
+                    </div>
+                )}
+                {editing && agreement.boq.length > 0 && Math.abs(agreement.boqTotal - money.grossExecution) > 1 && (
+                    <StudioNote warn>
+                        This BOQ adds up to ₹{inr(agreement.boqTotal)}, and the agreement states an execution value of ₹{inr(money.grossExecution)}. Check the approved BOQ version or the value in Money before you send this.
+                    </StudioNote>
+                )}
 
                 <div className="ea-box warn ea-avoid-break mt-6">
                     <strong>Close-Out Records:</strong> Handover checklists, snag lists, warranty claims, and closure records shall be prepared separately at substantial completion / handover stage. They are not pre-filled annexures to this Agreement because they arise only after execution has progressed.

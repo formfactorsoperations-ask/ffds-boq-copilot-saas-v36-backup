@@ -17,6 +17,7 @@ import { DocumentSurface } from './DocumentBlocks';
 import TermsDocketSheet from './TermsDocketSheet';
 import PaymentScheduleSheet from './PaymentScheduleSheet';
 import ExecutionAgreementSheet from './ExecutionAgreementSheet';
+import { agreementFromLegacySnapshot } from '../../lib/executionAgreement';
 import HandoverDocketSheet from './HandoverDocketSheet';
 import OnboardingKitSheet from './OnboardingKitSheet';
 import SnagListSheet from './SnagListSheet';
@@ -24,7 +25,6 @@ import DetailedBoqSheet from './DetailedBoqSheet';
 import ScopeRevisionSheet from './ScopeRevisionSheet';
 import ExecutionStamp from './ExecutionStamp';
 import { MessageCircleQuestion, MessagesSquare, Check } from 'lucide-react';
-import { formatCurrency, calculateSellPrice } from '../../lib/utils';
 import { documentMode, SignatureMode } from '../../services/documentReleaseEngine';
 
 export interface DocumentRendererProps {
@@ -430,37 +430,18 @@ const DocumentRenderer: React.FC<DocumentRendererProps> = ({
 
     // ── Master Execution Agreement ─────────────────────────────────────────
     case 'execution_agreement': {
-      if (!snap.milestonesList && !snap.boq) return <Unavailable what="agreement" />;
+      if (!snap.agreement && !snap.milestonesList && !snap.boq) return <Unavailable what="agreement" />;
+      /* Issued before the shared resolver: read the figures it was issued with. */
+      const agreement = snap.agreement || agreementFromLegacySnapshot(snap, orgName);
       return (
         <ExecutionAgreementSheet
-          projectContext={shimContext(snap)}
-          orgData={{ ...org, orgName }}
+          agreement={agreement}
           studioName={orgName}
           studioAddress={org.officeAddress}
           studioEmail={org.contactEmail}
           repName={org.signatoryName}
-          clientName={snap.clientName}
-          clientAddress={snap.clientAddress}
-          clientEmail={snap.clientEmail}
-          clientPhone={snap.clientPhone}
-          projectName={snap.projectName}
-          agreementDate={snap.agreementDate}
-          dateStr={snap.dateStr}
-          commencementTrigger={snap.commencementTrigger}
-          estimatedDuration={snap.estimatedDuration}
-          designFee={snap.designFee || 0}
-          executionTotal={snap.executionTotal || 0}
-          grandTotal={snap.grandTotal || 0}
-          gstAmount={snap.gstAmount}
-          gstRate={snap.gstRate ?? 18}
-          milestonesList={snap.milestonesList || []}
-          allAdvances={snap.allAdvances}
-          boq={snap.boq}
-          boqItemSpecOverrides={snap.boqItemSpecOverrides}
-          groupedBoq={snap.groupedBoq}
-          overrides={snap.overrides}
-          calculateSellPrice={calculateSellPrice as any}
-          formatCurrency={formatCurrency as any}
+          repTitle={org.signatoryTitle}
+          projectId={snap.projectId}
           /* No edit affordances for the client — read-only by omission. */
         />
       );
