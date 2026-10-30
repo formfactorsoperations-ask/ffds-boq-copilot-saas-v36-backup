@@ -29,6 +29,23 @@ const NON_BILLABLE = new Set(['deleted', 'substituted', 'excluded', 'client_proc
 
 export const isBillable = (b: BoqItem): boolean => !NON_BILLABLE.has((b as any).boqStatus);
 
+/*
+  AS ACTUALS — scope the client pays the vendor for directly.
+
+  A line marked "As actuals" (or named "… (AS ACTUALS)") is still part of the
+  scope: it stays in the BOQ, the client sees it, and the studio manages it.
+  But FFDS does not invoice it, so it is not in FFDS's total, the payment
+  schedule or GST. Its amount is an estimate, kept beside the total.
+
+  A design fee set as a percentage is still charged on it: the studio designs
+  that work whoever pays for the material (designFeeFor below).
+*/
+const AS_ACTUALS_NAME = /\bas[\s-]*actuals?\b/i;
+
+export function isAsActuals(b: any, name?: string | null): boolean {
+  return b?.boqStatus === 'as_actuals' || b?.asActuals === true || AS_ACTUALS_NAME.test(String(name ?? b?.name ?? ''));
+}
+
 export interface ResolvedBoqLine {
   /** Stable across versions: the bank id, else room + name. */
   key: string;
@@ -42,6 +59,8 @@ export interface ResolvedBoqLine {
   total: number;
   /** Present but not billable — shown, never summed. */
   billable: boolean;
+  /** In scope but paid directly to the vendor: shown, kept out of FFDS's total. */
+  asActuals: boolean;
   status?: string;
 }
 
@@ -87,6 +106,7 @@ export function resolveBoqLine(b: any, bankMap: Map<string, Item>): ResolvedBoqL
     rate,
     total: rate * qty,
     billable: isBillable(b),
+    asActuals: isAsActuals(b, name),
     status: (b as any).boqStatus,
   };
 }
@@ -95,11 +115,34 @@ export function resolveBoqLines(boq: any[], bankMap: Map<string, Item>): Resolve
   return (boq || []).map(b => resolveBoqLine(b, bankMap));
 }
 
-/** The scope value — billable lines only, matching the studio's own summary. */
+/** The scope value FFDS invoices — billable lines, as-actuals left out, matching the studio's own summary. */
 export function boqTotal(boq: any[], bankMap: Map<string, Item>): number {
   return resolveBoqLines(boq, bankMap)
-    .filter(l => l.billable)
+    .filter(l => l.billable && !l.asActuals)
     .reduce((sum, l) => sum + l.total, 0);
+}
+
+/** The estimate of what the client pays vendors directly ("as actuals"). */
+export function asActualsTotal(boq: any[], bankMap: Map<string, Item>): number {
+  return resolveBoqLines(boq, bankMap)
+    .filter(l => l.billable && l.asActuals)
+    .reduce((sum, l) => sum + l.total, 0);
+}
+
+/**
+ * The design fee on a scope. A percentage fee is charged on FFDS's work AND the
+ * as-actuals estimate; a lump sum or a rate per square foot does not depend on
+ * either. `designFee` defaults to 10 (%), as it always has.
+ */
+export function designFeeFor(
+  ctx: { designFeeType?: string; designFee?: number; area?: number } | null | undefined,
+  work: number,
+  asActuals = 0,
+): number {
+  const c: any = ctx || {};
+  if (c.designFeeType === 'fixed_lumpsum') return c.designFee || 0;
+  if (c.designFeeType === 'fixed_sqft') return (c.designFee || 0) * (c.area || 0);
+  return (work + asActuals) * ((c.designFee || 10) / 100);
 }
 
 /** Bank plus the project's ad-hoc items, which is what pricing actually needs. */

@@ -7,7 +7,7 @@ import { ClientTotalsOptions, clientTotals, execGstLabel } from '../../lib/scope
   studio sees exactly the lines the Excel, the email and the portal will carry.
 */
 
-const inr = (n: number) => `₹${Math.round(Number(n) || 0).toLocaleString('en-IN')}`;
+const inr = (n: number) => `${Math.round(Number(n) || 0) < 0 ? '−' : ''}₹${Math.abs(Math.round(Number(n) || 0)).toLocaleString('en-IN')}`;
 
 interface Props {
   value: ClientTotalsOptions;

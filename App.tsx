@@ -152,6 +152,7 @@ import { nextDefaultProjectName } from "./lib/projectNaming";
 import { sendPortalAccessLink } from "./services/emailService";
 import { verifyApiKey } from "./services/geminiService";
 import { id as generateId, calculateSellPrice, calculateCostFromSell } from "./lib/utils";
+import { designFeeFor, isAsActuals } from "./lib/boqPricing";
 import { initCommunicationLog } from "./services/communicationTrackerService";
 import { INITIAL_TEMPLATES } from "./lib/standardPackages";
 import { INITIAL_BANK } from "./constants";
@@ -1151,6 +1152,8 @@ export default function App() {
       let totalSell = 0;
       let totalCost = 0;
       let activeItemCount = 0;
+      /* Paid by the client to the vendor directly: in scope, not in FFDS's total (lib/boqPricing). */
+      let asActuals = 0;
 
       tier.boq.forEach((b) => {
         const item = bankMap.get(b.bankId);
@@ -1185,20 +1188,18 @@ export default function App() {
 
         const status = b.boqStatus;
         if (status !== 'deleted' && status !== 'substituted' && status !== 'excluded' && status !== 'client_procured') {
-          totalCost += itemCost;
-          totalSell += itemSell;
           activeItemCount++;
+          if (isAsActuals(b, item?.name || (b as any).name)) {
+            asActuals += itemSell;
+          } else {
+            totalCost += itemCost;
+            totalSell += itemSell;
+          }
         }
       });
 
-      // Design Fee Calc
-      let designFee = 0;
-      if (projectContext.designFeeType === "fixed_lumpsum")
-        designFee = projectContext.designFee || 0;
-      else if (projectContext.designFeeType === "fixed_sqft")
-        designFee =
-          (projectContext.designFee || 0) * (projectContext.area || 0);
-      else designFee = totalSell * ((projectContext.designFee || 10) / 100);
+      // Design Fee Calc: a percentage is charged on the as-actuals too.
+      const designFee = designFeeFor(projectContext, totalSell, asActuals);
 
       const totalRevenue = totalSell + designFee;
       const execProfit = totalSell - totalCost;
@@ -1217,6 +1218,7 @@ export default function App() {
           totalRevenue,
           designFee,
           blendedGm,
+          asActualsTotal: asActuals,
         },
         executionTotal: totalSell, // for easy access
       };

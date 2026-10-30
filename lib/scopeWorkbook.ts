@@ -151,13 +151,18 @@ function boqSheet(wb: any, name: string, boq: DetailedBoqSnapshot, heading: stri
   ws.views = [{ state: 'frozen', ySplit: h.number, showGridLines: false }];
 
   const roomTotalCells: string[] = [];
+  /* As actuals: listed, but paid by the client to the vendor, so left out of every total.
+     Older documents (no asActualsTotal) priced them in, and keep doing so. */
+  const keepOut = boq.asActualsTotal !== undefined;
+  const actualsCells: string[] = [];
   boq.rooms.forEach((room, ri) => {
     const rr = ws.addRow([String(ri + 1), (room.name || '').toUpperCase() + (room.formerly ? `  (formerly ${room.formerly})` : '')]);
     ws.mergeCells(rr.number, 2, rr.number, 6);
     rr.eachCell({ includeEmpty: true }, (c: Cell) => { c.fill = fill(ROOM); c.font = { bold: true }; c.border = box; });
     const first = rr.number + 1;
+    const roomActuals: string[] = [];
     room.lines.forEach((l, li) => {
-      const spec = [specOf(l), l.asActuals ? 'Billed as actuals.' : ''].filter(Boolean).join('\n');
+      const spec = [specOf(l), l.asActuals ? (keepOut ? 'As actuals: paid by you to the vendor directly. An estimate, not in the total.' : 'Billed as actuals.') : ''].filter(Boolean).join('\n');
       const row = ws.addRow([
         `${ri + 1}.${li + 1}`,
         l.name,
@@ -171,6 +176,7 @@ function boqSheet(wb: any, name: string, boq: DetailedBoqSnapshot, heading: stri
       ]);
       row.height = wrappedHeight([[l.name, 30], [spec, 66], [notes ? l.note || '' : '', 32]]);
       row.getCell(7).value = { formula: `E${row.number}*F${row.number}`, result: l.amount };
+      if (keepOut && l.asActuals) { roomActuals.push(`G${row.number}`); actualsCells.push(`G${row.number}`); }
       row.eachCell({ includeEmpty: true }, (c: Cell) => { c.border = box; c.alignment = { vertical: 'top', wrapText: true }; });
       row.getCell(3).font = { size: 9, color: { argb: MUTED } };
       if (notes) row.getCell(cols).font = { size: 9, color: { argb: MUTED } };
@@ -184,7 +190,7 @@ function boqSheet(wb: any, name: string, boq: DetailedBoqSnapshot, heading: stri
     const last = ws.lastRow.number;
     const totalCell = rr.getCell(7);
     totalCell.value = room.lines.length
-      ? { formula: `SUM(G${first}:G${last})`, result: room.total }
+      ? { formula: `SUM(G${first}:G${last})${roomActuals.map(c => `-${c}`).join('')}`, result: room.total }
       : room.total;
     money(totalCell);
     totalCell.font = { bold: true };
@@ -197,6 +203,13 @@ function boqSheet(wb: any, name: string, boq: DetailedBoqSnapshot, heading: stri
   t.getCell(7).value = roomTotalCells.length ? { formula: roomTotalCells.join('+'), result: boq.total } : boq.total;
   money(t.getCell(7));
   t.eachCell({ includeEmpty: true }, (c: Cell) => { c.font = { bold: true, size: 11 }; c.border = { top: { style: 'medium', color: { argb: INK } } }; });
+  if (actualsCells.length) {
+    const a = ws.addRow(['', 'As actuals, paid by you to the vendors directly (an estimate, not in the total)']);
+    ws.mergeCells(a.number, 2, a.number, 6);
+    a.getCell(7).value = { formula: actualsCells.join('+'), result: boq.asActualsTotal || 0 };
+    money(a.getCell(7));
+    a.eachCell({ includeEmpty: true }, (c: Cell) => { c.font = { size: 10, color: { argb: MUTED } }; });
+  }
   ws.addRow([]);
   const n = ws.addRow(['', 'Anything not listed on this sheet is outside this scope. Items on the "Not included" sheet are not part of this price.']);
   ws.mergeCells(n.number, 2, n.number, cols);
@@ -280,11 +293,14 @@ function totalsBlock(ws: Sheet, before: number | null, after: number, revisedRef
       row.getCell(revision ? 3 : 2).value = { formula: revisedRef, result: r.after };
       if (revision && signedValue !== null) row.getCell(2).value = r2(signedValue);
     } else if (r.key === 'execGst') {
-      if (revision) row.getCell(2).value = { formula: `B${at.execution}*${+share.toFixed(6)}`, result: r.before };
-      row.getCell(revision ? 3 : 2).value = { formula: `${colAfter}${at.execution}*${+share.toFixed(6)}`, result: r.after };
+      /* On the execution after its discount, when there is one. */
+      const on = (c: string) => (at.execDiscount ? `(${c}${at.execution}+${c}${at.execDiscount})` : `${c}${at.execution}`);
+      if (revision) row.getCell(2).value = { formula: `${on('B')}*${+share.toFixed(6)}`, result: r.before };
+      row.getCell(revision ? 3 : 2).value = { formula: `${on(colAfter)}*${+share.toFixed(6)}`, result: r.after };
     } else if (r.key === 'designGst') {
-      if (revision) row.getCell(2).value = { formula: `B${at.designFee}*${g}`, result: r.before };
-      row.getCell(revision ? 3 : 2).value = { formula: `${colAfter}${at.designFee}*${g}`, result: r.after };
+      const on = (c: string) => (at.designDiscount ? `(${c}${at.designFee}+${c}${at.designDiscount})` : `${c}${at.designFee}`);
+      if (revision) row.getCell(2).value = { formula: `${on('B')}*${g}`, result: r.before };
+      row.getCell(revision ? 3 : 2).value = { formula: `${on(colAfter)}*${g}`, result: r.after };
     } else if (isTotal) {
       const first = at.execution;
       if (revision) row.getCell(2).value = { formula: `SUM(B${first}:B${n - 1})`, result: r.before };
@@ -330,6 +346,12 @@ export async function buildRevisionWorkbook(s: ScopeRevisionSnapshot, meta: Work
   note.getCell(1).font = { size: 9, color: { argb: MUTED } };
   note.getCell(1).alignment = { wrapText: true };
   note.height = 26;
+  /* As actuals: paid by the client to vendors, an estimate outside every total above. */
+  if (s.asActuals && (s.asActuals.before > 0 || s.asActuals.after > 0)) {
+    const aa = summary.addRow(['As actuals, paid by you to the vendors directly (not in the totals)', r2(s.asActuals.before), r2(s.asActuals.after), r2(s.asActuals.after - s.asActuals.before)]);
+    [2, 3, 4].forEach(c => money(aa.getCell(c), c === 4));
+    aa.eachCell({ includeEmpty: true }, (c: Cell) => { c.font = { size: 10, color: { argb: MUTED } }; });
+  }
   summary.addRow([]);
 
   if (s.bridge.length) {
@@ -419,6 +441,11 @@ export async function buildDetailedBoqWorkbook(s: DetailedBoqSnapshot, meta: Wor
   note.getCell(1).font = { size: 9, color: { argb: MUTED } };
   note.getCell(1).alignment = { wrapText: true };
   note.height = 26;
+  if ((s.asActualsTotal || 0) > 0) {
+    const aa = summary.addRow(['As actuals, paid by you to the vendors directly (not in the total)', r2(s.asActualsTotal || 0)]);
+    money(aa.getCell(2));
+    aa.eachCell({ includeEmpty: true }, (c: Cell) => { c.font = { size: 10, color: { argb: MUTED } }; });
+  }
   summary.addRow([]);
   const facts = [
     ['Rooms', String(s.rooms.length)],

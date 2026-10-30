@@ -1406,6 +1406,8 @@ export interface ProposalTier {
         totalRevenue: number;
         designFee: number;
         blendedGm: number;
+        /** Lines the client pays vendors for directly ("as actuals"): an estimate, not in totalSell (lib/boqPricing). */
+        asActualsTotal?: number;
     };
     fullBoq?: FullBoqItem[]; // Optional extended prop for views
     executionTotal?: number; // Optional extended prop for views

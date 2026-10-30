@@ -32,6 +32,10 @@ import { useZohoBooks } from '../hooks/useZohoBooks';
 import ZohoRaiseInvoiceDialog from './ZohoRaiseInvoiceDialog';
 import type { ZohoRaiseResult } from '../services/zohoBooksService';
 import ScopeAdditionsMoneyPanel from './ops/ScopeAdditionsMoneyPanel';
+import RevisionMoneyPanel from './money/RevisionMoneyPanel';
+import { pendingRevision, previewRevisionMoney } from '../lib/revisionMoneyPreview';
+import AsActualsCorrectionPanel from './money/AsActualsCorrectionPanel';
+import { asActualsInContract, takeAsActualsOut } from '../lib/asActualsCorrection';
 
 interface PaymentCalculatorTabProps {
     projectContext: ProjectContext;
@@ -239,7 +243,7 @@ const PanelMetric: React.FC<{ value: string; caption: string; muted?: boolean }>
 
 const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectContext, setProjectContext, activeTier, tiers = [], allProjects = [], bank = [], fullBoq = [], setBoq, aiStrategy = 'balanced', projectId }) => {
     // --- STATE ---
-    const { orgData } = useOrg();
+    const { orgData, currentUserAuth } = useOrg() as any;
     /*
       Field by field, not all-or-nothing.
 
@@ -1163,7 +1167,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
       percentage of the original base. On Test Project for T&C the studio saw
       93,797 for a milestone the client's portal priced at 86,579.
     */
-    const schedule = useMemo(() => computeSchedule({
+    const scheduleArgs = useMemo(() => ({
         context: { ...projectContext, paymentMilestones: milestones },
         tierSummary: { totalSell: originalExecutionTotal, designFee: originalDesignFee },
         overrides: {
@@ -1179,6 +1183,41 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     }), [projectContext, milestones, originalExecutionTotal, originalDesignFee, gstRate,
          billablePercent, executionGstEnabled, designGstEnabled, initiationFee, discounts,
          rawExecutionTotal, rawDesignFee]);
+    const schedule = useMemo(() => computeSchedule(scheduleArgs), [scheduleArgs]);
+
+    /*
+      An open Scope Revision, previewed on these same figures.
+
+      The milestones above stay on the approved scope until the client approves
+      the revision and the studio applies it; this shows what they become, with
+      the discount, GST and billing split as set here. Nothing is saved. Not on
+      an older version from History: that is the past, not what a revision changes.
+    */
+    const openRevision = useMemo(
+        () => (selectedHistoricalEntry ? null : pendingRevision(projectContext, tiers, bank)),
+        [selectedHistoricalEntry, projectContext, tiers, bank],
+    );
+    const revisionPreview = useMemo(
+        () => (openRevision ? previewRevisionMoney(scheduleArgs, openRevision.v2Total) : null),
+        [openRevision, scheduleArgs],
+    );
+
+    /*
+      An approved value that still counts as-actuals (lib/asActualsCorrection):
+      shown with what taking them out does, and done on the studio's click.
+    */
+    const asActualsFix = useMemo(
+        () => (selectedHistoricalEntry ? null : asActualsInContract(projectContext, tiers)),
+        [selectedHistoricalEntry, projectContext, tiers],
+    );
+    const asActualsPreview = useMemo(
+        () => (asActualsFix ? previewRevisionMoney(scheduleArgs, asActualsFix.to) : null),
+        [asActualsFix, scheduleArgs],
+    );
+    const applyAsActualsFix = () => {
+        if (!asActualsFix) return;
+        setProjectContext(takeAsActualsOut(asActualsFix, currentUserAuth?.displayName || currentUserAuth?.email || 'Studio'));
+    };
 
     // Calculate Total Paid and Remaining Balance
     const legacyTotalPaid = useMemo(() => {
@@ -3284,6 +3323,12 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     </div>
 
                     {moneyTab === 'overview' && (<>
+                    {asActualsFix && asActualsPreview && (
+                        <AsActualsCorrectionPanel c={asActualsFix} preview={asActualsPreview} onApply={applyAsActualsFix} />
+                    )}
+                    {openRevision && revisionPreview && (
+                        <RevisionMoneyPanel rev={openRevision} preview={revisionPreview} compact onOpen={() => setMoneyTab('milestones')} />
+                    )}
                     {/*
                       The four questions that decide whether a project collects.
 
@@ -4519,6 +4564,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             </>)}
 
             {moneyTab === 'milestones' && (<>
+
+            {asActualsFix && asActualsPreview && (
+                <AsActualsCorrectionPanel c={asActualsFix} preview={asActualsPreview} onApply={applyAsActualsFix} />
+            )}
+            {openRevision && revisionPreview && <RevisionMoneyPanel rev={openRevision} preview={revisionPreview} />}
 
             {/*
               Dating the schedule from the programme.

@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheckIcon, GridIcon, ListIcon, SaveIcon, CheckIcon, ExportIcon, CalculatorIcon } from './Icons';
 import { Search, X, CheckCircle2, AlertCircle, Sparkles, Lock, Plus } from 'lucide-react';
 import { keepLockedTier, lockedTierId, scopeInForce, detailedBoqForTier, detailedBoqVersion } from '../lib/scopeFlow';
-import { resolveBoqLine, isBillable } from '../lib/boqPricing';
+import { resolveBoqLine, isBillable, isAsActuals } from '../lib/boqPricing';
 import { removeLines, restoreLines, RemovedLine } from '../lib/boqEdits';
 import { useOrg } from '../contexts/OrgContext';
 import { seesStudioFinance } from '../lib/roleAccess';
@@ -919,6 +919,8 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
           {(() => {
               let firmTotal = 0;
               let estimateExposure = 0;
+              /* Paid by the client to vendors directly: not in FFDS's total (lib/boqPricing). */
+              let asActualsValue = 0;
               let clientProcuredCount = 0;
               let excludedCount = 0;
               let firmBaseCost = 0;
@@ -933,7 +935,11 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                       clientProcuredCount++;
                   } else if (item.boqStatus === 'excluded') {
                       excludedCount++;
-                  } else if (item.boqStatus === 'as_actuals' || item.boqStatus === 'provisional_sum' || item.boqStatus === 'pending_finalisation') {
+                  } else if (item.boqStatus === 'deleted' || item.boqStatus === 'substituted') {
+                      // not scope
+                  } else if (isAsActuals(item, item.name)) {
+                      asActualsValue += sellPrice;
+                  } else if (item.boqStatus === 'provisional_sum' || item.boqStatus === 'pending_finalisation') {
                       estimateExposure += sellPrice;
                   } else if (item.boqStatus !== 'deleted' && item.boqStatus !== 'substituted') {
                       firmTotal += sellPrice;
@@ -954,6 +960,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               */
               const summary: any = (activeTier as any).summary || {};
               const workValue = Number(summary.totalSell ?? (firmTotal + estimateExposure)) || 0;
+              const asActuals = Number(summary.asActualsTotal ?? asActualsValue) || 0;
               const designFee = Number(summary.designFee) || 0;
               const grandTotal = Number(summary.totalRevenue ?? (workValue + designFee)) || 0;
               const firmMarginPercent = firmTotal > 0 ? ((firmTotal - firmBaseCost) / firmTotal) * 100 : 0;
@@ -999,6 +1006,10 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                                    <span className="text-slate-500 font-bold text-[10px] uppercase tracking-wider">Excluded</span>
                                    <span className="font-bold text-slate-700 text-xs">{excludedCount} items</span>
                                </div>
+                               <div className="flex justify-between items-center" title="Paid by the client to the vendor directly. Not invoiced by FFDS, so not in the total.">
+                                   <span className="text-slate-500 font-bold text-[10px] uppercase tracking-wider">As actuals, paid to vendors</span>
+                                   <span className="font-bold text-slate-700 text-xs">{asActuals > 0 ? (isOwner ? `₹ ${Math.round(asActuals).toLocaleString('en-IN')}` : 'Not in total') : 'None'}</span>
+                               </div>
                                <div className="flex justify-between items-center">
                                    <div className="flex items-center gap-1.5">
                                        <span className="text-slate-500 font-bold text-[10px] uppercase tracking-wider">Estimated Value</span>
@@ -1017,6 +1028,11 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                                       Work ₹ {workValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                       {designFee > 0 && <> + design fee ₹ {designFee.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</>}
                                   </span>
+                                  {asActuals > 0 && (
+                                      <span className="text-[11px] text-slate-400 tabular-nums" data-testid="boq-as-actuals">
+                                          As actuals ₹ {asActuals.toLocaleString('en-IN', { maximumFractionDigits: 0 })} paid to vendors, not included
+                                      </span>
+                                  )}
                               </>) : (
                                   <span className="font-mono text-slate-300 font-bold text-2xl tabular-nums">₹ --</span>
                               )}
@@ -1176,6 +1192,9 @@ const SignedBoqReadOnly: React.FC<{ boq: any[]; bankMap: Map<string, Item> }> = 
   const lines = boq.filter(b => isBillable(b)).map(b => resolveBoqLine(b, bankMap)).filter(l => l.qty > 0);
   const rooms = Array.from(new Set(lines.map(l => l.room)));
   const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+  /* As actuals are scope the client pays the vendor for: listed, kept out of FFDS's totals. */
+  const sum = (ls: typeof lines) => ls.filter(l => !l.asActuals).reduce((t, l) => t + l.total, 0);
+  const actuals = lines.filter(l => l.asActuals).reduce((t, l) => t + l.total, 0);
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100 bg-slate-50/60">
@@ -1191,19 +1210,27 @@ const SignedBoqReadOnly: React.FC<{ boq: any[]; bankMap: Map<string, Item> }> = 
           <tbody>
             {rooms.map(room => (
               <React.Fragment key={room}>
-                <tr className="bg-slate-50/50"><td colSpan={4} className="px-5 py-2 text-[12px] font-bold text-slate-700">{room}<span className="font-medium text-slate-400"> · {inr(lines.filter(l => l.room === room).reduce((t, l) => t + l.total, 0))}</span></td></tr>
+                <tr className="bg-slate-50/50"><td colSpan={4} className="px-5 py-2 text-[12px] font-bold text-slate-700">{room}<span className="font-medium text-slate-400"> · {inr(sum(lines.filter(l => l.room === room)))}</span></td></tr>
                 {lines.filter(l => l.room === room).map((l, i) => (
                   <tr key={room + i} className="border-t border-slate-100">
-                    <td className="px-5 py-2 text-slate-900 font-medium">{l.name}</td>
+                    <td className="px-5 py-2 text-slate-900 font-medium">
+                      {l.name}
+                      {l.asActuals && <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700" title="Paid by the client to the vendor directly. Not in FFDS's total.">As actuals · not in total</span>}
+                    </td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-600">{+l.qty.toFixed(3)} {l.unit}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-600">{inr(l.rate)}</td>
-                    <td className="px-5 py-2 text-right tabular-nums font-semibold text-slate-900">{inr(l.total)}</td>
+                    <td className={`px-5 py-2 text-right tabular-nums font-semibold ${l.asActuals ? 'text-slate-400' : 'text-slate-900'}`}>{inr(l.total)}</td>
                   </tr>
                 ))}
               </React.Fragment>
             ))}
           </tbody>
-          <tfoot><tr className="border-t-2 border-slate-200"><td colSpan={3} className="px-5 py-2.5 text-right font-bold text-slate-700">Total</td><td className="px-5 py-2.5 text-right tabular-nums font-extrabold text-slate-900">{inr(lines.reduce((t, l) => t + l.total, 0))}</td></tr></tfoot>
+          <tfoot>
+            <tr className="border-t-2 border-slate-200"><td colSpan={3} className="px-5 py-2.5 text-right font-bold text-slate-700">Total</td><td className="px-5 py-2.5 text-right tabular-nums font-extrabold text-slate-900">{inr(sum(lines))}</td></tr>
+            {actuals > 0 && (
+              <tr><td colSpan={3} className="px-5 pb-2.5 text-right text-xs text-slate-500">As actuals, paid by the client to vendors directly (not in the total)</td><td className="px-5 pb-2.5 text-right tabular-nums text-xs font-semibold text-slate-500">{inr(actuals)}</td></tr>
+            )}
+          </tfoot>
         </table>
       </div>
     </div>

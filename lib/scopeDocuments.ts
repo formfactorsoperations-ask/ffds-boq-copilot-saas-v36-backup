@@ -70,6 +70,12 @@ export interface ScopeRevisionSnapshot {
   /** Revised lines outside the price — at zero, removed, to be confirmed, as actuals. */
   atZero: { name: string; room: string; reason?: string }[];
   designFeeNote: string;
+  /**
+   * As actuals, signed and revised: what the client pays vendors directly, an
+   * estimate outside both totals. Absent on revisions issued before as-actuals
+   * were kept out of the price.
+   */
+  asActuals?: { before: number; after: number };
 }
 
 export function scopeRevisionReference(context: ProjectContext, v1Reference: string, number: number): string {
@@ -130,14 +136,16 @@ export function buildScopeRevisionSnapshot(input: BuildScopeRevisionInput): Scop
         caveat: settings.roomNotes[r.name]?.trim() ||
           'Itemised differently in the revision, so the section totals are compared rather than treating every revised line as new.',
         before: [],
-        after: r.lines.map(l => ({ name: displayName(l.imported?.name), amount: l.amount2 })),
+        after: r.lines.filter(l => !l.asActuals).map(l => ({ name: displayName(l.imported?.name), amount: l.amount2 })),
       };
       return base;
     }
+    /* As actuals on both sides are outside the price: nothing changes for FFDS's total. */
+    const inBefore = (l: typeof r.lines[number]) => !!l.signed && !l.signed.asActuals;
     base.lines = r.lines
-      .filter(l => TAG[l.kind])
+      .filter(l => TAG[l.kind] && (inBefore(l) || !l.asActuals))
       .map(l => {
-        const a1 = l.signed?.amount || 0;
+        const a1 = inBefore(l) ? l.signed!.amount : 0;
         const renamed = l.kind === 'redesign';
         return {
           name: displayName(l.imported?.name || l.signed?.name),
@@ -148,8 +156,8 @@ export function buildScopeRevisionSnapshot(input: BuildScopeRevisionInput): Scop
           q2: l.kind === 'removed' ? 0 : l.qty2,
           unit: l.imported?.unit || l.signed?.unit,
           a1,
-          a2: l.amount2,
-          change: l.amount2 - a1,
+          a2: l.asActuals ? 0 : l.amount2,
+          change: (l.asActuals ? 0 : l.amount2) - a1,
         };
       });
     return base;
@@ -159,7 +167,7 @@ export function buildScopeRevisionSnapshot(input: BuildScopeRevisionInput): Scop
   result.rooms.forEach((r, i) => {
     if (!r.compareAsSection || !rooms[i].asSection || !r.signedRoom) return;
     rooms[i].asSection!.before = input.signed
-      .filter(s => s.room === r.signedRoom)
+      .filter(s => s.room === r.signedRoom && !s.asActuals)
       .map(s => ({ name: displayName(s.name), amount: s.amount }));
   });
 
@@ -191,8 +199,9 @@ export function buildScopeRevisionSnapshot(input: BuildScopeRevisionInput): Scop
     bridge,
     rooms,
     removedCount: removed.length,
-    removedValue: removed.reduce((s, l) => s + (l.signed?.amount || 0), 0),
+    removedValue: removed.reduce((s, l) => s + (l.signed && !l.signed.asActuals ? l.signed.amount : 0), 0),
     atZero: result.zeroImported.map(l => ({ name: displayName(l.name), room: settings.roomNames[l.section] || l.section, reason: l.heldOut ? HELD_REASON[l.heldOut] : undefined })),
     designFeeNote,
+    asActuals: result.asActuals || { before: 0, after: 0 },
   } as ScopeRevisionSnapshot));
 }
