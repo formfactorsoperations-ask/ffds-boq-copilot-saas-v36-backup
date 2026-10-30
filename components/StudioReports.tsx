@@ -12,6 +12,8 @@ import SalesSection from "./reports/owner/SalesSection";
 import MoneySection from "./reports/owner/MoneySection";
 import DeliverySection from "./reports/owner/DeliverySection";
 import TargetsModal from "./reports/owner/TargetsModal";
+import FoundersGoalsTab from "./reports/owner/FoundersGoalsTab";
+import { isFounder } from "../lib/founderGoals";
 import { useOwnerReportData } from "./reports/owner/useOwnerReportData";
 import { Empty } from "./reports/owner/ReportBits";
 import { Dot } from "./ui/HudBits";
@@ -19,7 +21,7 @@ import {
   periodWindow, overdueAt, lateSites, bookedIn, salesReport, inr,
   type OwnerReportInput, type ReportPeriod,
 } from "../lib/ownerReports";
-import { BarChart3, Tags, Target } from "@/lib/lucide-shim";
+import { BarChart3, Lock, Tags, Target } from "@/lib/lucide-shim";
 export { getSingleProjectValue };
 
 /*
@@ -29,7 +31,9 @@ export { getSingleProjectValue };
   scorecard of eight figures, each against its target and the period before,
   and each card opens the section behind it: Sales, Money, and Delivery and
   team. Studio memory, the Zoho history and benchmarks, stays as the last
-  section. The arithmetic lives in lib/ownerReports; this file is the shell.
+  section. Founders' goals (mockup approved 30 Oct 2026) sits before it, for
+  the two founders only (lib/founderGoals), and always counts actual work.
+  The arithmetic lives in lib/ownerReports; this file is the shell.
 
   Top-tab layout (DESIGN.md): the shell's title row names the page, then the
   StudioBar, then a toolbar with the period on the left and what is counted
@@ -45,11 +49,12 @@ interface StudioReportsProps {
   onProjectsPatched?: (updated: FullProjectData[]) => void;
 }
 
-const SECTIONS: { id: Section; label: string }[] = [
+const SECTIONS: { id: Section; label: string; founders?: boolean }[] = [
   { id: "scorecard", label: "Scorecard" },
   { id: "sales", label: "Sales" },
   { id: "money", label: "Money" },
   { id: "delivery", label: "Delivery and team" },
+  { id: "goals", label: "Founders' goals", founders: true },
   { id: "memory", label: "Studio memory" },
 ];
 const PERIODS: { id: ReportPeriod; label: (now: number) => string }[] = [
@@ -67,22 +72,25 @@ const remembered = <T extends string>(key: string, allowed: readonly T[], fallba
 };
 const remember = (key: string, v: string) => { try { localStorage.setItem(key, v); } catch { /* private window */ } };
 
-const Segmented: React.FC<{ label: string; options: { id: string; label: string; amber?: boolean }[]; value: string; onChange: (id: string) => void }> = ({ label, options, value, onChange }) => (
+const Segmented: React.FC<{ label: string; options: { id: string; label: string; amber?: boolean; locked?: boolean }[]; value: string; onChange: (id: string) => void }> = ({ label, options, value, onChange }) => (
   <div role="group" aria-label={label} className="inline-flex self-start p-1 rounded-xl bg-slate-100 flex-wrap">
     {options.map((o) => (
       <button key={o.id} type="button" aria-pressed={value === o.id} onClick={() => onChange(o.id)}
         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
           value === o.id ? (o.amber ? "bg-white text-amber-700 shadow-sm" : "bg-white text-slate-800 shadow-sm") : "text-slate-500 hover:text-slate-800"
         }`}>
-        {o.label}
+        {o.locked && <Lock className="w-3 h-3 inline-block mr-1 -mt-px" />}{o.label}
       </button>
     ))}
   </div>
 );
 
 export default function StudioReports({ projects, onNavigate, onOpenProject, onProjectsPatched }: StudioReportsProps) {
-  const { currentRoles, currentRole } = useOrg() as any;
-  const [section, setSectionState] = useState<Section>(() => remembered(SECTION_KEY, SECTIONS.map((s) => s.id), "scorecard"));
+  const { currentRoles, currentRole, orgData, currentUserAuth } = useOrg() as any;
+  const me = String(currentUserAuth?.email || "").toLowerCase();
+  const founder = isFounder(me);
+  const sections = SECTIONS.filter((s) => !s.founders || founder);
+  const [section, setSectionState] = useState<Section>(() => remembered(SECTION_KEY, sections.map((s) => s.id), "scorecard"));
   const [period, setPeriodState] = useState<ReportPeriod>(() => remembered(PERIOD_KEY, ["month", "quarter", "fy"] as const, "month"));
   /* Strict by default: only what the studio has tagged as actual work. */
   const [scope, setScope] = useState<ReportScope>("actual");
@@ -94,7 +102,9 @@ export default function StudioReports({ projects, onNavigate, onOpenProject, onP
   const setPeriod = (p: ReportPeriod) => { setPeriodState(p); remember(PERIOD_KEY, p); };
 
   const all = projects || [];
-  const scoped = useMemo(() => all.filter((p) => inScope(p, scope)), [all, scope]);
+  /* Founders' goals counts actual work only, whatever the view picker says. */
+  const goals = section === "goals" && founder;
+  const scoped = useMemo(() => all.filter((p) => inScope(p, goals ? "actual" : scope)), [all, scope, goals]);
   const counts = useMemo(() => countClasses(all, getSingleProjectValue), [all]);
   const untagged = useMemo(() => all.filter((p) => classifyProject(p) === "untagged"), [all]);
 
@@ -143,9 +153,9 @@ export default function StudioReports({ projects, onNavigate, onOpenProject, onP
       </StudioBar>
 
       <Segmented label="Report sections" value={section} onChange={(id) => setSection(id as Section)}
-        options={SECTIONS.map((s) => ({ id: s.id, label: s.label }))} />
+        options={sections.map((s) => ({ id: s.id, label: s.label, locked: s.founders }))} />
 
-      {section !== "memory" && (
+      {section !== "memory" && !goals && (
         <div className="pt-1 pb-3 border-b border-slate-200/50 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap">
             <Segmented label="Period" value={period} onChange={(id) => setPeriod(id as ReportPeriod)}
@@ -171,6 +181,11 @@ export default function StudioReports({ projects, onNavigate, onOpenProject, onP
       <div key={section} className="hud-swap">
         {section === "memory" ? (
           <StudioMemoryView projects={all} />
+        ) : goals ? (
+          <FoundersGoalsTab tenantId={String(orgData?.tenantId || "")} me={me} all={all} facts={data.facts}
+            leads={data.leads || []} leadsRead={data.leads !== null && !data.leadsLoading}
+            targets={data.targets} roster={data.roster} canSetTargets={canSetTargets} saveTargets={data.saveTargets}
+            onOpenProject={(id) => openProject(id)} />
         ) : all.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in max-w-lg mx-auto text-center">
             <BarChart3 className="w-10 h-10 text-slate-300 mx-auto mb-3" />

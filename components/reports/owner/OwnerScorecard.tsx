@@ -9,7 +9,7 @@ import {
   ActionRow, BRAND, Chip, Columns, DeltaChip, Empty, Eyebrow, Figure, Foot, IconChip, Panel, SmallButton, Spark, STATE_WORD, Swatch, TONE_HEX,
 } from './ReportBits';
 
-export type Section = 'scorecard' | 'sales' | 'money' | 'delivery' | 'memory';
+export type Section = 'scorecard' | 'sales' | 'money' | 'delivery' | 'goals' | 'memory';
 
 const ICON: Record<Kpi['key'], React.ElementType> = {
   booked: TrendingUp, cash: Wallet, margin: Percent, overdue: Clock, winRate: Target, pipeline: Filter, onTime: Home, perPerson: Users,
