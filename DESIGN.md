@@ -129,6 +129,10 @@ hides from a Designer, and a screen that is wholly about money is covered by one
 with "Show figures". Client prices stay. New screens that show margin, cost or collections ask
 `seesStudioFinance`, and so follow the switch with no extra work.
 
+Beside it, for everyone, sits **Refresh StudioDesk** (`components/ui/RefreshApp.tsx`, `lib/appVersion.ts`),
+the same icon button. It reloads the app with no cached copy. When a newer deploy is out it takes the brand
+tint and dot, the same way Hide figures shows it is on. The phone menu has a "Refresh StudioDesk" row under "Storage & sync".
+
 ## People motion (approved 11 Oct 2026)
 
 The studio owner asked for People (attendance and leave, `components/people/`)

@@ -55,9 +55,9 @@ const Tabs = () => {
   return <p data-testid="tabs">{(Object.entries(inbox.byTab) as [string, { needs: number; unread: number }][]).map(([t, c]) => `${t}:${c.needs}/${c.unread}`).sort().join(' ')}</p>;
 };
 
-function setup(onOpen = vi.fn()) {
+function setup(onOpen = vi.fn(), tab?: string) {
   render(
-    <NotifyProvider box="inbox/riya@ff.in" onOpen={onOpen}>
+    <NotifyProvider box="inbox/riya@ff.in" tab={tab} onOpen={onOpen}>
       <NotifyBell />
       <NeedsYouBar />
       <Tabs />
@@ -77,6 +77,18 @@ describe('notifications in the app', () => {
     expect(screen.getByTestId('tabs').textContent).toBe('ops-desk:1/0 people:0/1');
     expect(screen.getByRole('button', { name: 'Notifications, 2 for you' })).toBeTruthy();
     expect(document.title).toBe('(2) StudioDesk');
+  });
+
+  it('clears a tab\'s badge once its screen is open, and keeps what waits on you in the bell', () => {
+    setup(vi.fn(), 'ops-desk');
+    serve([note('a'), checkin('b', 'Arjun Rao')]);
+    expect(screen.getByTestId('tabs').textContent).toBe('people:0/1');
+    expect(h.read).toHaveBeenCalledWith('inbox/riya@ff.in', ['a']);
+    expect(screen.getByRole('button', { name: 'Notifications, 1 for you' })).toBeTruthy();
+    /* One that lands while the tab is open is read too. */
+    serve([note('c'), note('a', { readAt: 1 }), checkin('b', 'Arjun Rao')]);
+    expect(screen.getByTestId('tabs').textContent).toBe('people:0/1');
+    expect(h.read).toHaveBeenLastCalledWith('inbox/riya@ff.in', ['c']);
   });
 
   it('does not interrupt for what was already there, only for what arrives', () => {

@@ -183,7 +183,7 @@ describe('in the app', () => {
   });
 
   it('counts what needs you, and unread updates, by top-bar tab', () => {
-    const counts = tabCounts([n('a'), n('b', { readAt: 5 }), n('c', { level: 'needs', area: 'clients' }), n('d', { level: 'needs', area: 'clients', doneAt: 9 })]);
+    const counts = tabCounts([n('a'), n('b', { readAt: 5 }), n('c', { level: 'needs', area: 'clients' }), n('d', { level: 'needs', area: 'clients', doneAt: 9 }), n('e', { level: 'needs', area: 'clients', readAt: 7 })]);
     expect(counts).toEqual({ people: { needs: 0, unread: 1 }, 'ops-desk': { needs: 1, unread: 0 } });
   });
 

@@ -374,15 +374,22 @@ export function foldedTitle(e: { kind: string; title: string; count: number }): 
   return `${e.title} and ${e.count - 1} more`;
 }
 
-/** Counts for the tab badges: the number waiting on you, and whether anything new is unread. */
+/** The top-bar tab whose badge counts a note. */
+export const tabOf = (n: Pick<Note, 'area'>) => AREA_TAB[n.area] || 'home';
+
+/**
+ * Counts for the tab badges: what is waiting on you there and new since you last
+ * opened the tab, and whether any update is unread. Opening a tab reads its notes
+ * (NotifyProvider's `tab`), so the badge clears; what still waits on you stays in
+ * the bell, the bar and the Ops Desk queue until it is done.
+ */
 export function tabCounts(notes: Note[], now = Date.now()): Record<string, { needs: number; unread: number }> {
   const out: Record<string, { needs: number; unread: number }> = {};
   for (const n of notes) {
-    if (!isOpen(n, now)) continue;
-    const tab = AREA_TAB[n.area] || 'home';
-    const c = (out[tab] ||= { needs: 0, unread: 0 });
+    if (!isOpen(n, now) || n.readAt) continue;
+    const c = (out[tabOf(n)] ||= { needs: 0, unread: 0 });
     if (n.level === 'needs') c.needs++;
-    else if (!n.readAt) c.unread++;
+    else c.unread++;
   }
   return out;
 }
