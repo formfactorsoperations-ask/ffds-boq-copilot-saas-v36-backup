@@ -85,6 +85,8 @@ export interface SignedLine {
   qty: number;
   rate: number;
   amount: number;
+  /** Paid by the client to the vendor directly: carried, never in a total (lib/boqPricing). */
+  asActuals?: boolean;
 }
 
 export type LineKind = 'same' | 'qty' | 'rate' | 'qty_rate' | 'redesign' | 'new' | 'removed';
@@ -103,6 +105,8 @@ export interface RevisionLine {
   /** How confident the pairing was, 0–1. Manual pairs are 1. */
   score: number;
   manual?: boolean;
+  /** As actuals in the revision: listed, kept out of the room's total and the bridge. */
+  asActuals?: boolean;
 }
 
 export interface RevisionRoom {
@@ -139,6 +143,8 @@ export interface RevisionResult {
   /** Revised lines at zero quantity: listed, not priced. */
   zeroImported: ImportedLine[];
   counts: Record<LineKind, number>;
+  /** As actuals, signed and revised: the estimate paid to vendors, outside both totals. */
+  asActuals?: { before: number; after: number };
 }
 
 export interface RevisionSettings {
@@ -507,6 +513,7 @@ export function signedLinesFrom(boq: any[], bankMap: Map<string, Item>): SignedL
       qty: r.qty,
       rate: r.rate,
       amount: r.total,
+      ...(r.asActuals ? { asActuals: true } : {}),
     }));
 }
 

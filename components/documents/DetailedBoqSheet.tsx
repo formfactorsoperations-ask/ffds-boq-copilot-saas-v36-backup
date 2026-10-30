@@ -86,7 +86,7 @@ const DetailedBoqSheet: React.FC<Props> = ({ snapshot: s, studioName, contentHas
                   <td className="l num">{ri + 1}.{li + 1}</td>
                   <td className="l">
                     <span className="nm">{l.name}</span>
-                    {l.asActuals && <span className="tag">As actuals</span>}
+                    {l.asActuals && <span className="tag">{s.asActualsTotal !== undefined ? 'As actuals · not in total' : 'As actuals'}</span>}
                     {l.description && <SpecLines text={l.description} />}
                     {l.note && <small>Note: {l.note}</small>}
                     {l.inclusions?.length ? <small>Includes: {l.inclusions.join('; ')}</small> : null}
@@ -95,7 +95,7 @@ const DetailedBoqSheet: React.FC<Props> = ({ snapshot: s, studioName, contentHas
                   <td className="nw">{l.unit}</td>
                   <td className="num">{qtyText(l.qty)}</td>
                   <td className="num">{rateText(l.rate)}</td>
-                  <td className="num">{amt(l.amount, 2)}</td>
+                  <td className="num" style={l.asActuals && s.asActualsTotal !== undefined ? { color: '#8E96B8' } : undefined}>{amt(l.amount, 2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -107,9 +107,17 @@ const DetailedBoqSheet: React.FC<Props> = ({ snapshot: s, studioName, contentHas
         <span>Total execution scope</span>
         <b className="num">{inr2(s.total)}</b>
       </div>
+      {(s.asActualsTotal || 0) > 0 && (
+        <div className="tot avoid" style={{ fontWeight: 500 }}>
+          <span>As actuals, paid by you to the vendors directly (estimate, not in the total)</span>
+          <span className="num">{inr2(s.asActualsTotal || 0)}</span>
+        </div>
+      )}
       <p className="note">
         Rates are net and final for this scope: every commercial term agreed for the project is already in them.
-        Amounts are before the design fee and GST. Items marked “As actuals” are measured on site and billed at the stated rate.
+        Amounts are before the design fee and GST. {s.asActualsTotal !== undefined
+          ? 'Items marked “As actuals” are paid by you directly to the vendor at actual cost; the amount shown is an estimate and is not part of the total or of our invoices.'
+          : 'Items marked “As actuals” are measured on site and billed at the stated rate.'}
       </p>
 
       <div className="dh" data-section-ref={embedded ? undefined : '2'}>

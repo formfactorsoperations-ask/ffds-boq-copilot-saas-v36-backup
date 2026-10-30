@@ -953,7 +953,7 @@ function RevisionEditor({
       approval: { mode: 'via_revision', revisionReference: reference },
       org: { orgName: orgName || null },
       formerly,
-      replaces: { reference: v1.reference, total: v1.snapshot?.total || result.v1Total },
+      replaces: { reference: v1.reference, total: result.v1Total },
     });
     const snapshot = buildScopeRevisionSnapshot({
       context: ctx,
@@ -963,7 +963,7 @@ function RevisionEditor({
       settings,
       v1: {
         reference: v1.reference,
-        total: v1.snapshot?.total ?? result.v1Total,
+        total: result.v1Total,
         approvedOn: v1.recordedApproval?.approvedAt || (v1.clientSignature as any)?.signedAt || null,
         fingerprint: v1.contentHash,
       },
@@ -1836,6 +1836,9 @@ const LineRow: React.FC<{
         <div className="flex flex-wrap items-center gap-1.5">
           <span className={`font-semibold ${removed ? 'line-through text-slate-400' : 'text-slate-900'}`}>{name}</span>
           {tag && <span className={`text-[9.5px] font-bold uppercase tracking-wide border rounded px-1.5 py-px ${tag[1]}`}>{tag[0]}</span>}
+          {(l.asActuals || s?.asActuals) && (
+            <span className="text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-0.5 bg-amber-100 text-amber-700" title="Paid by the client to the vendor directly. Kept out of FFDS's totals on both sides.">As actuals · not in total</span>
+          )}
           {d && l.kind !== 'same' && (
             <span className="flex items-center gap-1 text-[11px] text-slate-500">
               <span className={`w-1.5 h-1.5 rounded-full ${d.source === 'edit' ? 'bg-[#3D52A0]' : d.source === 'excel' ? 'bg-amber-500' : 'bg-slate-300'}`} />

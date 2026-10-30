@@ -87,6 +87,12 @@ const ScopeRevisionSheet: React.FC<Props> = ({ snapshot: s, studioName, contentH
         </table>
       )}
       {totals.length > 1 && <p className="note">{totalsNote((s as any).clientTotals)}</p>}
+      {s.asActuals && (s.asActuals.before > 0 || s.asActuals.after > 0) && (
+        <p className="note">
+          As actuals, paid by you directly to the vendors and not in any total above: an estimated {inr2(s.asActuals.before)} in {s.v1.reference},
+          {' '}{inr2(s.asActuals.after)} in {s.v2.reference}. FFDS does not invoice them.
+        </p>
+      )}
       <p className="note">
         On signature: (a) Detailed BOQ v{s.v2.version} becomes the execution scope; (b) the payment schedule is
         re-issued on the revised total for you to confirm; (c) {s.v1.reference} stays on record, marked as

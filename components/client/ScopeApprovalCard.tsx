@@ -192,6 +192,17 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
           </div>
         )}
         <p className="text-[11.5px] text-slate-500 -mt-2">{totalsNote(s.clientTotals, revision)}</p>
+        {(() => {
+          /* As actuals: paid to vendors directly, an estimate outside every total. */
+          const aa = revision ? s.asActuals : (s.asActualsTotal !== undefined ? { before: s.asActualsTotal, after: s.asActualsTotal } : null);
+          if (!aa || !(aa.before > 0 || aa.after > 0)) return null;
+          return (
+            <p className="text-xs text-slate-500 -mt-3">
+              Not in these totals: items marked as actuals, which you pay the vendors for directly
+              {revision ? ` (estimated ${inr(aa.before)} before, ${inr(aa.after)} revised)` : ` (estimated ${inr(aa.after)})`}. {studioName} does not invoice them.
+            </p>
+          );
+        })()}
 
         {changed.length > 0 && (
           <div className="rounded-2xl border border-slate-200 overflow-hidden">

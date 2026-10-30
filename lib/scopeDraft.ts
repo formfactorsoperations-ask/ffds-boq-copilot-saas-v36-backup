@@ -1,5 +1,5 @@
 import { Item } from '../types';
-import { resolveBoqLine, isBillable } from './boqPricing';
+import { resolveBoqLine, isBillable, isAsActuals } from './boqPricing';
 import { calculateSellPrice } from './utils';
 import { displayName, normaliseUnit } from './detailedBoq';
 import type { ScopeRevisionRecord } from './scopeRevision';
@@ -41,8 +41,10 @@ export interface DraftLine {
   source: DraftSource;
   /** Taken out of the scope in this revision. */
   removed?: boolean;
-  /** In the Excel but outside its price — removed there, to be confirmed, as actuals. */
+  /** In the Excel but outside its price — removed there, to be confirmed. */
   heldReason?: string | null;
+  /** As actuals: in scope, paid by the client to the vendor, outside every total (lib/boqPricing). */
+  asActuals?: boolean;
   /** A rate-bank item, when the line was added or replaced from the bank. */
   bankId?: string | null;
   /** Per-unit cost to the studio. Studio only — never in a document. */
@@ -303,6 +305,11 @@ export function mergeExcel(
   // Excel lines outside the price: listed, never priced.
   result.zeroImported.forEach(im => {
     const room = settings.roomNames[im.section] || roomDisplayName(im.section);
+    /* As actuals stay in the scope, at their estimate, outside the price: the client pays the vendor. */
+    if (im.heldOut === 'as_actuals' && im.qty > 0) {
+      lines.push({ ...fromImported(im, room, im.listRate * settings.basisForNew, 1, null), asActuals: true });
+      return;
+    }
     lines.push({ ...fromImported(im, room, im.listRate * settings.basisForNew, 1, null), qty: 0, heldReason: im.heldOut ? HELD_REASON[im.heldOut] : 'At zero quantity in the Excel' });
   });
 
@@ -365,6 +372,16 @@ export function revisionFromDraft(signed: SignedLine[], draft: ScopeDraft): Revi
   const bridge: Bridge = { new: 0, qty: 0, redesign: 0, section: 0, removed: 0, rate: 0 };
   const referenced = new Set(draft.lines.map(l => l.signedLineId).filter(Boolean) as string[]);
   const pseudo = (l: DraftLine): ImportedLine => ({ id: l.id, section: l.room, name: l.name, unit: l.unit, qty: l.qty, listRate: l.rate, note: undefined, description: l.description || undefined });
+  /*
+    As actuals are carried line by line but priced on neither side: the client
+    pays the vendor. A line is judged on each side on its own -- a signed line
+    that becomes as-actuals leaves FFDS's price (a removal), one that stops
+    being as-actuals enters it (new).
+  */
+  const draftAA = (l: DraftLine, s?: SignedLine) => isAsActuals({ asActuals: l.asActuals || s?.asActuals }, l.name);
+  const signedIn = (s?: SignedLine) => !!s && !s.asActuals;
+  const signedAmount = (s?: SignedLine) => (signedIn(s) ? s!.amount : 0);
+  const revisedAmount = (l: RevisionLine) => (l.asActuals ? 0 : l.amount2);
 
   // Room order: signed rooms as they were, then rooms new in the revision.
   const order: string[] = [];
@@ -382,13 +399,14 @@ export function revisionFromDraft(signed: SignedLine[], draft: ScopeDraft): Revi
 
     if (asSection) {
       const before = signed.filter(s => s.room === signedRoom);
-      room.before = before.reduce((t, s) => t + s.amount, 0);
+      room.before = before.reduce((t, s) => t + signedAmount(s), 0);
       here.forEach(l => {
         if (l.heldReason || !(l.qty > 0) || l.removed) { if (!l.signedLineId) zero.push({ ...pseudo(l), heldOut: undefined }); return; }
         const line: RevisionLine = { id: l.id, kind: 'new', imported: pseudo(l), qty2: l.qty, rate2: l.rate, amount2: l.qty * l.rate, basis: 1, score: 0 };
+        if (draftAA(l, l.signedLineId ? byId.get(l.signedLineId) : undefined)) line.asActuals = true;
         room.lines.push(line);
       });
-      room.after = room.lines.reduce((t, l) => t + l.amount2, 0);
+      room.after = room.lines.reduce((t, l) => t + revisedAmount(l), 0);
       bridge.section += room.after - room.before;
       rooms.push(room);
       return;
@@ -404,17 +422,18 @@ export function revisionFromDraft(signed: SignedLine[], draft: ScopeDraft): Revi
         qty2: priced ? l.qty : 0, rate2: priced ? l.rate : 0, amount2: priced ? l.qty * l.rate : 0,
         basis: 1, score: s ? nameSimilarity(s.name, l.name) : 0, manual: l.source === 'edit',
       };
+      if (draftAA(l, s)) line.asActuals = true;
       room.lines.push(line);
       if (l.heldReason && s) zero.push(pseudo(l));
     });
     // Signed lines of this room that no draft line carries: removed.
     if (signedRoom) {
       signed.filter(s => s.room === signedRoom && !referenced.has(s.lineId)).forEach(s => {
-        room.lines.push({ id: `removed:${s.lineId}`, kind: 'removed', signed: s, qty2: 0, rate2: 0, amount2: 0, basis: 1, score: 0 });
+        room.lines.push({ id: `removed:${s.lineId}`, kind: 'removed', signed: s, qty2: 0, rate2: 0, amount2: 0, basis: 1, score: 0, ...(s.asActuals ? { asActuals: true } : {}) });
       });
     }
-    room.before = room.lines.reduce((t, l) => t + (l.signed?.amount || 0), 0);
-    room.after = room.lines.reduce((t, l) => t + l.amount2, 0);
+    room.before = room.lines.reduce((t, l) => t + signedAmount(l.signed), 0);
+    room.after = room.lines.reduce((t, l) => t + revisedAmount(l), 0);
     if (room.lines.length || room.before) rooms.push(room);
   });
 
@@ -422,28 +441,36 @@ export function revisionFromDraft(signed: SignedLine[], draft: ScopeDraft): Revi
   const claimed = new Set(rooms.map(r => r.signedRoom).filter(Boolean));
   Array.from(new Set(signed.map(s => s.room))).filter(r => !claimed.has(r) && !claimed.has(draft.roomOf[r])).forEach(r => {
     const lines = signed.filter(s => s.room === r && !referenced.has(s.lineId))
-      .map(s => ({ id: `removed:${s.lineId}`, kind: 'removed' as LineKind, signed: s, qty2: 0, rate2: 0, amount2: 0, basis: 1, score: 0 }));
+      .map(s => ({ id: `removed:${s.lineId}`, kind: 'removed' as LineKind, signed: s, qty2: 0, rate2: 0, amount2: 0, basis: 1, score: 0, ...(s.asActuals ? { asActuals: true } : {}) }));
     if (!lines.length) return;
-    rooms.push({ name: r, section: null, signedRoom: r, compareAsSection: false, before: lines.reduce((t, l) => t + l.signed.amount, 0), after: 0, lines });
+    rooms.push({ name: r, section: null, signedRoom: r, compareAsSection: false, before: lines.reduce((t, l) => t + signedAmount(l.signed), 0), after: 0, lines });
   });
 
   rooms.forEach(room => {
     if (room.compareAsSection) return;
     room.lines.forEach(l => {
+      const sIn = signedIn(l.signed);
+      const dIn = !l.asActuals && l.kind !== 'removed';
+      if (!sIn && !dIn) return; // as actuals on both sides, or an as-actuals line removed: outside the price
+      const a1 = signedAmount(l.signed);
+      if (sIn && !dIn) { counts.removed++; bridge.removed -= a1; return; }
+      if (!sIn && dIn) { counts.new++; bridge.new += l.amount2; return; }
       counts[l.kind]++;
-      const a1 = l.signed?.amount || 0;
       if (l.kind === 'new') bridge.new += l.amount2;
-      else if (l.kind === 'removed') bridge.removed -= a1;
       else if (l.kind === 'redesign') bridge.redesign += l.amount2 - a1;
       else { bridge.qty += (l.qty2 - l.signed!.qty) * l.signed!.rate; bridge.rate += (l.rate2 - l.signed!.rate) * l.qty2; }
     });
   });
 
-  const v1Total = signed.reduce((t, s) => t + s.amount, 0);
+  const v1Total = signed.reduce((t, s) => t + signedAmount(s), 0);
   const v2Total = rooms.reduce((t, r) => t + r.after, 0);
   const change = v2Total - v1Total;
   const sum = bridge.new + bridge.qty + bridge.redesign + bridge.section + bridge.removed + bridge.rate;
-  return { basis: draft.basis, v1Total, v2Total, change, bridge, bridgeGap: sum - change, rooms, zeroImported: zero, counts };
+  const asActuals = {
+    before: signed.filter(s => s.asActuals).reduce((t, s) => t + s.amount, 0),
+    after: rooms.reduce((t, r) => t + r.lines.filter(l => l.asActuals && l.kind !== 'removed').reduce((u, l) => u + l.amount2, 0), 0),
+  };
+  return { basis: draft.basis, v1Total, v2Total, change, bridge, bridgeGap: sum - change, rooms, zeroImported: zero, counts, asActuals };
 }
 
 /** The settings the documents read, from the draft. */
@@ -502,6 +529,7 @@ export function buildBoqFromDraft(signedBoq: any[], signed: SignedLine[], draft:
         const k = s.rate > 0 ? l.rate / s.rate : 1;
         const item = bankMap.get(original.bankId);
         const line: any = { ...original, ...base };
+        if (isAsActuals({ asActuals: l.asActuals }, l.name)) line.boqStatus = 'as_actuals';
         if (item) {
           line.baseRate = (original.baseRate !== undefined ? original.baseRate : item.materials) * k;
           line.labor = (original.labor !== undefined ? original.labor : item.labor) * k;
@@ -533,6 +561,7 @@ export function buildBoqFromDraft(signedBoq: any[], signed: SignedLine[], draft:
         labor: (Number(item.labor) || 0) * k,
         marginOverride: item.margin,
         ...(s ? { revisedFrom: s.lineId } : {}),
+        ...(isAsActuals({ asActuals: l.asActuals || s?.asActuals }, l.name) ? { boqStatus: 'as_actuals' } : {}),
       });
       return;
     }
@@ -550,7 +579,7 @@ export function buildBoqFromDraft(signedBoq: any[], signed: SignedLine[], draft:
       marginOverride: hasCost ? (l.rate / (l.cost as number) - 1) * 100 : 0,
       selectedRate: l.rate,
       ...(s ? { revisedFrom: s.lineId } : {}),
-      ...(/as\s*actuals?/i.test(l.name) ? { boqStatus: 'as_actuals' } : {}),
+      ...(isAsActuals({ asActuals: l.asActuals || s?.asActuals }, l.name) ? { boqStatus: 'as_actuals' } : {}),
     });
   });
   return out;

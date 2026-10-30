@@ -1,6 +1,6 @@
 import type { DocumentIssue, Item, ProjectContext, ProposalTier } from '../types';
 import { buildBankMap } from './boqPricing';
-import { computeRevision, signedLinesFrom } from './scopeRevision';
+import { signedLinesFrom } from './scopeRevision';
 import { draftOfRecord, revisionFromDraft } from './scopeDraft';
 import { isSentBack } from './scopeChangeRequest';
 import { computeSchedule, ScheduleResult } from './paymentSchedule';
@@ -59,9 +59,8 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
     if (!base) return null;
     const bankMap = buildBankMap(bank, ctx.adHocItems);
     const signed = signedLinesFrom(base.boq, bankMap);
-    const result = rec.draft || !rec.imported?.length
-      ? revisionFromDraft(signed, draftOfRecord(rec, signed, base.boq, bankMap))
-      : computeRevision(signed, rec.imported, rec.settings);
+    /* The same engine the Revisions screen uses: as actuals stay outside both totals. */
+    const result = revisionFromDraft(signed, draftOfRecord(rec, signed, base.boq, bankMap));
     v1Total = result.v1Total;
     v2Total = result.v2Total;
   }

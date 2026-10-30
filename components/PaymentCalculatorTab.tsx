@@ -34,6 +34,8 @@ import type { ZohoRaiseResult } from '../services/zohoBooksService';
 import ScopeAdditionsMoneyPanel from './ops/ScopeAdditionsMoneyPanel';
 import RevisionMoneyPanel from './money/RevisionMoneyPanel';
 import { pendingRevision, previewRevisionMoney } from '../lib/revisionMoneyPreview';
+import AsActualsCorrectionPanel from './money/AsActualsCorrectionPanel';
+import { asActualsInContract, takeAsActualsOut } from '../lib/asActualsCorrection';
 
 interface PaymentCalculatorTabProps {
     projectContext: ProjectContext;
@@ -241,7 +243,7 @@ const PanelMetric: React.FC<{ value: string; caption: string; muted?: boolean }>
 
 const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectContext, setProjectContext, activeTier, tiers = [], allProjects = [], bank = [], fullBoq = [], setBoq, aiStrategy = 'balanced', projectId }) => {
     // --- STATE ---
-    const { orgData } = useOrg();
+    const { orgData, currentUserAuth } = useOrg() as any;
     /*
       Field by field, not all-or-nothing.
 
@@ -1199,6 +1201,23 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         () => (openRevision ? previewRevisionMoney(scheduleArgs, openRevision.v2Total) : null),
         [openRevision, scheduleArgs],
     );
+
+    /*
+      An approved value that still counts as-actuals (lib/asActualsCorrection):
+      shown with what taking them out does, and done on the studio's click.
+    */
+    const asActualsFix = useMemo(
+        () => (selectedHistoricalEntry ? null : asActualsInContract(projectContext, tiers)),
+        [selectedHistoricalEntry, projectContext, tiers],
+    );
+    const asActualsPreview = useMemo(
+        () => (asActualsFix ? previewRevisionMoney(scheduleArgs, asActualsFix.to) : null),
+        [asActualsFix, scheduleArgs],
+    );
+    const applyAsActualsFix = () => {
+        if (!asActualsFix) return;
+        setProjectContext(takeAsActualsOut(asActualsFix, currentUserAuth?.displayName || currentUserAuth?.email || 'Studio'));
+    };
 
     // Calculate Total Paid and Remaining Balance
     const legacyTotalPaid = useMemo(() => {
@@ -3304,6 +3323,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     </div>
 
                     {moneyTab === 'overview' && (<>
+                    {asActualsFix && asActualsPreview && (
+                        <AsActualsCorrectionPanel c={asActualsFix} preview={asActualsPreview} onApply={applyAsActualsFix} />
+                    )}
                     {openRevision && revisionPreview && (
                         <RevisionMoneyPanel rev={openRevision} preview={revisionPreview} compact onOpen={() => setMoneyTab('milestones')} />
                     )}
@@ -4543,6 +4565,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
             {moneyTab === 'milestones' && (<>
 
+            {asActualsFix && asActualsPreview && (
+                <AsActualsCorrectionPanel c={asActualsFix} preview={asActualsPreview} onApply={applyAsActualsFix} />
+            )}
             {openRevision && revisionPreview && <RevisionMoneyPanel rev={openRevision} preview={revisionPreview} />}
 
             {/*

@@ -33,6 +33,7 @@ export interface DetailedBoqLine {
   /** Net sell rate per unit. */
   rate: number;
   amount: number;
+  /** Paid by the client to the vendor directly: listed with its estimate, never in a total. */
   asActuals?: boolean;
   inclusions?: string[];
   exclusions?: string[];
@@ -43,6 +44,7 @@ export interface DetailedBoqRoom {
   /** The room's name in the previous version, when it was renamed. */
   formerly?: string;
   lines: DetailedBoqLine[];
+  /** What FFDS invoices in this room: as-actuals lines left out. */
   total: number;
 }
 
@@ -63,7 +65,13 @@ export interface DetailedBoqSnapshot {
   rooms: DetailedBoqRoom[];
   /** Held in the studio's working BOQ, but not part of this scope. */
   notInScope: { name: string; room: string; reason: string }[];
+  /** What FFDS invoices: as-actuals lines left out (lib/boqPricing). */
   total: number;
+  /**
+   * The estimate of the as-actuals lines, paid by the client to vendors. Absent
+   * on documents issued before as-actuals were kept out, whose total includes them.
+   */
+  asActualsTotal?: number;
   lineCount: number;
   /** The version this one replaces, for the heading line. */
   replaces?: { reference: string; total: number } | null;
@@ -231,14 +239,15 @@ export function buildDetailedBoqSnapshot(input: BuildDetailedBoqInput): Detailed
       qty: resolved.qty,
       rate: resolved.rate,
       amount: resolved.total,
-      asActuals: b.boqStatus === 'as_actuals' || b.asActuals === true || /as\s*actuals?/i.test(resolved.name) || undefined,
+      asActuals: resolved.asActuals || undefined,
       inclusions: toList(b.inclusions ?? (bankItem as any)?.inclusions),
       exclusions: toList(b.exclusions ?? (bankItem as any)?.exclusions),
     });
-    room.total += resolved.total;
+    if (!resolved.asActuals) room.total += resolved.total;
   });
 
   const total = rooms.reduce((s, r) => s + r.total, 0);
+  const asActualsTotal = rooms.reduce((s, r) => s + r.lines.filter(l => l.asActuals).reduce((t, l) => t + l.amount, 0), 0);
   const org = input.org || {};
   return JSON.parse(JSON.stringify({
     schema: 1,
@@ -253,6 +262,7 @@ export function buildDetailedBoqSnapshot(input: BuildDetailedBoqInput): Detailed
     rooms,
     notInScope,
     total,
+    asActualsTotal,
     lineCount: rooms.reduce((s, r) => s + r.lines.length, 0),
     replaces: input.replaces || null,
     tierId: tier.id,

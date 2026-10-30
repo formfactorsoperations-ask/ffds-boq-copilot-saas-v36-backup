@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ProjectContext, Item, BoqItem, Room, FullBoqItem } from '../types';
 import { calculateSellPrice, formatCurrency, generateId } from '../lib/utils';
+import { isAsActuals } from '../lib/boqPricing';
 import { ADDON_BUNDLES } from '../lib/standardPackages';
 import { SCOPE_BUCKETS, SCOPE_BUCKET_META, realRooms } from '../lib/scopeBuckets';
 import { resolvedRoomId } from '../lib/scopeMigration';
@@ -141,6 +142,8 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
     let grandTotal = 0;
     let firmTotal = 0;
     let estimateExposure = 0;
+    /* Paid by the client to vendors directly: kept out of the work total (lib/boqPricing). */
+    let asActuals = 0;
     let materialsCost = 0;
     let laborCost = 0;
 
@@ -151,11 +154,15 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
       if (item.boqStatus !== 'deleted' && item.boqStatus !== 'substituted') {
         if (item.boqStatus !== 'excluded' && item.boqStatus !== 'client_procured') {
           count++;
+          if (isAsActuals(item, item.name)) {
+            asActuals += val;
+            return;
+          }
           grandTotal += val;
           materialsCost += (item.materials || 0) * item.qty;
           laborCost += (item.labor || 0) * item.qty;
 
-          if (['as_actuals', 'provisional_sum', 'pending_finalisation'].includes(item.boqStatus || '')) {
+          if (['provisional_sum', 'pending_finalisation'].includes(item.boqStatus || '')) {
             estimateExposure += val;
           } else {
             firmTotal += val;
@@ -167,7 +174,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
     const profit = grandTotal - (materialsCost + laborCost);
     const avgMargin = grandTotal > 0 ? (profit / grandTotal) * 100 : 0;
 
-    return { count, grandTotal, firmTotal, estimateExposure, materialsCost, laborCost, profit, avgMargin };
+    return { count, grandTotal, firmTotal, estimateExposure, asActuals, materialsCost, laborCost, profit, avgMargin };
   }, [items]);
 
   // Combine standard and custom bundles
@@ -346,6 +353,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
           </div>
           <div className="text-xs text-slate-500 font-normal">
             <span title="The BOQ lines only. The project total with the design fee is at the foot of the editor.">Work total (before design fee):</span> <strong className="font-mono text-slate-900 text-sm font-bold tabular-nums">{formatCurrency(projectStats.grandTotal)}</strong>
+            {projectStats.asActuals > 0 && <span className="text-slate-400" title="Paid by the client to vendors directly; not in the work total."> · as actuals {formatCurrency(projectStats.asActuals)} not included</span>}
           </div>
         </div>
 

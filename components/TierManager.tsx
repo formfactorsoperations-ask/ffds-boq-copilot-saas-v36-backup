@@ -6,7 +6,7 @@ import { generateStandardPackages, TemplateData, INITIAL_TEMPLATES } from '../li
 import { resolveCivilScope, describeCivilScope } from '../lib/civilScope';
 import { realRooms } from '../lib/scopeBuckets';
 import { isScopeFlowOn, lockedTierId } from '../lib/scopeFlow';
-import { buildBankMap } from '../lib/boqPricing';
+import { buildBankMap, designFeeFor, isAsActuals } from '../lib/boqPricing';
 import { compareTiers, optionPrice } from '../lib/tierComparison';
 import { builtInSpecsName } from '../lib/comparison';
 import { otherBenchmarks, medianGm, closestInSize } from '../lib/tierBenchmarks';
@@ -158,23 +158,18 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             const effectiveLabor = b.labor !== undefined ? b.labor : (bankItem?.labor || 0);
             const sell = calculateSellPrice(effectiveMaterials, effectiveLabor, newMargin) * b.qty;
             
-            if (b.boqStatus !== 'deleted' && b.boqStatus !== 'substituted' && b.boqStatus !== 'excluded' && b.boqStatus !== 'client_procured') {
+            /* As actuals are paid to the vendor directly, so they are not in FFDS's total. */
+            if (b.boqStatus !== 'deleted' && b.boqStatus !== 'substituted' && b.boqStatus !== 'excluded' && b.boqStatus !== 'client_procured' && !isAsActuals(b, bankItem?.name)) {
                 simulatedSell += sell;
             }
         });
         return simulatedSell;
     }, [activeTier, marginShiftAmount, bankMap]);
 
-    const simulatedDesignFee = useMemo(() => {
-        if (projectContext.designFeeType === "fixed_lumpsum") {
-            return projectContext.designFee || 0;
-        } else if (projectContext.designFeeType === "fixed_sqft") {
-            return (projectContext.designFee || 0) * (projectContext.area || 0);
-        } else {
-            // Percentage based on simulated sell
-            return simulatedSellValue * ((projectContext.designFee || 10) / 100);
-        }
-    }, [projectContext, simulatedSellValue]);
+    /* A percentage fee is charged on the as-actuals as well, which a margin shift does not move. */
+    const simulatedDesignFee = useMemo(
+        () => designFeeFor(projectContext, simulatedSellValue, activeTier?.summary.asActualsTotal || 0),
+        [projectContext, simulatedSellValue, activeTier]);
 
     const simulatedTotalRevenue = simulatedSellValue + simulatedDesignFee;
 
@@ -189,6 +184,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         
         let newTotalCost = 0;
         let newTotalSell = 0;
+        let newAsActuals = 0;
         let activeItemCount = 0;
 
         // Systematic shift updates the margin override of each item
@@ -202,9 +198,9 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             const sell = calculateSellPrice(effectiveMaterials, effectiveLabor, newMargin) * b.qty;
 
             if (b.boqStatus !== 'deleted' && b.boqStatus !== 'substituted' && b.boqStatus !== 'excluded' && b.boqStatus !== 'client_procured') {
-                newTotalCost += cost;
-                newTotalSell += sell;
                 activeItemCount++;
+                if (isAsActuals(b, bankItem?.name)) newAsActuals += sell;
+                else { newTotalCost += cost; newTotalSell += sell; }
             }
 
             return {
@@ -213,15 +209,8 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             };
         });
 
-        // Design Fee Calc
-        let newDesignFee = 0;
-        if (projectContext.designFeeType === "fixed_lumpsum") {
-            newDesignFee = projectContext.designFee || 0;
-        } else if (projectContext.designFeeType === "fixed_sqft") {
-            newDesignFee = (projectContext.designFee || 0) * (projectContext.area || 0);
-        } else {
-            newDesignFee = newTotalSell * ((projectContext.designFee || 10) / 100);
-        }
+        // Design Fee Calc: a percentage is charged on the as-actuals too.
+        const newDesignFee = designFeeFor(projectContext, newTotalSell, newAsActuals);
 
         const newTotalRevenue = newTotalSell + newDesignFee;
         const newBlendedGm = newTotalRevenue > 0 ? (((newTotalSell - newTotalCost) + newDesignFee) / newTotalRevenue) * 100 : 0;
@@ -241,7 +230,8 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                     itemCount: activeItemCount,
                     totalRevenue: newTotalRevenue,
                     designFee: newDesignFee,
-                    blendedGm: newBlendedGm
+                    blendedGm: newBlendedGm,
+                    asActualsTotal: newAsActuals,
                 }
             };
         }));
