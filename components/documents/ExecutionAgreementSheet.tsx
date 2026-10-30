@@ -660,7 +660,16 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 </table>
                 {editing && (
                     <StudioNote>
-                        Values, discounts and GST are read from Money as they stand now. Type a figure here only if this agreement must state a different one; discounts and the GST switches are changed in Money.
+                        {money.optionName
+                            ? `The execution value and design fee are the approved option, ${money.optionName}, in Pricing & Tiers. `
+                            : 'The execution value and design fee are what Money bills. '}
+                        Discounts, GST and the milestones are Money's. Type a figure here only if this agreement must state a different one.
+                    </StudioNote>
+                )}
+                {editing && !money.executionManual && !money.designManual && money.moneyExecution !== undefined
+                    && (Math.abs(money.moneyExecution - money.grossExecution) > 1 || Math.abs((money.moneyDesign ?? 0) - money.grossDesign) > 1) && (
+                    <StudioNote warn>
+                        Money is billing on ₹{inr(money.moneyExecution)} execution and ₹{inr(money.moneyDesign ?? 0)} design fee, not the approved option's figures above. Update the approved values in Money so the invoices match this agreement.
                     </StudioNote>
                 )}
                 <p className="ea-small">Amounts, taxes, inclusions, exclusions, as-actuals, allowances, and provisional sums shall be governed by the final signed BOQ and invoice schedule.</p>
@@ -1417,7 +1426,10 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                                         <td className="ea-num tabular-nums">{item.qty}</td>
                                         <td className="ea-num" style={{ fontSize: '10px' }}>{item.unit}</td>
                                         <td className="ea-right tabular-nums">{inr(item.rate)}</td>
-                                        <td className="ea-right tabular-nums" style={{ fontWeight: 'bold' }}>{inr(item.amount)}</td>
+                                        <td className="ea-right tabular-nums" style={{ fontWeight: 'bold' }}>
+                                            {inr(item.amount)}
+                                            {item.asActuals && <div className="ea-small" style={{ fontWeight: 'normal' }}>As actuals</div>}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -1427,7 +1439,10 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
 
                 {agreement.boq.length > 0 && (
                     <div className="ea-box ea-avoid-break mt-6" style={{ background: '#f1f0fb', borderLeft: '4px solid #28216f', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '12px' }}>Total of Approved BOQ</div>
+                        <div style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '12px' }}>
+                            Total of Approved BOQ
+                            {agreement.boq.some((l) => l.asActuals) && <div className="ea-small" style={{ textTransform: 'none', fontWeight: 'normal' }}>As-actuals lines are paid to the vendor directly and are not in this total.</div>}
+                        </div>
                         <div className="tabular-nums" style={{ fontSize: '16px', fontWeight: 'bold', color: '#28216f' }}>₹{inr(agreement.boqTotal)}</div>
                     </div>
                 )}

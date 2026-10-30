@@ -3718,7 +3718,7 @@ export default function App() {
                           projectId={activeInternalId || (projectContext as any).id || ''}
                           activeTier={activeCalculatedTier}
                           fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
-                          tiers={tiers}
+                          tiers={tiersWithCalculatedSummaries}
                           bank={bank}
                         />
                       )}
@@ -4474,7 +4474,7 @@ export default function App() {
                           projectId={activeInternalId || (projectContext as any).id || ''}
                           activeTier={activeCalculatedTier}
                           fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
-                          tiers={tiers}
+                          tiers={tiersWithCalculatedSummaries}
                           bank={bank}
                         />
                       )}

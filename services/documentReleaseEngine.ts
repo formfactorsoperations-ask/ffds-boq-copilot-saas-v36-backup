@@ -32,8 +32,10 @@ import {
 } from './documentIssueEngine';
 import { resolveApprovals } from './clientApprovalEngine';
 import { resolveBoqLine, isBillable, buildBankMap } from '../lib/boqPricing';
-import { displayName, normaliseUnit, clientDescription } from '../lib/detailedBoq';
-import { resolveAgreement } from '../lib/executionAgreement';
+import { displayName, normaliseUnit, clientDescription, isPlaceholderText } from '../lib/detailedBoq';
+import { bankSpecForLine } from '../lib/bankSpecs';
+import { lockedTierId } from '../lib/scopeFlow';
+import { approvedOption, resolveAgreement } from '../lib/executionAgreement';
 
 // ---------------------------------------------------------------------------
 // CATALOGUE
@@ -233,7 +235,7 @@ export function getReleaseReadiness(
       }
       const approved = context.financials?.approvedExecutionValue;
       if (scope.priced && approved && Math.abs(approved - scope.total) > 1) {
-        warnings.push(`The approved execution value (₹${Math.round(approved).toLocaleString('en-IN')}) differs from the BOQ total in Annexure F (₹${Math.round(scope.total).toLocaleString('en-IN')}). The agreement states the approved value, which is what Money bills.`);
+        warnings.push(`The approved execution value (₹${Math.round(approved).toLocaleString('en-IN')}) differs from the BOQ total in Annexure F (₹${Math.round(scope.total).toLocaleString('en-IN')}). The agreement states the approved option's value, and Annexure F lists the approved BOQ.`);
       }
       if (scope.source === 'detailed_boq') {
         warnings.push(`Annexure F is the signed ${scope.reference}.`);
@@ -303,25 +305,41 @@ export interface AgreementScope {
 }
 
 export function agreementScope(context: ProjectContext, projectData?: FullProjectData): AgreementScope {
+  const tiers: any[] = projectData?.tiers || [];
+  const bank: any[] = (projectData as any)?.bank || [];
+  const bankMap = buildBankMap(bank, context.adHocItems);
+  /*
+    Specifications come from the item bank, as it stands now. A Detailed BOQ
+    freezes each line's description when it is issued, and most were issued
+    before the bank had specs, so Annexure F printed nothing under them. A line
+    the bank cannot match keeps its own wording.
+  */
+  const specFor = (tierLine: any, own: unknown) =>
+    bankSpecForLine(tierLine, bankMap, bank) || (isPlaceholderText(own) ? '' : String(own).trim());
+
   if ((context as any).scopeFlow?.enabled) {
     const approvedBoq = (context.documents?.issues || [])
       .filter(i => i.kind === 'detailed_boq' && !i.withdrawnAt && (i.clientSignature || i.recordedApproval || i.signedVia))
       .sort((a, b) => b.version - a.version)[0];
     if (approvedBoq?.snapshot?.rooms) {
+      const tierLines = new Map<string, any>(
+        ((tiers.find(t => t.id === approvedBoq.snapshot.tierId)?.boq) || []).map((b: any) => [String(b.id), b])
+      );
       const lines = (approvedBoq.snapshot.rooms as any[]).flatMap((r: any) =>
         (r.lines || []).map((l: any) => ({
           id: l.id, name: l.name, room: r.name, cat: r.name, unit: l.unit, qty: l.qty,
-          unitCost: l.rate, finalCost: l.amount, specs: l.description || '',
+          unitCost: l.rate, finalCost: l.amount,
+          specs: specFor(tierLines.get(String(l.id)) || { name: l.name }, l.description),
         }))
       );
       return { source: 'detailed_boq', reference: approvedBoq.reference, lines, total: approvedBoq.snapshot.total || 0, priced: true, unpriced: 0 };
     }
   }
 
-  const tier: any = projectData?.tiers?.find(t => t.id === context.approvedTierId) || projectData?.tiers?.[0];
+  /* The approved option in Pricing & Tiers: the signed one when signed scope is on. */
+  const approvedId = lockedTierId(context) || context.approvedTierId;
+  const tier: any = tiers.find(t => t.id === approvedId) || tiers[0];
   const raw: any[] = tier?.boq || [];
-  const bank: any[] = (projectData as any)?.bank || [];
-  const bankMap = buildBankMap(bank, context.adHocItems);
   const lines = raw
     .filter(b => isBillable(b))
     .map((b: any, i: number) => {
@@ -335,15 +353,17 @@ export function agreementScope(context: ProjectContext, projectData?: FullProjec
         qty: r.qty,
         unitCost: r.rate,
         finalCost: r.total,
-        specs: clientDescription(b, bankMap.get(b.bankId)) || '',
+        asActuals: r.asActuals || undefined,
+        specs: specFor(b, clientDescription(b)),
       };
     })
     .filter(l => l.qty > 0);
-  const total = lines.reduce((s, l) => s + l.finalCost, 0);
+  /* What FFDS invoices: as-actuals lines are listed, not totalled (lib/boqPricing). */
+  const total = lines.filter(l => !l.asActuals).reduce((s, l) => s + l.finalCost, 0);
   const unpriced = lines.filter(l => !(l.unitCost > 0)).length;
   // Every line at zero means the bank was not there to price them.
   const priced = !lines.length || unpriced < lines.length;
-  return { source: 'tier', lines, total, priced, unpriced };
+  return { source: 'tier', reference: tier?.name, lines, total, priced, unpriced };
 }
 
 // ---------------------------------------------------------------------------
@@ -476,8 +496,9 @@ export function buildSnapshot(
         rows, the people, the annexures and the studio's own clauses, so the
         client signs what the studio read.
 
-        Without a calculated option here, the base is Money's approved value,
-        then the approved BOQ's total, then the engagement's figure.
+        The figures are the approved option's, priced from the stored BOQ as
+        Pricing & Tiers prices it; without one, Money's approved value, then
+        the approved BOQ's total, then the engagement's figure.
       */
       const scope = agreementScope(context, projectData);
       const execBase =
@@ -486,6 +507,7 @@ export function buildSnapshot(
       const designBase = context.financials?.approvedDesignValue ?? ctx.engagement?.designFee ?? 0;
       const agreement = resolveAgreement(context, {
         tierSummary: { totalSell: execBase, designFee: designBase },
+        option: approvedOption(context, projectData?.tiers, (projectData as any)?.bank || []),
         scopeLines: scope.lines,
         studioName: opts?.orgName || 'the Studio',
       });
