@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { AlertTriangle, Check, Download, FileSpreadsheet, X } from '@/lib/lucide-shim';
 import { Item } from '../../types';
 import {
-  BANK_BYTES_LIMIT, SpecMatch, SpecSheetRow, applySpecs, bankBytes, matchSpecRows, parseSpecSheet, specUpdates,
+  BANK_BYTES_LIMIT, ParsedSpecSheet, SpecMatch, SpecSheetRow, applySpecs, bankBytes, matchSpecRows, normName, parseSpecSheet, specUpdates,
 } from '../../lib/bankSpecs';
 import { isPlaceholderText } from '../../lib/detailedBoq';
 import '../projectHeader/projectHeader.css';
@@ -28,6 +28,71 @@ const STATUS: Record<SpecMatch['status'], { label: string; tone: string }> = {
   skipped: { label: 'Skipped', tone: 'bg-slate-100 text-slate-600' },
 };
 
+/** An item's name as one line: names imported from Excel can carry the whole cell. */
+const oneLine = (s: unknown) => String(s ?? '').split(/\r?\n/)[0].trim() || 'Unnamed item';
+
+/**
+ * Find a bank item by typing. A native <select> of 400+ items drew as a blank
+ * sheet in the installed app window, and nobody scrolls 400 names anyway.
+ * Shows the nearest names first; typing narrows the whole bank.
+ */
+function ItemPicker({ bank, closest, placeholder, onPick, label }: {
+  bank: Item[];
+  closest: Item[];
+  placeholder: string;
+  onPick: (id: string) => void;
+  label: string;
+}) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const shown = useMemo(() => {
+    const words = normName(q).split(' ').filter(Boolean);
+    if (!words.length) return closest.slice(0, 8);
+    return bank
+      .filter(it => {
+        const hay = `${normName(it.name)} ${normName(it.cat)}`;
+        return words.every(w => hay.includes(w));
+      })
+      .slice(0, 8);
+  }, [q, bank, closest]);
+
+  return (
+    <div className="flex-1 min-w-[240px]">
+      <input
+        value={q}
+        onChange={e => { setQ(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+        aria-label={label}
+        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
+      />
+      {open && (
+        <div className="mt-1 rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
+          {!q.trim() && shown.length > 0 && (
+            <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Closest names</p>
+          )}
+          {shown.map(it => (
+            <button
+              key={it.id}
+              type="button"
+              onClick={() => { onPick(it.id); setOpen(false); setQ(''); }}
+              className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-slate-50 cursor-pointer"
+            >
+              <span className="text-sm font-semibold text-slate-800 truncate">{oneLine(it.name)}</span>
+              <span className="shrink-0 text-[11px] text-slate-500">{oneLine(it.cat)} · {oneLine(it.unit)}</span>
+            </button>
+          ))}
+          {shown.length === 0 && (
+            <p className="px-3 py-2 text-xs text-slate-500">
+              {q.trim() ? 'No bank item has those words. Try fewer, or skip this row.' : 'Start typing an item name.'}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const kb = (n: number) => `${Math.round(n / 1000).toLocaleString('en-IN')} KB`;
 
 /**
@@ -41,6 +106,7 @@ const kb = (n: number) => `${Math.round(n / 1000).toLocaleString('en-IN')} KB`;
 export default function BankSpecImportModal({ bank, onApply, onExport, onClose }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState('');
+  const [columns, setColumns] = useState<ParsedSpecSheet['columns']>();
   const [rows, setRows] = useState<SpecSheetRow[] | null>(null);
   const [error, setError] = useState('');
   const [reading, setReading] = useState(false);
@@ -88,6 +154,7 @@ export default function BankSpecImportModal({ bank, onApply, onExport, onClose }
         setError(parsed[0]?.error || 'No specifications were found in this file.');
       } else {
         setRows(best.rows);
+        setColumns(best.columns);
       }
       setFileName(file.name);
     } catch {
@@ -133,7 +200,17 @@ export default function BankSpecImportModal({ bank, onApply, onExport, onClose }
             >
               <Download className="w-4 h-4" /> Download the spec sheet
             </button>
-            {fileName && <span className="text-[11px] text-slate-500 truncate max-w-[240px]">{fileName}</span>}
+            {fileName && (
+              <span className="text-[11px] text-slate-500 min-w-0">
+                <span className="block truncate max-w-[320px]">{fileName}</span>
+                {/* Which columns were read, so a wrong pick is visible before anything is written. */}
+                {rows && columns && (
+                  <span className="block truncate max-w-[320px]">
+                    Item from “{columns.name}” · specification from “{columns.spec}”{columns.id ? ` · ID from “${columns.id}”` : ''}
+                  </span>
+                )}
+              </span>
+            )}
             <input
               ref={fileRef}
               type="file"
@@ -192,10 +269,10 @@ export default function BankSpecImportModal({ bank, onApply, onExport, onClose }
                 <div key={m.key} className="px-5 py-3 hud-row-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{item?.name || m.row.name}</p>
+                      <p className="text-sm font-semibold text-slate-800 truncate">{item ? oneLine(item.name) : m.row.name}</p>
                       <p className="text-[11px] text-slate-500">
                         Row {m.row.row}
-                        {item && item.name !== m.row.name ? ` · the sheet says “${m.row.name}”` : ''}
+                        {item && oneLine(item.name) !== m.row.name ? ` · the sheet says “${m.row.name}”` : ''}
                         {m.how === 'id' ? ' · matched by item ID' : m.how === 'name' ? ' · matched by name' : m.how === 'picked' ? ' · picked by you' : ''}
                       </p>
                     </div>
@@ -204,28 +281,19 @@ export default function BankSpecImportModal({ bank, onApply, onExport, onClose }
                   <p className="mt-1 text-xs text-slate-700 line-clamp-2">{m.row.spec.split('\n')[0]}</p>
                   {m.status === 'update' && <p className="mt-0.5 text-[11px] text-slate-500 line-clamp-1">{was ? `Was: ${was}` : 'No specification yet'}</p>}
                   {needsPick && (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <div className="mt-2 flex flex-wrap items-start gap-2">
                       {closest && (
                         <button type="button" onClick={() => pick(m.key, closest.id)} className="px-3 py-2 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] text-xs font-bold hover:bg-[#3D52A0]/15 cursor-pointer">
-                          Use “{closest.name}”
+                          Use “{oneLine(closest.name)}”
                         </button>
                       )}
-                      <select
-                        value=""
-                        onChange={e => e.target.value && pick(m.key, e.target.value)}
-                        className="flex-1 min-w-[220px] px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
-                        aria-label={`Bank item for row ${m.row.row}`}
-                      >
-                        <option value="">{m.status === 'ambiguous' ? 'Several items have this name: pick one…' : 'Pick the bank item…'}</option>
-                        {m.candidates.length > 0 && (
-                          <optgroup label="Closest">
-                            {m.candidates.map(id => <option key={id} value={id}>{byId.get(id)?.name} · {byId.get(id)?.cat}</option>)}
-                          </optgroup>
-                        )}
-                        <optgroup label="All items">
-                          {sortedBank.map(it => <option key={it.id} value={it.id}>{it.name} · {it.cat}</option>)}
-                        </optgroup>
-                      </select>
+                      <ItemPicker
+                        bank={sortedBank}
+                        closest={m.candidates.map(id => byId.get(id)).filter(Boolean) as Item[]}
+                        placeholder={m.status === 'ambiguous' ? 'Several items have this name: type to find the right one…' : 'Type to find the bank item…'}
+                        onPick={id => pick(m.key, id)}
+                        label={`Bank item for row ${m.row.row}`}
+                      />
                       <button type="button" onClick={() => pick(m.key, 'skip')} className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 cursor-pointer">Skip this row</button>
                     </div>
                   )}
