@@ -33,7 +33,8 @@ import {
 import { resolveApprovals } from './clientApprovalEngine';
 import { resolveBoqLine, isBillable, buildBankMap } from '../lib/boqPricing';
 import { displayName, normaliseUnit, clientDescription, isPlaceholderText } from '../lib/detailedBoq';
-import { bankSpecForLine } from '../lib/bankSpecs';
+import { bankItemForLine, bankSpecForLine } from '../lib/bankSpecs';
+import { specWithLists, listOf } from '../lib/specText';
 import { lockedTierId } from '../lib/scopeFlow';
 import { approvedOption, resolveAgreement } from '../lib/executionAgreement';
 
@@ -309,13 +310,22 @@ export function agreementScope(context: ProjectContext, projectData?: FullProjec
   const bank: any[] = (projectData as any)?.bank || [];
   const bankMap = buildBankMap(bank, context.adHocItems);
   /*
-    Specifications come from the item bank, as it stands now. A Detailed BOQ
-    freezes each line's description when it is issued, and most were issued
-    before the bank had specs, so Annexure F printed nothing under them. A line
-    the bank cannot match keeps its own wording.
+    Each line's specification as the client's own BOQ prints it (the Detailed
+    BOQ and the Revised BOQ Excel): its description, then what it includes and
+    what it excludes. A signed BOQ froze that text when it was issued, and it
+    is what the client signed, so it comes first. The item bank fills in only
+    where the line has none: by the line's bank item, else the one bank item
+    with the same name, which catches lines imported from a sheet.
   */
-  const specFor = (tierLine: any, own: unknown) =>
-    bankSpecForLine(tierLine, bankMap, bank) || (isPlaceholderText(own) ? '' : String(own).trim());
+  const specFor = (own: unknown, inclusions: unknown, exclusions: unknown, tierLine: any) => {
+    const description = isPlaceholderText(own) ? bankSpecForLine(tierLine, bankMap, bank) : String(own).trim();
+    const item = bankItemForLine(tierLine, bankMap, bank) as any;
+    return specWithLists(
+      description,
+      listOf(inclusions ?? tierLine?.inclusions ?? item?.inclusions),
+      listOf(exclusions ?? tierLine?.exclusions ?? item?.exclusions),
+    );
+  };
 
   if ((context as any).scopeFlow?.enabled) {
     const approvedBoq = (context.documents?.issues || [])
@@ -329,7 +339,8 @@ export function agreementScope(context: ProjectContext, projectData?: FullProjec
         (r.lines || []).map((l: any) => ({
           id: l.id, name: l.name, room: r.name, cat: r.name, unit: l.unit, qty: l.qty,
           unitCost: l.rate, finalCost: l.amount,
-          specs: specFor(tierLines.get(String(l.id)) || { name: l.name }, l.description),
+          asActuals: l.asActuals || undefined,
+          specs: specFor(l.description, l.inclusions, l.exclusions, tierLines.get(String(l.id)) || { name: l.name }),
         }))
       );
       return { source: 'detailed_boq', reference: approvedBoq.reference, lines, total: approvedBoq.snapshot.total || 0, priced: true, unpriced: 0 };
@@ -354,7 +365,7 @@ export function agreementScope(context: ProjectContext, projectData?: FullProjec
         unitCost: r.rate,
         finalCost: r.total,
         asActuals: r.asActuals || undefined,
-        specs: specFor(b, clientDescription(b)),
+        specs: specFor(clientDescription(b, bankItemForLine(b, bankMap, bank)), b.inclusions, b.exclusions, b),
       };
     })
     .filter(l => l.qty > 0);

@@ -103,3 +103,21 @@ export function parseSpec(text: unknown): ParsedSpec {
 /** "MATERIAL" -> "Material", for screens that set labels in sentence case. */
 export const specLabel = (label: string): string =>
   label ? label.charAt(0).toUpperCase() + label.slice(1).toLowerCase() : '';
+
+/** A list field as stored ("a; b", or an array), or empty. */
+export function listOf(v: unknown): string[] {
+  const raw = Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[;\n]\s*/) : [];
+  return raw.map((x) => String(x).replace(BULLET, '').trim()).filter(Boolean);
+}
+
+/**
+ * A line's specification with what it includes and excludes, in the shape
+ * `parseSpec` reads: a list the specification already states is not repeated.
+ */
+export function specWithLists(description: string, inclusions: string[] = [], exclusions: string[] = []): string {
+  const base = cleanSpec(description);
+  const has = (label: string) => new RegExp(`^${label}:`, 'm').test(base);
+  const block = (label: string, items: string[]) =>
+    items.length && !has(label) ? `${label}:\n${items.map((i) => `• ${i}`).join('\n')}` : '';
+  return [base, block('INCLUDES', inclusions), block('EXCLUDES', exclusions)].filter(Boolean).join('\n');
+}

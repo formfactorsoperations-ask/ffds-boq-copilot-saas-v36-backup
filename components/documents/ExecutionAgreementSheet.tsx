@@ -19,6 +19,7 @@ import { Plus, Trash2, RotateCcw } from '@/lib/lucide-shim';
 import { formatCurrency } from '../../lib/utils';
 import { AGREEMENT_ARTICLES, agreementId, groupBoqLines } from '../../lib/executionAgreement';
 import { PDF_CONTENT_WIDTH_PX } from '../../lib/documentPdf';
+import { parseSpec, specLabel } from '../../lib/specText';
 import type {
   AgreementClause,
   AgreementOverrides,
@@ -141,6 +142,30 @@ const RemoveButton: React.FC<{ onClick: () => void; label: string }> = ({ onClic
 const StudioNote: React.FC<{ children: React.ReactNode; warn?: boolean }> = ({ children, warn }) => (
   <p className={`mt-1 mb-2 text-[11px] font-semibold ${warn ? 'text-amber-700' : 'text-slate-500'}`}>{children}</p>
 );
+
+/**
+ * A BOQ line's specification as the client's BOQ lays it out (DetailedBoqSheet):
+ * the summary, then each section (Scope, Material, Hardware, Includes,
+ * Excludes …) with its points one to a line. Text in no particular shape
+ * prints as written.
+ */
+const AgreementSpec: React.FC<{ text: string }> = ({ text }) => {
+  const spec = parseSpec(text);
+  if (!spec.sections.length) return <div className="ea-spec" style={{ whiteSpace: 'pre-line' }}>{spec.summary || text}</div>;
+  return (
+    <div className="ea-spec">
+      {spec.summary && <div className="ea-spec-sum">{spec.summary}</div>}
+      {spec.sections.map((sec, i) => (
+        <div key={i} className="ea-spec-sec">
+          {sec.label && <b>{specLabel(sec.label)}{sec.items.length === 1 ? ': ' : ''}</b>}
+          {sec.items.length === 1 && sec.label
+            ? sec.items[0]
+            : sec.items.map((it, j) => <div key={j} className="ea-spec-it">• {it}</div>)}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const updateAt = <T,>(list: T[], i: number, patch: Partial<NoInfer<T>>): T[] =>
   list.map((x, j) => (j === i ? { ...x, ...patch } : x));
@@ -452,6 +477,11 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 padding-top: 7px;
             }
             .ea-avoid-break { break-inside: avoid; page-break-inside: avoid; }
+            .ea-spec { margin-top: 6px; font-size: 11px; line-height: 1.5; color: #475569; }
+            .ea-spec-sum { color: #1e1b4b; font-weight: 600; margin-bottom: 4px; }
+            .ea-spec-sec { margin-top: 4px; }
+            .ea-spec-sec b { color: #1e1b4b; font-weight: 700; }
+            .ea-spec-it { padding-left: 10px; text-indent: -10px; }
             .ea-toc td:first-child { width: 42px; font-weight: 700; color: #1e1b4b; }
             .ea-annex-title {
                 background: transparent;
@@ -1388,8 +1418,9 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 )}
 
                 {Object.entries(groupBoqLines(agreement.boq)).map(([room, items]) => (
-                    <div key={`boq-${room}`} className="ea-avoid-break mb-6">
-                        <h4 className="ea-label" style={{ background: '#f7f7fa', padding: '6px', borderBottom: '2px solid #28216f' }}>{room}</h4>
+                    /* Not kept together: with full specifications a room runs past a page. Rows are never cut. */
+                    <div key={`boq-${room}`} className="mb-6">
+                        <h4 data-pdf-keep-next className="ea-label" style={{ background: '#f7f7fa', padding: '6px', borderBottom: '2px solid #28216f' }}>{room}</h4>
                         <table>
                             <thead>
                                 <tr>
@@ -1420,7 +1451,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                                                     />
                                                 </div>
                                             ) : (
-                                                item.spec && <div className="ea-small" style={{ marginTop: '4px', whiteSpace: 'pre-line' }}>{item.spec}</div>
+                                                item.spec && <AgreementSpec text={item.spec} />
                                             )}
                                         </td>
                                         <td className="ea-num tabular-nums">{item.qty}</td>

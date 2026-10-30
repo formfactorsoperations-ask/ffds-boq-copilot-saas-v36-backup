@@ -238,3 +238,46 @@ describe('the approved option and the item bank', () => {
     expect(option!.design).toBeCloseTo(option!.execution * 0.1, 0);
   });
 });
+
+describe('Annexure F prints the signed BOQ\'s own specifications', () => {
+  const spec = [
+    '35 mm laminated safety door · MS grill · BWP frame cladding · Enox/Godrej lock',
+    '',
+    'SCOPE: New safety door at the main entrance, in laminate finish',
+    'MATERIAL:',
+    '• Door frame cladding: BWP plywood',
+    'EXCLUDES:',
+    '• Video door phone, digital / smart lock',
+  ].join('\n');
+  const bank: any[] = [{ id: 'door', name: 'New security door (laminate)', specs: 'An older bank wording' }];
+  const signed: any = {
+    ...ctx,
+    scopeFlow: { enabled: true },
+    documents: { issues: [{
+      kind: 'detailed_boq', version: 3, reference: 'DOC-BQ-2026-UV-v3', signedVia: 'rev2',
+      snapshot: { tierId: 'rev2', total: 60938, rooms: [{ name: 'Entrance', lines: [
+        { id: 'l1', name: 'New security door (laminate)', description: spec, unit: 'sq ft', qty: 24.38, rate: 2500, amount: 60938 },
+        { id: 'l2', name: 'Existing door shifting charges', description: 'Existing main door shifted', inclusions: ['Careful removal of shutter'], unit: 'lump sum', qty: 1, rate: 7500, amount: 7500 },
+      ] }] },
+    }] },
+  };
+  const tiers = [{ id: 'rev2', name: 'Detailed BOQ v3', boq: [{ id: 'l1', bankId: 'door', qty: 24.38 }, { id: 'l2', bankId: 'x', qty: 1 }] }];
+
+  it('the line\'s own text wins over the bank, and its lists are carried', () => {
+    const scope = agreementScope(signed, { tiers, bank } as any);
+    expect(scope.lines[0].specs).toContain('SCOPE: New safety door');
+    expect(scope.lines[0].specs).not.toContain('An older bank wording');
+    expect(scope.lines[1].specs).toBe('Existing main door shifted\nINCLUDES:\n• Careful removal of shutter');
+  });
+
+  it('renders the summary and each section', () => {
+    const scope = agreementScope(signed, { tiers, bank } as any);
+    const a = resolveAgreement(signed, { studioName: 'FFDS', scopeLines: scope.lines });
+    render(<ExecutionAgreementSheet agreement={a} studioName="FFDS" />);
+    expect(screen.getByText('35 mm laminated safety door · MS grill · BWP frame cladding · Enox/Godrej lock')).toBeTruthy();
+    expect(screen.getByText(/^Material:/)).toBeTruthy();
+    expect(screen.getByText(/^Excludes:/)).toBeTruthy();
+    expect(screen.getByText(/^Includes:/)).toBeTruthy();
+    expect(screen.queryByText(/Details missing from bank/)).toBeNull();
+  });
+});
