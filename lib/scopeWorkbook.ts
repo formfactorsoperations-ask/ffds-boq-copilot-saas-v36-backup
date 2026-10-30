@@ -280,11 +280,14 @@ function totalsBlock(ws: Sheet, before: number | null, after: number, revisedRef
       row.getCell(revision ? 3 : 2).value = { formula: revisedRef, result: r.after };
       if (revision && signedValue !== null) row.getCell(2).value = r2(signedValue);
     } else if (r.key === 'execGst') {
-      if (revision) row.getCell(2).value = { formula: `B${at.execution}*${+share.toFixed(6)}`, result: r.before };
-      row.getCell(revision ? 3 : 2).value = { formula: `${colAfter}${at.execution}*${+share.toFixed(6)}`, result: r.after };
+      /* On the execution after its discount, when there is one. */
+      const on = (c: string) => (at.execDiscount ? `(${c}${at.execution}+${c}${at.execDiscount})` : `${c}${at.execution}`);
+      if (revision) row.getCell(2).value = { formula: `${on('B')}*${+share.toFixed(6)}`, result: r.before };
+      row.getCell(revision ? 3 : 2).value = { formula: `${on(colAfter)}*${+share.toFixed(6)}`, result: r.after };
     } else if (r.key === 'designGst') {
-      if (revision) row.getCell(2).value = { formula: `B${at.designFee}*${g}`, result: r.before };
-      row.getCell(revision ? 3 : 2).value = { formula: `${colAfter}${at.designFee}*${g}`, result: r.after };
+      const on = (c: string) => (at.designDiscount ? `(${c}${at.designFee}+${c}${at.designDiscount})` : `${c}${at.designFee}`);
+      if (revision) row.getCell(2).value = { formula: `${on('B')}*${g}`, result: r.before };
+      row.getCell(revision ? 3 : 2).value = { formula: `${on(colAfter)}*${g}`, result: r.after };
     } else if (isTotal) {
       const first = at.execution;
       if (revision) row.getCell(2).value = { formula: `SUM(B${first}:B${n - 1})`, result: r.before };

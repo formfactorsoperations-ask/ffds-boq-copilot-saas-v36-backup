@@ -2,6 +2,7 @@ import React from 'react';
 import { ScopeRevisionSnapshot } from '../../lib/scopeDocuments';
 import DetailedBoqSheet from './DetailedBoqSheet';
 import { SCOPE_DOC_CSS, inr2, amt, signed0, qtyText, longDate } from './scopeDocStyles';
+import { clientTotals, totalsNote } from '../../lib/scopeTotals';
 
 /**
  * The Scope Revision, as the client reads and signs it.
@@ -24,6 +25,8 @@ const cls = (n: number) => (Math.round(n) > 0 ? 'pos' : Math.round(n) < 0 ? 'neg
 const ScopeRevisionSheet: React.FC<Props> = ({ snapshot: s, studioName, contentHash, signedBy, signedAt }) => {
   const org = s.org?.orgName || studioName || 'Design Studio';
   const changedRooms = s.rooms.filter(r => r.asSection || r.lines.length);
+  /* What the client pays, as issued: their discount, and the GST and design fee the studio chose to show. */
+  const totals = clientTotals(s.v1.total, s.v2.total, (s as any).clientTotals);
 
   return (
     <div className="sdoc">
@@ -63,6 +66,27 @@ const ScopeRevisionSheet: React.FC<Props> = ({ snapshot: s, studioName, contentH
           <tr><td className="l">Change</td><td className={`num ${cls(s.change)}`}>{signed0(s.change)}</td></tr>
         </tfoot>
       </table>
+      {totals.length > 1 && (
+        <table style={{ marginTop: 10 }}>
+          <colgroup>
+            <col style={{ width: '46%' }} /><col style={{ width: '18%' }} /><col style={{ width: '18%' }} /><col style={{ width: '18%' }} />
+          </colgroup>
+          <thead>
+            <tr><th className="l">What you pay</th><th>Signed (₹)</th><th>Revised (₹)</th><th>Change (₹)</th></tr>
+          </thead>
+          <tbody>
+            {totals.map(r => (
+              <tr key={r.key} style={r.key === 'total' ? { fontWeight: 700 } : undefined}>
+                <td className="l">{r.label}</td>
+                <td className="num">{amt(r.before).replace('-', '−')}</td>
+                <td className="num">{amt(r.after).replace('-', '−')}</td>
+                <td className={`num ${cls(r.change)}`}>{signed0(r.change)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {totals.length > 1 && <p className="note">{totalsNote((s as any).clientTotals)}</p>}
       <p className="note">
         On signature: (a) Detailed BOQ v{s.v2.version} becomes the execution scope; (b) the payment schedule is
         re-issued on the revised total for you to confirm; (c) {s.v1.reference} stays on record, marked as

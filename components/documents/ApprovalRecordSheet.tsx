@@ -15,7 +15,7 @@ import { agreedViaPhrase, approvalOf } from '../../lib/scopeAgreement';
 */
 
 const inr = (n?: number | null) =>
-  n === null || n === undefined ? '—' : `₹${(Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  n === null || n === undefined ? '—' : `${(Number(n) || 0) < 0 ? '−' : ''}₹${Math.abs(Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const when = (iso?: string | number | null) =>
   iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }) : '—';
 

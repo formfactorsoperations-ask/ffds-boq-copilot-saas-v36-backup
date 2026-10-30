@@ -34,7 +34,7 @@ import { useMomScopeQueue, MomScopeItem } from '../../hooks/useMomScopeQueue';
 import MeetingScopeInbox from './MeetingScopeInbox';
 import ClientTotalsPicker from './ClientTotalsPicker';
 import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
-import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, totalsNote } from '../../lib/scopeTotals';
+import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, netExecution, totalsNote } from '../../lib/scopeTotals';
 import { workbookForIssue, downloadWorkbook, toBase64, buildRevisionWorkbook, revisionWorkbookName } from '../../lib/scopeWorkbook';
 import { sendScopeEmail } from '../../services/emailService';
 import { publicAppOrigin } from '../../lib/publicUrl';
@@ -72,7 +72,7 @@ interface Props {
 }
 
 // ── Formatting ─────────────────────────────────────────────────────────────
-const inr = (n: number) => `₹${Math.round(Number(n) || 0).toLocaleString('en-IN')}`;
+const inr = (n: number) => `${Math.round(Number(n) || 0) < 0 ? '−' : ''}₹${Math.abs(Math.round(Number(n) || 0)).toLocaleString('en-IN')}`;
 const inr2 = (n: number) => `₹${(Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const sgn = (n: number) => {
   const r = Math.round(n);
@@ -281,6 +281,8 @@ export default function ScopeWorkspace({
         const before = revision ? Number(s.v1?.total) || 0 : null;
         const after = revision ? Number(s.v2?.total) || 0 : Number(s.total) || 0;
         const rows = clientTotals(before ?? after, after, s.clientTotals);
+        /* Led with the figures after the client's discount, when there is one. */
+        const net = netExecution(rows);
         const changed = revision ? (s.rooms || []).reduce((n: number, r: any) => n + (r.asSection ? 1 : (r.lines || []).length), 0) : 0;
         const first = String(ctx.clientName || '').trim().split(/\s+/)[0];
         const { buf, filename } = await workbookForIssue(issue, studioName);
@@ -309,8 +311,8 @@ export default function ScopeWorkspace({
             ? `We have updated your BOQ for ${s.projectName}. ${changed} item${changed === 1 ? '' : 's'} changed, and the full revised BOQ is attached as an Excel file.`
             : `Your detailed BOQ for ${s.projectName} is ready for your approval. It is attached as an Excel file, with every item and its specification.`,
           figures: revision
-            ? [['Current', inr(before || 0), ''], ['Revised', inr(after), ''], ['Change', sgn(after - (before || 0)), after - (before || 0) > 0.5 ? 'up' : after - (before || 0) < -0.5 ? 'down' : '']]
-            : [['Your BOQ', inr(after), ''], ['Items', String(s.lineCount ?? ''), '']],
+            ? [[net.discounted ? 'Current, after discount' : 'Current', inr(net.before), ''], [net.discounted ? 'Revised, after discount' : 'Revised', inr(net.after), ''], ['Change', sgn(net.after - net.before), net.after - net.before > 0.5 ? 'up' : net.after - net.before < -0.5 ? 'down' : '']]
+            : [[net.discounted ? 'Your BOQ, after discount' : 'Your BOQ', inr(net.after), ''], ['Items', String(s.lineCount ?? ''), '']],
           totals: rows.length > 1 ? rows.map(r => ({ label: r.label, value: revision ? `${inr(r.after)} (${sgn(r.change)})` : inr(r.after), strong: r.key === 'total' })) : undefined,
           note: totalsNote(s.clientTotals, revision),
           studioNote: revision ? s.summary || undefined : undefined,

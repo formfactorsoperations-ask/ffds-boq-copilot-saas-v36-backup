@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Check, CheckCircle2, Loader2, AlertTriangle, Undo2, ShieldCheck, Lock, MessageSquareText } from '@/lib/lucide-shim';
 import type { DocumentIssue } from '../../types';
-import { clientTotals, totalsNote } from '../../lib/scopeTotals';
+import { clientTotals, netExecution, totalsNote } from '../../lib/scopeTotals';
 import { workbookForIssue, downloadWorkbook } from '../../lib/scopeWorkbook';
 import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
 import { agreedViaPhrase } from '../../lib/scopeAgreement';
@@ -27,7 +27,7 @@ export const reportDownload = (issueId: string, format: 'excel' | 'record') => {
   try { window.dispatchEvent(new CustomEvent('scope-document-downloaded', { detail: { issueId, format } })); } catch { /* ignore */ }
 };
 
-const inr = (n: number) => `₹${Math.round(Number(n) || 0).toLocaleString('en-IN')}`;
+const inr = (n: number) => `${Math.round(Number(n) || 0) < 0 ? '−' : ''}₹${Math.abs(Math.round(Number(n) || 0)).toLocaleString('en-IN')}`;
 const sgn = (n: number) => {
   const r = Math.round(n);
   return r === 0 ? '₹0' : `${r > 0 ? '+' : '−'}₹${Math.abs(r).toLocaleString('en-IN')}`;
@@ -66,6 +66,10 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
   const before = revision ? Number(s.v1?.total) || 0 : null;
   const after = revision ? Number(s.v2?.total) || 0 : Number(s.total) || 0;
   const rows = clientTotals(before ?? after, after, s.clientTotals);
+  /* With a discount, the figures to lead with are after it: what the client is actually charged. */
+  const net = netExecution(rows);
+  const nb = net.before;
+  const na = net.after;
   const changed: { room: string; name: string; tag: string; change: number }[] = revision
     ? (s.rooms || []).flatMap((r: any) =>
         r.asSection
@@ -153,8 +157,8 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
       <div className="px-5 sm:px-6 py-5 space-y-5">
         <div className={`grid gap-2.5 ${revision ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
           {(revision
-            ? [['Current', inr(before || 0), ''], ['Revised', inr(after), ''], ['Change', sgn(after - (before || 0)), after - (before || 0) > 0.5 ? 'text-rose-700' : after - (before || 0) < -0.5 ? 'text-emerald-700' : '']]
-            : [['Your BOQ', inr(after), ''], ['Items', String(s.lineCount ?? ''), '']]
+            ? [[net.discounted ? 'Current, after discount' : 'Current', inr(nb), ''], [net.discounted ? 'Revised, after discount' : 'Revised', inr(na), ''], ['Change', sgn(na - nb), na - nb > 0.5 ? 'text-rose-700' : na - nb < -0.5 ? 'text-emerald-700' : '']]
+            : [[net.discounted ? 'Your BOQ, after discount' : 'Your BOQ', inr(na), ''], ['Items', String(s.lineCount ?? ''), '']]
           ).map(([k, v, c]) => (
             <div key={k} className="rounded-2xl bg-slate-50 px-4 py-3">
               <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500">{k}</div>
@@ -274,7 +278,7 @@ export default function ScopeApprovalCard({ issue, studioName, studioAddress, de
                 <label className="flex items-start gap-2.5 text-[13.5px] text-slate-800 cursor-pointer">
                   <input type="checkbox" checked={ack} onChange={(e) => { setAck(e.target.checked); setError(null); }} className="mt-0.5 w-[18px] h-[18px] accent-[#3D52A0] shrink-0" />
                   <span>
-                    I have reviewed {revision ? `the revised BOQ (v${s.v2?.version}, ${inr(after)} before design fee and GST)` : `the BOQ (${inr(after)} before design fee and GST)`} and approve it as my project's scope.
+                    I have reviewed {revision ? `the revised BOQ (v${s.v2?.version}, ${inr(after)}${net.discounted ? `, ${inr(na)} after my discount,` : ''} before design fee and GST)` : `the BOQ (${inr(after)}${net.discounted ? `, ${inr(na)} after my discount,` : ''} before design fee and GST)`} and approve it as my project's scope.
                   </span>
                 </label>
                 <div className="flex flex-wrap items-end gap-3">
