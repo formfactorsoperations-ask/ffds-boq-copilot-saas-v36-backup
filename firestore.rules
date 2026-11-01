@@ -1369,7 +1369,7 @@ service cloud.firestore {
     function leadShapeOk(d) {
       return d.keys().hasOnly(['tenantId', 'createdAt', 'createdBy', 'createdByName', 'ownerEmail', 'ownerName', 'people', 'home', 'source',
                'sourceNote', 'enquiry', 'stage', 'lostReason', 'know', 'next', 'touches', 'firstTouchAt', 'lastTouchAt', 'openRequest',
-               'projectId', 'updatedAt', 'updatedBy', 'notes', 'meetings'])
+               'projectId', 'updatedAt', 'updatedBy', 'notes', 'meetings', 'label', 'lostNote', 'revisitOn', 'closedAt'])
         && d.tenantId is string && d.ownerEmail is string && d.ownerEmail.size() > 3
         && d.stage in ['new', 'talking', 'meeting', 'measured', 'proposal', 'won', 'lost']
         && d.people is list && d.people.size() >= 1 && d.people.size() <= 8
@@ -1377,6 +1377,11 @@ service cloud.firestore {
         /* Notes kept on the lead, and the meetings with it that are over (lib/leads). Absent until the first one. */
         && (!('notes' in d) || (d.notes is list && d.notes.size() <= 200))
         && (!('meetings' in d) || (d.meetings is list && d.meetings.size() <= 200))
+        /* The name the studio gave it, and how it closed: why it was lost, a day to try again, when (lib/leads). */
+        && (!('label' in d) || (d.label is string && d.label.size() <= 80))
+        && (!('lostNote' in d) || (d.lostNote is string && d.lostNote.size() <= 500))
+        && (!('revisitOn' in d) || (d.revisitOn is string && d.revisitOn.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')))
+        && (!('closedAt' in d) || d.closedAt is number)
         && d.enquiry is string && d.enquiry.size() <= 2000
         && d.updatedBy == myEmail();
     }

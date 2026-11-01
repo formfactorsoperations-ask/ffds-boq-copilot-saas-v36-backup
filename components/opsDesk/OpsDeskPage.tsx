@@ -478,7 +478,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
               onDelete={async (l) => { try { await deleteLead(l.id); setLeads((ls) => ls.filter((x) => x.id !== l.id)); setLeadOpen(null); } catch { setError('The lead was not deleted. Try again.'); } }}
               onOpenProject={setConverting} />
           ) : (
-            <LeadsBoard onOpen={setLeadOpen} onAdd={() => setAdding({ paste: false })} onPaste={() => setAdding({ paste: true })} onMoved={replaceLead} />
+            <LeadsBoard onOpen={setLeadOpen} onAdd={() => setAdding({ paste: false })} onPaste={() => setAdding({ paste: true })} onMoved={replaceLead} onConvert={setConverting} />
           ))}
 
           {section === 'team' && isLead && (
@@ -781,7 +781,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
           onOpen={async () => {
             if (!onCreateFromLead) throw new Error('Opening a project is not available here.');
             const projectId = await onCreateFromLead(leadToProject(converting));
-            const l = withTouch({ ...converting, stage: 'won', projectId }, { kind: 'stage', text: 'Won: the project is open' }, me);
+            const l = withTouch({ ...converting, stage: 'won', projectId, closedAt: Date.now() }, { kind: 'stage', text: 'Won: the project is open' }, me);
             replaceLead(await saveLead(l, myEmail));
             if (converting.ownerEmail && converting.ownerEmail !== myEmail) await assign({ id: projectId }, converting.ownerEmail).catch(() => undefined);
             setConverting(null);

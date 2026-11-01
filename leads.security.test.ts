@@ -83,6 +83,15 @@ describe('leads', () => {
     await assertFails(updateDoc(doc(cr(), 'leads/theirs'), { stage: 'lost', updatedBy: 'cr@a.com' }));
     await assertFails(deleteDoc(doc(cr(), 'leads/mine')));
   });
+  it('Client Relations renames their lead, and marks it lost with a note and a day to try again', async () => {
+    await assertSucceeds(updateDoc(doc(cr(), 'leads/mine'), { label: 'Mehta family', updatedAt: 3 }));
+    await assertSucceeds(updateDoc(doc(cr(), 'leads/mine'), { stage: 'lost', lostReason: 'Postponed', lostNote: 'Moving in 2027', revisitOn: '2027-01-10', closedAt: 4, updatedAt: 4 }));
+    await assertFails(updateDoc(doc(cr(), 'leads/mine'), { label: 'x'.repeat(81) }));
+    await assertFails(updateDoc(doc(cr(), 'leads/mine'), { revisitOn: 'next year' }));
+    await assertFails(updateDoc(doc(cr(), 'leads/mine'), { lostNote: 'x'.repeat(501) }));
+    await assertFails(updateDoc(doc(cr(), 'leads/mine'), { closedAt: 'today' }));
+    await assertFails(updateDoc(doc(cr(), 'leads/theirs'), { label: 'Not mine', updatedBy: 'cr@a.com' }));
+  });
   it('a lead hands it on, opens the project and deletes it', async () => {
     await assertSucceeds(updateDoc(doc(admin(), 'leads/mine'), { ownerEmail: 'cr2@a.com', updatedBy: 'admin@a.com' }));
     await assertSucceeds(updateDoc(doc(admin(), 'leads/theirs'), { stage: 'won', projectId: 'p9', updatedBy: 'admin@a.com' }));

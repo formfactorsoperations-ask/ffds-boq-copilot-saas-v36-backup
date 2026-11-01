@@ -43,7 +43,7 @@ export const LEAD_SOURCES: { id: LeadSource; label: string }[] = [
 export const sourceLabel = (s: LeadSource | string | null | undefined) => LEAD_SOURCES.find((x) => x.id === s)?.label || 'Other';
 
 export const SCOPES = ['Full home', 'Kitchen', 'Wardrobes', 'Living', 'Bathrooms', 'Only furniture'] as const;
-export const LOST_REASONS = ['Budget', 'Went with a contractor', 'Went with another studio', 'Postponed', 'No reply', 'Other'] as const;
+export const LOST_REASONS = ['Budget', 'Went with a contractor', 'Went with another studio', 'Postponed', 'No reply', 'Not a fit for us', 'Too far away', 'Other'] as const;
 
 export interface LeadPerson {
   id: string;
@@ -159,6 +159,17 @@ export interface Lead {
   notes?: LeadNote[];
   /** Meetings that are over, newest last. Missing until one is closed out. */
   meetings?: LeadMeetingLog[];
+  /**
+   * What the studio calls this lead ("Waghmare family", "Dr Kulkarni's clinic"),
+   * when the name worked out from the people is not right. Empty: worked out.
+   */
+  label?: string | null;
+  /** Why it was lost, in the studio's words, beside the reason (lostReason). */
+  lostNote?: string | null;
+  /** A lost lead to try again on this day (YYYY-MM-DD): it comes back on its owner's Today list. */
+  revisitOn?: string | null;
+  /** When it was won or lost. */
+  closedAt?: number | null;
   firstTouchAt: number | null;
   lastTouchAt: number | null;
   /** Client Relations asked a lead to open the project. */
@@ -183,7 +194,9 @@ const MIN = 60000;
 export const isOpen = (l: Pick<Lead, 'stage'>) => l.stage !== 'won' && l.stage !== 'lost';
 
 /** "Mehta family" when two people share a surname, else the main contact's name. */
-export function leadName(l: Pick<Lead, 'people'>): string {
+export function leadName(l: Pick<Lead, 'people' | 'label'>): string {
+  const label = String(l.label || '').trim();
+  if (label) return label;
   const people = (l.people || []).filter((p) => p.name.trim());
   const main = people.find((p) => p.main) || people[0];
   if (!main) return 'New lead';
@@ -241,6 +254,14 @@ export function leadQueue(leads: Lead[], me: string, isLead: boolean, now: numbe
   const today = dayKey(now);
   const out: QueueItem[] = [];
   for (const l of leads) {
+    /* A lost lead the owner set a day to try again: back on their list from that day. */
+    if (l.stage === 'lost' && l.revisitOn && l.revisitOn <= today && l.ownerEmail === mine) {
+      out.push({
+        id: `leadrevisit:${l.id}`, group: 'today', kind: 'lead', projectId: '', projectName: `Lead · ${sourceLabel(l.source)}`,
+        title: `Try again: ${leadName(l)}`, detail: `lost${l.lostReason ? ` (${l.lostReason.toLowerCase()})` : ''}${l.lostNote ? `: ${l.lostNote}` : ''}`.slice(0, 160),
+        due: l.revisitOn, ref: l.id,
+      });
+    }
     if (!isOpen(l)) continue;
     const name = leadName(l);
     const owned = l.ownerEmail === mine;
@@ -395,9 +416,9 @@ export function leadStats(leads: Lead[], now: number) {
   return {
     added: fresh.length,
     meetings: fresh.filter((l) => reached(l, 'meeting')).length,
-    won: leads.filter((l) => l.stage === 'won' && inMonth(l.updatedAt)).length,
-    lost: leads.filter((l) => l.stage === 'lost' && inMonth(l.updatedAt)),
-    wonList: leads.filter((l) => l.stage === 'won' && inMonth(l.updatedAt)),
+    won: leads.filter((l) => l.stage === 'won' && inMonth(l.closedAt ?? l.updatedAt)).length,
+    lost: leads.filter((l) => l.stage === 'lost' && inMonth(l.closedAt ?? l.updatedAt)),
+    wonList: leads.filter((l) => l.stage === 'won' && inMonth(l.closedAt ?? l.updatedAt)),
     avgFirstCallMin: firsts.length ? Math.round(firsts.reduce((a, b) => a + b, 0) / firsts.length) : null,
   };
 }
@@ -603,3 +624,25 @@ export function editNote(l: Lead, id: string, change: { text?: string; pinned?: 
 }
 
 export const removeNote = (l: Lead, id: string): Lead => ({ ...l, notes: (l.notes || []).filter((n) => n.id !== id) });
+
+/* ── Closing a lead ─────────────────────────────────────────────────────── */
+
+/**
+ * Mark it lost, with the reason, a note in the studio's words, and, if it is
+ * worth another try, the day to try again. The caller saves.
+ */
+export function loseLead(l: Lead, reason: string, note: string, revisitOn: string | null, me: { email: string; name: string }, at: number): Lead {
+  const n = note.trim().slice(0, 500);
+  const revisit = revisitOn && /^\d{4}-\d{2}-\d{2}$/.test(revisitOn) ? revisitOn : null;
+  const touch: LeadTouch = {
+    id: `t${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`, at, by: me.email.toLowerCase(), byName: me.name, kind: 'stage',
+    text: `Lost: ${reason}${n ? ` (${n})` : ''}${revisit ? `. Try again ${revisit}` : ''}`.slice(0, 500), reached: null,
+  };
+  return { ...l, stage: 'lost', lostReason: reason.slice(0, 80), lostNote: n || null, revisitOn: revisit, closedAt: at, next: null, touches: [...l.touches, touch].slice(-300) };
+}
+
+/** Open a lost lead again, at Talking, with the old reason kept in its touches. */
+export function reopenLead(l: Lead, me: { email: string; name: string }, at: number): Lead {
+  const touch: LeadTouch = { id: `t${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`, at, by: me.email.toLowerCase(), byName: me.name, kind: 'stage', text: 'Opened again', reached: null };
+  return { ...l, stage: 'talking', lostReason: null, lostNote: null, revisitOn: null, closedAt: null, touches: [...l.touches, touch].slice(-300) };
+}

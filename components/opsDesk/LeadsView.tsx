@@ -3,7 +3,7 @@ import { AnimatePresence, LayoutGroup, motion, useDragControls } from 'framer-mo
 import {
   UserPlus, Phone, MessageCircle, CalendarCheck, Ruler, FileText, Plus, Trophy, ThumbsDown, Filter, Check, X, AlertTriangle, Target,
   Hourglass, CircleCheck, CircleDot, Clock, Sparkles, Globe, MapPin, Building2, Wallet, AtSign, Send, ArrowLeft, Trash2, Search, Lock, ShieldCheck,
-  StickyNote, Pin, PinOff, Pencil,
+  StickyNote, Pin, PinOff, Pencil, LayoutGrid, List, CalendarDays, BarChart3, RotateCcw,
 } from '@/lib/lucide-shim';
 import { Dot, CountUp } from '../ui/HudBits';
 import { Glide, IconTile, Tilt, DoneTick, Notice, listV, rowV } from '../people/PeopleBits';
@@ -11,7 +11,7 @@ import { dayKey, addDays } from '../../lib/opsDesk';
 import {
   BOARD_STAGES, LEAD_STAGES, LEAD_SOURCES, SCOPES, LOST_REASONS, FIRST_CALL_MINUTES, QUIET_DAYS, QUIET_DAYS_LEAD,
   leadName, homeLine, leadUrgency, waitedLabel, sourceLabel, mainPerson, findMatches, conversionLines, leadStats, lostReasons, phoneKey, emailKey,
-  blankDraft, blankPerson, draftProblems, isOpen, leadMeetingRows, LEAD_MEETING_ROW_LABEL, closeLeadMeeting, sortedNotes, addNote, editNote, removeNote, NOTE_MAX,
+  blankDraft, blankPerson, draftProblems, isOpen, loseLead, reopenLead, leadMeetingRows, LEAD_MEETING_ROW_LABEL, closeLeadMeeting, sortedNotes, addNote, editNote, removeNote, NOTE_MAX,
   type LeadMeetingRow, type LeadMeetingRowStatus, type LeadMeetingStatus, type LeadNote,
   type Lead, type LeadDraft, type LeadStage, type LeadSource, type TouchKind, type FirstStep, type LeadNext,
 } from '../../lib/leads';
@@ -25,6 +25,8 @@ import { useDesk, Panel, Chip, Avatar, Empty, EYEBROW, BRAND_EYEBROW, fmtDay, fm
 import { clock12 } from '../../lib/peopleDesk';
 import type { Person } from './OpsDeskPanels';
 import { FormLinkSheet } from './FormLink';
+import { HeatChip, LostSheet, EditLeadSheet, ClosedLanes, LeadCalendar, LeadInsights, SmartPanel } from './LeadsSmart';
+import { leadHeat, stageAge, templateText } from '../../lib/leadSmart';
 import '../projectHeader/projectHeader.css';
 
 /*
@@ -41,7 +43,7 @@ const STAGE_ICON: Record<LeadStage, React.ComponentType<any>> = {
 
 /* ── L1: the board ───────────────────────────────────────────────────────── */
 
-export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: string) => void; onAdd: () => void; onPaste: () => void; onMoved: (l: Lead) => void }) {
+export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved, onConvert }: { onOpen: (id: string) => void; onAdd: () => void; onPaste: () => void; onMoved: (l: Lead) => void; onConvert: (l: Lead) => void }) {
   const d = useDesk();
   /*
     Drag a card to another stage (with a mouse, trackpad or pen; on a phone,
@@ -52,6 +54,8 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
   */
   const [dragFrom, setDragFrom] = useState<LeadStage | null>(null);
   const [over, setOver] = useState<LeadStage | null>(null);
+  /* A card dropped on Lost asks why; one dropped on Won opens the project (or asks a lead to). */
+  const [losing, setLosing] = useState<Lead | null>(null);
   const [moved, setMoved] = useState<{ text: string; tone: 'ok' | 'bad' } | null>(null);
   const canMove = (l: Lead) => d.canWrite && (d.isLead || l.ownerEmail === d.me.email) && isOpen(l);
   const stageAt = (x: number, y: number): LeadStage | null => {
@@ -62,6 +66,8 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
     setDragFrom(null);
     setOver(null);
     if (!to || to === l.stage || !canMove(l)) return;
+    if (to === 'lost') return setLosing(l);
+    if (to === 'won') return onConvert(l);
     const label = LEAD_STAGES.find((s) => s.id === to)?.label || to;
     const next = withTouch({ ...l, stage: to }, { kind: 'stage', text: `Moved to ${label}` }, d.me);
     onMoved(next);
@@ -74,13 +80,20 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
     }
     window.setTimeout(() => setMoved(null), 3200);
   };
-  const [view, setView] = useState<'board' | 'list'>('board');
+  const [view, setView] = useState<'board' | 'list' | 'calendar'>(() => {
+    try { return (localStorage.getItem('opsDesk.leadView') as any) || 'board'; } catch { return 'board'; }
+  });
+  const pickView = (v: 'board' | 'list' | 'calendar') => { setView(v); try { localStorage.setItem('opsDesk.leadView', v); } catch { /* private window */ } };
+  const [insights, setInsights] = useState(false);
+  const [sort, setSort] = useState<'newest' | 'hottest' | 'due'>('newest');
   const [whose, setWhose] = useState<'mine' | 'everyone'>(d.isLead ? 'everyone' : 'mine');
   const [source, setSource] = useState<LeadSource | 'all'>('all');
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const stats = leadStats(d.leads, d.now);
-  const shown = d.leads.filter((l) => (whose === 'everyone' || l.ownerEmail === d.me.email) && (source === 'all' || l.source === source));
+  const q = search.trim().toLowerCase();
+  const shown = d.leads.filter((l) => (whose === 'everyone' || l.ownerEmail === d.me.email) && (source === 'all' || l.source === source)
+    && (!q || [leadName(l), l.home.where, l.home.type, l.lostReason || '', l.lostNote || '', ...l.people.map((p) => `${p.name} ${p.phone} ${p.email}`)].join(' ').toLowerCase().includes(q)));
   const toCall = shown.filter((l) => isOpen(l) && !l.firstTouchAt).length;
 
   return (
@@ -108,7 +121,7 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
 
       <AnimatePresence>{moved && <Notice text={moved.text} tone={moved.tone} onClose={() => setMoved(null)} />}</AnimatePresence>
       <div className="flex flex-wrap items-center gap-3">
-        <Glide id="lead-view" label="View" value={view} onChange={setView} options={[{ id: 'board', label: 'Board' }, { id: 'list', label: 'List' }]} />
+        <Glide id="lead-view" label="View" value={view} onChange={pickView} options={[{ id: 'board', label: 'Board', icon: LayoutGrid }, { id: 'list', label: 'List', icon: List }, { id: 'calendar', label: 'Calendar', icon: CalendarDays }]} />
         {d.isLead && <Glide id="lead-whose" label="Whose" value={whose} onChange={setWhose} options={[{ id: 'mine', label: 'Mine' }, { id: 'everyone', label: 'Everyone' }]} />}
         <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-600">
           <Filter className="w-3.5 h-3.5" />Source:
@@ -117,9 +130,18 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
             {LEAD_SOURCES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </label>
+        <span className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input className={`${input} pl-9 !py-1.5 !w-56`} placeholder="Search leads" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search leads" />
+        </span>
+        <button type="button" aria-pressed={insights} onClick={() => setInsights((x) => !x)}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-colors ${insights ? 'bg-[#3D52A0] text-white border-[#3D52A0]' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
+          <BarChart3 className="w-3.5 h-3.5" />Insights
+        </button>
         <span className="flex-1" />
-        <span className="text-xs text-slate-500">{view === 'board' ? 'Drag a card to move it to another stage. ' : ''}Won and lost leads move to the list, and stay searchable.</span>
+        <span className="text-xs text-slate-500">{view === 'board' ? 'Drag a card to another stage, or onto Won or Lost.' : view === 'calendar' ? 'Every next step on its day.' : 'Every lead, open and closed.'}</span>
       </div>
+      <AnimatePresence>{insights && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden"><LeadInsights leads={shown} /></motion.div>}</AnimatePresence>
 
       <AnimatePresence mode="wait">
         {view === 'board' ? (
@@ -127,7 +149,7 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
             <LayoutGroup>
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {BOARD_STAGES.map((st, ci) => {
-                  const list = shown.filter((l) => l.stage === st);
+                  const list = shown.filter((l) => l.stage === st).sort((a, b) => (leadHeat(b, d.now)?.score || 0) - (leadHeat(a, d.now)?.score || 0));
                   const Icon = STAGE_ICON[st];
                   return (
                     <motion.div key={st} data-stage={st} initial={{ opacity: 0, y: 20, rotateY: -12 }}
@@ -154,19 +176,24 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
                   );
                 })}
               </div>
+              <div className="mt-3"><ClosedLanes leads={shown} over={over} dragging={!!dragFrom} onOpen={onOpen} /></div>
             </LayoutGroup>
+          </motion.div>
+        ) : view === 'calendar' ? (
+          <motion.div key="calendar" initial={{ opacity: 0, rotateX: -10 }} animate={{ opacity: 1, rotateX: 0 }} exit={{ opacity: 0 }} style={{ transformPerspective: 1400 }}>
+            <LeadCalendar leads={shown} onOpen={onOpen} onMoved={onMoved} />
           </motion.div>
         ) : (
           <motion.div key="list" initial={{ opacity: 0, rotateX: -10 }} animate={{ opacity: 1, rotateX: 0 }} exit={{ opacity: 0 }} style={{ transformPerspective: 1400 }}>
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <div className="relative max-w-sm mb-3">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input className={`${input} pl-9`} placeholder="Search by name, phone or place" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search leads" />
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className={EYEBROW}>Sort</span>
+                <Glide id="lead-sort" label="Sort" value={sort} onChange={setSort} options={[{ id: 'newest', label: 'Newest' }, { id: 'hottest', label: 'Hottest' }, { id: 'due', label: 'Next step due' }]} />
+                <span className="flex-1" />
+                <span className="text-[11px] text-slate-500">{shown.length} lead{shown.length === 1 ? '' : 's'}</span>
               </div>
-              <LeadList leads={shown.filter((l) => {
-                const s = search.trim().toLowerCase();
-                return !s || [leadName(l), l.home.where, ...l.people.map((p) => `${p.name} ${p.phone} ${p.email}`)].join(' ').toLowerCase().includes(s);
-              })} onOpen={onOpen} />
+              <LeadList leads={[...shown].sort((a, b) => sort === 'hottest' ? (leadHeat(b, d.now)?.score ?? -1) - (leadHeat(a, d.now)?.score ?? -1)
+                : sort === 'due' ? (a.next?.due || '9999').localeCompare(b.next?.due || '9999') : b.createdAt - a.createdAt)} onOpen={onOpen} />
             </div>
           </motion.div>
         )}
@@ -178,6 +205,22 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
         <ThumbsDown className="w-4 h-4 text-slate-400" /><span><b className="text-slate-800">Lost:</b> {stats.lost.length}{stats.lost.length ? ` · ${lostReasons(stats.lost)}` : ''}</span>
       </motion.div>
       {formOpen && <FormLinkSheet onClose={() => setFormOpen(false)} />}
+      {losing && (
+        <LostSheet lead={losing} onClose={() => setLosing(null)} onSave={async (reason, note, revisitOn) => {
+          const l = losing;
+          const next = loseLead(l, reason, note, revisitOn, d.me, Date.now());
+          onMoved(next);
+          try {
+            onMoved(await saveLead(next, d.me.email));
+            setLosing(null);
+            setMoved({ text: `${leadName(l)} marked lost: ${reason}.${revisitOn ? ` Back on ${fmtDay(revisitOn)}.` : ''}`, tone: 'ok' });
+            window.setTimeout(() => setMoved(null), 3600);
+          } catch (e) {
+            onMoved(l);
+            throw e;
+          }
+        }} />
+      )}
     </div>
   );
 }
@@ -191,6 +234,8 @@ const LeadCard: React.FC<{
   /* A drag ends with a click on the card under the pointer: that click must not open the lead. */
   const dragged = useRef(false);
   const u = leadUrgency(l, d.now);
+  const age = stageAge(l, d.now);
+  const main = mainPerson(l);
   const chip = !l.firstTouchAt && u.waitedMin != null
     ? <Chip tone={u.waitedMin >= FIRST_CALL_MINUTES ? 'rose' : 'amber'}>{waitedLabel(u.waitedMin)}</Chip>
     : l.source === 'referral' ? <Chip tone="brand">Referral</Chip>
@@ -205,14 +250,25 @@ const LeadCard: React.FC<{
       whileDrag={{ scale: 1.06, rotate: -2.5, rotateX: 10, zIndex: 50, boxShadow: '0 24px 40px -18px rgba(61, 82, 160, 0.55)', cursor: 'grabbing' }}
       className={draggable ? 'cursor-grab rounded-xl' : 'rounded-xl'}>
       <Tilt max={6} className="rounded-xl">
-        <button type="button" onClick={() => { if (!dragged.current) onOpen(); }} className="w-full text-left rounded-xl bg-white border border-slate-200 shadow-sm p-3 hover:border-[#3D52A0]/40 transition-colors">
+        <div role="button" tabIndex={0} onClick={() => { if (!dragged.current) onOpen(); }} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }} className="group w-full text-left rounded-xl bg-white border border-slate-200 shadow-sm p-3 hover:border-[#3D52A0]/40 transition-colors">
           <span className="flex items-start gap-2"><span className="text-sm font-bold text-slate-800 flex-1 min-w-0 truncate">{leadName(l)}</span>{chip}</span>
           <span className="block text-[11px] text-slate-500 mt-0.5 truncate">{homeLine(l.home) || 'Home not filled in'}</span>
           <span className="block text-[11px] text-slate-500 truncate">{sourceLabel(l.source)}{l.sourceNote ? ` · ${l.sourceNote}` : ''}</span>
-          <span className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-2">
-            <Dot tone={u.tone} live={u.tone === 'bad'} /><span className="text-xs font-semibold text-slate-700 flex-1 min-w-0 truncate">{u.label}</span><Avatar name={l.ownerName || l.ownerEmail} />
+          <span className="mt-1.5 flex items-center gap-1.5">
+            <HeatChip lead={l} />
+            <span title="Days in this stage" className={`min-w-0 truncate text-[10px] font-bold tabular-nums ${age.stuck ? 'text-amber-700' : 'text-slate-400'}`}>{age.stuck ? 'Stuck · ' : ''}{age.label}</span>
+            {main?.phone && (
+              <span className="ml-auto flex items-center gap-0.5 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+                <a href={`tel:+${dialable(main.phone)}`} onClick={(e) => e.stopPropagation()} aria-label={`Call ${main.name}`} title="Call" className="p-1 rounded-md text-slate-500 hover:text-[#3D52A0] hover:bg-slate-100"><Phone className="w-3.5 h-3.5" /></a>
+                <a href={waLink(main.phone, templateText(l.firstTouchAt ? 'checkin' : 'intro', l, { me: d.me.name, studio: d.studioName }))} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} aria-label={`WhatsApp ${main.name}`} title="WhatsApp" className="p-1 rounded-md text-slate-500 hover:text-emerald-700 hover:bg-slate-100"><MessageCircle className="w-3.5 h-3.5" /></a>
+              </span>
+            )}
           </span>
-        </button>
+          <span className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-2">
+            <Dot tone={u.tone} live={u.tone === 'bad'} /><span className="text-xs font-semibold text-slate-700 flex-1 min-w-0 truncate">{u.label}</span>
+            <Avatar name={l.ownerName || l.ownerEmail} />
+          </span>
+        </div>
       </Tilt>
     </motion.div>
   );
@@ -223,15 +279,22 @@ function LeadList({ leads, onOpen }: { leads: Lead[]; onOpen: (id: string) => vo
   if (!leads.length) return <Empty icon={UserPlus} text="No leads here yet." />;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[620px] text-sm">
-        <thead><tr className={`${EYEBROW} text-left`}><th className="py-2 px-2">Lead</th><th className="px-2">Stage</th><th className="px-2">Source</th><th className="px-2">Owner</th><th className="px-2">Came in</th></tr></thead>
+      <table className="w-full min-w-[860px] text-sm">
+        <thead><tr className={`${EYEBROW} text-left`}><th className="py-2 px-2">Lead</th><th className="px-2">Heat</th><th className="px-2">Stage</th><th className="px-2">Next step</th><th className="px-2">Source</th><th className="px-2">Owner</th><th className="px-2">Came in</th></tr></thead>
         <motion.tbody variants={listV} initial="hidden" animate="show" className="divide-y divide-slate-100">
           {leads.map((l) => {
             const u = leadUrgency(l, d.now);
             return (
               <motion.tr variants={rowV} key={l.id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpen(l.id)}>
                 <td className="py-2.5 px-2"><span className="flex items-center gap-2"><Dot tone={u.tone} /><span><b className="font-semibold text-slate-800">{leadName(l)}</b><span className="block text-[11px] text-slate-500">{homeLine(l.home)}</span></span></span></td>
-                <td className="px-2">{l.stage === 'won' ? <Chip tone="emerald">Won</Chip> : l.stage === 'lost' ? <Chip>Lost{l.lostReason ? ` · ${l.lostReason}` : ''}</Chip> : <Chip tone="brand">{LEAD_STAGES.find((s) => s.id === l.stage)?.label}</Chip>}</td>
+                <td className="px-2"><HeatChip lead={l} /></td>
+                <td className="px-2 py-2 max-w-[240px]">
+                  {l.stage === 'won' ? <Chip tone="emerald">Won</Chip> : l.stage === 'lost' ? <Chip tone="rose">Lost · {l.lostReason || 'no reason given'}</Chip> : <Chip tone="brand">{LEAD_STAGES.find((s) => s.id === l.stage)?.label}</Chip>}
+                  {l.stage === 'lost' && l.lostNote && <span className="block text-[11px] text-slate-500 mt-0.5 line-clamp-2" title={l.lostNote}>{l.lostNote}</span>}
+                  {l.stage === 'lost' && l.revisitOn && <span className="block text-[11px] text-[#3D52A0] font-semibold mt-0.5">Try again {fmtDay(l.revisitOn)}</span>}
+                  {isOpen(l) && <span className="block text-[11px] text-slate-400 mt-0.5">{stageAge(l, d.now).label}</span>}
+                </td>
+                <td className="px-2 text-xs">{l.next && isOpen(l) ? <><span className="text-slate-700">{l.next.text}</span><span className={`block text-[11px] ${l.next.due < dayKey(d.now) ? 'text-rose-700 font-semibold' : 'text-slate-500'}`}>{fmtDay(l.next.due)}{l.next.due < dayKey(d.now) ? ' · overdue' : ''}</span></> : <span className="text-slate-400">—</span>}</td>
                 <td className="px-2 text-xs text-slate-600">{sourceLabel(l.source)}</td>
                 <td className="px-2 text-xs text-slate-600">{l.ownerName || l.ownerEmail}</td>
                 <td className="px-2 text-xs text-slate-500">{fmtWhen(l.createdAt)}</td>
@@ -512,6 +575,7 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
   const [guests, setGuests] = useState(mainPerson(l)?.email || '');
   useEffect(() => { setCalOn(booked ? true : next.mode === 'video'); }, [next.mode, !!booked]); // eslint-disable-line react-hooks/exhaustive-deps
   const [losing, setLosing] = useState(false);
+  const [editingLead, setEditingLead] = useState(false);
   /* Closing out a booked meeting: held, did not happen, or cancelled, with what came of it. */
   const [closing, setClosing] = useState<LeadMeetingStatus | null>(null);
   const [outcome, setOutcome] = useState('');
@@ -602,6 +666,7 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
           {main?.phone && <a href={`tel:+${dialable(main.phone)}`} className={`${btnPri} !py-1.5 !text-xs pp-press`} onClick={() => setTouchKind('call')}><Phone className="w-3.5 h-3.5" />Call</a>}
           {main?.phone && <a href={waLink(main.phone, `Hi ${main.name}, this is ${d.me.name} from ${d.studioName || 'the studio'}.`)} target="_blank" rel="noreferrer" className={`${btnSec} !py-1.5 !text-xs`} onClick={() => setTouchKind('whatsapp')}><MessageCircle className="w-3.5 h-3.5" />WhatsApp</a>}
           {canEdit && isOpen(l) && <button type="button" className={`${btnSec} !py-1.5 !text-xs`} onClick={() => { setNext({ text: 'Studio meeting', due: addDays(dayKey(d.now), 2), kind: 'meeting' }); setEditNext(true); }}><CalendarCheck className="w-3.5 h-3.5" />Book a meeting</button>}
+          {canEdit && <button type="button" className={`${btnSec} !py-1.5 !text-xs`} onClick={() => setEditingLead(true)}><Pencil className="w-3.5 h-3.5" />Edit</button>}
         </div>
       </motion.div>
 
@@ -621,16 +686,26 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
           );
         })}
         <span className="flex-1" />
-        {l.stage === 'lost' && <Chip>Lost{l.lostReason ? ` · ${l.lostReason}` : ''}</Chip>}
-        {canEdit && isOpen(l) && !losing && <button type="button" className={btnSm} onClick={() => setLosing(true)}><ThumbsDown className="w-3.5 h-3.5" />Mark as lost</button>}
-        {canEdit && l.stage === 'lost' && <button type="button" className={btnSm} onClick={() => commit(withTouch({ ...l, stage: 'talking', lostReason: null }, { kind: 'stage', text: 'Opened again' }, d.me))}>Open it again</button>}
-        {losing && (
-          <span className="inline-flex flex-wrap items-center gap-1.5">
-            {LOST_REASONS.map((r) => <button key={r} type="button" className={btnSm} onClick={() => { setLosing(false); commit(withTouch({ ...l, stage: 'lost', lostReason: r, next: null }, { kind: 'stage', text: `Lost: ${r}` }, d.me)); }}>{r}</button>)}
-            <button type="button" aria-label="Cancel" className="p-1 text-slate-400" onClick={() => setLosing(false)}><X className="w-4 h-4" /></button>
-          </span>
-        )}
+        {canEdit && isOpen(l) && <button type="button" className={btnSm} onClick={() => setLosing(true)}><ThumbsDown className="w-3.5 h-3.5" />Mark as lost</button>}
       </div>
+      {l.stage === 'lost' && (
+        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-rose-200 bg-rose-50/60 px-4 py-3 flex flex-wrap items-start gap-3">
+          <ThumbsDown className="w-4 h-4 text-rose-600 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-slate-800">Lost{l.lostReason ? `: ${l.lostReason}` : ', no reason given'}{l.closedAt ? <span className="font-semibold text-slate-500"> · {fmtDay(dayKey(l.closedAt))}</span> : null}</p>
+            {l.lostNote && <p className="text-xs text-slate-700 mt-0.5 whitespace-pre-wrap">{l.lostNote}</p>}
+            <p className="text-[11px] text-slate-500 mt-1">{l.revisitOn ? `Back on ${l.ownerName || 'the owner'}’s Today list on ${fmtDay(l.revisitOn)}, with a message ready.` : 'No day set to try again.'}</p>
+          </div>
+          {canEdit && (
+            <span className="flex flex-wrap gap-2">
+              <button type="button" className={btnSm} onClick={() => setLosing(true)}><Pencil className="w-3.5 h-3.5" />{l.lostReason ? 'Change the reason' : 'Add the reason'}</button>
+              <button type="button" className={btnSm} disabled={busy} onClick={() => commit(reopenLead(l, d.me, Date.now()))}><RotateCcw className="w-3.5 h-3.5" />Open it again</button>
+            </span>
+          )}
+        </motion.div>
+      )}
+      {losing && <LostSheet lead={l} onClose={() => setLosing(false)} onSave={async (reason, note, revisitOn) => { onSaved(await saveLead(loseLead(l, reason, note, revisitOn, d.me, Date.now()), d.me.email)); setLosing(false); }} />}
+      {editingLead && <EditLeadSheet lead={l} onClose={() => setEditingLead(false)} onSaved={(x) => { onSaved(x); setEditingLead(false); }} />}
       {error && <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1fr_1fr_340px] gap-5 items-start">
@@ -696,6 +771,18 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
         </Panel>
 
         <div className="flex flex-col gap-5">
+          <SmartPanel lead={l} canEdit={canEdit}
+            onSent={(label) => commit(withTouch(l, { kind: 'whatsapp', text: `Sent: ${label}` }, d.me))}
+            onAct={(s) => {
+              if (s.action === 'call') return setTouchKind('call');
+              if (s.action === 'book' || s.action === 'measure') {
+                setNext({ text: s.action === 'book' ? 'Studio meeting' : 'Site measurement', due: addDays(dayKey(d.now), s.action === 'book' ? 2 : 3), kind: 'meeting' });
+                return setEditNext(true);
+              }
+              if (s.action === 'ask' && s.ask) { setEditing(s.ask); return setEditVal(''); }
+              if (s.action === 'open') return onOpenProject(l);
+              if (s.action === 'next') { setNext(l.next || { text: '', due: addDays(dayKey(d.now), 1), kind: 'call' }); setEditNext(true); }
+            }} />
           <Panel icon={Target} title="Next step" blurb="Shows on your Today list">
             {editNext || !l.next ? (
               canEdit && isOpen(l) ? (

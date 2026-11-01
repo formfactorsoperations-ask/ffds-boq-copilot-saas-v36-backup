@@ -53,6 +53,10 @@ function normalise(id: string, d: any): Lead {
       id: String(n.id), at: Number(n.at) || 0, by: String(n.by || ''), byName: String(n.byName || ''), text: clip(n.text, 1500), pinned: !!n.pinned, editedAt: n.editedAt ?? null,
     })) as LeadNote[],
     meetings: (Array.isArray(d?.meetings) ? d.meetings : []) as LeadMeetingLog[],
+    label: d?.label ? clip(d.label, 80) : null,
+    lostNote: d?.lostNote ? clip(d.lostNote, 500) : null,
+    revisitOn: /^\d{4}-\d{2}-\d{2}$/.test(String(d?.revisitOn || '')) ? String(d.revisitOn) : null,
+    closedAt: Number(d?.closedAt) || null,
     firstTouchAt: d?.firstTouchAt ?? null,
     lastTouchAt: d?.lastTouchAt ?? null,
     openRequest: d?.openRequest || null,
@@ -86,6 +90,10 @@ const stored = (l: Lead) => {
   };
   if (!out.notes.length) delete (out as any).notes;
   if (!out.meetings.length) delete (out as any).meetings;
+  /* The same for the name the studio gave it and how it closed (firestore.rules: absent, or the right type). */
+  for (const k of ['label', 'lostNote', 'revisitOn', 'closedAt'] as const) {
+    if ((out as any)[k] == null || (out as any)[k] === '') delete (out as any)[k];
+  }
   return out;
 };
 

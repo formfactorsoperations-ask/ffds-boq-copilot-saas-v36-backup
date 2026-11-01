@@ -284,6 +284,11 @@ of Client Relations people, not one (mockups OD1 to OD7 and L1 to L4, approved
   stage with a mouse, trackpad or pen: it lifts and tilts, the column under it
   lights up with "Drop here". On touch screens the stage is changed on the
   lead's page, so dragging never fights the page's scroll.
+- Leads also has Won and Lost lanes under the board that a card can be dropped
+  on (Lost opens the reason sheet with `phd-scrim` and `phd-pop`). The calendar
+  view turns in depth between months, and a next step can be dragged to another day the
+  same way a card is dragged. Insight bars grow from the left and counts use
+  `CountUp`. Heat chips use the existing rose, amber and slate tones.
 - The public enquiry form (`EnquiryPage.tsx`, `?enquire=`) is one glass card
   in the same type and colours, with the studio's logo, rows that rise in, and
   the done tick and confetti once sent.
