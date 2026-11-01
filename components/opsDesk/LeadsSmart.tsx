@@ -2,17 +2,17 @@ import React, { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Flame, Snowflake, Thermometer, ThumbsDown, Check, X, ChevronLeft, ChevronRight, Phone, MessageCircle, CalendarCheck, Lock, Lightbulb,
-  RotateCcw, Copy, Trophy, Plus, Trash2, BarChart3, Send,
+  RotateCcw, Copy, Trophy, Plus, Trash2, BarChart3, Send, Ruler, FileText, Hourglass,
 } from '@/lib/lucide-shim';
 import { Glide, IconTile, Tilt, listV, rowV } from '../people/PeopleBits';
 import { CountUp } from '../ui/HudBits';
 import { addDays, dayKey } from '../../lib/opsDesk';
 import {
-  LEAD_SOURCES, LOST_REASONS, SCOPES, blankPerson, homeLine, leadName, mainPerson, sourceLabel,
+  BOARD_STAGES, LEAD_SOURCES, LEAD_STAGES, LOST_REASONS, SCOPES, blankPerson, homeLine, isOpen, leadName, mainPerson, sourceLabel,
   type Lead, type LeadPerson, type LeadSource,
 } from '../../lib/leads';
 import {
-  HEAT_LABEL, TEMPLATES, firstNameOf, calendarItems, leadHeat, leadInsights, monthGrid, moveCalItem, nextBestAction, shiftMonth, templateText,
+  HEAT_LABEL, TEMPLATES, firstNameOf, calendarItems, stageAge, leadHeat, leadInsights, monthGrid, moveCalItem, nextBestAction, shiftMonth, templateText,
   type CalItem, type Suggestion, type TemplateId,
 } from '../../lib/leadSmart';
 import { saveLead, withTouch } from '../../services/leadsService';
@@ -177,48 +177,165 @@ export function EditLeadSheet({ lead: l, onClose, onSaved }: { lead: Lead; onClo
 
 /* ── Won and lost, under the board ───────────────────────────────────────── */
 
-/** The leads closed lately, each side a place to drop a card: on Won to open the project, on Lost to say why. */
-export function ClosedLanes({ leads, over, dragging, onOpen }: { leads: Lead[]; over: string | null; dragging: boolean; onOpen: (id: string) => void }) {
+/* ── Where every lead stands: the strip over the board ──────────────────── */
+
+const STRIP_ICON: Record<string, React.ComponentType<any>> = { new: Plus, talking: Phone, meeting: CalendarCheck, measured: Ruler, proposal: FileText, won: Trophy, lost: ThumbsDown };
+
+/**
+ * The pipeline in one row, from New to Won, with Lost apart: how many are in
+ * each stage and how many are stuck. A segment scrolls its column into view,
+ * and takes a dragged card like the column does.
+ */
+export function PipelineStrip({ leads, over, dragging, onPick }: { leads: Lead[]; over: string | null; dragging: boolean; onPick: (stage: string) => void }) {
   const d = useDesk();
   const since = d.now - 60 * 86400000;
-  const recent = (s: 'won' | 'lost') => leads.filter((l) => l.stage === s && (l.closedAt ?? l.updatedAt) >= since).sort((a, b) => (b.closedAt ?? b.updatedAt) - (a.closedAt ?? a.updatedAt));
-  const older = (s: 'won' | 'lost') => leads.filter((l) => l.stage === s).length - recent(s).length;
-  const lane = (s: 'won' | 'lost') => {
-    const list = recent(s);
-    const hot = dragging && over === s;
-    const Icon = s === 'won' ? Trophy : ThumbsDown;
-    return (
-      <motion.div key={s} data-stage={s} animate={{ scale: hot ? 1.01 : 1 }}
-        className={`rounded-2xl border p-3 min-w-0 transition-colors ${hot ? (s === 'won' ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-200' : 'bg-rose-50 border-rose-300 ring-2 ring-rose-200') : dragging ? 'bg-white border-dashed border-slate-300' : 'bg-white border-slate-200'}`}>
-        <p className="flex items-center gap-2 pb-2 text-sm font-bold text-slate-800">
-          <Icon className={`w-4 h-4 ${s === 'won' ? 'text-emerald-600' : 'text-slate-400'}`} />{s === 'won' ? 'Won' : 'Lost'}
-          <span className="text-[11px] font-semibold text-slate-500">last 60 days</span>
-          <span className="ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 tabular-nums">{list.length}</span>
-        </p>
-        {dragging && <p className="text-xs font-bold text-center py-2 rounded-xl border-2 border-dashed mb-2 text-slate-500 border-slate-300">{s === 'won' ? 'Drop here to open the project' : 'Drop here to mark it lost'}</p>}
-        {!list.length ? <p className="text-xs text-slate-500">{s === 'won' ? 'None yet. A lead is won when its project is opened.' : 'None lost lately.'}</p> : (
-          <motion.ul variants={listV} initial="hidden" animate="show" className="flex flex-col divide-y divide-slate-100">
-            {list.slice(0, 6).map((l) => (
-              <motion.li variants={rowV} key={l.id}>
-                <button type="button" onClick={() => onOpen(l.id)} className="w-full text-left py-2 flex items-start gap-2 hover:bg-slate-50 rounded-lg px-1">
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-sm font-semibold text-slate-800 truncate">{leadName(l)}</span>
-                    <span className="block text-[11px] text-slate-500 truncate">
-                      {s === 'won' ? `${homeLine(l.home) || sourceLabel(l.source)}${l.projectId ? ' · project open' : ''}` : `${l.lostReason || 'No reason given'}${l.lostNote ? ` · ${l.lostNote}` : ''}`}
-                    </span>
-                  </span>
-                  <span className="text-[11px] text-slate-500 shrink-0">{fmtDay(dayKey(l.closedAt ?? l.updatedAt))}</span>
-                  {s === 'lost' && l.revisitOn && <span title={`Try again ${l.revisitOn}`}><Chip tone="brand"><RotateCcw className="w-3 h-3" />{fmtDay(l.revisitOn)}</Chip></span>}
+  const segs = [...BOARD_STAGES, 'won' as const].map((st, i) => {
+    const here = st === 'won'
+      ? leads.filter((l) => (l.stage === 'won' && (l.closedAt ?? l.updatedAt) >= since) || (isOpen(l) && l.openRequest && !l.projectId)).length
+      : leads.filter((l) => l.stage === st && !(l.openRequest && !l.projectId)).length;
+    const stuck = st === 'won' ? 0 : leads.filter((l) => l.stage === st && stageAge(l, d.now).stuck).length;
+    return { st, i, here, stuck, label: st === 'won' ? 'Won' : LEAD_STAGES.find((s) => s.id === st)?.label || st };
+  });
+  const lost = leads.filter((l) => l.stage === 'lost' && (l.closedAt ?? l.updatedAt) >= since).length;
+  const last = segs.length - 1;
+  return (
+    <div className="flex items-stretch gap-2">
+      <div className="flex-1 min-w-0 flex items-stretch">
+        {segs.map(({ st, i, here, stuck, label }) => {
+          const Icon = STRIP_ICON[st];
+          const won = st === 'won';
+          const hot = dragging && over === st;
+          const clip = i === 0 ? 'polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%)'
+            : i === last ? 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 12px 50%)'
+            : 'polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%, 12px 50%)';
+          return (
+            <motion.button key={st} type="button" data-stage={st} onClick={() => onPick(st)} title={`${label}: ${here}${stuck ? `, ${stuck} stuck` : ''}`}
+              initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0, scale: hot ? 1.04 : 1 }} transition={{ delay: dragging ? 0 : i * 0.05 }} whileHover={{ y: -2 }}
+              style={{ clipPath: clip, marginLeft: i === 0 ? 0 : -6, zIndex: hot ? 2 : 1 }}
+              className={`relative flex-1 min-w-0 flex items-center justify-center gap-1.5 py-2.5 ${i === 0 ? 'pl-3 pr-4' : 'pl-5 pr-4'} transition-colors ${
+                hot ? (won ? 'bg-emerald-500 text-white' : 'bg-[#3D52A0] text-white')
+                  : won ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                  : 'bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/20'}`}>
+              <Icon className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden lg:inline text-[11px] font-bold truncate">{label}</span>
+              <span className="text-sm font-black tabular-nums"><CountUp value={here} /></span>
+              {stuck > 0 && !hot && <span title={`${stuck} stuck`} className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
+            </motion.button>
+          );
+        })}
+      </div>
+      <motion.button type="button" data-stage="lost" onClick={() => onPick('lost')} title={`Lost in the last 60 days: ${lost}`}
+        initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0, scale: dragging && over === 'lost' ? 1.04 : 1 }} whileHover={{ y: -2 }}
+        className={`shrink-0 rounded-xl px-3 flex items-center gap-1.5 transition-colors ${dragging && over === 'lost' ? 'bg-rose-500 text-white' : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'}`}>
+        <ThumbsDown className="w-3.5 h-3.5" /><span className="hidden lg:inline text-[11px] font-bold">Lost</span><span className="text-sm font-black tabular-nums"><CountUp value={lost} /></span>
+      </motion.button>
+    </div>
+  );
+}
+
+/* ── Won: the last column ────────────────────────────────────────────────── */
+
+/**
+ * A lead is won when its project opens. The column holds the leads whose
+ * client said yes and are waiting for a lead to open the project, then those
+ * won in the last 60 days. Dropping a card here is "Mark as won".
+ */
+export function WonColumn({ leads, over, dragging, opener, onOpen, onConvert }: {
+  leads: Lead[]; over: string | null; dragging: boolean; opener: string; onOpen: (id: string) => void; onConvert: (l: Lead) => void;
+}) {
+  const d = useDesk();
+  const since = d.now - 60 * 86400000;
+  const waiting = leads.filter((l) => isOpen(l) && l.openRequest && !l.projectId).sort((a, b) => a.openRequest!.at - b.openRequest!.at);
+  const won = leads.filter((l) => l.stage === 'won' && (l.closedAt ?? l.updatedAt) >= since).sort((a, b) => (b.closedAt ?? b.updatedAt) - (a.closedAt ?? a.updatedAt));
+  const older = leads.filter((l) => l.stage === 'won').length - won.length;
+  const hot = dragging && over === 'won';
+  return (
+    <motion.div id="lead-col-won" data-stage="won" initial={{ opacity: 0, y: 20, rotateY: -12 }} animate={{ opacity: 1, y: 0, rotateY: 0, scale: hot ? 1.015 : 1 }}
+      transition={{ delay: dragging ? 0 : 0.3, duration: dragging ? 0.2 : 0.45 }} style={{ transformPerspective: 1000 }}
+      className={`rounded-2xl border min-w-0 flex flex-col overflow-hidden transition-colors ${hot ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-200' : 'bg-emerald-50/50 border-emerald-200'}`}>
+      <span className="h-1 bg-emerald-500" aria-hidden />
+      <div className="px-3 pt-2.5 pb-2 flex items-center gap-2">
+        <div className="min-w-0 flex-1"><p className="text-sm font-bold text-slate-800 truncate inline-flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5 text-emerald-600" />Won</p><p className="text-[10px] text-slate-500 truncate">When the project opens</p></div>
+        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-white text-emerald-700 tabular-nums border border-emerald-200">{waiting.length + won.length}</span>
+      </div>
+      <div className="px-2 pb-2 flex flex-col gap-2 min-h-[96px]">
+        {hot && <p className="rounded-xl border-2 border-dashed border-emerald-400 text-xs font-bold text-emerald-700 text-center py-3">{d.isLead ? 'Drop to open the project' : `Drop to ask ${opener} to open it`}</p>}
+        {waiting.length > 0 && <p className={`${EYEBROW} px-1 pt-1`}>Said yes · {d.isLead ? 'open the project' : `waiting for ${opener}`}</p>}
+        <motion.div variants={listV} initial="hidden" animate="show" className="flex flex-col gap-2">
+          {waiting.map((l) => (
+            <motion.div variants={rowV} key={l.id}>
+              <Tilt max={6} className="rounded-xl">
+                <div className="rounded-xl bg-white border border-amber-200 shadow-sm p-2.5">
+                  <button type="button" onClick={() => onOpen(l.id)} className="w-full text-left">
+                    <span className="block text-sm font-bold text-slate-800 truncate">{leadName(l)}</span>
+                    <span className="block text-[11px] text-slate-500 truncate">{homeLine(l.home) || sourceLabel(l.source)}</span>
+                  </button>
+                  <span className="mt-1.5 flex items-center gap-1.5 text-[11px] font-bold text-amber-700"><Hourglass className="w-3 h-3" />Asked {fmtDay(dayKey(l.openRequest!.at))}</span>
+                  {d.isLead && <button type="button" onClick={() => onConvert(l)} className={`${btnPri} !py-1 !text-xs w-full justify-center mt-2 pp-press`}><Trophy className="w-3.5 h-3.5" />Open project</button>}
+                </div>
+              </Tilt>
+            </motion.div>
+          ))}
+          {won.map((l) => (
+            <motion.div variants={rowV} key={l.id}>
+              <Tilt max={6} className="rounded-xl">
+                <button type="button" onClick={() => onOpen(l.id)} className="w-full text-left rounded-xl bg-white border border-emerald-200 shadow-sm p-2.5 hover:border-emerald-400 transition-colors">
+                  <span className="flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5 text-emerald-600 shrink-0" /><span className="text-sm font-bold text-slate-800 truncate">{leadName(l)}</span></span>
+                  <span className="block text-[11px] text-slate-500 truncate mt-0.5">{homeLine(l.home) || sourceLabel(l.source)}</span>
+                  <span className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-700 font-bold"><Check className="w-3 h-3" />Project open · {fmtDay(dayKey(l.closedAt ?? l.updatedAt))}</span>
                 </button>
-              </motion.li>
-            ))}
-          </motion.ul>
+              </Tilt>
+            </motion.div>
+          ))}
+        </motion.div>
+        {!waiting.length && !won.length && !hot && (
+          <div className="flex-1 rounded-xl border-2 border-dashed border-emerald-200 grid place-items-center text-center px-3 py-4">
+            <p className="text-[11px] text-slate-500"><Trophy className="w-4 h-4 text-emerald-400 mx-auto mb-1" />Drag a lead here when the client says yes.</p>
+          </div>
         )}
-        {(list.length > 6 || older(s) > 0) && <p className="text-[11px] text-slate-500 mt-1">{list.length > 6 ? `${list.length - 6} more` : ''}{list.length > 6 && older(s) > 0 ? ', ' : ''}{older(s) > 0 ? `${older(s)} older` : ''} in the list view.</p>}
-      </motion.div>
-    );
-  };
-  return <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{lane('won')}{lane('lost')}</div>;
+        {older > 0 && <p className="text-[11px] text-slate-500 px-1">{older} won earlier, in the list</p>}
+      </div>
+    </motion.div>
+  );
+}
+
+/* ── Lost: the lane under the board ──────────────────────────────────────── */
+
+/** Lost in the last 60 days, with the reason, the note and when to try again. A card dropped here asks why. */
+export function LostLane({ leads, over, dragging, onOpen }: { leads: Lead[]; over: string | null; dragging: boolean; onOpen: (id: string) => void }) {
+  const d = useDesk();
+  const since = d.now - 60 * 86400000;
+  const list = leads.filter((l) => l.stage === 'lost' && (l.closedAt ?? l.updatedAt) >= since).sort((a, b) => (b.closedAt ?? b.updatedAt) - (a.closedAt ?? a.updatedAt));
+  const older = leads.filter((l) => l.stage === 'lost').length - list.length;
+  const hot = dragging && over === 'lost';
+  return (
+    <motion.div id="lead-col-lost" data-stage="lost" animate={{ scale: hot ? 1.01 : 1 }}
+      className={`rounded-2xl border p-3 min-w-0 transition-colors ${hot ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-200' : dragging ? 'bg-white border-dashed border-rose-300' : 'bg-white border-slate-200'}`}>
+      <p className="flex items-center gap-2 pb-2 text-sm font-bold text-slate-800">
+        <IconTile icon={ThumbsDown} tone="bad" size="sm" />Lost
+        <span className="text-[11px] font-semibold text-slate-500">last 60 days</span>
+        <span className="ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 tabular-nums">{list.length}</span>
+      </p>
+      {dragging && <p className="text-xs font-bold text-center py-2 rounded-xl border-2 border-dashed mb-2 text-rose-700 border-rose-300">Drop here to mark it lost</p>}
+      {!list.length ? <p className="text-xs text-slate-500">None lost lately.</p> : (
+        <motion.ul variants={listV} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+          {list.slice(0, 8).map((l) => (
+            <motion.li variants={rowV} key={l.id} className="border-t border-slate-100">
+              <button type="button" onClick={() => onOpen(l.id)} className="w-full text-left py-2 flex items-start gap-2 hover:bg-slate-50 rounded-lg px-1">
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-semibold text-slate-800 truncate">{leadName(l)}</span>
+                  <span className="block text-[11px] text-slate-500 truncate">{l.lostReason || 'No reason given'}{l.lostNote ? ` · ${l.lostNote}` : ''}</span>
+                </span>
+                <span className="text-[11px] text-slate-500 shrink-0">{fmtDay(dayKey(l.closedAt ?? l.updatedAt))}</span>
+                {l.revisitOn && <span title={`Try again ${l.revisitOn}`}><Chip tone="brand"><RotateCcw className="w-3 h-3" />{fmtDay(l.revisitOn)}</Chip></span>}
+              </button>
+            </motion.li>
+          ))}
+        </motion.ul>
+      )}
+      {(list.length > 8 || older > 0) && <p className="text-[11px] text-slate-500 mt-1">{list.length > 8 ? `${list.length - 8} more` : ''}{list.length > 8 && older > 0 ? ', ' : ''}{older > 0 ? `${older} older` : ''} in the list view.</p>}
+    </motion.div>
+  );
 }
 
 /* ── The calendar ────────────────────────────────────────────────────────── */

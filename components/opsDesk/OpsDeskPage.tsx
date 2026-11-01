@@ -466,8 +466,12 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
 
         <div className="min-w-0" style={{ perspective: 1600 }}>
           {error && <p className="mb-4 text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
-          <AnimatePresence mode="wait">
-          <motion.div key={section === 'leads' ? `leads:${leadOpen || ''}` : section} variants={still ? undefined : deskSectionV} initial={still ? false : 'hidden'} animate="show" exit="exit"
+          {/*
+            A section turns in when it changes. No exit is waited on: a swap that waits
+            for the old section to finish leaving can be left waiting (framer-motion 11
+            with React 19), and the screen then stays empty with no error.
+          */}
+          <motion.div key={section === 'leads' ? `leads:${leadOpen || ''}` : section} variants={still ? undefined : deskSectionV} initial={still ? false : 'hidden'} animate="show"
             className="flex flex-col gap-6 min-w-0" style={{ transformOrigin: '50% 0%' }}>
 
           {section === 'today' && <TodayView />}
@@ -478,7 +482,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
               onDelete={async (l) => { try { await deleteLead(l.id); setLeads((ls) => ls.filter((x) => x.id !== l.id)); setLeadOpen(null); } catch { setError('The lead was not deleted. Try again.'); } }}
               onOpenProject={setConverting} />
           ) : (
-            <LeadsBoard onOpen={setLeadOpen} onAdd={() => setAdding({ paste: false })} onPaste={() => setAdding({ paste: true })} onMoved={replaceLead} onConvert={setConverting} />
+            <LeadsBoard opener={opener} onOpen={setLeadOpen} onAdd={() => setAdding({ paste: false })} onPaste={() => setAdding({ paste: true })} onMoved={replaceLead} onConvert={setConverting} />
           ))}
 
           {section === 'team' && isLead && (
@@ -703,7 +707,6 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
             </Panel>
           )}
           </motion.div>
-          </AnimatePresence>
         </div>
       </div>
       )}
@@ -773,7 +776,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
       {converting && (
         <OpenProjectSheet lead={converting} opener={opener} onClose={() => setConverting(null)}
           onAsk={async () => {
-            const l = withTouch({ ...converting, openRequest: { at: Date.now(), by: myEmail, byName: me.name } }, { kind: 'stage', text: `Asked ${opener} to open the project` }, me);
+            const l = withTouch({ ...converting, openRequest: { at: Date.now(), by: myEmail, byName: me.name } }, { kind: 'stage', text: `Client said yes. Asked ${opener} to open the project` }, me);
             replaceLead(await saveLead(l, myEmail));
             setConverting(null);
             setNotice(`${opener} has it on their desk. The project comes back to you, assigned to you, once it is open.`);
