@@ -256,7 +256,7 @@ const LeadCard: React.FC<{
           <span className="block text-[11px] text-slate-500 truncate">{sourceLabel(l.source)}{l.sourceNote ? ` · ${l.sourceNote}` : ''}</span>
           <span className="mt-1.5 flex items-center gap-1.5">
             <HeatChip lead={l} />
-            <span title="Days in this stage" className={`min-w-0 truncate text-[10px] font-bold tabular-nums ${age.stuck ? 'text-amber-700' : 'text-slate-400'}`}>{age.stuck ? 'Stuck · ' : ''}{age.label}</span>
+            <span title="Days in this stage" className={`min-w-0 truncate inline-flex items-center gap-0.5 text-[10px] font-bold tabular-nums ${age.stuck ? 'text-amber-700' : 'text-slate-400'}`}><Hourglass className="w-3 h-3 shrink-0" />{age.stuck ? 'Stuck · ' : ''}{age.days === 0 ? 'Today' : `${age.days} d`}</span>
             {main?.phone && (
               <span className="ml-auto flex items-center gap-0.5 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
                 <a href={`tel:+${dialable(main.phone)}`} onClick={(e) => e.stopPropagation()} aria-label={`Call ${main.name}`} title="Call" className="p-1 rounded-md text-slate-500 hover:text-[#3D52A0] hover:bg-slate-100"><Phone className="w-3.5 h-3.5" /></a>
