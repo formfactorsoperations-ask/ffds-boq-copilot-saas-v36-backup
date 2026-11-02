@@ -779,38 +779,37 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
     const netTaxableValue = taxableExecution + taxableDesign;
     const totalProposedInvestment = finalDesignTotal + finalExecutionTotal;
 
-    // Calculate all-inclusive total investment for each tier for accurate min/max ranges
-    const tierInvestments = useMemo(() => {
-        if (!tiers || tiers.length === 0) return [totalProposedInvestment];
+    /*
+      Each option's value, before GST and with it, for the headline range.
+
+      The Investment page leads with the value before GST (the studio asked for
+      it: clients compare quotes ex-GST), so the range is worked out both ways.
+    */
+    const tierValues = useMemo(() => {
+        if (!tiers || tiers.length === 0) return [{ net: netTaxableValue, total: totalProposedInvestment }];
         return tiers.map(t => {
             const baseExec = t.summary?.totalSell || 0;
             const baseDes = t.summary?.designFee || 0;
-            
+
             const execSavings = discounts
                 .filter(d => d.target === 'execution')
                 .reduce((sum, d) => sum + (d.type === 'percentage' ? baseExec * (d.value / 100) : d.value), 0);
             const desSavings = discounts
                 .filter(d => d.target === 'design')
                 .reduce((sum, d) => sum + (d.type === 'percentage' ? baseDes * (d.value / 100) : d.value), 0);
-                
+
             const taxExec = Math.max(0, baseExec - execSavings);
             const taxDes = Math.max(0, baseDes - desSavings);
-            
+
             const g = gstOn(taxExec, taxDes, gstTerms);
-            
-            return taxExec + taxDes + g.design + g.execution;
+
+            return { net: taxExec + taxDes, total: taxExec + taxDes + g.design + g.execution };
         });
-    }, [tiers, discounts, gstTerms.rate, gstTerms.billablePercent, gstTerms.executionGst, gstTerms.designGst, totalProposedInvestment]);
+    }, [tiers, discounts, gstTerms.rate, gstTerms.billablePercent, gstTerms.executionGst, gstTerms.designGst, netTaxableValue, totalProposedInvestment]);
 
-    const investmentMin = useMemo(() => {
-        if (tierInvestments.length === 0) return totalProposedInvestment;
-        return Math.min(...tierInvestments);
-    }, [tierInvestments, totalProposedInvestment]);
-
-    const investmentMax = useMemo(() => {
-        if (tierInvestments.length === 0) return totalProposedInvestment;
-        return Math.max(...tierInvestments);
-    }, [tierInvestments, totalProposedInvestment]);
+    const netMin = Math.min(...tierValues.map(v => v.net));
+    const netMax = Math.max(...tierValues.map(v => v.net));
+    const totalGst = gstOnDesign + chargedGstOnExecution;
 
     // --- GROUP BOQ ITEMS ---
     const carpentryItems = useMemo(() => {
@@ -2005,11 +2004,18 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 my-auto items-stretch">
                     <div className="lg:col-span-5 bg-[#0F172A] text-white p-8 rounded-2xl flex flex-col justify-between shadow-xl">
                         <div>
-                            <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-bold"><Ed k="922c6988" ctl={edCtl}>TOTAL, ALL INCLUSIVE</Ed></span>
+                            {/* A new key: a saved "TOTAL, ALL INCLUSIVE" must not label an ex-GST figure. */}
+                            <span className="text-[10px] uppercase tracking-wider text-[#C5A880] font-bold"><Ed k="5e0c1a7d" ctl={edCtl}>TOTAL, EXCLUDING GST</Ed></span>
                             <div className="text-3xl md:text-4xl font-black mt-4 font-mono text-white">
-                                {isL2 || investmentMin === investmentMax ? formatINR(totalProposedInvestment) : `${formatINR(investmentMin)} - ${formatINR(investmentMax)}`}
+                                {isL2 || netMin === netMax ? formatINR(netTaxableValue) : `${formatINR(netMin)} - ${formatINR(netMax)}`}
                             </div>
-                            <span className="text-xs text-slate-400 mt-2 block">Inclusive of applicable GST at {gstRate}%</span>
+                            <span className="text-xs text-slate-400 mt-2 block">
+                                {isL2 || netMin === netMax
+                                    ? (totalGst > 0
+                                        ? <>Plus applicable GST of {formatINR(totalGst)} · {formatINR(totalProposedInvestment)} with GST</>
+                                        : <>No GST is charged on this proposal</>)
+                                    : <>Plus applicable GST at {gstRate}%</>}
+                            </span>
                         </div>
 
                         <div className="mt-8 pt-8 border-t border-slate-800 text-xs text-slate-300 leading-relaxed space-y-3">
