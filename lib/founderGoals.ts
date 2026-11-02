@@ -86,9 +86,31 @@ export interface FounderPlan {
   growth: number;
   /** Null: the recommended level. */
   tier: Tier | null;
+  /** Projects counted though not tagged Actual, by id. */
+  include: string[];
+  /** Projects tagged Actual that the founders left out, by id. */
+  exclude: string[];
+  /** The What if board: projects placed on the months they might sign (lib/whatIf). */
+  plays: Play[];
 }
 
-export const DEFAULT_PLAN: FounderPlan = { bands: null, funnel: null, studio: null, home: [], cash: null, cashAt: null, buffer: 6, rebuild: 4, growth: 15, tier: null };
+/** A card on the What if board: a proposal from the pipeline (its project id) or a new project of a size band (its index), signing in a month (YYYY-MM). */
+export interface Play { kind: 'pipe' | 'new'; ref: string; month: string }
+
+export const DEFAULT_PLAN: FounderPlan = { bands: null, funnel: null, studio: null, home: [], cash: null, cashAt: null, buffer: 6, rebuild: 4, growth: 15, tier: null, include: [], exclude: [], plays: [] };
+
+export type ProjectTag = 'actual' | 'test' | 'untagged';
+/** Counted: tagged Actual unless the founders left it out, or any other the founders ticked in. */
+export const isCounted = (id: string, tag: ProjectTag, plan: Pick<FounderPlan, 'include' | 'exclude'>) =>
+  plan.exclude.includes(id) ? false : plan.include.includes(id) ? true : tag === 'actual';
+/** Tick or untick one project, keeping only the choices that differ from its tag. */
+export function setCounted(plan: Pick<FounderPlan, 'include' | 'exclude'>, id: string, tag: ProjectTag, on: boolean) {
+  const include = plan.include.filter((x) => x !== id);
+  const exclude = plan.exclude.filter((x) => x !== id);
+  if (on && tag !== 'actual') include.push(id);
+  if (!on && tag === 'actual') exclude.push(id);
+  return { include, exclude };
+}
 
 const n = (v: unknown, lo = 0, hi = Infinity): number => {
   const x = Number(v);
@@ -120,8 +142,14 @@ export function planOf(raw: any): FounderPlan {
     rebuild: r.rebuild == null ? DEFAULT_PLAN.rebuild : Math.max(1, n(r.rebuild, 1, 20)),
     growth: r.growth == null ? DEFAULT_PLAN.growth : n(r.growth, 0, 200),
     tier: r.tier === 'survive' || r.tier === 'sustain' || r.tier === 'grow' ? r.tier : null,
+    include: ids(r.include),
+    exclude: ids(r.exclude),
+    plays: (Array.isArray(r.plays) ? r.plays : []).slice(0, 40)
+      .filter((x: any) => x && (x.kind === 'pipe' || x.kind === 'new') && /^\d{4}-\d{2}$/.test(String(x.month || '')) && String(x.ref ?? '') !== '')
+      .map((x: any) => ({ kind: x.kind, ref: String(x.ref).slice(0, 120), month: String(x.month) })),
   };
 }
+const ids = (v: unknown): string[] => [...new Set((Array.isArray(v) ? v : []).map((x) => String(x ?? '').slice(0, 120)).filter(Boolean))].slice(0, 500);
 
 /** What is written to Firestore: the clean plan, and who saved it when. */
 export function storedPlan(p: FounderPlan, by: string, at: number) {
@@ -275,7 +303,7 @@ export function appFunnel(leads: Lead[], facts: ProjectFact[], now: number): Lea
   const proposed = year.filter((l) => furthestStage(l) >= PROPOSAL);
   const decided = proposed.filter((l) => l.stage === 'won' || l.stage === 'lost');
   const byId = new Map(facts.map((f) => [f.id, f]));
-  const cycles = year.filter((l) => l.stage === 'won').map((l) => (((l.projectId ? byId.get(l.projectId)?.bookedAt : null) ?? l.updatedAt) - l.createdAt) / DAY).filter((d) => d >= 0);
+  const cycles = year.filter((l) => l.stage === 'won').map((l) => (((l.projectId ? byId.get(l.projectId)?.bookedAt : null) ?? l.closedAt ?? l.updatedAt) - l.createdAt) / DAY).filter((d) => d >= 0);
   const enough = year.length >= 5;
   const funnel: Funnel = {
     leads: round1(recent.length / 3),
@@ -314,7 +342,7 @@ export interface GoalsInput {
 }
 
 export interface RunPoint { at: number; none: number; pace: number; goal: number }
-export interface PipeRow { id: string; name: string; stage: string; value: number; count: number; odds: number; signsBy: number; land: number; weighted: number }
+export interface PipeRow { id: string; name: string; stage: string; value: number; margin: number; count: number; odds: number; signsBy: number; land: number; weighted: number }
 export interface Lever { title: string; worth: number; line: string }
 export interface Move { title: string; line: string; tone: Tone; tag: string }
 export interface QuarterRow extends Quarter { earned: number; expected: number; booked: number; signed: number; now: boolean; past: boolean }
@@ -457,14 +485,14 @@ export function goalsReport(i: GoalsInput) {
     const signsBy = now + signDays[x.status] * DAY;
     const odds = oddsOf(x.status);
     const land = landBy(value, margin, signsBy);
-    return { id: x.id, name: x.name, stage: PIPE_LABEL[x.status], value, count: 1, odds, signsBy, land, weighted: land * odds };
+    return { id: x.id, name: x.name, stage: PIPE_LABEL[x.status], value, margin, count: 1, odds, signsBy, land, weighted: land * odds };
   });
   const openLeads = (i.leads || []).filter((l) => !l.projectId && l.stage !== 'won' && l.stage !== 'lost' && furthestStage(l) >= MEETING);
   if (openLeads.length && avgValue > 0) {
     const signsBy = now + f.cycle / 2 * DAY;
     const odds = (f.prop / 100) * (f.win / 100);
     const land = landBy(avgValue, avgMargin, signsBy) * openLeads.length;
-    pipe.push({ id: 'leads', name: `${plural(openLeads.length, 'lead')} past a first meeting`, stage: 'Met, no proposal yet', value: avgValue, count: openLeads.length, odds, signsBy, land, weighted: land * odds });
+    pipe.push({ id: 'leads', name: `${plural(openLeads.length, 'lead')} past a first meeting`, stage: 'Met, no proposal yet', value: avgValue, margin: avgMargin, count: openLeads.length, odds, signsBy, land, weighted: land * odds });
   }
   pipe.sort((a, b) => b.weighted - a.weighted || b.value - a.value);
   const pipeWeighted = pipe.reduce((s, p) => s + p.weighted, 0);

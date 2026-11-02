@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Target, CheckSquare, Flag, LineChart, Layers, Users, Filter, Clock, SlidersHorizontal, CalendarDays, LayoutGrid, Wallet, ShieldCheck,
 } from '@/lib/lucide-shim';
 import { CountUp } from '../../ui/HudBits';
-import { inr } from '../../../lib/ownerReports';
+import { inr, type ProjectFact } from '../../../lib/ownerReports';
 import {
-  BANDS, TIERS, monthName, shortDate, type FounderPlan, type GoalsReport, type Tier, type Band, type CostLine, type Funnel,
+  BANDS, TIERS, monthName, shortDate, signedWork, landedIn, isCounted, setCounted,
+  type FounderPlan, type GoalsReport, type Tier, type Band, type CostLine, type Funnel, type ProjectTag,
 } from '../../../lib/founderGoals';
 import { Panel, Chip, Eyebrow, Track, Swatch, ActionRow, SmallButton, Empty, BRAND, TONE_HEX } from './ReportBits';
 import { NumInput } from './GoalsInputs';
@@ -19,6 +20,7 @@ import { NumInput } from './GoalsInputs';
 */
 
 const HOME = '#7C8BC9';
+type SetPlan = (p: Partial<FounderPlan> | ((p: FounderPlan) => Partial<FounderPlan>)) => void;
 const one = (v: number) => String(Math.round(v * 10) / 10);
 const plural = (k: number, a: string, b = `${a}s`) => `${k} ${k === 1 ? a : b}`;
 const pct = (a: number, b: number) => `${Math.max(0, Math.min(100, b > 0 ? (a / b) * 100 : 0))}%`;
@@ -456,12 +458,12 @@ function Levers({ r }: { r: GoalsReport }) {
 
 /* ── The year ───────────────────────────────────────────────────────────── */
 
-function Year({ r }: { r: GoalsReport }) {
+function Year({ r, picked, onPick }: { r: GoalsReport; picked: string; onPick: (q: string) => void }) {
   const top = Math.max(r.goal, ...r.quarters.map((x) => x.earned + x.expected)) * 1.15 || 1;
   const H = 160;
   const px = (v: number) => (v / top) * H;
   return (
-    <Panel icon={CalendarDays} lift={false} delay={360} title={`${r.fy.label}, quarter by quarter`} blurb={`Margin earned and still to land against each quarter's ${r.tierName} goal, with revenue booked under each.`}
+    <Panel icon={CalendarDays} lift={false} delay={360} title={`${r.fy.label}, quarter by quarter`} blurb={`Margin earned and still to land against each quarter's ${r.tierName} goal. Click a quarter to see the projects behind it.`}
       aside={(
         <div className="flex gap-6 text-right flex-wrap justify-end">
           <div><Eyebrow>Year's goal</Eyebrow><div className="mt-1.5 text-2xl font-black text-slate-800 tabular-nums">{money(r.fyGoal)}</div><div className="text-[11px] text-slate-500">4 × {money(r.goal)}</div></div>
@@ -470,30 +472,31 @@ function Year({ r }: { r: GoalsReport }) {
             <div className="text-[11px] text-slate-500">{r.fyLeft > 0 && r.avgMargin ? `About ${Math.ceil(r.fyLeft / r.avgMargin)} typical projects${r.lastStart > r.now ? `, signed by ${shortDate(r.lastStart)}` : ''}` : 'Covered'}</div></div>
         </div>
       )}>
-      <div className="relative flex gap-4 sm:gap-7 items-end px-2 sm:px-6 border-b border-slate-100" style={{ height: H + 28 }}>
-        <div className="absolute left-0 right-0 border-t-[1.5px] border-dashed pointer-events-none" style={{ bottom: px(r.goal), borderColor: BRAND }} />
-        {r.qCosts < r.goal && <div className="absolute left-0 right-0 border-t-[1.5px] border-dashed border-slate-400 pointer-events-none" style={{ bottom: px(r.qCosts) }} />}
-        {r.quarters.map((x, k) => (
-          <div key={x.label} className="flex-1 min-w-0 flex flex-col items-center justify-end gap-1 h-full">
-            <span className={`text-xs font-bold tabular-nums ${x.now ? 'text-slate-800' : 'text-slate-500'}`}>{money(x.earned + x.expected)}</span>
-            <div className="w-full max-w-[72px] flex flex-col justify-end">
-              {x.expected > 0 && <div className="rp-bar rounded-t-md" style={{ height: px(x.expected), background: 'rgba(5,150,105,0.3)', animationDelay: `${400 + k * 60}ms` }} />}
-              {x.earned > 0 && <div className={`rp-bar ${x.expected > 0 ? '' : 'rounded-t-md'}`} style={{ height: px(x.earned), background: TONE_HEX.ok, animationDelay: `${400 + k * 60}ms` }} />}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="flex gap-4 sm:gap-7 px-2 sm:px-6 pt-2">
-        {r.quarters.map((x) => {
+      <div className="relative grid grid-cols-4 gap-2 sm:gap-4">
+        {/* The goal lines run across the bars only, not the labels under them. */}
+        <div className="absolute inset-x-0 top-0 pointer-events-none" style={{ height: H + 28 }}>
+          <div className="absolute left-0 right-0 border-t-[1.5px] border-dashed" style={{ bottom: px(r.goal), borderColor: BRAND }} />
+          {r.qCosts < r.goal && <div className="absolute left-0 right-0 border-t-[1.5px] border-dashed border-slate-400" style={{ bottom: px(r.qCosts) }} />}
+        </div>
+        {r.quarters.map((x, k) => {
           const total = x.earned + x.expected;
           const met = total >= r.goal, be = total >= r.qCosts;
           const tone = met ? 'ok' : be ? 'warn' : x.past ? 'bad' : x.now ? 'warn' : 'none';
+          const on = picked === x.label;
           return (
-            <div key={x.label} className="flex-1 min-w-0 text-center">
-              <div className={`text-xs font-bold ${x.now ? 'text-slate-800' : 'text-slate-500'}`}>{x.label} · {x.span}</div>
-              <div className="text-[11px] text-slate-500">{x.booked ? `${money(x.booked)} booked` : 'Nothing booked yet'} · {plural(x.signed, 'project')}</div>
-              <div className="mt-1"><Chip tone={tone as any}>{met ? 'Goal met' : be ? 'Broke even' : x.past ? 'Short' : x.now ? `${money(r.goal - total)} to find` : `${money(r.goal - total)} to win`}</Chip></div>
-            </div>
+            <button key={x.label} type="button" aria-pressed={on} onClick={() => onPick(on ? 'all' : x.label)}
+              className={`min-w-0 flex flex-col items-center rounded-xl border pb-3 transition-[border-color,box-shadow] ${on ? 'border-[#3D52A0] ring-[3px] ring-[#3D52A0]/10' : 'border-transparent hover:border-slate-200'}`}>
+              <span className="w-full flex flex-col items-center justify-end gap-1 border-b border-slate-100" style={{ height: H + 28 }}>
+                <span className={`text-xs font-bold tabular-nums ${x.now ? 'text-slate-800' : 'text-slate-500'}`}>{money(total)}</span>
+                <span className="w-full max-w-[72px] flex flex-col justify-end">
+                  {x.expected > 0 && <span className="block rp-bar rounded-t-md" style={{ height: px(x.expected), background: 'rgba(5,150,105,0.3)', animationDelay: `${400 + k * 60}ms` }} />}
+                  {x.earned > 0 && <span className={`block rp-bar ${x.expected > 0 ? '' : 'rounded-t-md'}`} style={{ height: px(x.earned), background: TONE_HEX.ok, animationDelay: `${400 + k * 60}ms` }} />}
+                </span>
+              </span>
+              <span className={`mt-2 text-xs font-bold ${x.now ? 'text-slate-800' : 'text-slate-500'}`}>{x.label} · {x.span}</span>
+              <span className="text-[11px] text-slate-500 px-1">{x.booked ? `${money(x.booked)} booked` : 'Nothing booked yet'} · {plural(x.signed, 'project')}</span>
+              <span className="mt-1"><Chip tone={tone as any}>{met ? 'Goal met' : be ? 'Broke even' : x.past ? 'Short' : x.now ? `${money(r.goal - total)} to find` : `${money(r.goal - total)} to win`}</Chip></span>
+            </button>
           );
         })}
       </div>
@@ -503,6 +506,123 @@ function Year({ r }: { r: GoalsReport }) {
         ...(r.qCosts < r.goal ? [{ color: '#94a3b8', label: `Break even ${money(r.qCosts)}`, dashed: true }] : []),
       ]} /></div>
     </Panel>
+  );
+}
+
+/* ── Which projects count ───────────────────────────────────────────────── */
+
+const STATUS_WORD: Record<string, string> = { won: 'Signed', execution: 'In execution', work_paused: 'Paused', completed: 'Handed over' };
+const TAG_CHIP: Record<ProjectTag, [string, 'ok' | 'warn' | 'none']> = { actual: ['Actual', 'ok'], untagged: ['Untagged', 'warn'], test: ['Dummy', 'none'] };
+
+function Counted({ r, facts, tags, plan, set, picked, onPick, onOpenProject }: {
+  r: GoalsReport;
+  facts: ProjectFact[];
+  tags: Map<string, ProjectTag>;
+  plan: FounderPlan;
+  set: SetPlan;
+  picked: string;
+  onPick: (q: string) => void;
+  onOpenProject: (id: string) => void;
+}) {
+  const q = r.quarter;
+  const work = signedWork(facts, r.bands);
+  const factOf = new Map(facts.map((f) => [f.id, f]));
+  const rows = work.map((w) => {
+    const tag = tags.get(w.id) || 'untagged';
+    const on = isCounted(w.id, tag, plan);
+    const quarter = r.quarters.find((x) => w.start >= x.start && w.start < x.end)?.label || '';
+    return { w, tag, on, quarter, lands: on ? landedIn([w], q.start, q.end) : 0, status: STATUS_WORD[factOf.get(w.id)?.status || ''] || 'Signed' };
+  }).sort((a, b) => b.w.start - a.w.start);
+  const shown = rows.filter((x) => picked === 'all' ? true : picked === 'out' ? !x.on : x.quarter === picked);
+  const counted = rows.filter((x) => x.on);
+  const inFy = counted.filter((x) => x.quarter);
+  const estimated = inFy.filter((x) => x.w.marginEstimated);
+  const toggle = (id: string, tag: ProjectTag, on: boolean) => set((p) => setCounted(p, id, tag, on));
+
+  const checks = [
+    ...counted.filter((x) => x.w.marginEstimated).map((x) => ({ id: x.w.id, tone: 'warn' as const, tag: 'Margin guessed', title: `${x.w.name}: no planned cost`, line: `Margin counted at the band's rate (${money(x.w.margin)}). Add the cost in its BOQ and the real figure replaces it.` })),
+    ...counted.filter((x) => x.w.runEstimated && x.w.end > r.now).map((x) => ({ id: x.w.id, tone: 'warn' as const, tag: 'Run guessed', title: `${x.w.name}: no handover date`, line: 'Its margin is spread over a typical run for its size. Set a target handover in the project and the spread follows it.' })),
+    ...rows.filter((x) => !x.on && x.tag === 'untagged').map((x) => ({ id: x.w.id, tone: 'brand' as const, tag: 'Not counted', title: `${x.w.name} is untagged`, line: `${money(x.w.value)} booked on ${shortDate(x.w.start)}. If it is real work, tag it Actual on its context card, or tick it here.` })),
+  ];
+
+  const filters = [
+    { id: 'all', label: `All signed (${rows.length})` },
+    ...r.quarters.map((x) => ({ id: x.label, label: `${x.label} booked (${rows.filter((y) => y.quarter === x.label).length})` })),
+    { id: 'out', label: `Left out (${rows.filter((x) => !x.on).length})` },
+  ];
+
+  return (
+    <>
+      <Panel icon={CheckSquare} lift={false} delay={380} title="Projects behind these numbers"
+        blurb="Every signed project, and whether it is counted. Tick or untick one: every figure on this tab follows, for both founders."
+        aside={(plan.include.length > 0 || plan.exclude.length > 0) ? <SmallButton onClick={() => set({ include: [], exclude: [] })}>Count only projects tagged Actual</SmallButton> : undefined}
+        foot="Margin is the contract before GST less the planned cost in the project's BOQ; where there is none, the band's margin stands in. It lands evenly from the day the proposal was accepted to the handover. Ticking here never changes the project itself, or any other report.">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <Tile label="Counting" line={`${rows.length - counted.length} left out`}><Big v={counted.length} f={(v) => String(Math.round(v))} size="text-2xl" suffix={`of ${rows.length} signed`} /></Tile>
+          <Tile label={`Booked in ${r.fy.label}`} line="Counted projects, before GST"><Big v={inFy.reduce((s, x) => s + x.w.value, 0)} size="text-2xl" /></Tile>
+          <Tile label="Their margin" line={estimated.length ? `${money(estimated.reduce((s, x) => s + x.w.margin, 0))} of it estimated, on ${plural(estimated.length, 'project')}` : 'All from planned costs'}><Big v={inFy.reduce((s, x) => s + x.w.margin, 0)} size="text-2xl" /></Tile>
+          <Tile label={`Lands in ${q.label}`} line={`Of the ${money(r.goal)} goal`}><Big v={counted.reduce((s, x) => s + x.lands, 0)} size="text-2xl" color="text-emerald-700" /></Tile>
+        </div>
+        <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
+          <div role="group" aria-label="Show" className="inline-flex p-1 rounded-xl bg-slate-100 flex-wrap">
+            {filters.map((f) => (
+              <button key={f.id} type="button" aria-pressed={picked === f.id} onClick={() => onPick(f.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${picked === f.id ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>{f.label}</button>
+            ))}
+          </div>
+          <span className="text-[11px] text-slate-500">{picked === 'all' ? 'Every signed project' : picked === 'out' ? 'What is left out' : `Booked in ${picked}. Click the quarter again to see all.`}</span>
+        </div>
+        {shown.length === 0 ? <div className="mt-3"><Empty>Nothing here.</Empty></div> : (
+          <div className="mt-3 overflow-x-auto -mx-1">
+            <table className="w-full text-xs min-w-[860px]">
+              <thead><tr className="text-left">
+                {['Count', 'Project', 'Tag', 'Booked', 'Value', 'Margin', 'Runs', `Lands in ${q.label}`].map((h) => <th key={h} className="px-2 py-2 border-b border-slate-100"><Eyebrow>{h}</Eyebrow></th>)}
+              </tr></thead>
+              <tbody>
+                {shown.map((x, k) => (
+                  <tr key={x.w.id} className={`hud-row-in ${x.on ? '' : 'opacity-60'}`} style={{ animationDelay: `${Math.min(k, 12) * 25}ms` }}>
+                    <td className="px-2 py-2.5 border-b border-slate-100">
+                      <input type="checkbox" checked={x.on} onChange={(e) => toggle(x.w.id, x.tag, e.target.checked)} aria-label={`Count ${x.w.name}`}
+                        className="w-4 h-4 accent-[#3D52A0] cursor-pointer" />
+                    </td>
+                    <td className="px-2 py-2.5 border-b border-slate-100">
+                      <button type="button" onClick={() => onOpenProject(x.w.id)} className="font-semibold text-slate-800 hover:text-[#3D52A0] text-left">{x.w.name}</button>
+                      <div className="text-[11px] text-slate-500">{x.status}</div>
+                    </td>
+                    <td className="px-2 py-2.5 border-b border-slate-100">
+                      <Chip tone={TAG_CHIP[x.tag][1]}>{TAG_CHIP[x.tag][0]}</Chip>
+                      {x.on !== (x.tag === 'actual') && <div className="text-[11px] text-slate-500 mt-0.5">{x.on ? 'Counted by you' : 'Left out by you'}</div>}
+                    </td>
+                    <td className="px-2 py-2.5 border-b border-slate-100 text-slate-700 whitespace-nowrap">{shortDate(x.w.start)}</td>
+                    <td className="px-2 py-2.5 border-b border-slate-100 font-semibold text-slate-800 tabular-nums">{money(x.w.value)}</td>
+                    <td className="px-2 py-2.5 border-b border-slate-100">
+                      <span className="font-semibold text-slate-800 tabular-nums">{money(x.w.margin)}</span> <span className="text-[11px] text-slate-500">{Math.round((x.w.margin / x.w.value) * 100)}%</span>
+                      {x.w.marginEstimated && <div className="mt-0.5"><Chip tone="warn">Estimated: no planned cost</Chip></div>}
+                    </td>
+                    <td className="px-2 py-2.5 border-b border-slate-100 text-slate-700 whitespace-nowrap">
+                      {shortDate(x.w.start)} → {shortDate(x.w.end)}
+                      {x.w.runEstimated && <div className="mt-0.5"><Chip tone="warn">Estimated: no handover date</Chip></div>}
+                    </td>
+                    <td className="px-2 py-2.5 border-b border-slate-100 font-bold text-slate-800 tabular-nums">{x.on ? (x.lands > 0 ? money(x.lands) : '–') : <span className="font-normal text-slate-500">Not counted</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+      {checks.length > 0 && (
+        <Panel icon={ShieldCheck} lift={false} delay={400} title="Before you trust the numbers" blurb="What the app had to guess, and what would firm it up.">
+          <div className="-mt-2">
+            {checks.slice(0, 8).map((c, k) => (
+              <ActionRow key={`${c.id}-${c.tag}`} tone={c.tone === 'brand' ? 'none' : c.tone} title={c.title} detail={c.line} delay={k * 30} last={k === Math.min(checks.length, 8) - 1}
+                chip={<Chip tone={c.tone}>{c.tag}</Chip>} button={<SmallButton onClick={() => onOpenProject(c.id)}>Open</SmallButton>} />
+            ))}
+            {checks.length > 8 && <p className="text-[11px] text-slate-500 pt-2">And {checks.length - 8} more.</p>}
+          </div>
+        </Panel>
+      )}
+    </>
   );
 }
 
@@ -643,13 +763,22 @@ function FunnelEditor({ r, plan, set }: { r: GoalsReport; plan: FounderPlan; set
 
 /* ── The tab ────────────────────────────────────────────────────────────── */
 
-export default function FoundersGoals({ r, plan, set, onOpenProject, leadsRead }: {
+export default function FoundersGoals({ r, plan, set, onOpenProject, leadsRead, facts, tags }: {
   r: GoalsReport;
   plan: FounderPlan;
-  set: (p: Partial<FounderPlan>) => void;
+  set: SetPlan;
   onOpenProject: (id: string) => void;
   leadsRead: boolean;
+  /** Every project's facts and tag, for the list of what counts. */
+  facts: ProjectFact[];
+  tags: Map<string, ProjectTag>;
 }) {
+  const [picked, setPicked] = useState('all');
+  const listRef = useRef<HTMLDivElement>(null);
+  const pickQuarter = (q: string) => {
+    setPicked(q);
+    if (q !== 'all') listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   return (
     <div className="flex flex-col gap-4">
       <Hero r={r} />
@@ -667,7 +796,10 @@ export default function FoundersGoals({ r, plan, set, onOpenProject, leadsRead }
         <Pipeline r={r} onOpenProject={onOpenProject} />
         <Levers r={r} />
       </div>
-      <Year r={r} />
+      <Year r={r} picked={picked} onPick={pickQuarter} />
+      <div ref={listRef} className="flex flex-col gap-4 scroll-mt-4">
+        <Counted r={r} facts={facts} tags={tags} plan={plan} set={set} picked={picked} onPick={setPicked} onOpenProject={onOpenProject} />
+      </div>
 
       <div className="mt-4 flex items-end justify-between gap-4 flex-wrap">
         <div>

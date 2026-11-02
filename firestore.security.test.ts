@@ -464,6 +464,14 @@ describe("the founders' goals are for the two founders only", () => {
     }
   });
 
+  it('keeps which projects count and the What if board, within limits', async () => {
+    const plays = [{ kind: 'new', ref: '2', month: '2026-12' }, { kind: 'pipe', ref: 'p1', month: '2027-01' }];
+    await assertSucceeds(setDoc(doc(cofounder(), PATH), { ...good, include: ['u1'], exclude: ['a2'], plays }));
+    await assertFails(setDoc(doc(cofounder(), PATH), { ...good, plays: 'all of them' }));
+    await assertFails(setDoc(doc(cofounder(), PATH), { ...good, plays: Array.from({ length: 41 }, () => plays[0]) }));
+    await assertFails(setDoc(doc(member(), PATH), { ...good, include: ['u1'] }));
+  });
+
   it('stores only the plan, and only in the one document', async () => {
     await assertFails(setDoc(doc(owner(), PATH), { ...good, note: 'x' }));
     await assertFails(setDoc(doc(owner(), `organizations/${STUDIO}/founderGoals/other`), good));

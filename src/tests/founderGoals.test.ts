@@ -157,7 +157,7 @@ describe('the stored plan', () => {
     expect(p.bands).toBeNull();
     expect(p.studio).toBeNull();
     expect(planOf(null)).toEqual(DEFAULT_PLAN);
-    expect(Object.keys(storedPlan(p, 'me', 1)).sort()).toEqual(['bands', 'buffer', 'cash', 'cashAt', 'funnel', 'growth', 'home', 'rebuild', 'studio', 'tier', 'updatedAt', 'updatedBy']);
+    expect(Object.keys(storedPlan(p, 'me', 1)).sort()).toEqual(['bands', 'buffer', 'cash', 'cashAt', 'exclude', 'funnel', 'growth', 'home', 'include', 'plays', 'rebuild', 'studio', 'tier', 'updatedAt', 'updatedBy']);
   });
   it("folds the studio's lines back into Set targets' three overheads", () => {
     expect(linesToOverheads(plan().studio!)).toEqual({ salaries: 75000, rent: 26250, other: 19500 });
