@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { dayKey } from '../../lib/opsDesk';
-import { leadName, leadQueue, loseLead, reopenLead, leadStats, type Lead } from '../../lib/leads';
+import { leadName, leadQueue, loseLead, reopenLead, leadStats, winLead, linkLeadProject, type Lead } from '../../lib/leads';
 import {
-  stageSince, stageAge, leadHeat, monthsToPossession, nextBestAction, templateText, furthestStage, leadInsights, calendarItems, monthGrid, shiftMonth, moveCalItem,
+  stageSince, stageAge, leadHeat, projectRefOf, projectGuesses, sureProject, monthsToPossession, nextBestAction, templateText, furthestStage, leadInsights, calendarItems, monthGrid, shiftMonth, moveCalItem,
 } from '../../lib/leadSmart';
 
 const DAY = 86400000;
@@ -131,5 +131,35 @@ describe('the calendar', () => {
     const g = monthGrid('2026-11');
     expect([g.length, g[0], g[6], g.includes('2026-11-30')]).toEqual([42, '2026-10-26', '2026-11-01', true]);
     expect([shiftMonth('2026-12', 1), shiftMonth('2026-01', -1)]).toEqual(['2027-01', '2025-12']);
+  });
+});
+
+describe('its project in the studio', () => {
+  const projects = [
+    projectRefOf({ id: 'p1', createdAt: 1, context: { name: 'Lodha Splendora 1203', clientName: 'Mrs Garima Dalal', clientPhone: '+91 98000 00001' } }),
+    projectRefOf({ id: 'p2', createdAt: 2, context: { name: 'Powai 3BHK', clientName: 'Rohan Mehta', clientPhone: '' } }),
+    projectRefOf({ id: 'p3', createdAt: 3, context: { name: 'Mehta Worli', clientName: 'Sunil Mehta', clientContacts: [{ name: 'Rohan', phone: '98330 12345' }] } }),
+  ];
+  it('finds it by the phone first, then the client’s name, then a name in common', () => {
+    const g = projectGuesses(lead(), projects);
+    expect(g.map((x) => [x.project.id, x.why])).toEqual([['p3', 'same phone'], ['p2', 'same client name, same place'], ]);
+    expect(sureProject(g)?.id).toBe('p3');
+  });
+  it('links a clear match by name alone, but not two that tie', () => {
+    const noPhone = lead({ people: [{ id: 'a', name: 'Mrs Garima Dalal', role: '', phone: '', email: '', main: true }], home: { ...lead().home, where: 'Thane' } });
+    expect(sureProject(projectGuesses(noPhone, projects))?.id).toBe('p1');
+    const tie = [projectRefOf({ id: 'a', context: { name: 'A', clientName: 'Garima Dalal' } }), projectRefOf({ id: 'b', context: { name: 'B', clientName: 'Garima Dalal' } })];
+    expect(sureProject(projectGuesses(noPhone, tie))).toBeNull();
+  });
+  it('leaves out a project another lead has, unless the phone says it is this one', () => {
+    expect(projectGuesses(lead(), projects, new Set(['p2', 'p3'])).map((x) => x.project.id)).toEqual(['p3']);
+  });
+  it('marking it won links the project and never makes one', () => {
+    const w = winLead(lead({ openRequest: { at: 1, by: 'x', byName: 'X' }, next: { text: 'Call', due: '2026-11-02', kind: 'call' } }), { id: 'p3', name: 'Mehta Worli' }, me, NOW);
+    expect(w).toMatchObject({ stage: 'won', projectId: 'p3', closedAt: NOW, openRequest: null, next: null });
+    expect(w.touches.at(-1)?.text).toBe('Won: linked to Mehta Worli');
+    expect(winLead(lead({ projectId: 'p2' }), { id: 'p3', name: 'x' }, me, NOW).projectId).toBe('p2');
+    expect(winLead(lead(), null, me, NOW)).toMatchObject({ stage: 'won', projectId: null });
+    expect(linkLeadProject(lead(), { id: 'p2', name: 'Powai 3BHK' }, me, NOW)).toMatchObject({ stage: 'talking', projectId: 'p2' });
   });
 });

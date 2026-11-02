@@ -1404,8 +1404,16 @@ service cloud.firestore {
           isDeskCR(resource.data.tenantId)
           && resource.data.ownerEmail == myEmail()
           && request.resource.data.ownerEmail == resource.data.ownerEmail
-          && request.resource.data.projectId == resource.data.projectId
-          && request.resource.data.stage != 'won'
+          /*
+            Client Relations may mark their lead won (the client said yes) and link it
+            to its project, already open in the studio for the proposal: once, from
+            none to a project of this studio. Changing a link is for the leads.
+          */
+          && (request.resource.data.get('projectId', null) == resource.data.get('projectId', null)
+              || (resource.data.get('projectId', null) == null
+                  && request.resource.data.projectId is string
+                  && exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId))
+                  && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.tenantId == resource.data.tenantId))
         ));
       allow delete: if isAuthenticated() && isDeskLead(resource.data.tenantId);
     }

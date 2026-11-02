@@ -12,7 +12,7 @@
   Pure, and shared by the screens and the tests.
 */
 import { addDays, dayKey, daysBetween } from './opsDesk';
-import { BOARD_STAGES, LEAD_SOURCES, LEAD_STAGES, QUIET_DAYS, isOpen, leadName, mainPerson, sourceLabel, type Lead, type LeadSource, type LeadStage } from './leads';
+import { BOARD_STAGES, LEAD_SOURCES, LEAD_STAGES, QUIET_DAYS, emailKey, isOpen, leadName, mainPerson, phoneKey, sourceLabel, type Lead, type LeadSource, type LeadStage } from './leads';
 
 const DAY = 86400000;
 const stageLabel = (s: LeadStage) => LEAD_STAGES.find((x) => x.id === s)?.label || (s === 'lost' ? 'Lost' : s);
@@ -283,4 +283,62 @@ export function moveCalItem(l: Lead, item: Pick<CalItem, 'kind'>, to: string): L
   if (!/^\d{4}-\d{2}-\d{2}$/.test(to)) return l;
   if (item.kind === 'revisit') return l.stage === 'lost' ? { ...l, revisitOn: to } : l;
   return l.next ? { ...l, next: { ...l.next, due: to } } : l;
+}
+
+/* ── Its project in the studio ───────────────────────────────────────────── */
+
+/** A project as the lead matching needs it: who the client is and how to reach them. */
+export interface ProjectRef { id: string; name: string; clientName: string; phones: string[]; emails: string[]; createdAt: number }
+
+export function projectRefOf(p: any): ProjectRef {
+  const c = p?.context || {};
+  const contacts = [{ phone: c.clientPhone, email: c.clientEmail }, ...(Array.isArray(c.clientContacts) ? c.clientContacts : [])];
+  return {
+    id: String(p?.id || ''), name: String(c.name || p?.name || 'Project'), clientName: String(c.clientName || p?.clientName || ''),
+    phones: contacts.map((x: any) => phoneKey(x?.phone)).filter(Boolean),
+    emails: contacts.flatMap((x: any) => String(x?.email || '').split(/[,;]/)).map(emailKey).filter((e) => e.includes('@')),
+    createdAt: Number(p?.createdAt || c.createdAt || p?.updatedAt || 0) || 0,
+  };
+}
+
+const TITLES = /^(mr|mrs|ms|miss|dr|shri|smt)\.?\s+/i;
+const words = (s: string) => String(s || '').toLowerCase().replace(TITLES, '').split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !['and', 'the', 'family', 'residence', 'flat', 'home'].includes(w));
+const sameName = (a: string, b: string) => !!a && !!b && String(a).toLowerCase().replace(TITLES, '').trim() === String(b).toLowerCase().replace(TITLES, '').trim();
+
+export interface ProjectGuess { project: ProjectRef; score: number; why: string }
+
+/**
+ * The projects in the studio that are most likely this lead's: the same phone
+ * or email first, then the same client name, then a name in common; newest
+ * first among equals. Projects already linked to another lead are left out
+ * unless the phone or email says otherwise.
+ */
+export function projectGuesses(l: Lead, projects: ProjectRef[], linkedElsewhere: Set<string> = new Set()): ProjectGuess[] {
+  const phones = new Set(l.people.map((p) => phoneKey(p.phone)).filter(Boolean));
+  const emails = new Set(l.people.map((p) => emailKey(p.email)).filter((e) => e.includes('@')));
+  const names = [leadName(l), ...l.people.map((p) => p.name)].filter(Boolean);
+  const leadWords = new Set(names.flatMap(words));
+  const placeWords = new Set(words(l.home.where));
+  const out: ProjectGuess[] = [];
+  for (const p of projects) {
+    if (!p.id) continue;
+    let score = 0;
+    let why = '';
+    if (p.phones.some((x) => phones.has(x))) { score = 100; why = 'same phone'; }
+    else if (p.emails.some((x) => emails.has(x))) { score = 90; why = 'same email'; }
+    else if (names.some((n) => sameName(n, p.clientName))) { score = 70; why = 'same client name'; }
+    else if ([...words(p.clientName), ...words(p.name)].some((w) => leadWords.has(w))) { score = 45; why = 'name in common'; }
+    if (!score) continue;
+    if (score < 90 && linkedElsewhere.has(p.id)) continue;
+    if (words(p.name).some((w) => placeWords.has(w))) { score += 10; why += ', same place'; }
+    out.push({ project: p, score, why });
+  }
+  return out.sort((a, b) => b.score - a.score || b.project.createdAt - a.project.createdAt).slice(0, 5);
+}
+
+/** The project to link without asking: a clear best guess on phone, email or the client's name. */
+export function sureProject(guesses: ProjectGuess[]): ProjectRef | null {
+  const [a, b] = guesses;
+  if (!a || a.score < 70) return null;
+  return !b || b.score < a.score ? a.project : null;
 }

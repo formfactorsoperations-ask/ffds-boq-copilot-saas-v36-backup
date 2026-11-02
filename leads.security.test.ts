@@ -42,6 +42,8 @@ beforeEach(async () => {
     await setDoc(doc(db, 'leads/mine'), lead('cr@a.com'));
     await setDoc(doc(db, 'leads/theirs'), lead('cr2@a.com'));
     await setDoc(doc(db, 'projects/p1'), { tenantId: STUDIO, context: { name: 'p1' } });
+    await setDoc(doc(db, 'projects/p2'), { tenantId: STUDIO, context: { name: 'p2' } });
+    await setDoc(doc(db, 'projects/pb'), { tenantId: 'studio_b', context: { name: 'pb' } });
     await setDoc(doc(db, 'projects/p1/teamView/ops'), { tenantId: STUDIO, kind: 'ops', members: ['cr@a.com'], compressedData: 'x' });
     await setDoc(doc(db, 'projects/p1/followUps/f1'), {
       tenantId: STUDIO, projectId: 'p1', projectName: 'P', at: 1, by: 'cr@a.com', byName: 'R', channel: 'call', note: 'x', subject: null,
@@ -76,7 +78,7 @@ describe('leads', () => {
     await assertFails(setDoc(doc(cr(), 'leads/new4'), lead('cr@a.com', { extra: 1 })));
     await assertFails(setDoc(doc(other(), 'leads/new5'), lead('cr@b.com')));
   });
-  it('Client Relations works their lead but cannot hand it on, open the project or delete it', async () => {
+  it('Client Relations works their lead but cannot hand it on, link a project that is not the studio’s, or delete it', async () => {
     await assertSucceeds(updateDoc(doc(cr(), 'leads/mine'), { stage: 'measured', openRequest: { at: 2, by: 'cr@a.com', byName: 'R' }, updatedAt: 2 }));
     await assertFails(updateDoc(doc(cr(), 'leads/mine'), { ownerEmail: 'cr2@a.com' }));
     await assertFails(updateDoc(doc(cr(), 'leads/mine'), { stage: 'won', projectId: 'p9' }));
@@ -91,6 +93,13 @@ describe('leads', () => {
     await assertFails(updateDoc(doc(cr(), 'leads/mine'), { lostNote: 'x'.repeat(501) }));
     await assertFails(updateDoc(doc(cr(), 'leads/mine'), { closedAt: 'today' }));
     await assertFails(updateDoc(doc(cr(), 'leads/theirs'), { label: 'Not mine', updatedBy: 'cr@a.com' }));
+  });
+  it('Client Relations marks their lead won and links it to its project, once', async () => {
+    await assertFails(updateDoc(doc(cr(), 'leads/mine'), { stage: 'won', projectId: 'pb', closedAt: 5, updatedAt: 5 }));
+    await assertSucceeds(updateDoc(doc(cr(), 'leads/mine'), { stage: 'won', projectId: 'p1', closedAt: 5, updatedAt: 5 }));
+    await assertFails(updateDoc(doc(cr(), 'leads/mine'), { projectId: 'p2', updatedAt: 6 }));
+    await assertFails(updateDoc(doc(cr(), 'leads/mine'), { projectId: null, updatedAt: 6 }));
+    await assertSucceeds(updateDoc(doc(admin(), 'leads/mine'), { projectId: 'p2', updatedBy: 'admin@a.com' }));
   });
   it('a lead hands it on, opens the project and deletes it', async () => {
     await assertSucceeds(updateDoc(doc(admin(), 'leads/mine'), { ownerEmail: 'cr2@a.com', updatedBy: 'admin@a.com' }));

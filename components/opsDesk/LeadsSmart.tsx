@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Flame, Snowflake, Thermometer, ThumbsDown, Check, X, ChevronLeft, ChevronRight, Phone, MessageCircle, CalendarCheck, Lock, Lightbulb,
@@ -12,10 +12,10 @@ import {
   type Lead, type LeadPerson, type LeadSource,
 } from '../../lib/leads';
 import {
-  HEAT_LABEL, TEMPLATES, firstNameOf, calendarItems, stageAge, leadHeat, leadInsights, monthGrid, moveCalItem, nextBestAction, shiftMonth, templateText,
-  type CalItem, type Suggestion, type TemplateId,
+  HEAT_LABEL, TEMPLATES, firstNameOf, calendarItems, stageAge, projectGuesses, sureProject, leadHeat, leadInsights, monthGrid, moveCalItem, nextBestAction, shiftMonth, templateText,
+  type CalItem, type Suggestion, type TemplateId, type ProjectGuess, type ProjectRef,
 } from '../../lib/leadSmart';
-import { saveLead, withTouch } from '../../services/leadsService';
+import { saveLead, studioMatches, withTouch } from '../../services/leadsService';
 import { clock12 } from '../../lib/peopleDesk';
 import { btnPri, btnSec, btnSm, input, Label, Sheet } from './OpsDeskPanels';
 import { useDesk, Panel, Chip, Empty, EYEBROW, BRAND_EYEBROW, fmtDay, dialable, waLink } from './DeskBits';
@@ -90,6 +90,98 @@ export function LostSheet({ lead: l, onClose, onSave }: { lead: Lead; onClose: (
           options={[{ id: 'no', label: 'No' }, { id: '1m', label: 'In a month' }, { id: '3m', label: 'In 3 months' }, { id: '6m', label: 'In 6 months' }, { id: 'pick', label: 'Pick a day' }]} />
         {revisit === 'pick' && <input type="date" aria-label="Try again on" className={`${input} mt-2 !w-auto`} min={addDays(dayKey(d.now), 1)} value={day} onChange={(e) => setDay(e.target.value)} />}
         {revisitOn && <p className="text-[11px] text-slate-500 mt-1">On {fmtDay(revisitOn)} it comes back on {l.ownerName || 'the owner'}’s Today list with a message ready.</p>}
+      </div>
+      {error && <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
+    </Sheet>
+  );
+}
+
+/* ── Won: the client said yes, and the lead joins its project ─────────────── */
+
+/**
+ * Mark a lead won. Its project is already open in the studio (a project is
+ * opened for the proposal), so it is linked, not made: found by the client's
+ * phone, email or name, and linked without asking when the match is clear.
+ */
+export function WonSheet({ lead: l, mode = 'win', onClose, onSave }: {
+  lead: Lead;
+  /** 'link' only links (or changes) the project, for a lead already won. */
+  mode?: 'win' | 'link';
+  onClose: () => void;
+  onSave: (project: ProjectRef | null) => Promise<void>;
+}) {
+  const d = useDesk();
+  const linkedElsewhere = useMemo(() => new Set(d.leads.filter((x) => x.id !== l.id && x.projectId).map((x) => x.projectId!)), [d.leads, l.id]);
+  const local = useMemo(() => projectGuesses(l, d.projectRefs, linkedElsewhere), [l, d.projectRefs, linkedElsewhere]);
+  /* Projects this person cannot see can still be the one: the studio-wide check finds them by phone or email. */
+  const [found, setFound] = useState<ProjectGuess[]>([]);
+  useEffect(() => {
+    let live = true;
+    studioMatches(l.people, l.id).then((m) => {
+      if (!live || !m) return;
+      setFound(m.filter((x) => x.kind === 'client').map((x) => ({
+        project: { id: x.id, name: x.detail.replace(/^is the client on /, '').replace(/\.$/, '') || 'their project', clientName: x.name, phones: [], emails: [], createdAt: 0 },
+        score: x.by === 'phone' ? 100 : 90, why: `same ${x.by}`,
+      })));
+    });
+    return () => { live = false; };
+  }, [l.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const guesses = useMemo(() => [...local, ...found.filter((f) => !local.some((g) => g.project.id === f.project.id))]
+    .sort((a, b) => b.score - a.score || b.project.createdAt - a.project.createdAt).slice(0, 5), [local, found]);
+  const sure = sureProject(guesses);
+  const current = l.projectId ? (d.projectRefs.find((p) => p.id === l.projectId) || guesses.find((g) => g.project.id === l.projectId)?.project || { id: l.projectId, name: 'its project', clientName: '', phones: [], emails: [], createdAt: 0 }) : null;
+  /* undefined: the desk's own pick (the linked project, else a clear match). */
+  const [pick, setPick] = useState<string | null | undefined>(undefined);
+  const chosenId = pick === undefined ? (current?.id ?? sure?.id ?? null) : pick;
+  const byId = (id: string | null) => (id ? (guesses.find((g) => g.project.id === id)?.project || d.projectRefs.find((p) => p.id === id) || current) : null);
+  const chosen = byId(chosenId);
+  const others = useMemo(() => [...d.projectRefs].filter((p) => !guesses.some((g) => g.project.id === p.id)).sort((a, b) => b.createdAt - a.createdAt || a.name.localeCompare(b.name)), [d.projectRefs, guesses]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try { await onSave(chosen && chosen.id !== l.projectId ? chosen : null); } catch { setError('That was not saved. Only its owner, or a lead, can change it.'); setBusy(false); }
+  };
+  const option = (id: string | null, title: string, sub: string, tag?: string) => (
+    <motion.button key={id || 'none'} type="button" whileTap={{ scale: 0.98 }} aria-pressed={chosenId === id} onClick={() => setPick(id)}
+      className={`w-full text-left rounded-xl border px-3 py-2.5 flex items-center gap-3 transition-colors ${chosenId === id ? 'border-[#3D52A0] bg-[#3D52A0]/5 ring-2 ring-[#3D52A0]/15' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
+      <span className={`w-4 h-4 rounded-full border-2 shrink-0 grid place-items-center ${chosenId === id ? 'border-[#3D52A0]' : 'border-slate-300'}`}>{chosenId === id && <span className="w-2 h-2 rounded-full bg-[#3D52A0]" />}</span>
+      <span className="flex-1 min-w-0"><span className="block text-sm font-bold text-slate-800 truncate">{title}</span><span className="block text-[11px] text-slate-500 truncate">{sub}</span></span>
+      {tag && <Chip tone={tag.startsWith('same phone') || tag.startsWith('same email') ? 'emerald' : 'brand'}>{tag}</Chip>}
+    </motion.button>
+  );
+  return (
+    <Sheet eyebrow={`Lead · ${leadName(l)}`} title={mode === 'win' ? 'The client said yes' : 'Its project'}
+      sub={mode === 'win' ? 'The lead is won and joins its project, which is already open for the proposal. No new project is made.' : 'Link the lead to its project in the studio.'}
+      onClose={onClose}
+      footer={<>
+        <button type="button" className={btnSec} onClick={onClose}>{mode === 'win' ? 'Not yet' : 'Cancel'}</button>
+        <button type="button" className={`${btnPri} pp-press`} disabled={busy || (mode === 'link' && (!chosen || chosen.id === l.projectId))} onClick={save}>
+          <Trophy className="w-4 h-4" />{busy ? 'Saving…' : mode === 'win' ? (chosen ? 'Mark as won and link' : 'Mark as won') : 'Link it'}
+        </button>
+      </>}>
+      <div>
+        <Label>Its project</Label>
+        {current && pick === undefined
+          ? <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 inline-flex items-center gap-1.5"><Check className="w-3.5 h-3.5" />Already linked to {current.name}.</p>
+          : sure && pick === undefined
+            ? <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 inline-flex items-center gap-1.5"><Check className="w-3.5 h-3.5" />Found {sure.name} ({guesses[0].why}). It is linked automatically.</p>
+            : <p className="text-xs text-slate-600">{guesses.length > 1 ? 'More than one project could be theirs. Pick it.' : guesses.length ? 'This could be their project. Pick it to link it.' : 'No project matches this client’s phone, email or name. Pick it below, or link it later from the lead.'}</p>}
+        <motion.div variants={listV} initial="hidden" animate="show" className="mt-2 flex flex-col gap-2">
+          {current && !guesses.some((g) => g.project.id === current.id) && <motion.div variants={rowV}>{option(current.id, current.name, current.clientName || 'Linked now', 'linked')}</motion.div>}
+          {guesses.map((g) => <motion.div variants={rowV} key={g.project.id}>{option(g.project.id, g.project.name, g.project.clientName ? `Client: ${g.project.clientName}` : 'In the studio', g.project.id === l.projectId ? 'linked' : g.why)}</motion.div>)}
+          {mode === 'win' && !current && <motion.div variants={rowV}>{option(null, 'Not linked yet', 'Mark it won now and link the project later')}</motion.div>}
+        </motion.div>
+        {others.length > 0 && (
+          <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+            <span className="shrink-0">Another project:</span>
+            <select aria-label="Another project" className={`${input} !py-1.5`} value={others.some((p) => p.id === chosenId) ? chosenId! : ''} onChange={(e) => setPick(e.target.value || null)}>
+              <option value="">Choose…</option>
+              {others.map((p) => <option key={p.id} value={p.id}>{p.name}{p.clientName ? ` · ${p.clientName}` : ''}</option>)}
+            </select>
+          </label>
+        )}
       </div>
       {error && <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
     </Sheet>
@@ -191,8 +283,8 @@ export function PipelineStrip({ leads, over, dragging, onPick }: { leads: Lead[]
   const since = d.now - 60 * 86400000;
   const segs = [...BOARD_STAGES, 'won' as const].map((st, i) => {
     const here = st === 'won'
-      ? leads.filter((l) => (l.stage === 'won' && (l.closedAt ?? l.updatedAt) >= since) || (isOpen(l) && l.openRequest && !l.projectId)).length
-      : leads.filter((l) => l.stage === st && !(l.openRequest && !l.projectId)).length;
+      ? leads.filter((l) => l.stage === 'won' && (l.closedAt ?? l.updatedAt) >= since).length
+      : leads.filter((l) => l.stage === st).length;
     const stuck = st === 'won' ? 0 : leads.filter((l) => l.stage === st && stageAge(l, d.now).stuck).length;
     return { st, i, here, stuck, label: st === 'won' ? 'Won' : LEAD_STAGES.find((s) => s.id === st)?.label || st };
   });
@@ -236,59 +328,46 @@ export function PipelineStrip({ leads, over, dragging, onPick }: { leads: Lead[]
 /* ── Won: the last column ────────────────────────────────────────────────── */
 
 /**
- * A lead is won when its project opens. The column holds the leads whose
- * client said yes and are waiting for a lead to open the project, then those
- * won in the last 60 days. Dropping a card here is "Mark as won".
+ * Won in the last 60 days, each with the project it joined. A lead is won when
+ * the client says yes; dropping a card here asks for that and links it to its
+ * project, which is already open for the proposal.
  */
-export function WonColumn({ leads, over, dragging, opener, onOpen, onConvert }: {
-  leads: Lead[]; over: string | null; dragging: boolean; opener: string; onOpen: (id: string) => void; onConvert: (l: Lead) => void;
-}) {
+export function WonColumn({ leads, over, dragging, onOpen }: { leads: Lead[]; over: string | null; dragging: boolean; onOpen: (id: string) => void }) {
   const d = useDesk();
   const since = d.now - 60 * 86400000;
-  const waiting = leads.filter((l) => isOpen(l) && l.openRequest && !l.projectId).sort((a, b) => a.openRequest!.at - b.openRequest!.at);
   const won = leads.filter((l) => l.stage === 'won' && (l.closedAt ?? l.updatedAt) >= since).sort((a, b) => (b.closedAt ?? b.updatedAt) - (a.closedAt ?? a.updatedAt));
   const older = leads.filter((l) => l.stage === 'won').length - won.length;
   const hot = dragging && over === 'won';
+  const nameOf = (id: string | null) => (id ? d.projectRefs.find((p) => p.id === id)?.name || 'its project' : null);
   return (
     <motion.div id="lead-col-won" data-stage="won" initial={{ opacity: 0, y: 20, rotateY: -12 }} animate={{ opacity: 1, y: 0, rotateY: 0, scale: hot ? 1.015 : 1 }}
       transition={{ delay: dragging ? 0 : 0.3, duration: dragging ? 0.2 : 0.45 }} style={{ transformPerspective: 1000 }}
       className={`rounded-2xl border min-w-0 flex flex-col overflow-hidden transition-colors ${hot ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-200' : 'bg-emerald-50/50 border-emerald-200'}`}>
       <span className="h-1 bg-emerald-500" aria-hidden />
       <div className="px-3 pt-2.5 pb-2 flex items-center gap-2">
-        <div className="min-w-0 flex-1"><p className="text-sm font-bold text-slate-800 truncate inline-flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5 text-emerald-600" />Won</p><p className="text-[10px] text-slate-500 truncate">When the project opens</p></div>
-        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-white text-emerald-700 tabular-nums border border-emerald-200">{waiting.length + won.length}</span>
+        <div className="min-w-0 flex-1"><p className="text-sm font-bold text-slate-800 truncate inline-flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5 text-emerald-600" />Won</p><p className="text-[10px] text-slate-500 truncate">The client said yes</p></div>
+        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-white text-emerald-700 tabular-nums border border-emerald-200">{won.length}</span>
       </div>
       <div className="px-2 pb-2 flex flex-col gap-2 min-h-[96px]">
-        {hot && <p className="rounded-xl border-2 border-dashed border-emerald-400 text-xs font-bold text-emerald-700 text-center py-3">{d.isLead ? 'Drop to open the project' : `Drop to ask ${opener} to open it`}</p>}
-        {waiting.length > 0 && <p className={`${EYEBROW} px-1 pt-1`}>Said yes · {d.isLead ? 'open the project' : `waiting for ${opener}`}</p>}
+        {hot && <p className="rounded-xl border-2 border-dashed border-emerald-400 text-xs font-bold text-emerald-700 text-center py-3">Drop when the client said yes</p>}
         <motion.div variants={listV} initial="hidden" animate="show" className="flex flex-col gap-2">
-          {waiting.map((l) => (
+          {won.map((l) => (
             <motion.div variants={rowV} key={l.id}>
               <Tilt max={6} className="rounded-xl">
-                <div className="rounded-xl bg-white border border-amber-200 shadow-sm p-2.5">
+                <div className="rounded-xl bg-white border border-emerald-200 shadow-sm p-2.5 hover:border-emerald-400 transition-colors">
                   <button type="button" onClick={() => onOpen(l.id)} className="w-full text-left">
-                    <span className="block text-sm font-bold text-slate-800 truncate">{leadName(l)}</span>
-                    <span className="block text-[11px] text-slate-500 truncate">{homeLine(l.home) || sourceLabel(l.source)}</span>
+                    <span className="flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5 text-emerald-600 shrink-0" /><span className="text-sm font-bold text-slate-800 truncate">{leadName(l)}</span></span>
+                    <span className="block text-[11px] text-slate-500 truncate mt-0.5">{fmtDay(dayKey(l.closedAt ?? l.updatedAt))} · {homeLine(l.home) || sourceLabel(l.source)}</span>
                   </button>
-                  <span className="mt-1.5 flex items-center gap-1.5 text-[11px] font-bold text-amber-700"><Hourglass className="w-3 h-3" />Asked {fmtDay(dayKey(l.openRequest!.at))}</span>
-                  {d.isLead && <button type="button" onClick={() => onConvert(l)} className={`${btnPri} !py-1 !text-xs w-full justify-center mt-2 pp-press`}><Trophy className="w-3.5 h-3.5" />Open project</button>}
+                  {l.projectId
+                    ? <button type="button" onClick={() => d.act.openProject(l.projectId!)} className="mt-1.5 w-full text-left flex items-center gap-1.5 text-[11px] text-emerald-700 font-bold hover:underline truncate"><Check className="w-3 h-3 shrink-0" /><span className="truncate">{nameOf(l.projectId)}</span></button>
+                    : <button type="button" onClick={() => onOpen(l.id)} className="mt-1.5 flex items-center gap-1.5 text-[11px] text-amber-700 font-bold"><Hourglass className="w-3 h-3" />Link its project</button>}
                 </div>
               </Tilt>
             </motion.div>
           ))}
-          {won.map((l) => (
-            <motion.div variants={rowV} key={l.id}>
-              <Tilt max={6} className="rounded-xl">
-                <button type="button" onClick={() => onOpen(l.id)} className="w-full text-left rounded-xl bg-white border border-emerald-200 shadow-sm p-2.5 hover:border-emerald-400 transition-colors">
-                  <span className="flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5 text-emerald-600 shrink-0" /><span className="text-sm font-bold text-slate-800 truncate">{leadName(l)}</span></span>
-                  <span className="block text-[11px] text-slate-500 truncate mt-0.5">{homeLine(l.home) || sourceLabel(l.source)}</span>
-                  <span className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-700 font-bold"><Check className="w-3 h-3" />Project open · {fmtDay(dayKey(l.closedAt ?? l.updatedAt))}</span>
-                </button>
-              </Tilt>
-            </motion.div>
-          ))}
         </motion.div>
-        {!waiting.length && !won.length && !hot && (
+        {!won.length && !hot && (
           <div className="flex-1 rounded-xl border-2 border-dashed border-emerald-200 grid place-items-center text-center px-3 py-4">
             <p className="text-[11px] text-slate-500"><Trophy className="w-4 h-4 text-emerald-400 mx-auto mb-1" />Drag a lead here when the client says yes.</p>
           </div>

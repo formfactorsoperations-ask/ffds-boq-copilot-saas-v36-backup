@@ -17,7 +17,8 @@ import {
   DESK_SCOPES, inDeskScope, scopeCounts, doneToday, dayRing, withSnoozes, liveSnoozes, teamRows, personQueue, weekNumbers, guideProgress,
   type DeskScope, type GuideStep, type GuideStepId,
 } from '../../lib/opsTeam';
-import { leadQueue, leadToProject, leadMeeting, isOpen as leadIsOpen, type Lead } from '../../lib/leads';
+import { leadQueue, leadToProject, leadMeeting, linkLeadProject, isOpen as leadIsOpen, type Lead } from '../../lib/leads';
+import { projectGuesses, projectRefOf } from '../../lib/leadSmart';
 import { loadProjectOps, loadStudioOps, markNextDone, closeEscalation, logFollowUp, type OpsMom } from '../../services/opsDeskService';
 import { loadLeads, saveLead, withTouch, deleteLead } from '../../services/leadsService';
 import {
@@ -125,6 +126,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
     };
   }), [scoped, seesMoney]);
   const ids = useMemo(() => new Set(deskProjects.map((p) => p.id)), [deskProjects]);
+  const projectRefs = useMemo(() => live.map(projectRefOf), [live]);
 
   const [section, setSection] = useState<Section>('today');
   const [loading, setLoading] = useState(true);
@@ -392,7 +394,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
 
   const desk: Desk = {
     tenantId, studioName: orgData?.orgName || '', me, isLead, isCR, canWrite, seesMoney, now, loading, settings, team,
-    projects: deskProjects, queue, waiting, followUps: fu, escalations: esc, moms: mm, visits: allVisits, pulseRows, leads, done, record, bumped,
+    projects: deskProjects, projectRefs, queue, waiting, followUps: fu, escalations: esc, moms: mm, visits: allVisits, pulseRows, leads, done, record, bumped,
     act: {
       go, log: setLogFor, escalate: setEscFor, capture: () => setCapturing(true), openItem: onItem, openClient: setClientFor, openLead,
       addLead: () => setAdding({ paste: false }), bookVisit: (projectId) => setVisitAct({ visit: null, to: null, projectId }),
@@ -403,6 +405,28 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
 
   const currentLead = leadOpen ? leads.find((l) => l.id === leadOpen) || null : null;
   const replaceLead = (l: Lead) => setLeads((ls) => ls.map((x) => (x.id === l.id ? l : x)));
+
+  /*
+    A lead joins its project on its own: a project is opened in StudioDesk for
+    the proposal, so once a lead is at Site measured, Proposal sent or Won and
+    has none, the one project with the same client phone or email is linked,
+    with a note in its touches. Names alone are only offered (WonSheet), never
+    linked unasked. Each lead is tried once per visit.
+  */
+  const autoLinked = useRef(new Set<string>());
+  useEffect(() => {
+    if (!canWrite || !leads.length || !projectRefs.length) return;
+    const taken = new Set<string>(leads.filter((l) => l.projectId).map((l) => l.projectId!));
+    for (const l of leads) {
+      if (l.projectId || autoLinked.current.has(l.id) || !['measured', 'proposal', 'won'].includes(l.stage) || !(isLead || l.ownerEmail === myEmail)) continue;
+      autoLinked.current.add(l.id);
+      const g = projectGuesses(l, projectRefs, taken);
+      const top = g[0];
+      if (!top || top.score < 90 || (g[1] && g[1].score >= top.score) || taken.has(top.project.id)) continue;
+      taken.add(top.project.id);
+      saveLead(linkLeadProject(l, top.project, me, Date.now()), myEmail).then(replaceLead).catch(() => undefined);
+    }
+  }, [leads, projectRefs, canWrite, isLead, myEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <DeskProvider value={desk}>
@@ -776,7 +800,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
       {converting && (
         <OpenProjectSheet lead={converting} opener={opener} onClose={() => setConverting(null)}
           onAsk={async () => {
-            const l = withTouch({ ...converting, openRequest: { at: Date.now(), by: myEmail, byName: me.name } }, { kind: 'stage', text: `Client said yes. Asked ${opener} to open the project` }, me);
+            const l = withTouch({ ...converting, openRequest: { at: Date.now(), by: myEmail, byName: me.name } }, { kind: 'stage', text: `Asked ${opener} to open the project for the proposal` }, me);
             replaceLead(await saveLead(l, myEmail));
             setConverting(null);
             setNotice(`${opener} has it on their desk. The project comes back to you, assigned to you, once it is open.`);
@@ -784,11 +808,13 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
           onOpen={async () => {
             if (!onCreateFromLead) throw new Error('Opening a project is not available here.');
             const projectId = await onCreateFromLead(leadToProject(converting));
-            const l = withTouch({ ...converting, stage: 'won', projectId, closedAt: Date.now() }, { kind: 'stage', text: 'Won: the project is open' }, me);
+            /* Opened for the proposal, and linked to the lead; it is won later, when the client says yes. */
+            const early = ['new', 'talking', 'meeting', 'measured'].includes(converting.stage);
+            const l = withTouch({ ...converting, stage: early ? 'proposal' : converting.stage, projectId, openRequest: null }, { kind: 'stage', text: early ? 'Moved to Proposal sent' : 'The project is open for the proposal' }, me);
             replaceLead(await saveLead(l, myEmail));
             if (converting.ownerEmail && converting.ownerEmail !== myEmail) await assign({ id: projectId }, converting.ownerEmail).catch(() => undefined);
             setConverting(null);
-            setNotice(`The project is open and on ${converting.ownerName || 'the owner'}’s desk.`);
+            setNotice(`The project is open, linked to the lead and on ${converting.ownerName || 'the owner'}’s desk.`);
           }} />
       )}
       {closing && (

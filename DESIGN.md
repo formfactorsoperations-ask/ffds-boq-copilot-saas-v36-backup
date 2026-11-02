@@ -287,8 +287,9 @@ of Client Relations people, not one (mockups OD1 to OD7 and L1 to L4, approved
 - Leads: a pipeline strip over the board (New to Won as chevrons, Lost apart)
   with counts that count up; each segment scrolls to its column and takes a
   dropped card. Columns carry a top rule in the brand colour, lighter to darker
-  as the lead moves on; Won is the last column in emerald, holding the leads
-  whose client said yes (waiting for a lead to open the project) and those won.
+  as the lead moves on; Won is the last column in emerald, each card with the
+  project it joined (a lead is won when the client says yes, and is linked to
+  its project, already open for the proposal; no project is made).
   Lost is a lane under the board. A card's left edge shows how warm it is
   (rose, amber, slate); call and WhatsApp appear on hover. Dropping on Lost
   opens the reason sheet (`phd-scrim`, `phd-pop`). The calendar turns in depth

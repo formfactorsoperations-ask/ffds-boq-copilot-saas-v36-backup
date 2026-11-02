@@ -11,7 +11,7 @@ import { dayKey, addDays } from '../../lib/opsDesk';
 import {
   BOARD_STAGES, LEAD_STAGES, LEAD_SOURCES, SCOPES, LOST_REASONS, FIRST_CALL_MINUTES, QUIET_DAYS, QUIET_DAYS_LEAD,
   leadName, homeLine, leadUrgency, waitedLabel, sourceLabel, mainPerson, findMatches, conversionLines, leadStats, lostReasons, phoneKey, emailKey,
-  blankDraft, blankPerson, draftProblems, isOpen, loseLead, reopenLead, leadMeetingRows, LEAD_MEETING_ROW_LABEL, closeLeadMeeting, sortedNotes, addNote, editNote, removeNote, NOTE_MAX,
+  blankDraft, blankPerson, draftProblems, isOpen, loseLead, reopenLead, winLead, linkLeadProject, leadMeetingRows, LEAD_MEETING_ROW_LABEL, closeLeadMeeting, sortedNotes, addNote, editNote, removeNote, NOTE_MAX,
   type LeadMeetingRow, type LeadMeetingRowStatus, type LeadMeetingStatus, type LeadNote,
   type Lead, type LeadDraft, type LeadStage, type LeadSource, type TouchKind, type FirstStep, type LeadNext,
 } from '../../lib/leads';
@@ -24,7 +24,7 @@ import { btnPri, btnSec, btnSm, input, Label, Seg } from './OpsDeskPanels';
 import { useDesk, Panel, Chip, Avatar, Empty, EYEBROW, BRAND_EYEBROW, fmtDay, fmtWhen, dialable, waLink, cardV, type ChipTone } from './DeskBits';
 import { clock12 } from '../../lib/peopleDesk';
 import type { Person } from './OpsDeskPanels';
-import { HeatChip, LostSheet, EditLeadSheet, PipelineStrip, WonColumn, LostLane, LeadCalendar, LeadInsights, SmartPanel } from './LeadsSmart';
+import { HeatChip, LostSheet, WonSheet, EditLeadSheet, PipelineStrip, WonColumn, LostLane, LeadCalendar, LeadInsights, SmartPanel } from './LeadsSmart';
 import { leadHeat, stageAge, templateText } from '../../lib/leadSmart';
 import '../projectHeader/projectHeader.css';
 
@@ -60,6 +60,7 @@ export function LeadsBoard({ opener, onOpen, onAdd, onPaste, onMoved, onConvert 
   const [over, setOver] = useState<LeadStage | null>(null);
   /* A card dropped on Lost asks why; one dropped on Won opens the project (or asks a lead to). */
   const [losing, setLosing] = useState<Lead | null>(null);
+  const [winning, setWinning] = useState<Lead | null>(null);
   const [moved, setMoved] = useState<{ text: string; tone: 'ok' | 'bad' } | null>(null);
   const canMove = (l: Lead) => d.canWrite && (d.isLead || l.ownerEmail === d.me.email) && isOpen(l);
   const stageAt = (x: number, y: number): LeadStage | null => {
@@ -71,7 +72,7 @@ export function LeadsBoard({ opener, onOpen, onAdd, onPaste, onMoved, onConvert 
     setOver(null);
     if (!to || to === l.stage || !canMove(l)) return;
     if (to === 'lost') return setLosing(l);
-    if (to === 'won') return onConvert(l);
+    if (to === 'won') return setWinning(l);
     const label = LEAD_STAGES.find((s) => s.id === to)?.label || to;
     const next = withTouch({ ...l, stage: to }, { kind: 'stage', text: `Moved to ${label}` }, d.me);
     onMoved(next);
@@ -153,8 +154,7 @@ export function LeadsBoard({ opener, onOpen, onAdd, onPaste, onMoved, onConvert 
           <LayoutGroup>
             <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               {BOARD_STAGES.map((st, ci) => {
-                /* A lead whose client said yes waits in Won, not in its stage. */
-                const list = shown.filter((l) => l.stage === st && !(l.openRequest && !l.projectId))
+                const list = shown.filter((l) => l.stage === st)
                   .sort((a, b) => (leadHeat(b, d.now)?.score || 0) - (leadHeat(a, d.now)?.score || 0));
                 const stuck = list.filter((l) => stageAge(l, d.now).stuck).length;
                 const Icon = STAGE_ICON[st];
@@ -194,7 +194,7 @@ export function LeadsBoard({ opener, onOpen, onAdd, onPaste, onMoved, onConvert 
                   </motion.div>
                 );
               })}
-              <WonColumn leads={shown} over={over} dragging={!!dragFrom} opener={opener} onOpen={onOpen} onConvert={onConvert} />
+              <WonColumn leads={shown} over={over} dragging={!!dragFrom} onOpen={onOpen} />
             </div>
             <LostLane leads={shown} over={over} dragging={!!dragFrom} onOpen={onOpen} />
           </LayoutGroup>
@@ -225,6 +225,22 @@ export function LeadsBoard({ opener, onOpen, onAdd, onPaste, onMoved, onConvert 
         <span className="w-px h-4 bg-slate-200" />
         <ThumbsDown className="w-4 h-4 text-slate-400" /><span><b className="text-slate-800">Lost:</b> {stats.lost.length}{stats.lost.length ? ` · ${lostReasons(stats.lost)}` : ''}</span>
       </motion.div>
+      {winning && (
+        <WonSheet lead={winning} onClose={() => setWinning(null)} onSave={async (project) => {
+          const l = winning;
+          const next = winLead(l, project, d.me, Date.now());
+          onMoved(next);
+          try {
+            onMoved(await saveLead(next, d.me.email));
+            setWinning(null);
+            setMoved({ text: `${leadName(l)} is won${next.projectId ? `, linked to ${project?.name || 'its project'}` : ''}.`, tone: 'ok' });
+            window.setTimeout(() => setMoved(null), 3600);
+          } catch (e) {
+            onMoved(l);
+            throw e;
+          }
+        }} />
+      )}
       {losing && (
         <LostSheet lead={losing} onClose={() => setLosing(null)} onSave={async (reason, note, revisitOn) => {
           const l = losing;
@@ -600,6 +616,8 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
   useEffect(() => { setCalOn(booked ? true : next.mode === 'video'); }, [next.mode, !!booked]); // eslint-disable-line react-hooks/exhaustive-deps
   const [losing, setLosing] = useState(false);
   const [editingLead, setEditingLead] = useState(false);
+  /* The yes: 'win' marks it won and links its project; 'link' only links (or changes) the project. */
+  const [winning, setWinning] = useState<'win' | 'link' | null>(null);
   /* Closing out a booked meeting: held, did not happen, or cancelled, with what came of it. */
   const [closing, setClosing] = useState<LeadMeetingStatus | null>(null);
   const [outcome, setOutcome] = useState('');
@@ -656,10 +674,13 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
     commit({ ...l, next: clean, stage: clean.kind === 'meeting' && (l.stage === 'new' || l.stage === 'talking') ? 'meeting' : l.stage });
   };
   /* Won is not a stage to click into: a lead is won when its project opens (OpenProjectSheet). */
+  /* Asked a lead to open the project for the proposal, and it is not open yet. */
   const waitingToOpen = !!l.openRequest && isOpen(l) && !l.projectId;
-  const canWin = canEdit && isOpen(l) && !(waitingToOpen && !d.isLead);
+  /* Won is the client's yes: the project is already open for the proposal, so it is linked, never made. */
+  const canWin = canEdit && isOpen(l);
+  const projectName = l.projectId ? d.projectRefs.find((p) => p.id === l.projectId)?.name || 'its project' : null;
   const moveTo = (s: LeadStage) => {
-    if (s === 'won') { if (canWin) onOpenProject(l); return; }
+    if (s === 'won') { if (canWin) setWinning('win'); return; }
     if (!canEdit || s === l.stage) return;
     commit(withTouch({ ...l, stage: s }, { kind: 'stage', text: `Moved to ${LEAD_STAGES.find((x) => x.id === s)?.label}` }, d.me));
   };
@@ -679,14 +700,14 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
   const [editing, setEditing] = useState<string | null>(null);
   const [editVal, setEditVal] = useState('');
   /* Near the top once the yes is close; at the foot before then. */
-  const wonFirst = l.stage === 'measured' || l.stage === 'proposal' || waitingToOpen;
+  const wonFirst = l.stage === 'measured' || l.stage === 'proposal' || !!l.projectId;
   const wonPanel = (
-            <Panel icon={Trophy} title="How this lead is won" blurb="Won means its project is open, with everything collected here">
+            <Panel icon={Trophy} title="How this lead is won" blurb="The client says yes; the lead joins its project">
               <ol className="flex flex-col gap-2 text-xs">
                 {([
-                  ['The client says yes', 'Usually after the proposal, or once the site is measured.', l.stage === 'proposal' || l.stage === 'measured' || waitingToOpen],
-                  [d.isLead ? 'You open the project' : `${opener} opens the project`, d.isLead ? 'Projects carry fees and money, so a lead opens them.' : 'You ask with Mark as won; projects carry money, so a lead opens them.', waitingToOpen],
-                  ['Won', 'It moves to Won on the board and the project carries it from here.', false],
+                  ['Its project is open for the proposal', projectName ? `Linked to ${projectName}.` : waitingToOpen ? `Asked ${opener} ${fmtWhen(l.openRequest!.at)}.` : 'Opened in StudioDesk for the proposal. The lead links to it by the client’s phone, email or name.', !!l.projectId],
+                  ['The client says yes', 'Usually after the proposal.', false],
+                  ['Mark as won', 'It moves to Won on the board, linked to its project. No new project is made.', false],
                 ] as [string, string, boolean][]).map(([t, sub, done], i) => (
                   <li key={t} className="flex gap-2.5">
                     <span className={`w-5 h-5 shrink-0 rounded-full grid place-items-center text-[10px] font-black ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{done ? <Check className="w-3 h-3" /> : i + 1}</span>
@@ -694,9 +715,13 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
                   </li>
                 ))}
               </ol>
-              {waitingToOpen && !d.isLead
-                ? <p className="mt-3 text-xs text-slate-600 inline-flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-[#3D52A0]" />Asked {opener} {fmtWhen(l.openRequest!.at)}. It comes back on your desk when the project opens.</p>
-                : canWin && <button type="button" className={`${btnPri} pp-press w-full mt-3`} onClick={() => onOpenProject(l)}><Trophy className="w-4 h-4" />{d.isLead ? 'Mark as won: open the project' : 'Mark as won'}</button>}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {canWin && <button type="button" className={`${btnPri} pp-press flex-1 justify-center`} onClick={() => setWinning('win')}><Trophy className="w-4 h-4" />Mark as won</button>}
+                {l.projectId
+                  ? <button type="button" className={btnSm} onClick={() => d.act.openProject(l.projectId!)}>Open the project</button>
+                  : canEdit && <button type="button" className={btnSm} onClick={() => setWinning('link')}>Link its project</button>}
+                {!l.projectId && !waitingToOpen && canEdit && l.stage === 'measured' && <button type="button" className={btnSm} onClick={() => onOpenProject(l)}>{d.isLead ? 'Open the project here' : `Ask ${opener} to open it`}</button>}
+              </div>
             </Panel>
   );
 
@@ -726,7 +751,7 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
           return (
             <React.Fragment key={s.id}>
               <motion.button type="button" whileHover={(s.id === 'won' ? canWin : canEdit) ? { y: -2 } : undefined} whileTap={{ scale: 0.95 }} disabled={(s.id === 'won' ? !canWin : !canEdit) || busy} onClick={() => moveTo(s.id)}
-                title={s.id === 'won' ? (canWin ? 'Mark as won: the project opens' : waitingToOpen ? `Waiting for ${opener} to open the project` : undefined) : undefined}
+                title={s.id === 'won' && canWin ? 'Mark as won: the client said yes' : undefined}
                 className={`relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${on ? 'text-white' : done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'} disabled:cursor-default`}>
                 {on && <motion.span layoutId="lead-stage" className="absolute inset-0 rounded-full bg-[#3D52A0]" transition={{ type: 'spring', stiffness: 420, damping: 32 }} />}
                 <span className="relative inline-flex items-center gap-1.5">{done ? <Check className="w-3 h-3" /> : <span className="tabular-nums">{i + 1}</span>}{s.label}</span>
@@ -736,8 +761,7 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
           );
         })}
         <span className="flex-1" />
-        {waitingToOpen && <Chip tone="amber"><Clock className="w-3 h-3" />Said yes · {d.isLead ? 'open the project to win it' : `waiting for ${opener}`}</Chip>}
-        {canWin && <button type="button" className={`${btnSm} !text-emerald-700 !border-emerald-300 hover:!bg-emerald-50`} onClick={() => onOpenProject(l)}><Trophy className="w-3.5 h-3.5" />Mark as won</button>}
+        {canWin && <button type="button" className={`${btnSm} !text-emerald-700 !border-emerald-300 hover:!bg-emerald-50`} onClick={() => setWinning('win')}><Trophy className="w-3.5 h-3.5" />Mark as won</button>}
         {canEdit && isOpen(l) && <button type="button" className={btnSm} onClick={() => setLosing(true)}><ThumbsDown className="w-3.5 h-3.5" />Mark as lost</button>}
       </div>
       {l.stage === 'lost' && (
@@ -757,6 +781,13 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
         </motion.div>
       )}
       {losing && <LostSheet lead={l} onClose={() => setLosing(false)} onSave={async (reason, note, revisitOn) => { onSaved(await saveLead(loseLead(l, reason, note, revisitOn, d.me, Date.now()), d.me.email)); setLosing(false); }} />}
+      {winning && (
+        <WonSheet lead={l} mode={winning} onClose={() => setWinning(null)} onSave={async (project) => {
+          const next = winning === 'win' ? winLead(l, project, d.me, Date.now()) : project ? linkLeadProject(l, project, d.me, Date.now()) : l;
+          onSaved(await saveLead(next, d.me.email));
+          setWinning(null);
+        }} />
+      )}
       {editingLead && <EditLeadSheet lead={l} onClose={() => setEditingLead(false)} onSaved={(x) => { onSaved(x); setEditingLead(false); }} />}
       {error && <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
 
@@ -908,11 +939,15 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
             <p className="text-xs text-slate-600">No touch for {QUIET_DAYS} days puts it at the top of {mine ? 'your' : 'its owner’s'} Today list. {QUIET_DAYS_LEAD} days, and {opener} sees it.{u.quietDays >= 1 && l.firstTouchAt ? ` Last touch ${u.quietDays} day${u.quietDays === 1 ? '' : 's'} ago.` : ''}</p>
           </Panel>
           {isOpen(l) && !wonFirst && wonPanel}
-          {l.projectId && (
-            <div className="relative rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 flex items-center gap-3">
+          {l.stage === 'won' && (
+            <div className="relative rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 flex flex-wrap items-center gap-3">
               <DoneTick size={36} />
-              <div className="flex-1"><p className="text-sm font-bold text-slate-800">Won. The project is open.</p><p className="text-xs text-slate-500">Everything collected went with it.</p></div>
-              <button type="button" className={btnSm} onClick={() => d.act.openProject(l.projectId!)}>Open it</button>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800">Won{l.closedAt ? ` on ${fmtDay(dayKey(l.closedAt))}` : ''}.</p>
+                <p className="text-xs text-slate-500 truncate">{projectName ? `Part of ${projectName}.` : 'Not linked to its project yet.'}</p>
+              </div>
+              {l.projectId && <button type="button" className={btnSm} onClick={() => d.act.openProject(l.projectId!)}>Open the project</button>}
+              {canEdit && (!l.projectId || d.isLead) && <button type="button" className={btnSm} onClick={() => setWinning('link')}>{l.projectId ? 'Change' : 'Link its project'}</button>}
             </div>
           )}
           {d.isLead && (
@@ -1094,13 +1129,13 @@ export function OpenProjectSheet({ lead: l, opener, onClose, onAsk, onOpen }: {
     try { await f(); } catch { setError('That did not go through. Try again.'); setBusy(false); }
   };
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" role="dialog" aria-label="Mark as won">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" role="dialog" aria-label="Open the project for the proposal">
       <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={onClose} />
       <div className="phd-pop relative w-full max-w-3xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="px-6 pt-5 pb-4">
           <p className={BRAND_EYEBROW}>{leadName(l)} · {l.home.where.split(/[·,]/)[0] || 'lead'} · {LEAD_STAGES.find((s) => s.id === l.stage)?.label.toLowerCase()}</p>
-          <h3 className="text-lg font-bold text-slate-800">Mark {leadName(l)} as won</h3>
-          <p className="text-xs text-slate-500">A lead is won when its project opens. The project starts at its first stage, with everything collected below.</p>
+          <h3 className="text-lg font-bold text-slate-800">Open the project for the proposal</h3>
+          <p className="text-xs text-slate-500">The project starts at its first stage with everything collected below, linked to this lead. The lead is won later, when the client says yes.</p>
         </div>
         <motion.div variants={listV} initial="hidden" animate="show" className="px-6 pb-5 flex flex-col gap-3 overflow-y-auto">
           {conversionLines(l).map(([k, v]) => (
@@ -1110,7 +1145,7 @@ export function OpenProjectSheet({ lead: l, opener, onClose, onAsk, onOpen }: {
             <Lock className="w-4 h-4 text-[#3D52A0] shrink-0" />
             <span>{d.isLead
               ? <><b>You open the project.</b> It is tagged Actual, starts as a lead, and goes on {l.ownerName || 'the owner'}’s desk, assigned to them. The budget they said stays with the lead.</>
-              : <><b>{opener} opens the project.</b> Projects carry fees and money, so an Owner, Admin or Ops Director opens them. Until then the lead waits in Won as “said yes”; it is won, and back on your desk assigned to you, the moment they do.</>}
+              : <><b>{opener} opens the project.</b> Projects carry fees and money, so an Owner, Admin or Ops Director opens them. It comes back on your desk, assigned to you and linked to this lead, the moment they do.</>}
             </span>
           </div>
           {error && <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
@@ -1118,7 +1153,7 @@ export function OpenProjectSheet({ lead: l, opener, onClose, onAsk, onOpen }: {
         <div className="bg-slate-50 border-t border-slate-100 px-6 py-3 flex justify-end gap-3">
           <button type="button" className={btnSec} onClick={onClose}>Not yet</button>
           {d.isLead
-            ? <button type="button" className={`${btnPri} pp-press`} disabled={busy} onClick={() => go(onOpen)}><Trophy className="w-4 h-4" />{busy ? 'Opening…' : 'Open the project and mark won'}</button>
+            ? <button type="button" className={`${btnPri} pp-press`} disabled={busy} onClick={() => go(onOpen)}><Send className="w-4 h-4" />{busy ? 'Opening…' : 'Open the project'}</button>
             : <button type="button" className={`${btnPri} pp-press`} disabled={busy || !!l.openRequest} onClick={() => go(onAsk)}><Send className="w-4 h-4" />{l.openRequest ? 'Asked' : `Ask ${opener} to open the project`}</button>}
         </div>
       </div>

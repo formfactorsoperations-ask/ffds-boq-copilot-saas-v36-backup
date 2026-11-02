@@ -646,3 +646,23 @@ export function reopenLead(l: Lead, me: { email: string; name: string }, at: num
   const touch: LeadTouch = { id: `t${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`, at, by: me.email.toLowerCase(), byName: me.name, kind: 'stage', text: 'Opened again', reached: null };
   return { ...l, stage: 'talking', lostReason: null, lostNote: null, revisitOn: null, closedAt: null, touches: [...l.touches, touch].slice(-300) };
 }
+
+/**
+ * Mark a lead won: the client said yes. Its project is already open in the
+ * studio (a project is opened for the proposal), so the lead is linked to it,
+ * not given a new one. The caller saves.
+ */
+export function winLead(l: Lead, project: { id: string; name: string } | null, me: { email: string; name: string }, at: number): Lead {
+  const projectId = l.projectId || project?.id || null;
+  const touch: LeadTouch = {
+    id: `t${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`, at, by: me.email.toLowerCase(), byName: me.name, kind: 'stage',
+    text: `Won${project && !l.projectId ? `: linked to ${project.name}` : ''}`.slice(0, 500), reached: null,
+  };
+  return { ...l, stage: 'won', projectId, openRequest: null, lostReason: null, lostNote: null, revisitOn: null, closedAt: at, next: null, touches: [...l.touches, touch].slice(-300) };
+}
+
+/** Link a lead to its project in the studio, without changing its stage. The caller saves. */
+export function linkLeadProject(l: Lead, project: { id: string; name: string }, me: { email: string; name: string }, at: number): Lead {
+  const touch: LeadTouch = { id: `t${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`, at, by: me.email.toLowerCase(), byName: me.name, kind: 'note', text: `Linked to the project ${project.name}`.slice(0, 500), reached: null };
+  return { ...l, projectId: project.id, openRequest: null, touches: [...l.touches, touch].slice(-300) };
+}
