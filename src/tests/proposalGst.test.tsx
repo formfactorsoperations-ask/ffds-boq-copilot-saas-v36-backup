@@ -77,6 +77,20 @@ describe('the proposal shows it', () => {
     expect(gstRow.textContent).toContain(formatINR(EXEC * 0.3 * 0.18 + DESIGN * 0.18));
   });
 
+  it('Luxe Booklet: the Investment headline is the value before GST, with the GST and the with-GST total beneath', () => {
+    const tier: any = { id: 'com', name: 'Comfort Upgrade', timestamp: 1, boq: [], fullBoq: [], summary: { totalSell: EXEC, designFee: DESIGN, totalRevenue: EXEC + DESIGN } };
+    for (const level of ['LEVEL_1', 'LEVEL_1_5', 'LEVEL_2'] as const) {
+      render(<ClientBookletProposal tiers={[tier]} projectContext={lodha() as any} timelinePhases={[]} paymentMilestones={[]} level={level} settings={{ companyName: 'Test Studio' }} isClientViewOnly />);
+      const label = screen.getByText('TOTAL, EXCLUDING GST');
+      const card = label.parentElement!;
+      const gst = EXEC * 0.3 * 0.18 + DESIGN * 0.18;
+      expect(card.querySelector('.font-mono')!.textContent).toBe(formatINR(EXEC + DESIGN));
+      expect(card.textContent).toContain(`Plus applicable GST of ${formatINR(gst)} · ${formatINR(EXEC + DESIGN + gst)} with GST`);
+      expect(screen.queryByText('TOTAL, ALL INCLUSIVE')).toBeNull();
+      cleanup();
+    }
+  });
+
   it('the GST note says what is invoiced', () => {
     expect(gstNoteFor(gstTermsOf(lodha()))).toBe('GST @ 18% applicable on Professional/Design Fees and on the 30% of execution invoiced; the remaining 70% is billed net of taxes (Vendor Direct / Cash).');
     expect(gstNoteFor(gstTermsOf(lodha({ billablePercent: 100 })))).toBe('GST @ 18% applicable on all invoices.');
