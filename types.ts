@@ -879,6 +879,8 @@ export interface ProjectContext {
      * only the day the app first saw them (lib/ownerReports bookedSource).
      */
     bookedOn?: string;
+    /** The day the project was handed over (YYYY-MM-DD), set by the studio; read before the lifecycle gate, which the legacy migration filled in. */
+    handedOverOn?: string;
     currentExecutionBundle?: string;
     procurementLeadTimeWeeks?: number;
     briefFrozenAt?: number;

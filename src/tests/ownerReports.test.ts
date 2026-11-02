@@ -365,3 +365,16 @@ describe('when a project was booked', () => {
     expect(f.bookedAt).toBeNull();
   });
 });
+
+describe('when a project was handed over', () => {
+  it("prefers the studio's own handover date, and marks one the migration filled in as assumed", () => {
+    const set = projectFact(project('h1', {}, { status: 'completed', handedOverOn: iso(2026, 8, 30), lifecycle: { gates: { proposalAccepted: { done: true, at: at(2026, 5, 1), reference: null }, handoverComplete: { done: true, at: at(2026, 10, 2), reference: 'legacy' } } } }));
+    expect(set.handedOverAt).toBe(new Date('2026-08-30T00:00:00').getTime());
+    expect(set.handedOverSource).toBe('set');
+    const legacy = projectFact(project('h2', {}, { status: 'completed', lifecycle: { gates: { proposalAccepted: { done: true, at: at(2026, 5, 1), reference: null }, handoverComplete: { done: true, at: at(2026, 10, 2), reference: 'legacy' } } } }));
+    expect(legacy.handedOverSource).toBe('assumed');
+    const signed = projectFact(project('h3', {}, { status: 'completed', handoverDate: iso(2026, 9, 15) }));
+    expect(signed.handedOverSource).toBe('accepted');
+    expect(projectFact(project('h4')).handedOverSource).toBe('none');
+  });
+});

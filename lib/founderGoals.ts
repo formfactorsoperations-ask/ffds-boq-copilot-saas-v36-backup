@@ -218,6 +218,9 @@ export interface SignedWork {
   bookedSource: BookedSource;
   /** The first invoice or payment: a likely signing date when the booked one is assumed. */
   firstMoneyAt: number | null;
+  /** Handed over, and where that date came from; the run ends there. */
+  handedOver: boolean;
+  handedOverSource: BookedSource;
 }
 
 const SIGNED = ['won', 'execution', 'work_paused', 'completed'];
@@ -241,6 +244,8 @@ export function signedWork(facts: ProjectFact[], bands: Band[]): SignedWork[] {
       runEstimated: !runKnown,
       bookedSource: f.bookedSource || 'accepted',
       firstMoneyAt: f.firstMoneyAt ?? null,
+      handedOver: f.handedOverAt != null && f.handedOverAt > start,
+      handedOverSource: f.handedOverAt != null ? (f.handedOverSource || 'accepted') : 'none',
     };
   });
 }

@@ -62,10 +62,10 @@ export default function FoundersGoalsTab(props: FoundersTabProps) {
   }, [tags]);
 
   /* The signing date is the project's own, so it is saved on the project, the way Classify saves its tag. */
-  const setBookedOn = async (id: string, day: string | null) => {
+  const setDay = (key: 'bookedOn' | 'handedOverOn') => async (id: string, day: string | null) => {
     const p = all.find((x) => x.id === id);
     if (!p) return;
-    const next: FullProjectData = { ...p, context: { ...p.context, bookedOn: day || undefined } };
+    const next: FullProjectData = { ...p, context: { ...p.context, [key]: day || undefined } };
     await db.saveProject(next);
     onProjectsPatched?.([next]);
   };
@@ -88,7 +88,7 @@ export default function FoundersGoalsTab(props: FoundersTabProps) {
           <FoundersOnly />
         </div>
       </div>
-      <FoundersGoals r={report} plan={plan} set={set} onOpenProject={onOpenProject} leadsRead={leadsRead} facts={facts} tags={tags} onSetBookedOn={setBookedOn} />
+      <FoundersGoals r={report} plan={plan} set={set} onOpenProject={onOpenProject} leadsRead={leadsRead} facts={facts} tags={tags} onSetBookedOn={setDay('bookedOn')} onSetHandedOverOn={setDay('handedOverOn')} />
     </div>
   );
 }

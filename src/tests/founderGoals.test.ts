@@ -284,3 +284,12 @@ describe('signed work keeps where its booking date came from', () => {
     expect(v.bookedSource).toBe('accepted');
   });
 });
+
+describe('a handed-over project', () => {
+  it('ends its run on the handover day and says where that came from', () => {
+    const [w] = signedWork([fact('a', { status: 'completed', bookedAt: at(2026, 5, 1), handedOverAt: at(2026, 8, 30), handedOverSource: 'set' })], SHEET_BANDS);
+    expect(w.handedOver).toBe(true);
+    expect(w.end).toBe(at(2026, 8, 30));
+    expect(w.handedOverSource).toBe('set');
+  });
+});
