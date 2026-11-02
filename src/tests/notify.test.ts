@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ALWAYS_KINDS, DEFAULT_PREFS, cleanPrefs, counted, interrupts, isQuiet, portalDrafts,
-  approversOf, clientActionDraft, decisionDraft, escalationDraft, foldGroups, foldedTitle, initialsOf, isOpen, leadDraft,
+  approversOf, clientActionDraft, decisionDraft, escalationDraft, foldGroups, foldedTitle, initialsOf, isOpen,
   peopleDrafts, resolveAudience, reviewDraft, siteDraft, stamp, tabCounts, type Stored,
 } from '../../lib/notify';
 import type { Person } from '../../lib/peopleDesk';
@@ -155,12 +155,6 @@ describe('the other server calls', () => {
     const d = siteDraft({ type: 'blocker', text: 'Waiting on the ceiling drawing' }, { ...project, actor: 'Sanjay K' })!;
     expect(d).toMatchObject({ level: 'needs', title: 'Site blocked at Harmony 704', route: 'site-ops' });
     expect(siteDraft({ type: 'material' }, { ...project, actor: 'Sanjay K' })).toBeNull();
-  });
-
-  it('a website enquiry goes to its owner, the Ops Director, and the Owners and Admins', () => {
-    const d = leadDraft({ name: 'Aditi Joshi', wants: 'Kitchen, Wardrobes', home: '3 BHK, Baner' }, 'Riya@ff.in');
-    expect(resolveAudience(d.to, { team }).sort()).toEqual(['meera@ff.in', 'riya@ff.in', 'tanvi@ff.in', 'vikram@ff.in']);
-    expect(d.line).toBe('Kitchen, Wardrobes · 3 BHK, Baner');
   });
 });
 

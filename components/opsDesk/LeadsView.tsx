@@ -3,7 +3,7 @@ import { AnimatePresence, LayoutGroup, motion, useDragControls } from 'framer-mo
 import {
   UserPlus, Phone, MessageCircle, CalendarCheck, Ruler, FileText, Plus, Trophy, ThumbsDown, Filter, Check, X, AlertTriangle, Target,
   Hourglass, CircleCheck, CircleDot, Clock, Sparkles, Globe, MapPin, Building2, Wallet, AtSign, Send, ArrowLeft, Trash2, Search, Lock, ShieldCheck,
-  StickyNote, Pin, PinOff, Pencil,
+  StickyNote, Pin, PinOff, Pencil, LayoutGrid, List, CalendarDays, BarChart3, RotateCcw,
 } from '@/lib/lucide-shim';
 import { Dot, CountUp } from '../ui/HudBits';
 import { Glide, IconTile, Tilt, DoneTick, Notice, listV, rowV } from '../people/PeopleBits';
@@ -11,7 +11,7 @@ import { dayKey, addDays } from '../../lib/opsDesk';
 import {
   BOARD_STAGES, LEAD_STAGES, LEAD_SOURCES, SCOPES, LOST_REASONS, FIRST_CALL_MINUTES, QUIET_DAYS, QUIET_DAYS_LEAD,
   leadName, homeLine, leadUrgency, waitedLabel, sourceLabel, mainPerson, findMatches, conversionLines, leadStats, lostReasons, phoneKey, emailKey,
-  blankDraft, blankPerson, draftProblems, isOpen, leadMeetingRows, LEAD_MEETING_ROW_LABEL, closeLeadMeeting, sortedNotes, addNote, editNote, removeNote, NOTE_MAX,
+  blankDraft, blankPerson, draftProblems, isOpen, loseLead, reopenLead, winLead, linkLeadProject, leadMeetingRows, LEAD_MEETING_ROW_LABEL, closeLeadMeeting, sortedNotes, addNote, editNote, removeNote, NOTE_MAX,
   type LeadMeetingRow, type LeadMeetingRowStatus, type LeadMeetingStatus, type LeadNote,
   type Lead, type LeadDraft, type LeadStage, type LeadSource, type TouchKind, type FirstStep, type LeadNext,
 } from '../../lib/leads';
@@ -24,7 +24,8 @@ import { btnPri, btnSec, btnSm, input, Label, Seg } from './OpsDeskPanels';
 import { useDesk, Panel, Chip, Avatar, Empty, EYEBROW, BRAND_EYEBROW, fmtDay, fmtWhen, dialable, waLink, cardV, type ChipTone } from './DeskBits';
 import { clock12 } from '../../lib/peopleDesk';
 import type { Person } from './OpsDeskPanels';
-import { FormLinkSheet } from './FormLink';
+import { HeatChip, LostSheet, WonSheet, EditLeadSheet, PipelineStrip, WonColumn, LostLane, LeadCalendar, LeadInsights, SmartPanel } from './LeadsSmart';
+import { leadHeat, stageAge, templateText } from '../../lib/leadSmart';
 import '../projectHeader/projectHeader.css';
 
 /*
@@ -35,13 +36,18 @@ import '../projectHeader/projectHeader.css';
   takes everything collected with it.
 */
 
+/* What each column is for, under its name. */
+const STAGE_HINT: Record<string, string> = {
+  new: 'Call within the hour', talking: 'Learn the brief', meeting: 'Meet at the studio', measured: 'Brief for the proposal', proposal: 'Wait for the yes',
+};
+
 const STAGE_ICON: Record<LeadStage, React.ComponentType<any>> = {
   new: UserPlus, talking: Phone, meeting: CalendarCheck, measured: Ruler, proposal: FileText, won: Trophy, lost: ThumbsDown,
 };
 
 /* ── L1: the board ───────────────────────────────────────────────────────── */
 
-export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: string) => void; onAdd: () => void; onPaste: () => void; onMoved: (l: Lead) => void }) {
+export function LeadsBoard({ opener, onOpen, onAdd, onPaste, onMoved, onConvert }: { opener: string; onOpen: (id: string) => void; onAdd: () => void; onPaste: () => void; onMoved: (l: Lead) => void; onConvert: (l: Lead) => void }) {
   const d = useDesk();
   /*
     Drag a card to another stage (with a mouse, trackpad or pen; on a phone,
@@ -52,6 +58,9 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
   */
   const [dragFrom, setDragFrom] = useState<LeadStage | null>(null);
   const [over, setOver] = useState<LeadStage | null>(null);
+  /* A card dropped on Lost asks why; one dropped on Won opens the project (or asks a lead to). */
+  const [losing, setLosing] = useState<Lead | null>(null);
+  const [winning, setWinning] = useState<Lead | null>(null);
   const [moved, setMoved] = useState<{ text: string; tone: 'ok' | 'bad' } | null>(null);
   const canMove = (l: Lead) => d.canWrite && (d.isLead || l.ownerEmail === d.me.email) && isOpen(l);
   const stageAt = (x: number, y: number): LeadStage | null => {
@@ -62,6 +71,8 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
     setDragFrom(null);
     setOver(null);
     if (!to || to === l.stage || !canMove(l)) return;
+    if (to === 'lost') return setLosing(l);
+    if (to === 'won') return setWinning(l);
     const label = LEAD_STAGES.find((s) => s.id === to)?.label || to;
     const next = withTouch({ ...l, stage: to }, { kind: 'stage', text: `Moved to ${label}` }, d.me);
     onMoved(next);
@@ -74,13 +85,19 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
     }
     window.setTimeout(() => setMoved(null), 3200);
   };
-  const [view, setView] = useState<'board' | 'list'>('board');
+  const [view, setView] = useState<'board' | 'list' | 'calendar'>(() => {
+    try { return (localStorage.getItem('opsDesk.leadView') as any) || 'board'; } catch { return 'board'; }
+  });
+  const pickView = (v: 'board' | 'list' | 'calendar') => { setView(v); try { localStorage.setItem('opsDesk.leadView', v); } catch { /* private window */ } };
+  const [insights, setInsights] = useState(false);
+  const [sort, setSort] = useState<'newest' | 'hottest' | 'due'>('newest');
   const [whose, setWhose] = useState<'mine' | 'everyone'>(d.isLead ? 'everyone' : 'mine');
   const [source, setSource] = useState<LeadSource | 'all'>('all');
   const [search, setSearch] = useState('');
-  const [formOpen, setFormOpen] = useState(false);
   const stats = leadStats(d.leads, d.now);
-  const shown = d.leads.filter((l) => (whose === 'everyone' || l.ownerEmail === d.me.email) && (source === 'all' || l.source === source));
+  const q = search.trim().toLowerCase();
+  const shown = d.leads.filter((l) => (whose === 'everyone' || l.ownerEmail === d.me.email) && (source === 'all' || l.source === source)
+    && (!q || [leadName(l), l.home.where, l.home.type, l.lostReason || '', l.lostNote || '', ...l.people.map((p) => `${p.name} ${p.phone} ${p.email}`)].join(' ').toLowerCase().includes(q)));
   const toCall = shown.filter((l) => isOpen(l) && !l.firstTouchAt).length;
 
   return (
@@ -101,14 +118,13 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
         <div className="flex flex-wrap items-center gap-2">
           {d.canWrite && <button type="button" data-tour="lead-board" className={`${btnPri} pp-press`} onClick={onAdd}><UserPlus className="w-4 h-4" />Add a lead</button>}
           {d.canWrite && <button type="button" className={btnSec} onClick={onPaste}><MessageCircle className="w-4 h-4" />From a WhatsApp chat</button>}
-          <button type="button" className={btnSec} onClick={() => setFormOpen(true)}><Globe className="w-4 h-4" />Website form link</button>
           {toCall > 0 && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 ml-1"><Dot tone="warn" live />{toCall} to call now</span>}
         </div>
       </Panel>
 
       <AnimatePresence>{moved && <Notice text={moved.text} tone={moved.tone} onClose={() => setMoved(null)} />}</AnimatePresence>
       <div className="flex flex-wrap items-center gap-3">
-        <Glide id="lead-view" label="View" value={view} onChange={setView} options={[{ id: 'board', label: 'Board' }, { id: 'list', label: 'List' }]} />
+        <Glide id="lead-view" label="View" value={view} onChange={pickView} options={[{ id: 'board', label: 'Board', icon: LayoutGrid }, { id: 'list', label: 'List', icon: List }, { id: 'calendar', label: 'Calendar', icon: CalendarDays }]} />
         {d.isLead && <Glide id="lead-whose" label="Whose" value={whose} onChange={setWhose} options={[{ id: 'mine', label: 'Mine' }, { id: 'everyone', label: 'Everyone' }]} />}
         <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-600">
           <Filter className="w-3.5 h-3.5" />Source:
@@ -117,67 +133,130 @@ export function LeadsBoard({ onOpen, onAdd, onPaste, onMoved }: { onOpen: (id: s
             {LEAD_SOURCES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </label>
+        <span className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input className={`${input} pl-9 !py-1.5 !w-56`} placeholder="Search leads" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search leads" />
+        </span>
+        <button type="button" aria-pressed={insights} onClick={() => setInsights((x) => !x)}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-colors ${insights ? 'bg-[#3D52A0] text-white border-[#3D52A0]' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
+          <BarChart3 className="w-3.5 h-3.5" />Insights
+        </button>
         <span className="flex-1" />
-        <span className="text-xs text-slate-500">{view === 'board' ? 'Drag a card to move it to another stage. ' : ''}Won and lost leads move to the list, and stay searchable.</span>
+        <span className="text-xs text-slate-500">{view === 'board' ? 'Drag a card to another stage, onto Won when the client says yes, or onto Lost.' : view === 'calendar' ? 'Every next step on its day.' : 'Every lead, open and closed.'}</span>
       </div>
+      <AnimatePresence>{insights && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden"><LeadInsights leads={shown} /></motion.div>}</AnimatePresence>
 
-      <AnimatePresence mode="wait">
-        {view === 'board' ? (
-          <motion.div key="board" initial={{ opacity: 0, rotateX: -10 }} animate={{ opacity: 1, rotateX: 0 }} exit={{ opacity: 0 }} style={{ transformPerspective: 1400 }}>
-            <LayoutGroup>
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                {BOARD_STAGES.map((st, ci) => {
-                  const list = shown.filter((l) => l.stage === st);
-                  const Icon = STAGE_ICON[st];
-                  return (
-                    <motion.div key={st} data-stage={st} initial={{ opacity: 0, y: 20, rotateY: -12 }}
-                      animate={{ opacity: 1, y: 0, rotateY: 0, scale: over === st && dragFrom !== st ? 1.015 : 1 }} transition={{ delay: dragFrom ? 0 : ci * 0.06, duration: dragFrom ? 0.2 : 0.45 }}
-                      style={{ transformPerspective: 1000, position: 'relative', zIndex: dragFrom === st ? 30 : 'auto' }}
-                      className={`rounded-2xl border p-2.5 min-w-0 transition-colors ${over === st && dragFrom !== st ? 'bg-[#3D52A0]/5 border-[#3D52A0]/40 ring-2 ring-[#3D52A0]/20' : 'bg-slate-100/70 border-slate-200'}`}>
-                      <p className="flex items-center gap-2 px-1 pb-2 text-sm font-bold text-slate-800"><Icon className="w-4 h-4 text-slate-400" />{LEAD_STAGES.find((s) => s.id === st)?.label}
-                        <span className="ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full bg-white text-slate-600 tabular-nums">{list.length}</span></p>
-                      <motion.div variants={listV} initial="hidden" animate="show" className="flex flex-col gap-2">
-                        {list.map((l) => (
-                          <LeadCard key={l.id} lead={l} onOpen={() => onOpen(l.id)} draggable={canMove(l)}
-                            onDragStart={() => setDragFrom(l.stage)} onDragOver={(x, y) => setOver(stageAt(x, y))} onDrop={(x, y) => drop(l, stageAt(x, y))} />
-                        ))}
-                        {dragFrom && dragFrom !== st && over === st && (
-                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 44 }} className="rounded-xl border-2 border-dashed border-[#3D52A0]/40 text-xs font-bold text-[#3D52A0] grid place-items-center">Drop here</motion.div>
-                        )}
-                        {st === 'new' && d.canWrite && (
-                          <button type="button" onClick={onAdd} className="rounded-xl border-2 border-dashed border-slate-300 px-3 py-2.5 text-xs font-bold text-slate-500 flex items-center gap-1.5 hover:border-[#3D52A0]/40 hover:text-[#3D52A0] transition-colors">
-                            <Plus className="w-3.5 h-3.5" />Add a lead
-                          </button>
-                        )}
-                      </motion.div>
+      {/* One view at a time. A view turns in; the old one is not waited on (see OpsDeskPage). */}
+      {view === 'board' && (
+        <motion.div key="board" initial={{ opacity: 0, rotateX: -10 }} animate={{ opacity: 1, rotateX: 0 }} style={{ transformPerspective: 1400 }} className="flex flex-col gap-3">
+          <PipelineStrip leads={shown} over={over} dragging={!!dragFrom}
+            onPick={(st) => document.getElementById(`lead-col-${st}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })} />
+          <LayoutGroup>
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              {BOARD_STAGES.map((st, ci) => {
+                const list = shown.filter((l) => l.stage === st)
+                  .sort((a, b) => (leadHeat(b, d.now)?.score || 0) - (leadHeat(a, d.now)?.score || 0));
+                const stuck = list.filter((l) => stageAge(l, d.now).stuck).length;
+                const Icon = STAGE_ICON[st];
+                const hot = over === st && dragFrom !== st;
+                return (
+                  <motion.div key={st} id={`lead-col-${st}`} data-stage={st} initial={{ opacity: 0, y: 20, rotateY: -12 }}
+                    animate={{ opacity: 1, y: 0, rotateY: 0, scale: hot ? 1.015 : 1 }} transition={{ delay: dragFrom ? 0 : ci * 0.06, duration: dragFrom ? 0.2 : 0.45 }}
+                    style={{ transformPerspective: 1000, position: 'relative', zIndex: dragFrom === st ? 30 : 'auto' }}
+                    className={`rounded-2xl border min-w-0 flex flex-col transition-colors ${hot ? 'bg-[#3D52A0]/5 border-[#3D52A0]/40 ring-2 ring-[#3D52A0]/20' : 'bg-slate-50 border-slate-200'}`}>
+                    <span className="h-1 rounded-t-2xl bg-[#3D52A0]" style={{ opacity: 0.25 + ci * 0.18 }} aria-hidden />
+                    <div className="px-3 pt-2.5 pb-2 flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-slate-800 truncate">{LEAD_STAGES.find((s) => s.id === st)?.label}</p>
+                        <p className={`text-[10px] truncate ${stuck ? 'font-bold text-amber-700' : 'text-slate-500'}`}>{stuck ? `${stuck} stuck` : STAGE_HINT[st]}</p>
+                      </div>
+                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600 tabular-nums">{list.length}</span>
+                    </div>
+                    <motion.div variants={listV} initial="hidden" animate="show" className="px-2 pb-2 flex flex-col gap-2 flex-1">
+                      {list.map((l) => (
+                        <LeadCard key={l.id} lead={l} onOpen={() => onOpen(l.id)} draggable={canMove(l)}
+                          onDragStart={() => setDragFrom(l.stage)} onDragOver={(x, y) => setOver(stageAt(x, y))} onDrop={(x, y) => drop(l, stageAt(x, y))} />
+                      ))}
+                      {hot && dragFrom && (
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 44 }} className="rounded-xl border-2 border-dashed border-[#3D52A0]/40 text-xs font-bold text-[#3D52A0] grid place-items-center">Drop here</motion.div>
+                      )}
+                      {!list.length && !hot && st !== 'new' && (
+                        <div className="rounded-xl border-2 border-dashed border-slate-200 grid place-items-center text-center px-3 py-5">
+                          <Icon className="w-4 h-4 text-slate-300 mb-1" /><p className="text-[11px] text-slate-400">Nobody here yet</p>
+                        </div>
+                      )}
+                      {st === 'new' && d.canWrite && (
+                        <button type="button" onClick={onAdd} className="rounded-xl border-2 border-dashed border-slate-300 px-3 py-2.5 text-xs font-bold text-slate-500 flex items-center gap-1.5 hover:border-[#3D52A0]/40 hover:text-[#3D52A0] transition-colors">
+                          <Plus className="w-3.5 h-3.5" />Add a lead
+                        </button>
+                      )}
                     </motion.div>
-                  );
-                })}
-              </div>
-            </LayoutGroup>
-          </motion.div>
-        ) : (
-          <motion.div key="list" initial={{ opacity: 0, rotateX: -10 }} animate={{ opacity: 1, rotateX: 0 }} exit={{ opacity: 0 }} style={{ transformPerspective: 1400 }}>
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <div className="relative max-w-sm mb-3">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input className={`${input} pl-9`} placeholder="Search by name, phone or place" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search leads" />
-              </div>
-              <LeadList leads={shown.filter((l) => {
-                const s = search.trim().toLowerCase();
-                return !s || [leadName(l), l.home.where, ...l.people.map((p) => `${p.name} ${p.phone} ${p.email}`)].join(' ').toLowerCase().includes(s);
-              })} onOpen={onOpen} />
+                  </motion.div>
+                );
+              })}
+              <WonColumn leads={shown} over={over} dragging={!!dragFrom} onOpen={onOpen} />
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <LostLane leads={shown} over={over} dragging={!!dragFrom} onOpen={onOpen} />
+          </LayoutGroup>
+        </motion.div>
+      )}
+      {view === 'calendar' && (
+        <motion.div key="calendar" initial={{ opacity: 0, rotateX: -10 }} animate={{ opacity: 1, rotateX: 0 }} style={{ transformPerspective: 1400 }}>
+          <LeadCalendar leads={shown} onOpen={onOpen} onMoved={onMoved} />
+        </motion.div>
+      )}
+      {view === 'list' && (
+        <motion.div key="list" initial={{ opacity: 0, rotateX: -10 }} animate={{ opacity: 1, rotateX: 0 }} style={{ transformPerspective: 1400 }}>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className={EYEBROW}>Sort</span>
+                <Glide id="lead-sort" label="Sort" value={sort} onChange={setSort} options={[{ id: 'newest', label: 'Newest' }, { id: 'hottest', label: 'Hottest' }, { id: 'due', label: 'Next step due' }]} />
+                <span className="flex-1" />
+                <span className="text-[11px] text-slate-500">{shown.length} lead{shown.length === 1 ? '' : 's'}</span>
+              </div>
+              <LeadList leads={[...shown].sort((a, b) => sort === 'hottest' ? (leadHeat(b, d.now)?.score ?? -1) - (leadHeat(a, d.now)?.score ?? -1)
+                : sort === 'due' ? (a.next?.due || '9999').localeCompare(b.next?.due || '9999') : b.createdAt - a.createdAt)} onOpen={onOpen} />
+            </div>
+        </motion.div>
+      )}
 
       <motion.div variants={cardV} initial="hidden" animate="show" className="rounded-2xl border border-slate-200 bg-white shadow-sm px-4 py-3 flex flex-wrap items-center gap-3 text-xs text-slate-600">
         <Trophy className="w-4 h-4 text-emerald-600" /><span><b className="text-slate-800">Won this month:</b> {stats.wonList.length ? stats.wonList.map(leadName).join(', ') : 'none yet'}</span>
         <span className="w-px h-4 bg-slate-200" />
         <ThumbsDown className="w-4 h-4 text-slate-400" /><span><b className="text-slate-800">Lost:</b> {stats.lost.length}{stats.lost.length ? ` · ${lostReasons(stats.lost)}` : ''}</span>
       </motion.div>
-      {formOpen && <FormLinkSheet onClose={() => setFormOpen(false)} />}
+      {winning && (
+        <WonSheet lead={winning} onClose={() => setWinning(null)} onSave={async (project) => {
+          const l = winning;
+          const next = winLead(l, project, d.me, Date.now());
+          onMoved(next);
+          try {
+            onMoved(await saveLead(next, d.me.email));
+            setWinning(null);
+            setMoved({ text: `${leadName(l)} is won${next.projectId ? `, linked to ${project?.name || 'its project'}` : ''}.`, tone: 'ok' });
+            window.setTimeout(() => setMoved(null), 3600);
+          } catch (e) {
+            onMoved(l);
+            throw e;
+          }
+        }} />
+      )}
+      {losing && (
+        <LostSheet lead={losing} onClose={() => setLosing(null)} onSave={async (reason, note, revisitOn) => {
+          const l = losing;
+          const next = loseLead(l, reason, note, revisitOn, d.me, Date.now());
+          onMoved(next);
+          try {
+            onMoved(await saveLead(next, d.me.email));
+            setLosing(null);
+            setMoved({ text: `${leadName(l)} marked lost: ${reason}.${revisitOn ? ` Back on ${fmtDay(revisitOn)}.` : ''}`, tone: 'ok' });
+            window.setTimeout(() => setMoved(null), 3600);
+          } catch (e) {
+            onMoved(l);
+            throw e;
+          }
+        }} />
+      )}
     </div>
   );
 }
@@ -191,6 +270,9 @@ const LeadCard: React.FC<{
   /* A drag ends with a click on the card under the pointer: that click must not open the lead. */
   const dragged = useRef(false);
   const u = leadUrgency(l, d.now);
+  const age = stageAge(l, d.now);
+  const heat = leadHeat(l, d.now);
+  const main = mainPerson(l);
   const chip = !l.firstTouchAt && u.waitedMin != null
     ? <Chip tone={u.waitedMin >= FIRST_CALL_MINUTES ? 'rose' : 'amber'}>{waitedLabel(u.waitedMin)}</Chip>
     : l.source === 'referral' ? <Chip tone="brand">Referral</Chip>
@@ -205,14 +287,28 @@ const LeadCard: React.FC<{
       whileDrag={{ scale: 1.06, rotate: -2.5, rotateX: 10, zIndex: 50, boxShadow: '0 24px 40px -18px rgba(61, 82, 160, 0.55)', cursor: 'grabbing' }}
       className={draggable ? 'cursor-grab rounded-xl' : 'rounded-xl'}>
       <Tilt max={6} className="rounded-xl">
-        <button type="button" onClick={() => { if (!dragged.current) onOpen(); }} className="w-full text-left rounded-xl bg-white border border-slate-200 shadow-sm p-3 hover:border-[#3D52A0]/40 transition-colors">
-          <span className="flex items-start gap-2"><span className="text-sm font-bold text-slate-800 flex-1 min-w-0 truncate">{leadName(l)}</span>{chip}</span>
-          <span className="block text-[11px] text-slate-500 mt-0.5 truncate">{homeLine(l.home) || 'Home not filled in'}</span>
-          <span className="block text-[11px] text-slate-500 truncate">{sourceLabel(l.source)}{l.sourceNote ? ` · ${l.sourceNote}` : ''}</span>
-          <span className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-2">
-            <Dot tone={u.tone} live={u.tone === 'bad'} /><span className="text-xs font-semibold text-slate-700 flex-1 min-w-0 truncate">{u.label}</span><Avatar name={l.ownerName || l.ownerEmail} />
+        <div role="button" tabIndex={0} onClick={() => { if (!dragged.current) onOpen(); }} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}
+          className="group relative w-full text-left rounded-xl bg-white border border-slate-200 shadow-sm pl-3.5 pr-2.5 py-2.5 overflow-hidden hover:border-[#3D52A0]/40 hover:shadow-md transition-[border-color,box-shadow]">
+          {/* How warm it is, at a glance: the edge of the card. */}
+          <span className={`absolute left-0 inset-y-0 w-1 ${heat?.heat === 'hot' ? 'bg-rose-400' : heat?.heat === 'warm' ? 'bg-amber-400' : 'bg-slate-200'}`} aria-hidden />
+          <span className="block text-sm font-bold text-slate-800 truncate">{leadName(l)}</span>
+          <span className="block text-[11px] text-slate-500 truncate">{homeLine(l.home) || sourceLabel(l.source)}</span>
+          <span className="mt-2 flex items-center gap-1.5 flex-wrap">
+            {chip}
+            <HeatChip lead={l} />
+            <span title="Days in this stage" className={`inline-flex items-center gap-0.5 text-[10px] font-bold tabular-nums ${age.stuck ? 'text-amber-700' : 'text-slate-400'}`}><Hourglass className="w-3 h-3 shrink-0" />{age.stuck ? 'Stuck · ' : ''}{age.days === 0 ? 'Today' : `${age.days} d`}</span>
           </span>
-        </button>
+          <span className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-2">
+            <Dot tone={u.tone} live={u.tone === 'bad'} /><span className="text-xs font-semibold text-slate-700 flex-1 min-w-0 line-clamp-2 leading-snug" title={u.label}>{u.label}</span>
+            <Avatar name={l.ownerName || l.ownerEmail} />
+          </span>
+          {main?.phone && (
+            <span className="absolute top-1.5 right-1.5 flex items-center gap-0.5 rounded-lg bg-white/95 border border-slate-200 shadow-sm px-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+              <a href={`tel:+${dialable(main.phone)}`} onClick={(e) => e.stopPropagation()} aria-label={`Call ${main.name}`} title="Call" className="p-1 rounded-md text-slate-500 hover:text-[#3D52A0] hover:bg-slate-100"><Phone className="w-3.5 h-3.5" /></a>
+              <a href={waLink(main.phone, templateText(l.firstTouchAt ? 'checkin' : 'intro', l, { me: d.me.name, studio: d.studioName }))} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} aria-label={`WhatsApp ${main.name}`} title="WhatsApp" className="p-1 rounded-md text-slate-500 hover:text-emerald-700 hover:bg-slate-100"><MessageCircle className="w-3.5 h-3.5" /></a>
+            </span>
+          )}
+        </div>
       </Tilt>
     </motion.div>
   );
@@ -223,15 +319,22 @@ function LeadList({ leads, onOpen }: { leads: Lead[]; onOpen: (id: string) => vo
   if (!leads.length) return <Empty icon={UserPlus} text="No leads here yet." />;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[620px] text-sm">
-        <thead><tr className={`${EYEBROW} text-left`}><th className="py-2 px-2">Lead</th><th className="px-2">Stage</th><th className="px-2">Source</th><th className="px-2">Owner</th><th className="px-2">Came in</th></tr></thead>
+      <table className="w-full min-w-[860px] text-sm">
+        <thead><tr className={`${EYEBROW} text-left`}><th className="py-2 px-2">Lead</th><th className="px-2">Heat</th><th className="px-2">Stage</th><th className="px-2">Next step</th><th className="px-2">Source</th><th className="px-2">Owner</th><th className="px-2">Came in</th></tr></thead>
         <motion.tbody variants={listV} initial="hidden" animate="show" className="divide-y divide-slate-100">
           {leads.map((l) => {
             const u = leadUrgency(l, d.now);
             return (
               <motion.tr variants={rowV} key={l.id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpen(l.id)}>
                 <td className="py-2.5 px-2"><span className="flex items-center gap-2"><Dot tone={u.tone} /><span><b className="font-semibold text-slate-800">{leadName(l)}</b><span className="block text-[11px] text-slate-500">{homeLine(l.home)}</span></span></span></td>
-                <td className="px-2">{l.stage === 'won' ? <Chip tone="emerald">Won</Chip> : l.stage === 'lost' ? <Chip>Lost{l.lostReason ? ` · ${l.lostReason}` : ''}</Chip> : <Chip tone="brand">{LEAD_STAGES.find((s) => s.id === l.stage)?.label}</Chip>}</td>
+                <td className="px-2"><HeatChip lead={l} /></td>
+                <td className="px-2 py-2 max-w-[240px]">
+                  {l.stage === 'won' ? <Chip tone="emerald">Won</Chip> : l.stage === 'lost' ? <Chip tone="rose">Lost · {l.lostReason || 'no reason given'}</Chip> : <Chip tone="brand">{LEAD_STAGES.find((s) => s.id === l.stage)?.label}</Chip>}
+                  {l.stage === 'lost' && l.lostNote && <span className="block text-[11px] text-slate-500 mt-0.5 line-clamp-2" title={l.lostNote}>{l.lostNote}</span>}
+                  {l.stage === 'lost' && l.revisitOn && <span className="block text-[11px] text-[#3D52A0] font-semibold mt-0.5">Try again {fmtDay(l.revisitOn)}</span>}
+                  {isOpen(l) && <span className="block text-[11px] text-slate-400 mt-0.5">{stageAge(l, d.now).label}</span>}
+                </td>
+                <td className="px-2 text-xs">{l.next && isOpen(l) ? <><span className="text-slate-700">{l.next.text}</span><span className={`block text-[11px] ${l.next.due < dayKey(d.now) ? 'text-rose-700 font-semibold' : 'text-slate-500'}`}>{fmtDay(l.next.due)}{l.next.due < dayKey(d.now) ? ' · overdue' : ''}</span></> : <span className="text-slate-400">—</span>}</td>
                 <td className="px-2 text-xs text-slate-600">{sourceLabel(l.source)}</td>
                 <td className="px-2 text-xs text-slate-600">{l.ownerName || l.ownerEmail}</td>
                 <td className="px-2 text-xs text-slate-500">{fmtWhen(l.createdAt)}</td>
@@ -512,6 +615,9 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
   const [guests, setGuests] = useState(mainPerson(l)?.email || '');
   useEffect(() => { setCalOn(booked ? true : next.mode === 'video'); }, [next.mode, !!booked]); // eslint-disable-line react-hooks/exhaustive-deps
   const [losing, setLosing] = useState(false);
+  const [editingLead, setEditingLead] = useState(false);
+  /* The yes: 'win' marks it won and links its project; 'link' only links (or changes) the project. */
+  const [winning, setWinning] = useState<'win' | 'link' | null>(null);
   /* Closing out a booked meeting: held, did not happen, or cancelled, with what came of it. */
   const [closing, setClosing] = useState<LeadMeetingStatus | null>(null);
   const [outcome, setOutcome] = useState('');
@@ -567,8 +673,15 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
     setEditNext(false);
     commit({ ...l, next: clean, stage: clean.kind === 'meeting' && (l.stage === 'new' || l.stage === 'talking') ? 'meeting' : l.stage });
   };
+  /* Won is not a stage to click into: a lead is won when its project opens (OpenProjectSheet). */
+  /* Asked a lead to open the project for the proposal, and it is not open yet. */
+  const waitingToOpen = !!l.openRequest && isOpen(l) && !l.projectId;
+  /* Won is the client's yes: the project is already open for the proposal, so it is linked, never made. */
+  const canWin = canEdit && isOpen(l);
+  const projectName = l.projectId ? d.projectRefs.find((p) => p.id === l.projectId)?.name || 'its project' : null;
   const moveTo = (s: LeadStage) => {
-    if (!canEdit || s === l.stage || s === 'won') return;
+    if (s === 'won') { if (canWin) setWinning('win'); return; }
+    if (!canEdit || s === l.stage) return;
     commit(withTouch({ ...l, stage: s }, { kind: 'stage', text: `Moved to ${LEAD_STAGES.find((x) => x.id === s)?.label}` }, d.me));
   };
   const logTouch = async () => {
@@ -586,6 +699,31 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
   ];
   const [editing, setEditing] = useState<string | null>(null);
   const [editVal, setEditVal] = useState('');
+  /* Near the top once the yes is close; at the foot before then. */
+  const wonFirst = l.stage === 'measured' || l.stage === 'proposal' || !!l.projectId;
+  const wonPanel = (
+            <Panel icon={Trophy} title="How this lead is won" blurb="The client says yes; the lead joins its project">
+              <ol className="flex flex-col gap-2 text-xs">
+                {([
+                  ['Its project is open for the proposal', projectName ? `Linked to ${projectName}.` : waitingToOpen ? `Asked ${opener} ${fmtWhen(l.openRequest!.at)}.` : 'Opened in StudioDesk for the proposal. The lead links to it by the client’s phone, email or name.', !!l.projectId],
+                  ['The client says yes', 'Usually after the proposal.', false],
+                  ['Mark as won', 'It moves to Won on the board, linked to its project. No new project is made.', false],
+                ] as [string, string, boolean][]).map(([t, sub, done], i) => (
+                  <li key={t} className="flex gap-2.5">
+                    <span className={`w-5 h-5 shrink-0 rounded-full grid place-items-center text-[10px] font-black ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{done ? <Check className="w-3 h-3" /> : i + 1}</span>
+                    <span><b className="text-slate-800">{t}</b><span className="block text-slate-500">{sub}</span></span>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {canWin && <button type="button" className={`${btnPri} pp-press flex-1 justify-center`} onClick={() => setWinning('win')}><Trophy className="w-4 h-4" />Mark as won</button>}
+                {l.projectId
+                  ? <button type="button" className={btnSm} onClick={() => d.act.openProject(l.projectId!)}>Open the project</button>
+                  : canEdit && <button type="button" className={btnSm} onClick={() => setWinning('link')}>Link its project</button>}
+                {!l.projectId && !waitingToOpen && canEdit && l.stage === 'measured' && <button type="button" className={btnSm} onClick={() => onOpenProject(l)}>{d.isLead ? 'Open the project here' : `Ask ${opener} to open it`}</button>}
+              </div>
+            </Panel>
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -602,6 +740,7 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
           {main?.phone && <a href={`tel:+${dialable(main.phone)}`} className={`${btnPri} !py-1.5 !text-xs pp-press`} onClick={() => setTouchKind('call')}><Phone className="w-3.5 h-3.5" />Call</a>}
           {main?.phone && <a href={waLink(main.phone, `Hi ${main.name}, this is ${d.me.name} from ${d.studioName || 'the studio'}.`)} target="_blank" rel="noreferrer" className={`${btnSec} !py-1.5 !text-xs`} onClick={() => setTouchKind('whatsapp')}><MessageCircle className="w-3.5 h-3.5" />WhatsApp</a>}
           {canEdit && isOpen(l) && <button type="button" className={`${btnSec} !py-1.5 !text-xs`} onClick={() => { setNext({ text: 'Studio meeting', due: addDays(dayKey(d.now), 2), kind: 'meeting' }); setEditNext(true); }}><CalendarCheck className="w-3.5 h-3.5" />Book a meeting</button>}
+          {canEdit && <button type="button" className={`${btnSec} !py-1.5 !text-xs`} onClick={() => setEditingLead(true)}><Pencil className="w-3.5 h-3.5" />Edit</button>}
         </div>
       </motion.div>
 
@@ -611,7 +750,8 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
           const on = s.id === l.stage;
           return (
             <React.Fragment key={s.id}>
-              <motion.button type="button" whileHover={canEdit && s.id !== 'won' ? { y: -2 } : undefined} whileTap={{ scale: 0.95 }} disabled={!canEdit || s.id === 'won' || busy} onClick={() => moveTo(s.id)}
+              <motion.button type="button" whileHover={(s.id === 'won' ? canWin : canEdit) ? { y: -2 } : undefined} whileTap={{ scale: 0.95 }} disabled={(s.id === 'won' ? !canWin : !canEdit) || busy} onClick={() => moveTo(s.id)}
+                title={s.id === 'won' && canWin ? 'Mark as won: the client said yes' : undefined}
                 className={`relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${on ? 'text-white' : done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'} disabled:cursor-default`}>
                 {on && <motion.span layoutId="lead-stage" className="absolute inset-0 rounded-full bg-[#3D52A0]" transition={{ type: 'spring', stiffness: 420, damping: 32 }} />}
                 <span className="relative inline-flex items-center gap-1.5">{done ? <Check className="w-3 h-3" /> : <span className="tabular-nums">{i + 1}</span>}{s.label}</span>
@@ -621,16 +761,34 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
           );
         })}
         <span className="flex-1" />
-        {l.stage === 'lost' && <Chip>Lost{l.lostReason ? ` · ${l.lostReason}` : ''}</Chip>}
-        {canEdit && isOpen(l) && !losing && <button type="button" className={btnSm} onClick={() => setLosing(true)}><ThumbsDown className="w-3.5 h-3.5" />Mark as lost</button>}
-        {canEdit && l.stage === 'lost' && <button type="button" className={btnSm} onClick={() => commit(withTouch({ ...l, stage: 'talking', lostReason: null }, { kind: 'stage', text: 'Opened again' }, d.me))}>Open it again</button>}
-        {losing && (
-          <span className="inline-flex flex-wrap items-center gap-1.5">
-            {LOST_REASONS.map((r) => <button key={r} type="button" className={btnSm} onClick={() => { setLosing(false); commit(withTouch({ ...l, stage: 'lost', lostReason: r, next: null }, { kind: 'stage', text: `Lost: ${r}` }, d.me)); }}>{r}</button>)}
-            <button type="button" aria-label="Cancel" className="p-1 text-slate-400" onClick={() => setLosing(false)}><X className="w-4 h-4" /></button>
-          </span>
-        )}
+        {canWin && <button type="button" className={`${btnSm} !text-emerald-700 !border-emerald-300 hover:!bg-emerald-50`} onClick={() => setWinning('win')}><Trophy className="w-3.5 h-3.5" />Mark as won</button>}
+        {canEdit && isOpen(l) && <button type="button" className={btnSm} onClick={() => setLosing(true)}><ThumbsDown className="w-3.5 h-3.5" />Mark as lost</button>}
       </div>
+      {l.stage === 'lost' && (
+        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-rose-200 bg-rose-50/60 px-4 py-3 flex flex-wrap items-start gap-3">
+          <ThumbsDown className="w-4 h-4 text-rose-600 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-slate-800">Lost{l.lostReason ? `: ${l.lostReason}` : ', no reason given'}{l.closedAt ? <span className="font-semibold text-slate-500"> · {fmtDay(dayKey(l.closedAt))}</span> : null}</p>
+            {l.lostNote && <p className="text-xs text-slate-700 mt-0.5 whitespace-pre-wrap">{l.lostNote}</p>}
+            <p className="text-[11px] text-slate-500 mt-1">{l.revisitOn ? `Back on ${l.ownerName || 'the owner'}’s Today list on ${fmtDay(l.revisitOn)}, with a message ready.` : 'No day set to try again.'}</p>
+          </div>
+          {canEdit && (
+            <span className="flex flex-wrap gap-2">
+              <button type="button" className={btnSm} onClick={() => setLosing(true)}><Pencil className="w-3.5 h-3.5" />{l.lostReason ? 'Change the reason' : 'Add the reason'}</button>
+              <button type="button" className={btnSm} disabled={busy} onClick={() => commit(reopenLead(l, d.me, Date.now()))}><RotateCcw className="w-3.5 h-3.5" />Open it again</button>
+            </span>
+          )}
+        </motion.div>
+      )}
+      {losing && <LostSheet lead={l} onClose={() => setLosing(false)} onSave={async (reason, note, revisitOn) => { onSaved(await saveLead(loseLead(l, reason, note, revisitOn, d.me, Date.now()), d.me.email)); setLosing(false); }} />}
+      {winning && (
+        <WonSheet lead={l} mode={winning} onClose={() => setWinning(null)} onSave={async (project) => {
+          const next = winning === 'win' ? winLead(l, project, d.me, Date.now()) : project ? linkLeadProject(l, project, d.me, Date.now()) : l;
+          onSaved(await saveLead(next, d.me.email));
+          setWinning(null);
+        }} />
+      )}
+      {editingLead && <EditLeadSheet lead={l} onClose={() => setEditingLead(false)} onSaved={(x) => { onSaved(x); setEditingLead(false); }} />}
       {error && <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1fr_1fr_340px] gap-5 items-start">
@@ -696,6 +854,19 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
         </Panel>
 
         <div className="flex flex-col gap-5">
+          <SmartPanel lead={l} canEdit={canEdit}
+            onSent={(label) => commit(withTouch(l, { kind: 'whatsapp', text: `Sent: ${label}` }, d.me))}
+            onAct={(s) => {
+              if (s.action === 'call') return setTouchKind('call');
+              if (s.action === 'book' || s.action === 'measure') {
+                setNext({ text: s.action === 'book' ? 'Studio meeting' : 'Site measurement', due: addDays(dayKey(d.now), s.action === 'book' ? 2 : 3), kind: 'meeting' });
+                return setEditNext(true);
+              }
+              if (s.action === 'ask' && s.ask) { setEditing(s.ask); return setEditVal(''); }
+              if (s.action === 'open') return onOpenProject(l);
+              if (s.action === 'next') { setNext(l.next || { text: '', due: addDays(dayKey(d.now), 1), kind: 'call' }); setEditNext(true); }
+            }} />
+          {isOpen(l) && wonFirst && wonPanel}
           <Panel icon={Target} title="Next step" blurb="Shows on your Today list">
             {editNext || !l.next ? (
               canEdit && isOpen(l) ? (
@@ -767,18 +938,16 @@ export function LeadPage({ lead: l, owners, opener, onBack, onSaved, onDelete, o
           <Panel icon={Hourglass} title="If it goes quiet" blurb="The desk reminds you, then the lead">
             <p className="text-xs text-slate-600">No touch for {QUIET_DAYS} days puts it at the top of {mine ? 'your' : 'its owner’s'} Today list. {QUIET_DAYS_LEAD} days, and {opener} sees it.{u.quietDays >= 1 && l.firstTouchAt ? ` Last touch ${u.quietDays} day${u.quietDays === 1 ? '' : 's'} ago.` : ''}</p>
           </Panel>
-          {isOpen(l) && (l.stage === 'measured' || l.stage === 'proposal' || l.openRequest) && (
-            <Panel icon={ShieldCheck} title="Ready for a proposal?" blurb="The project opens with everything collected here">
-              {l.openRequest && !d.isLead
-                ? <p className="text-xs text-slate-600 inline-flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-[#3D52A0]" />Asked {opener} {fmtWhen(l.openRequest.at)}. It comes back on your desk when the project opens.</p>
-                : <button type="button" className={`${btnPri} pp-press w-full`} disabled={!canEdit} onClick={() => onOpenProject(l)}><Send className="w-4 h-4" />{d.isLead ? 'Open the project' : `Ask ${opener} to open the project`}</button>}
-            </Panel>
-          )}
-          {l.projectId && (
-            <div className="relative rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 flex items-center gap-3">
+          {isOpen(l) && !wonFirst && wonPanel}
+          {l.stage === 'won' && (
+            <div className="relative rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 flex flex-wrap items-center gap-3">
               <DoneTick size={36} />
-              <div className="flex-1"><p className="text-sm font-bold text-slate-800">Won. The project is open.</p><p className="text-xs text-slate-500">Everything collected went with it.</p></div>
-              <button type="button" className={btnSm} onClick={() => d.act.openProject(l.projectId!)}>Open it</button>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800">Won{l.closedAt ? ` on ${fmtDay(dayKey(l.closedAt))}` : ''}.</p>
+                <p className="text-xs text-slate-500 truncate">{projectName ? `Part of ${projectName}.` : 'Not linked to its project yet.'}</p>
+              </div>
+              {l.projectId && <button type="button" className={btnSm} onClick={() => d.act.openProject(l.projectId!)}>Open the project</button>}
+              {canEdit && (!l.projectId || d.isLead) && <button type="button" className={btnSm} onClick={() => setWinning('link')}>{l.projectId ? 'Change' : 'Link its project'}</button>}
             </div>
           )}
           {d.isLead && (
@@ -960,13 +1129,13 @@ export function OpenProjectSheet({ lead: l, opener, onClose, onAsk, onOpen }: {
     try { await f(); } catch { setError('That did not go through. Try again.'); setBusy(false); }
   };
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" role="dialog" aria-label="Ready for a proposal?">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" role="dialog" aria-label="Open the project for the proposal">
       <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={onClose} />
       <div className="phd-pop relative w-full max-w-3xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="px-6 pt-5 pb-4">
           <p className={BRAND_EYEBROW}>{leadName(l)} · {l.home.where.split(/[·,]/)[0] || 'lead'} · {LEAD_STAGES.find((s) => s.id === l.stage)?.label.toLowerCase()}</p>
-          <h3 className="text-lg font-bold text-slate-800">Ready for a proposal?</h3>
-          <p className="text-xs text-slate-500">This opens the project at its first stage, with everything you collected.</p>
+          <h3 className="text-lg font-bold text-slate-800">Open the project for the proposal</h3>
+          <p className="text-xs text-slate-500">The project starts at its first stage with everything collected below, linked to this lead. The lead is won later, when the client says yes.</p>
         </div>
         <motion.div variants={listV} initial="hidden" animate="show" className="px-6 pb-5 flex flex-col gap-3 overflow-y-auto">
           {conversionLines(l).map(([k, v]) => (
@@ -976,7 +1145,7 @@ export function OpenProjectSheet({ lead: l, opener, onClose, onAsk, onOpen }: {
             <Lock className="w-4 h-4 text-[#3D52A0] shrink-0" />
             <span>{d.isLead
               ? <><b>You open the project.</b> It is tagged Actual, starts as a lead, and goes on {l.ownerName || 'the owner'}’s desk, assigned to them. The budget they said stays with the lead.</>
-              : <><b>{opener} opens the project.</b> Projects carry fees and money, so an Owner, Admin or Ops Director says yes. You get it back on your desk, assigned to you, the moment they do.</>}
+              : <><b>{opener} opens the project.</b> Projects carry fees and money, so an Owner, Admin or Ops Director opens them. It comes back on your desk, assigned to you and linked to this lead, the moment they do.</>}
             </span>
           </div>
           {error && <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}

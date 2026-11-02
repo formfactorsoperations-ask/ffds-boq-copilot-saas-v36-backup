@@ -284,9 +284,20 @@ of Client Relations people, not one (mockups OD1 to OD7 and L1 to L4, approved
   stage with a mouse, trackpad or pen: it lifts and tilts, the column under it
   lights up with "Drop here". On touch screens the stage is changed on the
   lead's page, so dragging never fights the page's scroll.
-- The public enquiry form (`EnquiryPage.tsx`, `?enquire=`) is one glass card
-  in the same type and colours, with the studio's logo, rows that rise in, and
-  the done tick and confetti once sent.
+- Leads: a pipeline strip over the board (New to Won as chevrons, Lost apart)
+  with counts that count up; each segment scrolls to its column and takes a
+  dropped card. Columns carry a top rule in the brand colour, lighter to darker
+  as the lead moves on; Won is the last column in emerald, each card with the
+  project it joined (a lead is won when the client says yes, and is linked to
+  its project, already open for the proposal; no project is made).
+  Lost is a lane under the board. A card's left edge shows how warm it is
+  (rose, amber, slate); call and WhatsApp appear on hover. Dropping on Lost
+  opens the reason sheet (`phd-scrim`, `phd-pop`). The calendar turns in depth
+  between months, and a next step can be dragged to another day. Insight bars
+  grow from the left and counts use `CountUp`.
+- A section, and a Leads view, turns in when it changes but never waits for
+  the old one to leave: with framer-motion 11 and React 19 a waited exit could
+  be left hanging, and the screen then stayed empty.
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent
   colours, no half-pixel sizes.
 

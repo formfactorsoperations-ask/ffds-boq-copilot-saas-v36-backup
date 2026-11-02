@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { opsSettingsOf, escalationRecipientsOf, type OpsSettings } from '../../lib/opsDesk';
 import { DEFAULT_PLAYBOOKS, playbookOf, type PlaybookKind } from '../../lib/opsTeam';
-import { FormLinkPanel } from '../opsDesk/FormLink';
 import { runDailyCheckNow } from '../../services/opsDeskService';
 import { Check, Plus } from '@/lib/lucide-shim';
 import { Dot } from '../ui/HudBits';
@@ -122,11 +121,6 @@ export default function OpsDeskSettings({ org, tenantId, team, canEdit, onChange
           </button>
         </div>
       )}
-
-      <div className="flex flex-col gap-2">
-        <p className={label}>Website enquiry form</p>
-        <FormLinkPanel settings={s.leadForm} tenantId={String(tenantId || org?.tenantId || '')} team={team} canEdit={canEdit} onChange={(leadForm) => set({ leadForm })} />
-      </div>
 
       <div className="rounded-xl border border-slate-200 px-4 py-3 flex flex-col gap-3">
         <div>

@@ -32,7 +32,7 @@ export { designMeeting } from "./designMeeting";
 /* The Ops Desk: escalation emails and the daily check; see opsDesk.ts. */
 export { onEscalationWritten, opsDeskDailyCheck, opsDeskCheckNow } from "./opsDesk";
 export { onVisitRequestWritten, onDeskMeetingWritten, onMinutesWritten, onDesignMeetingWritten } from "./meetingSync";
-export { leadForm, leadMatches } from "./leads";
+export { leadMatches } from "./leads";
 /* People: attendance and leave; see peopleDesk.ts. */
 export { peopleSnapshot, peopleCommand, peopleOutbox } from "./peopleDesk";
 export { peopleImport } from "./peopleImport";

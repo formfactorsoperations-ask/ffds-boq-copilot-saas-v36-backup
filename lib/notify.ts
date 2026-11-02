@@ -298,16 +298,6 @@ export function decisionDraft(before: any, after: any, p: { projectId: string })
   return { ...base, kind: 'client.query', level: 'needs', title: `${who} asked about a decision: ${what}`, line: quote(s.queryText) || 'Asked a question in the client portal', action: 'Answer', to: { project: ['ops', 'design'], roles: ['Ops Director'] } };
 }
 
-/** A website enquiry: to the person the studio's rules made its owner (lib/leadForm ownerFor), and the Ops Director. */
-export function leadDraft(e: { name?: string; wants?: string; home?: string }, ownerEmail: string): Draft {
-  const bits = [e.wants, e.home].map((x) => clip(x, 50)).filter(Boolean).join(' · ');
-  return {
-    kind: 'lead.new', area: 'clients', level: 'needs', title: `New enquiry from ${clip(e.name, 60) || 'the website'}`,
-    line: bits || 'From the website form', projectId: null, projectName: null, route: 'ops-desk', action: 'Call them',
-    actor: e.name || null, group: null, to: { emails: [inboxKey(ownerEmail)].filter(Boolean), roles: ['Ops Director'] },
-  };
-}
-
 /* ── Who, as email addresses ─────────────────────────────────────────────── */
 
 const rolesOfRow = (m: any): string[] => [m?.role, ...(Array.isArray(m?.roles) ? m.roles : [])].map((r) => String(r || '').trim()).filter(Boolean);

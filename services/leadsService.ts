@@ -10,7 +10,6 @@ import { db, functions } from './firebaseClient';
 import { getAi, aiIsReachable } from './aiClient';
 import { FLASH_MODEL } from '../constants/aiModels';
 import { blankPerson, readChat, type Lead, type LeadDraft, type LeadStage, type LeadTouch, type LeadNote, type LeadMeetingLog, type Match, type TouchKind } from '../lib/leads';
-import type { Enquiry } from '../lib/leadForm';
 
 const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 const clip = (v: any, n: number) => String(v ?? '').trim().slice(0, n);
@@ -53,6 +52,10 @@ function normalise(id: string, d: any): Lead {
       id: String(n.id), at: Number(n.at) || 0, by: String(n.by || ''), byName: String(n.byName || ''), text: clip(n.text, 1500), pinned: !!n.pinned, editedAt: n.editedAt ?? null,
     })) as LeadNote[],
     meetings: (Array.isArray(d?.meetings) ? d.meetings : []) as LeadMeetingLog[],
+    label: d?.label ? clip(d.label, 80) : null,
+    lostNote: d?.lostNote ? clip(d.lostNote, 500) : null,
+    revisitOn: /^\d{4}-\d{2}-\d{2}$/.test(String(d?.revisitOn || '')) ? String(d.revisitOn) : null,
+    closedAt: Number(d?.closedAt) || null,
     firstTouchAt: d?.firstTouchAt ?? null,
     lastTouchAt: d?.lastTouchAt ?? null,
     openRequest: d?.openRequest || null,
@@ -86,6 +89,10 @@ const stored = (l: Lead) => {
   };
   if (!out.notes.length) delete (out as any).notes;
   if (!out.meetings.length) delete (out as any).meetings;
+  /* The same for the name the studio gave it and how it closed (firestore.rules: absent, or the right type). */
+  for (const k of ['label', 'lostNote', 'revisitOn', 'closedAt'] as const) {
+    if ((out as any)[k] == null || (out as any)[k] === '') delete (out as any)[k];
+  }
   return out;
 };
 
@@ -202,21 +209,4 @@ export async function studioMatches(people: { phone: string; email: string }[], 
     console.warn('Duplicate check', e?.code || e);
     return null;
   }
-}
-
-/* ── The public enquiry form (lib/leadForm.ts) ──────────────────────────── */
-
-export interface FormDoor { open: boolean; name?: string | null; logo?: string | null; phone?: string | null; email?: string | null }
-
-/** The studio's name and logo for a form link, or `open: false` when the link is not live. */
-export async function formDoor(token: string): Promise<FormDoor> {
-  if (!functions) return { open: false };
-  const res: any = await httpsCallable(functions, 'leadForm', { timeout: 20000 })({ action: 'door', token });
-  return res?.data || { open: false };
-}
-
-export async function sendEnquiry(token: string, enquiry: Enquiry): Promise<{ ok: boolean; reason?: string; problems?: string[]; name?: string | null }> {
-  if (!functions) return { ok: false, reason: 'offline' };
-  const res: any = await httpsCallable(functions, 'leadForm', { timeout: 30000 })({ action: 'submit', token, enquiry });
-  return res?.data || { ok: false, reason: 'closed' };
 }

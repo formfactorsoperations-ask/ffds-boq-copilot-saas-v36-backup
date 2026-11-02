@@ -3,6 +3,7 @@ import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { EASE, IconTile, Skeleton, type RingTone } from '../people/PeopleBits';
 import type { OpsSettings, QueueItem, WaitingItem, FollowUp, Escalation } from '../../lib/opsDesk';
 import type { Lead } from '../../lib/leads';
+import type { ProjectRef } from '../../lib/leadSmart';
 import type { DoneToday } from '../../lib/opsTeam';
 import type { DeskRecord } from '../../services/opsPeopleService';
 import type { OpsMom } from '../../services/opsDeskService';
@@ -72,6 +73,8 @@ export interface Desk {
   settings: OpsSettings;
   team: Person[];
   projects: DeskProjectFull[];
+  /** Every project this person can see, out of the desk's scope too: for linking a lead to its project (lib/leadSmart). */
+  projectRefs: ProjectRef[];
   queue: QueueItem[];
   waiting: WaitingItem[];
   followUps: FollowUp[];

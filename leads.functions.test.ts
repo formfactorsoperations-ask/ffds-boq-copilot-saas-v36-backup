@@ -1,5 +1,5 @@
 /*
-  The public enquiry form and the studio-wide duplicate check, end to end, in
+  The studio-wide duplicate check, end to end, in
   the local emulators (functions/src/leads.ts). A throwaway "demo-" project.
 
     npm --prefix functions run build
@@ -16,7 +16,6 @@ import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firesto
 
 const PROJECT = 'demo-ld';
 const STUDIO = 'studio_l';
-const TOKEN = `${STUDIO}.${'k'.repeat(24)}`;
 let env: RulesTestEnvironment;
 const apps: FirebaseApp[] = [];
 
@@ -42,7 +41,6 @@ const leadsOf = async () => {
   });
   return out;
 };
-const enquiry = (over: any = {}) => ({ name: 'Neha Shah', phone: '+91 98111 22233', email: '', where: 'Powai', type: '3 BHK', scope: ['Kitchen'], possession: '', message: 'Hi', website: '', openedAt: Date.now() - 20000, ...over });
 
 beforeAll(async () => {
   env = await initializeTestEnvironment({
@@ -56,7 +54,6 @@ beforeAll(async () => {
       orgName: 'Studio L',
       team: [{ email: 'lead@l.com', name: 'Anish', role: 'Ops Director' }, { email: 'cr@l.com', name: 'Anushka', role: 'Client Relations' }, { email: 'cr2@l.com', name: 'Priya', role: 'Client Relations' }],
       projectDesigners: { p1: ['cr2@l.com'] },
-      opsDesk: { leadForm: { enabled: true, token: TOKEN, ownerEmail: 'cr@l.com' } },
     });
     await setDoc(doc(db, 'projects/p1'), { tenantId: STUDIO, context: { name: 'Sea Breeze', clientName: 'Mrs Shah', clientPhone: '+91 90000 11111', clientEmail: 'shah@x.in', status: 'execution' } });
     await setDoc(doc(db, 'leads/old'), {
@@ -69,40 +66,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await Promise.all(apps.map((a) => deleteApp(a)));
   await env?.cleanup();
-});
-
-describe('the public enquiry form', () => {
-  const form = () => httpsCallable(fnsFor(`anon${Math.random()}`).fns, 'leadForm', { timeout: 60000 });
-
-  it('opens only for the studio’s live link, without signing in', async () => {
-    expect((await form()({ action: 'door', token: TOKEN })).data).toMatchObject({ open: true, name: 'Studio L' });
-    expect((await form()({ action: 'door', token: `${STUDIO}.${'z'.repeat(24)}` })).data).toEqual({ open: false });
-    expect((await form()({ action: 'door', token: 'nonsense' })).data).toEqual({ open: false });
-  }, 60000);
-
-  it('makes a lead for the chosen person, with a call today', async () => {
-    const r: any = (await form()({ action: 'submit', token: TOKEN, enquiry: enquiry() })).data;
-    expect(r).toMatchObject({ ok: true });
-    const mine = (await leadsOf()).filter((l) => l.createdBy === 'website-form');
-    expect(mine).toHaveLength(1);
-    expect(mine[0]).toMatchObject({ ownerEmail: 'cr@l.com', ownerName: 'Anushka', stage: 'new', source: 'website' });
-    expect(mine[0].people[0]).toMatchObject({ name: 'Neha Shah', phone: '+91 98111 22233' });
-  }, 60000);
-
-  it('adds a second message from the same person to their lead', async () => {
-    await form()({ action: 'submit', token: TOKEN, enquiry: enquiry({ message: 'Also the bathrooms' }) });
-    const mine = (await leadsOf()).filter((l) => l.createdBy === 'website-form');
-    expect(mine).toHaveLength(1);
-    expect(mine[0].touches.map((t: any) => t.text).join(' ')).toContain('Also the bathrooms');
-  }, 60000);
-
-  it('thanks a bot and keeps nothing, and turns away what is missing', async () => {
-    const before = (await leadsOf()).length;
-    expect((await form()({ action: 'submit', token: TOKEN, enquiry: enquiry({ phone: '+91 97000 00001', website: 'http://spam' }) })).data).toMatchObject({ ok: true });
-    expect((await form()({ action: 'submit', token: TOKEN, enquiry: enquiry({ phone: '+91 97000 00002', openedAt: Date.now() }) })).data).toMatchObject({ ok: true });
-    expect((await form()({ action: 'submit', token: TOKEN, enquiry: enquiry({ name: 'N', phone: '', email: '' }) })).data).toMatchObject({ ok: false, reason: 'invalid' });
-    expect((await leadsOf()).length).toBe(before);
-  }, 60000);
 });
 
 describe('the duplicate check across the studio', () => {
