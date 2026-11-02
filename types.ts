@@ -873,6 +873,12 @@ export interface ProjectContext {
     // Execution Intelligence Fields
     sofFreezeDate?: string;
     targetHandoverDate?: string;
+    /**
+     * The day the client signed (YYYY-MM-DD), set by the studio. Reports read it
+     * before the lifecycle's proposal-accepted date, which on older projects is
+     * only the day the app first saw them (lib/ownerReports bookedSource).
+     */
+    bookedOn?: string;
     currentExecutionBundle?: string;
     procurementLeadTimeWeeks?: number;
     briefFrozenAt?: number;

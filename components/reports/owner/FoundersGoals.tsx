@@ -3,7 +3,7 @@ import {
   Target, CheckSquare, Flag, LineChart, Layers, Users, Filter, Clock, SlidersHorizontal, CalendarDays, LayoutGrid, Wallet, ShieldCheck,
 } from '@/lib/lucide-shim';
 import { CountUp } from '../../ui/HudBits';
-import { inr, type ProjectFact } from '../../../lib/ownerReports';
+import { inr, type BookedSource, type ProjectFact } from '../../../lib/ownerReports';
 import {
   BANDS, TIERS, monthName, shortDate, signedWork, landedIn, isCounted, setCounted,
   type FounderPlan, type GoalsReport, type Tier, type Band, type CostLine, type Funnel, type ProjectTag,
@@ -514,7 +514,41 @@ function Year({ r, picked, onPick }: { r: GoalsReport; picked: string; onPick: (
 const STATUS_WORD: Record<string, string> = { won: 'Signed', execution: 'In execution', work_paused: 'Paused', completed: 'Handed over' };
 const TAG_CHIP: Record<ProjectTag, [string, 'ok' | 'warn' | 'none']> = { actual: ['Actual', 'ok'], untagged: ['Untagged', 'warn'], test: ['Dummy', 'none'] };
 
-function Counted({ r, facts, tags, plan, set, picked, onPick, onOpenProject }: {
+/** A booking date as the date field reads it. */
+const ymd = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
+/* Where a project's booking date came from, in a line, and a fix when the date is only assumed. */
+function BookedOn({ id, at, source, firstMoneyAt, onSet }: { id: string; name: string; at: number | null; source: BookedSource; firstMoneyAt: number | null; onSet: (id: string, day: string | null) => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const save = async (day: string | null) => {
+    setBusy(true); setFailed(false);
+    try { await onSet(id, day); } catch { setFailed(true); } finally { setBusy(false); }
+  };
+  const suggest = (source === 'assumed' || source === 'none') && firstMoneyAt != null && (at == null || Math.abs(firstMoneyAt - at) > 86400000);
+  return (
+    <div className="min-w-[140px]">
+      <input type="date" aria-label="Signed on" value={at != null ? ymd(at) : ''} disabled={busy}
+        onChange={(e) => { if (e.target.value) void save(e.target.value); }}
+        className="px-2 py-1 rounded-lg border border-slate-300 text-xs tabular-nums outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] disabled:opacity-50" />
+      <div className="mt-0.5">
+        {failed ? <span className="text-[11px] font-bold text-rose-700">Not saved: try again</span>
+          : busy ? <span className="text-[11px] text-slate-500">Saving…</span>
+          : source === 'set' ? <span className="text-[11px] text-slate-500">Set by you · <button type="button" className="underline hover:text-slate-800" onClick={() => void save(null)}>clear</button></span>
+          : source === 'accepted' ? <span className="text-[11px] text-slate-500">Proposal accepted</span>
+          : source === 'assumed' ? <Chip tone="warn">Assumed: set this</Chip>
+          : <Chip tone="bad">No date: not counted</Chip>}
+      </div>
+      {suggest && !busy && (
+        <button type="button" onClick={() => void save(ymd(firstMoneyAt as number))} className="mt-0.5 text-[11px] font-bold text-[#3D52A0] hover:underline text-left">
+          Use first invoice, {shortDate(firstMoneyAt as number)}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Counted({ r, facts, tags, plan, set, picked, onPick, onOpenProject, onSetBookedOn }: {
   r: GoalsReport;
   facts: ProjectFact[];
   tags: Map<string, ProjectTag>;
@@ -523,6 +557,7 @@ function Counted({ r, facts, tags, plan, set, picked, onPick, onOpenProject }: {
   picked: string;
   onPick: (q: string) => void;
   onOpenProject: (id: string) => void;
+  onSetBookedOn: (id: string, day: string | null) => Promise<void>;
 }) {
   const q = r.quarter;
   const work = signedWork(facts, r.bands);
@@ -533,13 +568,18 @@ function Counted({ r, facts, tags, plan, set, picked, onPick, onOpenProject }: {
     const quarter = r.quarters.find((x) => w.start >= x.start && w.start < x.end)?.label || '';
     return { w, tag, on, quarter, lands: on ? landedIn([w], q.start, q.end) : 0, status: STATUS_WORD[factOf.get(w.id)?.status || ''] || 'Signed' };
   }).sort((a, b) => b.w.start - a.w.start);
+  /* Signed, but with no booking date at all: not counted until it has one. */
+  const undated = facts.filter((f) => ['won', 'execution', 'work_paused', 'completed'].includes(f.status) && f.bookedAt == null && f.execution + f.design > 0);
   const shown = rows.filter((x) => picked === 'all' ? true : picked === 'out' ? !x.on : x.quarter === picked);
   const counted = rows.filter((x) => x.on);
   const inFy = counted.filter((x) => x.quarter);
   const estimated = inFy.filter((x) => x.w.marginEstimated);
   const toggle = (id: string, tag: ProjectTag, on: boolean) => set((p) => setCounted(p, id, tag, on));
 
+  const assumed = counted.filter((x) => x.w.bookedSource === 'assumed');
   const checks = [
+    ...undated.map((f) => ({ id: f.id, tone: 'bad' as const, tag: 'No date', title: `${f.name}: signed, but no booking date`, line: 'It is not counted anywhere until it has one. Set the day the client signed in the list above.' })),
+    ...assumed.map((x) => ({ id: x.w.id, tone: 'warn' as const, tag: 'Date assumed', title: `${x.w.name}: booked ${shortDate(x.w.start)}?`, line: `That is the day the app first saw it, not the signing. Set the real date in the list above${x.w.firstMoneyAt ? `; its first invoice was ${shortDate(x.w.firstMoneyAt)}` : ''}.` })),
     ...counted.filter((x) => x.w.marginEstimated).map((x) => ({ id: x.w.id, tone: 'warn' as const, tag: 'Margin guessed', title: `${x.w.name}: no planned cost`, line: `Margin counted at the band's rate (${money(x.w.margin)}). Add the cost in its BOQ and the real figure replaces it.` })),
     ...counted.filter((x) => x.w.runEstimated && x.w.end > r.now).map((x) => ({ id: x.w.id, tone: 'warn' as const, tag: 'Run guessed', title: `${x.w.name}: no handover date`, line: 'Its margin is spread over a typical run for its size. Set a target handover in the project and the spread follows it.' })),
     ...rows.filter((x) => !x.on && x.tag === 'untagged').map((x) => ({ id: x.w.id, tone: 'brand' as const, tag: 'Not counted', title: `${x.w.name} is untagged`, line: `${money(x.w.value)} booked on ${shortDate(x.w.start)}. If it is real work, tag it Actual on its context card, or tick it here.` })),
@@ -556,9 +596,9 @@ function Counted({ r, facts, tags, plan, set, picked, onPick, onOpenProject }: {
       <Panel icon={CheckSquare} lift={false} delay={380} title="Projects behind these numbers"
         blurb="Every signed project, and whether it is counted. Tick or untick one: every figure on this tab follows, for both founders."
         aside={(plan.include.length > 0 || plan.exclude.length > 0) ? <SmallButton onClick={() => set({ include: [], exclude: [] })}>Count only projects tagged Actual</SmallButton> : undefined}
-        foot="Margin is the contract before GST less the planned cost in the project's BOQ; where there is none, the band's margin stands in. It lands evenly from the day the proposal was accepted to the handover. Ticking here never changes the project itself, or any other report.">
+        foot="Booked is the day the client signed: the date you set, else the day the proposal was accepted. On older projects that day is often only when the app first saw them, marked Assumed; setting the real date fixes it in every report. Margin is the contract before GST less the planned cost in the BOQ, landing evenly to the handover. Ticking never changes the project, or any other report.">
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-          <Tile label="Counting" line={`${rows.length - counted.length} left out`}><Big v={counted.length} f={(v) => String(Math.round(v))} size="text-2xl" suffix={`of ${rows.length} signed`} /></Tile>
+          <Tile label="Counting" line={`${rows.length - counted.length} left out${assumed.length ? ` · ${assumed.length} booking ${assumed.length === 1 ? 'date' : 'dates'} assumed` : ''}${undated.length ? ` · ${undated.length} with no date` : ''}`}><Big v={counted.length} f={(v) => String(Math.round(v))} size="text-2xl" suffix={`of ${rows.length} signed`} /></Tile>
           <Tile label={`Booked in ${r.fy.label}`} line="Counted projects, before GST"><Big v={inFy.reduce((s, x) => s + x.w.value, 0)} size="text-2xl" /></Tile>
           <Tile label="Their margin" line={estimated.length ? `${money(estimated.reduce((s, x) => s + x.w.margin, 0))} of it estimated, on ${plural(estimated.length, 'project')}` : 'All from planned costs'}><Big v={inFy.reduce((s, x) => s + x.w.margin, 0)} size="text-2xl" /></Tile>
           <Tile label={`Lands in ${q.label}`} line={`Of the ${money(r.goal)} goal`}><Big v={counted.reduce((s, x) => s + x.lands, 0)} size="text-2xl" color="text-emerald-700" /></Tile>
@@ -572,7 +612,7 @@ function Counted({ r, facts, tags, plan, set, picked, onPick, onOpenProject }: {
           </div>
           <span className="text-[11px] text-slate-500">{picked === 'all' ? 'Every signed project' : picked === 'out' ? 'What is left out' : `Booked in ${picked}. Click the quarter again to see all.`}</span>
         </div>
-        {shown.length === 0 ? <div className="mt-3"><Empty>Nothing here.</Empty></div> : (
+        {shown.length === 0 && !((picked === 'all' || picked === 'out') && undated.length) ? <div className="mt-3"><Empty>Nothing here.</Empty></div> : (
           <div className="mt-3 overflow-x-auto -mx-1">
             <table className="w-full text-xs min-w-[860px]">
               <thead><tr className="text-left">
@@ -593,7 +633,9 @@ function Counted({ r, facts, tags, plan, set, picked, onPick, onOpenProject }: {
                       <Chip tone={TAG_CHIP[x.tag][1]}>{TAG_CHIP[x.tag][0]}</Chip>
                       {x.on !== (x.tag === 'actual') && <div className="text-[11px] text-slate-500 mt-0.5">{x.on ? 'Counted by you' : 'Left out by you'}</div>}
                     </td>
-                    <td className="px-2 py-2.5 border-b border-slate-100 text-slate-700 whitespace-nowrap">{shortDate(x.w.start)}</td>
+                    <td className="px-2 py-2 border-b border-slate-100 text-slate-700">
+                      <BookedOn id={x.w.id} name={x.w.name} at={x.w.start} source={x.w.bookedSource} firstMoneyAt={x.w.firstMoneyAt} onSet={onSetBookedOn} />
+                    </td>
                     <td className="px-2 py-2.5 border-b border-slate-100 font-semibold text-slate-800 tabular-nums">{money(x.w.value)}</td>
                     <td className="px-2 py-2.5 border-b border-slate-100">
                       <span className="font-semibold text-slate-800 tabular-nums">{money(x.w.margin)}</span> <span className="text-[11px] text-slate-500">{Math.round((x.w.margin / x.w.value) * 100)}%</span>
@@ -604,6 +646,19 @@ function Counted({ r, facts, tags, plan, set, picked, onPick, onOpenProject }: {
                       {x.w.runEstimated && <div className="mt-0.5"><Chip tone="warn">Estimated: no handover date</Chip></div>}
                     </td>
                     <td className="px-2 py-2.5 border-b border-slate-100 font-bold text-slate-800 tabular-nums">{x.on ? (x.lands > 0 ? money(x.lands) : '–') : <span className="font-normal text-slate-500">Not counted</span>}</td>
+                  </tr>
+                ))}
+                {(picked === 'all' || picked === 'out') && undated.map((f) => (
+                  <tr key={f.id} className="opacity-80">
+                    <td className="px-2 py-2.5 border-b border-slate-100"><input type="checkbox" disabled checked={false} aria-label={`${f.name} has no booking date`} className="w-4 h-4" /></td>
+                    <td className="px-2 py-2.5 border-b border-slate-100">
+                      <button type="button" onClick={() => onOpenProject(f.id)} className="font-semibold text-slate-800 hover:text-[#3D52A0] text-left">{f.name}</button>
+                      <div className="text-[11px] text-slate-500">{STATUS_WORD[f.status] || 'Signed'}</div>
+                    </td>
+                    <td className="px-2 py-2.5 border-b border-slate-100"><Chip tone={TAG_CHIP[tags.get(f.id) || 'untagged'][1]}>{TAG_CHIP[tags.get(f.id) || 'untagged'][0]}</Chip></td>
+                    <td className="px-2 py-2 border-b border-slate-100"><BookedOn id={f.id} name={f.name} at={null} source="none" firstMoneyAt={f.firstMoneyAt ?? null} onSet={onSetBookedOn} /></td>
+                    <td className="px-2 py-2.5 border-b border-slate-100 font-semibold text-slate-800 tabular-nums">{money(f.execution + f.design)}</td>
+                    <td className="px-2 py-2.5 border-b border-slate-100 text-slate-500" colSpan={3}>Counted once it has a booking date</td>
                   </tr>
                 ))}
               </tbody>
@@ -763,7 +818,7 @@ function FunnelEditor({ r, plan, set }: { r: GoalsReport; plan: FounderPlan; set
 
 /* ── The tab ────────────────────────────────────────────────────────────── */
 
-export default function FoundersGoals({ r, plan, set, onOpenProject, leadsRead, facts, tags }: {
+export default function FoundersGoals({ r, plan, set, onOpenProject, leadsRead, facts, tags, onSetBookedOn }: {
   r: GoalsReport;
   plan: FounderPlan;
   set: SetPlan;
@@ -772,6 +827,7 @@ export default function FoundersGoals({ r, plan, set, onOpenProject, leadsRead, 
   /** Every project's facts and tag, for the list of what counts. */
   facts: ProjectFact[];
   tags: Map<string, ProjectTag>;
+  onSetBookedOn: (id: string, day: string | null) => Promise<void>;
 }) {
   const [picked, setPicked] = useState('all');
   const listRef = useRef<HTMLDivElement>(null);
@@ -798,7 +854,7 @@ export default function FoundersGoals({ r, plan, set, onOpenProject, leadsRead, 
       </div>
       <Year r={r} picked={picked} onPick={pickQuarter} />
       <div ref={listRef} className="flex flex-col gap-4 scroll-mt-4">
-        <Counted r={r} facts={facts} tags={tags} plan={plan} set={set} picked={picked} onPick={setPicked} onOpenProject={onOpenProject} />
+        <Counted r={r} facts={facts} tags={tags} plan={plan} set={set} picked={picked} onPick={setPicked} onOpenProject={onOpenProject} onSetBookedOn={onSetBookedOn} />
       </div>
 
       <div className="mt-4 flex items-end justify-between gap-4 flex-wrap">

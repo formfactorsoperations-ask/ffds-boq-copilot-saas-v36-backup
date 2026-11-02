@@ -274,3 +274,13 @@ describe('the year', () => {
     void DAY;
   });
 });
+
+describe('signed work keeps where its booking date came from', () => {
+  it('carries the source and the first invoice through', () => {
+    const [w] = signedWork([fact('a', { bookedSource: 'assumed', firstMoneyAt: at(2026, 4, 20) })], SHEET_BANDS);
+    expect(w.bookedSource).toBe('assumed');
+    expect(w.firstMoneyAt).toBe(at(2026, 4, 20));
+    const [v] = signedWork([fact('b')], SHEET_BANDS);
+    expect(v.bookedSource).toBe('accepted');
+  });
+});

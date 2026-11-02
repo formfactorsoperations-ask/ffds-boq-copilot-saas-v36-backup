@@ -9,6 +9,7 @@ import { Chip, Empty } from './ReportBits';
 import FoundersGoals from './FoundersGoals';
 import { useFounderPlan, useGoalsReport, type SaveStatus } from './useFounderGoals';
 import { Lock } from '@/lib/lucide-shim';
+import { db } from '../../../services/dbService';
 
 /*
   The Founders' goals tab: the founders' plan (useFounderPlan), the report on
@@ -30,6 +31,8 @@ export interface FoundersTabProps {
   onOpenProject: (id: string) => void;
   /** Open the Founders' goals tab. */
   onGoals?: () => void;
+  /** Projects whose stored data was changed here, for App to merge. */
+  onProjectsPatched?: (updated: FullProjectData[]) => void;
 }
 
 export const SavedNote: React.FC<{ status: SaveStatus }> = ({ status }) => (
@@ -48,7 +51,7 @@ export const PlanState: React.FC<{ plan: unknown }> = ({ plan }) =>
     : <Empty>The founders' plan could not be read. Check the connection and open the tab again; if it keeps happening, the Firestore rules for founderGoals may not be published yet.</Empty>;
 
 export default function FoundersGoalsTab(props: FoundersTabProps) {
-  const { tenantId, me, all, facts, leads, leadsRead, targets, roster, canSetTargets, saveTargets, onOpenProject } = props;
+  const { tenantId, me, all, facts, leads, leadsRead, targets, roster, canSetTargets, saveTargets, onOpenProject, onProjectsPatched } = props;
   const { plan, set, status } = useFounderPlan(tenantId, me, targets, canSetTargets, saveTargets);
   const [now] = useState(() => Date.now());
   const { tags, counted, realLeads, report } = useGoalsReport({ all, facts, leads, leadsRead, targets, roster, plan, now });
@@ -57,6 +60,15 @@ export default function FoundersGoalsTab(props: FoundersTabProps) {
     for (const t of tags.values()) c[t]++;
     return c;
   }, [tags]);
+
+  /* The signing date is the project's own, so it is saved on the project, the way Classify saves its tag. */
+  const setBookedOn = async (id: string, day: string | null) => {
+    const p = all.find((x) => x.id === id);
+    if (!p) return;
+    const next: FullProjectData = { ...p, context: { ...p.context, bookedOn: day || undefined } };
+    await db.saveProject(next);
+    onProjectsPatched?.([next]);
+  };
 
   if (!plan || !report) return <PlanState plan={plan} />;
   const countedIds = new Set(counted.map((f) => f.id));
@@ -76,7 +88,7 @@ export default function FoundersGoalsTab(props: FoundersTabProps) {
           <FoundersOnly />
         </div>
       </div>
-      <FoundersGoals r={report} plan={plan} set={set} onOpenProject={onOpenProject} leadsRead={leadsRead} facts={facts} tags={tags} />
+      <FoundersGoals r={report} plan={plan} set={set} onOpenProject={onOpenProject} leadsRead={leadsRead} facts={facts} tags={tags} onSetBookedOn={setBookedOn} />
     </div>
   );
 }

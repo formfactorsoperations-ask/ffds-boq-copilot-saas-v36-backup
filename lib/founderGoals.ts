@@ -24,7 +24,7 @@
   Pure, and shared by the screen and the tests.
 */
 import { BOARD_STAGES, type Lead } from './leads';
-import { furthestStage, inr, STAGE_CHANCE, type ProjectFact } from './ownerReports';
+import { furthestStage, inr, STAGE_CHANCE, type BookedSource, type ProjectFact } from './ownerReports';
 
 const DAY = 86400000;
 /** An average month, for spreading margin and measuring runs. */
@@ -214,6 +214,10 @@ export interface SignedWork {
   /** Run from the band, no handover date being known. */
   runEstimated: boolean;
   band: number;
+  /** Where the booking date came from (ownerReports BookedSource). */
+  bookedSource: BookedSource;
+  /** The first invoice or payment: a likely signing date when the booked one is assumed. */
+  firstMoneyAt: number | null;
 }
 
 const SIGNED = ['won', 'execution', 'work_paused', 'completed'];
@@ -235,6 +239,8 @@ export function signedWork(facts: ProjectFact[], bands: Band[]): SignedWork[] {
       marginEstimated: !quoted,
       start, end: runKnown ? (known as number) : start + Math.max(0.5, b.months) * MONTH,
       runEstimated: !runKnown,
+      bookedSource: f.bookedSource || 'accepted',
+      firstMoneyAt: f.firstMoneyAt ?? null,
     };
   });
 }

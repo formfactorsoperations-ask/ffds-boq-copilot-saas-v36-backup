@@ -192,6 +192,7 @@ export default function StudioReports({ projects, onNavigate, onOpenProject, onP
             targets: data.targets, roster: data.roster, canSetTargets, saveTargets: data.saveTargets,
             onOpenProject: (id: string) => openProject(id),
             onGoals: () => setSection("goals"),
+            onProjectsPatched,
           })
         ) : all.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in max-w-lg mx-auto text-center">
