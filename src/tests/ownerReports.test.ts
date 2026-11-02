@@ -337,3 +337,44 @@ describe('targets', () => {
     expect(inr(10000000)).toBe('₹1Cr');
   });
 });
+
+describe('when a project was booked', () => {
+  it("prefers the studio's own signing date over the lifecycle gate", () => {
+    const f = projectFact(project('b1', {}, { bookedOn: iso(2026, 5, 12) }));
+    expect(f.bookedAt).toBe(new Date('2026-05-12T00:00:00').getTime());
+    expect(f.bookedSource).toBe('set');
+  });
+  it('marks a gate date the app filled in, on an older project, as assumed', () => {
+    const legacy = projectFact(project('b2', {}, { lifecycle: { gates: { proposalAccepted: { done: true, at: at(2026, 9, 3), reference: 'legacy' } } } }));
+    expect(legacy.bookedSource).toBe('assumed');
+    const synced = projectFact(project('b3', {}, { lifecycle: { gates: { proposalAccepted: { done: true, at: at(2026, 9, 3), reference: 'auto-sync-journey' } } } }));
+    expect(synced.bookedSource).toBe('assumed');
+    expect(projectFact(project('b4')).bookedSource).toBe('accepted');
+  });
+  it('has no booking date for a signed project with no gate, and says so', () => {
+    const f = projectFact(project('b5', {}, { lifecycle: { gates: {} } }));
+    expect(f.bookedAt).toBeNull();
+    expect(f.bookedSource).toBe('none');
+  });
+  it('knows the first invoice or payment, a likely signing date', () => {
+    const f = projectFact(project('b6', {}, { paymentMilestones: [ms('m1', { status: 'paid', invoiceDate: iso(2026, 4, 20), paidDate: iso(2026, 4, 25) }), ms('m2', { status: 'invoiced', invoiceDate: iso(2026, 6, 2) })] }));
+    expect(f.firstMoneyAt).toBe(new Date('2026-04-20T00:00:00').getTime());
+  });
+  it('leaves a proposal unbooked whatever dates it carries', () => {
+    const f = projectFact(project('b7', {}, { status: 'proposal_sent', bookedOn: iso(2026, 5, 12) }));
+    expect(f.bookedAt).toBeNull();
+  });
+});
+
+describe('when a project was handed over', () => {
+  it("prefers the studio's own handover date, and marks one the migration filled in as assumed", () => {
+    const set = projectFact(project('h1', {}, { status: 'completed', handedOverOn: iso(2026, 8, 30), lifecycle: { gates: { proposalAccepted: { done: true, at: at(2026, 5, 1), reference: null }, handoverComplete: { done: true, at: at(2026, 10, 2), reference: 'legacy' } } } }));
+    expect(set.handedOverAt).toBe(new Date('2026-08-30T00:00:00').getTime());
+    expect(set.handedOverSource).toBe('set');
+    const legacy = projectFact(project('h2', {}, { status: 'completed', lifecycle: { gates: { proposalAccepted: { done: true, at: at(2026, 5, 1), reference: null }, handoverComplete: { done: true, at: at(2026, 10, 2), reference: 'legacy' } } } }));
+    expect(legacy.handedOverSource).toBe('assumed');
+    const signed = projectFact(project('h3', {}, { status: 'completed', handoverDate: iso(2026, 9, 15) }));
+    expect(signed.handedOverSource).toBe('accepted');
+    expect(projectFact(project('h4')).handedOverSource).toBe('none');
+  });
+});

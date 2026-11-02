@@ -13,6 +13,7 @@ import MoneySection from "./reports/owner/MoneySection";
 import DeliverySection from "./reports/owner/DeliverySection";
 import TargetsModal from "./reports/owner/TargetsModal";
 import FoundersGoalsTab from "./reports/owner/FoundersGoalsTab";
+import WhatIfTab from "./reports/owner/WhatIfTab";
 import { isFounder } from "../lib/founderGoals";
 import { useOwnerReportData } from "./reports/owner/useOwnerReportData";
 import { Empty } from "./reports/owner/ReportBits";
@@ -31,8 +32,10 @@ export { getSingleProjectValue };
   scorecard of eight figures, each against its target and the period before,
   and each card opens the section behind it: Sales, Money, and Delivery and
   team. Studio memory, the Zoho history and benchmarks, stays as the last
-  section. Founders' goals (mockup approved 30 Oct 2026) sits before it, for
-  the two founders only (lib/founderGoals), and always counts actual work.
+  section. Founders' goals (mockup approved 30 Oct 2026) and What if (2 Nov
+  2026) sit before it, for the two founders only (lib/founderGoals). They see
+  every project and count the ones the founders chose, whatever the view
+  picker says.
   The arithmetic lives in lib/ownerReports; this file is the shell.
 
   Top-tab layout (DESIGN.md): the shell's title row names the page, then the
@@ -55,6 +58,7 @@ const SECTIONS: { id: Section; label: string; founders?: boolean }[] = [
   { id: "money", label: "Money" },
   { id: "delivery", label: "Delivery and team" },
   { id: "goals", label: "Founders' goals", founders: true },
+  { id: "whatif", label: "What if", founders: true },
   { id: "memory", label: "Studio memory" },
 ];
 const PERIODS: { id: ReportPeriod; label: (now: number) => string }[] = [
@@ -102,9 +106,9 @@ export default function StudioReports({ projects, onNavigate, onOpenProject, onP
   const setPeriod = (p: ReportPeriod) => { setPeriodState(p); remember(PERIOD_KEY, p); };
 
   const all = projects || [];
-  /* Founders' goals counts actual work only, whatever the view picker says. */
-  const goals = section === "goals" && founder;
-  const scoped = useMemo(() => all.filter((p) => inScope(p, goals ? "actual" : scope)), [all, scope, goals]);
+  /* The founders' tabs read every project; the founders' own choices decide what counts. */
+  const goals = (section === "goals" || section === "whatif") && founder;
+  const scoped = useMemo(() => all.filter((p) => inScope(p, goals ? "all" : scope)), [all, scope, goals]);
   const counts = useMemo(() => countClasses(all, getSingleProjectValue), [all]);
   const untagged = useMemo(() => all.filter((p) => classifyProject(p) === "untagged"), [all]);
 
@@ -182,10 +186,14 @@ export default function StudioReports({ projects, onNavigate, onOpenProject, onP
         {section === "memory" ? (
           <StudioMemoryView projects={all} />
         ) : goals ? (
-          <FoundersGoalsTab tenantId={String(orgData?.tenantId || "")} me={me} all={all} facts={data.facts}
-            leads={data.leads || []} leadsRead={data.leads !== null && !data.leadsLoading}
-            targets={data.targets} roster={data.roster} canSetTargets={canSetTargets} saveTargets={data.saveTargets}
-            onOpenProject={(id) => openProject(id)} />
+          React.createElement(section === "whatif" ? WhatIfTab : FoundersGoalsTab, {
+            tenantId: String(orgData?.tenantId || ""), me, all, facts: data.facts,
+            leads: data.leads || [], leadsRead: data.leads !== null && !data.leadsLoading,
+            targets: data.targets, roster: data.roster, canSetTargets, saveTargets: data.saveTargets,
+            onOpenProject: (id: string) => openProject(id),
+            onGoals: () => setSection("goals"),
+            onProjectsPatched,
+          })
         ) : all.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in max-w-lg mx-auto text-center">
             <BarChart3 className="w-10 h-10 text-slate-300 mx-auto mb-3" />

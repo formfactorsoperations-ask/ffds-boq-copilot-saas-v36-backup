@@ -181,6 +181,10 @@ export interface AdditionFact {
 export interface DecisionFact { title: string; waiting: boolean; since: number | null }
 export interface ScheduleFact { finishAt: number | null; targetAt: number | null; holdReason: string | null }
 
+export type BookedSource = 'set' | 'accepted' | 'assumed' | 'none';
+/* Gate dates written by the app, not by a client accepting: the legacy migration (dbService) and the journey sync (journeyEngine). */
+const FILLED_IN = ['legacy', 'auto-sync-journey'];
+
 export interface ProjectFact {
   id: string;
   name: string;
@@ -188,6 +192,16 @@ export interface ProjectFact {
   status: string;
   area: number;
   bookedAt: number | null;
+  /**
+   * Where bookedAt came from: the studio's own signing date, the accepted
+   * proposal, a date the app filled in when it first saw an older project
+   * (assumed), or nothing. Missing on facts built by hand.
+   */
+  bookedSource?: BookedSource;
+  /** The first invoice or payment on the project: a good guess at when it was signed. */
+  firstMoneyAt?: number | null;
+  /** Where handedOverAt came from, as bookedSource. */
+  handedOverSource?: BookedSource;
   /** Taxable execution and design, before GST. */
   execution: number;
   design: number;
@@ -254,6 +268,25 @@ export function projectFact(p: any, src: FactSources = {}): ProjectFact {
       dueAt: dateOf(m.date),
     };
   });
+  /* When it was booked: the studio's own date first, then the accepted proposal, then the signed contract. */
+  const signed = MONEY_STATUSES.includes(status);
+  const booked = ((): { at: number | null; source: BookedSource } => {
+    const set = dateOf(ctx.bookedOn);
+    if (set != null) return { at: set, source: 'set' };
+    const gate = gates.proposalAccepted?.at != null ? gates.proposalAccepted : gates.contractSigned;
+    const at = dateOf(gate?.at);
+    if (at == null) return { at: null, source: 'none' };
+    return { at, source: FILLED_IN.includes(String(gate?.reference || '')) ? 'assumed' : 'accepted' };
+  })();
+  /* When it was handed over: the studio's own date first, then the handover gate, then the handover sign-off date. */
+  const handed = ((): { at: number | null; source: BookedSource } => {
+    const set = dateOf(ctx.handedOverOn);
+    if (set != null) return { at: set, source: 'set' };
+    const gate = dateOf(gates.handoverComplete?.at);
+    if (gate != null) return { at: gate, source: FILLED_IN.includes(String(gates.handoverComplete?.reference || '')) ? 'assumed' : 'accepted' };
+    const signed = dateOf(ctx.handoverDate);
+    return signed != null ? { at: signed, source: 'accepted' } : { at: null, source: 'none' };
+  })();
   const decisions: DecisionFact[] = (src.decisionsByProject?.[p.id] || []).map((d: any) => ({
     title: String(d.title || d.decisionText || 'A decision'),
     waiting: WAITING.includes(String(d.status || '')),
@@ -265,7 +298,9 @@ export function projectFact(p: any, src: FactSources = {}): ProjectFact {
     client: ctx.clientName || ctx.name || '',
     status,
     area: Number(ctx.area) || 0,
-    bookedAt: MONEY_STATUSES.includes(status) ? (dateOf(gates.proposalAccepted?.at) ?? dateOf(gates.contractSigned?.at)) : null,
+    bookedAt: signed ? booked.at : null,
+    bookedSource: signed ? booked.source : 'none',
+    firstMoneyAt: milestones.reduce<number | null>((m, x) => { const t = x.invoicedAt ?? x.paidAt; return t != null && (m == null || t < m) ? t : m; }, null),
     execution: Number(fin?.taxableExecution) || 0,
     design: Number(fin?.taxableDesign) || 0,
     plannedCost: Number(tierOf(p)?.summary?.totalCost) || 0,
@@ -273,7 +308,8 @@ export function projectFact(p: any, src: FactSources = {}): ProjectFact {
     milestones,
     additions: src.additionsByProject?.[p.id] || [],
     targetHandoverAt: dateOf(ctx.targetHandoverDate) ?? src.schedulesByProject?.[p.id]?.targetAt ?? null,
-    handedOverAt: dateOf(gates.handoverComplete?.at) ?? dateOf(ctx.handoverDate),
+    handedOverAt: handed.at,
+    handedOverSource: handed.source,
     snags: ((ctx.snagList || []) as any[]).filter(Boolean).map((s) => ({
       raisedAt: dateOf(s.raisedAt) || 0,
       resolvedAt: dateOf(s.resolvedAt),

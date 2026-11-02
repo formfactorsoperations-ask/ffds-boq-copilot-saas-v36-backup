@@ -396,7 +396,11 @@ service cloud.firestore {
         allow read: if isAuthenticated() && isFounder() && (isSameTenant(orgId) || isSuperAdmin());
         allow write: if isAuthenticated() && docId == 'plan' && isFounder() && (isSameTenant(orgId) || isSuperAdmin())
           && request.resource.data.keys().hasOnly(['bands', 'funnel', 'studio', 'home', 'cash', 'cashAt',
-               'buffer', 'rebuild', 'growth', 'tier', 'updatedAt', 'updatedBy']);
+               'buffer', 'rebuild', 'growth', 'tier', 'include', 'exclude', 'plays', 'updatedAt', 'updatedBy'])
+          /* Which projects count, and the What if board: lists, kept short. */
+          && (!('include' in request.resource.data) || (request.resource.data.include is list && request.resource.data.include.size() <= 500))
+          && (!('exclude' in request.resource.data) || (request.resource.data.exclude is list && request.resource.data.exclude.size() <= 500))
+          && (!('plays' in request.resource.data) || (request.resource.data.plays is list && request.resource.data.plays.size() <= 40));
       }
 
       match /settings/{settingId} {

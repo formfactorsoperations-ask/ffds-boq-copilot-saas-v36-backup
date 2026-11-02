@@ -157,7 +157,7 @@ describe('the stored plan', () => {
     expect(p.bands).toBeNull();
     expect(p.studio).toBeNull();
     expect(planOf(null)).toEqual(DEFAULT_PLAN);
-    expect(Object.keys(storedPlan(p, 'me', 1)).sort()).toEqual(['bands', 'buffer', 'cash', 'cashAt', 'funnel', 'growth', 'home', 'rebuild', 'studio', 'tier', 'updatedAt', 'updatedBy']);
+    expect(Object.keys(storedPlan(p, 'me', 1)).sort()).toEqual(['bands', 'buffer', 'cash', 'cashAt', 'exclude', 'funnel', 'growth', 'home', 'include', 'plays', 'rebuild', 'studio', 'tier', 'updatedAt', 'updatedBy']);
   });
   it("folds the studio's lines back into Set targets' three overheads", () => {
     expect(linesToOverheads(plan().studio!)).toEqual({ salaries: 75000, rent: 26250, other: 19500 });
@@ -272,5 +272,24 @@ describe('the year', () => {
     expect(r.fyGoal).toBeCloseTo(r.goal * 4);
     expect(r.fyHave).toBeCloseTo(250000);
     void DAY;
+  });
+});
+
+describe('signed work keeps where its booking date came from', () => {
+  it('carries the source and the first invoice through', () => {
+    const [w] = signedWork([fact('a', { bookedSource: 'assumed', firstMoneyAt: at(2026, 4, 20) })], SHEET_BANDS);
+    expect(w.bookedSource).toBe('assumed');
+    expect(w.firstMoneyAt).toBe(at(2026, 4, 20));
+    const [v] = signedWork([fact('b')], SHEET_BANDS);
+    expect(v.bookedSource).toBe('accepted');
+  });
+});
+
+describe('a handed-over project', () => {
+  it('ends its run on the handover day and says where that came from', () => {
+    const [w] = signedWork([fact('a', { status: 'completed', bookedAt: at(2026, 5, 1), handedOverAt: at(2026, 8, 30), handedOverSource: 'set' })], SHEET_BANDS);
+    expect(w.handedOver).toBe(true);
+    expect(w.end).toBe(at(2026, 8, 30));
+    expect(w.handedOverSource).toBe('set');
   });
 });
