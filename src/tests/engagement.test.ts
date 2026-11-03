@@ -208,3 +208,62 @@ describe('reports', () => {
     expect(withDesign.contracted).toBe(1);
   });
 });
+
+import { buildScheduleFromProject, scheduleForEngagement } from '../../lib/scheduleBuilder';
+import { computeSchedule as computeProgramme } from '../../lib/schedule';
+import { calculateClientLifecycleStages } from '../../services/clientPortalEngine';
+import { buildPortalView } from '../../lib/portalProjection';
+
+describe('the programme of a design-only project', () => {
+  const boq: any[] = [
+    { id: 'b1', cat: 'Civil', qty: 1, materials: 100000, labor: 50000 },
+    { id: 'b2', cat: 'Carpentry', qty: 1, materials: 300000, labor: 100000 },
+  ];
+  const designOnly = { engagementType: 'design_only', procurementLeadTimeWeeks: 4 } as any;
+
+  it('plans the design and ends at the closeout, with no site work', () => {
+    const s = buildScheduleFromProject(designOnly, boq);
+    expect(s.tasks.some((t) => t.kind === 'execution' || t.kind === 'procurement')).toBe(false);
+    expect(s.tasks.find((t) => t.id === 'ms-design-gate')?.title).toBe('GFC Release');
+    const closeout = s.tasks.find((t) => t.id === 'ms-handover');
+    expect(closeout?.title).toBe('Design Closeout');
+    expect(closeout?.dependencies).toEqual(['ms-design-gate']);
+    expect(() => computeProgramme(s)).not.toThrow();
+  });
+
+  it('strips the site work from a schedule saved while the project was turnkey', () => {
+    const saved = buildScheduleFromProject({} as any, boq);
+    expect(saved.tasks.some((t) => t.kind === 'execution')).toBe(true);
+    const s = scheduleForEngagement(saved, designOnly)!;
+    expect(s.tasks.some((t) => t.kind === 'execution' || t.kind === 'procurement')).toBe(false);
+    const ids = new Set(s.tasks.map((t) => t.id));
+    for (const t of s.tasks) for (const d of t.dependencies || []) expect(ids.has(d)).toBe(true);
+    expect(s.tasks.filter((t) => t.id === 'ms-handover')).toHaveLength(1);
+    // Running it twice changes nothing.
+    expect(scheduleForEngagement(s, designOnly)!.tasks.map((t) => t.id)).toEqual(s.tasks.map((t) => t.id));
+  });
+
+  it('leaves a turnkey schedule exactly as saved', () => {
+    const saved = buildScheduleFromProject({} as any, boq);
+    expect(scheduleForEngagement(saved, {})).toBe(saved);
+  });
+});
+
+describe('the client portal of a design-only project', () => {
+  it('names the stages for design work, with no site execution or snag', () => {
+    const names = calculateClientLifecycleStages({ engagementType: 'design_only' } as any).stages.map((s: any) => s.shortName);
+    expect(names).toEqual(['1. Brief & Discovery', '2. Scope & Terms', '3. 3D & Selections', '4. GFC Drawings', '5. Selections & Site Queries', '6. Design Closeout']);
+    const turnkey = calculateClientLifecycleStages({} as any).stages.map((s: any) => s.shortName);
+    expect(turnkey[4]).toBe('5. Site Execution');
+  });
+
+  it('publishes the engagement and no execution milestones', () => {
+    const ctx: any = {
+      name: 'Pali Hill', engagementType: 'design_only',
+      paymentMilestones: [{ id: 'd1', type: 'design', name: 'Retainer', percentage: 100 }, { id: 'e1', type: 'execution', name: 'Advance', percentage: 100 }],
+    };
+    const view: any = buildPortalView('p1', ctx);
+    expect(view.context.engagementType).toBe('design_only');
+    expect(view.context.paymentMilestones.map((m: any) => m.id)).toEqual(['d1']);
+  });
+});

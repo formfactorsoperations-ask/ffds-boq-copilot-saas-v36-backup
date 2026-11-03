@@ -35,7 +35,7 @@ import { engagementOf, stageLabel } from '../../lib/engagement';
 const stageNameOf = (ctx: any, n: number): string => stageLabel(engagementOf(ctx), n, STAGE_LABELS[n] || '');
 import { computeSchedule as computePayments } from '../../lib/paymentSchedule';
 import { computeSchedule as computeProgramme } from '../../lib/schedule';
-import { buildScheduleFromProject } from '../../lib/scheduleBuilder';
+import { buildScheduleFromProject, scheduleForEngagement } from '../../lib/scheduleBuilder';
 import { useTimelinePhases } from '../../hooks/useTimelinePhases';
 import { buildProjectPnl, marginAssumption, CONFIDENCE_LABEL, MARGIN_SOURCE_LABEL } from '../../lib/projectPnl';
 import { resolveDocumentState } from '../../services/documentIssueEngine';
@@ -173,7 +173,7 @@ function Home(p: ProjectHomeProps) {
   const programme = useMemo(() => {
     if (savedSchedule === undefined) return { rows: [] as GanttRow[], finishISO: null as string | null, targetISO: null as string | null };
     try {
-      const schedule = savedSchedule || buildScheduleFromProject(ctx, p.fullBoq, { designSteps: phases as any });
+      const schedule = scheduleForEngagement(savedSchedule, ctx) || buildScheduleFromProject(ctx, p.fullBoq, { designSteps: phases as any });
       const r = computeProgramme(schedule);
       const rows: GanttRow[] = r.tasks
         .map((t: any) => ({ id: t.id, title: t.title, kind: t.kind, start: t.plannedStartISO || t.startISO, end: t.plannedEndISO || t.endISO, status: t.status || 'pending' }))

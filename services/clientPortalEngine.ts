@@ -24,6 +24,7 @@
 
 import { ProjectContext, FullProjectData, PaymentMilestone } from '../types';
 import { formatINR } from '../lib/utils';
+import { engagementOf } from '../lib/engagement';
 import {
   resolveApprovals,
   ApprovalSnapshot,
@@ -368,6 +369,59 @@ const STAGE_DEFINITIONS: StageDefinition[] = [
   }
 ];
 
+/*
+  The stages as a design-only project runs them (lib/engagement.ts).
+
+  Stages 1 to 3 are the same work. From there the studio issues the GFC set
+  rather than freezing a BOQ and signing an execution contract, answers the
+  client's contractors rather than running the site, and closes with a sign-off
+  on the final drawings rather than a key handover and warranty.
+*/
+const DESIGN_ONLY_STAGES: Record<number, Partial<StageDefinition>> = {
+  3: {
+    description: 'Photorealistic 3D perspectives and finish selections.',
+    deliverables: ['3D Views per room', 'Material finish specifications', 'Finishes schedule'],
+  },
+  4: {
+    name: 'GFC Drawings',
+    shortName: '4. GFC Drawings',
+    subtitle: 'Good for Construction drawing set and its release',
+    description: 'Joinery, electrical, civil and ceiling working drawings, released as the GFC set.',
+    deliverables: ['Working drawings', 'GFC drawing set'],
+    clientDeliverable: 'The Good for Construction drawing set',
+    clientCheckpoints: ['Final drawing approvals', 'Design fee stage'],
+    gateRequirement: 'GFC Release',
+    exitGate: undefined,
+  },
+  5: {
+    name: 'Drawings & Selections',
+    shortName: '5. Selections & Site Queries',
+    subtitle: 'Finishes locked and your contractors’ questions answered',
+    description: 'Selections locked with you; your contractors build from the drawings and we answer their queries.',
+    deliverables: ['Locked finishes schedule', 'Answers to contractor queries'],
+    clientDeliverable: 'Locked finishes schedule',
+    clientCheckpoints: ['Finish selections', 'Design fee stage'],
+    gateRequirement: 'Selections locked',
+  },
+  6: {
+    name: 'Design Closeout',
+    shortName: '6. Design Closeout',
+    subtitle: 'Final drawing set and your sign-off',
+    description: 'The final drawing set is issued and the design engagement closes with your sign-off.',
+    deliverables: ['Final drawing set', 'Design closeout sign-off'],
+    clientDeliverable: 'Final drawing set & Design Closeout',
+    clientCheckpoints: ['Design Closeout signature', 'Final design fee'],
+    gateRequirement: 'Design Closeout',
+    exitGate: 'handover',
+  },
+};
+
+/** The six stages, worded for the project's engagement. */
+function stageDefinitionsFor(context: ProjectContext): StageDefinition[] {
+  if (engagementOf(context) !== 'design_only') return STAGE_DEFINITIONS;
+  return STAGE_DEFINITIONS.map((d) => ({ ...d, ...(DESIGN_ONLY_STAGES[d.id] || {}) }));
+}
+
 // ---------------------------------------------------------------------------
 // LIFECYCLE PIPELINE
 // ---------------------------------------------------------------------------
@@ -468,7 +522,7 @@ export function calculateClientLifecycleStages(context: ProjectContext): ClientL
   const contractSigned = approvals.contract.state === 'signed';
   const handoverSigned = approvals.handover.state === 'signed';
 
-  const stages: ClientLifecycleStage[] = STAGE_DEFINITIONS.map(def => {
+  const stages: ClientLifecycleStage[] = stageDefinitionsFor(safeContext).map(def => {
     let status: 'completed' | 'active' | 'pending' = 'pending';
     let progressPercent = 0;
 

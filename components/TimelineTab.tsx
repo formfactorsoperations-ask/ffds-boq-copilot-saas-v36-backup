@@ -63,7 +63,7 @@ import ProjectMinutes from "./minutes/ProjectMinutes";
 import { db as firestoreDb } from "../services/firebaseClient";
 import { doc, setDoc, collection, query, onSnapshot } from "firebase/firestore";
 import ScheduleGantt from "./ScheduleGantt";
-import { buildScheduleFromProject } from "../lib/scheduleBuilder";
+import { buildScheduleFromProject, scheduleForEngagement } from "../lib/scheduleBuilder";
 import { buildMarkers } from "../lib/scheduleMarkers";
 import { db } from "../services/dbService";
 import { computeSchedule, DEFAULT_CALENDAR, toDayNum, workSpanEnd, toISO, isWorkingDay, workingDaysBetween, shiftByWorkingDays } from "../lib/schedule";
@@ -272,9 +272,10 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
     [projectContext, boq, phases],
   );
   const projectSchedule = React.useMemo(() => {
-    const base = scheduleOverride || derivedSchedule;
+    // A design-only project has no site programme, even in a schedule saved before it became one.
+    const base = scheduleForEngagement(scheduleOverride, projectContext) || derivedSchedule;
     return { ...base, markers };
-  }, [scheduleOverride, derivedSchedule, markers]);
+  }, [scheduleOverride, derivedSchedule, markers, projectContext?.engagementType]);
 
   // Bidirectional Sync: phases -> scheduleOverride
   useEffect(() => {

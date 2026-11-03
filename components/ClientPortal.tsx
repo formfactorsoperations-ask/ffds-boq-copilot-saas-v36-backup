@@ -157,7 +157,8 @@ import {
 } from '@/lib/lucide-shim';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import ScheduleGantt from './ScheduleGantt';
-import { buildScheduleFromProject } from '../lib/scheduleBuilder';
+import { buildScheduleFromProject, scheduleForEngagement } from '../lib/scheduleBuilder';
+import { engagementOf, isFeeOnly } from '../lib/engagement';
 import { db as storageDb } from '../services/dbService';
 import { ProjectSchedule } from '../types';
 import { publicAppOrigin } from '../lib/publicUrl';
@@ -785,8 +786,9 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     const storedSchedule = (context as any).clientSchedule as ProjectSchedule | undefined;
 
     const clientSchedule = useMemo(() => {
-        if (customSchedule) return customSchedule;
-        if (storedSchedule?.tasks?.length) return storedSchedule;
+        // A design-only project has no site programme, even in a schedule saved before it became one.
+        if (customSchedule) return scheduleForEngagement(customSchedule, projectData.context);
+        if (storedSchedule?.tasks?.length) return scheduleForEngagement(storedSchedule, projectData.context);
         // Same arguments the studio's Timeline passes, so both derive the
         // identical schedule rather than two different ones.
         return buildScheduleFromProject(projectData.context, displayBoq, {
@@ -914,7 +916,9 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
       no fallback -- a fallback is a second calculator waiting to disagree.
     */
     const money = (context as any).portalMoney as PortalMoney | undefined;
-    const milestones = context.paymentMilestones || [];
+    /* A design-only project bills no execution (lib/engagement.ts). */
+    const feeOnlyProject = isFeeOnly(engagementOf(context));
+    const milestones = (context.paymentMilestones || []).filter((m: any) => !(feeOnlyProject && m?.type === 'execution'));
 
     /*
       Whether anything was sent. False for a client holding a projection
@@ -4538,6 +4542,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                     }}
                                     onContactStudio={() => setActiveTab('overview')}
                                     known={moneyKnown}
+                                    designOnly={feeOnlyProject}
                                 />
 
                                 {/* Work added after the scope was agreed. Renders

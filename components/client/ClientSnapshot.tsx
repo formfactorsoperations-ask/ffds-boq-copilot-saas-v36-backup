@@ -293,10 +293,22 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ level, investmentMin, i
                     <div className="rounded-3xl bg-white border border-slate-200 p-6 flex flex-col justify-between">
                         <div>
                             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Timeline (indicative)</div>
-                            <div className="mt-2 text-2xl font-extrabold text-slate-900">{totalDays} Days Total</div>
-                            <div className="mt-1 text-xs font-semibold text-slate-600">
-                                Design: {designDays} Days • Site Execution: {executionDays} Days
-                            </div>
+                            {designOnlyFee !== undefined ? (
+                                /* Design only: the studio's time is the design; the build is the client's contractors'. */
+                                <>
+                                    <div className="mt-2 text-2xl font-extrabold text-slate-900">{designDays} Days of Design</div>
+                                    <div className="mt-1 text-xs font-semibold text-slate-600">
+                                        To the GFC drawing set • Your contractors' build time is separate
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="mt-2 text-2xl font-extrabold text-slate-900">{totalDays} Days Total</div>
+                                    <div className="mt-1 text-xs font-semibold text-slate-600">
+                                        Design: {designDays} Days • Site Execution: {executionDays} Days
+                                    </div>
+                                </>
+                            )}
                             <div className="mt-1.5 text-[11px] text-slate-400 font-medium">
                                 Subject to design freeze approvals and site realities
                             </div>
