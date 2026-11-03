@@ -12,6 +12,7 @@ import { assignedDesignersFor } from '../../../lib/roleAccess';
 import { opsSettingsOf } from '../../../lib/opsDesk';
 import { normaliseAddition, scopeAdditionsPath } from '../../../lib/scopeAdditions';
 import { computeSchedule } from '../../../lib/schedule';
+import { scheduleForEngagement } from '../../../lib/scheduleBuilder';
 import { DEFAULT_TARGETS, type ReportTargets } from '../../../lib/reportTargets';
 import {
   projectFact, dateOf, MONEY_STATUSES, LIVE_STATUSES,
@@ -89,7 +90,9 @@ export function useOwnerReportData(projects: FullProjectData[]) {
       each(activeIds, async (id) => {
         const s: any = await db.getSchedule(id);
         if (!s || !Array.isArray(s.tasks) || !s.tasks.length) return s?.targetHandoverISO ? { finishAt: null, targetAt: dateOf(s.targetHandoverISO), holdReason: null } : null;
-        const r = computeSchedule(s);
+        // A design-only project's programme ends at the design closeout, whatever site work a saved schedule still holds.
+        const ctx = projects.find((p) => p.id === id)?.context;
+        const r = computeSchedule(scheduleForEngagement(s, ctx));
         const hold = ((s.holds || []) as any[]).filter((h) => h && !h.liftedAt).sort((x, y) => (y.workDays || 0) - (x.workDays || 0))[0];
         return { finishAt: dateOf(r.finishISO), targetAt: dateOf(s.targetHandoverISO), holdReason: hold?.reason ? String(hold.reason) : null } as ScheduleFact;
       }, null as ScheduleFact | null),

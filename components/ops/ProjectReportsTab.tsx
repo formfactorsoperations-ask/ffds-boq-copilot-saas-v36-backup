@@ -13,6 +13,7 @@ import { buildProjectRisk, RISK_TONE } from '../../lib/projectRisk';
 import { Gauge, MarginWaterfall, CostSpine, RoomMarginChart, CollectionBar } from './ReportCharts';
 import DocumentMeter from './DocumentMeter';
 import { buildDocumentCompleteness } from '../../lib/documentCompleteness';
+import { engagementOf, isFeeOnly } from '../../lib/engagement';
 
 /**
  * PROJECT REPORTS — the studio report, scoped to one job.
@@ -104,9 +105,16 @@ const ProjectReportsTab: React.FC<Props> = ({
   const ratePerSqft   = area > 0 ? contracted / area : 0;
   const collectionPct = contracted > 0 ? Math.min(100, Math.round((collected / contracted) * 100)) : 0;
 
+  /* A design-only project: its revenue is the fee and it has no bought cost (lib/engagement.ts). */
+  const feeOnly = isFeeOnly(engagementOf(projectContext));
+  const designMilestones = (projectContext?.paymentMilestones || []).filter((m: any) => m?.type === 'design');
+  const designMilestonesPaid = designMilestones.filter((m: any) => m.status === 'paid').length;
+  const designMilestonesInvoiced = designMilestones.filter((m: any) => m.status === 'invoiced').length;
+
   const studioMarginPct = useMemo(() => {
     const MONEY = ['won', 'execution', 'work_paused', 'completed'];
-    const rows = (allProjects || []).filter(p => MONEY.includes(p.context?.status || ''));
+    /* Turnkey work only: a design-only fee has no BOQ cost to measure against. */
+    const rows = (allProjects || []).filter(p => MONEY.includes(p.context?.status || '') && !isFeeOnly(engagementOf(p.context)));
     let c = 0, m = 0;
     rows.forEach(p => {
       const tier = (p.tiers || []).find(t => t.id === (p.activeTierId || p.context?.approvedTierId)) || (p.tiers || [])[0];
@@ -213,6 +221,27 @@ const ProjectReportsTab: React.FC<Props> = ({
 
       {/* ── Money ────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/*
+          Design only: one panel for the fee in place of Margin and Cost. There
+          is no BOQ cost behind a design fee, so a margin read against one said
+          nothing true (it showed -634% on Pali Hills).
+        */}
+        {feeOnly ? (
+          <div className="lg:col-span-2">
+            <Panel title="Design fee" sub="A design-only project: the fee is the studio's revenue" icon={<Percent className="w-4 h-4" />}>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Stat label="Design fee" value={formatINR(pnl.contractedDesign)} foot="ex-GST" tone="text-emerald-700" />
+                <Stat label="Fee stages paid" value={`${designMilestonesPaid} / ${designMilestones.length}`} foot={designMilestonesInvoiced ? `${designMilestonesInvoiced} invoiced, awaiting payment` : 'none awaiting payment'} />
+                <Stat label="Collected" value={formatINR(collected)} foot="incl. GST" />
+                <Stat label="Still to collect" value={formatINR(pnl.uncollected)} foot="incl. GST" tone={pnl.uncollected > 0 ? 'text-slate-900' : 'text-emerald-700'} />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-4 pt-4 border-t border-slate-100 leading-relaxed">
+                No margin or cost is shown: the client buys the materials and pays the contractors directly, and the studio's own time is not costed here.
+                {pnl.poCount > 0 && ` ${pnl.poCount} purchase order${pnl.poCount === 1 ? ' was' : 's were'} raised on this project, worth ${formatINR(pnl.committedCost)}.`}
+              </p>
+            </Panel>
+          </div>
+        ) : (<>
         <Panel title="Margin" sub={pnl.hasProcurement ? 'Actual: against orders and vendor bills' : 'Potential: from the BOQ margin'} icon={<Percent className="w-4 h-4" />}>
           <div className="flex items-center gap-5">
             <Gauge
@@ -262,6 +291,7 @@ const ProjectReportsTab: React.FC<Props> = ({
             />
           </div>
         </Panel>
+        </>)}
 
         <Panel title="Collections" sub={`${collectionPct}% of contract in hand`} icon={<Wallet className="w-4 h-4" />}>
           <CollectionBar
@@ -275,7 +305,7 @@ const ProjectReportsTab: React.FC<Props> = ({
             <Stat
               label="Net in hand"
               value={formatINR(pnl.cashPosition)}
-              foot="collected less paid to vendors"
+              foot={feeOnly ? 'the design fee collected so far' : 'collected less paid to vendors'}
               tone={pnl.cashPosition < 0 ? 'text-rose-700' : 'text-emerald-700'}
             />
           </div>
@@ -318,6 +348,7 @@ const ProjectReportsTab: React.FC<Props> = ({
           </Panel>
         </div>
 
+        {!feeOnly && (
         <div className="lg:col-span-3">
           <Panel title="Margin by room" sub="Where the money is made and lost" icon={<Ruler className="w-4 h-4" />}>
             {pnl.rooms.filter(r => r.quotedSell > 0).length > 0 ? (
@@ -329,12 +360,13 @@ const ProjectReportsTab: React.FC<Props> = ({
             )}
           </Panel>
         </div>
+        )}
       </div>
 
       <p className="text-[10.5px] text-slate-400 leading-relaxed">
-        Contract value and collections include GST. Margin is ex-GST and includes the design fee, which
-        carries no cost. Realized rate and collection percentage use the same formulas as the studio-wide
-        report, so the two screens agree.
+        {feeOnly
+          ? 'Contract value and collections include GST; the design fee is shown ex-GST. Realized rate and collection percentage use the same formulas as the studio-wide report, so the two screens agree.'
+          : 'Contract value and collections include GST. Margin is ex-GST and includes the design fee, which carries no cost. Realized rate and collection percentage use the same formulas as the studio-wide report, so the two screens agree.'}
       </p>
     </motion.div>
   );

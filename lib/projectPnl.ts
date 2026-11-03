@@ -3,6 +3,7 @@ import { buildEnvelopes, buildRoomMargins, effectiveMaterials, envelopeKey, Enve
 import { calculateProjectFinancials } from './financialsUtils';
 import { isBillable } from './boqPricing';
 import { calculateSellPrice } from './utils';
+import { engagementOf, isFeeOnly } from './engagement';
 
 // ============================================================================
 // PROJECT P&L — did this job make money?
@@ -281,6 +282,15 @@ export function buildProjectPnl(
   /** Used only when no BOQ line carries a cost (marginAssumption). */
   assumption: MarginAssumption | null = null,
 ): ProjectPnl {
+  /*
+    A design-only project sells no execution, so a BOQ left on it from an
+    earlier estimate is not its cost. Read against the BOQ, ₹7.3 lakh of
+    planned cost came off a ₹1 lakh design fee and the margin read -634%.
+    Its cost is what was actually bought, if anything; its revenue is the fee.
+  */
+  const feeOnly = isFeeOnly(engagementOf(context));
+  if (feeOnly) { boq = []; assumption = null; }
+
   const envelopes = buildEnvelopes(boq || [], pos || [], modes);
   const rooms = buildRoomMargins(boq || [], pos || [], modes);
   const fin = calculateProjectFinancials(context, activeTier) as any;

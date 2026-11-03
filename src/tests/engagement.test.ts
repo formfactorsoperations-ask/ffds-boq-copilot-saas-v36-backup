@@ -290,3 +290,55 @@ describe('a turnkey project with no priced BOQ yet (a design-only project moved 
     expect(scheduleMatchesEngagement(null, {})).toBe(true);
   });
 });
+
+import { buildProjectPnl } from '../../lib/projectPnl';
+import { buildProjectRisk } from '../../lib/projectRisk';
+import { getSingleProjectValue } from '../../lib/financialsUtils';
+
+describe('reports on a design-only project (Pali Hills)', () => {
+  // An old BOQ on the option: ₹7.3 lakh of cost that the client, not the studio, will pay.
+  const boq: any[] = [{ id: 'b1', bankId: 'x', name: 'Wardrobe', cat: 'Carpentry', room: 'Bedroom', qty: 1, materials: 600000, labor: 134681, margin: 25 }];
+  const option: any = { id: 't1', name: 'Option 1', boq: [], summary: { totalSell: 980000, designFee: 100000, totalCost: 734681 } };
+  const ctx: any = {
+    engagementType: 'design_only', status: 'won', approvedTierId: 't1', designFeeType: 'fixed_lumpsum', designFee: 100000,
+    lifecycle: { stage: 4 },
+    paymentMilestones: [{ id: 'd1', type: 'design', name: 'Sign-up', percentage: 25, status: 'pending' }],
+  };
+
+  it('shows no BOQ cost against the fee, so no negative margin', () => {
+    const pnl = buildProjectPnl(ctx, boq, [], option);
+    expect(pnl.plannedCost).toBe(0);
+    expect(pnl.contractedExecution).toBe(0);
+    expect(pnl.contractedDesign).toBe(100000);
+    expect(pnl.quotedMarginPct).toBeGreaterThanOrEqual(0);
+    expect(pnl.rooms).toHaveLength(0);
+  });
+
+  it('values the project at its fee, not the BOQ option', () => {
+    expect(getSingleProjectValue({ context: { ...ctx, status: 'draft' }, tiers: [option] })).toBe(100000);
+    expect(getSingleProjectValue({ context: ctx, tiers: [option], activeTierId: 't1' })).toBe(118000);
+  });
+
+  it('asks for the GFC release and the design agreement, not a frozen BOQ and an execution contract', () => {
+    const pnl = buildProjectPnl(ctx, boq, [], option);
+    const titles = buildProjectRisk({ ...ctx, lifecycle: { stage: 5 } }, pnl).signals.map((s: any) => s.title);
+    expect(titles).toContain('GFC set not released');
+    expect(titles).toContain('Design agreement unsigned');
+    expect(titles).not.toContain('Scope not frozen');
+    expect(titles).not.toContain('Execution agreement unsigned');
+  });
+});
+
+import { buildDocumentCompleteness } from '../../lib/documentCompleteness';
+
+describe('documents on a design-only project', () => {
+  it('asks for no execution agreement or snag list, and ends at the design closeout', () => {
+    const r = buildDocumentCompleteness({ engagementType: 'design_only', lifecycle: { stage: 5 } } as any);
+    const kinds = r.slots.map((s: any) => s.kind);
+    expect(kinds).not.toContain('execution_agreement');
+    expect(kinds).not.toContain('snag_list');
+    expect(r.slots.find((s: any) => s.kind === 'handover_docket')?.label).toBe('Design closeout');
+    expect(r.headline || '').not.toMatch(/Execution agreement/);
+    expect(buildDocumentCompleteness({ lifecycle: { stage: 5 } } as any).slots.map((s: any) => s.kind)).toContain('execution_agreement');
+  });
+});

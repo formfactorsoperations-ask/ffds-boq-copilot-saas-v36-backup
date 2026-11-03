@@ -1,4 +1,5 @@
 import { ProjectContext, ClientDocumentKind, DocumentState } from '../types';
+import { engagementOf } from './engagement';
 import { resolveDocumentState, getCurrentIssue } from '../services/documentIssueEngine';
 import { isVisibleToClient } from './clientVisibility';
 
@@ -128,7 +129,18 @@ export function buildDocumentCompleteness(
   const ctx: any = context || {};
   const stage: number = ctx?.lifecycle?.stage || ctx?.currentStage || 1;
 
-  const slots: DocSlot[] = DOCUMENT_SLOTS.map(def => {
+  /*
+    A design-only project has no execution agreement and no snag list, and its
+    last document is the Design Closeout, signed through the handover docket.
+  */
+  const designOnly = engagementOf(ctx) === 'design_only';
+  const defs: DocDef[] = designOnly
+    ? DOCUMENT_SLOTS
+        .filter(d => d.kind !== 'execution_agreement' && d.kind !== 'snag_list')
+        .map(d => d.kind === 'handover_docket' ? { ...d, label: 'Design closeout', short: 'Closeout' } : d)
+    : DOCUMENT_SLOTS;
+
+  const slots: DocSlot[] = defs.map(def => {
     const state: DocumentState = context
       ? resolveDocumentState(context, def.kind)
       : 'draft';
@@ -175,11 +187,11 @@ export function buildDocumentCompleteness(
     .filter(s => s.status !== 'complete')
     .sort((a, b) => SEVERITY[b.status] - SEVERITY[a.status]);
 
-  const contract = slots.find(s => s.kind === 'execution_agreement')!;
-  const unsignedContract = contract.status !== 'not_due' && contract.status !== 'complete';
+  const contract = slots.find(s => s.kind === 'execution_agreement');
+  const unsignedContract = !!contract && contract.status !== 'not_due' && contract.status !== 'complete';
 
   let headline: string | null = null;
-  if (unsignedContract) {
+  if (contract && unsignedContract) {
     headline = contract.status === 'missing'
       ? 'Execution agreement not issued'
       : contract.status === 'attention'

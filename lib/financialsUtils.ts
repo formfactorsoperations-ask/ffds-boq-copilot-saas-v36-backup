@@ -1,4 +1,6 @@
 import { billingBase, billingSummary } from './paymentSchedule';
+import { designFeeFor } from './boqPricing';
+import { engagementOf, isFeeOnly } from './engagement';
 
 export function calculateProjectFinancials(context: any, activeTier?: any) {
     const financials = context?.financials || {
@@ -169,6 +171,15 @@ export function getSingleProjectValue(p: any): number {
         } catch (e) {
             console.error("Error calculating financials for project", p.id, e);
         }
+    }
+
+    /*
+      A design-only project is worth its design fee. The fallbacks below read
+      the BOQ option's total or a stored execution value, which a design-only
+      project does not sell, and `context.designFee` is a rate per sq ft there.
+    */
+    if (isFeeOnly(engagementOf(p.context))) {
+        return p.context?.financials?.approvedDesignValue || p.context?.engagement?.designFee || designFeeFor(p.context, 0, 0) || 0;
     }
 
     // Fallbacks:

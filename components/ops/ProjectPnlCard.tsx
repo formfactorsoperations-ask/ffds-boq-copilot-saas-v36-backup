@@ -5,6 +5,7 @@ import { useFiguresHidden } from '../ui/HideFigures';
 import { ProjectContext, FullBoqItem, PurchaseOrder } from '../../types';
 import { db } from '../../services/dbService';
 import { formatINR } from '../../lib/utils';
+import { engagementOf, isFeeOnly } from '../../lib/engagement';
 import { buildProjectPnl, CONFIDENCE_LABEL, CONFIDENCE_NOTE, MARGIN_SOURCE_LABEL, projectMarginPct, type MarginAssumption } from '../../lib/projectPnl';
 
 /**
@@ -133,6 +134,33 @@ const ProjectPnlCard: React.FC<Props> = ({
     return shell(
       <div className="flex-1 flex items-center justify-center">
         <div className="w-5 h-5 border-2 border-[#3D52A0] border-t-transparent rounded-full animate-spin" />
+      </div>,
+    );
+  }
+
+  /*
+    A design-only project has a fee and no bought cost, so there is no profit
+    to measure against a BOQ: the card says what the fee is and what is in.
+  */
+  if (isFeeOnly(engagementOf(projectContext))) {
+    return shell(
+      <div className="flex-1 flex flex-col gap-3">
+        <div className="rounded-2xl p-4 border bg-slate-50 border-slate-200">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Design fee</p>
+          <p className="text-2xl font-extrabold tracking-tight text-slate-900 mt-1 font-mono tabular-nums">{formatINR(pnl.contractedDesign)}</p>
+          <p className="text-xs text-slate-500 mt-1">ex-GST. A design-only project: the client pays the contractors directly.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-slate-200 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Collected</p>
+            <p className="text-sm font-black text-slate-800 tabular-nums mt-1">{formatINR(pnl.receivedFromClient)}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Still to collect</p>
+            <p className="text-sm font-black text-slate-800 tabular-nums mt-1">{formatINR(pnl.uncollected)}</p>
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-500 leading-relaxed">No margin is shown: there is no bought cost behind a design fee, and the studio's own time is not costed here.</p>
       </div>,
     );
   }
