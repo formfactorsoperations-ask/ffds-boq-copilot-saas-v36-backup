@@ -10,6 +10,7 @@ import { FFDSLogo } from '../FFDSLogo';
 import ClientCover from './ClientIntroduction';
 import ClientDesignProcess from './ClientDesignProcess';
 import ClientDesignFees from './ClientDesignFees';
+import { designFeeFor } from '../../lib/boqPricing';
 import ClientTimeline from './ClientTimeline';
 import ClientDecisionLock from './ClientDecisionLock';
 import ClientSnapshot from './ClientSnapshot';
@@ -152,6 +153,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
 
     const { level, onEditSection, tiers = [], projectContext, timelinePhases = [], paymentMilestones = [], setProjectContext, clientBudget, onVisibilityChange, onUpdatePaymentSchedule, setTimelinePhases, bank = [], isClientViewOnly = false, proposalFormat } = props;
     const proposalType = (projectContext.proposalType || 'TURNKEY') as string;
+    const isDesignOnly = proposalType === 'DESIGN_ONLY';
     const [isSectionConfigOpen, setIsSectionConfigOpen] = useState(false);
     
     // Logic for min/max investment
@@ -300,6 +302,15 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                         {visibleSections.snapshot && (
                             <ScanFirstSection title="Executive Summary" cue="At a Glance">
                                 <SectionWrapper id="snapshot" onEdit={onEditSection}>
+                                    {isDesignOnly ? (
+                                        // Design only: the fee engine's fee, the figure Money bills; no options, no execution.
+                                        <ClientSnapshot level={level as any} investmentMin={0} investmentMax={0}
+                                            timelinePhases={timelinePhases}
+                                            content={content.snapshot}
+                                            projectContext={projectContext}
+                                            designOnlyFee={designFeeFor(projectContext, 0, 0)}
+                                        />
+                                    ) : (
                                     <ClientSnapshot level={level as any} investmentMin={investmentMin} 
                                         investmentMax={investmentMax} 
                                         timelinePhases={timelinePhases}
@@ -311,6 +322,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                         options={tiers.map((t, i) => ({ id: t.id, label: optionLabel(i), name: t.name, executionTotal: t.summary?.totalSell || 0, designFee: t.summary?.designFee || 0 }))}
                                         activeOptionId={activeTier?.id}
                                     />
+                                    )}
                                 </SectionWrapper>
                             </ScanFirstSection>
                         )}
@@ -336,7 +348,8 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                             </ScanFirstSection>
                         )}
 
-                        {visibleSections.options && (
+                        {/* Options, the room-wise scope and material grades come from a BOQ, which a design-only project does not sell. */}
+                        {visibleSections.options && !isDesignOnly && (
                             <ScanFirstSection title="Strategic Options" cue="Scenarios">
                                 <SectionWrapper id="options" onEdit={onEditSection}>
                                     <ClientOptions 
@@ -350,6 +363,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                             </ScanFirstSection>
                         )}
 
+                        {!isDesignOnly && (<>
                         {/* Roomwise Breakdown - Now wrapped in accordion */}
                         <ScanFirstSection id="scope-breakdown" title="Detailed Scope Breakdown" cue="Room-by-Room">
                             <div className="break-inside-avoid">
@@ -363,6 +377,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                 <ClientMaterialSpecs comparisonData={props.comparisonData} tiers={tiers} projectContext={projectContext} setProjectContext={setProjectContext} />
                             </div>
                         </ScanFirstSection>
+                        </>)}
 
                         {visibleSections.timeline && (
                             <ScanFirstSection title="Schedule" cue="Timeline">

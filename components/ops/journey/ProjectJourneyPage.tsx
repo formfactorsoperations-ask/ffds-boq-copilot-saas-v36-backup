@@ -39,9 +39,11 @@ interface ProjectJourneyPageProps {
 
 export default function ProjectJourneyPage({ projectId, projectContext, onClose, onNavigate }: ProjectJourneyPageProps) {
     const {
-        steps, stepsByPhase, phaseProgress, overall,
+        steps, stepsByPhase, phaseProgress, overall, phases: enginePhases,
         markStepDone, markStepPending, loading, nextStep,
     } = useProjectJourney(projectId, projectContext);
+    /* The phases named for the project's engagement (lib/engagement.ts). */
+    const PHASE_LIST = enginePhases || PHASES;
     const [focusedPhase, setFocusedPhase] = useState<number | null>(null);
     const [retrofitMode, setRetrofitMode] = useState<boolean>(false);
     const stillMotion = useReducedMotion();
@@ -100,10 +102,10 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
 
     const enginePhase = phaseProgress.findIndex(p => p.pct < 100) !== -1
         ? phaseProgress.findIndex(p => p.pct < 100)
-        : PHASES.length - 1;
+        : PHASE_LIST.length - 1;
 
     const displayPhaseIndex = focusedPhase !== null ? focusedPhase : enginePhase;
-    const currentPhaseDef = PHASES[displayPhaseIndex];
+    const currentPhaseDef = PHASE_LIST[displayPhaseIndex];
     const currentSteps = stepsByPhase[displayPhaseIndex] || [];
     const isProjectComplete = (projectContext?.lifecycle?.stage || 1) >= 7 || projectContext?.status === 'completed';
 
@@ -241,7 +243,7 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
                 </div>
 
                 <div className="flex items-stretch gap-1.5">
-                    {PHASES.map((p, i) => {
+                    {PHASE_LIST.map((p, i) => {
                         const prog = phaseProgress[i] || { done: 0, total: 0, pct: 0 };
                         const span = phaseSpan(stepsByPhase[i] || []);
                         const isShown = displayPhaseIndex === i;

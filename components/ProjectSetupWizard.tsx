@@ -37,6 +37,7 @@ interface ProjectSetupWizardProps {
 type SetupMethod = 'manual' | 'floorplan';
 
 import { useOrg } from '../contexts/OrgContext';
+import { engagementOf, isFeeOnly } from '../lib/engagement';
 
 const container = {
     hidden: { opacity: 0 },
@@ -546,6 +547,16 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
              
              <div className="flex justify-center gap-4 pt-4">
                 <button onClick={() => setStep(0)} className="px-8 py-4 bg-white text-slate-600 font-bold rounded-2xl hover:bg-slate-50 transition-all shadow-sm border border-slate-200">Back</button>
+                {/* A fee-only project has no BOQ options to generate: it opens straight onto the project. */}
+                {isFeeOnly(engagementOf(projectContext)) ? (
+                  <button
+                      onClick={handleStartManual}
+                      disabled={!isContextComplete}
+                      className="px-10 py-4 btn-primary text-white font-bold rounded-2xl shadow-xl transition-all flex items-center gap-2"
+                  >
+                      Create the project <ArrowRightIcon className="w-5 h-5" />
+                  </button>
+                ) : (
                 <button 
                     onClick={() => setStep(3)} // SKIPPED STEP 2
                     disabled={!isContextComplete} 
@@ -553,6 +564,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                 >
                     Next: Generate Options <ArrowRightIcon className="w-5 h-5" />
                 </button>
+                )}
              </div>
         </MotionDiv>
       )}

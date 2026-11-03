@@ -25,7 +25,8 @@ export type SectionId =
   | 'system'
   | 'opsdesk'
   | 'people'
-  | 'minutes';
+  | 'minutes'
+  | 'engagements';
 
 export interface SettingsSection {
   id: SectionId;
@@ -45,6 +46,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'opsdesk', label: 'Ops Desk', blurb: 'When a payment is late, and who decides escalations' },
   { id: 'people', label: 'People', blurb: 'Working hours, leave, holidays, check-in location and who reports to whom' },
   { id: 'minutes', label: 'Minutes', blurb: 'Bring older minutes into the new format, once' },
+  { id: 'engagements', label: 'Engagements', blurb: 'The kinds of project the studio takes on, and the design-only fee' },
 ];
 
 /** How badly a missing value hurts. */
@@ -95,6 +97,9 @@ export const SETTINGS_FIELDS: SettingsField[] = [
   { key: 'bankDetails.upiId', label: 'UPI ID', section: 'financial', criticality: 'recommended', aliases: ['gpay', 'phonepe'] },
   { key: 'bankDetails.qrCodeImage', label: 'Payment QR code', section: 'financial', criticality: 'optional' },
   { key: 'designFeePercentage', label: 'Default design fee %', section: 'financial', criticality: 'recommended', consequence: 'Pre-fills the fee on a new proposal' },
+
+  // Engagements
+  { key: 'designOnlyFeePerSqft', label: 'Design-only fee per sq ft', section: 'engagements', criticality: 'optional', consequence: 'Pre-fills the fee when a project is set up as design only', aliases: ['design only', 'consultancy fee', 'pali hill'] },
 
   // Contract terms
   { key: 'defaultContractWordings.paymentTermsText', label: 'Payment terms wording', section: 'contract', criticality: 'required', consequence: 'Printed verbatim in every contract' },

@@ -14,6 +14,7 @@ import { onDownloadIntent } from '../../lib/downloadIntent';
 import { generateLocalComparison } from '../../lib/comparison';
 import { ExportIcon, PrintIcon, CheckBadgeIcon, PencilRulerIcon, BriefcaseIcon } from '../Icons';
 import { TEMPLATE_TURNKEY, TEMPLATE_DESIGN_ONLY, INITIAL_BANK } from '../../constants';
+import { engagementOf, proposalModeFor, engagementDef, isFeeOnly } from '../../lib/engagement';
 import { proposalOption, optionLabel } from '../../lib/proposalOption';
 
 export type { PageOrientation };
@@ -81,9 +82,22 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
     return map;
   }, [bank, projectContext?.adHocItems]);
 
-  const proposalLevel = projectContext?.activeProposalLevel || 'LEVEL_1';
-  const activeMode = projectContext?.activeProposalMode || 'TURNKEY';
-  const proposalFormat = projectContext?.activeProposalFormat || 'classic';
+  /*
+    A design-only proposal is one document: Level 1, classic. Levels 1.5 to 3
+    and the Luxe Booklet are built on a priced BOQ and a turnkey execution
+    contract, which a design-only project does not have.
+  */
+  const feeOnlyProposal = isFeeOnly(engagementOf(projectContext));
+  const proposalLevel = feeOnlyProposal ? 'LEVEL_1' : (projectContext?.activeProposalLevel || 'LEVEL_1');
+  /*
+    The proposal follows the project's engagement (Project setup), so the
+    proposal, Money and the agreement describe the same job. It used to be a
+    toggle of its own here: a project could be shown as "Design & PMC" while
+    Money billed it as turnkey.
+  */
+  const engagement = engagementOf(projectContext);
+  const activeMode: ProposalType = proposalModeFor(engagement);
+  const proposalFormat = feeOnlyProposal ? 'classic' : (projectContext?.activeProposalFormat || 'classic');
   const showScopePricing = projectContext?.showScopePricing || false;
 
   const setProposalLevel = (level: ProposalLevel) => {
@@ -92,11 +106,13 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
       }
   };
 
-  const setActiveMode = (mode: ProposalType) => {
-      if (setProjectContext) {
-          setProjectContext(prev => ({ ...prev, activeProposalMode: mode }));
+  /* Edits to the proposal's wording are saved per mode (proposalContentByMode), under activeProposalMode. */
+  useEffect(() => {
+      if (setProjectContext && projectContext && projectContext.activeProposalMode !== activeMode) {
+          setProjectContext(prev => (prev && prev.activeProposalMode !== activeMode ? { ...prev, activeProposalMode: activeMode } : prev));
       }
-  };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMode]);
 
   const setProposalFormat = (format: 'classic' | 'booklet') => {
       if (setProjectContext) {
@@ -392,7 +408,7 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
 
 const MODEL_SWITCHER = [
       { id: 'TURNKEY', label: 'Turnkey Proposal', icon: <CheckBadgeIcon className="w-4 h-4" /> },
-      { id: 'DESIGN_ONLY', label: 'Design & PMC', icon: <PencilRulerIcon className="w-4 h-4" /> },
+      { id: 'DESIGN_ONLY', label: 'Design proposal', icon: <PencilRulerIcon className="w-4 h-4" /> },
   ];
 
   const getExportFileName = () => {
@@ -514,18 +530,11 @@ const MODEL_SWITCHER = [
 
                  
                  <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                     {/* Engagement Model Switcher */}
-                     <div className="bg-white p-1 rounded-lg border border-slate-300 shadow-sm flex items-center">
-                        {MODEL_SWITCHER.map((m: any) => (
-                            <button
-                                key={m.id}
-                                onClick={() => setActiveMode(m.id as ProposalType)}
-                                className={`${UI_STYLES.button.xs} rounded-md transition-all ${activeMode === m.id ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-500 hover:text-[#334486] hover:bg-sky-50'}`}
-                            >
-                                {m.icon}
-                                {m.label}
-                            </button>
-                        ))}
+                     {/* The engagement this proposal is written for; it is chosen in Project setup. */}
+                     <div className="bg-white px-3 py-2 rounded-lg border border-slate-300 shadow-sm flex items-center gap-2">
+                        {(MODEL_SWITCHER.find((m: any) => m.id === activeMode) as any)?.icon}
+                        <span className="text-xs font-bold text-slate-800">{engagementDef(engagement).label} proposal</span>
+                        <span className="text-[11px] text-slate-500">· set in Project setup</span>
                      </div>
 
                      <div className="flex gap-3 items-center">
@@ -586,6 +595,7 @@ const MODEL_SWITCHER = [
                         >
                             Level 1: Concept
                         </button>
+                        {!feeOnlyProposal && (<>
                         <button 
                             onClick={() => setProposalLevel('LEVEL_1_5')}
                             className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_1_5' ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
@@ -604,6 +614,7 @@ const MODEL_SWITCHER = [
                         >
                             Level 3: Execution
                         </button>
+                        </>)}
                      </div>
 
                      {true && (
@@ -636,7 +647,7 @@ const MODEL_SWITCHER = [
                                      <span>Show Scope Pricing & Total</span>
                                  </label>
                              )}
-                             {proposalLevel !== 'LEVEL_3' && (
+                             {proposalLevel !== 'LEVEL_3' && !feeOnlyProposal && (
                                  <div className="flex bg-white rounded-lg p-1 border border-slate-300 shadow-sm gap-1 self-stretch md:self-auto">
                                  <button
                                  onClick={() => setProposalFormat('classic')}

@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { ProposalContent, ProjectContext } from '../../types';
 import { formatCurrency, formatClientValue } from '../../lib/utils';
+import { designFeeFor } from '../../lib/boqPricing';
+import { gstTermsOf } from '../../lib/paymentSchedule';
 import { ChevronDownIcon, ChevronUpIcon } from '../Icons';
 
 interface ClientDesignFeesProps {
@@ -147,83 +149,45 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
         );
     }
 
-    // --- DESIGN ONLY + PMC CALCULATOR LOGIC ---
-    // (Existing Design Only Logic Preserved)
-    
-    // Use content if available for title/subtitle to allow edits
+    // --- DESIGN ONLY ---
+    /*
+      One fee, the one Money bills.
+
+      This used to be its own calculator: a ₹75,000 base retainer plus the area
+      at a rate picked by size band, with a PMC switch, saved to fields nothing
+      else read. Money billed Project setup's fee engine instead, so the client
+      could be shown one figure and invoiced another. The fee here is now the
+      fee engine's (lib/boqPricing designFeeFor), and editing it here edits
+      that.
+    */
     const data = {
-        title: content?.title || "Professional Design Fee Structure",
-        subtitle: content?.subtitle || "Our fee is calculated based on the carpet area and the complexity of the design mandate. This transparent model ensures you pay strictly for the value delivered."
+        title: content?.title || "Professional Design Fee",
+        subtitle: content?.subtitle || "Our fee covers the design mandate: layouts, 3D views, the Good for Construction drawing set and selections. Your contractors are engaged and paid by you directly."
     };
 
-    // 1. Determine Constants & Defaults
     const area = projectContext.area || 0;
-    const defaultBaseFee = 75000;
-    
-    // 2. Determine Default Multiplier Band
-    let calculatedDefaultMultiplier = 40;
-    let bandLabel = "Standard Band (<900 sqft)";
-    let bandColor = "border border-slate-300 text-slate-700 bg-white";
+    const feeType = projectContext.designFeeType === 'fixed_lumpsum' ? 'fixed_lumpsum' : 'fixed_sqft';
+    const rate = projectContext.designFee || 0;
+    const totalFee = designFeeFor({ ...projectContext, designFeeType: feeType }, 0, 0);
+    const gstRate = gstTermsOf(projectContext).rate;
+    const designGst = gstTermsOf(projectContext).designGst;
+    const deliverables = (content?.card2?.items && content.card2.items.length)
+        ? content.card2.items
+        : [
+            "Layouts and space planning",
+            "3D visualisation of every room",
+            "Good for Construction drawings (joinery, electrical, civil, ceiling)",
+            "Finishes and fittings selection",
+        ];
 
-    if (area >= 901 && area <= 1200) {
-        calculatedDefaultMultiplier = 50;
-        bandLabel = "Mid Band (901-1200 sqft)";
-        bandColor = "border border-slate-300 text-slate-700 bg-white";
-    } else if (area > 1200) {
-        calculatedDefaultMultiplier = 60;
-        bandLabel = "Large Format (>1200 sqft)";
-        bandColor = "border border-slate-300 text-slate-700 bg-white";
-    } else if (area < 600) {
-        calculatedDefaultMultiplier = 40;
-        bandLabel = "Compact Studio (<600 sqft)";
-        bandColor = "border border-slate-300 text-slate-700 bg-white";
-    }
-
-    // 3. Check for Overrides or Use Defaults
-    const baseFee = projectContext.designFeeConfig?.baseFee ?? defaultBaseFee;
-    const multiplier = projectContext.designFeeConfig?.multiplier ?? calculatedDefaultMultiplier;
-    
-    // PMC Logic
-    const includePmc = projectContext.designFeeConfig?.includePmc ?? false;
-    const pmcRate = projectContext.designFeeConfig?.pmcRate ?? 30; // Default 30 as per prompt
-
-    // 4. Calculate Final Fee
-    const designTotal = baseFee + (area * multiplier);
-    const pmcTotal = includePmc ? (area * pmcRate) : 0;
-    const totalFee = designTotal + pmcTotal;
-
-    // 5. Handlers
-    const updateConfig = (field: 'baseFee' | 'multiplier' | 'pmcRate', value: number) => {
+    const setFee = (patch: Partial<ProjectContext>) => {
         if (!setProjectContext) return;
-        setProjectContext(prev => ({
-            ...prev,
-            designFeeConfig: {
-                ...prev.designFeeConfig,
-                [field]: value
-            }
-        }));
+        setProjectContext(prev => ({ ...prev, ...patch }));
     };
-
-    const togglePmc = (val: boolean) => {
-        if (!setProjectContext) return;
-        setProjectContext(prev => ({
-            ...prev,
-            designFeeConfig: {
-                ...prev.designFeeConfig,
-                includePmc: val
-            }
-        }));
-    }
-
-    const updateArea = (val: number) => {
-        if (!setProjectContext) return;
-        setProjectContext(prev => ({ ...prev, area: val }));
-    }
 
     return (
         <section id="fees" className="py-10">
             <div className="mb-8">
-                <span className="inline-block px-3 py-1 border border-[#C5A880] text-[#C5A880] text-[10px] font-bold uppercase tracking-widest rounded-full mb-3">Thane/Mumbai Pricing</span>
                 <h2 className="text-3xl font-extrabold text-slate-900 mb-2">{data.title}</h2>
                 <p className="text-slate-600 max-w-3xl text-sm leading-relaxed">
                     {data.subtitle}
@@ -232,156 +196,70 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
 
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                 <div className="grid grid-cols-1 md:grid-cols-12">
-                    
-                    {/* Left: Breakdown */}
+                    {/* Left: how the fee is reached, and what it covers */}
                     <div className="md:col-span-7 p-8 border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50/50">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Fee Breakdown</h3>
-                            {setProjectContext && (
-                                <label className="flex items-center gap-2 cursor-pointer no-print">
-                                    <div className="relative">
-                                        <input type="checkbox" checked={includePmc} onChange={(e) => togglePmc(e.target.checked)} className="sr-only peer" />
-                                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-slate-800"></div>
-                                    </div>
-                                    <span className="text-xs font-bold text-slate-600 select-none">Include PMC</span>
-                                </label>
-                            )}
-                        </div>
-                        
-                        <div className="space-y-6">
-                            {/* Base */}
-                            <div className="flex justify-between items-center group">
-                                <div>
-                                    <p className="text-sm font-semibold text-slate-700">Base Retainer Fee</p>
-                                    <p className="text-xs text-slate-500">Core planning & concept development</p>
-                                </div>
-                                <div className="font-mono font-bold text-slate-900 text-lg group-hover:text-slate-900 transition-colors">
-                                    {formatCurrency(baseFee)}
-                                </div>
+                        <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider mb-6">Fee Breakdown</h3>
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <p className="text-sm font-semibold text-slate-700">Design fee</p>
+                                <p className="text-xs text-slate-500">
+                                    {feeType === 'fixed_sqft' ? `${area} sq ft × ₹${rate.toLocaleString('en-IN')} per sq ft` : 'Fixed professional fee'}
+                                </p>
                             </div>
-
-                            <div className="w-full h-px bg-slate-200"></div>
-
-                            {/* Design Area */}
-                            <div className="flex justify-between items-center group">
-                                <div>
-                                    <p className="text-sm font-semibold text-slate-700">Design Fee (Area Based)</p>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${bandColor}`}>{bandLabel}</span>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="font-mono font-bold text-slate-900 text-lg group-hover:text-slate-900 transition-colors">
-                                        {formatCurrency(area * multiplier)}
-                                    </div>
-                                    <p className="text-xs text-slate-500 mt-0.5">
-                                        {area} sqft × ₹{multiplier}/sqft
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* PMC - Conditional */}
-                            {includePmc && (
-                                <>
-                                    <div className="w-full h-px bg-slate-200"></div>
-                                    <div className="flex justify-between items-center group bg-slate-50 p-2 -mx-2 rounded-lg border border-slate-100">
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-800">Project Management (PMC)</p>
-                                            <p className="text-xs text-[#3D52A0]/90">Site Supervision & Vendor Coordination</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="font-mono font-bold text-slate-800 text-lg">
-                                                {formatCurrency(pmcTotal)}
-                                            </div>
-                                            <p className="text-xs text-[#3D52A0] mt-0.5">
-                                                {area} sqft × ₹{pmcRate}/sqft
-                                            </p>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
+                            <div className="font-mono font-bold text-slate-900 text-lg tabular-nums">{formatCurrency(totalFee)}</div>
                         </div>
 
-                        {/* PMC Details - Show if active */}
-                        {includePmc && (
-                            <div className="mt-6 p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-                                <h4 className="text-xs font-bold text-slate-800 uppercase mb-3">PMC Scope</h4>
-                                <div className="grid grid-cols-2 gap-4 text-xs">
-                                    <div>
-                                        <p className="font-bold text-emerald-700 mb-1">Includes:</p>
-                                        <ul className="space-y-1 text-slate-600 list-disc list-inside">
-                                            <li>Scheduled site supervision</li>
-                                            <li>Vendor coordination</li>
-                                            <li>Quality checks</li>
-                                            <li>Design intent enforcement</li>
-                                        </ul>
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-red-700 mb-1">Excludes:</p>
-                                        <ul className="space-y-1 text-slate-600 list-disc list-inside">
-                                            <li>Labour payroll management</li>
-                                            <li>Direct material purchases</li>
-                                            <li>Contractor liability</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        
-                        {/* Advanced Toggle */}
+                        <div className="w-full h-px bg-slate-200 my-6"></div>
+
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">{content?.card2?.label || 'What it covers'}</p>
+                        <ul className="space-y-2">
+                            {deliverables.map((item, idx) => (
+                                <li key={idx} className="flex items-start gap-3 text-sm text-slate-700">
+                                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></span>
+                                    <span className="leading-relaxed">{item}</span>
+                                </li>
+                            ))}
+                        </ul>
+
+                        {/* The same fee engine as Project setup; studio side only. */}
                         {setProjectContext && (
                             <div className="mt-8 no-print">
-                                <button 
+                                <button
                                     onClick={() => setShowAdvanced(!showAdvanced)}
                                     className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-wider"
                                 >
                                     {showAdvanced ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
-                                    {showAdvanced ? 'Hide Configuration' : 'Advanced Configuration'}
+                                    {showAdvanced ? 'Hide fee settings' : 'Change the fee'}
                                 </button>
-                                
                                 {showAdvanced && (
-                                    <div className="mt-4 p-4 bg-white border border-slate-200 rounded-xl space-y-4 shadow-inner">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-500 mb-1">Chargeable Area (sqft)</label>
-                                                <input 
-                                                    type="number" 
-                                                    value={area}
-                                                    onChange={(e) => updateArea(parseInt(e.target.value) || 0)}
-                                                    className="w-full p-2 border border-slate-300 rounded text-sm"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-500 mb-1">Base Fee Override (₹)</label>
-                                                <input 
-                                                    type="number" 
-                                                    value={baseFee}
-                                                    onChange={(e) => updateConfig('baseFee', parseInt(e.target.value) || 0)}
-                                                    className="w-full p-2 border border-slate-300 rounded text-sm"
-                                                />
-                                            </div>
+                                    <div className="mt-4 p-4 bg-white border border-slate-200 rounded-xl space-y-4">
+                                        <div className="inline-flex p-1 rounded-xl bg-slate-100">
+                                            {([['fixed_sqft', '₹ per sq ft'], ['fixed_lumpsum', 'Fixed sum']] as const).map(([id, label]) => (
+                                                <button key={id} type="button" onClick={() => setFee({ designFeeType: id })}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold ${feeType === id ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>
+                                                    {label}
+                                                </button>
+                                            ))}
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
+                                            {feeType === 'fixed_sqft' && (
+                                                <div>
+                                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Chargeable area (sq ft)</label>
+                                                    <input type="number" value={area}
+                                                        onChange={(e) => setFee({ area: parseInt(e.target.value) || 0 })}
+                                                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]" />
+                                                </div>
+                                            )}
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-500 mb-1">Design Rate (₹/sqft)</label>
-                                                <input 
-                                                    type="number" 
-                                                    value={multiplier}
-                                                    onChange={(e) => updateConfig('multiplier', parseInt(e.target.value) || 0)}
-                                                    className="w-full p-2 border border-slate-300 rounded text-sm"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-500 mb-1">PMC Rate (₹/sqft)</label>
-                                                <input 
-                                                    type="number" 
-                                                    value={pmcRate}
-                                                    onChange={(e) => updateConfig('pmcRate', parseInt(e.target.value) || 0)}
-                                                    disabled={!includePmc}
-                                                    className="w-full p-2 border border-slate-300 rounded text-sm disabled:opacity-50"
-                                                />
+                                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                                                    {feeType === 'fixed_sqft' ? 'Rate (₹ per sq ft)' : 'Fee (₹)'}
+                                                </label>
+                                                <input type="number" value={rate}
+                                                    onChange={(e) => setFee({ designFee: parseFloat(e.target.value) || 0 })}
+                                                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]" />
                                             </div>
                                         </div>
+                                        <p className="text-[11px] text-slate-500">This is the fee Money bills; it is the same setting as Project setup.</p>
                                     </div>
                                 )}
                             </div>
@@ -390,22 +268,13 @@ const ClientDesignFees: React.FC<ClientDesignFeesProps> = ({ content, projectCon
 
                     {/* Right: Total */}
                     <div className="md:col-span-5 bg-slate-900 border border-slate-800 p-8 flex flex-col justify-center items-center text-center text-white relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
-                            <svg width="200" height="200" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"/></svg>
-                        </div>
-                        
                         <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Total Professional Fee</p>
-                        <div className="text-4xl md:text-5xl font-black tracking-tight mb-2">
+                        <div className="text-4xl md:text-5xl font-black tracking-tight mb-2 tabular-nums">
                             {formatCurrency(Math.round(totalFee)).replace('₹ ', '₹')}
                         </div>
                         <div className="inline-block px-3 py-1 rounded-full bg-slate-800 text-[10px] font-bold text-slate-300 uppercase tracking-widest border border-slate-700">
-                            + GST Applicable (18%)
+                            {designGst ? `+ GST applicable (${gstRate}%)` : 'No GST on this fee'}
                         </div>
-                        {includePmc && (
-                            <div className="mt-4 text-xs font-medium text-slate-300 bg-slate-800/50 px-3 py-1 rounded border border-slate-700">
-                                Includes Design + PMC
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>

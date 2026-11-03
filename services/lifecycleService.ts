@@ -94,7 +94,9 @@ export const advance = async (
                     const execProgress = journeySummary.phaseProgress?.[4];
                     const execDone = execProgress?.done || 0;
                     if (execDone === 0) {
-                        throw new LifecycleError(`Cannot advance to Stage 6: No operational steps completed in Execution phase (Ops Matrix progress is 0%).`);
+                        throw new LifecycleError(currentContext.engagementType === 'design_only'
+                            ? `Cannot advance to Stage 6: no steps completed in the Selections phase (lock the selections in the Ops Matrix first).`
+                            : `Cannot advance to Stage 6: No operational steps completed in Execution phase (Ops Matrix progress is 0%).`);
                     }
                 }
             }

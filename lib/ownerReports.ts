@@ -21,6 +21,7 @@
   Pure, and shared by the screens and the tests.
 */
 import { calculateProjectFinancials } from './financialsUtils';
+import { engagementOf, isFeeOnly, type EngagementType } from './engagement';
 import { LOST_REASONS, LEAD_SOURCES, LEAD_STAGES, BOARD_STAGES, FIRST_CALL_MINUTES, QUIET_DAYS, isOpen, type Lead, type LeadSource, type LeadStage } from './leads';
 import type { ReportTargets } from './reportTargets';
 import { overheadsMonthly } from './reportTargets';
@@ -202,6 +203,8 @@ export interface ProjectFact {
   firstMoneyAt?: number | null;
   /** Where handedOverAt came from, as bookedSource. */
   handedOverSource?: BookedSource;
+  /** Turnkey, design only or design + PMC (lib/engagement.ts). */
+  engagement?: EngagementType;
   /** Taxable execution and design, before GST. */
   execution: number;
   design: number;
@@ -301,9 +304,11 @@ export function projectFact(p: any, src: FactSources = {}): ProjectFact {
     bookedAt: signed ? booked.at : null,
     bookedSource: signed ? booked.source : 'none',
     firstMoneyAt: milestones.reduce<number | null>((m, x) => { const t = x.invoicedAt ?? x.paidAt; return t != null && (m == null || t < m) ? t : m; }, null),
+    engagement: engagementOf(ctx),
     execution: Number(fin?.taxableExecution) || 0,
     design: Number(fin?.taxableDesign) || 0,
-    plannedCost: Number(tierOf(p)?.summary?.totalCost) || 0,
+    // A fee-only project buys nothing, whatever cost an old BOQ left on its option.
+    plannedCost: isFeeOnly(engagementOf(ctx)) ? 0 : Number(tierOf(p)?.summary?.totalCost) || 0,
     committed,
     milestones,
     additions: src.additionsByProject?.[p.id] || [],
@@ -429,7 +434,12 @@ export interface MarginRow {
   id: string; name: string; contracted: number; quotedPct: number; actualPct: number; leak: number;
 }
 export function marginOf(facts: ProjectFact[]) {
-  const rows = money(facts).filter((f) => contract(f) > 0);
+  /*
+    Gross margin is a turnkey measure: contract less what was bought for it. A
+    design-only fee has no bought cost, so counting it would read as a 100%
+    margin and lift the studio's figure; it is left out.
+  */
+  const rows = money(facts).filter((f) => contract(f) > 0 && !(f.engagement && isFeeOnly(f.engagement)));
   const total = rows.reduce((s, f) => s + contract(f), 0);
   const planned = rows.reduce((s, f) => s + f.plannedCost, 0);
   const measured = rows.filter((f) => f.committed > 0);
@@ -577,7 +587,7 @@ export function scorecard(i: OwnerReportInput): Kpi[] {
       text: gap > 0.05 ? `Quoted at ${pctText(mg.measuredQuotedPct)}, so ${gap.toFixed(1)} points are leaking` : `Quoted at ${pctText(mg.measuredQuotedPct)} and holding`,
     } : null,
     spark: [],
-    how: 'Contract value less purchase-order cost, on projects with POs. Where none are raised the margin is as quoted.',
+    how: 'Contract value less purchase-order cost, on projects with POs. Where none are raised the margin is as quoted. Turnkey projects only: a design-only fee buys nothing.',
   };
 
   /* 4. Owed and overdue, as of now against the start of the period. */

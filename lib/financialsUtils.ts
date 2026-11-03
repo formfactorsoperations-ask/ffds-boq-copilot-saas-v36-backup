@@ -1,4 +1,4 @@
-import { billingBase } from './paymentSchedule';
+import { billingBase, billingSummary } from './paymentSchedule';
 
 export function calculateProjectFinancials(context: any, activeTier?: any) {
     const financials = context?.financials || {
@@ -21,8 +21,10 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
     let originalExecutionTotal = 0;
     let originalDesignFee = 0;
     if (activeTier) {
-        originalExecutionTotal = activeTier.summary?.totalSell || 0;
-        originalDesignFee = activeTier.summary?.designFee || 0;
+        // A fee-only project bills no execution and the fee engine's design fee (lib/paymentSchedule.ts).
+        const summary = billingSummary(context, activeTier.summary);
+        originalExecutionTotal = summary?.totalSell || 0;
+        originalDesignFee = summary?.designFee || 0;
     } else {
         originalExecutionTotal = context?.originalExecutionTotal || 0;
         originalDesignFee = context?.originalDesignFee || 0;

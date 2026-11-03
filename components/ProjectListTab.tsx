@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { ENGAGEMENTS, EngagementType, engagementDef, engagementOf, isFeeOnly } from '../lib/engagement';
 import { db } from '../services/dbService';
 import { FullProjectData, ProjectStatus } from "../types";
 import { classifyProject } from "../lib/projectClassification";
@@ -307,6 +308,8 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   const [activeTab, setActiveTab] = useState<"projects" | "intelligence" | "analytics">("projects");
   const [statusFilter, setStatusFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState<"all" | "actual" | "dummy" | "untagged">("all");
+  /* Turnkey, design only, design + PMC (lib/engagement.ts). */
+  const [engagementFilter, setEngagementFilter] = useState<"all" | EngagementType>("all");
   const [searchQuery, setSearchQuery] = useState("");
   /*
     Deleting more than one.
@@ -456,16 +459,26 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
     return it?.action?.priority === alertFilter;
   };
 
+  const matchesEngagement = (proj: FullProjectData, e: "all" | EngagementType = engagementFilter) =>
+    e === "all" || engagementOf(proj.context) === e;
+
+  /* Only worth a filter once the studio has more than one kind of project. */
+  const engagementsInUse = useMemo(
+    () => ENGAGEMENTS.filter((d) => projects.some((p) => engagementOf(p.context) === d.id)),
+    [projects],
+  );
+
   const filteredProjects = useMemo(
     () =>
       projects.filter(
         (proj) =>
           matchesKind(proj, kindFilter) &&
           matchesPhase(proj, statusFilter) &&
+          matchesEngagement(proj) &&
           matchesSearch(proj) &&
           matchesAlert(proj),
       ),
-    [projects, kindFilter, statusFilter, searchQuery, alertFilter, intel],
+    [projects, kindFilter, statusFilter, engagementFilter, searchQuery, alertFilter, intel],
   );
 
   /*
@@ -1024,6 +1037,42 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                   );
                 })}
               </div>
+
+              {/* Engagement filter: shown once the studio has design-only (or PMC) projects as well as turnkey ones. */}
+              {engagementsInUse.length > 1 && (
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">
+                    Engagement:
+                  </span>
+                  {([{ id: 'all', short: 'All' }, ...engagementsInUse] as { id: "all" | EngagementType; short: string }[]).map((e) => {
+                    const live = engagementFilter === e.id;
+                    const n = projects.filter(
+                      (proj) =>
+                        matchesKind(proj, kindFilter) &&
+                        matchesPhase(proj, statusFilter) &&
+                        matchesEngagement(proj, e.id) &&
+                        matchesSearch(proj) &&
+                        matchesAlert(proj),
+                    ).length;
+                    return (
+                      <button
+                        key={e.id}
+                        onClick={() => setEngagementFilter(e.id)}
+                        className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                          live
+                            ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs'
+                            : n === 0
+                              ? 'bg-slate-100 text-slate-300 hover:bg-slate-200'
+                              : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        }`}
+                      >
+                        {e.short}
+                        <span className={`tabular-nums text-[10px] ${live ? 'text-white/70' : 'text-slate-400'}`}>{n}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-3 md:gap-4 w-full xl:w-auto pb-2 xl:pb-0">
@@ -1419,6 +1468,16 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                       </motion.div>
                                     );
                                   })()}
+
+                                  {/* Turnkey is the default and goes unmarked; the other engagements say so. */}
+                                  {isFeeOnly(engagementOf(project.context)) && (
+                                    <span
+                                      className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#3D52A0]/10 text-[#3D52A0]"
+                                      title={engagementDef(engagementOf(project.context)).blurb}
+                                    >
+                                      {engagementDef(engagementOf(project.context)).label}
+                                    </span>
+                                  )}
 
                                   {metrics.riskScore > 0 && (
                                     <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-[0.15em] bg-rose-50 text-rose-600 border border-rose-100">

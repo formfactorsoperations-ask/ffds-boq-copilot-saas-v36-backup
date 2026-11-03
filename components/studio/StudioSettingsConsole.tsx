@@ -28,6 +28,7 @@ import ZohoBooksCard from './ZohoBooksCard';
 import OpsDeskSettings from './OpsDeskSettings';
 import MinutesMigration from './MinutesMigration';
 import PeopleSettings from './PeopleSettings';
+import EngagementSettings from './EngagementSettings';
 import ConsoleHeader from '../ui/ConsoleHeader';
 import {
   SETTINGS_SECTIONS, SETTINGS_FIELDS, SectionId, SettingsField,
@@ -36,7 +37,7 @@ import {
 import { TeamMember } from '../../types';
 import {
   Save, Building2, Users, CreditCard, Scale, Globe, Palette,
-  Database, Check, AlertTriangle, Upload, RotateCcw, Inbox, UserCheck, FileText,
+  Database, Check, AlertTriangle, Upload, RotateCcw, Inbox, UserCheck, FileText, Briefcase,
 } from '@/lib/lucide-shim';
 
 const SECTION_ICON: Record<SectionId, React.ComponentType<any>> = {
@@ -50,6 +51,7 @@ const SECTION_ICON: Record<SectionId, React.ComponentType<any>> = {
   opsdesk: Inbox,
   people: UserCheck,
   minutes: FileText,
+  engagements: Briefcase,
 };
 
 /** Personalization lives in localStorage, not the org document — it is per device. */
@@ -584,6 +586,19 @@ export default function StudioSettingsConsole(props: {
           {activeSection === 'people' && (
             <Panel id="people" title="People" blurb={SETTINGS_SECTIONS[8].blurb} missing={0}>
               <PeopleSettings org={draft} canEdit={canEdit} onChange={(v) => setField('peopleDesk', v)} />
+            </Panel>
+          )}
+
+          {activeSection === 'engagements' && (
+            <Panel id="engagements" title="Engagements" blurb={SETTINGS_SECTIONS[10].blurb} missing={0}>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">What the studio takes on</p>
+              <p className="text-xs text-slate-500 mb-3">
+                Each project is set up as one of these. Only the ones ticked are offered.
+              </p>
+              <EngagementSettings org={draft} canEdit={canEdit} onChange={(v) => setField('engagementTypesOffered', v)} />
+              <div className="mt-6 pt-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field {...bind('designOnlyFeePerSqft')} type="number" placeholder="e.g. 150" />
+              </div>
             </Panel>
           )}
 

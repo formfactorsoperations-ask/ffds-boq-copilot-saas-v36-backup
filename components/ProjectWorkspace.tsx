@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ProjectContextTier } from './ProjectContextTier';
 import { ProjectContext, ProjectStatus, FullProjectData } from '../types';
 import { STAGE_LABELS, PHASES } from '../constants/journeyConstants';
 import { Lock, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, X, Compass, Activity, Check, Info, Settings, Edit3, AlertTriangle, LayoutGrid, Handshake, Palette, Layers, FileText, Truck, Hammer, Key, Sparkles, SlidersHorizontal, Eye, Pencil } from '@/lib/lucide-shim';
 import { NAV_CONFIG, ALWAYS_ON_BAND } from './navConfig';
+import { engagementOf, navItemsFor, stageLabel, routeLabel, isRouteHidden, engagementDef } from '../lib/engagement';
 import { useProjectJourney } from '../hooks/useProjectJourney';
 import { useOrg } from '../contexts/OrgContext';
 import { seesStudioFinance, holdsFinanceRole, isDesignerRole, isLimitedRole, DESIGNER_EDITABLE_TABS, limitedMayOpen, limitedHomeTab } from '../lib/roleAccess';
@@ -42,6 +43,15 @@ const WORKSPACE_STATUS_MAP: Record<
   The project's progress as a ring that fills to its value when the project
   opens (H1 in the header mockups).
 */
+/* Page names for screens that do a different job on a design-only project (lib/engagement.ts). */
+const ENGAGEMENT_PAGE_TITLES: Partial<Record<string, Record<string, { title: string; subtitle: string }>>> = {
+  design_only: {
+    'design-gate': { title: 'GFC Release', subtitle: 'Checks that must clear before the GFC set goes to the client' },
+    'handover-docket': { title: 'Design Closeout', subtitle: 'Final drawing set issued and the client’s sign-off' },
+    materials: { title: 'SOF & Selections', subtitle: 'Finishes and fittings chosen with the client' },
+  },
+};
+
 function ProgressRing({ pct }: { pct: number }) {
   const C = 2 * Math.PI * 15;
   const [shown, setShown] = useState(0);
@@ -98,6 +108,19 @@ export function ProjectWorkspace({
   const currentStage = lifecycle.stage;
 
   /*
+    The rail for this project's engagement. A design-only project has no BOQ,
+    pricing, execution agreement or site screens, and its Design Gate and
+    Handover Docket do the jobs of GFC Release and Design Closeout.
+  */
+  const engagement = engagementOf(projectContext);
+  const NAV = useMemo(() => NAV_CONFIG.map(s => ({
+    ...s,
+    label: stageLabel(engagement, s.stage, s.label),
+    items: navItemsFor(engagement, s.items),
+  })), [engagement]);
+  const BAND = useMemo(() => navItemsFor(engagement, ALWAYS_ON_BAND), [engagement]);
+
+  /*
     Scoping, pricing and the proposal are how the work is won, so they open the
     moment a project exists.
 
@@ -119,17 +142,17 @@ export function ProjectWorkspace({
   const journey = useProjectJourney(projectId, projectContext);
   const { steps = [], markStepDone, markStepPending } = journey;
 
-  const activeTabStage = NAV_CONFIG.find(s => s.items.some(item => item.route === activeTab))?.stage || currentStage;
+  const activeTabStage = NAV.find(s => s.items.some(item => item.route === activeTab))?.stage || currentStage;
   const [selectedStage, setSelectedStage] = useState<number>(activeTabStage);
 
   useEffect(() => {
-    const found = NAV_CONFIG.find(s => s.items.some(item => item.route === activeTab));
+    const found = NAV.find(s => s.items.some(item => item.route === activeTab));
     if (found) {
       setSelectedStage(found.stage);
     }
   }, [activeTab]);
 
-  const activeStageConfig = NAV_CONFIG.find(c => c.stage === selectedStage) || NAV_CONFIG.find(c => c.stage === currentStage);
+  const activeStageConfig = NAV.find(c => c.stage === selectedStage) || NAV.find(c => c.stage === currentStage);
 
   // Local state for expanded stage. By default, the currentStage is expanded.
   const [activeExpandedStage, setActiveExpandedStage] = useState<Record<string, number>>({});
@@ -153,8 +176,9 @@ export function ProjectWorkspace({
   };
 
   // Active Phase and Stage Calculations for Floating Widget
-  const activePhaseIndex = Math.max(0, Math.min(PHASES.length - 1, currentStage - 1));
-  const activePhaseDef = PHASES[activePhaseIndex];
+  const phases = (journey as any).phases || PHASES;
+  const activePhaseIndex = Math.max(0, Math.min(phases.length - 1, currentStage - 1));
+  const activePhaseDef = phases[activePhaseIndex];
   const activePhaseProgress = journey.phaseProgress?.[activePhaseIndex] || { pct: 0, done: 0, total: 0 };
   const isPhaseComplete = activePhaseProgress.pct === 100;
   const phaseSteps = journey.stepsByPhase?.[activePhaseIndex] || [];
@@ -181,8 +205,8 @@ export function ProjectWorkspace({
   if (activePhaseIndex === 0) transitionMessage = "Acquisition complete. Ready to advance the project to Design.";
   else if (activePhaseIndex === 1) transitionMessage = "Every step is signed off. Move the project into Contracting.";
   else if (activePhaseIndex === 2) transitionMessage = "Contracting complete. Ready to start Pre-Execution setup.";
-  else if (activePhaseIndex === 3) transitionMessage = "Pre-Execution setup complete. Ready to mobilize on-site execution.";
-  else if (activePhaseIndex === 4) transitionMessage = "Execution complete. Ready to begin handover closeout.";
+  else if (activePhaseIndex === 3) transitionMessage = engagement === 'design_only' ? "The GFC set is out. Move on to locking selections." : "Pre-Execution setup complete. Ready to mobilize on-site execution.";
+  else if (activePhaseIndex === 4) transitionMessage = engagement === 'design_only' ? "Selections are locked. Ready for the design closeout." : "Execution complete. Ready to begin handover closeout.";
 
   // Function to handle advancing the lifecycle
   const handleAdvanceLifecycle = async (newStage: number) => {
@@ -220,7 +244,8 @@ export function ProjectWorkspace({
   // Helper to get lock text
   const getLockNote = (stage: number) => {
     if (stage === 6 && !(lifecycle.gates as any)?.designGateActive?.done) {
-      return { text: "Unlocks when the Design Complete Gate is activated.", linkText: "Go to Design Gate →", linkRoute: "design-gate" };
+      const gate = routeLabel(engagement, 'design-gate', 'Design Gate');
+      return { text: `Unlocks when the ${gate} is activated.`, linkText: `Go to ${gate} →`, linkRoute: "design-gate" };
     }
     // generic fallback for other stages if they somehow lock
     return { text: "Unlocks when prerequisite gates are met.", linkText: "Go to Overview →", linkRoute: "dashboard" };
@@ -326,7 +351,7 @@ export function ProjectWorkspace({
     );
   };
 
-  const getStageCounts = (stageConfig: typeof NAV_CONFIG[0]) => {
+  const getStageCounts = (stageConfig: typeof NAV[0]) => {
     // Filter out items hidden by role rules (Designer cannot see money: true)
     const visibleItems = stageConfig.items.filter(item => !(hiddenForRole(item)));
     let doneCount = 0;
@@ -384,7 +409,7 @@ export function ProjectWorkspace({
               setActiveTab(isLimited ? limitedHome : 'dashboard');
             }}
             className={`phd-lift flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12.5px] font-bold shrink-0 ${
-              selectedStage === 0 || ALWAYS_ON_BAND.some(i => i.route === activeTab) || activeTab === 'dashboard' || (isLimited && activeTab === limitedHome)
+              selectedStage === 0 || BAND.some(i => i.route === activeTab) || activeTab === 'dashboard' || (isLimited && activeTab === limitedHome)
                 ? 'bg-[#3D52A0] text-white shadow-md shadow-[#3D52A0]/25'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
@@ -482,9 +507,9 @@ export function ProjectWorkspace({
               const isCompleted = stg < currentStage;
               const isActive = stg === currentStage;
               const isLocked = isStageLocked(stg);
-              const stageConfig = NAV_CONFIG.find(c => c.stage === stg);
-              const label = STAGE_LABELS[stg] || `Stage ${stg}`;
-              const isSelectedStage = selectedStage === stg && !ALWAYS_ON_BAND.some(i => i.route === activeTab) && activeTab !== 'dashboard';
+              const stageConfig = NAV.find(c => c.stage === stg);
+              const label = stageLabel(engagement, stg, STAGE_LABELS[stg] || `Stage ${stg}`);
+              const isSelectedStage = selectedStage === stg && !BAND.some(i => i.route === activeTab) && activeTab !== 'dashboard';
               // The screens this person may open in the stage. A stage with none
               // is left out for a Designer rather than offered as a dead end.
               const openableItems = (stageConfig?.items || []).filter(item => !hiddenForRole(item));
@@ -583,7 +608,7 @@ export function ProjectWorkspace({
         </div>
 
         {/* Row 3: Stage Sub-Menus (Screens in active/selected stage) */}
-        {activeTab !== 'dashboard' && !ALWAYS_ON_BAND.some(i => i.route === activeTab) && selectedStage > 0 && activeStageConfig && activeStageConfig.items.length > 0 && (
+        {activeTab !== 'dashboard' && !BAND.some(i => i.route === activeTab) && selectedStage > 0 && activeStageConfig && activeStageConfig.items.length > 0 && (
           <div className="bg-slate-50/60 border-b border-slate-200 px-4 lg:px-6 py-2 flex items-center gap-2 shrink-0 flex-wrap">
             {activeStageConfig.items.map(item => {
               if (hiddenForRole(item)) return null;
@@ -639,7 +664,7 @@ export function ProjectWorkspace({
             <FloatingDock
               tooltipPosition="bottom"
               alwaysShowLabels={true}
-              items={ALWAYS_ON_BAND.filter((item) => !(hiddenForRole(item))).map((item) => {
+              items={BAND.filter((item) => !(hiddenForRole(item))).map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.route || (item.route === 'dashboard' && activeTab === 'dashboard');
                 let badgeText = item.statusBadge ? item.statusBadge(projectContext) : null;
@@ -761,7 +786,7 @@ export function ProjectWorkspace({
                 
                 {/* Project Hub Center Icons */}
                 <div className="flex flex-col items-center gap-2.5 w-full">
-                  {ALWAYS_ON_BAND.map(item => {
+                  {BAND.map(item => {
                     if (hiddenForRole(item)) return null;
                     const Icon = item.icon;
                     const isActive = activeTab === item.route;
@@ -807,7 +832,7 @@ export function ProjectWorkspace({
                   const isCompleted = stage < currentStage;
                   const isActive = stage === currentStage;
                   const isLocked = isStageLocked(stage);
-                  const stageConfig = NAV_CONFIG.find(c => c.stage === stage);
+                  const stageConfig = NAV.find(c => c.stage === stage);
                   const label = stageConfig ? stageConfig.label : `Stage ${stage}`;
 
                   return (
@@ -881,7 +906,7 @@ export function ProjectWorkspace({
                     <span className="text-[8px] font-extrabold text-[#3D52A0] uppercase tracking-widest font-mono">Always on</span>
                   </div>
                   <div className="space-y-0.5">
-                    {ALWAYS_ON_BAND.map(item => renderNavItem(item, false, true))}
+                    {BAND.map(item => renderNavItem(item, false, true))}
                   </div>
                 </div>
               </div>
@@ -895,7 +920,7 @@ export function ProjectWorkspace({
                   </div>
                   {/* Stage Accordion with Segmented Connected Timeline */}
                   <div className="relative space-y-1 pl-1.5">
-                    {NAV_CONFIG.map((stageConfig) => {
+                    {NAV.map((stageConfig) => {
                       const isCompleted = stageConfig.stage < currentStage;
                       const isActive = stageConfig.stage === currentStage;
                       const isLocked = isStageLocked(stageConfig.stage);
@@ -1005,10 +1030,39 @@ export function ProjectWorkspace({
         {renderOpsBanner()}
         {/* The dashboard route shows the setup wizard until the project has tiers,
             so the title has to follow the screen rather than the route. */}
-        <PageTitleBlock route={isWizard ? 'project-setup' : activeTab} />
+        <PageTitleBlock
+          route={isWizard ? 'project-setup' : activeTab}
+          {...(!isWizard && ENGAGEMENT_PAGE_TITLES[engagement]?.[activeTab] ? ENGAGEMENT_PAGE_TITLES[engagement]![activeTab] : {})}
+        />
         {/* Everything but the Drawing Tracker is look-only for a Designer. */}
         <ViewOnlyGuard active={isLimited && !(isDesigner && DESIGNER_EDITABLE_TABS.has(activeTab))}>
-          {children}
+          {/* A screen this engagement has no use for, reached by an old link or a bookmark. */}
+          {isRouteHidden(engagement, activeTab) ? (
+            <div className="max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] flex items-center justify-center shrink-0">
+                  <Info className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-bold text-slate-800">Not part of a {engagementDef(engagement).adjective} project</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    This is a {engagementDef(engagement).adjective} project, so the studio does not price, contract or run the execution here.
+                    If the client has asked the studio to build, change the engagement in Project setup.
+                  </p>
+                  <div className="mt-4 flex gap-2">
+                    <button type="button" onClick={() => setActiveTab('dashboard')}
+                      className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486]">
+                      Open Project setup
+                    </button>
+                    <button type="button" onClick={() => setActiveTab('drawing-tracker')}
+                      className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">
+                      Go to Drawings
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : children}
         </ViewOnlyGuard>
       </div>
       </div>

@@ -9,6 +9,7 @@ import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 import DigitalSignatureDocketView from '../common/DigitalSignatureDocket';
 import ManualAcceptanceOverrideModal from '../ops/ManualAcceptanceOverrideModal';
 import { publicAppOrigin } from '../../lib/publicUrl';
+import { engagementOf } from '../../lib/engagement';
 
 interface HandoverDocketPageProps {
     projectContext: ProjectContext;
@@ -26,6 +27,16 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
     const projectName = projectContext?.name || 'Untitled Project';
     const projectId = propProjectId || (projectContext as any).projectId || (projectContext as any).id || (projectContext.name ? projectContext.name.replace(/[^a-zA-Z0-9_-]/g, '_') : 'PRJ-0000');
     
+    /*
+      On a design-only project this is the Design Closeout: the client signs off
+      the final drawing set and the design engagement closes. There was no site
+      handed over and the studio gives no workmanship warranty, so neither
+      appears. The signature runs through the same handover sign-off.
+    */
+    const designOnly = engagementOf(projectContext) === 'design_only';
+    const docTitle = designOnly ? 'Design Closeout' : 'Handover Docket';
+    const fileStem = designOnly ? 'Design_Closeout' : 'Handover_Docket';
+    const drawingsIssued = Object.values((projectContext as any).drawingTracker || {}).length;
     const [handoverDate, setHandoverDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [isSending, setIsSending] = useState(false);
     const [showSendConfirm, setShowSendConfirm] = useState(false);
@@ -64,7 +75,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
 
             const opt = {
                 margin: [15, 0, 15, 0],
-                filename: `Handover_Docket_${projectName.replace(/\s+/g, '_')}.pdf`,
+                filename: `${fileStem}_${projectName.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 1 },
                 html2canvas: {
                     scale: 2,
@@ -111,7 +122,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                     
                     const opt = {
                         margin: [15, 0, 15, 0],
-                        filename: `Handover_Docket_${projectName.replace(/\s+/g, '_')}.pdf`,
+                        filename: `${fileStem}_${projectName.replace(/\s+/g, '_')}.pdf`,
                         image: { type: 'jpeg' as const, quality: 1 },
                         html2canvas: {
                             scale: 2,
@@ -191,7 +202,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                         <div className="flex-grow">
                             <h3 className="text-lg font-black text-amber-900 uppercase tracking-wider mb-2">Awaiting Client Sign-Off</h3>
-                            <p className="text-sm text-amber-800">The handover docket has been generated and is awaiting digital signature.</p>
+                            <p className="text-sm text-amber-800">The {designOnly ? "design closeout" : "handover docket"} has been generated and is awaiting digital signature.</p>
                             
                             <div className="mt-4 p-4 bg-white rounded-xl border border-amber-200 shadow-xs">
                                 <div className="flex items-center justify-between mb-2 pb-2 border-b border-amber-100">
@@ -241,7 +252,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                             legalAffirmation: true,
                             manualOverride: currentSignoff?.manualOverride
                         }}
-                        documentTitle="Formal Handover & Warranty Docket"
+                        documentTitle={designOnly ? "Design Closeout & Final Drawing Set" : "Formal Handover & Warranty Docket"}
                         projectId={projectId}
                         projectName={projectName}
                         studioName={studioName}
@@ -258,7 +269,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
 
             {showOverrideModal && (
                 <ManualAcceptanceOverrideModal
-                    documentTitle="Formal Handover & Warranty Docket"
+                    documentTitle={designOnly ? "Design Closeout & Final Drawing Set" : "Formal Handover & Warranty Docket"}
                     projectName={projectName}
                     defaultClientName={clientName}
                     defaultClientEmail={projectContext.clientEmail}
@@ -295,9 +306,9 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
             <div className="flex-none p-6 border-b border-slate-200 bg-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4 z-10 sticky top-0 shadow-sm print:hidden">
                 <div>
                     <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2 docket-font">
-                        Handover Docket & Warranty
+                        {designOnly ? 'Design Closeout' : 'Handover Docket & Warranty'}
                     </h2>
-                    <p className="text-xs text-slate-500 mt-1">Formal completion certificate, warranty terms, and care guidelines.</p>
+                    <p className="text-xs text-slate-500 mt-1">{designOnly ? 'The client’s sign-off on the final drawing set, closing the design engagement.' : 'Formal completion certificate, warranty terms, and care guidelines.'}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2 mr-2 bg-slate-50 px-3 py-1.5 rounded border border-slate-200">
@@ -345,13 +356,13 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                             </div>
                             <div className="text-right">
                                 <p className="text-[10px] font-bold tracking-[0.2em] text-[#C6A96C] uppercase mb-1">Formal Document</p>
-                                <p className="text-lg font-black text-slate-900 uppercase tracking-widest m-0">Handover Docket</p>
+                                <p className="text-lg font-black text-slate-900 uppercase tracking-widest m-0">{docTitle}</p>
                             </div>
                         </div>
 
                         {/* Certificate Banner Layout */}
                         <div className="text-center py-6 mb-10">
-                            <h1 className="text-3xl md:text-4xl font-black uppercase tracking-[0.2em] text-slate-900 mb-4">Certificate of Completion</h1>
+                            <h1 className="text-3xl md:text-4xl font-black uppercase tracking-[0.2em] text-slate-900 mb-4">{designOnly ? 'Design Completion' : 'Certificate of Completion'}</h1>
                             <div className="inline-block border border-slate-200 bg-slate-50 px-6 py-2">
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mr-2">Project:</span>
                                 <span className="text-[12px] font-black text-slate-900 uppercase tracking-wider">{projectName}</span>
@@ -373,7 +384,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                                 <div className="font-semibold text-slate-900 text-[13px]">{projectId}</div>
                             </div>
                             <div>
-                                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1.5">Date of Handover</div>
+                                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1.5">{designOnly ? 'Date of Closeout' : 'Date of Handover'}</div>
                                 <div className="font-semibold text-slate-900 text-[13px]">{displayDate}</div>
                             </div>
                         </div>
@@ -382,10 +393,12 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                         <div className="mb-10">
                             <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-[0.15em] mb-4 flex items-center gap-3">
                                 <span className="w-6 h-[2px] bg-[#C6A96C]"></span>
-                                1. Practical Completion
+                                {designOnly ? '1. Design Completion' : '1. Practical Completion'}
                             </h4>
                             <p className="text-[13px] leading-relaxed text-slate-700 pl-9">
-                                This document serves as the formal handover and closure of the interior execution phase for the project referenced above. By signing this document, all parties acknowledge that the works have been executed as per the agreed design intent and scope, and the site is handed over in a satisfactory, ready-to-use condition.
+                                {designOnly
+                                    ? `This document closes the design engagement for the project referenced above. By signing it, the client acknowledges receipt of the final Good for Construction drawing set and the agreed design deliverables. Execution of the works is carried out by contractors engaged and paid by the client, who remain responsible for their workmanship.`
+                                    : `This document serves as the formal handover and closure of the interior execution phase for the project referenced above. By signing this document, all parties acknowledge that the works have been executed as per the agreed design intent and scope, and the site is handed over in a satisfactory, ready-to-use condition.`}
                             </p>
                         </div>
 
@@ -395,6 +408,24 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                                 <span className="w-6 h-[2px] bg-[#C6A96C]"></span>
                                 2. Closure Checklist
                             </h4>
+                            {designOnly ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-9">
+                                {[
+                                    ['Final Drawing Set', `The GFC set issued${drawingsIssued ? ` (${drawingsIssued} drawings)` : ''}.`],
+                                    ['Selections', 'Finishes and fittings schedule shared with the client.'],
+                                    ['Design Fee Settled', '100% of the design fee cleared.'],
+                                    ['Site Queries', 'Contractor queries on the drawings answered.'],
+                                ].map(([title, text]) => (
+                                    <div key={title} className="flex items-start gap-3 p-4 border border-slate-200 rounded-sm bg-white">
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                                        <div>
+                                            <div className="text-[11px] font-bold text-slate-900 uppercase tracking-wide mb-1">{title}</div>
+                                            <div className="text-[11px] text-slate-500 leading-snug">{text}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-9">
                                 <div className="flex items-start gap-3 p-4 border border-slate-200 rounded-sm bg-white">
                                     <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
@@ -425,8 +456,11 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                                     </div>
                                 </div>
                             </div>
+                            )}
                         </div>
 
+                        {/* Warranty and care: turnkey only. A design-only studio built nothing to warrant. */}
+                        {!designOnly && (<>
                         {/* Section: Warranty Certificate */}
                         <div className="break-inside-avoid mb-10 pt-4 border-t border-slate-200">
                             <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-[0.15em] mb-6 flex items-center gap-3">
@@ -488,6 +522,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                                 </div>
                             </div>
                         </div>
+                        </>)}
 
                         {/* Section D: Sign-off */}
                         <div className="break-inside-avoid pt-10">
