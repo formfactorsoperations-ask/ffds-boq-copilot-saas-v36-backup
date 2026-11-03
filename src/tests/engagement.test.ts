@@ -342,3 +342,30 @@ describe('documents on a design-only project', () => {
     expect(buildDocumentCompleteness({ lifecycle: { stage: 5 } } as any).slots.map((s: any) => s.kind)).toContain('execution_agreement');
   });
 });
+
+import { calculateProjectFinancials } from '../../lib/financialsUtils';
+
+describe("the design fee's GST switch in the reports", () => {
+  const ctx: any = {
+    engagementType: 'design_only', approvedTierId: 't1', designFeeType: 'fixed_lumpsum', designFee: 100000,
+    paymentMilestones: [{ id: 'd1', type: 'design', name: 'Sign-up', percentage: 100, status: 'pending' }],
+  };
+  const option: any = { id: 't1', summary: { totalSell: 0, designFee: 100000 } };
+
+  it('adds no GST when Money has it switched off (Pali Hills: ₹1,00,000, not ₹1,18,000)', () => {
+    const off = calculateProjectFinancials({ ...ctx, financials: { designGstEnabled: false } }, option) as any;
+    expect(off.currentProjectValue).toBe(100000);
+    expect(off.milestoneAmounts?.d1 ?? off.calculateMilestoneTotal(ctx.paymentMilestones[0])).toBe(100000);
+  });
+
+  it('still adds it when the switch is on or never set', () => {
+    expect((calculateProjectFinancials({ ...ctx, financials: {} }, option) as any).currentProjectValue).toBe(118000);
+    expect((calculateProjectFinancials(ctx, option) as any).currentProjectValue).toBe(118000);
+  });
+
+  it('gives a design-only project a margin on its fee: all of it while nothing is bought', () => {
+    const pnl = buildProjectPnl(ctx, [], [], option);
+    expect(pnl.quotedMargin).toBe(100000);
+    expect(Math.round(pnl.quotedMarginPct)).toBe(100);
+  });
+});

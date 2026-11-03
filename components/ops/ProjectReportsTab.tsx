@@ -222,27 +222,17 @@ const ProjectReportsTab: React.FC<Props> = ({
       {/* ── Money ────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/*
-          Design only: one panel for the fee in place of Margin and Cost. There
-          is no BOQ cost behind a design fee, so a margin read against one said
-          nothing true (it showed -634% on Pali Hills).
+          Design only: the margin is the fee less what was actually bought for
+          the job (outsourced renders, a consultant), never an old BOQ's cost:
+          read against one it showed -634% on Pali Hills.
         */}
-        {feeOnly ? (
-          <div className="lg:col-span-2">
-            <Panel title="Design fee" sub="A design-only project: the fee is the studio's revenue" icon={<Percent className="w-4 h-4" />}>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Stat label="Design fee" value={formatINR(pnl.contractedDesign)} foot="ex-GST" tone="text-emerald-700" />
-                <Stat label="Fee stages paid" value={`${designMilestonesPaid} / ${designMilestones.length}`} foot={designMilestonesInvoiced ? `${designMilestonesInvoiced} invoiced, awaiting payment` : 'none awaiting payment'} />
-                <Stat label="Collected" value={formatINR(collected)} foot="incl. GST" />
-                <Stat label="Still to collect" value={formatINR(pnl.uncollected)} foot="incl. GST" tone={pnl.uncollected > 0 ? 'text-slate-900' : 'text-emerald-700'} />
-              </div>
-              <p className="text-[11px] text-slate-500 mt-4 pt-4 border-t border-slate-100 leading-relaxed">
-                No margin or cost is shown: the client buys the materials and pays the contractors directly, and the studio's own time is not costed here.
-                {pnl.poCount > 0 && ` ${pnl.poCount} purchase order${pnl.poCount === 1 ? ' was' : 's were'} raised on this project, worth ${formatINR(pnl.committedCost)}.`}
-              </p>
-            </Panel>
-          </div>
-        ) : (<>
-        <Panel title="Margin" sub={pnl.hasProcurement ? 'Actual: against orders and vendor bills' : 'Potential: from the BOQ margin'} icon={<Percent className="w-4 h-4" />}>
+        <Panel
+          title="Margin"
+          sub={feeOnly
+            ? (pnl.hasProcurement ? 'The design fee less what was bought for the job' : 'The design fee: nothing bought for the job yet')
+            : (pnl.hasProcurement ? 'Actual: against orders and vendor bills' : 'Potential: from the BOQ margin')}
+          icon={<Percent className="w-4 h-4" />}
+        >
           <div className="flex items-center gap-5">
             <Gauge
               pct={Math.max(0, marginPct)}
@@ -253,7 +243,7 @@ const ProjectReportsTab: React.FC<Props> = ({
             />
             <div className="flex-1 min-w-0 space-y-3">
               <Stat label="Margin" value={formatINR(marginValue)} tone={marginValue < 0 ? 'text-rose-700' : 'text-slate-900'} />
-              {vsStudio != null && (
+              {vsStudio != null && !feeOnly && (
                 <p className={`text-[11px] font-bold flex items-center gap-1 ${vsStudio < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                   {vsStudio < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
                   {vsStudio >= 0 ? '+' : ''}{vsStudio.toFixed(1)} pts vs studio {studioMarginPct!.toFixed(1)}%
@@ -270,11 +260,28 @@ const ProjectReportsTab: React.FC<Props> = ({
             />
           </div>
           <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
-            <Stat label="Execution work" value={formatINR(pnl.hasProcurement ? pnl.executionMarginCurrent : pnl.executionMarginQuoted)} foot="sell less cost" />
-            <Stat label="Design fee" value={formatINR(pnl.contractedDesign)} foot="no cost against it" tone="text-emerald-700" />
+            {feeOnly ? (
+              <Stat label="Bought for the job" value={formatINR(pnl.effectiveCost)} foot={pnl.poCount ? `${pnl.poCount} purchase order${pnl.poCount === 1 ? '' : 's'}` : 'no purchase orders'} />
+            ) : (
+              <Stat label="Execution work" value={formatINR(pnl.hasProcurement ? pnl.executionMarginCurrent : pnl.executionMarginQuoted)} foot="sell less cost" />
+            )}
+            <Stat label="Design fee" value={formatINR(pnl.contractedDesign)} foot={feeOnly ? 'ex-GST' : 'no cost against it'} tone="text-emerald-700" />
           </div>
+          {feeOnly && (
+            <p className="text-[11px] text-slate-500 mt-3 leading-relaxed">The studio's own design time is not costed here, and the client pays the contractors directly.</p>
+          )}
         </Panel>
 
+        {feeOnly ? (
+          <Panel title="Design fee" sub="Stages billed and paid" icon={<Activity className="w-4 h-4" />}>
+            <div className="grid grid-cols-2 gap-4">
+              <Stat label="Design fee" value={formatINR(pnl.contractedDesign)} foot="ex-GST" tone="text-emerald-700" />
+              <Stat label="Fee stages paid" value={`${designMilestonesPaid} / ${designMilestones.length}`} foot={designMilestonesInvoiced ? `${designMilestonesInvoiced} invoiced, awaiting payment` : 'none awaiting payment'} />
+              <Stat label="Collected" value={formatINR(collected)} foot={(projectContext as any)?.financials?.designGstEnabled === false ? 'no GST on this fee' : 'incl. GST'} />
+              <Stat label="Still to collect" value={formatINR(pnl.uncollected)} foot={(projectContext as any)?.financials?.designGstEnabled === false ? 'no GST on this fee' : 'incl. GST'} tone={pnl.uncollected > 0 ? 'text-slate-900' : 'text-emerald-700'} />
+            </div>
+          </Panel>
+        ) : (
         <Panel title="Cost" sub={`${pnl.poCount} purchase order${pnl.poCount === 1 ? '' : 's'} raised`} icon={<Activity className="w-4 h-4" />}>
           <CostSpine
             planned={pnl.plannedCost}
@@ -291,7 +298,7 @@ const ProjectReportsTab: React.FC<Props> = ({
             />
           </div>
         </Panel>
-        </>)}
+        )}
 
         <Panel title="Collections" sub={`${collectionPct}% of contract in hand`} icon={<Wallet className="w-4 h-4" />}>
           <CollectionBar
@@ -301,7 +308,7 @@ const ProjectReportsTab: React.FC<Props> = ({
             fmt={formatINR}
           />
           <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
-            <Stat label="Contract value" value={formatINR(contracted)} foot="incl. GST" />
+            <Stat label="Contract value" value={formatINR(contracted)} foot={feeOnly && (projectContext as any)?.financials?.designGstEnabled === false ? 'no GST on this fee' : 'incl. GST'} />
             <Stat
               label="Net in hand"
               value={formatINR(pnl.cashPosition)}

@@ -139,16 +139,22 @@ const ProjectPnlCard: React.FC<Props> = ({
   }
 
   /*
-    A design-only project has a fee and no bought cost, so there is no profit
-    to measure against a BOQ: the card says what the fee is and what is in.
+    A design-only project: the margin is the fee less what was actually bought
+    for the job (purchase orders), never an old BOQ's cost.
   */
   if (isFeeOnly(engagementOf(projectContext))) {
+    const margin = pnl.hasProcurement ? pnl.currentMargin : pnl.quotedMargin;
+    const marginPct = pnl.hasProcurement ? pnl.currentMarginPct : pnl.quotedMarginPct;
     return shell(
       <div className="flex-1 flex flex-col gap-3">
-        <div className="rounded-2xl p-4 border bg-slate-50 border-slate-200">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Design fee</p>
-          <p className="text-2xl font-extrabold tracking-tight text-slate-900 mt-1 font-mono tabular-nums">{formatINR(pnl.contractedDesign)}</p>
-          <p className="text-xs text-slate-500 mt-1">ex-GST. A design-only project: the client pays the contractors directly.</p>
+        <div className={`rounded-2xl p-4 border ${margin < 0 ? 'bg-rose-50/60 border-rose-200/70' : 'bg-emerald-50/50 border-emerald-200/60'}`}>
+          <p className={`text-[10px] font-black uppercase tracking-widest ${margin < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>Margin on the design fee</p>
+          <p className="text-2xl font-extrabold tracking-tight text-slate-900 mt-1 font-mono tabular-nums">
+            {formatINR(margin)} <span className="text-sm font-bold text-slate-500">{marginPct.toFixed(1)}%</span>
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            Fee {formatINR(pnl.contractedDesign)} ex-GST{pnl.hasProcurement ? `, less ${formatINR(pnl.effectiveCost)} bought for the job` : ', nothing bought for the job yet'}.
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-xl border border-slate-200 p-3">
@@ -160,7 +166,7 @@ const ProjectPnlCard: React.FC<Props> = ({
             <p className="text-sm font-black text-slate-800 tabular-nums mt-1">{formatINR(pnl.uncollected)}</p>
           </div>
         </div>
-        <p className="text-[11px] text-slate-500 leading-relaxed">No margin is shown: there is no bought cost behind a design fee, and the studio's own time is not costed here.</p>
+        <p className="text-[11px] text-slate-500 leading-relaxed">The studio's own design time is not costed here, and the client pays the contractors directly.</p>
       </div>,
     );
   }
