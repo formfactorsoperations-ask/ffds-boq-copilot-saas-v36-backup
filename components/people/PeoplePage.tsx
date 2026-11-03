@@ -18,7 +18,8 @@ import { LeaveSheet, CorrectionSheet } from './PeopleSheets';
 import { Ring, Avatar, Skeleton, Glide, Notice, IconTile, Tilt, Panel, Empty, LEAVE_ICON, MODE_ICON, initials, listV, rowV, sectionV, EASE } from './PeopleBits';
 import { StudioPulse, ArrivalToasts, useToday } from './Arrivals';
 import PeopleCalendar from './PeopleCalendar';
-import { useGuide } from '../../services/peopleGuideService';
+import { useGuide, kudosSeenAt, markKudosSeen } from '../../services/peopleGuideService';
+import { takePeopleSection, onPeopleSection } from '../../lib/peopleSection';
 import { OfficeGuideSection } from './OfficeGuide';
 import { CelebrationsSection, CelebrationBanner } from './Celebrations';
 import { KudosWallSection } from './KudosWall';
@@ -40,6 +41,8 @@ import { btnPri, btnSec, btnSm, input } from '../opsDesk/OpsDeskPanels';
 */
 
 type Section = 'today' | 'attendance' | 'leave' | 'approvals' | 'calendar' | 'guide' | 'celebrations' | 'kudos' | 'essentials' | 'emergency' | 'report';
+const SECTION_IDS: Section[] = ['today', 'attendance', 'leave', 'approvals', 'calendar', 'guide', 'celebrations', 'kudos', 'essentials', 'emergency', 'report'];
+const asSection = (x: string): Section | null => (SECTION_IDS.includes(x as Section) ? (x as Section) : null);
 const chip = 'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap';
 const niceDay = (d: string) => new Date(`${d}T12:00:00+05:30`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 const range = (a: string, b: string) => (a === b ? niceDay(a) : `${niceDay(a)} – ${niceDay(b)}`);
@@ -52,7 +55,9 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   const { snapshot, loading, error, stale, at, refresh } = usePeople();
   /* The office guide, essentials, cards, kudos and emergency contacts (lib/peopleGuide.ts), loaded beside the snapshot. */
   const guide = useGuide();
-  const [section, setSection] = useState<Section>('today');
+  /* A note or a Home pin can open People at a section (lib/peopleSection.ts). */
+  const [section, setSection] = useState<Section>(() => asSection(takePeopleSection()) || 'today');
+  useEffect(() => onPeopleSection((x) => { const want = asSection(x); if (want) setSection(want); }), []);
   const [leaveOpen, setLeaveOpen] = useState<{ start?: string } | null>(null);
   const [correcting, setCorrecting] = useState<Attendance | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -69,6 +74,13 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   useNoteArrivals((n) => n.kind.startsWith('people.'), () => refresh());
   /* A thank-you, or your emergency contacts opened: the guide catches up. */
   useNoteArrivals((n) => n.kind.startsWith('guide.'), () => guide.refresh());
+  /* Thank-yous pinned up since this person last looked at the wall, counted on its rail item. */
+  const meId = snapshot?.me.id || '';
+  const [kudosSeen, setKudosSeen] = useState('');
+  useEffect(() => {
+    if (!meId) return;
+    if (section === 'kudos') { markKudosSeen(meId); setKudosSeen(new Date().toISOString()); } else setKudosSeen(kudosSeenAt(meId));
+  }, [meId, section]);
 
   if (!snapshot) {
     return (
@@ -100,7 +112,7 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
       { id: 'calendar', label: 'Calendar', icon: CalendarDays, show: true },
       { id: 'guide', label: 'Office guide', icon: BookUser, show: true },
       { id: 'celebrations', label: 'Celebrations', icon: PartyPopper, n: (guide.view?.cards || []).filter((c) => c.days === 0 && !c.mine && !c.signed).length, show: true },
-      { id: 'kudos', label: 'Kudos', icon: HandHeart, show: true },
+      { id: 'kudos', label: 'Kudos', icon: HandHeart, n: kudosSeen ? (guide.view?.kudos || []).filter((k) => k.at > kudosSeen && k.from !== s.me.id).length : 0, show: true },
     ] },
     { label: 'Studio', items: [
       { id: 'essentials', label: 'Essentials', icon: Building2, show: true },

@@ -4,12 +4,15 @@ import { Pin } from '@/lib/lucide-shim';
 import type { HomeFeeds } from './useHomeFeeds';
 import { mayOpenStudioTab } from '../../lib/roleAccess';
 import { teamToday } from '../../lib/homeWidgets';
-import { checkInOf, dayOrder, dayTitle, type DayPin } from '../../lib/homeDay';
+import { checkInOf, dayOrder, dayTitle, lifeOf, type DayPin } from '../../lib/homeDay';
 import { businessDate } from '../../lib/peopleDesk';
 import { openInDesignReview } from '../../services/drawingReviewService';
 import { usePeople } from '../../services/peopleService';
+import { useGuide } from '../../services/peopleGuideService';
+import { openPeopleSection } from '../../lib/peopleSection';
+import { useNoteArrivals } from '../notify/NotifyContext';
 import MyDayCard from '../people/MyDayCard';
-import { AttentionWidget, ComingUpWidget, ForYouWidget, Pinned, ReviewWidget, TeamWidget } from './HomeWidgets';
+import { AttentionWidget, ComingUpWidget, ForYouWidget, Pinned, ReviewWidget, StudioLifeWidget, TeamWidget } from './HomeWidgets';
 import type { AttentionRow } from './useAttention';
 import { useCalendarData } from './calendarData';
 import { useWide } from './StoryDeck';
@@ -61,13 +64,17 @@ export default function DayBoard({ feeds, projects, attention, onNavigate }: {
   const onPeople = people && !(error && !snapshot);
   const team = useMemo(() => (onPeople ? (snapshot ? teamToday(snapshot) : null) : undefined), [onPeople, snapshot]);
   const checkin = useMemo(() => (onPeople ? (snapshot?.me ? checkInOf(snapshot) : null) : undefined), [onPeople, snapshot]);
+  /* Studio life (lib/peopleGuide.ts): null while it loads; left out when there is nothing in it, or it cannot be read. */
+  const guide = useGuide(!!onPeople);
+  useNoteArrivals((n) => n.kind.startsWith('guide.'), () => guide.refresh());
+  const life = useMemo(() => (!onPeople || (guide.error && !guide.view) ? undefined : guide.view ? lifeOf(guide.view) || undefined : null), [onPeople, guide.view, guide.error]);
   const counts = useMemo(() => (attention ? {
     blocked: attention.rows.filter((r) => r.worst === 'blocker').length,
     due: attention.rows.filter((r) => r.worst === 'due').length,
   } : undefined), [attention?.rows]);
   const day = useMemo(() => dayOrder({
-    rows: desk ? rows : undefined, reviewer, viewer, visits: visitsOn ? visits : undefined, team, checkin, attention: counts,
-  }), [desk, rows, reviewer, viewer, visitsOn, visits, team, checkin, counts]);
+    rows: desk ? rows : undefined, reviewer, viewer, visits: visitsOn ? visits : undefined, team, checkin, attention: counts, life,
+  }), [desk, rows, reviewer, viewer, visitsOn, visits, team, checkin, counts, life]);
   const { importantDates } = useCalendarData(projects);
   const today = businessDate(new Date());
   const sites = useMemo(() => projects.map((p: any) => String(p?.context?.name || '')).filter(Boolean), [projects]);
@@ -86,6 +93,7 @@ export default function DayBoard({ feeds, projects, attention, onNavigate }: {
       : p.kind === 'meetings' ? <ComingUpWidget index={0} list={visits} today={today} milestones={importantDates} onAll={mayOpenStudioTab('ops-desk', who) ? () => onNavigate('ops-desk') : undefined} />
       : p.kind === 'checkin' ? <MyDayCard variant="pin" sites={sites} onOpenPeople={() => onNavigate('people')} />
       : p.kind === 'attention' ? <AttentionWidget index={0} {...attention!} />
+      : p.kind === 'life' ? (guide.view ? <StudioLifeWidget index={0} view={guide.view} onOpen={(section) => { openPeopleSection(section); onNavigate('people'); }} /> : <div className="pp-shimmer h-40 rounded-2xl" />)
       : team ? <TeamWidget index={0} t={team} onAll={() => onNavigate('people')} />
       : <div className="pp-shimmer h-40 rounded-2xl" />;
 

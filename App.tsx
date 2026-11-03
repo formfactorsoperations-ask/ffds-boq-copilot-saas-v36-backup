@@ -166,6 +166,7 @@ import NeedsYouBar from "./components/notify/NeedsYouBar";
 import CatchUp from "./components/notify/CatchUp";
 import { PORTAL_OPEN_EVENT } from "./components/notify/NotifyContext";
 import { STUDIO_ROUTES, staffBox, clientBox, type Stored } from "./lib/notify";
+import { openPeopleSection } from "./lib/peopleSection";
 
 // Default Empty Context
 const DEFAULT_CONTEXT: ProjectContext = {
@@ -2791,6 +2792,8 @@ export default function App() {
     const roles = currentRoles?.length ? currentRoles : currentRole;
     if (STUDIO_ROUTES.has(n.route) || !n.projectId) {
       const tab = STUDIO_ROUTES.has(n.route) ? n.route : "home";
+      /* A People note can name its section (a birthday card, the kudos wall). */
+      if (tab === "people" && n.section) openPeopleSection(n.section);
       setActiveTab(mayOpenStudioTab(tab, roles) && limitedMayOpen(roles, tab) ? tab : "home");
       return;
     }

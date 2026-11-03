@@ -8,6 +8,7 @@
     attention  projects blocked or due (the studio's worklist)
     meetings   meetings and visits booked with clients, and the week ahead
     team       the team today, and the next holiday
+    life       studio life: a birthday or anniversary to sign for, thank-yous, what is coming
 
   A pin's weight says how much it asks of the person today. My day is always
   pin 01: checking in starts the day, and checking out ends it (it counts as
@@ -21,9 +22,10 @@ import { dueOf, type DeskRow, type Viewer } from './designDesk';
 import { mySheets, reviewInbox, type TeamToday, type Upcoming } from './homeWidgets';
 import { clock12, isOff, type Snapshot } from './peopleDesk';
 import { myDay } from './peopleView';
+import type { GuideView } from './peopleGuide';
 
-export type PinKind = 'checkin' | 'sheets' | 'reviews' | 'attention' | 'meetings' | 'team';
-const ORDER: PinKind[] = ['checkin', 'sheets', 'reviews', 'attention', 'meetings', 'team'];
+export type PinKind = 'checkin' | 'sheets' | 'reviews' | 'attention' | 'meetings' | 'team' | 'life';
+const ORDER: PinKind[] = ['checkin', 'sheets', 'reviews', 'attention', 'meetings', 'team', 'life'];
 
 /** Where this person's working day stands: not in yet, in, done, or a day off. */
 export interface CheckIn { state: 'out' | 'in' | 'done' | 'off'; since?: string }
@@ -34,6 +36,26 @@ export function checkInOf(s: Snapshot): CheckIn {
   if (s.policy.holidays.includes(today) || isOff(today, s.policy)) return { state: 'off' };
   const away = s.availability.find((a) => a.employeeId === s.me.id && a.start <= today && a.end >= today && a.status !== 'Pending' && a.mode !== 'WFH');
   return { state: away ? 'off' : 'out' };
+}
+
+/**
+ * Studio life for the Home pin (lib/peopleGuide.ts): the cards open today and
+ * tomorrow, thank-yous of the last week, and what is coming in the month.
+ * Null when there is nothing to show, so the pin is left out.
+ */
+export interface Life { today: number; unsigned: number; mine: boolean; tomorrow: number; kudos: number; upcoming: number }
+export function lifeOf(v: GuideView, now = new Date()): Life | null {
+  const week = new Date(now.getTime() - 7 * 86400000).toISOString();
+  const today = v.cards.filter((c) => c.days === 0);
+  const life: Life = {
+    today: today.length,
+    unsigned: today.filter((c) => !c.mine && !c.signed).length,
+    mine: today.some((c) => c.mine),
+    tomorrow: v.cards.filter((c) => c.days === 1).length,
+    kudos: v.kudos.filter((k) => k.at >= week).length,
+    upcoming: v.upcoming.filter((o) => o.days >= 2).length,
+  };
+  return life.today || life.tomorrow || life.kudos || life.upcoming ? life : null;
 }
 
 /** At or above this weight a pin is something to do today, not only to know. */
@@ -47,6 +69,8 @@ export interface DayInput {
   visits?: Upcoming[] | null;
   team?: TeamToday | null;
   checkin?: CheckIn | null;
+  /** Studio life (lifeOf); left out when there is nothing in it. */
+  life?: Life | null;
   /** Projects in the worklist: how many are blocked, how many have something due. */
   attention?: { blocked: number; due: number } | null;
   now?: Date;
@@ -87,6 +111,14 @@ export function pinWeight(kind: PinKind, i: DayInput): number {
     if (i.visits.some((u) => u.daysAway === 1)) return 46;
     return i.visits.length ? 15 : 0;
   }
+  if (kind === 'life') {
+    if (!i.life) return 0;
+    if (i.life.mine) return 44; // your own day: near the top, but not something to do
+    if (i.life.unsigned) return 47;
+    if (i.life.today) return 20;
+    if (i.life.tomorrow) return 18;
+    return 12;
+  }
   if (!i.team) return 0;
   if (i.team.asked.length) return 48;
   return i.team.away.length + i.team.home.length ? 10 : 0;
@@ -99,9 +131,10 @@ const WHY: Record<PinKind, Record<number, string>> = {
   reviews: { 85: 'Overdue', 60: 'Waiting on you', 0: 'All clear' },
   meetings: { 100: 'Today', 46: 'Tomorrow', 15: 'Next two weeks', 0: 'Nothing booked' },
   team: { 48: 'Asked off today', 10: 'Worth knowing', 0: 'Everyone in' },
+  life: { 44: 'Your day', 47: 'Sign the card', 20: 'Today', 18: 'Tomorrow', 12: 'Worth knowing', 0: '' },
 };
 const loading = (kind: PinKind, i: DayInput) =>
-  kind === 'meetings' ? !i.visits : kind === 'team' ? !i.team : kind === 'checkin' ? !i.checkin
+  kind === 'meetings' ? !i.visits : kind === 'team' ? !i.team : kind === 'life' ? !i.life : kind === 'checkin' ? !i.checkin
     : kind === 'attention' ? !i.attention : !i.rows || !i.viewer;
 const DONE: Record<string, string> = { done: 'Day done', off: 'Day off' };
 
@@ -116,6 +149,7 @@ export function dayOrder(i: DayInput): { pins: DayPin[]; toDo: number; ready: bo
       : k === 'meetings' ? i.visits !== undefined
       : k === 'checkin' ? i.checkin !== undefined
       : k === 'attention' ? i.attention !== undefined
+      : k === 'life' ? i.life !== undefined
       : i.team !== undefined);
   const pins = shown.map((kind) => {
     const weight = pinWeight(kind, i);

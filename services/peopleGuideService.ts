@@ -89,3 +89,15 @@ export function useGuide(enabled = true) {
   }, [tenant, enabled, uid]);
   return { ...s, refresh: refreshGuide, run: runGuide };
 }
+
+/* ── Kudos you have not seen yet ─────────────────────────────────────────── */
+
+const seenKey = (who: string) => `ffds.kudosSeen.${who}`;
+/** When this person last looked at the kudos wall; a week ago if never. */
+export function kudosSeenAt(who: string): string {
+  try { const v = localStorage.getItem(seenKey(who)); if (v) return v; } catch { /* private mode: count the last week */ }
+  return new Date(Date.now() - 7 * 86400000).toISOString();
+}
+export function markKudosSeen(who: string): void {
+  try { localStorage.setItem(seenKey(who), new Date().toISOString()); } catch { /* nothing to remember it in */ }
+}

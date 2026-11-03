@@ -66,6 +66,8 @@ export interface Note {
   group: string | null;
   /** Small facts a person's settings can filter on: a check-in that was "late" or from "home". */
   tags?: string[];
+  /** Inside a studio tab, the section to open (People: "celebrations", "kudos"). */
+  section?: string;
   at: number;
   readAt: number | null;
   doneAt: number | null;
@@ -225,15 +227,65 @@ export function peopleDrafts(
 export function kudosDraft(k: { tag: string; text: string }, p: { fromName: string; toEmail: string }): Draft {
   return {
     kind: 'guide.kudos', area: 'team', level: 'update', title: `${p.fromName} thanked you: ${k.tag.toLowerCase()}`, line: quote(k.text),
-    projectId: null, projectName: null, route: 'people', action: null, actor: p.fromName, group: null, to: { emails: [inboxKey(p.toEmail)] },
+    projectId: null, projectName: null, route: 'people', section: 'kudos', action: null, actor: p.fromName, group: null, to: { emails: [inboxKey(p.toEmail)] },
   };
+}
+
+/**
+ * The same thank-you, told to the rest of the studio (the owner, 3 Nov 2026:
+ * "nobody is aware until told"). Quiet: counted on the badge and listed in the
+ * bell, never a pop-up; a day's thank-yous fold into one entry.
+ */
+export function kudosStudioDraft(k: { tag: string; text: string; at: string }, p: { fromName: string; toName: string; emails: string[] }): Draft | null {
+  if (!p.emails.length) return null;
+  return {
+    kind: 'guide.kudos.studio', area: 'team', level: 'update', title: `${p.fromName} thanked ${p.toName}: ${k.tag.toLowerCase()}`, line: quote(k.text),
+    projectId: null, projectName: null, route: 'people', section: 'kudos', action: null, actor: p.fromName,
+    group: `kudos:${String(k.at).slice(0, 10)}`, to: { emails: p.emails.map(inboxKey) },
+  };
+}
+
+/**
+ * A birthday or work anniversary (lib/peopleGuide.ts occasions), told by the
+ * morning check (functions/src/peopleGuide.ts peopleCelebrations):
+ *   the day before   everyone else: the card is open, sign it so it is full by the morning;
+ *   on the day       everyone else: sign the card (the one note of these that asks for something);
+ *                    the person: happy birthday, and how many have signed.
+ */
+export function celebrationDrafts(
+  o: { kind: 'birthday' | 'anniversary'; days: number; date: string; years?: number },
+  p: { name: string; email: string; others: string[]; signed: number },
+): Draft[] {
+  const first = p.name.split(/\s+/)[0] || p.name;
+  const what = o.kind === 'birthday' ? `${p.name}'s birthday` : `${p.name}: ${o.years} year${o.years === 1 ? '' : 's'} with the studio`;
+  const base = { area: 'team' as NoteArea, projectId: null, projectName: null, route: 'people', section: 'celebrations', actor: p.name };
+  const others = p.others.map(inboxKey).filter((e) => e && e !== inboxKey(p.email));
+  const out: Draft[] = [];
+  if (o.days === 1 && others.length) {
+    out.push({ ...base, kind: 'guide.celebration.soon', level: 'update', title: o.kind === 'birthday' ? `${what} is tomorrow` : `Tomorrow, ${what}`,
+      line: 'The card is open. Sign it today so it is full by the morning.', action: null, group: `celebrate:${o.date}`, to: { emails: others } });
+  }
+  if (o.days === 0) {
+    if (others.length) {
+      out.push({ ...base, kind: 'guide.celebration', level: 'needs', title: o.kind === 'birthday' ? `It's ${what} today` : `Today, ${what}`,
+        line: p.signed ? `${p.signed} ${p.signed === 1 ? 'person has' : 'people have'} signed the card` : 'Be the first to sign the card',
+        action: 'Sign the card', group: `celebrate:${o.date}`, to: { emails: others } });
+    }
+    if (p.email) {
+      out.push({ ...base, kind: 'guide.celebration.mine', level: 'update',
+        title: o.kind === 'birthday' ? `Happy birthday, ${first}!` : `Happy work anniversary, ${first}! ${o.years} year${o.years === 1 ? '' : 's'} with us`,
+        line: p.signed ? `${p.signed} ${p.signed === 1 ? 'person has' : 'people have'} signed your card` : 'Your card is open. The studio is signing it today',
+        action: null, group: null, to: { emails: [inboxKey(p.email)] } });
+    }
+  }
+  return out;
 }
 
 /** An admin opened someone's emergency contacts: the person is always told, with the reason given. */
 export function emergencyOpenedDraft(reason: string, p: { byName: string; toEmail: string }): Draft {
   return {
     kind: 'guide.emergency', area: 'team', level: 'update', title: `${p.byName} opened your emergency contacts`, line: quote(reason),
-    projectId: null, projectName: null, route: 'people', action: null, actor: p.byName, group: null, to: { emails: [inboxKey(p.toEmail)] },
+    projectId: null, projectName: null, route: 'people', section: 'emergency', action: null, actor: p.byName, group: null, to: { emails: [inboxKey(p.toEmail)] },
   };
 }
 
@@ -361,6 +413,7 @@ export function foldedTitle(e: { kind: string; title: string; count: number }): 
   if (e.count < 2) return e.title;
   if (e.kind === 'people.checkin') return `${e.count} people checked in`;
   if (e.kind === 'people.checkout') return `${e.count} people checked out`;
+  if (e.kind === 'guide.kudos.studio') return `${e.count} thank-yous on the kudos wall today`;
   return `${e.title} and ${e.count - 1} more`;
 }
 
