@@ -5,6 +5,7 @@ import { useFiguresHidden } from '../ui/HideFigures';
 import { ProjectContext, FullBoqItem, PurchaseOrder } from '../../types';
 import { db } from '../../services/dbService';
 import { formatINR } from '../../lib/utils';
+import { engagementOf, isFeeOnly } from '../../lib/engagement';
 import { buildProjectPnl, CONFIDENCE_LABEL, CONFIDENCE_NOTE, MARGIN_SOURCE_LABEL, projectMarginPct, type MarginAssumption } from '../../lib/projectPnl';
 
 /**
@@ -133,6 +134,39 @@ const ProjectPnlCard: React.FC<Props> = ({
     return shell(
       <div className="flex-1 flex items-center justify-center">
         <div className="w-5 h-5 border-2 border-[#3D52A0] border-t-transparent rounded-full animate-spin" />
+      </div>,
+    );
+  }
+
+  /*
+    A design-only project: the margin is the fee less what was actually bought
+    for the job (purchase orders), never an old BOQ's cost.
+  */
+  if (isFeeOnly(engagementOf(projectContext))) {
+    const margin = pnl.hasProcurement ? pnl.currentMargin : pnl.quotedMargin;
+    const marginPct = pnl.hasProcurement ? pnl.currentMarginPct : pnl.quotedMarginPct;
+    return shell(
+      <div className="flex-1 flex flex-col gap-3">
+        <div className={`rounded-2xl p-4 border ${margin < 0 ? 'bg-rose-50/60 border-rose-200/70' : 'bg-emerald-50/50 border-emerald-200/60'}`}>
+          <p className={`text-[10px] font-black uppercase tracking-widest ${margin < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>Margin on the design fee</p>
+          <p className="text-2xl font-extrabold tracking-tight text-slate-900 mt-1 font-mono tabular-nums">
+            {formatINR(margin)} <span className="text-sm font-bold text-slate-500">{marginPct.toFixed(1)}%</span>
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            Fee {formatINR(pnl.contractedDesign)} ex-GST{pnl.hasProcurement ? `, less ${formatINR(pnl.effectiveCost)} bought for the job` : ', nothing bought for the job yet'}.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-slate-200 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Collected</p>
+            <p className="text-sm font-black text-slate-800 tabular-nums mt-1">{formatINR(pnl.receivedFromClient)}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Still to collect</p>
+            <p className="text-sm font-black text-slate-800 tabular-nums mt-1">{formatINR(pnl.uncollected)}</p>
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-500 leading-relaxed">The studio's own design time is not costed here, and the client pays the contractors directly.</p>
       </div>,
     );
   }

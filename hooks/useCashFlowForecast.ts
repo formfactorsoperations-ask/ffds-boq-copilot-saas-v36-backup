@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebaseClient';
+import { engagementOf, isFeeOnly } from '../lib/engagement';
+import { designFeeFor } from '../lib/boqPricing';
 
 export interface CashFlowItem {
     id: string;
@@ -144,7 +146,10 @@ export function useCashFlowForecast(studioId: string | null | undefined) {
                 });
 
                 // Fetch milestones from Payment Calculator context
-                const paymentMilestones: any[] = projectData.context?.paymentMilestones || [];
+                // A design-only project expects no execution payments (lib/engagement.ts).
+                const feeOnlyProject = isFeeOnly(engagementOf(projectData.context));
+                const paymentMilestones: any[] = (projectData.context?.paymentMilestones || [])
+                    .filter((m: any) => !(feeOnlyProject && m?.type === 'execution'));
                 const financials: any = projectData.context?.financials || {};
                 
                 // Need original base amounts to calculate
@@ -159,7 +164,7 @@ export function useCashFlowForecast(studioId: string | null | undefined) {
                 }
 
                 // Get split values if possible
-                const originalNetDesign = activeTier?.summary?.totalDesign || 0;
+                const originalNetDesign = activeTier?.summary?.totalDesign || (feeOnlyProject ? designFeeFor(projectData.context, 0, 0) : 0);
                 const originalNetExecution = activeTier?.summary?.totalExecution || 0;
 
                 paymentMilestones.forEach(m => {

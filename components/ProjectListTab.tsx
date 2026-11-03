@@ -1827,7 +1827,8 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                             </div>
                                             {/* Covered until pointed at or clicked: the
                                                 grid is often on screen with a client in the room. */}
-                                            {showFinance && (
+                                            {/* A design-only fee has no BOQ margin behind it. */}
+                                            {showFinance && !isFeeOnly(engagementOf(project.context)) && (
                                               <MarginReveal
                                                 value={Number(
                                                   tier.summary.blendedGm?.toFixed(0) ||

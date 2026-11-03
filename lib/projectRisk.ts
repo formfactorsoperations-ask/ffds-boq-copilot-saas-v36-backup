@@ -1,5 +1,6 @@
 import { ProjectContext } from '../types';
 import { ProjectPnl } from './projectPnl';
+import { engagementOf } from './engagement';
 
 // ============================================================================
 // WHAT IS HAMPERING THIS PROJECT
@@ -119,8 +120,32 @@ export function buildProjectRisk(context: ProjectContext | null | undefined, pnl
     });
   }
 
+  /*
+    A design-only project has no BOQ to freeze, no execution agreement and no
+    site: its equivalents are the GFC release and the design agreement (the
+    Terms Docket).
+  */
+  const designOnly = engagementOf(ctx) === 'design_only';
+
   // ── 3. Building against an unfrozen scope ────────────────────────────────
-  {
+  if (designOnly) {
+    const released = !!ctx.gfcReleasedAt || !!ctx?.designGate?.activated;
+    const level: RiskLevel = closed || released ? 'clear' : stage >= 5 ? 'warning' : 'clear';
+    signals.push({
+      id: 'scope-not-frozen',
+      level,
+      title: 'GFC set not released',
+      check: 'GFC release',
+      detail: closed
+        ? 'Project is closed.'
+        : released
+        ? 'The GFC set is released to the client and their contractors.'
+        : 'The final drawing set has not been released yet.',
+      route: 'design-gate',
+      action: 'Open GFC Release',
+      weight: level === 'warning' ? 10 : 0,
+    });
+  } else {
     const frozen = !!ctx.boqFrozen || !!ctx?.designGate?.gateActivated;
     const level: RiskLevel = closed ? 'clear'
       : executing && !frozen ? 'critical' : !frozen && stage >= 4 ? 'warning' : 'clear';
@@ -143,7 +168,20 @@ export function buildProjectRisk(context: ProjectContext | null | undefined, pnl
   }
 
   // ── 4. Working without a signed contract ─────────────────────────────────
-  {
+  if (designOnly) {
+    const signed = ctx?.designAgreementSignoff?.status === 'signed' || ctx?.termsSignoff?.status === 'signed';
+    const level: RiskLevel = closed ? 'clear' : stage >= 4 && !signed ? 'warning' : 'clear';
+    signals.push({
+      id: 'contract-unsigned',
+      level,
+      title: 'Design agreement unsigned',
+      check: 'Design agreement',
+      detail: signed ? 'Signed and on file.' : closed ? 'Project closed without a signed design agreement on file.' : 'The Terms Docket has not been signed yet.',
+      route: 'terms-docket',
+      action: 'Open Terms Docket',
+      weight: level === 'warning' ? 8 : 0,
+    });
+  } else {
     const signed = ctx?.executionSignoff?.status === 'signed' || ctx?.contractSignoff?.status === 'signed';
     const level: RiskLevel = closed ? 'clear'
       : executing && !signed ? 'critical' : stage >= 4 && !signed ? 'warning' : 'clear';

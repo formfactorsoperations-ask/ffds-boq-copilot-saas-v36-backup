@@ -1,4 +1,6 @@
 import { billingBase, billingSummary } from './paymentSchedule';
+import { designFeeFor } from './boqPricing';
+import { engagementOf, isFeeOnly } from './engagement';
 
 export function calculateProjectFinancials(context: any, activeTier?: any) {
     const financials = context?.financials || {
@@ -15,6 +17,13 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
     const initiationFee = financials.initiationFeePaid || 0;
     const billablePercent = financials.billablePercent ?? 100;
     const executionGstEnabled = financials.executionGstEnabled ?? true;
+    /*
+      The design fee's own GST switch, as Money bills it (lib/paymentSchedule
+      resolveFinancials): absent means on. This always charged GST on the
+      design fee, so with the switch off in Money the reports still added 18%:
+      ₹1,18,000 against a ₹1,00,000 fee billed without GST on Pali Hills.
+    */
+    const designGstEnabled = financials.designGstEnabled !== false;
     const discounts = financials.discounts || [];
     
     // In Dashboard, activeTier could be passed, or we fallback to context.approvedExecutionValue
@@ -59,7 +68,7 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
     const executionCash = taxableExecution * ((100 - billablePercent) / 100);
     
     const gstOnExecution = executionGstEnabled ? (executionBillable * (gstRate / 100)) : 0;
-    const gstOnDesign = taxableDesign * (gstRate / 100);
+    const gstOnDesign = designGstEnabled ? taxableDesign * (gstRate / 100) : 0;
     
     const totalGST = gstOnExecution + gstOnDesign;
     const currentProjectValue = executionBillable + executionCash + taxableDesign + totalGST;
@@ -79,6 +88,8 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
             rowBillable = rowBaseOriginal * (billablePercent / 100);
             rowCash = rowBaseOriginal * (Math.max(0, 100 - billablePercent) / 100);
             if (!executionGstEnabled) applicableGstRate = 0;
+        } else if (!designGstEnabled) {
+            applicableGstRate = 0;
         }
         
         const rowGST = rowBillable * (applicableGstRate / 100);
@@ -169,6 +180,15 @@ export function getSingleProjectValue(p: any): number {
         } catch (e) {
             console.error("Error calculating financials for project", p.id, e);
         }
+    }
+
+    /*
+      A design-only project is worth its design fee. The fallbacks below read
+      the BOQ option's total or a stored execution value, which a design-only
+      project does not sell, and `context.designFee` is a rate per sq ft there.
+    */
+    if (isFeeOnly(engagementOf(p.context))) {
+        return p.context?.financials?.approvedDesignValue || p.context?.engagement?.designFee || designFeeFor(p.context, 0, 0) || 0;
     }
 
     // Fallbacks:
