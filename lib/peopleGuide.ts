@@ -271,6 +271,27 @@ export function cleanKudos(data: any, from: Person, people: Person[]): Pick<Kudo
   return { to: to.id, tag: d.tag, text };
 }
 
+/** Someone who hearted a thank-you, as shown under it. */
+export interface Liker { id: string; name: string; me: boolean }
+/**
+ * Who hearted a thank-you (the owner, 3 Nov 2026: "it should show who liked
+ * it"): the person looking first, then the latest first. Someone who has left
+ * still counts, unnamed.
+ */
+export function likersOf(hearts: string[], meId: string, nameOf: (id: string) => string | undefined): Liker[] {
+  const ids = [...new Set(hearts || [])].reverse();
+  const list = ids.map((id) => ({ id, name: nameOf(id) || "Someone who has left", me: id === meId }));
+  return [...list.filter((l) => l.me), ...list.filter((l) => !l.me)];
+}
+/** "Liked by You, Anish K and 2 others". */
+export function likedLine(likers: Liker[]): string {
+  const n = likers.map((l) => (l.me ? "You" : l.name));
+  if (!n.length) return "No hearts yet";
+  if (n.length === 1) return `Liked by ${n[0]}`;
+  if (n.length <= 3) return `Liked by ${n.slice(0, -1).join(", ")} and ${n[n.length - 1]}`;
+  return `Liked by ${n.slice(0, 2).join(", ")} and ${n.length - 2} others`;
+}
+
 /* ── Occasions and cards ─────────────────────────────────────────────────── */
 
 /** A card opens the day before (so it is full by the morning) and stays open three days after. */

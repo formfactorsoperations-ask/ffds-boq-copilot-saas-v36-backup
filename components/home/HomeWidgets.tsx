@@ -9,7 +9,7 @@ import { dueOf, projectLook, type DeskRow, type Viewer } from '../../lib/designD
 import { mySheets, reviewInbox, whenLabel, type TeamToday, type Upcoming } from '../../lib/homeWidgets';
 import { addDays, clock12 } from '../../lib/peopleDesk';
 import type { AttentionRow } from './useAttention';
-import type { GuideView } from '../../lib/peopleGuide';
+import { likersOf, likedLine, type GuideView } from '../../lib/peopleGuide';
 import type { ImportantDates } from './calendarData';
 import { CountUp, Dot } from '../ui/HudBits';
 import { Confetti, IconTile, Tilt, initials, EASE } from '../people/PeopleBits';
@@ -475,7 +475,7 @@ export function StudioLifeWidget({ view, onOpen, index }: { view: GuideView; onO
                 <span className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-800 truncate">{first(k.from)} thanked {first(k.to)}</span>
                   <span className={`${chip} bg-white/80 text-slate-700`}>{k.tag}</span>
-                  <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 tabular-nums"><Heart className="w-3 h-3" fill="currentColor" />{k.hearts.length}</span>
+                  <span title={likedLine(likersOf(k.hearts, '', (id) => names.get(id)))} className="ml-auto inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 tabular-nums"><Heart className="w-3 h-3" fill="currentColor" />{k.hearts.length}</span>
                 </span>
                 <span className="block text-[11px] text-slate-600 truncate mt-0.5">{k.text}</span>
               </motion.button>

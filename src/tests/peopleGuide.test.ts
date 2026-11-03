@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Person } from '../../lib/peopleDesk';
 import {
   cleanOffice, cleanEssentials, cleanEmergency, cleanKudos, cleanReason, occasions, openCards, signCard, guideView, parseCardId, cardId,
-  onYear, emergencyDue, phone, type OfficeDetails, type GuideStore,
+  onYear, emergencyDue, phone, likersOf, likedLine, type OfficeDetails, type GuideStore,
 } from '../../lib/peopleGuide';
 
 const person = (id: string, over: Partial<Person> = {}): Person => ({ id, name: id.toUpperCase(), title: '', teamId: 'design', managerId: '', accessRole: 'employee', active: true, email: `${id}@studio.in`, ...over });
@@ -229,5 +229,24 @@ describe('moments worth confetti (the owner, 3 Nov 2026)', () => {
       ['Happy birthday, ME!', 'Your card is open. The studio is signing it today', false],
       ["It's Kavya Iyer's birthday today", 'You have signed the card', true],
     ]);
+  });
+});
+
+describe('who liked a thank-you (the owner, 3 Nov 2026)', () => {
+  const names: Record<string, string> = { ak: 'Anish K', an: 'Anushka Shah', ki: 'Kavya Iyer', ro: 'Rohan Desai' };
+  const nameOf = (id: string) => names[id];
+  it('puts you first, then the latest, and keeps someone who has left', () => {
+    const l = likersOf(['ak', 'gone', 'me', 'ki'], 'me', nameOf);
+    expect(l.map((x) => x.id)).toEqual(['me', 'ki', 'gone', 'ak']);
+    expect(l[0].me).toBe(true);
+    expect(l[2].name).toBe('Someone who has left');
+    expect(likersOf(['ak', 'ak'], 'me', nameOf)).toHaveLength(1);
+  });
+  it('says who in a line', () => {
+    expect(likedLine([])).toBe('No hearts yet');
+    expect(likedLine(likersOf(['ak'], 'me', nameOf))).toBe('Liked by Anish K');
+    expect(likedLine(likersOf(['ak', 'me'], 'me', nameOf))).toBe('Liked by You and Anish K');
+    expect(likedLine(likersOf(['ak', 'an', 'ki'], 'me', nameOf))).toBe('Liked by Kavya Iyer, Anushka Shah and Anish K');
+    expect(likedLine(likersOf(['ak', 'an', 'ki', 'ro', 'me'], 'me', nameOf))).toBe('Liked by You, Rohan Desai and 3 others');
   });
 });
