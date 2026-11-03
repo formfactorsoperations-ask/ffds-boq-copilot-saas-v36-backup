@@ -55,3 +55,9 @@ export const cancelMeeting = (t: Target, meetingId: string) => meet(t, { action:
 export const signMeeting = (t: Target, meetingId: string, name: string, signature: string) => meet(t, { action: 'sign', meetingId, name, signature });
 export const updateCharge = (t: Target, meetingId: string, room: string, patch: { status?: ChargeStatus; fee?: number | string | null; note?: string; ref?: string }) =>
   meet(t, { action: 'charge', meetingId, room, ...patch });
+
+/** The Design Head chooses which Designers may present each drawing: { drawingId: emails }. */
+export async function setPresenters(t: Target, drawings: Record<string, string[]>): Promise<Record<string, string[]>> {
+  const res = await call({ ...t, action: 'presenters', drawings }, 'designMeeting');
+  return res?.presenters || {};
+}

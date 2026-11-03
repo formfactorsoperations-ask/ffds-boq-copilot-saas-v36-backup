@@ -43,6 +43,11 @@ interface Props {
   /** The widest the page is drawn (default 1100 px), and the tallest it may be, so a presentation fills the screen. */
   maxWidth?: number;
   fitHeight?: number;
+  /**
+   * The width to fit to, when the page is drawn in another window (the
+   * client's window in a meeting), where this window cannot watch its size.
+   */
+  fitWidth?: number;
   /** Named areas on the page (a room on the layout plan), as fractions of the unturned page. */
   areas?: { x: number; y: number; w: number; h: number; label?: string; active?: boolean }[] | null;
 }
@@ -110,7 +115,8 @@ export default function PdfStage(props: Props) {
   }, []);
   /* The page's height for its width, once drawn, so a fixed height can be fitted. */
   const [aspect, setAspect] = useState<number | null>(null);
-  const fitted = props.fitHeight && aspect ? Math.min(boxWidth, props.fitHeight / aspect) : boxWidth;
+  const box = props.fitWidth || boxWidth;
+  const fitted = props.fitHeight && aspect ? Math.min(box, props.fitHeight / aspect) : box;
   const width = Math.max(200, Math.min(fitted, props.maxWidth || 1100) * zoom);
   const mode = comparePath ? 'compare' : 'single';
   const main = useCanvasPage(pdfPath, page, width, mode, turn, props.loader);

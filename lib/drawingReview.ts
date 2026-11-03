@@ -68,6 +68,12 @@ export interface ReviewSummary {
    * back to the designer, or keeps it approved.
    */
   clientChanges?: ClientChanges | null;
+  /**
+   * The Designers (emails) the Design Head lets present this sheet at a
+   * design meeting, once it is approved. Written by the designMeeting
+   * function only; a new PDF keeps it.
+   */
+  presenters?: string[] | null;
   updatedAt: number;
 }
 
@@ -173,6 +179,15 @@ export const canUpload = (role?: RoleSet) => hasRole(role, UPLOADER_ROLES);
 export const canSetAudience = (role?: RoleSet) => hasRole(role, AUDIENCE_ROLES);
 /** Who presents to the client and records what they agreed: the Design Head, or the studio's Owner and Admins. */
 export const canRunMeeting = canReview;
+
+/** Who may present only the drawings the Design Head gave them, on their own projects. */
+export const PRESENTER_ROLES = new Set(['Designer']);
+/**
+ * A Designer presenting: only approved drawings the Design Head assigned to
+ * them, only meetings they started, and never revision billing. Someone who
+ * also runs meetings is not limited this way.
+ */
+export const canPresentAssigned = (role?: RoleSet) => hasRole(role, PRESENTER_ROLES) && !canRunMeeting(role);
 
 /* ------------------------------------------------------------ transitions */
 

@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { presentableRooms, clientRoundsByRoom, includedRoundsFrom, isOverIncluded, cleanChanges, cleanFee, meetingSummary, revisionCharges, portalDesignRecord, cleanSignerName, cleanSignature, confirmationLine, type DesignMeeting, type MeetingRoom } from '../../lib/designMeeting';
 import { buildPortalView } from '../../lib/portalProjection';
-import { cleanBox, cleanRoomBoxes, guessLayout } from '../../lib/designMeeting';
+import { cleanBox, cleanRoomBoxes, guessLayout, cleanPresenters, mayPresent, mayRunThis } from '../../lib/designMeeting';
 import { allowed, clientPending, refusal } from '../../lib/drawingReview';
 
 const sheet = (id: string, room: string, state: string | null, extra: any = {}) => ({
   id, name: extra.name || `Sheet ${id}`, roomName: room,
-  review: state ? { state, versionId: `${id}v`, versionNo: 1, audience: extra.audience || 'client', clientChanges: extra.clientChanges || null } : null,
+  review: state ? { state, versionId: `${id}v`, versionNo: 1, audience: extra.audience || 'client', clientChanges: extra.clientChanges || null, presenters: extra.presenters || null } : null,
 });
 const room = (name: string, outcome: MeetingRoom['outcome'], extra: Partial<MeetingRoom> = {}): MeetingRoom => ({ room: name, sheets: [], outcome, changes: [], round: 0, charge: null, ...extra });
 const meeting = (id: string, state: DesignMeeting['state'], rooms: MeetingRoom[], closedAt = 1): DesignMeeting => ({
@@ -46,6 +46,58 @@ describe('rooms ready to present', () => {
     const [r] = presentableRooms([sheet('a', 'Kitchen', 'APPROVED', { name: 'Kitchen A', clientChanges: { pending: true } })]);
     expect(r.ready).toBe(false);
     expect(r.why).toBe('Kitchen A has client changes waiting for the Design Head');
+  });
+});
+
+describe('a Designer presenting', () => {
+  const riya = 'riya@m.com';
+  it('sees only the approved drawings the Design Head gave them', () => {
+    const drawings = [
+      sheet('a', 'Kitchen', 'APPROVED', { name: 'Kitchen A', presenters: ['Riya@M.com'] }),
+      sheet('b', 'Kitchen', 'APPROVED', { name: 'Kitchen B' }),
+      sheet('c', 'Kitchen', 'IN_REVIEW', { name: 'Kitchen C', presenters: [riya] }),
+      sheet('d', 'Living', 'APPROVED', { name: 'Living A', presenters: ['other@m.com'] }),
+      sheet('e', 'Foyer', 'DRAFT', { name: 'Foyer A', presenters: [riya] }),
+    ];
+    const rooms = presentableRooms(drawings, riya);
+    const kitchen = rooms.find((r) => r.room === 'Kitchen')!;
+    expect(kitchen.ready).toBe(true);
+    expect(kitchen.sheets.map((s) => s.id)).toEqual(['a']);
+    expect(kitchen.later.map((s) => s.id)).toEqual(['b', 'c']);
+    const living = rooms.find((r) => r.room === 'Living')!;
+    expect(living.ready).toBe(false);
+    expect(living.why).toBe('The Design Head has not given you a drawing here to present');
+    /* Not approved yet: the usual reason, whoever it is given to. */
+    expect(rooms.find((r) => r.room === 'Foyer')!.why).toBe('Foyer A is not sent for review yet');
+    /* The Design Head sees every approved sheet. */
+    expect(presentableRooms(drawings).find((r) => r.room === 'Kitchen')!.sheets.map((s) => s.id)).toEqual(['a', 'b']);
+  });
+
+  it('cannot present a room waiting on client changes, even a drawing given to them', () => {
+    const [r] = presentableRooms([sheet('a', 'Kitchen', 'APPROVED', { name: 'Kitchen A', presenters: [riya], clientChanges: { pending: true } })], riya);
+    expect(r.ready).toBe(false);
+    expect(r.why).toBe('Kitchen A has client changes waiting for the Design Head');
+  });
+
+  it('may present a sheet only with their own email on it', () => {
+    expect(mayPresent({ review: { presenters: [riya] } as any }, 'RIYA@m.com')).toBe(true);
+    expect(mayPresent({ review: { presenters: [riya] } as any }, 'x@m.com')).toBe(false);
+    expect(mayPresent({ review: null }, riya)).toBe(false);
+    expect(mayPresent({ review: { presenters: [riya] } as any }, '')).toBe(false);
+  });
+
+  it('names only the project\'s own designers, once each', () => {
+    expect(cleanPresenters([' Riya@M.com', 'riya@m.com', 'stranger@x.com', 7, null], [riya, 'dev@m.com'])).toEqual([riya]);
+    expect(cleanPresenters('riya@m.com', [riya])).toEqual([]);
+    expect(cleanPresenters([], [riya])).toEqual([]);
+  });
+
+  it('carries on only the meetings they started; a lead carries on any', () => {
+    const m = { startedBy: { uid: 'u1', email: riya, name: 'Riya' } };
+    expect(mayRunThis(m, { uid: 'u1', lead: false })).toBe(true);
+    expect(mayRunThis(m, { uid: 'u2', lead: false })).toBe(false);
+    expect(mayRunThis(m, { uid: '', lead: false })).toBe(false);
+    expect(mayRunThis(m, { uid: 'u2', lead: true })).toBe(true);
   });
 });
 

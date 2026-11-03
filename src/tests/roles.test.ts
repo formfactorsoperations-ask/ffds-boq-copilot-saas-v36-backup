@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { rolesOf, primaryRole, hasRole, memberRoles, roleLabel } from '../../lib/roles';
 import { seesStudioFinance, isDesignerRole, mayOpenStudioTab, designerMayOpen, isLimitedRole, teamViewKindOf, limitedMayOpen, limitedHomeTab, visibleToRole } from '../../lib/roleAccess';
-import { canReview, canUpload, canSetAudience, canRunMeeting } from '../../lib/drawingReview';
+import { canReview, canUpload, canSetAudience, canRunMeeting, canPresentAssigned } from '../../lib/drawingReview';
 
 describe('several roles', () => {
   it('cleans and orders roles, most senior first', () => {
@@ -27,6 +27,15 @@ describe('several roles', () => {
     expect(seesStudioFinance('Design Head')).toBe(false);
     expect(seesStudioFinance(both)).toBe(true);
     expect(canUpload('Designer') && canSetAudience(['Designer', 'Design Head'])).toBe(true);
+  });
+
+  it('lets a Designer present only what they are given, and not someone who runs meetings anyway', () => {
+    expect(canPresentAssigned('Designer')).toBe(true);
+    expect(canRunMeeting('Designer')).toBe(false);
+    expect(canPresentAssigned(['Designer', 'Design Head'])).toBe(false);
+    expect(canPresentAssigned('Design Head')).toBe(false);
+    expect(canPresentAssigned('Ops Director')).toBe(false);
+    expect(canPresentAssigned(null)).toBe(false);
   });
 
   it('limits to assigned projects only someone who is nothing but a Designer', () => {
