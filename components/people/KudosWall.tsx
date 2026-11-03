@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { HandHeart, Heart, Pin, RefreshCw, X } from '@/lib/lucide-shim';
-import { KUDOS_TAGS, type GuideView, type Kudos, type KudosTag } from '../../lib/peopleGuide';
+import { KUDOS_TAGS, likersOf, likedLine, type GuideView, type Kudos, type KudosTag, type Liker } from '../../lib/peopleGuide';
 import { runGuide, playedMoments, markPlayed } from '../../services/peopleGuideService';
 import { Label, input, btnSec } from '../opsDesk/OpsDeskPanels';
-import { Panel, Empty, Notice, Glide, Skeleton, Confetti, ConfettiShower, useHoverParty, EASE } from './PeopleBits';
+import { Panel, Empty, Notice, Glide, Skeleton, Confetti, ConfettiShower, useHoverParty, initials, EASE } from './PeopleBits';
 import { chip, firstName, niceDay } from './GuideBits';
 
 /*
@@ -122,7 +122,7 @@ export function KudosWallSection({ view, meId, error, onRefresh }: { view: Guide
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-6">
             <AnimatePresence initial={true}>
               {m.notes.map((k, i) => (
-                <Note key={k.id} k={k} i={i} isNew={fresh.has(k.id)} toName={names.get(k.to) || 'Someone'} fromName={names.get(k.from) || 'Someone who has left'} meId={meId} canRemove={k.from === meId || view.canEdit} onError={setProblem} />
+                <Note key={k.id} k={k} i={i} isNew={fresh.has(k.id)} nameOf={(id) => names.get(id)} toName={names.get(k.to) || 'Someone'} fromName={names.get(k.from) || 'Someone who has left'} meId={meId} canRemove={k.from === meId || view.canEdit} onError={setProblem} />
               ))}
             </AnimatePresence>
           </div>
@@ -133,11 +133,12 @@ export function KudosWallSection({ view, meId, error, onRefresh }: { view: Guide
   );
 }
 
-const Note: React.FC<{ k: Kudos; i: number; isNew?: boolean; toName: string; fromName: string; meId: string; canRemove: boolean; onError: (m: string) => void }> = ({ k, i, isNew = false, toName, fromName, meId, canRemove, onError }) => {
+const Note: React.FC<{ k: Kudos; i: number; isNew?: boolean; nameOf: (id: string) => string | undefined; toName: string; fromName: string; meId: string; canRemove: boolean; onError: (m: string) => void }> = ({ k, i, isNew = false, nameOf, toName, fromName, meId, canRemove, onError }) => {
   const still = useReducedMotion();
   const paper = PAPER[i % PAPER.length];
   const tilt = still ? 0 : TILT[i % TILT.length];
   const hearted = k.hearts.includes(meId);
+  const likers = likersOf(k.hearts, meId, nameOf);
   const [busy, setBusy] = useState(false);
   /* Pointing at a note sets off confetti and crackers until the pointer leaves. */
   const party = useHoverParty({ spread: 56 });
@@ -173,15 +174,64 @@ const Note: React.FC<{ k: Kudos; i: number; isNew?: boolean; toName: string; fro
             <X className="w-3.5 h-3.5" />
           </button>
         )}
-        <motion.button type="button" disabled={busy} whileTap={{ scale: 0.85 }} onClick={() => act('heart', { kudosId: k.id, on: !hearted })}
-          aria-pressed={hearted} aria-label={hearted ? 'Take your heart back' : 'Add a heart'}
-          className={`inline-flex items-center gap-1 text-[11px] font-bold ${hearted ? 'text-rose-600' : 'text-slate-500 hover:text-rose-600'}`}>
-          <motion.span key={String(hearted)} initial={{ scale: hearted ? 0.4 : 1 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 500, damping: 14 }} className="inline-flex">
-            <Heart className="w-3.5 h-3.5" fill={hearted ? 'currentColor' : 'none'} />
-          </motion.span>
-          {k.hearts.length}
-        </motion.button>
+        <Likers likers={likers}>
+          <motion.button type="button" disabled={busy} whileTap={{ scale: 0.85 }} onClick={() => act('heart', { kudosId: k.id, on: !hearted })}
+            aria-pressed={hearted} aria-label={hearted ? 'Take your heart back' : 'Add a heart'}
+            className={`inline-flex items-center gap-1 text-[11px] font-bold ${hearted ? 'text-rose-600' : 'text-slate-500 hover:text-rose-600'}`}>
+            <motion.span key={String(hearted)} initial={{ scale: hearted ? 0.4 : 1 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 500, damping: 14 }} className="inline-flex">
+              <Heart className="w-3.5 h-3.5" fill={hearted ? 'currentColor' : 'none'} />
+            </motion.span>
+            {k.hearts.length}
+          </motion.button>
+        </Likers>
       </span>
     </motion.div>
+  );
+};
+
+/*
+  Who liked it (the owner, 3 Nov 2026): the faces of whoever hearted a note sit
+  by the heart, you first; pointing at them or the heart (or tapping the faces)
+  lists their names.
+*/
+const Likers: React.FC<{ likers: Liker[]; children: React.ReactNode }> = ({ likers, children }) => {
+  const [open, setOpen] = useState(false);
+  const shown = open && likers.length > 0;
+  return (
+    <span className="relative inline-flex items-center gap-1.5"
+      onPointerEnter={(e) => { if (e.pointerType === 'mouse') setOpen(true); }} onPointerLeave={(e) => { if (e.pointerType === 'mouse') setOpen(false); }}>
+      {likers.length > 0 && (
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={shown} aria-label={likedLine(likers)} className="flex items-center -space-x-0.5">
+          <AnimatePresence initial={false}>
+            {likers.slice(0, 3).map((l, n) => (
+              <motion.span key={l.id} style={{ zIndex: 3 - n }} initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+                className={`w-6 h-6 rounded-full ring-2 ring-white grid place-items-center text-[10px] font-black ${l.me ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-700'}`}>
+                {initials(l.name)}
+              </motion.span>
+            ))}
+          </AnimatePresence>
+          {likers.length > 3 && <span className="w-6 h-6 rounded-full ring-2 ring-white bg-slate-100 grid place-items-center text-[10px] font-black text-slate-600">+{likers.length - 3}</span>}
+        </button>
+      )}
+      {children}
+      <AnimatePresence>
+        {shown && (
+          <motion.span role="tooltip" initial={{ opacity: 0, y: 6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 4, scale: 0.97, transition: { duration: 0.12 } }}
+            transition={{ type: 'spring', stiffness: 420, damping: 28 }} style={{ transformOrigin: '100% 100%' }}
+            className="absolute bottom-full right-0 mb-2 z-30 w-max min-w-[160px] max-w-[240px] rounded-xl bg-white border border-slate-200 shadow-[0_18px_34px_-20px_rgba(15,23,42,0.45)] px-3 py-2 flex flex-col gap-1.5">
+            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-rose-600"><Heart className="w-3 h-3" fill="currentColor" />Liked by {likers.length}</span>
+            <span className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+              {likers.map((l, n) => (
+                <motion.span key={l.id} initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(n, 8) * 0.03 }} className="flex items-center gap-2 text-xs text-slate-700">
+                  <span className={`w-6 h-6 shrink-0 rounded-full grid place-items-center text-[10px] font-black ${l.me ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-700'}`}>{initials(l.name)}</span>
+                  <span className="truncate">{l.me ? 'You' : l.name}</span>
+                </motion.span>
+              ))}
+            </span>
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </span>
   );
 };

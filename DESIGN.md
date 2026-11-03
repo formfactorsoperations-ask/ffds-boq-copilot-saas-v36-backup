@@ -270,6 +270,10 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
   spark rises and bursts into a ring of streaks) one after another, at random spots on it, until
   the pointer leaves. Brand and state colours only; mouse only, so a touch does nothing; held for
   a moment while a wish is typed; nothing under reduced motion.
+- **Who liked it** (owner, 3 Nov 2026, `likersOf` in `lib/peopleGuide.ts`): the faces of whoever
+  hearted a kudos note sit by the heart (rose tint, yours solid, three then "+N"); pointing at them
+  or the heart, or tapping the faces, opens a small list of names that pops up above. The Home
+  pin's heart count says who in its tooltip.
 - The People rail is grouped (owner, 28 Oct 2026): My day (Today, Attendance, Leave,
   Approvals), Team (Calendar, Office guide, Celebrations, Kudos), Studio (Essentials,
   Emergency contacts) and Admin (Monthly report). Group names are field labels, shown
