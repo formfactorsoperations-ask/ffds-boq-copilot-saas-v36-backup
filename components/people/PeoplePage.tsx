@@ -19,7 +19,7 @@ import { Ring, Avatar, Skeleton, Glide, Notice, IconTile, Tilt, Panel, Empty, LE
 import { StudioPulse, ArrivalToasts, useToday } from './Arrivals';
 import PeopleCalendar from './PeopleCalendar';
 import { useGuide, kudosSeenAt, markKudosSeen } from '../../services/peopleGuideService';
-import { takePeopleSection, onPeopleSection } from '../../lib/peopleSection';
+import { wantedPeopleSection, clearPeopleSection, onPeopleSection } from '../../lib/peopleSection';
 import { OfficeGuideSection } from './OfficeGuide';
 import { CelebrationsSection, CelebrationBanner } from './Celebrations';
 import { KudosWallSection } from './KudosWall';
@@ -56,8 +56,11 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   /* The office guide, essentials, cards, kudos and emergency contacts (lib/peopleGuide.ts), loaded beside the snapshot. */
   const guide = useGuide();
   /* A note or a Home pin can open People at a section (lib/peopleSection.ts). */
-  const [section, setSection] = useState<Section>(() => asSection(takePeopleSection()) || 'today');
-  useEffect(() => onPeopleSection((x) => { const want = asSection(x); if (want) setSection(want); }), []);
+  const [section, setSection] = useState<Section>(() => asSection(wantedPeopleSection()) || 'today');
+  useEffect(() => {
+    clearPeopleSection();
+    return onPeopleSection((x) => { const want = asSection(x); if (want) setSection(want); });
+  }, []);
   const [leaveOpen, setLeaveOpen] = useState<{ start?: string } | null>(null);
   const [correcting, setCorrecting] = useState<Attendance | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
