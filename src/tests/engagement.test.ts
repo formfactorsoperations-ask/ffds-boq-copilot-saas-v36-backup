@@ -209,7 +209,7 @@ describe('reports', () => {
   });
 });
 
-import { buildScheduleFromProject, scheduleForEngagement } from '../../lib/scheduleBuilder';
+import { buildScheduleFromProject, scheduleForEngagement, scheduleMatchesEngagement } from '../../lib/scheduleBuilder';
 import { computeSchedule as computeProgramme } from '../../lib/schedule';
 import { calculateClientLifecycleStages } from '../../services/clientPortalEngine';
 import { buildPortalView } from '../../lib/portalProjection';
@@ -265,5 +265,28 @@ describe('the client portal of a design-only project', () => {
     const view: any = buildPortalView('p1', ctx);
     expect(view.context.engagementType).toBe('design_only');
     expect(view.context.paymentMilestones.map((m: any) => m.id)).toEqual(['d1']);
+  });
+});
+
+describe('a turnkey project with no priced BOQ yet (a design-only project moved to turnkey)', () => {
+  it('shares the execution days between the trades, not 75 days each', () => {
+    const s = buildScheduleFromProject({} as any, [], { designSteps: [{ stepNumber: 1, title: 'Discovery & SOF', durationDays: 7 }] as any });
+    const exec = s.tasks.filter((t) => t.kind === 'execution');
+    expect(exec.length).toBeGreaterThan(0);
+    // Was 75 each: about two years end to end.
+    expect(Math.max(...exec.map((t) => t.workDays))).toBeLessThan(20);
+    const r = computeProgramme(s);
+    const days = (Date.parse(r.finishISO!) - Date.parse(r.startISO!)) / 86400000;
+    expect(days).toBeLessThan(200);
+  });
+
+  it('flags a schedule saved for the other engagement, so the Timeline offers to rebuild it', () => {
+    const designOnlySaved = buildScheduleFromProject({ engagementType: 'design_only' } as any, []);
+    const turnkeySaved = buildScheduleFromProject({} as any, []);
+    expect(scheduleMatchesEngagement(designOnlySaved, {})).toBe(false);
+    expect(scheduleMatchesEngagement(turnkeySaved, {})).toBe(true);
+    expect(scheduleMatchesEngagement(turnkeySaved, { engagementType: 'design_only' })).toBe(false);
+    expect(scheduleMatchesEngagement(designOnlySaved, { engagementType: 'design_only' })).toBe(true);
+    expect(scheduleMatchesEngagement(null, {})).toBe(true);
   });
 });

@@ -209,9 +209,18 @@ export function buildScheduleFromProject(
     return preds;
   };
 
+  /*
+    Without a priced BOQ the execution days are shared evenly between the trades.
+
+    The fallback was `1 / ordered.length`, but `ordered` lists the BOQ's trades,
+    so with no BOQ it was empty and every trade got the whole 75 days: fifteen
+    stages back to back came to about two years. That is every project without
+    a BOQ, including a design-only project moved to turnkey.
+  */
+  const tradeCount = new Set(activeTemplates.map(t => t.trade)).size;
   activeTemplates.forEach(template => {
     const tradeValue = byTrade.get(template.trade) || 0;
-    const share = totalValue > 0 ? tradeValue / totalValue : 1 / Math.max(1, ordered.length);
+    const share = totalValue > 0 ? tradeValue / totalValue : 1 / Math.max(1, tradeCount);
     const totalTradeDuration = durationFor(share, totalWorkDays);
     const stageDuration = Math.max(2, Math.round(template.share * totalTradeDuration));
 
@@ -321,6 +330,23 @@ export function scheduleForEngagement<T extends ProjectSchedule | null | undefin
 ): T {
   if (!schedule || !schedule.tasks || engagementOf(projectContext) !== 'design_only') return schedule;
   return designOnlyProgramme(schedule) as T;
+}
+
+/**
+ * Whether a saved schedule was planned for the engagement the project has now.
+ *
+ * False for a turnkey project whose saved schedule has no site work (saved
+ * while it was design only), and for a design-only project whose saved
+ * schedule still has some (saved while it was turnkey). The Timeline offers to
+ * rebuild it either way.
+ */
+export function scheduleMatchesEngagement(
+  schedule: ProjectSchedule | null | undefined,
+  projectContext: { engagementType?: unknown } | null | undefined,
+): boolean {
+  if (!schedule?.tasks?.length) return true;
+  const hasSite = schedule.tasks.some(t => t.kind === 'execution' || t.kind === 'procurement');
+  return engagementOf(projectContext) === 'design_only' ? !hasSite : hasSite;
 }
 
 /** True when the project has enough to draw a schedule worth looking at. */
