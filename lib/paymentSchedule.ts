@@ -1,4 +1,6 @@
 import { lockedTierId } from './scopeFlow';
+import { designFeeFor } from './boqPricing';
+import { engagementOf, isFeeOnly } from './engagement';
 
 /**
  * What every milestone on a project is worth, worked out once.
@@ -136,15 +138,39 @@ export function contractInForce(ctx: any): boolean {
   return !!ctx?.approvedTierId || !!lockedTierId(ctx) || !!ctx?.proposalAcceptance?.accepted;
 }
 
+/*
+  What a project's option is worth to bill, by engagement.
+
+  A design-only (or design + PMC) project sells no execution, so it bills none:
+  whatever a BOQ left on the option, execution is ₹0. Its design fee is the one
+  set in Project setup's fee engine (₹/sq ft or a fixed sum), the same figure
+  the proposal shows. The option's own designFee is only refreshed when a BOQ
+  is priced, which a design-only project never does, so it cannot be trusted
+  here. Turnkey projects are returned unchanged.
+*/
+export function billingSummary<T extends { totalSell?: number; designFee?: number }>(
+  ctx: any,
+  tierSummary: T | undefined,
+): T | undefined {
+  if (!isFeeOnly(engagementOf(ctx))) return tierSummary;
+  return { ...(tierSummary || {}), totalSell: 0, designFee: designFeeFor(ctx, 0, 0) } as T;
+}
+
 export function billingBase(
   ctx: any,
   tierSummary: { totalSell?: number; designFee?: number } | undefined,
   financials: Pick<ScheduleFinancials, 'approvedExecutionValue' | 'approvedDesignValue'>,
 ): { execution: number; design: number; contract: boolean } {
-  const optionExec = tierSummary?.totalSell || 0;
-  const optionDes = tierSummary?.designFee || 0;
+  const feeOnly = isFeeOnly(engagementOf(ctx));
+  const summary = billingSummary(ctx, tierSummary);
+  const optionExec = summary?.totalSell || 0;
+  const optionDes = summary?.designFee || 0;
   // Without an option to bill there is nothing else to show but what is stored.
   const contract = contractInForce(ctx) || !tierSummary;
+  if (feeOnly) {
+    // No execution, whatever is stored from a time the project was turnkey.
+    return { execution: 0, design: contract ? (financials.approvedDesignValue ?? optionDes) : optionDes, contract };
+  }
   return contract
     ? { execution: financials.approvedExecutionValue ?? optionExec, design: financials.approvedDesignValue ?? optionDes, contract: true }
     : { execution: optionExec, design: optionDes, contract: false };
@@ -314,10 +340,13 @@ export function computeSchedule(args: {
   const ctx = args.context || {};
   const financials = { ...resolveFinancials(ctx.financials), ...(args.overrides || {}) } as ScheduleFinancials;
   const gstRate = args.overrides?.gstRate ?? (ctx.gstRate || 18);
-  const milestones: any[] = ctx.paymentMilestones || [];
+  // A fee-only project has no execution track to bill (lib/engagement.ts).
+  const milestones: any[] = (ctx.paymentMilestones || [])
+    .filter((m: any) => !(isFeeOnly(engagementOf(ctx)) && m?.type === 'execution'));
 
-  const origExec = args.tierSummary?.totalSell || 0;
-  const origDes = args.tierSummary?.designFee || 0;
+  const summary = billingSummary(ctx, args.tierSummary);
+  const origExec = summary?.totalSell || 0;
+  const origDes = summary?.designFee || 0;
   const base = billingBase(ctx, args.tierSummary, financials);
   const rawExec = base.execution;
   const rawDes = base.design;

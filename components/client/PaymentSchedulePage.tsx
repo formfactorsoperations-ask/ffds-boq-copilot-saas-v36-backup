@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { ProjectContext, PaymentSchedule, ProjectEngagement } from '../../types';
 import { FileText, Send, Download, AlertTriangle, ArrowRight, History, Eye } from '@/lib/lucide-shim';
 import { formatCurrency, id as generateId } from '../../lib/utils';
-import { resolveFinancials } from '../../lib/paymentSchedule';
+import { resolveFinancials, billingSummary } from '../../lib/paymentSchedule';
+import { engagementOf, isFeeOnly } from '../../lib/engagement';
 import { useOrg } from '../../contexts/OrgContext';
 import { resolveDocumentState, getCurrentIssue } from '../../services/documentIssueEngine';
 import ExecutionStamp from '../documents/ExecutionStamp';
@@ -15,7 +16,14 @@ interface PaymentSchedulePageProps {
     activeTier?: any;
 }
 
-export default function PaymentSchedulePage({ projectContext, setProjectContext, activeTier }: PaymentSchedulePageProps) {
+export default function PaymentSchedulePage({ projectContext, setProjectContext, activeTier: optionTier }: PaymentSchedulePageProps) {
+    /*
+      A fee-only project (design only) schedules the design fee and nothing
+      else: no execution value, whatever an old BOQ left on the option, and no
+      execution stages (lib/engagement.ts).
+    */
+    const feeOnly = isFeeOnly(engagementOf(projectContext));
+    const activeTier = optionTier && feeOnly ? { ...optionTier, summary: billingSummary(projectContext, optionTier.summary) } : optionTier;
     /*
       GST per phase, from the project rather than from a literal.
 
@@ -81,7 +89,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
             history: [],
             ...(engagement || {}),
             designFee: (activeTier?.summary?.designFee !== undefined && activeTier?.summary?.designFee > 0) ? activeTier.summary.designFee : (engagement?.designFee || projectContext.financials?.approvedDesignValue || 0),
-            executionValue: (activeTier?.summary?.totalSell !== undefined && activeTier?.summary?.totalSell > 0) ? activeTier.summary.totalSell : (engagement?.executionValue || projectContext.financials?.approvedExecutionValue || 0)
+            executionValue: feeOnly ? 0 : (activeTier?.summary?.totalSell !== undefined && activeTier?.summary?.totalSell > 0) ? activeTier.summary.totalSell : (engagement?.executionValue || projectContext.financials?.approvedExecutionValue || 0)
         } as ProjectEngagement;
 
         latestSchedule = {
@@ -130,7 +138,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
             const originalNetDesign = (activeTier?.summary?.designFee !== undefined && activeTier?.summary?.designFee > 0)
                 ? activeTier.summary.designFee 
                 : (engagement?.designFee || projectContext.financials?.approvedDesignValue || 0);
-            const originalNetExecution = (activeTier?.summary?.totalSell !== undefined && activeTier?.summary?.totalSell > 0)
+            const originalNetExecution = feeOnly ? 0 : (activeTier?.summary?.totalSell !== undefined && activeTier?.summary?.totalSell > 0)
                 ? activeTier.summary.totalSell 
                 : (engagement?.executionValue || projectContext.financials?.approvedExecutionValue || 0);
             const contractValue = originalNetExecution + originalNetDesign;
@@ -156,7 +164,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                 // Use custom milestones from Payment Calculator
                 let dIndex = 0;
                 let eIndex = 0;
-                newAdvances = projectContext.paymentMilestones.map((m) => {
+                newAdvances = projectContext.paymentMilestones.filter((m) => !(feeOnly && m.type === 'execution')).map((m) => {
                     const originalBaseAmount = m.type === 'execution' ? originalNetExecution : originalNetDesign;
                     let amount = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : (originalBaseAmount * (m.percentage / 100));
                     amount = Math.round(amount);
@@ -199,7 +207,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                 }
     
                 // Execution Stages
-                for (const m of paymentStructure.executionStages) {
+                for (const m of (feeOnly ? [] : paymentStructure.executionStages)) {
                     newAdvances.push({
                         advanceCode: m.code || `E${i+1}`,
                         label: m.name,
@@ -381,7 +389,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
     const signatoryTitle = orgData.signatoryTitle || latestSchedule.snapshotTermsConfig?.signatory?.title || (latestSchedule.snapshotTermsConfig as any)?.signatoryTitle || '[Principal Title]';
 
     const baseDesignFee = latestSchedule.snapshotEngagement?.designFee || projectContext.financials?.approvedDesignValue || activeTier?.summary?.designFee || 0;
-    const baseExecutionValue = latestSchedule.snapshotEngagement?.executionValue || projectContext.financials?.approvedExecutionValue || activeTier?.summary?.totalSell || 0;
+    const baseExecutionValue = feeOnly ? 0 : (latestSchedule.snapshotEngagement?.executionValue || projectContext.financials?.approvedExecutionValue || activeTier?.summary?.totalSell || 0);
 
     const termsDockets = projectContext.termsDockets || [];
     let latestDocket = null;

@@ -9,7 +9,8 @@ import { RotateCcw, Coins, CheckCircle, TrendingUp, Info, AlertTriangle, Sparkle
 import Card from './shared/Card';
 import { CalculatorIcon, ShieldCheckIcon, AlertIcon, CheckIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon, DeleteIcon, PlusIcon, ScissorsIcon, ClockIcon, CalendarIcon } from './Icons';
 import { useOrg } from '../contexts/OrgContext';
-import { computeSchedule, outstandingInvoices, resolveFinancials, sameFinancials, billingBase } from '../lib/paymentSchedule';
+import { computeSchedule, outstandingInvoices, resolveFinancials, sameFinancials, billingBase, billingSummary } from '../lib/paymentSchedule';
+import { engagementOf, isFeeOnly } from '../lib/engagement';
 import { resolveDocumentState } from '../services/documentIssueEngine';
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import { FFDS_PAYMENT_STRUCTURE_DEFAULTS, getPaymentStructure, setPaymentStructure } from '../services/engagementService';
@@ -371,7 +372,13 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const isReadOnlyMode = !!selectedHistoricalEntry && !selectedHistoricalEntry.isCurrentActive;
 
     // Derived active values
-    const milestones = selectedHistoricalEntry ? selectedHistoricalEntry.milestones : (projectContext.paymentMilestones || []);
+    /*
+      A fee-only project (design only, design + PMC) has no execution track:
+      only its design milestones are shown and billed (lib/engagement.ts).
+    */
+    const feeOnly = isFeeOnly(engagementOf(projectContext));
+    const milestones = (selectedHistoricalEntry ? selectedHistoricalEntry.milestones : (projectContext.paymentMilestones || []))
+        .filter((m: PaymentMilestone) => !(feeOnly && m.type === 'execution'));
     const gstRate = localGstRate;
     const cashLimit = localCashLimit;
 
@@ -609,7 +616,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 unlocks: s.unlocks || '',
                 trigger: s.trigger || ''
             })),
-            ...structure.executionStages.map((s: any, i: number) => ({
+            // A fee-only project has no execution milestones (lib/engagement.ts).
+            ...(feeOnly ? [] : structure.executionStages).map((s: any, i: number) => ({
                 id: `e${i + 1}`,
                 type: 'execution' as const,
                 name: s.name,
@@ -672,6 +680,21 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             setProjectContext(prev => ({ ...prev, paymentMilestones: getDefaultMilestones() }));
         }
     }, [studioPaymentStr]);
+
+    /*
+      A design-only project that becomes turnkey (the client asks the studio to
+      build) has its design milestones, some perhaps paid, and no execution
+      track. The studio's execution stages are added after them; the design
+      milestones are left exactly as they are.
+    */
+    useEffect(() => {
+        if (feeOnly || selectedHistoricalEntry) return;
+        const stored = projectContext.paymentMilestones || [];
+        if (stored.length === 0 || stored.some(m => m.type === 'execution')) return;
+        const execution = getDefaultMilestones().filter(m => m.type === 'execution');
+        if (execution.length) setProjectContext(prev => ({ ...prev, paymentMilestones: [...(prev.paymentMilestones || []), ...execution] }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [feeOnly, studioPaymentStr]);
 
     const autoBalanceMilestones = (items: PaymentMilestone[], phase: string, changedId?: string) => {
         const phaseItems = items.filter(m => m.type === phase);
@@ -1091,13 +1114,15 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
     // --- CALCULATIONS ENGINE ---
 
+    // A fee-only project bills no execution and the fee engine's design fee (lib/paymentSchedule.ts).
+    const optionSummary = billingSummary(projectContext, activeTier?.summary);
     const originalExecutionTotal = selectedHistoricalEntry
         ? selectedHistoricalEntry.executionValue
-        : (activeTier?.summary.totalSell || 0);
+        : (optionSummary?.totalSell || 0);
 
     const originalDesignFee = selectedHistoricalEntry
         ? selectedHistoricalEntry.designValue
-        : (activeTier?.summary.designFee || 0);
+        : (optionSummary?.designFee || 0);
 
     const rawExecutionTotal = selectedHistoricalEntry
         ? selectedHistoricalEntry.executionValue
@@ -2960,7 +2985,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 text: `Design milestones sum to ${Math.round(totalDesignPct)}% (should equal 100%). Adjust stages to balance the design fee track.`
             });
         }
-        if (Math.abs(totalExecPct - 100) > 0.1) {
+        // A fee-only project has no execution track to balance.
+        if (!feeOnly && Math.abs(totalExecPct - 100) > 0.1) {
             list.push({
                 type: 'warning',
                 text: `Execution milestones sum to ${Math.round(totalExecPct)}% (should equal 100%). Adjust stages to balance the execution track.`
@@ -2973,7 +2999,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         if (allDesignInvoicedOrPaid && projectStageNum < 5) {
             list.push({
                 type: 'info',
-                text: 'All Design milestones are invoiced or paid. Consider advancing the project stage to Execution (Stage 5) to initiate civil/material orders.',
+                text: feeOnly
+                    ? 'All design milestones are invoiced or paid. Release the GFC set to move the project to Drawings & Selections (stage 5).'
+                    : 'All Design milestones are invoiced or paid. Consider advancing the project stage to Execution (Stage 5) to initiate civil/material orders.',
             });
         }
 
@@ -3816,7 +3844,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                   so they were repetition in the most prominent slot on the
                   tab. The fourth was already unique and is untouched.
                 */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className={`grid grid-cols-1 sm:grid-cols-2 ${feeOnly ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
+                    {/* The execution's billable and cash split: nothing to split on a fee-only project. */}
+                    {!feeOnly && (
                     <motion.div
                         whileHover={{ y: -4, scale: 1.01 }}
                         transition={{ type: "spring", stiffness: 300, damping: 20 }}
@@ -3829,6 +3859,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         <h3 className="text-xl font-extrabold text-[#12182F] tabular-nums mt-2">{formatCurrency(executionBillable)}</h3>
                         <p className="text-[10px] text-[#8E96B8] mt-1">Cash side: {formatCurrency(executionCash)}</p>
                     </motion.div>
+                    )}
 
                     <motion.div
                         whileHover={{ y: -4, scale: 1.01 }}
@@ -4160,6 +4191,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
                                 {/* Right Side: Split Sliders & GST Overrides */}
                                 <div className="space-y-6">
+                                    {!feeOnly && (
                                     <div>
                                         <h4 className="text-xs font-black text-[#8E96B8] uppercase tracking-wider mb-3">Execution Cash Split</h4>
                                         <div className="p-4 bg-[#F6F7FB] rounded-2xl border border-[#E2E5F0]/80 space-y-4">
@@ -4184,9 +4216,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             </div>
                                         </div>
                                     </div>
+                                    )}
 
                                     <div>
                                         <h4 className="text-xs font-black text-[#8E96B8] uppercase tracking-wider mb-3">GST</h4>
+                                        {!feeOnly && (
                                         <div className="p-4 bg-[#F6F7FB] rounded-2xl border border-[#E2E5F0]/80 flex items-center justify-between">
                                             <label className={`flex items-center gap-3 ${isReadOnlyMode ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                                                 <div className="relative">
@@ -4209,6 +4243,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 <p className="text-sm font-extrabold text-amber-700 tabular-nums">{formatCurrency(executionCash)}</p>
                                             </div>
                                         </div>
+                                        )}
                                         {/*
                                           The design fee has its own switch.
 
@@ -4269,7 +4304,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[#EDEFF7] font-medium tabular-nums">
-                            {/* Execution Row */}
+                            {/* Execution Row: none on a fee-only project */}
+                            {!feeOnly && (
                             <tr className="hover:bg-[#F6F7FB]/30">
                                 <td className="p-4 font-bold text-[#252C4E]">Execution Scope</td>
                                 <td className="p-4 text-right text-[#5A628A]">{formatCurrency(rawExecutionTotal)}</td>
@@ -4278,6 +4314,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                 <td className="p-4 text-right text-[#5A628A]">{executionGstEnabled ? formatCurrency(gstOnExecution) : '₹0'}</td>
                                 <td className="p-4 text-right font-extrabold text-[#252C4E]">{formatCurrency(taxableExecution + (executionGstEnabled ? gstOnExecution : 0))}</td>
                             </tr>
+                            )}
                             {/* Design Row */}
                             <tr className="hover:bg-[#F6F7FB]/30">
                                 <td className="p-4 font-bold text-[#252C4E]">Design Fee</td>
@@ -4302,6 +4339,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             </div>
 
             {/* TAX SIMULATOR */}
+            {/* Splits material and labour from the BOQ: nothing to split on a fee-only project. */}
+            {!feeOnly && (
             <div className="bg-white rounded-3xl border border-[#E2E5F0] overflow-hidden shadow-sm">
                 <div 
                     className="p-5 bg-[#F6F7FB]/60 border-b border-[#EDEFF7] flex justify-between items-center cursor-pointer hover:bg-[#F6F7FB] transition-colors"
@@ -4560,6 +4599,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     </div>
                 )}
             </div>
+            )}
 
             </>)}
 
@@ -4679,7 +4719,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             <h3 className="text-base font-extrabold text-[#12182F]">Milestones Realization Schedule</h3>
                             <p className="text-xs text-[#8E96B8] mt-0.5">Track, release, and audit design and execution fee structures</p>
                         </div>
-                        {activeTier && (
+                        {activeTier && !feeOnly && (
                             <div className="flex flex-wrap items-center gap-3">
                                 <div className="flex bg-[#EDEFF7] p-1 rounded-xl border border-[#E2E5F0]/60 max-w-fit">
                                     <button 
@@ -4767,15 +4807,15 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         </div>
                     ) : (
                         /* Milestone tracking container - grid side-by-side if All is selected and viewLayout is side-by-side */
-                        <div className={`grid grid-cols-1 ${activeTrackTab === 'all' && viewLayout === 'side-by-side' ? 'xl:grid-cols-2 gap-8' : 'gap-12'} items-start`}>
-                            {(activeTrackTab === 'all' || activeTrackTab === 'design') && (
+                        <div className={`grid grid-cols-1 ${activeTrackTab === 'all' && viewLayout === 'side-by-side' && !feeOnly ? 'xl:grid-cols-2 gap-8' : 'gap-12'} items-start`}>
+                            {(feeOnly || activeTrackTab === 'all' || activeTrackTab === 'design') && (
                                 designViewMode === 'simple' ? (
                                     renderSimpleTrackView(designMilestones, taxableDesign, originalNetDesign, false, "Design Fees")
                                 ) : (
                                     renderSplitTable(designMilestones, taxableDesign, originalNetDesign, false, "Design Fees")
                                 )
                             )}
-                            {(activeTrackTab === 'all' || activeTrackTab === 'execution') && (
+                            {!feeOnly && (activeTrackTab === 'all' || activeTrackTab === 'execution') && (
                                 executionViewMode === 'simple' ? (
                                     renderSimpleTrackView(executionMilestones, taxableExecution, originalNetExecution, true, "Execution Milestones")
                                 ) : (

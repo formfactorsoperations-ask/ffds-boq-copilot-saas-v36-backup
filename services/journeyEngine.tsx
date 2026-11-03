@@ -4,6 +4,7 @@ import { db } from './firebaseClient';
 import { JOURNEY_STEPS, PHASES, STAGE_LABELS, JourneyStepDef } from '../constants/journeyConstants';
 import { ProjectContext, CommunicationLogItem, TermsDocket, RevisionAction, ManualJourneyStep } from '../types';
 import { useOrg } from '../contexts/OrgContext';
+import { engagementOf, journeyStepsFor, phasesFor, gateStepIds, PhaseDef } from '../lib/engagement';
 
 export interface StepWithStatus extends JourneyStepDef {
   status: 'done' | 'active' | 'pending' | 'locked';
@@ -16,6 +17,8 @@ export interface JourneyContextType {
   steps: StepWithStatus[];
   stepsByPhase: Record<number, StepWithStatus[]>;
   phaseProgress: { done: number; total: number; pct: number }[];
+  /** The six phases, named for the project's engagement (lib/engagement.ts). */
+  phases: PhaseDef[];
   overall: { done: number; total: number; pct: number };
   activeSteps: StepWithStatus[];
   nextStep: StepWithStatus | null;
@@ -249,6 +252,16 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
       case 'handover_dossier_sent':
         return commsLog['handover_warranty']?.status === 'sent' || !!projectContext.handoverDate || currentStage >= 7;
         
+      // Design-only steps (lib/engagement.ts).
+      case 'gfc_set_issued':
+        return !!(projectContext as any).gfcReleasedAt || currentStage >= 6;
+      case 'final_design_fee_received': {
+        const design = (projectContext.paymentMilestones || []).filter((m) => m.type === 'design');
+        return (design.length > 0 && design.every((m) => m.status === 'paid')) || currentStage >= 7;
+      }
+      case 'design_closeout_signed':
+        return (projectContext as any).handoverSignoff?.status === 'signed' || currentStage >= 7 || projectContext.status === 'completed';
+
       case 'warranty_activated': {
         const allPaid = (projectContext.paymentMilestones || []).length > 0 && (projectContext.paymentMilestones || []).every((m) => m.status === 'paid');
         return (!!projectContext.handoverDate && allPaid) || currentStage >= 7 || projectContext.status === 'completed';
@@ -259,8 +272,13 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
   }, [projectContext, termsDockets, commsLog, revisions]);
 
   // Compute absolute current state of all 34 steps
+  /* The steps for this project's engagement: a design-only project has no execution or site steps. */
+  const engagement = engagementOf(projectContext);
+  const stepDefs = useMemo(() => journeyStepsFor(engagement, JOURNEY_STEPS), [engagement]);
+  const phases = useMemo(() => phasesFor(engagement, PHASES as PhaseDef[]), [engagement]);
+
   const computedSteps = useMemo(() => {
-    const steps: StepWithStatus[] = JOURNEY_STEPS.map((s) => ({
+    const steps: StepWithStatus[] = stepDefs.map((s) => ({
       ...s,
       status: 'pending',
       completedAt: null,
@@ -365,7 +383,7 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
     }
 
     return steps;
-  }, [evaluateAutoStep, manualSteps, projectContext]);
+  }, [evaluateAutoStep, manualSteps, projectContext, stepDefs]);
 
   /*
     Stamp a self-validating step the first time it is seen done.
@@ -467,9 +485,11 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
 
     // Gate evaluations
     const proposalAcceptedDone = computedSteps.some(s => s.id === 'discovery_completed' && s.status === 'done');
-    const contractSignedDone = computedSteps.some(s => s.id === 'agreement_signed' && s.status === 'done');
+    // On a design-only project the Terms Docket is the contract and the design closeout the handover.
+    const gateSteps = gateStepIds(engagementOf(projectContext));
+    const contractSignedDone = computedSteps.some(s => s.id === gateSteps.contractSigned && s.status === 'done');
     const designGateActiveDone = computedSteps.some(s => s.id === 'design_approved' && s.status === 'done');
-    const handoverCompleteDone = computedSteps.some(s => s.id === 'keys_handed_over' && s.status === 'done');
+    const handoverCompleteDone = computedSteps.some(s => s.id === gateSteps.handoverComplete && s.status === 'done');
 
     const currentStage = projectContext.lifecycle?.stage || 1;
     const currentGates = (projectContext.lifecycle?.gates || {}) as any;
@@ -728,13 +748,14 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
     steps: computedSteps,
     stepsByPhase,
     phaseProgress,
+    phases,
     overall,
     activeSteps,
     nextStep,
     loading,
     markStepDone,
     markStepPending,
-  }), [computedSteps, stepsByPhase, phaseProgress, overall, activeSteps, nextStep, loading, markStepDone, markStepPending]);
+  }), [computedSteps, stepsByPhase, phaseProgress, phases, overall, activeSteps, nextStep, loading, markStepDone, markStepPending]);
 
   return <JourneyContext.Provider value={value}>{children}</JourneyContext.Provider>;
 }

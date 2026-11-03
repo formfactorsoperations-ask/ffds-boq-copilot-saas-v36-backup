@@ -35,7 +35,7 @@ const STRUCTURAL_FIELDS = [
   'designFee', 'designFeeType', 'designScope', 'designFeeConfig',
   'gstRate', 'paymentScheduleConfig',
   // How the studio presents and runs this kind of job
-  'proposalType', 'proposalMode', 'activeProposalFormat', 'activeProposalLevel',
+  'proposalType', 'engagementType', 'proposalMode', 'activeProposalFormat', 'activeProposalLevel',
   'activeProposalMode', 'showScopePricing', 'coverStyle', 'logoImage',
   'logoHeight', 'theme', 'propertyStatus', 'civilScope', 'clientBrief',
   'procurementModes', 'tradeSequence', 'procurementLeadTimeWeeks',

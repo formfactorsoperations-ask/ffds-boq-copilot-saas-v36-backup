@@ -1,7 +1,8 @@
 import {
   ProjectSchedule, ScheduleTask, ProjectContext, FullBoqItem, WorkCalendar,
 } from '../types';
-import { DEFAULT_CALENDAR, toISO, toDayNum, laneOrder } from './schedule';
+import { DEFAULT_CALENDAR, toISO, toDayNum, laneOrder, isDesignGateTask, isHandoverTask } from './schedule';
+import { engagementOf } from './engagement';
 
 // ============================================================================
 // scheduleBuilder — derive a first schedule from what the project already knows.
@@ -119,6 +120,9 @@ export function buildScheduleFromProject(
     return !(/procurement|carpentry|execution|finishes|finishing|installation|handover|closeout|site|civil|tiling|flooring|electrical|plumbing|painting|completion|snag/i.test(title));
   });
 
+  // A design-only project: the studio designs, the client's contractors build (lib/engagement.ts).
+  const designOnly = engagementOf(projectContext) === 'design_only';
+
   // If no design steps provided, use the studio's standard 5-step design process
   if (steps.length === 0) {
     steps = [
@@ -126,7 +130,7 @@ export function buildScheduleFromProject(
       { stepNumber: 2, title: '2D Spatial Layouts & Moodboards', durationDays: 8 },
       { stepNumber: 3, title: '3D Visualisations & Material Selections', durationDays: 10 },
       { stepNumber: 4, title: 'Good-For-Construction (GFC) Drawings', durationDays: 8 },
-      { stepNumber: 5, title: 'BOQ Freeze & Design Sign-off', durationDays: 5 }
+      { stepNumber: 5, title: designOnly ? 'Final Selections & Design Sign-off' : 'BOQ Freeze & Design Sign-off', durationDays: 5 }
     ];
   }
 
@@ -167,6 +171,23 @@ export function buildScheduleFromProject(
     });
   }
 
+  /*
+    A design-only project ends with the design. There is no execution, no
+    procurement and no site handover to plan: the gate is the GFC release and
+    the programme closes on the design closeout.
+  */
+  if (designOnly) {
+    return designOnlyProgramme({
+      tasks,
+      holds: [],
+      calendar,
+      baselineAt: null,
+      targetHandoverISO: projectContext?.targetHandoverDate
+        ? String(projectContext.targetHandoverDate).slice(0, 10)
+        : undefined,
+    });
+  }
+
   // ---- Execution lane, from the templates hoisted above -------------------
   const activeTemplates = byTrade.size > 0
     ? EXECUTION_TEMPLATES.filter(t => byTrade.has(t.trade))
@@ -188,9 +209,18 @@ export function buildScheduleFromProject(
     return preds;
   };
 
+  /*
+    Without a priced BOQ the execution days are shared evenly between the trades.
+
+    The fallback was `1 / ordered.length`, but `ordered` lists the BOQ's trades,
+    so with no BOQ it was empty and every trade got the whole 75 days: fifteen
+    stages back to back came to about two years. That is every project without
+    a BOQ, including a design-only project moved to turnkey.
+  */
+  const tradeCount = new Set(activeTemplates.map(t => t.trade)).size;
   activeTemplates.forEach(template => {
     const tradeValue = byTrade.get(template.trade) || 0;
-    const share = totalValue > 0 ? tradeValue / totalValue : 1 / Math.max(1, ordered.length);
+    const share = totalValue > 0 ? tradeValue / totalValue : 1 / Math.max(1, tradeCount);
     const totalTradeDuration = durationFor(share, totalWorkDays);
     const stageDuration = Math.max(2, Math.round(template.share * totalTradeDuration));
 
@@ -250,6 +280,73 @@ export function buildScheduleFromProject(
       ? String(projectContext.targetHandoverDate).slice(0, 10)
       : undefined,
   };
+}
+
+/*
+  A schedule as a design-only project runs it.
+
+  Drops execution and procurement work (whatever a saved schedule or an old
+  BOQ put there), names the Design Gate for its job, GFC Release, and closes the
+  programme on a Design Closeout milestone after it. Design tasks, holds,
+  progress and the baseline are kept as they are. Used both by the builder and
+  on schedules saved before the project became design only.
+*/
+function designOnlyProgramme(schedule: ProjectSchedule): ProjectSchedule {
+  const dropped = new Set(
+    schedule.tasks
+      .filter(t => t.kind === 'execution' || t.kind === 'procurement' || isHandoverTask(t))
+      .map(t => t.id),
+  );
+  const kept = schedule.tasks
+    .filter(t => !dropped.has(t.id))
+    .map(t => {
+      const dependencies = (t.dependencies || []).filter(d => !dropped.has(d));
+      const named = isDesignGateTask(t) ? { title: 'GFC Release' } : {};
+      return { ...t, ...named, dependencies };
+    });
+  const gate = kept.find(isDesignGateTask);
+  const designIds = kept.filter(t => t.kind === 'design').map(t => t.id);
+  const closeoutDeps = gate ? [gate.id] : designIds.slice(-1);
+  if (closeoutDeps.length) {
+    kept.push({
+      id: 'ms-handover', title: 'Design Closeout', kind: 'milestone', workDays: 0,
+      dependencies: closeoutDeps, status: 'pending',
+    });
+  }
+  return {
+    ...schedule,
+    tasks: kept,
+    holds: schedule.holds || [],
+  };
+}
+
+/**
+ * A saved or derived schedule, as the project's engagement runs it. Turnkey
+ * schedules come back unchanged; a design-only one loses its site work.
+ */
+export function scheduleForEngagement<T extends ProjectSchedule | null | undefined>(
+  schedule: T,
+  projectContext: { engagementType?: unknown } | null | undefined,
+): T {
+  if (!schedule || !schedule.tasks || engagementOf(projectContext) !== 'design_only') return schedule;
+  return designOnlyProgramme(schedule) as T;
+}
+
+/**
+ * Whether a saved schedule was planned for the engagement the project has now.
+ *
+ * False for a turnkey project whose saved schedule has no site work (saved
+ * while it was design only), and for a design-only project whose saved
+ * schedule still has some (saved while it was turnkey). The Timeline offers to
+ * rebuild it either way.
+ */
+export function scheduleMatchesEngagement(
+  schedule: ProjectSchedule | null | undefined,
+  projectContext: { engagementType?: unknown } | null | undefined,
+): boolean {
+  if (!schedule?.tasks?.length) return true;
+  const hasSite = schedule.tasks.some(t => t.kind === 'execution' || t.kind === 'procurement');
+  return engagementOf(projectContext) === 'design_only' ? !hasSite : hasSite;
 }
 
 /** True when the project has enough to draw a schedule worth looking at. */

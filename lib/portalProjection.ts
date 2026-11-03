@@ -1,4 +1,5 @@
 import { ProjectContext, ProjectSchedule } from '../types';
+import { engagementOf, isFeeOnly } from './engagement';
 import type { PortalDesignMeeting } from './designMeeting';
 import { isVisibleToClient } from './clientVisibility';
 import { ClientBoqRow } from './clientBoq';
@@ -300,13 +301,18 @@ export function buildPortalView(
         ? c.clientContacts.map((p: any) => ({ id: p.id, name: p.name, role: p.role || null, email: p.email || null }))
         : undefined,
       status: c.status,
+      /* Turnkey or design only: decides the client's stage names, programme and payment groups (lib/engagement.ts). */
+      engagementType: c.engagementType,
       area: ctx.area,
       config: ctx.config,
       rooms: (ctx.rooms || []).map((r: any) => ({ id: r.id, name: r.name, size: r.size, unit: r.unit })),
 
       // Money the client is entitled to: what is owed and when. No
       // lockedTaxableBase, no cost split, no margin.
-      paymentMilestones: (ctx.paymentMilestones || []).map((m: any) => ({
+      // A design-only project bills no execution, whatever an earlier turnkey setup stored.
+      paymentMilestones: (ctx.paymentMilestones || [])
+        .filter((m: any) => !(isFeeOnly(engagementOf(ctx)) && m?.type === 'execution'))
+        .map((m: any) => ({
         id: m.id, type: m.type, name: m.name, description: m.description,
         trigger: m.trigger, date: m.date, status: m.status,
         percentage: m.percentage, fixedAmount: m.fixedAmount, isFixedAmount: m.isFixedAmount,

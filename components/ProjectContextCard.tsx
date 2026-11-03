@@ -7,6 +7,8 @@ import { isScopeBucket, realRooms, ensureScopeRooms, polishRoomNames, SCOPE_BUCK
 import { estimateRoomSizes, isAiAvailable } from '../services/geminiService';
 import { useOrg } from '../contexts/OrgContext';
 import TakeoffPanel from './TakeoffPanel';
+import EngagementPicker from './projects/EngagementPicker';
+import { engagementOf, isFeeOnly } from '../lib/engagement';
 import ClientPeoplePanel from './clients/ClientPeoplePanel';
 import MinutesInbox from './minutes/MinutesInbox';
 import { 
@@ -270,13 +272,18 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
     }
   };
 
+  // A fee-only project sells no execution, so a percentage of it would come to nothing.
+  const feeOnly = isFeeOnly(engagementOf(projectContext));
+
   const deliverablesCount = Object.entries(projectContext.designScope || {})
     .filter(([k, v]) => k !== 'visitCount' && v === true).length;
     
   
+  const sqftTotal = (projectContext.designFee || 0) * (projectContext.area || 0);
   const feeLabel = projectContext.designFeeType === 'percentage' ? `${projectContext.designFee || 10}% of Cost` : 
-                   projectContext.designFeeType === 'fixed_sqft' ? `₹${projectContext.designFee || 0}/sqft` : 
-                   `₹${projectContext.designFee || 0} Fixed`;
+                   projectContext.designFeeType === 'fixed_sqft'
+                     ? `₹${projectContext.designFee || 0}/sqft${projectContext.area ? ` × ${projectContext.area} sq ft = ₹${sqftTotal.toLocaleString('en-IN')}` : ''}`
+                     : `₹${(projectContext.designFee || 0).toLocaleString('en-IN')} Fixed`;
 
   return (
     <div className="space-y-6 w-full">
@@ -735,6 +742,9 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
         </div>
       </div>
 
+      {/* What the studio has been engaged to do: turnkey, design only, or design + PMC. */}
+      <EngagementPicker projectContext={projectContext} setProjectContext={setProjectContext} />
+
       {/* 3. Live Design Scope Checklist & Commercial Fees Panel */}
       <div className="glass-light rounded-2xl border border-[#3D52A0]/15 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
         <div className="px-6 py-4 glass-light border-b border-[#3D52A0]/10 flex items-center justify-between">
@@ -845,7 +855,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   { id: 'percentage', label: '% Cost' },
                   { id: 'fixed_sqft', label: '₹/Sqft' },
                   { id: 'fixed_lumpsum', label: 'Fixed Sum' }
-                ].map(model => (
+                ].filter(model => !(feeOnly && model.id === 'percentage')).map(model => (
                   <button 
                     key={model.id}
                     type="button"
@@ -888,8 +898,8 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
         </div>
       </div>
 
-      {/* 4. Execution Intelligence & Operations Layer */}
-      {!hideExecutionControls && (
+      {/* 4. Execution Intelligence & Operations Layer: not for a design-only project, which has no site to run. */}
+      {!hideExecutionControls && engagementOf(projectContext) !== 'design_only' && (
         <div className="bg-[#111C30] border border-[#3D52A0]/30 p-6 md:p-8 rounded-2xl text-white relative overflow-hidden shadow-xl">
           <div className="absolute top-0 right-0 w-64 h-64 bg-[#3D52A0]/5 rounded-full blur-3xl pointer-events-none"></div>
           

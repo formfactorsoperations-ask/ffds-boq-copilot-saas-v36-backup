@@ -8,6 +8,9 @@ import FlipText from './ui/flip-text';
 
 interface Props {
   route: string;
+  /** The page's name when the project calls the screen something else (a design-only project's GFC Release). */
+  title?: string;
+  subtitle?: string;
 }
 
 /**
@@ -23,8 +26,9 @@ interface Props {
  * the block survives all four themes. Never add `font-[...]` — it defeats the
  * font switcher in Studio Settings.
  */
-const PageTitleBlock: React.FC<Props> = ({ route }) => {
-  const meta = getPageMeta(route);
+const PageTitleBlock: React.FC<Props> = ({ route, title, subtitle }) => {
+  const base = getPageMeta(route);
+  const meta = base && (title || subtitle) ? { ...base, title: title || base.title, subtitle: subtitle ?? base.subtitle } : base;
   const { badge, vitals, views, actions, hidden } = usePageHeaderSlots();
 
   if (!meta || hidden) return null;

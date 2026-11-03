@@ -75,8 +75,10 @@ export function journeyStrip(
   stepsByPhase: Record<number, StepWithStatus[]>,
   phaseProgress: { done: number; total: number; pct: number }[],
   activeIndex: number,
+  /** The phases named for the project's engagement; the turnkey names when absent. */
+  phases: { name: string }[] = PHASES,
 ): PhaseCell[] {
-  return PHASES.map((p, i) => {
+  return phases.map((p, i) => {
     const prog = phaseProgress[i] || { done: 0, total: (stepsByPhase[i] || []).length, pct: 0 };
     const complete = prog.total > 0 && prog.done >= prog.total;
     const state: PhaseCell['state'] = complete ? 'done' : i === activeIndex ? 'now' : 'todo';

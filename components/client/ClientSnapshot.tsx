@@ -16,6 +16,8 @@ interface ClientSnapshotProps {
     content?: ProposalContent['snapshot'];
     designFee?: number; // Optional design fee value
     executionTotal?: number; // Optional exact execution value
+    /** A design-only project: the professional fee is the whole commercial, and no execution is quoted. */
+    designOnlyFee?: number;
     projectContext?: ProjectContext; // Added to access financials
     settings?: any; // Dynamic studio settings
     /** The option the commercial summary is for, named on it so the figures are never read as everyone's. */
@@ -52,7 +54,7 @@ export function ledgerFor(baseExecution: number, baseDesign: number, discounts: 
     };
 }
 
-const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ level, investmentMin, investmentMax, timelinePhases, content, designFee, executionTotal, projectContext, settings, option, options = [], activeOptionId }) => {
+const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ level, investmentMin, investmentMax, timelinePhases, content, designFee, executionTotal, designOnlyFee, projectContext, settings, option, options = [], activeOptionId }) => {
     // Correct calculation: Max End Day across all phases
     const totalDaysMin = useMemo(() => {
         // Smart Default logic matching Contract View
@@ -149,7 +151,19 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ level, investmentMin, i
                 {/* LEFT CARD: FINANCIALS */}
                 <div className="rounded-3xl bg-slate-50 border border-slate-200 p-1 flex flex-col justify-center overflow-hidden">
                     
-                    {showGrandTotal ? (
+                    {designOnlyFee !== undefined ? (
+                        /* Design only: the fee is the commercial; the client engages and pays the contractors. */
+                        <div className="p-6">
+                            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Professional design fee</div>
+                            <div className="mt-2 text-3xl font-extrabold text-slate-900 tabular-nums">{formatCurrency(designOnlyFee)}</div>
+                            <div className="mt-1 text-sm text-slate-500">
+                                {gstTerms.designGst ? `+ GST at ${gstRate}%` : 'No GST on this fee'} • Billed in design stages
+                            </div>
+                            <div className="mt-4 text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-200">
+                                <span className="font-bold">Execution:</span> your contractors are engaged and paid by you directly, working from our drawings and specifications.
+                            </div>
+                        </div>
+                    ) : showGrandTotal ? (
                         /* NEW: Detailed Level 2 Commercial Breakdown - Ledger Style */
                         <div className="bg-white rounded-[20px] h-full flex flex-col">
                             <div className="p-6 pb-4 border-b border-slate-100 bg-slate-50/50">
@@ -279,10 +293,22 @@ const ClientSnapshot: React.FC<ClientSnapshotProps> = ({ level, investmentMin, i
                     <div className="rounded-3xl bg-white border border-slate-200 p-6 flex flex-col justify-between">
                         <div>
                             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Timeline (indicative)</div>
-                            <div className="mt-2 text-2xl font-extrabold text-slate-900">{totalDays} Days Total</div>
-                            <div className="mt-1 text-xs font-semibold text-slate-600">
-                                Design: {designDays} Days • Site Execution: {executionDays} Days
-                            </div>
+                            {designOnlyFee !== undefined ? (
+                                /* Design only: the studio's time is the design; the build is the client's contractors'. */
+                                <>
+                                    <div className="mt-2 text-2xl font-extrabold text-slate-900">{designDays} Days of Design</div>
+                                    <div className="mt-1 text-xs font-semibold text-slate-600">
+                                        To the GFC drawing set • Your contractors' build time is separate
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="mt-2 text-2xl font-extrabold text-slate-900">{totalDays} Days Total</div>
+                                    <div className="mt-1 text-xs font-semibold text-slate-600">
+                                        Design: {designDays} Days • Site Execution: {executionDays} Days
+                                    </div>
+                                </>
+                            )}
                             <div className="mt-1.5 text-[11px] text-slate-400 font-medium">
                                 Subject to design freeze approvals and site realities
                             </div>

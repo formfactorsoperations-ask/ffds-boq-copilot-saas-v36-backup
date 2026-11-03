@@ -63,7 +63,8 @@ import ProjectMinutes from "./minutes/ProjectMinutes";
 import { db as firestoreDb } from "../services/firebaseClient";
 import { doc, setDoc, collection, query, onSnapshot } from "firebase/firestore";
 import ScheduleGantt from "./ScheduleGantt";
-import { buildScheduleFromProject } from "../lib/scheduleBuilder";
+import { buildScheduleFromProject, scheduleForEngagement, scheduleMatchesEngagement } from "../lib/scheduleBuilder";
+import { engagementDef, engagementOf } from "../lib/engagement";
 import { buildMarkers } from "../lib/scheduleMarkers";
 import { db } from "../services/dbService";
 import { computeSchedule, DEFAULT_CALENDAR, toDayNum, workSpanEnd, toISO, isWorkingDay, workingDaysBetween, shiftByWorkingDays } from "../lib/schedule";
@@ -272,9 +273,10 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
     [projectContext, boq, phases],
   );
   const projectSchedule = React.useMemo(() => {
-    const base = scheduleOverride || derivedSchedule;
+    // A design-only project has no site programme, even in a schedule saved before it became one.
+    const base = scheduleForEngagement(scheduleOverride, projectContext) || derivedSchedule;
     return { ...base, markers };
-  }, [scheduleOverride, derivedSchedule, markers]);
+  }, [scheduleOverride, derivedSchedule, markers, projectContext?.engagementType]);
 
   // Bidirectional Sync: phases -> scheduleOverride
   useEffect(() => {
@@ -885,6 +887,34 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
         anything to hide that; the arithmetic of catching up is a disclosure
         rather than a wall of figures.
       */}
+      {/*
+        A schedule saved for another engagement: the project was design only and
+        is now turnkey (no site programme at all), or the other way round. It is
+        rebuilt only when the studio says so, because it may carry their edits.
+      */}
+      {scheduleOverride && !scheduleMatchesEngagement(scheduleOverride, projectContext) && (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 hud-panel-in">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-amber-900">
+              This schedule was saved before the project became {engagementDef(engagementOf(projectContext)).adjective}.
+            </p>
+            <p className="text-[11px] text-amber-800 mt-0.5">
+              {engagementOf(projectContext) === 'design_only'
+                ? 'Its site stages are hidden here. Rebuild it to plan the design through to the closeout only.'
+                : 'It has no site programme. Rebuild it to plan the design, the trades and the handover from the BOQ.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleResetSchedule}
+            className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] shrink-0"
+          >
+            Rebuild the schedule
+          </button>
+        </div>
+      )}
+
       {(delayedCount > 0 || compression || activeRequest) && (
         <div className="flex flex-col gap-3 mb-6">
           {(delayedCount > 0 || compression) && (
@@ -1319,7 +1349,8 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
               </div>
               <div className="p-6">
                 <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                  Are you sure you want to reset the full execution schedule? This will discard custom modifications, baseline shifts, and active holds to rebuild from the latest project BOQ and design phases.
+                  Are you sure you want to reset the schedule? This discards custom changes, baseline shifts and holds, and rebuilds it from the design phases{engagementOf(projectContext) === 'design_only' ? ', ending at the design closeout' : ' and the latest BOQ'}.
+                  {engagementOf(projectContext) !== 'design_only' && ' With no priced BOQ yet, the trades share about 75 working days evenly until it is priced.'}
                 </p>
               </div>
               <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">

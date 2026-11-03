@@ -2,6 +2,10 @@
 export interface OrganizationContext {
     tenantId: string;
     orgName: string;
+    /** The engagements this studio takes on (lib/engagement.ts). Absent: turnkey and design only. */
+    engagementTypesOffered?: import('./lib/engagement').EngagementType[];
+    /** Pre-fills the fee, in rupees per sq ft, when a project is set up as design only. */
+    designOnlyFeePerSqft?: number;
     orgLogo?: string;
     contactEmail: string;
     contactPhone?: string;
@@ -772,6 +776,13 @@ export interface ProjectContext {
      */
     clientBrief?: string;
     proposalType?: ProposalType;
+    /**
+     * What the studio was engaged to do: turnkey, design only, or design + PMC.
+     * Read through `engagementOf` (lib/engagement.ts); absent means turnkey.
+     */
+    engagementType?: import('./lib/engagement').EngagementType;
+    /** When a design-only project's GFC set was released (GFC Release). */
+    gfcReleasedAt?: number;
     proposalMode?: 'single' | 'tiered';
     gstRate?: number;
     theme?: string; // e.g., 'Modern Minimalist', 'Japandi'

@@ -57,6 +57,8 @@ interface Props {
     that guesses convincingly.
   */
   known?: boolean;
+  /** A design-only project: the design fee is all the client pays the studio; there is no execution contract. */
+  designOnly?: boolean;
 }
 
 type Stage = 'cleared' | 'due' | 'upcoming';
@@ -129,7 +131,7 @@ const whenLine = (_m: PaymentMilestone, stage: Stage): string => {
 
 export default function PortalPayments({
   milestones, amountOf, discountOf, projectValue, totalPaid, balanceDue,
-  dueCount, design, execution, onContactStudio, known = true,
+  dueCount, design, execution, onContactStudio, known = true, designOnly = false,
 }: Props) {
   /** A figure, or an honest dash. */
   const rupees = (n: number) => (known ? formatINR(n) : '\u2014');
@@ -154,10 +156,11 @@ export default function PortalPayments({
   const clearedPct = pctOf(totalPaid, projectValue);
   const duePct = pctOf(dueTotal, projectValue);
 
-  const phases: { key: 'design' | 'execution'; label: string; phase: Phase; bar: string; text: string }[] = [
+  const allPhases: { key: 'design' | 'execution'; label: string; phase: Phase; bar: string; text: string }[] = [
     { key: 'design', label: 'Design fee', phase: design, bar: 'bg-indigo-500', text: 'text-indigo-700' },
     { key: 'execution', label: 'Execution contract', phase: execution, bar: 'bg-[#3D52A0]', text: 'text-[#334486]' },
   ];
+  const phases = allPhases.filter(p => !(designOnly && p.key === 'execution'));
 
   return (
     <div className="space-y-5">
@@ -252,7 +255,7 @@ export default function PortalPayments({
       )}
 
       {/* ── The two things being paid for. ── */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <section className={`grid grid-cols-1 ${designOnly ? '' : 'sm:grid-cols-2'} gap-4`}>
         {phases.map(({ key, label, phase, bar, text }, i) => (
           <div key={key} className="rounded-2xl border border-slate-200/80 bg-white p-5">
             <div className="flex items-baseline justify-between gap-3">
@@ -285,7 +288,7 @@ export default function PortalPayments({
             which is not necessarily date order -- so it no longer says it is.
           */}
           <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Grouped by design and execution, with where each one stands.
+            {designOnly ? 'Your design fee stages, with where each one stands.' : 'Grouped by design and execution, with where each one stands.'}
           </p>
         </div>
 

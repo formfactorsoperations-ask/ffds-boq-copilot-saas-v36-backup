@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { engagementOf } from '../../lib/engagement';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ProjectContext, FullBoqItem, DesignGateState } from '../../types';
 import {
@@ -35,6 +36,12 @@ export default function DesignCompleteGate({
 }: Props) {
   const { orgData } = useOrg();
   const tenantId: string | undefined = orgData?.tenantId;
+  /*
+    On a design-only project this screen is GFC Release: the same drawing
+    checks, but clearing it releases the final set to the client and their
+    contractors. There is no BOQ to freeze and no execution to open.
+  */
+  const designOnly = engagementOf(projectContext) === 'design_only';
   /* Design meetings the client confirmed: the strongest evidence for the client sign-off. */
   const [meetings, setMeetings] = useState<DesignMeeting[]>([]);
   useEffect(() => {
@@ -75,7 +82,7 @@ export default function DesignCompleteGate({
     badge: activated
       ? 'Phase Closed (Locked)'
       : readiness.allClear
-      ? 'Ready for Execution'
+      ? (designOnly ? 'Ready to release' : 'Ready for Execution')
       : `${readiness.done}/${readiness.total} Cleared`,
     vitals: [
       {
@@ -83,10 +90,10 @@ export default function DesignCompleteGate({
         value: `${readiness.pct}%`,
         tone: readiness.allClear ? 'good' : undefined,
       },
-      {
+      ...(designOnly ? [] : [{
         label: 'BOQ Lines',
         value: `${frozenCount} items`,
-      },
+      }]),
       {
         label: 'Drawings',
         value: `${approvedDrawingsCount}/${drawingsCount} approved`,
@@ -202,13 +209,13 @@ export default function DesignCompleteGate({
       const now = Date.now();
       return {
         ...prev,
-        boqFrozen: true,
-        scopeAdditionsEnabled: true,
+        // A design-only project has no BOQ to freeze; it records the release of the GFC set.
+        ...(designOnly ? { gfcReleasedAt: now } : { boqFrozen: true, scopeAdditionsEnabled: true }),
         designPhaseClosedAt: now,
         lifecycle: {
           ...lc,
           stage: Math.max((lc.stage as number) || 1, 5) as any,
-          subState: 'Execution',
+          subState: designOnly ? 'Drawings & Selections' : 'Execution',
           enteredStageAt: now,
           gates: { ...(lc.gates || {}), designGateActive: { done: true, at: now, reference: 'design-gate' } } as any,
           updatedAt: now,
@@ -235,6 +242,7 @@ export default function DesignCompleteGate({
       return {
         ...prev,
         boqFrozen: false,
+        ...(designOnly ? { gfcReleasedAt: undefined } : {}),
         lifecycle: {
           ...lc,
           stage: Math.min((lc.stage as number) || 5, 4) as any,
@@ -269,10 +277,12 @@ export default function DesignCompleteGate({
             </div>
             <div>
               <p className="text-sm font-bold text-emerald-950">
-                Design Gate Activated {gate.activatedAt ? `on ${new Date(gate.activatedAt).toLocaleDateString()}` : ''}
+                {designOnly ? 'GFC set released' : 'Design Gate Activated'} {gate.activatedAt ? `on ${new Date(gate.activatedAt).toLocaleDateString()}` : ''}
               </p>
               <p className="text-xs text-emerald-800 mt-0.5">
-                BOQ frozen with <strong>{frozenCount} line items</strong>. Rate baseline established.
+                {designOnly
+                  ? <>The final drawing set is with the client and their contractors.</>
+                  : <>BOQ frozen with <strong>{frozenCount} line items</strong>. Rate baseline established.</>}
                 {gate.proceedAnyway && (
                   <span className="block mt-1 text-amber-800 font-medium italic">
                     Activated with early override: "{gate.proceedAnyway.reason}" (by {gate.proceedAnyway.by})
@@ -306,7 +316,9 @@ export default function DesignCompleteGate({
               <h3 className="text-sm font-bold text-amber-950">Reopen the design phase?</h3>
             </div>
             <p className="text-xs text-amber-800 mb-3 leading-relaxed">
-              This unfreezes BOQ line rates and steps the project back to Pre-Execution (Stage 4). Any payments collected in Money are unaffected.
+              {designOnly
+                ? 'This withdraws the GFC release and steps the project back to stage 4. Any payments collected in Money are unaffected.'
+                : 'This unfreezes BOQ line rates and steps the project back to Pre-Execution (Stage 4). Any payments collected in Money are unaffected.'}
             </p>
             <textarea
               value={reopenReason}
@@ -497,6 +509,7 @@ export default function DesignCompleteGate({
                   <span className="text-xs text-slate-400 font-bold">PDF files</span>
                 </div>
               </div>
+              {!designOnly && (
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
                 <span className="text-[11px] font-medium text-slate-500 block mb-1">BOQ Line Items</span>
                 <div className="flex items-baseline gap-1.5">
@@ -504,6 +517,7 @@ export default function DesignCompleteGate({
                   <span className="text-xs text-slate-400 font-bold">specs</span>
                 </div>
               </div>
+              )}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
                 <span className="text-[11px] font-medium text-slate-500 block mb-1">Current Lifecycle</span>
                 <div className="flex items-baseline gap-1.5">
@@ -555,8 +569,8 @@ export default function DesignCompleteGate({
                   <Snowflake className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-800">BOQ Rates Freeze</h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Locks baseline prices. Future scope edits route through signed Change Orders.</p>
+                  <h4 className="text-xs font-bold text-slate-800">{designOnly ? 'GFC set released' : 'BOQ Rates Freeze'}</h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{designOnly ? 'The final drawing set goes to the client and their contractors. Later changes are design revisions.' : 'Locks baseline prices. Future scope edits route through signed Change Orders.'}</p>
                 </div>
               </div>
 
@@ -565,8 +579,8 @@ export default function DesignCompleteGate({
                   <Zap className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-800">Execution Phase Unlock</h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Unlocks Stage 5 tools, procurement checklists, and site updates.</p>
+                  <h4 className="text-xs font-bold text-slate-800">{designOnly ? 'Selections stage opens' : 'Execution Phase Unlock'}</h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{designOnly ? 'Moves the project to Drawings & Selections (stage 5).' : 'Unlocks Stage 5 tools, procurement checklists, and site updates.'}</p>
                 </div>
               </div>
 
@@ -576,7 +590,7 @@ export default function DesignCompleteGate({
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-slate-800">Payment Continuity</h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Design & execution collection schedules continue smoothly in Money.</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{designOnly ? 'The design fee milestones carry on in Money.' : 'Design & execution collection schedules continue smoothly in Money.'}</p>
                 </div>
               </div>
             </div>
@@ -589,7 +603,7 @@ export default function DesignCompleteGate({
                     onClick={() => setConfirmMode({})}
                     className="w-full py-3 px-4 rounded-xl font-bold text-xs uppercase tracking-wider text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
                   >
-                    <ShieldCheck className="w-4 h-4" /> Freeze Rates & Open Execution
+                    <ShieldCheck className="w-4 h-4" /> {designOnly ? 'Release the GFC set' : 'Freeze Rates & Open Execution'}
                   </button>
                 ) : (
                   <div className="space-y-2">
@@ -693,12 +707,14 @@ export default function DesignCompleteGate({
                 <Snowflake className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Freeze Design & Open Execution</h3>
-                <p className="text-xs text-slate-500">Establish BOQ rate baseline and advance to Stage 5</p>
+                <h3 className="text-lg font-semibold text-slate-900">{designOnly ? 'Release the GFC set' : 'Freeze Design & Open Execution'}</h3>
+                <p className="text-xs text-slate-500">{designOnly ? 'Issue the final drawings and advance to stage 5' : 'Establish BOQ rate baseline and advance to Stage 5'}</p>
               </div>
             </div>
             <p className="text-xs text-slate-600 mb-4 leading-relaxed">
-              This locks <strong>{frozenCount} BOQ lines</strong> and marks the design phase closed. Scope additions or modifications will require Change Orders. You can reopen the phase at any time.
+              {designOnly
+                ? <>This marks the drawing set final and released to the client. Later changes go out as design revisions. You can withdraw the release at any time.</>
+                : <>This locks <strong>{frozenCount} BOQ lines</strong> and marks the design phase closed. Scope additions or modifications will require Change Orders. You can reopen the phase at any time.</>}
             </p>
 
             {confirmMode.reason !== undefined && (
@@ -728,7 +744,7 @@ export default function DesignCompleteGate({
                 disabled={confirmMode.reason !== undefined && reasonDraft.trim().length < 15}
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl flex items-center gap-2 disabled:opacity-40 cursor-pointer shadow-xs"
               >
-                <ShieldCheck className="w-4 h-4" /> Confirm & Lock Baseline
+                <ShieldCheck className="w-4 h-4" /> {designOnly ? 'Confirm and release' : 'Confirm & Lock Baseline'}
               </button>
             </div>
           </Modal>

@@ -29,9 +29,13 @@ import type { ProjectContext, FullBoqItem, DrawingTrackerItem, MOM, ProjectSched
 import type { JourneyContextType } from '../../services/journeyEngine';
 import type { NextAction } from '../../services/nextActionEngine';
 import { PHASES, STAGE_LABELS } from '../../constants/journeyConstants';
+import { engagementOf, stageLabel } from '../../lib/engagement';
+
+/* A stage's name as this project's engagement calls it. */
+const stageNameOf = (ctx: any, n: number): string => stageLabel(engagementOf(ctx), n, STAGE_LABELS[n] || '');
 import { computeSchedule as computePayments } from '../../lib/paymentSchedule';
 import { computeSchedule as computeProgramme } from '../../lib/schedule';
-import { buildScheduleFromProject } from '../../lib/scheduleBuilder';
+import { buildScheduleFromProject, scheduleForEngagement } from '../../lib/scheduleBuilder';
 import { useTimelinePhases } from '../../hooks/useTimelinePhases';
 import { buildProjectPnl, marginAssumption, CONFIDENCE_LABEL, MARGIN_SOURCE_LABEL } from '../../lib/projectPnl';
 import { resolveDocumentState } from '../../services/documentIssueEngine';
@@ -157,7 +161,7 @@ function Home(p: ProjectHomeProps) {
   const activeIdx = journey.activeSteps.length > 0
     ? journey.activeSteps[0].phase
     : (journey.overall.done === journey.overall.total ? PHASES.length - 1 : 0);
-  const strip = useMemo(() => journeyStrip(journey.stepsByPhase, journey.phaseProgress, activeIdx), [journey.stepsByPhase, journey.phaseProgress, activeIdx]);
+  const strip = useMemo(() => journeyStrip(journey.stepsByPhase, journey.phaseProgress, activeIdx, journey.phases), [journey.stepsByPhase, journey.phaseProgress, activeIdx, journey.phases]);
   const roomNames = useMemo(() => (ctx.rooms || []).map((r: any) => r.name), [ctx.rooms]);
   const drawings = useMemo(() => drawItems ? drawingModel(drawItems, roomNames) : null, [drawItems, roomNames]);
 
@@ -169,7 +173,7 @@ function Home(p: ProjectHomeProps) {
   const programme = useMemo(() => {
     if (savedSchedule === undefined) return { rows: [] as GanttRow[], finishISO: null as string | null, targetISO: null as string | null };
     try {
-      const schedule = savedSchedule || buildScheduleFromProject(ctx, p.fullBoq, { designSteps: phases as any });
+      const schedule = scheduleForEngagement(savedSchedule, ctx) || buildScheduleFromProject(ctx, p.fullBoq, { designSteps: phases as any });
       const r = computeProgramme(schedule);
       const rows: GanttRow[] = r.tasks
         .map((t: any) => ({ id: t.id, title: t.title, kind: t.kind, start: t.plannedStartISO || t.startISO, end: t.plannedEndISO || t.endISO, status: t.status || 'pending' }))
@@ -356,7 +360,7 @@ function Home(p: ProjectHomeProps) {
   const stepsDone = useCountUp(journey.overall.done, armed, 900);
   const pctDone = useCountUp(journey.overall.pct, armed, 900);
 
-  const stageName = STAGE_LABELS[p.stage] || '';
+  const stageName = stageNameOf(ctx, p.stage);
   const tierName = String((p.tiers || []).find((t: any) => t.id === ctx.approvedTierId)?.name || p.activeTier?.name || '').replace(/\s*\(.*\)\s*$/, '');
 
   return (
@@ -483,7 +487,7 @@ function Home(p: ProjectHomeProps) {
           />
 
           {/* ═══ site readiness — from the stage it can act in ═══ */}
-          {p.stage >= 5 && (
+          {p.stage >= 5 && engagementOf(ctx) !== 'design_only' && (
             <div className="ph-rise" style={{ animationDelay: '.2s', display: 'grid', gridTemplateColumns: p.stage >= 6 ? 'repeat(auto-fit,minmax(300px,1fr))' : '1fr', gap: 14 }}>
               <ProcurementGateWidget paymentMilestones={ctx.paymentMilestones || []} sofItems={p.sofItems} onOpenLedger={() => go('payment-calc')} />
               {p.stage >= 6 && (
@@ -729,8 +733,8 @@ function buildRows(a: {
   if (p.isMismatch) {
     const to = p.actualPhaseIdx + 1;
     rows.push({
-      key: 'realign', tone: 'mut', icon: <Glyph name="realign" />, title: <>Realign the stage to {STAGE_LABELS[to]}</>,
-      desc: <>The project is recorded at {STAGE_LABELS[p.stage]}, but its Ops Matrix steps are at {STAGE_LABELS[to]}.</>,
+      key: 'realign', tone: 'mut', icon: <Glyph name="realign" />, title: <>Realign the stage to {stageNameOf(ctx, to)}</>,
+      desc: <>The project is recorded at {stageNameOf(ctx, p.stage)}, but its Ops Matrix steps are at {stageNameOf(ctx, to)}.</>,
       actions: [{ label: 'Realign', onClick: () => p.advanceLifecycle(to) }],
     });
   }
@@ -740,8 +744,8 @@ function buildRows(a: {
   if (!p.isMismatch && cur && cur.total > 0 && cur.done >= cur.total && p.stage < 6) {
     rows.push({
       key: 'phase-done', tone: 'b', icon: <Glyph name="advance" />, title: <>{cur.name} is complete</>,
-      desc: <>Every step is signed off. Move the project to {STAGE_LABELS[p.stage + 1]}.</>,
-      actions: [{ label: `Move to ${STAGE_LABELS[p.stage + 1]}`, onClick: () => p.advanceLifecycle(p.stage + 1) }],
+      desc: <>Every step is signed off. Move the project to {stageNameOf(ctx, p.stage + 1)}.</>,
+      actions: [{ label: `Move to ${stageNameOf(ctx, p.stage + 1)}`, onClick: () => p.advanceLifecycle(p.stage + 1) }],
     });
   }
 
@@ -793,6 +797,16 @@ function stageAdvance(stage: number, ctx: any, journey: JourneyContextType):
   if (stage === 1) return { label: 'Start Scope & Strategy', sub: 'Move to stage 2', to: 2 };
   if (stage === 2) return { label: 'Approve Scope & Start Proposal', sub: 'Move to stage 3', to: 3 };
   if (stage === 3) return { label: 'Approve Proposal & Start Agreement', sub: 'Move to stage 4', to: 4 };
+  if (engagementOf(ctx) === 'design_only') {
+    // No execution: stage 5 is drawings and selections, stage 6 the design closeout.
+    if (stage === 4) return { label: 'Agreement signed, start the GFC set', sub: 'Move to stage 5', to: 5 };
+    if (stage === 5) {
+      const gateDone = !!ctx.lifecycle?.gates?.designGateActive?.done;
+      if (!gateDone) return { label: 'Release the GFC set', sub: 'Needed before the design closeout', tab: 'design-gate' };
+      return { label: 'Start the design closeout', sub: 'Move to stage 6', to: 6 };
+    }
+    return null;
+  }
   if (stage === 4) return { label: 'Sign Contract & Mobilise Execution', sub: 'Move to stage 5', to: 5 };
   if (stage === 5) {
     const gateDone = !!ctx.lifecycle?.gates?.designGateActive?.done;
@@ -886,17 +900,18 @@ function WaitingCard({ decisions, go }: { decisions: any[]; go: (r: string) => v
 function ComingUp({ journey, activeIdx, stage, payments }: {
   journey: JourneyContextType; activeIdx: number; stage: number; payments: ReturnType<typeof paymentModel>;
 }) {
-  const nextIdx = Math.min(PHASES.length - 1, activeIdx + 1);
+  const phases = journey.phases || PHASES;
+  const nextIdx = Math.min(phases.length - 1, activeIdx + 1);
   const nextSteps = nextIdx > activeIdx ? (journey.stepsByPhase[nextIdx] || []).filter(s => s.status !== 'done') : [];
   const firstExec = payments.rungs.find(r => r.type === 'execution');
   const procurementOpen = !!firstExec && (firstExec.state === 'paid' || firstExec.invoiced);
   const items: { icon: React.ReactNode; title: string; text: string }[] = [];
   if (nextSteps.length) {
-    items.push({ icon: <Glyph name="building" />, title: PHASES[nextIdx].name.replace('Pre-Execution', 'Pre-execution'),
+    items.push({ icon: <Glyph name="building" />, title: phases[nextIdx].name.replace('Pre-Execution', 'Pre-execution'),
       text: nextSteps.slice(0, 3).map(s => s.title).join(', ') + (nextSteps.length > 3 ? '…' : '.') });
   }
   if (stage < 5 && firstExec) items.push({ icon: <Glyph name="lock" />, title: 'Procurement', text: procurementOpen ? 'Open — the first execution payment is raised.' : `Opens once ${firstExec.name} is raised.` });
-  if (stage < 6) items.push({ icon: <Glyph name="key" />, title: 'Handover checklist', text: 'Opens at stage 6.' });
+  if (stage < 6) items.push({ icon: <Glyph name="key" />, title: firstExec ? 'Handover checklist' : 'Design closeout', text: 'Opens at stage 6.' });
   if (!items.length) return null;
   return (
     <section className="ph-card ph-box ph-tilt ph-rise" style={{ animationDelay: '.16s' }}>
