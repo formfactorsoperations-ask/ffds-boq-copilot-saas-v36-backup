@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PartyPopper, Cake, Star, Send, RefreshCw, Gift } from '@/lib/lucide-shim';
 import type { CardView, GuideView } from '../../lib/peopleGuide';
-import { runGuide } from '../../services/peopleGuideService';
+import { runGuide, playedMoments, markPlayed } from '../../services/peopleGuideService';
 import { btnSec } from '../opsDesk/OpsDeskPanels';
-import { Panel, Empty, Notice, Ring, Skeleton, Confetti, listV, rowV, EASE } from './PeopleBits';
+import { Panel, Empty, Notice, Ring, Skeleton, Confetti, ConfettiShower, listV, rowV, EASE } from './PeopleBits';
 import { Face, chip, firstName, fromNow, niceDay } from './GuideBits';
 
 /*
@@ -85,6 +85,13 @@ const CardStage: React.FC<{ card: CardView; name: string; meId: string }> = ({ c
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [burst, setBurst] = useState(0);
+  /* The day itself: the card opens under a shower of confetti, the first time each person sees it (lib/peopleMoments.ts). */
+  const [shower, setShower] = useState(0);
+  useEffect(() => {
+    if (card.days !== 0 || !meId || playedMoments(meId, 'card').has(card.id)) return;
+    markPlayed(meId, 'card', [card.id]);
+    setShower(Date.now());
+  }, [card.id, card.days, meId]);
   useEffect(() => { if (!burst) return; const t = window.setTimeout(() => setBurst(0), 1500); return () => window.clearTimeout(t); }, [burst]);
   const sign = async () => {
     setSaving(true);
@@ -96,6 +103,7 @@ const CardStage: React.FC<{ card: CardView; name: string; meId: string }> = ({ c
   };
   return (
     <div className="pp-3d relative rounded-2xl bg-gradient-to-b from-slate-50 to-[#3D52A0]/5 border border-slate-200 p-5 sm:p-8 overflow-hidden">
+      {shower > 0 && <ConfettiShower key={shower} pieces={card.mine ? 30 : 24} spread={card.mine ? 170 : 140} />}
       <div className="flex flex-col md:flex-row justify-center pp-keep">
         <motion.div className="relative md:w-60 min-h-[220px] md:min-h-[340px] rounded-t-2xl md:rounded-tr-md md:rounded-l-2xl md:rounded-bl-2xl bg-gradient-to-br from-[#3D52A0] to-[#334486] text-white p-6 flex flex-col justify-between shadow-[-18px_30px_40px_-24px_rgba(18,24,47,0.6)]"
           style={{ transformOrigin: 'right center', transformPerspective: 1600 }}

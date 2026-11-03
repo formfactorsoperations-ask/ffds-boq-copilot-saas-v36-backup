@@ -181,22 +181,43 @@ export const Coin: React.FC<{ front: React.ReactNode; back: React.ReactNode; sho
 
 const BURST = ['#3D52A0', '#10B981', '#F59E0B', '#F43F5E', '#3D52A0', '#10B981'];
 /** A burst of small pieces in the brand and state colours, for an arrival or a day well done. */
-export const Confetti: React.FC<{ pieces?: number; spread?: number }> = ({ pieces = 18, spread = 90 }) => {
+export const Confetti: React.FC<{ pieces?: number; spread?: number; delay?: number; size?: number; duration?: number }> = ({ pieces = 18, spread = 90, delay = 0, size = 1, duration = 1.3 }) => {
   const still = useReducedMotion();
   const bits = useMemo(() => Array.from({ length: pieces }, (_, i) => {
     const a = (i / pieces) * Math.PI * 2 + Math.random() * 0.4;
     const d = spread * (0.55 + Math.random() * 0.45);
-    return { x: Math.cos(a) * d, y: Math.sin(a) * d - 20, r: Math.random() * 540 - 270, c: BURST[i % BURST.length], w: 4 + Math.round(Math.random() * 4), round: i % 3 === 0 };
-  }), [pieces, spread]);
+    return { x: Math.cos(a) * d, y: Math.sin(a) * d - 20, r: Math.random() * 540 - 270, c: BURST[i % BURST.length], w: Math.round((4 + Math.random() * 4) * size), round: i % 3 === 0 };
+  }), [pieces, spread, size]);
   if (still) return null;
   return (
     <span aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 z-10">
       {bits.map((b, i) => (
         <motion.span key={i} className={`absolute ${b.round ? 'rounded-full' : 'rounded-sm'}`} style={{ width: b.w, height: b.round ? b.w : b.w * 1.8, background: b.c, left: 0, top: 0 }}
           initial={{ x: 0, y: 0, opacity: 1, rotate: 0, scale: 0.6 }}
-          animate={{ x: b.x, y: [0, b.y, b.y + 40], opacity: [1, 1, 0], rotate: b.r, scale: 1 }}
-          transition={{ duration: 1.3, ease: [0.22, 1, 0.36, 1], times: [0, 0.6, 1] }} />
+          animate={{ x: b.x, y: [0, b.y, b.y + 40 * size * size], opacity: [1, 1, 0], rotate: b.r, scale: 1 }}
+          transition={{ duration, ease: [0.22, 1, 0.36, 1], times: [0, 0.55, 1], delay }} />
       ))}
     </span>
   );
 };
+
+/* Where the bursts of a shower go off, across the card it sits in, one after another. */
+const SHOWER = [
+  { left: '14%', top: '35%', delay: 0 }, { left: '50%', top: '18%', delay: 0.18 }, { left: '86%', top: '35%', delay: 0.36 },
+  { left: '32%', top: '70%', delay: 0.55 }, { left: '68%', top: '65%', delay: 0.72 },
+];
+/**
+ * A shower of confetti across a card: five bursts, one after another, in the
+ * brand and state colours only (DESIGN.md → "People motion"). For a moment
+ * worth celebrating: a thank-you, a birthday. Nothing under reduced motion.
+ * Give it a new `key` to play it again.
+ */
+export const ConfettiShower: React.FC<{ pieces?: number; spread?: number }> = ({ pieces = 22, spread = 120 }) => (
+  <span aria-hidden className="pointer-events-none absolute inset-0 z-10 overflow-visible">
+    {SHOWER.map((b, i) => (
+      <span key={i} className="absolute" style={{ left: b.left, top: b.top }}>
+        <Confetti pieces={pieces} spread={spread} delay={b.delay} size={1.6} duration={2.6} />
+      </span>
+    ))}
+  </span>
+);

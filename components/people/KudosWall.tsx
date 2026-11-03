@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { HandHeart, Heart, Pin, RefreshCw, X } from '@/lib/lucide-shim';
 import { KUDOS_TAGS, type GuideView, type Kudos, type KudosTag } from '../../lib/peopleGuide';
-import { runGuide } from '../../services/peopleGuideService';
+import { runGuide, playedMoments, markPlayed } from '../../services/peopleGuideService';
 import { Label, input, btnSec } from '../opsDesk/OpsDeskPanels';
-import { Panel, Empty, Notice, Glide, Skeleton, Confetti, EASE } from './PeopleBits';
+import { Panel, Empty, Notice, Glide, Skeleton, Confetti, ConfettiShower, EASE } from './PeopleBits';
 import { chip, firstName, niceDay } from './GuideBits';
 
 /*
@@ -35,6 +35,22 @@ export function KudosWallSection({ view, meId, error, onRefresh }: { view: Guide
   const [notice, setNotice] = useState<string | null>(null);
   const [burst, setBurst] = useState(0);
   const [show, setShow] = useState<'all' | 'mine'>('all');
+  /*
+    Thank-yous pinned up since this person last saw the wall (the owner, 3 Nov
+    2026): a shower of confetti over the wall, and a glowing "New" on each, once.
+  */
+  const [fresh, setFresh] = useState<Set<string>>(() => new Set());
+  const [shower, setShower] = useState(0);
+  useEffect(() => {
+    if (!view || !meId) return;
+    const week = new Date(Date.now() - 7 * 86400000).toISOString();
+    const played = playedMoments(meId, 'wall');
+    const ids = view.kudos.filter((k) => k.from !== meId && k.at >= week && !played.has(k.id)).map((k) => k.id);
+    if (!ids.length) return;
+    markPlayed(meId, 'wall', ids);
+    setFresh((f) => new Set([...f, ...ids]));
+    setShower(Date.now());
+  }, [view, meId]);
   useEffect(() => { if (!notice) return; const t = window.setTimeout(() => setNotice(null), 4500); return () => window.clearTimeout(t); }, [notice]);
   useEffect(() => { if (!burst) return; const t = window.setTimeout(() => setBurst(0), 1500); return () => window.clearTimeout(t); }, [burst]);
 
@@ -96,6 +112,8 @@ export function KudosWallSection({ view, meId, error, onRefresh }: { view: Guide
         {problem && <Notice text={problem} tone="bad" />}
       </div>
 
+      <div className="relative">
+      {shower > 0 && <ConfettiShower key={shower} pieces={26} spread={150} />}
       {months.length === 0 ? (
         <Empty icon={HandHeart} text={show === 'mine' ? 'No thank-yous to you in the last two months yet.' : 'Nothing pinned up yet. Be the first to thank someone.'} />
       ) : months.map((m) => (
@@ -104,17 +122,18 @@ export function KudosWallSection({ view, meId, error, onRefresh }: { view: Guide
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-6">
             <AnimatePresence initial={true}>
               {m.notes.map((k, i) => (
-                <Note key={k.id} k={k} i={i} toName={names.get(k.to) || 'Someone'} fromName={names.get(k.from) || 'Someone who has left'} meId={meId} canRemove={k.from === meId || view.canEdit} onError={setProblem} />
+                <Note key={k.id} k={k} i={i} isNew={fresh.has(k.id)} toName={names.get(k.to) || 'Someone'} fromName={names.get(k.from) || 'Someone who has left'} meId={meId} canRemove={k.from === meId || view.canEdit} onError={setProblem} />
               ))}
             </AnimatePresence>
           </div>
         </div>
       ))}
+      </div>
     </Panel>
   );
 }
 
-const Note: React.FC<{ k: Kudos; i: number; toName: string; fromName: string; meId: string; canRemove: boolean; onError: (m: string) => void }> = ({ k, i, toName, fromName, meId, canRemove, onError }) => {
+const Note: React.FC<{ k: Kudos; i: number; isNew?: boolean; toName: string; fromName: string; meId: string; canRemove: boolean; onError: (m: string) => void }> = ({ k, i, isNew = false, toName, fromName, meId, canRemove, onError }) => {
   const still = useReducedMotion();
   const paper = PAPER[i % PAPER.length];
   const tilt = still ? 0 : TILT[i % TILT.length];
@@ -133,7 +152,15 @@ const Note: React.FC<{ k: Kudos; i: number; toName: string; fromName: string; me
       style={{ transformOrigin: '50% 0%' }}
       className={`group relative min-h-[150px] rounded-2xl border border-slate-900/5 ${paper.bg} px-4 pt-5 pb-3 flex flex-col gap-2 shadow-[0_10px_20px_-16px_rgba(15,23,42,0.4)] hover:shadow-[0_18px_34px_-20px_rgba(61,82,160,0.55)] transition-shadow`}>
       <span className={`absolute -top-1.5 left-1/2 -ml-1.5 w-3 h-3 rounded-full ${paper.pin} shadow`} aria-hidden />
-      <span className={`${chip} self-start bg-white/80 text-slate-700`}>{k.tag}</span>
+      {isNew && (
+        /* New since you last looked: a ring that glows a few times, then stays. */
+        <motion.span aria-hidden className="pointer-events-none absolute -inset-1 rounded-[20px] ring-2 ring-emerald-400"
+          initial={{ opacity: 0 }} animate={still ? { opacity: 0.8 } : { opacity: [0, 1, 0.3, 1, 0.3, 0.8] }} transition={{ duration: 3, delay: 0.4 }} />
+      )}
+      <span className="flex items-center gap-1.5">
+        <span className={`${chip} bg-white/80 text-slate-700`}>{k.tag}</span>
+        {isNew && <motion.span initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 500, damping: 14, delay: 0.5 }} className={`${chip} bg-emerald-100 text-emerald-700`}>New</motion.span>}
+      </span>
       <p className="text-xs text-slate-800 leading-relaxed whitespace-pre-line">{k.text}</p>
       <span className="mt-auto flex items-center gap-2">
         <span className="flex-1 text-[11px] text-slate-600"><b className="text-slate-800">{toName}{k.to === meId ? ' (you)' : ''}</b> · from {fromName} · {niceDay(k.at)}</span>

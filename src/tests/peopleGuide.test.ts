@@ -196,3 +196,38 @@ describe('telling the studio (the owner, 3 Nov 2026)', () => {
     expect(day.every((d) => d.section === 'celebrations' && d.route === 'people')).toBe(true);
   });
 });
+
+describe('moments worth confetti (the owner, 3 Nov 2026)', () => {
+  const NOW = new Date('2026-11-03T10:00:00.000Z');
+  const people = [person('me'), person('an', { name: 'Anushka Shah' }), person('ki', { name: 'Kavya Iyer' }), person('rd', { name: 'Rohan Desai' })];
+  const k = (id: string, from: string, to: string, at = '2026-11-03T08:00:00.000Z') => ({ id, from, to, at, tag: 'Above and beyond' as const, text: 'Thank you', hearts: [] });
+  const view = (over: Partial<GuideStore> = {}, me = 'me') => guideView({ people, offices: {}, essentials: null, cards: {}, kudos: [], emergency: null, ...over }, people.find((p) => p.id === me)!, '2026-11-03');
+
+  it('plays a thank-you to everyone but its writer, yours first, and never one from last month', async () => {
+    const { momentsOf } = await import('../../lib/peopleMoments');
+    const v = view({ kudos: [k('k1', 'an', 'ki'), k('k2', 'ki', 'me'), k('k3', 'me', 'an'), k('old', 'an', 'rd', '2026-10-01T00:00:00.000Z')] });
+    expect(momentsOf(v, 'me', new Set(), NOW).map((m) => [m.id, m.title, m.mine, m.section])).toEqual([
+      ['k2', 'Kavya Iyer thanked you', true, 'kudos'],
+      ['k1', 'Anushka Shah thanked Kavya Iyer', false, 'kudos'],
+    ]);
+    expect(momentsOf(v, 'me', new Set(['k1', 'k2']), NOW)).toEqual([]);
+  });
+
+  it('folds more than three thank-yous into one', async () => {
+    const { momentsOf } = await import('../../lib/peopleMoments');
+    const v = view({ kudos: ['a', 'b', 'c', 'd'].map((id) => k(id, 'an', 'ki')) });
+    const m = momentsOf(v, 'me', new Set(), NOW);
+    expect(m).toHaveLength(1);
+    expect(m[0]).toMatchObject({ title: '4 new thank-yous on the kudos wall', ids: ['a', 'b', 'c', 'd'] });
+  });
+
+  it("plays a birthday today, the person's own first, and says whether you have signed", async () => {
+    const { momentsOf } = await import('../../lib/peopleMoments');
+    const offices = { ki: office({ birthday: '11-03' }), me: office({ birthday: '11-03' }) };
+    const cards = { 'birthday_ki_2026-11-03': [{ by: 'me', name: 'ME', text: 'Yay', at: 't' }] };
+    expect(momentsOf(view({ offices, cards }), 'me', new Set(), NOW).map((m) => [m.title, m.line, m.signed])).toEqual([
+      ['Happy birthday, ME!', 'Your card is open. The studio is signing it today', false],
+      ["It's Kavya Iyer's birthday today", 'You have signed the card', true],
+    ]);
+  });
+});
