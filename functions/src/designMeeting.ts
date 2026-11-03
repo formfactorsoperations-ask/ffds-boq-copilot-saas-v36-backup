@@ -3,12 +3,12 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { resolveActor, person, type Actor } from "./drawingReview";
 import {
-  canRunMeeting, canSetAudience, cleanText, storeShape, safeId, trackerPatch,
+  canRunMeeting, canPresentAssigned, canSetAudience, cleanText, storeShape, safeId, trackerPatch,
   type ReviewSummary, type ReviewMark, type ReviewEvent,
 } from "../../lib/drawingReview";
 import {
   presentableRooms, clientRoundsByRoom, includedRoundsFrom, isOverIncluded, cleanChanges, cleanFee,
-  cleanSignerName, cleanSignature, portalDesignRecord, cleanRoomBoxes,
+  cleanSignerName, cleanSignature, portalDesignRecord, cleanRoomBoxes, cleanPresenters, mayRunThis,
   type DesignMeeting, type MeetingConfirmation, type PortalDesignMeeting, type MeetingLayout, type LayoutSetup, type MeetingRoom, type MeetingSheet, type RoomCharge, type ChargeStatus, type RoomDrawing,
 } from "../../lib/designMeeting";
 
@@ -17,7 +17,11 @@ import {
 
   The Design Head (or the studio's Owner or an Admin) presents approved rooms
   to the client and records, room by room, whether the client agreed or asked
-  for changes. Only this function writes a meeting, and only it turns the
+  for changes. A Designer on the project may present too, but only the
+  approved drawings the Design Head assigned to them (presenters, below),
+  only carry on meetings they started, and never decide revision billing: a
+  chargeable round from their meeting waits on the list to bill for the
+  Design Head to bill or waive. Only this function writes a meeting, and only it turns the
   client's changes into notes on the sheets, so what the client was shown and
   what they asked for cannot be edited afterwards from a browser.
 
@@ -45,12 +49,24 @@ function meetingRef(orgId: string, projectId: string, meetingId: unknown) {
   return db().doc(`${projectPath(orgId, projectId)}/designMeetings/${meetingId}`);
 }
 
-function mustRun(actor: Actor) {
-  if (!canRunMeeting(actor.roles)) throw new HttpsError("permission-denied", "Only the Design Head, the Owner or an Admin runs a design meeting.");
+/** The Design Head, the Owner or an Admin: any meeting, any approved room, and billing. */
+const isLead = (actor: Actor) => canRunMeeting(actor.roles);
+
+/* Leads, and Designers presenting what the Design Head gave them. */
+function mustPresent(actor: Actor) {
+  if (!isLead(actor) && !canPresentAssigned(actor.roles)) throw new HttpsError("permission-denied", "Only the Design Head, the Owner, an Admin or the project's designer presents a design meeting.");
+}
+
+/* A Designer carries on only the meetings they started; a lead, any. */
+function mustRunThis(actor: Actor, m: DesignMeeting) {
+  mustPresent(actor);
+  if (!mayRunThis(m, { uid: actor.uid, lead: isLead(actor) })) {
+    throw new HttpsError("permission-denied", `${m.startedBy?.name || "Someone else"} is running this meeting. Only they, the Design Head or an Admin can carry it on.`);
+  }
 }
 
 async function start(actor: Actor, orgId: string, projectId: string, input: Input) {
-  mustRun(actor);
+  mustPresent(actor);
   const wanted: string[] = Array.isArray(input.rooms) ? [...new Set(input.rooms.map((r: unknown) => String(r)).filter(Boolean))].slice(0, 30) as string[] : [];
   if (!wanted.length) throw new HttpsError("invalid-argument", "Pick at least one room to present.");
   const base = projectPath(orgId, projectId);
@@ -59,7 +75,8 @@ async function start(actor: Actor, orgId: string, projectId: string, input: Inpu
 
   const tracker = await db().collection(`${base}/drawingTracker`).get();
   const drawings: RoomDrawing[] = tracker.docs.map((d) => ({ id: d.id, name: String(d.data().name || "Drawing"), roomName: d.data().roomName || null, review: d.data().review || null }));
-  const rooms = presentableRooms(drawings);
+  /* A Designer presents only the approved drawings the Design Head assigned to them. */
+  const rooms = presentableRooms(drawings, isLead(actor) ? null : actor.email);
   const chosen: MeetingRoom[] = wanted.map((name) => {
     const r = rooms.find((x) => x.room === name);
     if (!r) throw new HttpsError("failed-precondition", `${name} has no drawings for the client.`);
@@ -98,12 +115,13 @@ async function start(actor: Actor, orgId: string, projectId: string, input: Inpu
 }
 
 async function decide(actor: Actor, orgId: string, projectId: string, input: Input) {
-  mustRun(actor);
+  mustPresent(actor);
   const ref = meetingRef(orgId, projectId, input.meetingId);
   return db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError("not-found", "That meeting could not be found.");
     const m = snap.data() as DesignMeeting;
+    mustRunThis(actor, m);
     if (m.state !== "OPEN") throw new HttpsError("failed-precondition", "This meeting is already closed.");
     const i = m.rooms.findIndex((r) => r.room === String(input.room || ""));
     if (i < 0) throw new HttpsError("invalid-argument", "That room is not in this meeting.");
@@ -118,7 +136,7 @@ async function decide(actor: Actor, orgId: string, projectId: string, input: Inp
 }
 
 async function close(actor: Actor, orgId: string, projectId: string, input: Input) {
-  mustRun(actor);
+  mustPresent(actor);
   const ref = meetingRef(orgId, projectId, input.meetingId);
   const base = projectPath(orgId, projectId);
   const charges: Record<string, unknown> = input.charges && typeof input.charges === "object" ? input.charges : {};
@@ -126,6 +144,7 @@ async function close(actor: Actor, orgId: string, projectId: string, input: Inpu
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError("not-found", "That meeting could not be found.");
     const m = snap.data() as DesignMeeting;
+    mustRunThis(actor, m);
     if (m.state !== "OPEN") throw new HttpsError("failed-precondition", "This meeting is already closed.");
     if (input.expectedRev !== undefined && Number(input.expectedRev) !== m.rev) throw new HttpsError("aborted", "The meeting changed a moment ago. Refresh and try again.");
     const decided = m.rooms.filter((r) => r.outcome);
@@ -153,7 +172,8 @@ async function close(actor: Actor, orgId: string, projectId: string, input: Inpu
       if (r.outcome !== "changes") return { ...r, round: 0, charge: null };
       const round = (used[r.room] || 0) + 1;
       if (!isOverIncluded(round, m.includedRounds)) return { ...r, round, charge: null };
-      const status = charges[r.room];
+      /* Billing is the Design Head's: from a Designer's meeting the round waits on the list to bill, to be billed or waived there. */
+      const status = isLead(actor) ? charges[r.room] : "to_bill";
       if (status !== "to_bill" && status !== "waived") {
         throw new HttpsError("invalid-argument", `${r.room} goes to round ${round} and ${m.includedRounds} are included. Choose to bill it or waive it.`);
       }
@@ -222,7 +242,7 @@ export async function refreshPortalRecord(orgId: string, projectId: string): Pro
 
 /* The client signs the record on the studio's screen, with the studio's login holding it. */
 async function sign(actor: Actor, orgId: string, projectId: string, input: Input) {
-  mustRun(actor);
+  mustPresent(actor);
   const name = cleanSignerName(input.name);
   if (!name) throw new HttpsError("invalid-argument", "Type the client's name as they would sign it.");
   const signature = cleanSignature(input.signature);
@@ -232,6 +252,7 @@ async function sign(actor: Actor, orgId: string, projectId: string, input: Input
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError("not-found", "That meeting could not be found.");
     const m = snap.data() as DesignMeeting;
+    mustRunThis(actor, m);
     if (m.state !== "CLOSED") throw new HttpsError("failed-precondition", "Save the meeting before the client confirms it.");
     if (m.confirmation?.at) throw new HttpsError("failed-precondition", "The client has already confirmed this meeting.");
     const confirmation: MeetingConfirmation = { via: "studio", name, email: null, uid: null, at: Date.now(), signature, recordedBy: person(actor) };
@@ -276,7 +297,7 @@ export async function confirmMeetingByClient(p: {
   meeting on the same plan picks the boxes up straight away.
 */
 async function layoutRooms(actor: Actor, orgId: string, projectId: string, input: Input) {
-  mustRun(actor);
+  mustPresent(actor);
   if (!safeId(input.drawingId)) throw new HttpsError("invalid-argument", "Which layout plan?");
   const base = projectPath(orgId, projectId);
   const d = await db().doc(`${base}/drawingTracker/${input.drawingId}`).get();
@@ -326,16 +347,48 @@ export async function portalSheetFor(p: { tenantId: unknown; projectId: string; 
 }
 
 async function cancel(actor: Actor, orgId: string, projectId: string, input: Input) {
-  mustRun(actor);
+  mustPresent(actor);
   const ref = meetingRef(orgId, projectId, input.meetingId);
   return db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError("not-found", "That meeting could not be found.");
     const m = snap.data() as DesignMeeting;
+    mustRunThis(actor, m);
     if (m.state !== "OPEN") throw new HttpsError("failed-precondition", "Only an open meeting can be cancelled.");
     tx.update(ref, { state: "CANCELLED", closedAt: Date.now(), closedBy: person(actor), rev: m.rev + 1 });
     return { meeting: { ...m, state: "CANCELLED" } };
   });
+}
+
+/*
+  Which Designers may present which drawings: the Design Head's choice, kept
+  on each sheet's review (review.presenters) so it follows the sheet through
+  new versions. Only the project's own Designers can be named. Takes
+  { drawings: { [drawingId]: emails[] } }, up to 200 sheets at once.
+*/
+export const MAX_PRESENTER_SHEETS = 200;
+async function presenters(actor: Actor, orgId: string, projectId: string, input: Input) {
+  if (!isLead(actor)) throw new HttpsError("permission-denied", "Only the Design Head, the Owner or an Admin chooses who presents a drawing.");
+  const wanted = input.drawings && typeof input.drawings === "object" && !Array.isArray(input.drawings) ? Object.entries(input.drawings as Record<string, unknown>) : [];
+  if (!wanted.length) throw new HttpsError("invalid-argument", "Which drawings?");
+  if (wanted.length > MAX_PRESENTER_SHEETS) throw new HttpsError("invalid-argument", `At most ${MAX_PRESENTER_SHEETS} drawings at a time.`);
+  if (!wanted.every(([id]) => safeId(id))) throw new HttpsError("invalid-argument", "Which drawings?");
+  const view = (await db().doc(`projects/${projectId}/designView/current`).get()).data();
+  const designers: string[] = view && view.tenantId === orgId && Array.isArray(view.designers) ? view.designers : [];
+  const base = projectPath(orgId, projectId);
+  const out: Record<string, string[]> = {};
+  await db().runTransaction(async (tx) => {
+    const refs = wanted.map(([id]) => db().doc(`${base}/drawingTracker/${id}`));
+    const snaps = await Promise.all(refs.map((r) => tx.get(r)));
+    snaps.forEach((snap, i) => {
+      const s = snap.data()?.review as ReviewSummary | undefined;
+      if (!snap.exists || !s || s.versionNo === undefined) throw new HttpsError("failed-precondition", `${snap.data()?.name || "That drawing"} has no PDF yet.`);
+      const emails = cleanPresenters(wanted[i][1], designers);
+      out[snap.id] = emails;
+      tx.update(refs[i], { "review.presenters": emails });
+    });
+  });
+  return { presenters: out };
 }
 
 /* The billing list: a chargeable round's fee, and whether it was billed or waived. */
@@ -379,6 +432,7 @@ export const designMeeting = onCall({ cors: true, timeoutSeconds: 60 }, async (r
       case "charge": return await charge(actor, orgId, projectId, input);
       case "sign": return await sign(actor, orgId, projectId, input);
       case "layoutRooms": return await layoutRooms(actor, orgId, projectId, input);
+      case "presenters": return await presenters(actor, orgId, projectId, input);
       default: throw new HttpsError("invalid-argument", "Unknown action.");
     }
   } catch (e: any) {

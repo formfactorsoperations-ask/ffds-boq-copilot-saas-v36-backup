@@ -193,7 +193,9 @@ export interface PresentableRoom {
 }
 
 export const roomOf = (d: { roomName?: string | null }) => d.roomName || GENERAL_ROOM;
-const forClient = (d: RoomDrawing) => (d.review?.audience || guessAudience(d.name)) === 'client';
+/** A drawing the client is shown (studio-only sheets never are). */
+export const isClientSheet = (d: RoomDrawing) => (d.review?.audience || guessAudience(d.name)) === 'client';
+const forClient = isClientSheet;
 const approved = (d: RoomDrawing) => stateOf(d.review as ReviewSummary) === 'APPROVED' && !!d.review?.versionId;
 
 /** A client sheet's state, in a line, for a room that cannot be presented yet. */
@@ -206,6 +208,10 @@ function notReady(d: RoomDrawing): string {
     : `${d.name} is not sent for review yet`;
 }
 
+/** The Designer may present this sheet: the Design Head put their email on it. */
+export const mayPresent = (d: { review?: Partial<ReviewSummary> | null }, email: string | null | undefined) =>
+  !!email && (d.review?.presenters || []).map((e) => String(e).toLowerCase()).includes(email.toLowerCase());
+
 /**
  * Every room with client sheets, and whether it can be presented: at least
  * one client sheet approved by the Design Head, and none of them waiting on
@@ -213,8 +219,12 @@ function notReady(d: RoomDrawing): string {
  * sheets; the rest (not started, or still with the designer or the Design
  * Head) wait for a later meeting, so a sheet nobody has drawn yet does not
  * hold back the ones that are signed off. Studio-only sheets are never shown.
+ *
+ * For a Designer presenting (`presenter`, their email), only the approved
+ * sheets the Design Head assigned to them count; the room's other approved
+ * sheets wait for a meeting the Design Head runs.
  */
-export function presentableRooms(drawings: RoomDrawing[]): PresentableRoom[] {
+export function presentableRooms(drawings: RoomDrawing[], presenter?: string | null): PresentableRoom[] {
   const by = new Map<string, RoomDrawing[]>();
   drawings.forEach((d) => by.set(roomOf(d), [...(by.get(roomOf(d)) || []), d]));
   const out: PresentableRoom[] = [];
@@ -222,13 +232,31 @@ export function presentableRooms(drawings: RoomDrawing[]): PresentableRoom[] {
     const client = list.filter(forClient).sort((a, b) => a.name.localeCompare(b.name));
     if (!client.length) return;
     const pending = client.find((d) => d.review?.clientChanges?.pending);
-    const sheets = pending ? [] : client.filter(approved);
+    const signedOff = pending ? [] : client.filter(approved);
+    const sheets = presenter ? signedOff.filter((d) => mayPresent(d, presenter)) : signedOff;
     const later = client.filter((d) => !sheets.includes(d));
     const ready = sheets.length > 0;
-    out.push({ room, ready, why: ready ? '' : notReady(pending || later[0]), sheets, later });
+    const why = ready ? ''
+      : signedOff.length ? 'The Design Head has not given you a drawing here to present'
+      : notReady(pending || later[0]);
+    out.push({ room, ready, why, sheets, later });
   });
   return out.sort((a, b) => Number(b.ready) - Number(a.ready) || (a.room === GENERAL_ROOM ? 1 : b.room === GENERAL_ROOM ? -1 : a.room.localeCompare(b.room)));
 }
+
+/** Emails the Design Head may let present a sheet: the project's own Designers, at most 10. */
+export function cleanPresenters(raw: unknown, allowed: string[]): string[] {
+  if (!Array.isArray(raw)) return [];
+  const ok = new Set(allowed.map((e) => String(e).trim().toLowerCase()));
+  return [...new Set(raw.map((e) => String(e ?? '').trim().toLowerCase()))].filter((e) => ok.has(e)).slice(0, 10);
+}
+
+/**
+ * Who may carry on a meeting (mark rooms, finish, cancel, take the client's
+ * signature): whoever started it, and the Design Head or a lead on any.
+ */
+export const mayRunThis = (m: Pick<DesignMeeting, 'startedBy'>, who: { uid: string; lead: boolean }) =>
+  who.lead || (!!who.uid && m.startedBy?.uid === who.uid);
 
 /* ------------------------------------------------------------ the client's agreement */
 

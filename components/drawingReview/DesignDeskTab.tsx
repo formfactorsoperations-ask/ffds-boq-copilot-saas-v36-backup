@@ -3,7 +3,8 @@ import { FileUp, Inbox, LayoutGrid, Loader2, PenTool, Presentation, Send } from 
 import { LayoutGroup, motion } from 'framer-motion';
 import { useOrg } from '../../contexts/OrgContext';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
-import { canReview, canRunMeeting, canSetAudience, canUpload, stateOf } from '../../lib/drawingReview';
+import { canPresentAssigned, canReview, canRunMeeting, canSetAudience, canUpload, stateOf } from '../../lib/drawingReview';
+import { useProjectTeam } from '../../services/projectTeam';
 import type { DesignMeeting } from '../../lib/designMeeting';
 import { attention, projectLook, pushRecent, reviewQueue, statsOf, suggestions as pickSuggestions, type Suggestion, type Viewer } from '../../lib/designDesk';
 import { watchStudioReviews, watchProjectDrawings, takeOpenRequest, submitSheet, type ReviewDrawing } from '../../services/drawingReviewService';
@@ -29,7 +30,9 @@ import { MotionStyles } from './motion';
   sheet can be dragged to the Design Head to send it. Opening a sheet
   replaces the view with the review screen; leaving it comes back here.
   "Meetings" is where the Design Head presents a project's approved rooms to
-  the client, and where chargeable revision rounds are billed or waived.
+  the client, and where chargeable revision rounds are billed or waived. A
+  Designer presents there too: the approved drawings the Design Head gave
+  them, without the billing.
 */
 
 interface Props {
@@ -73,7 +76,9 @@ function Desk({ projects, activeProjectId }: Props) {
   const uploader = canUpload(role);
   const canRun = canRunMeeting(role);
   const canBill = canSetAudience(role);
-  const meetsTab = canRun || canBill;
+  const presenter = canPresentAssigned(role);
+  const meetsTab = canRun || canBill || presenter;
+  const team = useProjectTeam();
   const me: Me = {
     uid: currentUserAuth?.uid || '',
     email: String(currentUserAuth?.email || '').toLowerCase(),
@@ -92,6 +97,15 @@ function Desk({ projects, activeProjectId }: Props) {
     .map((p) => ({ ...p, client: p.client && !p.name.toLowerCase().includes(p.client.toLowerCase()) ? p.client : undefined }))
     .filter((p) => p.id), [projects]);
   const listKey = list.map((p) => p.id).join(',');
+  /* The project's Designers, for the Design Head's "Who presents": its assigned people who are Designers on the team. */
+  const designersOf = (id: string) => {
+    const proj = (projects || []).find((p: any) => String(p.id) === id);
+    if (!proj) return [];
+    return team.designersOn(proj).map((email) => {
+      const m = team.designers.find((t) => t.email === email);
+      return m ? (m.role === 'Designer' ? { email, name: m.name } : null) : { email, name: email };
+    }).filter((x): x is { email: string; name: string } => !!x);
+  };
 
   /* ------------------------------------------------------------ where we are */
   const [project, setProjectRaw] = useState<string>(() => {
@@ -303,7 +317,7 @@ function Desk({ projects, activeProjectId }: Props) {
     <div className={`w-full pb-36 text-[#17191E] ${open || live ? 'mx-auto max-w-[1360px] px-4 pt-6 md:px-5' : ''}`}>
       {live && !open ? (
         <MeetingMode key={live.id} orgId={orgId} projectId={project} projectName={projectOf(project).name} look={projectOf(project)}
-          meeting={live} meetings={meetings || []}
+          meeting={live} meetings={meetings || []} lead={canRun}
           onExit={(to) => { setRunning(null); setTab(to || 'meetings'); window.scrollTo({ top: 0 }); }} />
       ) : open ? (
         <SheetStudio
@@ -354,7 +368,8 @@ function Desk({ projects, activeProjectId }: Props) {
                 <div className="grid min-h-[30vh] place-items-center"><Loader2 className="animate-spin text-[#8A8E97]" /></div>
               ) : <div key={tab} className="dd-swap">{tab === 'meetings' && meetsTab ? (
                 <Meetings orgId={orgId} projectId={isAll || !current ? null : project} projectName={current?.name || ''} look={current ? projectOf(project) : null}
-                  drawings={scope} meetings={meetings} canRun={canRun} canBill={canBill} onResume={(m) => { setRunning(m); window.scrollTo({ top: 0 }); }}
+                  drawings={scope} meetings={meetings} canRun={canRun} canBill={canBill} presenter={presenter} me={me} designers={designersOf(project)}
+                  onResume={(m) => { setRunning(m); window.scrollTo({ top: 0 }); }}
                   projects={infos.map((p) => ({ id: p.id, name: p.name, code: p.code, color: p.color }))} onPickProject={pickProject} />
               ) : tab === 'foryou' ? (
                 <ForYou scope={scope} all={rows} viewer={viewer} uploader={uploader} isAll={isAll || !current} scopeName={current?.name || 'this project'}

@@ -109,8 +109,10 @@ describe('a design meeting', { timeout: 60000 }, () => {
   let meetingId = '';
   let k1Version = '';
 
-  it('only a room whose client sheets are all approved can be presented, and only by the Design Head or a lead', async () => {
-    expect(await code(users.designer.meet({ action: 'start', rooms: ['Kitchen'] }))).toBe('functions/permission-denied');
+  it('only a room whose client sheets are all approved can be presented, and only by the Design Head, a lead or the project\'s designer', async () => {
+    expect(await code(users.ops.meet({ action: 'start', rooms: ['Kitchen'] }))).toBe('functions/permission-denied');
+    /* A Designer may present, but nothing here is approved, let alone given to them. */
+    expect(await code(users.designer.meet({ action: 'start', rooms: ['Kitchen'] }))).toBe('functions/failed-precondition');
     expect(await code(users.head.meet({ action: 'start', rooms: ['Kitchen'] }))).toBe('functions/failed-precondition');
     k1Version = (await approved('k1', 'k1')).versionId;
     await approved('k2', 'k2');
@@ -272,7 +274,8 @@ describe('a design meeting', { timeout: 60000 }, () => {
       for (const o of (await list(`${P}/designMeetings`)).filter((x) => x.state === 'OPEN')) await users.head.meet({ action: 'cancel', meetingId: o.id });
       await approved('lp', 'lp');
       await approved('d1', 'd1');
-      expect(await code(users.designer.meet({ action: 'layoutRooms', drawingId: 'lp', rooms: {} }))).toBe('functions/permission-denied');
+      /* The project's designer may mark rooms on the plan too. */
+      expect(await code(users.designer.meet({ action: 'layoutRooms', drawingId: 'lp', rooms: {} }))).toBe('ok');
       await users.head.meet({ action: 'layoutRooms', drawingId: 'lp', rooms: { Dining: { page: 0, x: 0.6, y: 0.1, w: 0.3, h: 0.25 }, Bad: { x: 'no' } } });
       expect((await read(`${P}/designLayout/current`)).rooms).toEqual({ Dining: { page: 0, x: 0.6, y: 0.1, w: 0.3, h: 0.25 } });
       expect(await code(users.head.meet({ action: 'start', rooms: ['Dining'], layoutDrawingId: 'k3' }))).toBe('functions/failed-precondition');
@@ -303,6 +306,69 @@ describe('a design meeting', { timeout: 60000 }, () => {
       expect(plan.name).toBe('Furniture Layout');
       expect(plan.views).toHaveLength(1);
       expect((await read(`${P}/designMeetings/${held}`)).views).toEqual([expect.objectContaining({ uid: users.client.uid })]);
+    });
+  });
+  describe('a designer presenting what the Design Head gives them', () => {
+    let mine = '';
+    it('the Design Head chooses who presents which drawing; nobody else can', async () => {
+      for (const o of (await list(`${P}/designMeetings`)).filter((x) => x.state === 'OPEN')) await users.head.meet({ action: 'cancel', meetingId: o.id });
+      expect(await code(users.designer.meet({ action: 'start', rooms: ['Living Room'] }))).toBe('functions/failed-precondition');
+      expect(await code(users.designer.meet({ action: 'presenters', drawings: { l1: ['riya@m.com'] } }))).toBe('functions/permission-denied');
+      expect(await code(users.ops.meet({ action: 'presenters', drawings: { l1: ['riya@m.com'] } }))).toBe('functions/permission-denied');
+      expect(await code(users.head.meet({ action: 'presenters', drawings: { k3: ['riya@m.com'] } }))).toBe('functions/failed-precondition');
+      const res = await users.head.meet({ action: 'presenters', drawings: { l1: ['Riya@M.com', 'stranger@x.com'] } });
+      expect(res.presenters).toEqual({ l1: ['riya@m.com'] });
+      const l1 = await read(`${DT}/l1`);
+      expect(l1.review.presenters).toEqual(['riya@m.com']);
+      expect(l1.review.state).toBe('APPROVED');
+    });
+
+    it('no browser writes the choice, and the designer reads the project\'s meetings and plan', async () => {
+      const designer = env.authenticatedContext(users.designer.uid, { email: users.designer.email }).firestore();
+      const head = env.authenticatedContext(users.head.uid, { email: users.head.email }).firestore();
+      await assertFails(updateDoc(doc(designer, `${DT}/k2`), { 'review.presenters': ['riya@m.com'] }));
+      await assertFails(updateDoc(doc(head, `${DT}/k2`), { 'review.presenters': ['riya@m.com'] }));
+      await assertSucceeds(getDocs(collection(designer, `${P}/designMeetings`)));
+      await assertSucceeds(getDoc(doc(designer, `${P}/designLayout/current`)));
+      await assertFails(setDoc(doc(designer, `${P}/designMeetings/fake`), { state: 'OPEN', rooms: [] }));
+      const client = env.authenticatedContext(users.client.uid, { email: users.client.email }).firestore();
+      await assertFails(getDocs(collection(client, `${P}/designMeetings`)));
+    });
+
+    it('presents only the approved drawings given to them', async () => {
+      /* Kitchen's approved sheet was not given to them. */
+      expect(await code(users.designer.meet({ action: 'start', rooms: ['Kitchen'] }))).toBe('functions/failed-precondition');
+      const res = await users.designer.meet({ action: 'start', rooms: ['Living Room'], attendees: 'Rahul Mehta', layoutDrawingId: 'lp' });
+      mine = res.meeting.id;
+      expect(res.meeting.rooms.map((r: any) => [r.room, r.sheets.map((x: any) => x.drawingId)])).toEqual([['Living Room', ['l1']]]);
+      expect(res.meeting.startedBy.email).toBe('riya@m.com');
+    });
+
+    it('carries on only their own meeting; another designer cannot, a lead can', async () => {
+      await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'projects/p1/designView/current'), { tenantId: STUDIO, designers: ['riya@m.com', 'dev@m.com'] }); });
+      await makeUser('designer2', 'dev@m.com', { tenantId: STUDIO, role: 'Designer', displayName: 'Dev' });
+      expect(await code(users.designer2.meet({ action: 'room', meetingId: mine, room: 'Living Room', outcome: 'agreed' }))).toBe('functions/permission-denied');
+      expect(await code(users.designer2.meet({ action: 'cancel', meetingId: mine }))).toBe('functions/permission-denied');
+      expect(await code(users.ops.meet({ action: 'room', meetingId: mine, room: 'Living Room', outcome: 'agreed' }))).toBe('functions/permission-denied');
+      await users.head.meet({ action: 'room', meetingId: mine, room: 'Living Room', outcome: 'agreed' });
+      await users.designer.meet({ action: 'room', meetingId: mine, room: 'Living Room', outcome: 'changes', changes: [{ drawingId: 'l1', page: 0, shape: { t: 'pin', x: 0.4, y: 0.4 }, text: 'Lower TV unit' }] });
+    });
+
+    it('a chargeable round from their meeting waits on the list to bill, whatever they send', async () => {
+      const res = await users.designer.meet({ action: 'close', meetingId: mine, charges: { 'Living Room': 'waived' } });
+      expect(res.meeting.state).toBe('CLOSED');
+      const m = await read(`${P}/designMeetings/${mine}`);
+      expect(m.rooms[0].charge).toMatchObject({ status: 'to_bill', decidedBy: { email: 'riya@m.com' } });
+      expect((await read(`${DT}/l1`)).review.clientChanges).toMatchObject({ meetingId: mine, pending: true });
+      expect(await code(users.designer.meet({ action: 'charge', meetingId: mine, room: 'Living Room', status: 'waived' }))).toBe('functions/permission-denied');
+      const waived = await users.head.meet({ action: 'charge', meetingId: mine, room: 'Living Room', status: 'waived' });
+      expect(waived.meeting.rooms[0].charge.status).toBe('waived');
+    });
+
+    it('they can take the client\'s signature on their own meeting', async () => {
+      expect(await code(users.designer2.meet({ action: 'sign', meetingId: mine, name: 'Rahul Mehta', signature: SIGNATURE }))).toBe('functions/permission-denied');
+      const res = await users.designer.meet({ action: 'sign', meetingId: mine, name: 'Rahul Mehta', signature: SIGNATURE });
+      expect(res.meeting.confirmation).toMatchObject({ via: 'studio', recordedBy: { email: 'riya@m.com' } });
     });
   });
 });

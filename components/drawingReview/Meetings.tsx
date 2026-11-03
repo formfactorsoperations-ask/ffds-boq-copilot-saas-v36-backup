@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BadgeCheck, CalendarCheck, Check, ChevronRight, Clock, History, IndianRupee, Loader2, MapPinned, PenLine, Presentation, ReceiptText, Undo2, Users, X } from 'lucide-react';
-import { presentableRooms, revisionCharges, meetingSummary, plural, confirmationLine, isConfirmed, guessLayout, GENERAL_ROOM, type DesignMeeting, type LayoutSetup, type MeetingRoom } from '../../lib/designMeeting';
+import { BadgeCheck, CalendarCheck, Check, ChevronRight, Clock, History, IndianRupee, Loader2, MapPinned, PenLine, Presentation, ReceiptText, Undo2, UserCheck, Users, X } from 'lucide-react';
+import { presentableRooms, revisionCharges, meetingSummary, plural, confirmationLine, isConfirmed, guessLayout, mayRunThis, GENERAL_ROOM, type DesignMeeting, type LayoutSetup, type MeetingRoom } from '../../lib/designMeeting';
+import Presenters, { type TeamMember } from './Presenters';
 import { LayoutRooms } from './LayoutPlan';
 import { startMeeting, cancelMeeting, updateCharge, watchLayoutSetup } from '../../services/designMeetingService';
 import type { ReviewDrawing } from '../../services/drawingReviewService';
@@ -15,6 +16,9 @@ import ClientSign from './ClientSign';
   the room's other sheets wait for a later meeting), start, and present them
   one by one. Below: the revision rounds past the included ones, with their
   fee and whether they were billed or waived, and the meetings already held.
+
+  A Designer presents too, but only the approved drawings the Design Head
+  gave them ("Who presents"), and never sees the billing.
 */
 
 interface Props {
@@ -26,6 +30,11 @@ interface Props {
   meetings: DesignMeeting[] | null;
   canRun: boolean;
   canBill: boolean;
+  /** A Designer presenting only what the Design Head gave them (lib/drawingReview canPresentAssigned). */
+  presenter: boolean;
+  me: { uid: string; email: string };
+  /** The project's Designers, for "Who presents". */
+  designers: TeamMember[];
   onResume: (m: DesignMeeting) => void;
   projects: { id: string; name: string; code: string; color: string }[];
   onPickProject: (id: string) => void;
@@ -36,9 +45,14 @@ const CHARGE: Record<string, { label: string; tone: 'red' | 'green' | 'grey' }> 
   to_bill: { label: 'To bill', tone: 'red' }, billed: { label: 'Billed', tone: 'green' }, waived: { label: 'Waived', tone: 'grey' },
 };
 
-export default function Meetings({ orgId, projectId, projectName, look, drawings, meetings, canRun, canBill, onResume, projects, onPickProject }: Props) {
+export default function Meetings({ orgId, projectId, projectName, look, drawings, meetings, canRun, canBill, presenter, me, designers, onResume, projects, onPickProject }: Props) {
   const toast = useToast();
-  const rooms = useMemo(() => presentableRooms(drawings), [drawings]);
+  const rooms = useMemo(() => presentableRooms(drawings, presenter ? me.email : null), [drawings, presenter, me.email]);
+  /* Leads, and a Designer with something to present, start a meeting. */
+  const canStart = canRun || presenter;
+  const mine = (m: DesignMeeting) => (canRun || presenter) && mayRunThis(m, { uid: me.uid, lead: canRun });
+  const [giving, setGiving] = useState(false);
+  const nameOf = (e: string) => firstName(designers.find((p) => p.email.toLowerCase() === e.toLowerCase())?.name || e);
   const ready = rooms.filter((r) => r.ready);
   const [picked, setPicked] = useState<Record<string, boolean>>({});
   const [attendees, setAttendees] = useState('');
@@ -107,7 +121,8 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
             <div className="font-bold">A meeting is in progress</div>
             <div className="text-[13px] text-[#4F535C]">Started {shortDate(open.startedAt)} by {firstName(open.startedBy?.name)} · {plural(open.rooms.length, 'room')} · {meetingSummary(open)}</div>
           </div>
-          {canRun && <>
+          {!mine(open) && <span className="text-[13px] text-[#4F535C]">Only {firstName(open.startedBy?.name)}, the Design Head or an Admin can carry it on.</span>}
+          {mine(open) && <>
             <button type="button" onClick={() => cancel(open)} disabled={!!busy} className="min-h-[40px] rounded-[10px] px-3 text-[13px] font-bold text-[#4F535C] hover:bg-white/70 disabled:opacity-45">Cancel meeting</button>
             <button type="button" onClick={() => onResume(open)} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#4146C8] px-[18px] text-[14px] font-bold text-white hover:bg-[#3439AD]">Resume<ChevronRight size={16} /></button>
           </>}
@@ -115,7 +130,15 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
       )}
 
       <section className="dd-rise rounded-[18px] border border-[#E4E4DE] bg-white px-2.5 pb-3 pt-2">
-        <SectionHead icon={Presentation} tone="indigo" title="Next design meeting" sub={`${projectName}: rooms with client drawings approved`} />
+        <div className="flex items-center gap-2 pr-1">
+          <div className="min-w-0 flex-1"><SectionHead icon={Presentation} tone="indigo" title="Next design meeting" sub={presenter ? `${projectName}: approved drawings the Design Head gave you` : `${projectName}: rooms with client drawings approved`} /></div>
+          {canRun && (
+            <button type="button" onClick={() => setGiving(true)} title="Choose which designers may present which drawings"
+              className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-[#DCDCD5] bg-white px-3.5 text-[13px] font-bold hover:border-[#A9AAA2]">
+              <UserCheck size={15} />Who presents
+            </button>
+          )}
+        </div>
         {rooms.length === 0 ? (
           <div className="px-3 pb-3 pt-2 text-[13px] text-[#5F636D]">No drawings for the client in this project yet.</div>
         ) : (
@@ -123,18 +146,22 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
             {rooms.map((r, i) => (
               <label key={r.room} className={`flex items-center gap-3 rounded-[12px] border-t border-[#EEEEEA] px-3 py-3 transition-colors first:border-t-0 ${r.ready ? 'dd-rise cursor-pointer hover:bg-[#F6F6F2]' : 'opacity-60'}`}
                 style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
-                <input type="checkbox" checked={r.ready && !!picked[r.room]} disabled={!r.ready || !canRun || !!open} onChange={() => setPicked((p) => ({ ...p, [r.room]: !p[r.room] }))}
+                <input type="checkbox" checked={r.ready && !!picked[r.room]} disabled={!r.ready || !canStart || !!open} onChange={() => setPicked((p) => ({ ...p, [r.room]: !p[r.room] }))}
                   className="h-[18px] w-[18px] accent-[#4146C8]" aria-label={`Present ${roomLabel(r.room)}`} />
                 <span className="min-w-0 flex-1">
                   <span className="block font-bold">{roomLabel(r.room)}</span>
-                  <span className="block truncate text-[12.5px] text-[#5F636D]">{r.ready ? r.sheets.map((d) => `${d.name} v${d.review?.versionNo}`).join(' · ') + (r.later.length ? ` · ${plural(r.later.length, 'sheet')} not approved yet, left out` : '') : r.why}</span>
+                  <span className="block truncate text-[12px] text-[#5F636D]">{r.ready ? r.sheets.map((d) => `${d.name} v${d.review?.versionNo}`).join(' · ') + (r.later.length ? ` · ${plural(r.later.length, 'sheet')} ${presenter ? 'not yours or not approved yet' : 'not approved yet'}, left out` : '') : r.why}</span>
+                  {canRun && designers.length > 0 && (() => {
+                    const who = [...new Set(r.sheets.flatMap((d) => d.review?.presenters || []))];
+                    return who.length ? <span className="mt-0.5 flex items-center gap-1 text-[12px] font-semibold text-[#3A3FB8]"><UserCheck size={13} />{who.map(nameOf).join(', ')} can present</span> : null;
+                  })()}
                 </span>
                 <Chip tone={r.ready ? 'indigo' : 'grey'}>{r.ready ? 'Ready to present' : 'Not ready'}</Chip>
               </label>
             ))}
           </div>
         )}
-        {canRun && !open && ready.length > 0 && (
+        {canStart && !open && ready.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-[#EEEEEA] bg-[#FBF8F1] px-3 py-3">
             <MapPinned size={20} className="shrink-0 text-[#8F4C07]" />
             <span className="min-w-0 flex-[1_1_240px]">
@@ -157,7 +184,7 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
             )}
           </div>
         )}
-        {canRun && !open && ready.length > 0 && (
+        {canStart && !open && ready.length > 0 && (
           <div className="mt-2 flex flex-wrap items-end gap-3 border-t border-[#EEEEEA] px-3 pt-3">
             <label className="min-w-0 flex-[1_1_260px]">
               <span className="mb-1 flex items-center gap-1.5 text-[12.5px] font-bold"><Users size={14} />Who is in the meeting <span className="font-medium text-[#8A8E97]">(optional)</span></span>
@@ -171,10 +198,11 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
             </button>
           </div>
         )}
-        {!canRun && <div className="px-3 pt-2 text-[12.5px] text-[#5F636D]">The Design Head, the Owner or an Admin runs design meetings.</div>}
+        {presenter && !ready.length && rooms.length > 0 && <div className="px-3 pt-2 text-[12px] text-[#5F636D]">You present the approved drawings the Design Head gives you. Ask them to add you under "Who presents".</div>}
+        {!canStart && <div className="px-3 pt-2 text-[12px] text-[#5F636D]">The Design Head, the Owner, an Admin or the project's designer runs design meetings.</div>}
       </section>
 
-      {charges.length > 0 && (
+      {charges.length > 0 && !presenter && (
         <section className="dd-rise rounded-[18px] border border-[#E4E4DE] bg-white px-2.5 pb-2.5 pt-2">
           <SectionHead icon={ReceiptText} tone="red" title="Revisions to bill" count={charges.filter((c) => c.room.charge?.status === 'to_bill').length}
             sub="Rounds past the ones included in the client's terms" />
@@ -206,7 +234,7 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
                 </button>
                 {isOpen && (
                   <div className="dd-rise flex flex-col gap-2 px-4 pb-4 pt-1">
-                    {m.rooms.map((r) => <RoomRecord key={r.room} r={r} included={m.includedRounds} />)}
+                    {m.rooms.map((r) => <RoomRecord key={r.room} r={r} included={m.includedRounds} billing={!presenter} />)}
                     <div className="flex flex-wrap items-center gap-3 rounded-[14px] border border-[#E4E4DE] px-3.5 py-3 text-[13px]">
                       {isConfirmed(m) ? <BadgeCheck size={18} className="shrink-0 text-[#1B6E4F]" /> : <Clock size={18} className="shrink-0 text-[#8F4C07]" />}
                       <span className="min-w-0 flex-[1_1_240px]">
@@ -218,7 +246,7 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
                         </span>
                       </span>
                       {m.confirmation?.signature && <img src={m.confirmation.signature} alt={`Signature of ${m.confirmation.name}`} className="h-12 max-w-[180px] rounded-lg border border-[#EEEEEA] bg-white object-contain" />}
-                      {!isConfirmed(m) && canRun && (
+                      {!isConfirmed(m) && mine(m) && (
                         <button type="button" onClick={() => setSigning(m)} className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-[#DCDCD5] bg-white px-3.5 text-[13px] font-bold hover:border-[#A9AAA2]">
                           <PenLine size={15} />Client signs here
                         </button>
@@ -231,6 +259,7 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
           })}
       </section>
       {signing && <ClientSign orgId={orgId} projectId={projectId} meeting={signing} onClose={() => setSigning(null)} />}
+      {giving && <Presenters orgId={orgId} projectId={projectId} projectName={projectName} drawings={drawings} designers={designers} onClose={() => setGiving(false)} />}
       {marking && plan && (
         <LayoutRooms orgId={orgId} projectId={projectId} rooms={allRooms} initial={marks} onClose={() => setMarking(false)}
           sheet={{ drawingId: plan.id, name: plan.name, versionNo: plan.review?.versionNo || 1, pdfPath: plan.review?.pdfPath || null }} />
@@ -239,7 +268,8 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
   );
 }
 
-export const RoomRecord: React.FC<{ r: MeetingRoom; included: number }> = ({ r, included }) => {
+/** A room as the meeting recorded it. `billing` off hides the revision round and its charge (a Designer's view). */
+export const RoomRecord: React.FC<{ r: MeetingRoom; included: number; billing?: boolean }> = ({ r, included, billing = true }) => {
   const tone = r.outcome === 'agreed' ? 'green' : r.outcome === 'changes' ? 'amber' : 'grey';
   return (
     <div className="rounded-[14px] bg-[#F6F6F2] px-3.5 py-3">
@@ -248,8 +278,8 @@ export const RoomRecord: React.FC<{ r: MeetingRoom; included: number }> = ({ r, 
         <Chip tone={tone} icon={r.outcome === 'agreed' ? Check : r.outcome === 'changes' ? Undo2 : undefined}>
           {r.outcome === 'agreed' ? 'Agreed' : r.outcome === 'changes' ? plural(r.changes.length, 'change') : 'Not discussed'}
         </Chip>
-        {r.round > 0 && <Chip tone={r.round > included ? 'red' : 'grey'}>Round {r.round} of {included} included</Chip>}
-        {r.charge && <Chip tone={CHARGE[r.charge.status].tone}>{CHARGE[r.charge.status].label}{r.charge.fee !== null ? ` · ${inr(r.charge.fee)}` : ''}</Chip>}
+        {billing && r.round > 0 && <Chip tone={r.round > included ? 'red' : 'grey'}>Round {r.round} of {included} included</Chip>}
+        {billing && r.charge && <Chip tone={CHARGE[r.charge.status].tone}>{CHARGE[r.charge.status].label}{r.charge.fee !== null ? ` · ${inr(r.charge.fee)}` : ''}</Chip>}
       </div>
       <div className="mt-1 text-[12.5px] text-[#5F636D]">{r.sheets.map((s) => `${s.name} v${s.versionNo}`).join(' · ')}</div>
       {r.changes.map((c) => <div key={c.n} className="mt-1 text-[13px]"><b className="text-[#8F4C07]">{c.n}.</b> {c.text} <span className="text-[#8A8E97]">({r.sheets.find((s) => s.drawingId === c.drawingId)?.name})</span></div>)}

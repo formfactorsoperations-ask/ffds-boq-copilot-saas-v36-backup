@@ -476,6 +476,19 @@ service cloud.firestore {
          }
 
          /*
+           Design meetings and the project's layout plan: an assigned Designer
+           reads every meeting of the project (they present the drawings the
+           Design Head gives them, and see the record of the rest). Written by
+           the designMeeting function only (isReviewRecordPath), never here.
+         */
+         match /designMeetings/{meetingId} {
+           allow read: if isAssignedDesigner(orgId, projectId);
+         }
+         match /designLayout/{layoutId} {
+           allow read: if isAssignedDesigner(orgId, projectId);
+         }
+
+         /*
            The programme the Timeline draws (dbService.getSchedule): stages,
            dates, holds and the target handover; no prices. An assigned
            Designer reads it, as Client Relations and a Site Supervisor do
