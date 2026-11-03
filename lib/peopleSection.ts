@@ -12,11 +12,17 @@ export function openPeopleSection(section: string): void {
   wantedSection = section;
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(SECTION_EVENT, { detail: section }));
 }
-/** The section asked for, once; empty when none was. */
-export function takePeopleSection(): string {
-  const s = wantedSection;
+/**
+ * The section asked for; empty when none was. Only reads it: People clears it
+ * once it is on screen (clearPeopleSection), because React may run a first
+ * render twice (StrictMode, or a render it sets aside) and a read that also
+ * cleared would leave the second run with nothing, opening Today instead.
+ */
+export function wantedPeopleSection(): string {
+  return wantedSection;
+}
+export function clearPeopleSection(): void {
   wantedSection = '';
-  return s;
 }
 /** Told when a section is asked for while People is open. */
 export function onPeopleSection(fn: (section: string) => void): () => void {

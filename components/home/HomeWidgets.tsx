@@ -432,8 +432,13 @@ export function StudioLifeWidget({ view, onOpen, index }: { view: GuideView; onO
   const week = new Date(Date.now() - 7 * 86400000).toISOString();
   const kudos = view.kudos.filter((k) => k.at >= week).slice(0, 2);
   const coming = view.upcoming.filter((o) => o.days >= 2).slice(0, 2);
+  /* Where the pin as a whole leads: a card to sign first, then the thank-yous. */
+  const main = today.length || tomorrow.length || !kudos.length ? 'celebrations' : 'kudos';
+  /* Anywhere on the pin opens People; its buttons say where exactly. */
+  const anywhere = (e: React.MouseEvent) => { if (!(e.target as HTMLElement).closest('button, a')) onOpen(main); };
   return (
-    <Widget index={index} icon={PartyPopper} tone="ok" eyebrow="Studio life" action={{ label: 'People', onClick: () => onOpen(today.length || tomorrow.length ? 'celebrations' : 'kudos') }}>
+    <div className="cursor-pointer" onClick={anywhere}>
+    <Widget index={index} icon={PartyPopper} tone="ok" eyebrow="Studio life" action={{ label: main === 'kudos' ? 'Kudos wall' : 'Celebrations', onClick: () => onOpen(main) }}>
       <div className="flex flex-col gap-3">
         {today.map((c, k) => {
           const name = names.get(c.personId) || 'Someone';
@@ -478,18 +483,19 @@ export function StudioLifeWidget({ view, onOpen, index }: { view: GuideView; onO
           </div>
         )}
         {coming.length > 0 && (
-          <div className="flex flex-col gap-1.5 pt-1 border-t border-slate-200/70">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 pt-2">Coming up</p>
+          <button type="button" onClick={() => onOpen('celebrations')} className="text-left flex flex-col gap-1.5 pt-1 border-t border-slate-200/70 rounded-lg hover:bg-white/50 transition-colors">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 pt-2">Coming up</span>
             {coming.map((o) => (
-              <span key={o.id} className="flex items-center gap-2 text-xs text-slate-700">
+              <span key={o.id} className="w-full flex items-center gap-2 text-xs text-slate-700">
                 <span className="flex-1 min-w-0 truncate">{o.kind === 'birthday' ? `${names.get(o.personId)}'s birthday` : `${names.get(o.personId)}: ${o.years} year${o.years === 1 ? '' : 's'} with the studio`}</span>
                 <span className="text-[11px] text-slate-500">{new Date(`${o.date}T12:00:00+05:30`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
                 <span className={`${chip} ${o.kind === 'birthday' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-amber-100 text-amber-700'}`}>In {o.days} days</span>
               </span>
             ))}
-          </div>
+          </button>
         )}
       </div>
     </Widget>
+    </div>
   );
 }
