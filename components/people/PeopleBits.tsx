@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useMotionValue, useReducedMotion, useSpring, useTransform, type Variants } from 'framer-motion';
 import { TreePalm, Thermometer, Coffee, Gift, House, Building2, HardHat, Sparkles } from '@/lib/lucide-shim';
 import type { LeaveType, Mode } from '../../lib/peopleDesk';
@@ -200,6 +200,74 @@ export const Confetti: React.FC<{ pieces?: number; spread?: number; delay?: numb
     </span>
   );
 };
+
+/**
+ * A cracker: a spark rises, then bursts into a ring of streaks with a flash,
+ * in one brand or state colour with amber glints. Plays once where it sits.
+ */
+export const Cracker: React.FC<{ color: string; spread?: number }> = ({ color, spread = 60 }) => {
+  const sparks = useMemo(() => Array.from({ length: 12 }, (_, i) => ({
+    a: i * 30 + Math.random() * 12, d: spread * (0.65 + Math.random() * 0.35), c: i % 3 === 0 ? '#F59E0B' : color,
+  })), [color, spread]);
+  return (
+    <span aria-hidden className="pointer-events-none absolute left-0 top-0">
+      <motion.span className="absolute rounded-full" style={{ width: 4, height: 4, left: -2, top: -2, background: color }}
+        initial={{ y: 46, opacity: 0 }} animate={{ y: 0, opacity: [0, 1, 1, 0] }} transition={{ duration: 0.3, ease: 'easeOut', times: [0, 0.2, 0.9, 1] }} />
+      <motion.span className="absolute rounded-full" style={{ width: 12, height: 12, left: -6, top: -6, background: color }}
+        initial={{ scale: 0, opacity: 0 }} animate={{ scale: [0, 2.6, 0], opacity: [0.9, 0.45, 0] }} transition={{ duration: 0.5, delay: 0.28 }} />
+      {sparks.map((s, i) => (
+        <span key={i} className="absolute left-0 top-0" style={{ transform: `rotate(${s.a}deg)` }}>
+          <motion.span className="absolute rounded-full" style={{ width: 3, height: 11, left: -1.5, top: -5.5, background: s.c }}
+            initial={{ y: 0, opacity: 0, scaleY: 1.4 }} animate={{ y: -s.d, opacity: [0, 1, 1, 0], scaleY: [1.4, 1.4, 1, 0.3] }}
+            transition={{ duration: 1, delay: 0.28, ease: [0.22, 1, 0.36, 1], times: [0, 0.05, 0.6, 1] }} />
+        </span>
+      ))}
+    </span>
+  );
+};
+
+/**
+ * A party while the mouse is over a card (the owner, 3 Nov 2026): confetti and
+ * crackers go off one after another, at random spots on it, for as long as the
+ * pointer stays; leaving stops new ones and lets the last finish. Mouse only (a
+ * touch has no hover) and nothing under reduced motion. `paused` holds it, say
+ * while someone types. Spread the handlers on the card (which must be
+ * `relative`) and render `layer` inside it.
+ */
+export function useHoverParty({ spread = 60, every = 360, paused = false }: { spread?: number; every?: number; paused?: boolean } = {}) {
+  const still = useReducedMotion();
+  const [bits, setBits] = useState<{ id: number; kind: 'confetti' | 'cracker'; left: number; top: number; color: string }[]>([]);
+  const timer = useRef(0);
+  const count = useRef(0);
+  const hold = useRef(paused);
+  hold.current = paused;
+  const fire = useCallback(() => {
+    if (hold.current) return;
+    const id = ++count.current;
+    const bit = { id, kind: id % 2 ? 'confetti' as const : 'cracker' as const, left: 12 + Math.random() * 76, top: 18 + Math.random() * 62, color: BURST[id % 4] };
+    setBits((b) => [...b.slice(-7), bit]);
+    window.setTimeout(() => setBits((b) => b.filter((x) => x.id !== id)), 1700);
+  }, []);
+  const stop = useCallback(() => { window.clearInterval(timer.current); timer.current = 0; }, []);
+  const start = useCallback((e: React.PointerEvent) => {
+    if (still || e.pointerType !== 'mouse' || timer.current) return;
+    fire();
+    timer.current = window.setInterval(fire, every);
+  }, [still, fire, every]);
+  useEffect(() => stop, [stop]);
+  useEffect(() => { if (still) stop(); }, [still, stop]);
+  const layer = bits.length ? (
+    <span aria-hidden className="pointer-events-none absolute inset-0 z-20 overflow-visible">
+      {bits.map((b) => (
+        <span key={b.id} className="absolute" style={{ left: `${b.left}%`, top: `${b.top}%` }}>
+          {b.kind === 'cracker' ? <Cracker color={b.color} spread={spread} />
+            : <span className="absolute left-0 top-0"><Confetti pieces={14} spread={spread} /></span>}
+        </span>
+      ))}
+    </span>
+  ) : null;
+  return { onPointerEnter: start, onPointerLeave: stop, layer };
+}
 
 /* Where the bursts of a shower go off, across the card it sits in, one after another. */
 const SHOWER = [

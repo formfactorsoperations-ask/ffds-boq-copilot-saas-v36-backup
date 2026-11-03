@@ -4,7 +4,7 @@ import { HandHeart, Heart, Pin, RefreshCw, X } from '@/lib/lucide-shim';
 import { KUDOS_TAGS, type GuideView, type Kudos, type KudosTag } from '../../lib/peopleGuide';
 import { runGuide, playedMoments, markPlayed } from '../../services/peopleGuideService';
 import { Label, input, btnSec } from '../opsDesk/OpsDeskPanels';
-import { Panel, Empty, Notice, Glide, Skeleton, Confetti, ConfettiShower, EASE } from './PeopleBits';
+import { Panel, Empty, Notice, Glide, Skeleton, Confetti, ConfettiShower, useHoverParty, EASE } from './PeopleBits';
 import { chip, firstName, niceDay } from './GuideBits';
 
 /*
@@ -139,6 +139,8 @@ const Note: React.FC<{ k: Kudos; i: number; isNew?: boolean; toName: string; fro
   const tilt = still ? 0 : TILT[i % TILT.length];
   const hearted = k.hearts.includes(meId);
   const [busy, setBusy] = useState(false);
+  /* Pointing at a note sets off confetti and crackers until the pointer leaves. */
+  const party = useHoverParty({ spread: 56 });
   const act = async (action: string, data: Record<string, unknown>) => {
     setBusy(true);
     const r = await runGuide(action, data);
@@ -149,9 +151,10 @@ const Note: React.FC<{ k: Kudos; i: number; isNew?: boolean; toName: string; fro
     <motion.div layout initial={{ opacity: 0, y: -24, rotate: tilt, scale: 0.96 }} animate={{ opacity: 1, y: 0, rotate: tilt, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
       whileHover={still ? undefined : { rotate: 0, y: -3 }}
       transition={{ type: 'spring', stiffness: 260, damping: 18, delay: Math.min(i, 8) * 0.06 }}
-      style={{ transformOrigin: '50% 0%' }}
-      className={`group relative min-h-[150px] rounded-2xl border border-slate-900/5 ${paper.bg} px-4 pt-5 pb-3 flex flex-col gap-2 shadow-[0_10px_20px_-16px_rgba(15,23,42,0.4)] hover:shadow-[0_18px_34px_-20px_rgba(61,82,160,0.55)] transition-shadow`}>
+      style={{ transformOrigin: '50% 0%' }} onPointerEnter={party.onPointerEnter} onPointerLeave={party.onPointerLeave}
+      className={`group relative hover:z-20 min-h-[150px] rounded-2xl border border-slate-900/5 ${paper.bg} px-4 pt-5 pb-3 flex flex-col gap-2 shadow-[0_10px_20px_-16px_rgba(15,23,42,0.4)] hover:shadow-[0_18px_34px_-20px_rgba(61,82,160,0.55)] transition-shadow`}>
       <span className={`absolute -top-1.5 left-1/2 -ml-1.5 w-3 h-3 rounded-full ${paper.pin} shadow`} aria-hidden />
+      {party.layer}
       {isNew && (
         /* New since you last looked: a ring that glows a few times, then stays. */
         <motion.span aria-hidden className="pointer-events-none absolute -inset-1 rounded-[20px] ring-2 ring-emerald-400"
