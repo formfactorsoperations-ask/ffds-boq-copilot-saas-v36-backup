@@ -101,3 +101,19 @@ export function kudosSeenAt(who: string): string {
 export function markKudosSeen(who: string): void {
   try { localStorage.setItem(seenKey(who), new Date().toISOString()); } catch { /* nothing to remember it in */ }
 }
+
+/* ── Moments already played (lib/peopleMoments.ts) ───────────────────────── */
+
+/** Where a moment plays: on Home, on the kudos wall, on the card. Each plays once in each. */
+export type MomentPlace = 'home' | 'wall' | 'card';
+const playedKey = (who: string, place: MomentPlace) => `ffds.moments.${place}.${who}`;
+export function playedMoments(who: string, place: MomentPlace): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(playedKey(who, place)) || '[]')); } catch { return new Set(); }
+}
+export function markPlayed(who: string, place: MomentPlace, ids: string[]): void {
+  if (!who || !ids.length) return;
+  try {
+    const all = [...playedMoments(who, place), ...ids];
+    localStorage.setItem(playedKey(who, place), JSON.stringify([...new Set(all)].slice(-300)));
+  } catch { /* nothing to remember it in: it may play again */ }
+}

@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PartyPopper, Cake, Star, Send, RefreshCw, Gift } from '@/lib/lucide-shim';
 import type { CardView, GuideView } from '../../lib/peopleGuide';
-import { runGuide } from '../../services/peopleGuideService';
+import { runGuide, playedMoments, markPlayed } from '../../services/peopleGuideService';
 import { btnSec } from '../opsDesk/OpsDeskPanels';
-import { Panel, Empty, Notice, Ring, Skeleton, Confetti, listV, rowV, EASE } from './PeopleBits';
+import { Panel, Empty, Notice, Ring, Skeleton, Confetti, ConfettiShower, useHoverParty, listV, rowV, EASE } from './PeopleBits';
 import { Face, chip, firstName, fromNow, niceDay } from './GuideBits';
 
 /*
@@ -85,6 +85,17 @@ const CardStage: React.FC<{ card: CardView; name: string; meId: string }> = ({ c
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [burst, setBurst] = useState(0);
+  /* Pointing at the card sets off confetti and crackers until the pointer leaves; held for a moment after each key while a wish is written. */
+  const [typing, setTyping] = useState(0);
+  useEffect(() => { if (!typing) return; const t = window.setTimeout(() => setTyping(0), 1500); return () => window.clearTimeout(t); }, [typing]);
+  const party = useHoverParty({ spread: 90, paused: typing > 0 });
+  /* The day itself: the card opens under a shower of confetti, the first time each person sees it (lib/peopleMoments.ts). */
+  const [shower, setShower] = useState(0);
+  useEffect(() => {
+    if (card.days !== 0 || !meId || playedMoments(meId, 'card').has(card.id)) return;
+    markPlayed(meId, 'card', [card.id]);
+    setShower(Date.now());
+  }, [card.id, card.days, meId]);
   useEffect(() => { if (!burst) return; const t = window.setTimeout(() => setBurst(0), 1500); return () => window.clearTimeout(t); }, [burst]);
   const sign = async () => {
     setSaving(true);
@@ -95,7 +106,10 @@ const CardStage: React.FC<{ card: CardView; name: string; meId: string }> = ({ c
     setBurst(Date.now());
   };
   return (
-    <div className="pp-3d relative rounded-2xl bg-gradient-to-b from-slate-50 to-[#3D52A0]/5 border border-slate-200 p-5 sm:p-8 overflow-hidden">
+    <div className="pp-3d relative rounded-2xl bg-gradient-to-b from-slate-50 to-[#3D52A0]/5 border border-slate-200 p-5 sm:p-8 overflow-hidden"
+      onPointerEnter={party.onPointerEnter} onPointerLeave={party.onPointerLeave}>
+      {party.layer}
+      {shower > 0 && <ConfettiShower key={shower} pieces={card.mine ? 30 : 24} spread={card.mine ? 170 : 140} />}
       <div className="flex flex-col md:flex-row justify-center pp-keep">
         <motion.div className="relative md:w-60 min-h-[220px] md:min-h-[340px] rounded-t-2xl md:rounded-tr-md md:rounded-l-2xl md:rounded-bl-2xl bg-gradient-to-br from-[#3D52A0] to-[#334486] text-white p-6 flex flex-col justify-between shadow-[-18px_30px_40px_-24px_rgba(18,24,47,0.6)]"
           style={{ transformOrigin: 'right center', transformPerspective: 1600 }}
@@ -129,7 +143,7 @@ const CardStage: React.FC<{ card: CardView; name: string; meId: string }> = ({ c
               {error && <Notice text={error} tone="bad" />}
               <div className="flex gap-2">
                 <input aria-label="Your wish" className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
-                  placeholder={card.signed ? 'Change your wish' : 'Write your wish'} value={text} maxLength={280} onChange={(e) => setText(e.target.value)}
+                  placeholder={card.signed ? 'Change your wish' : 'Write your wish'} value={text} maxLength={280} onChange={(e) => { setText(e.target.value); setTyping(Date.now()); }}
                   onKeyDown={(e) => { if (e.key === 'Enter' && text.trim() && !saving) sign(); }} />
                 <button type="button" className="pp-press inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50" disabled={saving || !text.trim()} onClick={sign}>
                   <Send className="w-4 h-4" />{saving ? 'Signing…' : card.signed ? 'Update' : 'Sign'}

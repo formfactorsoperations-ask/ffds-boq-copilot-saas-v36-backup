@@ -260,6 +260,16 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
   the week's thank-yous as small tilted notes, and the month's occasions. "Sign the card"
   while unsigned (a to-do), "Your day" on your own, otherwise only worth knowing; left out
   when there is nothing in it.
+- **Moments** (owner, 3 Nov 2026, `lib/peopleMoments.ts`): a new thank-you, or a birthday or
+  anniversary today, plays once for each person in each place, under a `ConfettiShower` (five
+  bursts across the card, brand and state colours only): a glass card that drops in at the top
+  of Home (`StudioMoments`), new notes on the kudos wall with a glowing "New" ring, and the
+  day's card in Celebrations. Nothing moves under reduced motion; the card still shows.
+- **Party on hover** (owner, 3 Nov 2026, `useHoverParty` and `Cracker` in `PeopleBits.tsx`):
+  pointing at a kudos note or a birthday or anniversary card sets off confetti and crackers (a
+  spark rises and bursts into a ring of streaks) one after another, at random spots on it, until
+  the pointer leaves. Brand and state colours only; mouse only, so a touch does nothing; held for
+  a moment while a wish is typed; nothing under reduced motion.
 - The People rail is grouped (owner, 28 Oct 2026): My day (Today, Attendance, Leave,
   Approvals), Team (Calendar, Office guide, Celebrations, Kudos), Studio (Essentials,
   Emergency contacts) and Admin (Monthly report). Group names are field labels, shown
