@@ -172,3 +172,27 @@ describe('the essentials, kudos and emergency contacts', () => {
     expect(emergencyDue({ checkedAt: '2026-03-01T10:00:00.000Z' }, TODAY)).toBe(true);
   });
 });
+
+describe('telling the studio (the owner, 3 Nov 2026)', () => {
+  it('tells everyone else about a thank-you, quietly, folded by day', async () => {
+    const { kudosStudioDraft, foldedTitle } = await import('../../lib/notify');
+    const d = kudosStudioDraft({ tag: 'Above and beyond', text: 'Kept up the follow-ups', at: '2026-11-03T05:00:00.000Z' }, { fromName: 'Anish K', toName: 'Anushka', emails: ['Tanvi@S.in', 'riya@s.in'] })!;
+    expect(d).toMatchObject({ level: 'update', title: 'Anish K thanked Anushka: above and beyond', section: 'kudos', group: 'kudos:2026-11-03', to: { emails: ['tanvi@s.in', 'riya@s.in'] } });
+    expect(foldedTitle({ kind: d.kind, title: d.title, count: 3 })).toBe('3 thank-yous on the kudos wall today');
+    expect(kudosStudioDraft({ tag: 'x', text: 'y', at: '' }, { fromName: 'A', toName: 'B', emails: [] })).toBeNull();
+  });
+
+  it('tells everyone else the day before, asks them to sign on the day, and wishes the person well', async () => {
+    const { celebrationDrafts } = await import('../../lib/notify');
+    const who = { name: 'Kavya Iyer', email: 'kavya@s.in', others: ['kavya@s.in', 'arjun@s.in'], signed: 0 };
+    const soon = celebrationDrafts({ kind: 'birthday', days: 1, date: '2026-11-04' }, who);
+    expect(soon.map((d) => [d.kind, d.level, d.title, d.to.emails])).toEqual([['guide.celebration.soon', 'update', "Kavya Iyer's birthday is tomorrow", ['arjun@s.in']]]);
+    const day = celebrationDrafts({ kind: 'birthday', days: 0, date: '2026-11-04' }, { ...who, signed: 3 });
+    expect(day.map((d) => [d.kind, d.level, d.title, d.line, d.action, d.to.emails])).toEqual([
+      ['guide.celebration', 'needs', "It's Kavya Iyer's birthday today", '3 people have signed the card', 'Sign the card', ['arjun@s.in']],
+      ['guide.celebration.mine', 'update', 'Happy birthday, Kavya!', '3 people have signed your card', null, ['kavya@s.in']],
+    ]);
+    expect(celebrationDrafts({ kind: 'anniversary', days: 0, date: '2026-11-04', years: 3 }, who)[0].title).toBe('Today, Kavya Iyer: 3 years with the studio');
+    expect(day.every((d) => d.section === 'celebrations' && d.route === 'people')).toBe(true);
+  });
+});

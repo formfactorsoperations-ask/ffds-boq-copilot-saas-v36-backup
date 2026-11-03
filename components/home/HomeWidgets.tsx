@@ -2,13 +2,14 @@ import React, { createContext, useContext, useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   PenTool, Undo2, Send, Eye, ArrowRight, Stamp, Flame, Clock, Sparkles, CalendarClock, Users, HardHat, Ruler, Video, Phone,
-  MapPin, PartyPopper, TreePalm, House, Hourglass, MessageSquareQuote, BellOff, Check, Flag,
+  MapPin, PartyPopper, TreePalm, House, Hourglass, MessageSquareQuote, BellOff, Check, Flag, Heart,
 } from '@/lib/lucide-shim';
 import type { HomeFeeds } from './useHomeFeeds';
 import { dueOf, projectLook, type DeskRow, type Viewer } from '../../lib/designDesk';
 import { mySheets, reviewInbox, whenLabel, type TeamToday, type Upcoming } from '../../lib/homeWidgets';
 import { addDays, clock12 } from '../../lib/peopleDesk';
 import type { AttentionRow } from './useAttention';
+import type { GuideView } from '../../lib/peopleGuide';
 import type { ImportantDates } from './calendarData';
 import { CountUp, Dot } from '../ui/HudBits';
 import { Confetti, IconTile, Tilt, initials, EASE } from '../people/PeopleBits';
@@ -25,6 +26,8 @@ import { Confetti, IconTile, Tilt, initials, EASE } from '../people/PeopleBits';
                    meetings, site visits and measurements booked with clients
     Team today     who is away or working from home (never why, never who is in),
                    and a countdown to the next holiday
+    Studio life    a birthday or anniversary card to sign, the week's thank-yous,
+                   and the month's occasions (People)
 
   Each card appears only for someone whose role opens what it shows. Built
   with the People motion kit (DESIGN.md → "People motion"): the same fonts
@@ -406,5 +409,87 @@ function Holiday({ h }: { h: TeamToday['nextHoliday'] }) {
         <span className="text-[11px] text-slate-500 pb-0.5 pl-1">{h.days === 0 ? 'today!' : h.days === 1 ? 'day' : 'days'}</span>
       </div>
     </div>
+  );
+}
+
+/* ── Studio life: a card to sign, thank-yous, what is coming ─────────────── */
+
+const occasionTitle = (kind: string, name: string, years?: number) =>
+  kind === 'birthday' ? `${name}'s birthday` : `${name}: ${years} year${years === 1 ? '' : 's'} with the studio`;
+const signedLine = (n: number, mine: boolean) =>
+  n ? `${n} ${n === 1 ? 'person has' : 'people have'} signed ${mine ? 'your' : 'the'} card` : mine ? 'Your card is open today' : 'Be the first to sign';
+
+/**
+ * Studio life (lib/peopleGuide.ts; the owner, 3 Nov 2026): a birthday or work
+ * anniversary today with its card to sign, one tomorrow, the week's
+ * thank-yous and the month's occasions. Each opens its section of People.
+ */
+export function StudioLifeWidget({ view, onOpen, index }: { view: GuideView; onOpen: (section: 'celebrations' | 'kudos') => void; index: number }) {
+  const names = new Map(view.entries.map((e) => [e.id, e.name]));
+  const first = (id: string) => (names.get(id) || 'Someone').split(/\s+/)[0];
+  const today = view.cards.filter((c) => c.days === 0).sort((a, b) => Number(b.mine) - Number(a.mine)).slice(0, 2);
+  const tomorrow = view.cards.filter((c) => c.days === 1).slice(0, 2);
+  const week = new Date(Date.now() - 7 * 86400000).toISOString();
+  const kudos = view.kudos.filter((k) => k.at >= week).slice(0, 2);
+  const coming = view.upcoming.filter((o) => o.days >= 2).slice(0, 2);
+  return (
+    <Widget index={index} icon={PartyPopper} tone="ok" eyebrow="Studio life" action={{ label: 'People', onClick: () => onOpen(today.length || tomorrow.length ? 'celebrations' : 'kudos') }}>
+      <div className="flex flex-col gap-3">
+        {today.map((c, k) => {
+          const name = names.get(c.personId) || 'Someone';
+          return (
+            <motion.div key={c.id} initial={{ opacity: 0, y: 8, rotateX: -20 }} animate={{ opacity: 1, y: 0, rotateX: 0 }} transition={{ delay: 0.15 + k * 0.1, duration: 0.5, ease: EASE }}
+              style={{ transformPerspective: 700 }} className="relative rounded-2xl bg-white/80 border border-emerald-200 px-3 py-3 flex items-center gap-3">
+              {k === 0 && <Confetti pieces={14} spread={80} />}
+              <span className="w-11 h-11 shrink-0 rounded-xl bg-[#3D52A0] text-white grid place-items-center text-xs font-black shadow-[0_10px_18px_-12px_rgba(61,82,160,0.7)]">{initials(name)}</span>
+              <span className="min-w-0 flex-1 flex flex-col">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">{c.kind === 'birthday' ? 'Birthday today' : 'Work anniversary today'}</span>
+                <span className="text-sm font-bold text-slate-800 truncate">{c.mine ? (c.kind === 'birthday' ? `Happy birthday, ${first(c.personId)}!` : `${c.years} year${c.years === 1 ? '' : 's'} with us. Thank you!`) : occasionTitle(c.kind, name, c.years)}</span>
+                <span className="text-[11px] text-slate-500">{signedLine(c.wishes.length, c.mine)}</span>
+              </span>
+              {c.mine || c.signed
+                ? <button type="button" onClick={() => onOpen('celebrations')} className="shrink-0 text-xs font-bold text-[#3D52A0] hover:text-[#334486]">{c.mine ? 'Open your card' : 'See the card'}</button>
+                : <button type="button" onClick={() => onOpen('celebrations')} className="pp-press shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486]"><PartyPopper className="w-3.5 h-3.5" />Sign the card</button>}
+            </motion.div>
+          );
+        })}
+        {tomorrow.map((c) => (
+          <button key={c.id} type="button" onClick={() => onOpen('celebrations')} className="text-left flex items-center gap-2.5 rounded-xl px-1 py-1 hover:bg-white/60 transition-colors">
+            <span className="w-8 h-8 shrink-0 rounded-lg bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center text-[11px] font-black">{initials(names.get(c.personId) || '?')}</span>
+            <span className="min-w-0 flex-1 text-xs text-slate-700"><b className="text-slate-800">Tomorrow:</b> {occasionTitle(c.kind, names.get(c.personId) || 'Someone', c.years)}. The card is open.</span>
+            <span className={`${chip} bg-[#3D52A0]/10 text-[#3D52A0]`}>{c.signed ? 'Signed' : 'Sign early'}</span>
+          </button>
+        ))}
+        {kudos.length > 0 && (
+          <div className="flex flex-col gap-2 pt-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Thank-yous this week</p>
+            {kudos.map((k, i) => (
+              <motion.button key={k.id} type="button" onClick={() => onOpen('kudos')} initial={{ opacity: 0, y: -10, rotate: i ? 1.2 : -1.2 }} animate={{ opacity: 1, y: 0, rotate: i ? 1.2 : -1.2 }}
+                whileHover={{ rotate: 0, y: -2 }} transition={{ type: 'spring', stiffness: 260, damping: 18, delay: 0.3 + i * 0.08 }}
+                className={`text-left rounded-xl border border-slate-900/5 px-3 py-2 ${i ? 'bg-amber-50' : 'bg-[#3D52A0]/5'}`}>
+                <span className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-800 truncate">{first(k.from)} thanked {first(k.to)}</span>
+                  <span className={`${chip} bg-white/80 text-slate-700`}>{k.tag}</span>
+                  <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 tabular-nums"><Heart className="w-3 h-3" fill="currentColor" />{k.hearts.length}</span>
+                </span>
+                <span className="block text-[11px] text-slate-600 truncate mt-0.5">{k.text}</span>
+              </motion.button>
+            ))}
+          </div>
+        )}
+        {coming.length > 0 && (
+          <div className="flex flex-col gap-1.5 pt-1 border-t border-slate-200/70">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 pt-2">Coming up</p>
+            {coming.map((o) => (
+              <span key={o.id} className="flex items-center gap-2 text-xs text-slate-700">
+                <span className="flex-1 min-w-0 truncate">{o.kind === 'birthday' ? `${names.get(o.personId)}'s birthday` : `${names.get(o.personId)}: ${o.years} year${o.years === 1 ? '' : 's'} with the studio`}</span>
+                <span className="text-[11px] text-slate-500">{new Date(`${o.date}T12:00:00+05:30`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                <span className={`${chip} ${o.kind === 'birthday' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-amber-100 text-amber-700'}`}>In {o.days} days</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </Widget>
   );
 }

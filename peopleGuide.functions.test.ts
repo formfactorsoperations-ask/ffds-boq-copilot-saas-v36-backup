@@ -185,3 +185,43 @@ describe('emergency contacts', () => {
     expect(v.emergency.openings).toHaveLength(1);
   }, 60000);
 });
+
+describe('telling the studio', () => {
+  const notesOf = async (email: string, kind: string) => {
+    let list: any[] = [];
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      list = (await getDocs(collection(ctx.firestore(), `inbox/${email}/notes`))).docs.map((d) => d.data()).filter((x: any) => x.kind === kind);
+    });
+    return list;
+  };
+
+  it('tells everyone else about a thank-you, but not the writer, and not twice', async () => {
+    const id = cid();
+    await u.anish.run('kudos', { id, to: 'tm-riya', tag: 'Above and beyond', text: 'Kept up the follow-ups' });
+    await u.anish.run('kudos', { id, to: 'tm-riya', tag: 'Above and beyond', text: 'Kept up the follow-ups' });
+    await new Promise((r) => setTimeout(r, 1500));
+    expect((await notesOf('tanvi@g.in', 'guide.kudos.studio')).map((n) => [n.title, n.section])).toEqual([['Anish thanked Riya: above and beyond', 'kudos']]);
+    expect((await notesOf('anish@g.in', 'guide.kudos.studio')).filter((n) => n.title.includes('thanked Riya'))).toHaveLength(0);
+    expect(await notesOf('riya@g.in', 'guide.kudos.studio')).toHaveLength(0);
+    expect(await notesOf('riya@g.in', 'guide.kudos')).toHaveLength(1);
+  }, 60000);
+
+  it('the morning check asks everyone else to sign a card today and wishes the person well, once', async () => {
+    process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
+    process.env.GCLOUD_PROJECT = PROJECT;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const admin = require('./functions/node_modules/firebase-admin');
+    if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT });
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { celebrateStudio } = require('./functions/lib/functions/src/peopleGuide.js');
+    const org = (await admin.firestore().doc(`organizations/${STUDIO}`).get()).data();
+    expect(await celebrateStudio(STUDIO, org)).toBe(1);
+    expect(await celebrateStudio(STUDIO, org)).toBe(0);
+    await new Promise((r) => setTimeout(r, 1000));
+    expect((await notesOf('anish@g.in', 'guide.celebration')).map((n) => [n.title, n.level, n.action, n.section])).toEqual([["It's Tanvi Rao's birthday today", 'needs', 'Sign the card', 'celebrations']]);
+    expect((await notesOf('tanvi@g.in', 'guide.celebration.mine')).map((n) => n.title)).toEqual(['Happy birthday, Tanvi!']);
+    expect(await notesOf('tanvi@g.in', 'guide.celebration')).toHaveLength(0);
+    /* Riya keeps hers private: never told, even though her day is not today. */
+    expect(await notesOf('anish@g.in', 'guide.celebration.soon')).toHaveLength(0);
+  }, 60000);
+});

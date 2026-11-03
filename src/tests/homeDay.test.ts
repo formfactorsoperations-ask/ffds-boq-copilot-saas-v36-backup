@@ -86,3 +86,35 @@ test('the board is ready only once no pin is still loading', () => {
   expect(dayOrder({ rows: [], viewer: designer, checkin: { state: 'out' }, team: team() }).ready).toBe(true);
   expect(dayOrder({}).ready).toBe(true);
 });
+
+/* ── Studio life (the owner, 3 Nov 2026) ─────────────────────────────────── */
+import { lifeOf } from '../../lib/homeDay';
+import type { GuideView } from '../../lib/peopleGuide';
+
+const guide = (over: Partial<GuideView> = {}): GuideView => ({
+  today: '2026-10-14', entries: [], essentials: null, upcoming: [], cards: [], kudos: [], emergency: null, canEdit: false, ...over,
+});
+const card = (over: any) => ({ id: 'c', personId: 'p', kind: 'birthday', date: '2026-10-14', days: 0, wishes: [], mine: false, signed: false, ...over });
+
+test('studio life asks you to sign a card today, and sits above what is only worth knowing', () => {
+  const life = lifeOf(guide({ cards: [card({})] }), NOW)!;
+  expect(life).toMatchObject({ today: 1, unsigned: 1, mine: false });
+  const day = dayOrder({ team: team(), life, now: NOW });
+  expect(day.pins.map((p) => [p.kind, p.why])).toEqual([['life', 'Sign the card'], ['team', 'Everyone in']]);
+  expect(day.toDo).toBe(1);
+});
+
+test('once signed, or on your own day, it is not something to do', () => {
+  expect(dayOrder({ life: lifeOf(guide({ cards: [card({ signed: true })] }), NOW), now: NOW }).pins[0]).toMatchObject({ why: 'Today' });
+  const mine = dayOrder({ life: lifeOf(guide({ cards: [card({ mine: true })] }), NOW), now: NOW });
+  expect(mine.pins[0]).toMatchObject({ kind: 'life', why: 'Your day' });
+  expect(mine.toDo).toBe(0);
+});
+
+test('studio life is left out when there is nothing in it, and counts only the last week of thank-yous', () => {
+  expect(lifeOf(guide(), NOW)).toBeNull();
+  const old = { id: 'k', to: 'a', from: 'b', tag: 'Saved the day' as const, text: 'x', hearts: [], at: '2026-09-01T00:00:00.000Z' };
+  expect(lifeOf(guide({ kudos: [old] }), NOW)).toBeNull();
+  expect(lifeOf(guide({ kudos: [{ ...old, at: '2026-10-13T00:00:00.000Z' }] }), NOW)).toMatchObject({ kudos: 1 });
+  expect(dayOrder({ life: undefined, now: NOW }).pins).toEqual([]);
+});

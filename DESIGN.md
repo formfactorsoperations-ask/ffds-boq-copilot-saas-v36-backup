@@ -252,6 +252,14 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
 - **Emergency contacts** (`EmergencyContacts.tsx`): private to the person and
   admins; opening one asks why, and the person is told.
 - Birth years and personal numbers are never asked for or shown.
+- **Telling the studio** (owner, 3 Nov 2026: "nobody is aware until told"): a thank-you goes
+  to everyone's bell, quietly (folded by day); a birthday or anniversary is told the day
+  before, asks everyone else to sign on the day (a "needs you" note with Sign the card),
+  and wishes the person well. Notes open their section of People (`lib/peopleSection.ts`).
+- **Studio life** pin on Home (`StudioLifeWidget`): a card to sign today, tomorrow's,
+  the week's thank-yous as small tilted notes, and the month's occasions. "Sign the card"
+  while unsigned (a to-do), "Your day" on your own, otherwise only worth knowing; left out
+  when there is nothing in it.
 - The People rail is grouped (owner, 28 Oct 2026): My day (Today, Attendance, Leave,
   Approvals), Team (Calendar, Office guide, Celebrations, Kudos), Studio (Essentials,
   Emergency contacts) and Admin (Monthly report). Group names are field labels, shown

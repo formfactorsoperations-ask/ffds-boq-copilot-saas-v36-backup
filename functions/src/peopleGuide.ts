@@ -1,11 +1,13 @@
 import { onCall } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
+import * as logger from "firebase-functions/logger";
 import { contextOf, fail, PEOPLE_REGION, type Ctx } from "./peopleDesk";
 import { notify } from "./notify";
-import { emergencyOpenedDraft, kudosDraft } from "../../lib/notify";
-import { DomainError, businessDate } from "../../lib/peopleDesk";
+import { celebrationDrafts, emergencyOpenedDraft, kudosDraft, kudosStudioDraft } from "../../lib/notify";
+import { DomainError, businessDate, peopleOf, type Person } from "../../lib/peopleDesk";
 import {
-  cleanEmergency, cleanEssentials, cleanKudos, cleanOffice, cleanReason, guideView, isGuideAdmin, openCards, parseCardId, signCard,
+  cleanEmergency, cleanEssentials, cleanKudos, cleanOffice, cleanReason, guideView, isGuideAdmin, occasions, openCards, parseCardId, signCard,
   type Emergency, type GuideView, type Kudos, type OfficeDetails, type Opening, type Wish,
 } from "../../lib/peopleGuide";
 
@@ -92,6 +94,10 @@ const personIn = (ctx: Ctx, id: unknown) => {
   return p;
 };
 
+/** Everyone on the studio's team who can be told something, but these people (and never the platform owner looking in). */
+const studioEmails = (people: Person[], but: string[]) =>
+  people.filter((p) => p.active && p.email && p.id !== "platform-owner" && !but.includes(p.id)).map((p) => String(p.email));
+
 export const peopleGuideCommand = onCall({ cors: true, region: PEOPLE_REGION }, async (request) => {
   try {
     const ctx = await contextOf(request);
@@ -143,7 +149,13 @@ export const peopleGuideCommand = onCall({ cors: true, region: PEOPLE_REGION }, 
           else throw e;
         });
         const to = ctx.people.find((p) => p.id === clean.to);
-        if (created && to?.email) await notify({ tenantId: ctx.tenantId, actorEmail: ctx.me.email || null }, [kudosDraft(clean, { fromName: ctx.me.name, toEmail: to.email })]);
+        /* The person thanked hears it as theirs; everyone else in the studio hears it too, quietly (lib/notify kudosStudioDraft). */
+        if (created && to) {
+          await notify({ tenantId: ctx.tenantId, actorEmail: ctx.me.email || null }, [
+            to.email ? kudosDraft(clean, { fromName: ctx.me.name, toEmail: to.email }) : null,
+            kudosStudioDraft({ ...clean, at: now }, { fromName: ctx.me.name, toName: to.name, emails: studioEmails(ctx.people, [to.id]) }),
+          ]);
+        }
         break;
       }
       case "heart": {
@@ -214,3 +226,47 @@ export const peopleGuideCommand = onCall({ cors: true, region: PEOPLE_REGION }, 
     return fail(e);
   }
 });
+
+/*
+  The morning check (the owner, 3 Nov 2026: "nobody is aware until told").
+  Every morning at 9:15, India time, for each studio: a birthday or work
+  anniversary tomorrow tells everyone else the card is open; one today asks
+  everyone else to sign it and wishes the person well (lib/notify
+  celebrationDrafts). A birthday someone keeps to themselves is never told.
+  Each message goes once: a marker per occasion and day under
+  peopleDesk/{studio}/sent, so a retried run tells nobody twice.
+*/
+export const peopleCelebrations = onSchedule({ schedule: "15 9 * * *", timeZone: "Asia/Kolkata", region: PEOPLE_REGION }, async () => {
+  const orgs = await db().collection("organizations").get();
+  let told = 0;
+  for (const o of orgs.docs) {
+    try { told += await celebrateStudio(o.id, o.data()); } catch (e: any) { logger.error("[peopleGuide] celebrations failed", { tenantId: o.id, message: e?.message }); }
+  }
+  logger.info("[peopleGuide] celebrations", { studios: orgs.size, occasions: told });
+});
+
+export async function celebrateStudio(tenantId: string, org: any, now = new Date().toISOString()): Promise<number> {
+  const root = base(tenantId);
+  const offices = await db().collection(`${root}/office`).get();
+  if (offices.empty) return 0;
+  const officeMap: Record<string, Partial<OfficeDetails>> = {};
+  offices.docs.forEach((d) => { officeMap[d.id] = d.data() as OfficeDetails; });
+  const people = peopleOf(org).filter((p) => p.active);
+  const today = businessDate(now, "Asia/Kolkata");
+  let told = 0;
+  for (const occ of occasions(people, officeMap, today, 0, 1)) {
+    const person = people.find((p) => p.id === occ.personId);
+    if (!person) continue;
+    /* Once per occasion and day: the marker is created first, so a second run finds it and stops. */
+    const marker = db().doc(`${root}/sent/${occ.id}_${occ.days}`);
+    const first = await marker.create({ at: now }).then(() => true, (e: any) => { if (Number(e?.code) === 6) return false; throw e; });
+    if (!first) continue;
+    const card = occ.days === 0 ? (await db().doc(`${root}/cards/${occ.id}`).get()).data() : null;
+    const drafts = celebrationDrafts(occ, {
+      name: person.name, email: person.email || "", others: studioEmails(people, [person.id]), signed: ((card?.wishes || []) as Wish[]).length,
+    });
+    await notify({ tenantId, org }, drafts);
+    told++;
+  }
+  return told;
+}
