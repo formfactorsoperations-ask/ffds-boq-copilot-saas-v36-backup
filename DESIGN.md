@@ -298,6 +298,10 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
 - **Leave types shown** (owner, 4 Nov 2026: "6 CLs + 6 SLs a year, plus holidays"): People shows
   only the leave the studio gives. A type with no allowance (planned leave, by default) and none
   taken is left out of the bar, Leave, the leave form, Today and the Leave year report.
+  Where the studio gives no planned leave, planned days already taken count as casual leave
+  (shown as casual, "incl. N from planned" in the report). A leave day on a weekly or monthly off
+  or a studio holiday, even one added later, is never charged; the Leave year report says so
+  ("+N on offs, free") and lists who in a "Worth a look" strip.
 - The People rail is grouped (owner, 28 Oct 2026): My day (Today, Attendance, Leave, Travel,
   Approvals), Team (Calendar, Office guide, Celebrations, Kudos), Studio (Essentials,
   Emergency contacts) and Admin (Reports). Group names are field labels, shown

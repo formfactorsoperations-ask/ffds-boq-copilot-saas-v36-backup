@@ -5,7 +5,7 @@
   and its CSV. Pure, so the tests run it.
 */
 import {
-  LEAVE_LABELS, addDays, availabilityOf, balanceFor, businessDate, fiscalYear, isLate, isOff, timeLabel,
+  LEAVE_LABELS, addDays, availabilityOf, balanceFor, plannedIsCasual, businessDate, fiscalYear, isLate, isOff, timeLabel,
   type Attendance, type Balance, type Store, type LeaveType, type Located, type Mode, type Person, type Policy, type RequestRecord, type Snapshot,
 } from './peopleDesk';
 
@@ -207,7 +207,7 @@ export function monthReport(s: Snapshot, month: string): ReportRow[] {
       late: mine.filter((a) => isLate(a, s.policy)).length,
       open: mine.filter((a) => !a.checkOut).length,
       minutes: mine.filter((a) => a.checkOut).reduce((n, a) => n + minutesWorked(a, a.checkOut!), 0),
-      awayDays: leave.reduce((n, r) => n + r.days.filter((d) => d.date.slice(0, 7) === month).reduce((m, d) => m + d.units, 0), 0),
+      awayDays: leave.reduce((n, r) => n + r.days.filter((d) => d.date.slice(0, 7) === month && !isOff(d.date, s.policy)).reduce((m, d) => m + d.units, 0), 0),
     };
   });
 }
@@ -226,6 +226,23 @@ export interface LeaveYearRow {
   wfh: number;
   /** Taken in each month of the year, Apr to Mar. */
   byMonth: number[];
+  /** Leave days that fell on a weekly or monthly off or a studio holiday, so were not charged. */
+  offDays: { date: string; why: string }[];
+  /** Planned-leave days counted as casual leave (the studio gives no planned leave). */
+  plannedAsCasual: number;
+}
+/** Why a day is not a working day: "Holiday: Diwali", "Weekly off", "Monthly off". */
+export function offReason(date: string, policy: Policy): string {
+  if (policy.holidays.includes(date)) return `Holiday${policy.holidayNames?.[date] ? `: ${policy.holidayNames[date]}` : ''}`;
+  const dow = new Date(`${date}T12:00:00Z`).getUTCDay();
+  if (policy.weeklyOffDays.includes(dow)) return 'Weekly off';
+  return 'Monthly off';
+}
+/** The type a leave request now counts as: planned leave counts as casual where the studio gives none. */
+export const shownLeaveType = (t: LeaveType, policy: Pick<Policy, 'allowances'>): LeaveType => (t === 'PL' && policy.allowances.PL === 0 ? 'CL' : t);
+/** A leave type as the studio now calls it: planned leave reads as casual leave where the studio gives none. */
+export function leaveTypeLabel(t: LeaveType, policy: Pick<Policy, 'allowances'>): string {
+  return t === 'PL' && policy.allowances.PL === 0 ? LEAVE_LABELS.CL : LEAVE_LABELS[t];
 }
 /** Everyone the person may see in full (themselves, their people, or the studio), for one leave year. */
 export function leaveYear(s: Snapshot, fy: string): LeaveYearRow[] {
@@ -237,15 +254,21 @@ export function leaveYear(s: Snapshot, fy: string): LeaveYearRow[] {
   return people.map((person) => {
     const balances = Object.fromEntries((Object.keys(LEAVE_LABELS) as LeaveType[]).map((t) => [t, balanceFor(store, person, t, fy)])) as Record<LeaveType, Balance>;
     const byMonth = Array.from({ length: 12 }, () => 0);
+    const offDays: { date: string; why: string }[] = [];
+    let plannedAsCasual = 0;
+    const folded = plannedIsCasual(s.policy, person, fy);
     for (const r of s.requests) {
       if (r.employeeId !== person.id || r.kind !== 'leave' || r.type === 'WFH' || !(r.status === 'Approved' || r.status === 'Cancellation requested')) continue;
       for (const d of r.days) {
         if (fiscalYear(d.date, s.policy) !== fy) continue;
+        /* A day off anyway (weekly, monthly or a holiday) is not leave taken: noted, not charged. */
+        if (isOff(d.date, s.policy)) { offDays.push({ date: d.date, why: offReason(d.date, s.policy) }); continue; }
         byMonth[(Number(d.date.slice(5, 7)) - start + 12) % 12] += d.units;
+        if (r.type === 'PL' && folded) plannedAsCasual += d.units;
       }
     }
     return {
-      person, balances, byMonth,
+      person, balances, byMonth, offDays: offDays.sort((a, b) => a.date.localeCompare(b.date)), plannedAsCasual,
       taken: CHARGED.reduce((n, t) => n + balances[t].used, 0),
       left: CHARGED.reduce((n, t) => n + Math.max(0, balances[t].available), 0),
       wfh: balances.WFH.used,
@@ -299,7 +322,7 @@ export function mergeChange(s: Snapshot, change: { session?: Attendance | null; 
 
 /** The leave year, one row a person, for a spreadsheet. */
 export function leaveYearCsv(rows: LeaveYearRow[], fy: string, types: LeaveType[] = CHARGED): string {
-  const head = ['Name', ...types.flatMap((t) => [`${LEAVE_LABELS[t]} allowed`, `${LEAVE_LABELS[t]} taken`, `${LEAVE_LABELS[t]} waiting`, `${LEAVE_LABELS[t]} left`]), 'Total taken', 'Total left', 'Work from home days', 'Leave year'];
-  const body = rows.map((r) => [r.person.name, ...types.flatMap((t) => [r.balances[t].entitled, r.balances[t].used, r.balances[t].reserved, r.balances[t].available]), r.taken, r.left, r.wfh, fyLabel(fy)]);
+  const head = ['Name', ...types.flatMap((t) => [`${LEAVE_LABELS[t]} allowed`, `${LEAVE_LABELS[t]} taken`, `${LEAVE_LABELS[t]} waiting`, `${LEAVE_LABELS[t]} left`]), 'Total taken', 'Total left', 'Work from home days', 'Not charged (offs and holidays)', 'Planned leave counted as casual', 'Leave year'];
+  const body = rows.map((r) => [r.person.name, ...types.flatMap((t) => [r.balances[t].entitled, r.balances[t].used, r.balances[t].reserved, r.balances[t].available]), r.taken, r.left, r.wfh, r.offDays.length, r.plannedAsCasual, fyLabel(fy)]);
   return [head, ...body].map((r) => r.map(cell).join(',')).join('\n');
 }

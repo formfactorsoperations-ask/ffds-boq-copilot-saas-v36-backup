@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_POLICY, scopeSnapshot, type Person, type RequestRecord, type Snapshot } from '../../lib/peopleDesk';
+import { DEFAULT_POLICY, balanceFor, scopeSnapshot, type Person, type RequestRecord, type Snapshot } from '../../lib/peopleDesk';
 import {
   cleanClaim, kmAmount, cleanRates, canDecide, canDelete, claimsByProject, forOf, decideClaim, payClaim, withdrawClaim, claimsView, totalsOf, claimsMonth, claimsCsv, recentTrips,
   DEFAULT_RATES, type Claim,
 } from '../../lib/peopleClaims';
 import { claimLoggedDraft, claimDecidedDraft, claimDeletedDraft, foldedTitle } from '../../lib/notify';
-import { leaveYear, leaveYearCsv, leaveTypesFor } from '../../lib/peopleView';
+import { leaveYear, leaveYearCsv, leaveTypesFor, shownLeaveType, monthReport } from '../../lib/peopleView';
 
 const person = (id: string, over: Partial<Person> = {}): Person => ({ id, name: id.toUpperCase(), title: '', teamId: 'design', managerId: '', accessRole: 'employee', active: true, email: `${id}@studio.in`, ...over });
 const TODAY = '2026-11-04';
@@ -158,7 +158,7 @@ describe('the leave year (the owner, 4 Nov 2026)', () => {
   const ravi = person('ravi', { managerId: 'meena', entitlements: { 2026: { PL: 15 } } });
   const tara = person('tara');
   const requests = [
-    req('1', 'ravi', 'PL', ['2026-05-04', '2026-05-05']),
+    req('1', 'ravi', 'PL', ['2026-05-05', '2026-05-06']),
     req('2', 'ravi', 'SL', ['2026-09-10']),
     req('3', 'ravi', 'PL', ['2026-12-01'], 'Pending'),
     req('4', 'ravi', 'WFH', ['2026-10-01']),
@@ -174,6 +174,34 @@ describe('the leave year (the owner, 4 Nov 2026)', () => {
     expect(r.byMonth[5]).toBe(1); // September
     expect(rows.map((x) => x.person.id)).toEqual(['boss', 'ravi', 'tara']);
     expect(leaveYearCsv(rows, '2026').split('\n')[2]).toContain('RAVI,15,2,1,12');
+  });
+  it('never charges a leave day that falls on a weekly or monthly off or a holiday, even one added later', () => {
+    /* Mon 4 May is the weekly off; Sun 10 May the 2nd Sunday; Wed 6 May becomes a holiday after the leave. */
+    const policy = { ...DEFAULT_POLICY, holidays: ['2026-05-06'], holidayNames: { '2026-05-06': 'Maharashtra Day (moved)' } };
+    const imported = [req('h1', 'tara', 'CL', ['2026-05-04', '2026-05-05', '2026-05-06', '2026-05-10'])];
+    const store = { people: [tara], policy, requests: imported, attendance: [], events: [] } as any;
+    expect(balanceFor(store, tara, 'CL', '2026')).toMatchObject({ used: 1, available: 5 });
+    const row = leaveYear({ ...snap(person('boss', { accessRole: 'admin' }), [tara], imported), policy }, '2026').find((x) => x.person.id === 'tara')!;
+    expect(row.taken).toBe(1);
+    expect(row.offDays).toEqual([
+      { date: '2026-05-04', why: 'Weekly off' }, { date: '2026-05-06', why: 'Holiday: Maharashtra Day (moved)' }, { date: '2026-05-10', why: 'Monthly off' },
+    ]);
+    expect(monthReport({ ...snap(tara, [tara], imported), policy }, '2026-05')[0].awayDays).toBe(1);
+  });
+  it('with no planned leave, planned days already taken count as casual leave, and show as casual', () => {
+    const anushka = person('anushka');
+    const hub = [req('p1', 'anushka', 'PL', ['2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10', '2026-07-11']), req('c1', 'anushka', 'CL', ['2026-08-04'])];
+    const store = { people: [anushka], policy: DEFAULT_POLICY, requests: hub, attendance: [], events: [] } as any;
+    expect(balanceFor(store, anushka, 'PL', '2026')).toMatchObject({ entitled: 0, used: 0, available: 0 });
+    expect(balanceFor(store, anushka, 'CL', '2026')).toMatchObject({ entitled: 6, used: 6, available: 0 });
+    const row = leaveYear(snap(person('boss', { accessRole: 'admin' }), [anushka], hub), '2026').find((x) => x.person.id === 'anushka')!;
+    expect([row.plannedAsCasual, row.taken, row.left]).toEqual([5, 6, 6]);
+    expect(leaveTypesFor(DEFAULT_POLICY, [row.balances])).toEqual(['SL', 'CL']);
+    expect(shownLeaveType('PL', DEFAULT_POLICY)).toBe('CL');
+    /* A studio, or a person, that does give planned leave keeps it apart. */
+    const ravi15 = { ...anushka, entitlements: { 2026: { PL: 15 } } };
+    expect(balanceFor(store, ravi15, 'CL', '2026').used).toBe(1);
+    expect(shownLeaveType('PL', { allowances: { ...DEFAULT_POLICY.allowances, PL: 12 } })).toBe('PL');
   });
   it('the studio gives 6 casual and 6 sick days a year; a type with no allowance is left out unless someone has it', () => {
     expect(DEFAULT_POLICY.allowances).toMatchObject({ PL: 0, SL: 6, CL: 6, COMP: 0 });

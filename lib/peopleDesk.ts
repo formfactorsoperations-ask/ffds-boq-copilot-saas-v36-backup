@@ -505,21 +505,38 @@ export function isApprover(person: Person): boolean {
 const reserves = (status: Status) => status === "Pending";
 const consumes = (status: Status) =>
   status === "Approved" || status === "Cancellation requested";
+/**
+ * Whether planned leave is folded into casual leave for this person and year
+ * (the owner, 4 Nov 2026: "remove planned leave and shift the leaves to
+ * casual"): when neither the studio nor the person gives any planned leave,
+ * planned days already taken (People Hub's, say) count as casual leave.
+ */
+export function plannedIsCasual(policy: Pick<Policy, "allowances">, person: Pick<Person, "entitlements">, fy: string): boolean {
+  return (person.entitlements?.[fy]?.PL ?? policy.allowances.PL) === 0;
+}
+/**
+ * A leave year's balance of one type. Only working days are charged: a day
+ * that falls on a weekly or monthly off, or a studio holiday (even one added
+ * after the leave was approved), is never counted (the owner, 4 Nov 2026).
+ */
 export function balanceFor(
   store: Store,
   person: Person,
   type: LeaveType,
   fy: string,
 ): Balance {
+  const folded = plannedIsCasual(store.policy, person, fy);
+  if (type === "PL" && folded) return { entitled: 0, used: 0, reserved: 0, remaining: 0, available: 0 };
+  const types: LeaveType[] = type === "CL" && folded ? ["CL", "PL"] : [type];
   const entitled =
     person.entitlements?.[fy]?.[type] ?? store.policy.allowances[type];
   let used = 0,
     reserved = 0;
   for (const r of store.requests.filter(
-    (r) => r.employeeId === person.id && r.kind === "leave" && r.type === type,
+    (r) => r.employeeId === person.id && r.kind === "leave" && types.includes(r.type),
   )) {
     const units = r.days
-      .filter((d) => fiscalYear(d.date, store.policy) === fy)
+      .filter((d) => fiscalYear(d.date, store.policy) === fy && !isOff(d.date, store.policy))
       .reduce((sum, d) => sum + d.units, 0);
     if (consumes(r.status)) used += units;
     if (reserves(r.status)) reserved += units;

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ChartColumn, ChevronLeft, ChevronRight, Download, Fingerprint, Sunrise, TreePalm, Clock, Search, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle,
-  IndianRupee, Hourglass, BadgeCheck, Wallet, ChevronDown, Route, CalendarRange, House,
+  IndianRupee, Hourglass, BadgeCheck, Wallet, ChevronDown, Route, CalendarRange, House, Sparkles,
 } from '@/lib/lucide-shim';
 import { LEAVE_LABELS, addDays, isOff, type Snapshot } from '../../lib/peopleDesk';
 import {
@@ -377,6 +377,13 @@ function LeaveYearReport({ s, fy, query }: { s: Snapshot; fy: string; query: str
   /* Only the leave the studio gives: a type with no allowance and none taken (planned leave, by default) gets no column. */
   const types = leaveTypesFor(s.policy, rows.map((r) => r.balances));
   const low = rows.filter((r) => r.left <= 2).length;
+  const spared = rows.reduce((n, r) => n + r.offDays.length, 0);
+  /* Who needs a look: overdrawn, or leave recorded on days off (not charged), or planned leave now counted as casual. */
+  const flags = rows.flatMap((r) => [
+    ...types.filter((t) => r.balances[t].available < 0).map((t) => ({ id: `${r.person.id}-${t}`, name: r.person.name, text: `${Math.abs(r.balances[t].available)} over on ${LEAVE_LABELS[t].toLowerCase()}`, tone: 'bad' as const })),
+    r.offDays.length ? { id: `${r.person.id}-off`, name: r.person.name, text: `${r.offDays.length} leave day${r.offDays.length === 1 ? '' : 's'} on ${[...new Set(r.offDays.map((d) => d.why.split(':')[0].toLowerCase()))].join(' and ')}, not charged`, tone: 'ok' as const, title: r.offDays.map((d) => `${d.date}: ${d.why}`).join('\n') } : null,
+    r.plannedAsCasual ? { id: `${r.person.id}-pl`, name: r.person.name, text: `${r.plannedAsCasual} planned-leave day${r.plannedAsCasual === 1 ? '' : 's'} counted as casual`, tone: 'warn' as const } : null,
+  ].filter(Boolean)) as { id: string; name: string; text: string; tone: 'ok' | 'warn' | 'bad'; title?: string }[];
   const peak = Math.max(1, ...rows.flatMap((r) => r.byMonth));
   const start = s.policy.fiscalStartMonth || 4;
   const months = MONTHS.map((_, i) => new Date(2026, (start - 1 + i) % 12, 15).toLocaleDateString('en-IN', { month: 'short' }));
@@ -385,9 +392,23 @@ function LeaveYearReport({ s, fy, query }: { s: Snapshot; fy: string; query: str
       <Tiles items={[
         [TreePalm, 'Leave taken', totals.taken, 'ok'],
         [CalendarRange, 'Leave left', totals.left, 'brand'],
-        [House, 'Days from home', totals.wfh, 'brand'],
+        [Sparkles, 'Not charged: leave on offs or holidays', spared, 'ok'],
         [AlertTriangle, '2 days of leave or fewer left', low, 'warn'],
       ]} />
+      <AnimatePresence initial={false}>
+        {flags.length > 0 && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5 mb-2"><AlertTriangle className="w-3.5 h-3.5" />Worth a look</p>
+            <motion.div variants={listV} initial="hidden" animate="show" className="flex flex-wrap gap-2">
+              {flags.map((f) => (
+                <motion.span key={f.id} variants={rowV} title={f.title} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-white border ${f.tone === 'bad' ? 'border-rose-200 text-rose-700' : f.tone === 'warn' ? 'border-amber-200 text-amber-800' : 'border-emerald-200 text-emerald-700'}`}>
+                  <b className="text-slate-800">{f.name}</b> {f.text}
+                </motion.span>
+              ))}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full min-w-[900px] text-xs">
           <thead><tr className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50">
@@ -410,11 +431,17 @@ function LeaveYearReport({ s, fy, query }: { s: Snapshot; fy: string; query: str
                       <span className="inline-flex flex-col items-end gap-1 w-20">
                         <span className="tabular-nums"><b className={b.available <= 0 && b.entitled ? 'text-rose-700' : b.available <= 1 && b.entitled ? 'text-amber-700' : 'text-slate-800'}>{b.available}</b><span className="text-slate-500"> left of {b.entitled}</span></span>
                         <span className="flex items-center gap-1 w-full"><Icon className="w-3 h-3 text-slate-400 shrink-0" /><Bar value={b.entitled ? b.used / b.entitled : 0} tone={b.available <= 1 && b.entitled ? 'warn' : 'ok'} /></span>
+                        {t === 'CL' && r.plannedAsCasual > 0 && <span className="text-[10px] text-amber-700 whitespace-nowrap">incl. {r.plannedAsCasual} from planned</span>}
                       </span>
                     </td>
                   );
                 })}
-                <td className="px-3 py-2 text-right tabular-nums font-bold text-slate-800">{r.taken}</td>
+                <td className="px-3 py-2 text-right" title={r.offDays.length ? `Not charged:\n${r.offDays.map((d) => `${d.date}: ${d.why}`).join('\n')}` : undefined}>
+                  <span className="inline-flex flex-col items-end">
+                    <span className="tabular-nums font-bold text-slate-800">{r.taken}</span>
+                    {r.offDays.length > 0 && <span className="text-[10px] text-emerald-700 whitespace-nowrap">+{r.offDays.length} on offs, free</span>}
+                  </span>
+                </td>
                 <td className="px-3 py-2 text-right tabular-nums font-bold text-[#3D52A0]">{r.left}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{r.wfh}</td>
                 <td className="px-3 py-2">
@@ -432,7 +459,7 @@ function LeaveYearReport({ s, fy, query }: { s: Snapshot; fy: string; query: str
         {shown.length === 0 && <p className="text-xs text-slate-500 px-3 py-4">No one matches “{query}”.</p>}
       </div>
       <div className="flex flex-wrap items-center gap-3 mt-2">
-        <p className="text-[11px] text-slate-500 flex-1 min-w-0">Left counts leave waiting for approval as spoken for. Taken is approved leave in {fyLabel(fy)} (holidays and weekly offs are never counted); the bars show when in the year ({months[0]} to {months[11]}).</p>
+        <p className="text-[11px] text-slate-500 flex-1 min-w-0">Left counts leave waiting for approval as spoken for. Taken is approved leave in {fyLabel(fy)}; a leave day on a weekly or monthly off or a studio holiday is never charged (point at a number to see which days); the bars show when in the year ({months[0]} to {months[11]}).</p>
         <button type="button" className={btnSm} onClick={() => download(leaveYearCsv(rows, fy, types), `leave-${fyLabel(fy).replace(/\s+/g, '-')}.csv`)}><Download className="w-3.5 h-3.5" />Leave CSV</button>
       </div>
     </>

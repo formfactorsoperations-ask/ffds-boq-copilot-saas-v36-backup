@@ -8,7 +8,7 @@ import {
 import { LEAVE_LABELS, addDays, clock12, isLate, type Attendance, type Balance, type LeaveType, type RequestRecord, type Snapshot, type Status } from '../../lib/peopleDesk';
 import {
   myDay, minutesWorked, duration, whereLabel, mapLink, CHARGED, currentFy, fyLabel, unitsOf, awaitingMe, personName,
-  monthGrid, shiftMonth, awayOn, dayKind, monthReport, attendanceCsv, todayOf, leaveTypesFor,
+  monthGrid, shiftMonth, awayOn, dayKind, monthReport, attendanceCsv, todayOf, leaveTypesFor, shownLeaveType,
 } from '../../lib/peopleView';
 import { usePeople, runPeople, fetchPeopleMonth } from '../../services/peopleService';
 import { StudioBar, BarStrip, BarButton } from '../ui/StudioBar';
@@ -258,8 +258,8 @@ function TodaySection({ s, sites, onCorrect, onLeave, onGo, waiting }: { s: Snap
             <motion.ul variants={listV} initial="hidden" animate="show" className="flex flex-col gap-2">
               {mine.map((r) => (
                 <motion.li key={r.id} variants={rowV} className="flex items-center gap-3">
-                  <IconTile icon={LEAVE_ICON[r.type]} size="sm" tone={r.type === 'SL' ? 'warn' : 'brand'} />
-                  <span className="text-sm font-semibold text-slate-800 flex-1 min-w-0 truncate">{range(r.start, r.end)}<span className="block text-[11px] font-normal text-slate-500">{LEAVE_LABELS[r.type]}</span></span>
+                  <IconTile icon={LEAVE_ICON[shownLeaveType(r.type, s.policy)]} size="sm" tone={r.type === 'SL' ? 'warn' : 'brand'} />
+                  <span className="text-sm font-semibold text-slate-800 flex-1 min-w-0 truncate">{range(r.start, r.end)}<span className="block text-[11px] font-normal text-slate-500">{LEAVE_LABELS[shownLeaveType(r.type, s.policy)]}</span></span>
                   <span className={`${chip} ${STATUS_TINT[r.status]}`}>{r.status === 'Cancellation requested' ? 'Cancelling' : r.status}</span>
                 </motion.li>
               ))}
@@ -386,9 +386,9 @@ function LeaveSection({ s, onApply, onDone }: { s: Snapshot; onApply: () => void
               const last = r.decisions[r.decisions.length - 1];
               return (
                 <motion.div key={r.id} variants={rowV} className="group flex flex-wrap items-center gap-3 px-3 py-2.5">
-                  <IconTile icon={r.kind === 'correction' ? Wrench : LEAVE_ICON[r.type]} tone={r.status === 'Rejected' ? 'bad' : r.status === 'Approved' ? 'ok' : r.status === 'Pending' || r.status === 'Cancellation requested' ? 'warn' : 'slate'} />
+                  <IconTile icon={r.kind === 'correction' ? Wrench : LEAVE_ICON[shownLeaveType(r.type, s.policy)]} tone={r.status === 'Rejected' ? 'bad' : r.status === 'Approved' ? 'ok' : r.status === 'Pending' || r.status === 'Cancellation requested' ? 'warn' : 'slate'} />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-800">{r.kind === 'correction' ? `Attendance correction, ${niceDay(r.start)}` : `${LEAVE_LABELS[r.type]} · ${range(r.start, r.end)}`}
+                    <p className="text-sm font-semibold text-slate-800">{r.kind === 'correction' ? `Attendance correction, ${niceDay(r.start)}` : `${LEAVE_LABELS[shownLeaveType(r.type, s.policy)]} · ${range(r.start, r.end)}`}
                       {r.kind === 'leave' && <span className="text-xs font-normal text-slate-500"> · {unitsOf(r)} day{unitsOf(r) === 1 ? '' : 's'}{r.portion !== 'Full day' ? ` (${r.portion.toLowerCase()})` : ''}</span>}</p>
                     {last && <p className="text-[11px] text-slate-500">{personName(s, last.actorId)}: {last.status}{last.note ? ` · "${last.note}"` : ''}</p>}
                   </div>
@@ -424,7 +424,7 @@ function ApprovalsSection({ s, list, claims, onDone }: { s: Snapshot; list: Requ
     const who = personName(s, r.employeeId);
     onDone(r.status === 'Cancellation requested'
       ? (decision === 'approve' ? `${who}'s leave is cancelled and the days returned.` : `${who}'s leave stays booked.`)
-      : `${decision === 'approve' ? 'Approved' : 'Rejected'}: ${who}'s ${r.kind === 'correction' ? 'correction' : LEAVE_LABELS[r.type].toLowerCase()}.`);
+      : `${decision === 'approve' ? 'Approved' : 'Rejected'}: ${who}'s ${r.kind === 'correction' ? 'correction' : LEAVE_LABELS[shownLeaveType(r.type, s.policy)].toLowerCase()}.`);
   };
   const trips = claims?.founder && claims.toDecide.length ? <ClaimApprovals s={s} view={claims} onDone={onDone} /> : null;
   if (s.me.accessRole === 'employee') return trips;
@@ -444,10 +444,10 @@ function ApprovalsSection({ s, list, claims, onDone }: { s: Snapshot; list: Requ
                 <motion.div key={r.id} variants={rowV} layout exit={{ opacity: 0, x: 40, transition: { duration: 0.25 } }}
                   className="group rounded-2xl border border-slate-200 p-4 flex flex-col gap-3 pp-lift">
                   <div className="flex flex-wrap items-start gap-3">
-                    <span className="relative"><Avatar name={name} /><span className="absolute -bottom-1 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 grid place-items-center text-[#3D52A0]">{React.createElement(r.kind === 'correction' ? Wrench : LEAVE_ICON[r.type], { className: 'w-3 h-3' })}</span></span>
+                    <span className="relative"><Avatar name={name} /><span className="absolute -bottom-1 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 grid place-items-center text-[#3D52A0]">{React.createElement(r.kind === 'correction' ? Wrench : LEAVE_ICON[shownLeaveType(r.type, s.policy)], { className: 'w-3 h-3' })}</span></span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-slate-800">{name}
-                        <span className="font-semibold text-slate-500"> · {r.kind === 'correction' ? 'attendance correction' : cancelling ? `cancel ${LEAVE_LABELS[r.type].toLowerCase()}` : LEAVE_LABELS[r.type].toLowerCase()}</span></p>
+                        <span className="font-semibold text-slate-500"> · {r.kind === 'correction' ? 'attendance correction' : cancelling ? `cancel ${LEAVE_LABELS[shownLeaveType(r.type, s.policy)].toLowerCase()}` : LEAVE_LABELS[shownLeaveType(r.type, s.policy)].toLowerCase()}</span></p>
                       <p className="text-xs text-slate-500">
                         {r.kind === 'correction' && r.correction
                           ? <>{niceDay(r.start)}: {session ? `${clock12(session.checkIn, tz)}–${session.checkOut ? clock12(session.checkOut, tz) : 'open'}` : 'recorded day'} → <b className="text-slate-700">{clock12(r.correction.checkIn, tz)}–{clock12(r.correction.checkOut, tz)}</b>, {r.correction.mode}</>
