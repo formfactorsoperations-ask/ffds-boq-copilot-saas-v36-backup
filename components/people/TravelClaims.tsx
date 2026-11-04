@@ -338,8 +338,8 @@ function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot;
       </div>
 
       <div className="relative min-h-[230px]">
-        <AnimatePresence mode="wait" initial={false} custom={dir}>
-          <motion.div key={step} custom={dir} initial={{ opacity: 0, x: dir * 36 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: dir * -36 }} transition={{ duration: 0.25, ease: EASE }} className="flex flex-col gap-4">
+        {/* The next step slides in at once: waiting for the last one to leave (mode="wait") could stall on a blank step, e.g. after "Earlier" was picked. */}
+          <motion.div key={step} initial={{ opacity: 0, x: dir * 36 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.25, ease: EASE }} className="flex flex-col gap-4">
             {step === 0 && (
               <>
                 {recent.length > 0 && (
@@ -374,7 +374,7 @@ function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot;
                   </AnimatePresence>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
-                  <div><Label htmlFor="trip-from">From</Label><input id="trip-from" className={input} value={f.from} maxLength={80} placeholder="Office" onChange={(e) => set('from', e.target.value)} /></div>
+                  <div><Label htmlFor="trip-from">From</Label><input id="trip-from" className={input} value={f.from} maxLength={80} placeholder="Office" onFocus={(e) => e.target.select()} onChange={(e) => set('from', e.target.value)} /></div>
                   <div>
                     <Label>When</Label>
                     <div className="flex flex-wrap items-center gap-2">
@@ -457,7 +457,6 @@ function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot;
               </>
             )}
           </motion.div>
-        </AnimatePresence>
       </div>
       {error && <Notice text={error} tone="bad" />}
     </Sheet>
