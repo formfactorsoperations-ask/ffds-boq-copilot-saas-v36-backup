@@ -295,6 +295,9 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
   `PeopleReport.tsx`): one panel with Attendance, Travel claims (founders) and Leave year. Tiles
   count up; tables sort by any column and filter by name; "Worth a look" lists who was late three
   times, left a day open or has days unaccounted for; thin bars fill in; each has its own CSV.
+- **Leave types shown** (owner, 4 Nov 2026: "6 CLs + 6 SLs a year, plus holidays"): People shows
+  only the leave the studio gives. A type with no allowance (planned leave, by default) and none
+  taken is left out of the bar, Leave, the leave form, Today and the Leave year report.
 - The People rail is grouped (owner, 28 Oct 2026): My day (Today, Attendance, Leave, Travel,
   Approvals), Team (Calendar, Office guide, Celebrations, Kudos), Studio (Essentials,
   Emergency contacts) and Admin (Reports). Group names are field labels, shown

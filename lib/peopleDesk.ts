@@ -85,7 +85,12 @@ export const DEFAULT_POLICY: Policy = {
   monthlyOff: { weekday: 0, weeks: [2, 4] },
   holidays: [],
   fiscalStartMonth: 4,
-  allowances: { PL: 12, SL: 6, CL: 6, COMP: 0, WFH: 0 },
+  /*
+    The owner, 4 Nov 2026: 6 casual and 6 sick days a year, plus the studio's
+    holidays; no planned leave unless the studio sets some in Studio settings
+    → People (or for one person). It was 12 + 6 + 6 = 24 by mistake.
+  */
+  allowances: { PL: 0, SL: 6, CL: 6, COMP: 0, WFH: 0 },
   office: null,
   requireLocation: false,
 };

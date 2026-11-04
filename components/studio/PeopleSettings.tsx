@@ -200,7 +200,7 @@ export default function PeopleSettings({ org, canEdit, onChange }: {
         </div>
       </Block>
 
-      <Block title="Leave allowances" sub={`Each person's yearly allowance, unless set for them below. No carry-forward: each leave year starts afresh.`}>
+      <Block title="Leave allowances" sub={`Each person's yearly allowance, unless set for them below. No carry-forward: each leave year starts afresh. A type set to 0 is not offered in People. Holidays are set below and are never counted as leave.`}>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           {CHARGED.map((t) => (
             <label key={t} className="flex flex-col gap-1.5">

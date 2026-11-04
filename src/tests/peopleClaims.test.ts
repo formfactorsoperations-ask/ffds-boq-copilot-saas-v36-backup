@@ -5,7 +5,7 @@ import {
   DEFAULT_RATES, type Claim,
 } from '../../lib/peopleClaims';
 import { claimLoggedDraft, claimDecidedDraft, claimDeletedDraft, foldedTitle } from '../../lib/notify';
-import { leaveYear, leaveYearCsv } from '../../lib/peopleView';
+import { leaveYear, leaveYearCsv, leaveTypesFor } from '../../lib/peopleView';
 
 const person = (id: string, over: Partial<Person> = {}): Person => ({ id, name: id.toUpperCase(), title: '', teamId: 'design', managerId: '', accessRole: 'employee', active: true, email: `${id}@studio.in`, ...over });
 const TODAY = '2026-11-04';
@@ -174,6 +174,14 @@ describe('the leave year (the owner, 4 Nov 2026)', () => {
     expect(r.byMonth[5]).toBe(1); // September
     expect(rows.map((x) => x.person.id)).toEqual(['boss', 'ravi', 'tara']);
     expect(leaveYearCsv(rows, '2026').split('\n')[2]).toContain('RAVI,15,2,1,12');
+  });
+  it('the studio gives 6 casual and 6 sick days a year; a type with no allowance is left out unless someone has it', () => {
+    expect(DEFAULT_POLICY.allowances).toMatchObject({ PL: 0, SL: 6, CL: 6, COMP: 0 });
+    expect(leaveTypesFor(DEFAULT_POLICY)).toEqual(['SL', 'CL']);
+    const b = (entitled: number, used = 0) => ({ entitled, used, reserved: 0, remaining: entitled - used, available: entitled - used });
+    expect(leaveTypesFor(DEFAULT_POLICY, [{ PL: b(0, 2) } as any])).toEqual(['PL', 'SL', 'CL']);
+    expect(leaveTypesFor(DEFAULT_POLICY, [{ COMP: b(1) } as any])).toEqual(['SL', 'CL', 'COMP']);
+    expect(leaveTypesFor({ allowances: { ...DEFAULT_POLICY.allowances, PL: 12 } })).toEqual(['PL', 'SL', 'CL']);
   });
   it('a manager sees themselves and their people only', () => {
     const meena = person('meena', { accessRole: 'manager' });

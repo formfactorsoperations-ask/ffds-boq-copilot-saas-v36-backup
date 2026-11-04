@@ -52,6 +52,14 @@ export const mapLink = (loc: Pick<Located, 'lat' | 'lng'>) => `https://www.googl
 
 export const CHARGED: LeaveType[] = ['PL', 'SL', 'CL', 'COMP'];
 export const leaveLabel = (t: LeaveType) => LEAVE_LABELS[t];
+/**
+ * The leave types a studio uses (the owner, 4 Nov 2026: "6 CLs + 6 SLs a
+ * year, plus holidays"): those with an allowance, or one already given or
+ * taken by someone in view. A type set to 0 in Studio settings drops out.
+ */
+export function leaveTypesFor(policy: Pick<Policy, 'allowances'>, balances: (Partial<Record<LeaveType, Balance>> | undefined)[] = []): LeaveType[] {
+  return CHARGED.filter((t) => (policy.allowances[t] || 0) > 0 || balances.some((b) => !!b?.[t] && (b[t]!.entitled > 0 || b[t]!.used > 0 || b[t]!.reserved > 0)));
+}
 export const fyLabel = (fy: string) => `FY ${fy}–${String(Number(fy) + 1).slice(2)}`;
 export const currentFy = (s: Snapshot) => fiscalYear(todayOf(s), s.policy);
 export const isActiveLeave = (r: Pick<RequestRecord, 'status'>) => ['Pending', 'Approved', 'Cancellation requested'].includes(r.status);
@@ -290,8 +298,8 @@ export function mergeChange(s: Snapshot, change: { session?: Attendance | null; 
 }
 
 /** The leave year, one row a person, for a spreadsheet. */
-export function leaveYearCsv(rows: LeaveYearRow[], fy: string): string {
-  const head = ['Name', ...CHARGED.flatMap((t) => [`${LEAVE_LABELS[t]} allowed`, `${LEAVE_LABELS[t]} taken`, `${LEAVE_LABELS[t]} waiting`, `${LEAVE_LABELS[t]} left`]), 'Total taken', 'Total left', 'Work from home days', 'Leave year'];
-  const body = rows.map((r) => [r.person.name, ...CHARGED.flatMap((t) => [r.balances[t].entitled, r.balances[t].used, r.balances[t].reserved, r.balances[t].available]), r.taken, r.left, r.wfh, fyLabel(fy)]);
+export function leaveYearCsv(rows: LeaveYearRow[], fy: string, types: LeaveType[] = CHARGED): string {
+  const head = ['Name', ...types.flatMap((t) => [`${LEAVE_LABELS[t]} allowed`, `${LEAVE_LABELS[t]} taken`, `${LEAVE_LABELS[t]} waiting`, `${LEAVE_LABELS[t]} left`]), 'Total taken', 'Total left', 'Work from home days', 'Leave year'];
+  const body = rows.map((r) => [r.person.name, ...types.flatMap((t) => [r.balances[t].entitled, r.balances[t].used, r.balances[t].reserved, r.balances[t].available]), r.taken, r.left, r.wfh, fyLabel(fy)]);
   return [head, ...body].map((r) => r.map(cell).join(',')).join('\n');
 }

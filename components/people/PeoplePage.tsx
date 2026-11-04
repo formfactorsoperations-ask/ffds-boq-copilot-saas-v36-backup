@@ -8,7 +8,7 @@ import {
 import { LEAVE_LABELS, addDays, clock12, isLate, type Attendance, type Balance, type LeaveType, type RequestRecord, type Snapshot, type Status } from '../../lib/peopleDesk';
 import {
   myDay, minutesWorked, duration, whereLabel, mapLink, CHARGED, currentFy, fyLabel, unitsOf, awaitingMe, personName,
-  monthGrid, shiftMonth, awayOn, dayKind, monthReport, attendanceCsv, todayOf,
+  monthGrid, shiftMonth, awayOn, dayKind, monthReport, attendanceCsv, todayOf, leaveTypesFor,
 } from '../../lib/peopleView';
 import { usePeople, runPeople, fetchPeopleMonth } from '../../services/peopleService';
 import { StudioBar, BarStrip, BarButton } from '../ui/StudioBar';
@@ -144,7 +144,7 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
       {/* Named by the shell's title row, like Projects; this is the bar under it. */}
       <StudioBar className="mb-6">
         <BarStrip label={bal ? `Leave left · ${fyLabel(fy)}` : 'Your day'}>
-          {bal && (['PL', 'SL', 'CL'] as const).map((t, i) => (
+          {bal && leaveTypesFor(s.policy, [bal]).slice(0, 3).map((t, i) => (
             <motion.div key={t} initial={{ opacity: 0, y: 6, rotateY: -90 }} animate={{ opacity: 1, y: 0, rotateY: 0 }} transition={{ delay: 0.1 + i * 0.1, duration: 0.6, ease: EASE }} style={{ transformPerspective: 600 }}
               className="flex items-center gap-1.5 pl-1 pr-2.5 py-0.5 rounded-full border border-slate-200 bg-slate-50">
               <Ring value={bal[t].entitled ? bal[t].available / bal[t].entitled : 0} size={30} stroke={3} tone={bal[t].available <= 1 ? 'warn' : 'brand'} label={`${LEAVE_LABELS[t]}: ${bal[t].available} left`}>
@@ -365,7 +365,7 @@ function LeaveSection({ s, onApply, onDone }: { s: Snapshot; onApply: () => void
         aside={years.length > 1 ? <Glide id="leave-fy" label="Leave year" value={fy} onChange={setFy} options={years.map((y) => ({ id: y, label: fyLabel(y) }))} /> : undefined}>
         {bal ? (
           <motion.div variants={listV} initial="hidden" animate="show" key={fy} className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {CHARGED.map((t) => (
+            {leaveTypesFor(s.policy, [bal]).map((t) => (
               <motion.div key={t} variants={rowV}><BalanceCard type={t} b={bal[t]} onApply={onApply} /></motion.div>
             ))}
             <motion.div variants={rowV} className="group rounded-2xl border border-slate-200 p-4 flex flex-col items-center justify-center gap-2 pp-lift min-h-[208px]">

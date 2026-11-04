@@ -6,7 +6,7 @@ import {
 } from '@/lib/lucide-shim';
 import { LEAVE_LABELS, addDays, isOff, type Snapshot } from '../../lib/peopleDesk';
 import {
-  monthReport, attendanceCsv, shiftMonth, todayOf, duration, currentFy, fyLabel, leaveYear, leaveYearCsv, CHARGED, personName, type ReportRow, type LeaveYearRow,
+  monthReport, attendanceCsv, shiftMonth, todayOf, duration, currentFy, fyLabel, leaveYear, leaveYearCsv, leaveTypesFor, personName, type ReportRow, type LeaveYearRow,
 } from '../../lib/peopleView';
 import { claimsMonth, claimsByProject, claimsCsv, canDelete, FOR_LABELS, inr, type ProjectRow, type ClaimsView, type ClaimRow } from '../../lib/peopleClaims';
 import { fetchPeopleMonth } from '../../services/peopleService';
@@ -374,7 +374,9 @@ function LeaveYearReport({ s, fy, query }: { s: Snapshot; fy: string; query: str
   const shown = sorted<LeaveYearRow, LeaveKey>(rows.filter((r) => matches(r.person.name, query)), sort, (r, k) =>
     k === 'name' ? r.person.name : k === 'taken' || k === 'left' || k === 'wfh' ? r[k] : r.balances[k].available);
   const totals = rows.reduce((t, r) => ({ taken: t.taken + r.taken, left: t.left + r.left, wfh: t.wfh + r.wfh }), { taken: 0, left: 0, wfh: 0 });
-  const low = rows.filter((r) => r.balances.PL.entitled > 0 && r.balances.PL.available <= 1).length;
+  /* Only the leave the studio gives: a type with no allowance and none taken (planned leave, by default) gets no column. */
+  const types = leaveTypesFor(s.policy, rows.map((r) => r.balances));
+  const low = rows.filter((r) => r.left <= 2).length;
   const peak = Math.max(1, ...rows.flatMap((r) => r.byMonth));
   const start = s.policy.fiscalStartMonth || 4;
   const months = MONTHS.map((_, i) => new Date(2026, (start - 1 + i) % 12, 15).toLocaleDateString('en-IN', { month: 'short' }));
@@ -384,13 +386,13 @@ function LeaveYearReport({ s, fy, query }: { s: Snapshot; fy: string; query: str
         [TreePalm, 'Leave taken', totals.taken, 'ok'],
         [CalendarRange, 'Leave left', totals.left, 'brand'],
         [House, 'Days from home', totals.wfh, 'brand'],
-        [AlertTriangle, '1 day of paid leave or less', low, 'warn'],
+        [AlertTriangle, '2 days of leave or fewer left', low, 'warn'],
       ]} />
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full min-w-[900px] text-xs">
           <thead><tr className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50">
             <Th k="name" sort={sort} onSort={setSort} right={false}>Person</Th>
-            {CHARGED.map((t) => <React.Fragment key={t}><Th k={t as LeaveKey} sort={sort} onSort={setSort}>{LEAVE_LABELS[t]}</Th></React.Fragment>)}
+            {types.map((t) => <React.Fragment key={t}><Th k={t as LeaveKey} sort={sort} onSort={setSort}>{LEAVE_LABELS[t]}</Th></React.Fragment>)}
             <Th k="taken" sort={sort} onSort={setSort}>Taken</Th>
             <Th k="left" sort={sort} onSort={setSort}>Left</Th>
             <Th k="wfh" sort={sort} onSort={setSort}>Home</Th>
@@ -400,7 +402,7 @@ function LeaveYearReport({ s, fy, query }: { s: Snapshot; fy: string; query: str
             {shown.map((r: LeaveYearRow) => (
               <motion.tr key={r.person.id} variants={rowV} className="hover:bg-slate-50/70">
                 <td className="px-3 py-2"><span className="flex items-center gap-2"><Avatar name={r.person.name} size="sm" /><span className="text-sm font-semibold text-slate-800">{r.person.name}</span></span></td>
-                {CHARGED.map((t) => {
+                {types.map((t) => {
                   const b = r.balances[t];
                   const Icon = LEAVE_ICON[t];
                   return (
@@ -430,8 +432,8 @@ function LeaveYearReport({ s, fy, query }: { s: Snapshot; fy: string; query: str
         {shown.length === 0 && <p className="text-xs text-slate-500 px-3 py-4">No one matches “{query}”.</p>}
       </div>
       <div className="flex flex-wrap items-center gap-3 mt-2">
-        <p className="text-[11px] text-slate-500 flex-1 min-w-0">Left counts leave waiting for approval as spoken for. Taken is approved paid, sick, casual and comp-off leave in {fyLabel(fy)}; the bars show when in the year ({months[0]} to {months[11]}).</p>
-        <button type="button" className={btnSm} onClick={() => download(leaveYearCsv(rows, fy), `leave-${fyLabel(fy).replace(/\s+/g, '-')}.csv`)}><Download className="w-3.5 h-3.5" />Leave CSV</button>
+        <p className="text-[11px] text-slate-500 flex-1 min-w-0">Left counts leave waiting for approval as spoken for. Taken is approved leave in {fyLabel(fy)} (holidays and weekly offs are never counted); the bars show when in the year ({months[0]} to {months[11]}).</p>
+        <button type="button" className={btnSm} onClick={() => download(leaveYearCsv(rows, fy, types), `leave-${fyLabel(fy).replace(/\s+/g, '-')}.csv`)}><Download className="w-3.5 h-3.5" />Leave CSV</button>
       </div>
     </>
   );
