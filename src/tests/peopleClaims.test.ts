@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_POLICY, scopeSnapshot, type Person, type RequestRecord, type Snapshot } from '../../lib/peopleDesk';
 import {
-  cleanClaim, claimAmount, cleanRates, canDecide, decideClaim, payClaim, withdrawClaim, claimsView, totalsOf, claimsMonth, claimsCsv, recentTrips,
+  cleanClaim, kmAmount, cleanRates, canDecide, decideClaim, payClaim, withdrawClaim, claimsView, totalsOf, claimsMonth, claimsCsv, recentTrips,
   DEFAULT_RATES, type Claim,
 } from '../../lib/peopleClaims';
 import { claimLoggedDraft, claimDecidedDraft, foldedTitle } from '../../lib/notify';
@@ -13,26 +13,28 @@ const anish = person('anish', { accessRole: 'admin', name: 'Anish K' });
 const meera = person('meera', { accessRole: 'admin', name: 'Meera S' });
 const riya = person('riya', { name: 'Riya Shah' });
 const team = [anish, meera, riya];
-const trip = (over: Record<string, unknown> = {}) => ({ date: TODAY, purpose: 'Site visit', place: 'Bandra site', from: 'Office', to: 'Bandra', mode: 'bike', km: 12, roundTrip: true, ...over });
+const trip = (over: Record<string, unknown> = {}) => ({ date: TODAY, purpose: 'Site visit', place: 'Bandra site', from: 'Office', to: 'Bandra', mode: 'bike', amount: 96, ...over });
 const claimOf = (over: Partial<Claim> = {}): Claim => ({
   id: 'riya_1', personId: 'riya', ...cleanClaim(trip(), DEFAULT_RATES, TODAY), receipt: false, status: 'Pending', createdAt: `${TODAY}T10:00:00Z`, decisions: [], ...over,
 });
 
-describe('logging a trip (the owner, 4 Nov 2026)', () => {
-  it('works out the amount: km at the rate, twice for a return, or the fare, plus parking', () => {
-    expect(cleanClaim(trip(), DEFAULT_RATES, TODAY).amount).toBe(96); // 12 × 2 × ₹4
-    expect(cleanClaim(trip({ mode: 'car', roundTrip: false, extras: 50 }), DEFAULT_RATES, TODAY).amount).toBe(170);
-    const cab = cleanClaim(trip({ mode: 'cab', km: 99, fare: 340, roundTrip: true }), DEFAULT_RATES, TODAY);
-    expect([cab.amount, cab.km, cab.roundTrip, cab.rate]).toEqual([340, 0, false, 0]);
-    expect(claimAmount({ mode: 'bike', km: 7.5, roundTrip: false, rate: 4, fare: 0, extras: 0 })).toBe(30);
+describe('logging a trip (the owner, 4 Nov 2026: amount first)', () => {
+  it('claims what the person says it cost; km, when given for own bike or car, are kept with the studio rate', () => {
+    expect(cleanClaim(trip(), DEFAULT_RATES, TODAY)).toMatchObject({ amount: 96, km: 0, roundTrip: false, rate: 0 });
+    expect(cleanClaim(trip({ km: 12, roundTrip: true }), { bike: 5, car: 12 }, TODAY)).toMatchObject({ amount: 96, km: 12, roundTrip: true, rate: 5 });
+    expect(cleanClaim(trip({ mode: 'cab', amount: '340.4', km: 12 }), DEFAULT_RATES, TODAY)).toMatchObject({ amount: 340, km: 0, rate: 0 });
+    expect(cleanClaim(trip({ mode: 'car', km: '', amount: 150 }), DEFAULT_RATES, TODAY).km).toBe(0);
   });
-  it('uses the studio’s rate, whatever the browser sends', () => {
-    expect(cleanClaim(trip({ rate: 100 }), { bike: 5, car: 12 }, TODAY).rate).toBe(5);
+  it('works out an amount from km, for the helper', () => {
+    expect(kmAmount(6, true, 2)).toBe(24);
+    expect(kmAmount(7.5, false, 4)).toBe(30);
   });
   it('says what is missing, in words', () => {
     expect(() => cleanClaim(trip({ place: '' }), DEFAULT_RATES, TODAY)).toThrow(/where you went/);
-    expect(() => cleanClaim(trip({ km: 0 }), DEFAULT_RATES, TODAY)).toThrow(/distance/);
-    expect(() => cleanClaim(trip({ mode: 'auto', fare: '' }), DEFAULT_RATES, TODAY)).toThrow(/fare/);
+    expect(() => cleanClaim(trip({ amount: '' }), DEFAULT_RATES, TODAY)).toThrow(/what the trip cost/);
+    expect(() => cleanClaim(trip({ amount: 0 }), DEFAULT_RATES, TODAY)).toThrow(/what the trip cost/);
+    expect(() => cleanClaim(trip({ amount: 200000 }), DEFAULT_RATES, TODAY)).toThrow(/more than one trip/);
+    expect(() => cleanClaim(trip({ km: -3 }), DEFAULT_RATES, TODAY)).toThrow(/distance/);
     expect(() => cleanClaim(trip({ date: '2026-11-05' }), DEFAULT_RATES, TODAY)).toThrow(/once it has happened/);
     expect(() => cleanClaim(trip({ date: '2026-07-01' }), DEFAULT_RATES, TODAY)).toThrow(/older than 90 days/);
     expect(() => cleanClaim(trip({ purpose: 'Holiday' }), DEFAULT_RATES, TODAY)).toThrow(/what the trip was for/);

@@ -275,14 +275,15 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
   or the heart, or tapping the faces, opens a small list of names that pops up above. The Home
   pin's heart count says who in its tooltip.
 - **Travel claims** (owner, 4 Nov 2026, `lib/peopleClaims.ts`, `TravelClaims.tsx`): "Travel" under
-  My day. Logging a trip is one sheet of tiles: when (Today, Yesterday, Earlier), what for (site
-  visit, selections, client, vendor, other), where, how (own bike or car at the studio's rate a
-  km, or cab, auto, public transport at the fare), parking or tolls, and a receipt photo; the
-  sum shows as it is typed, and a recent trip can be repeated in one tap. Chosen tiles slide a
-  brand highlight under them and turn their icon; a logged trip ends in `Confetti`. Founders
-  (People admins) see "To approve" (by person, "Approve all", a stamp lands on each decision)
-  and "To pay back" (by person, "Mark paid"), and set the rates. Status chips: waiting amber,
-  approved emerald, paid back brand, not approved rose.
+  My day. Logging a trip is four short steps (where and when, what for, how, what it cost) under
+  a trip ticket in the brand gradient that fills in as you answer: the route draws itself, the
+  way you travelled rides along it, the amount springs in, and "Sent" stamps it with `Confetti`.
+  Picking a tile moves on by itself; a recent trip repeats in one tap. The amount is typed in;
+  by own bike or car "Work it out from km" fills it at the founders' rate. No trips yet shows a
+  small road with each way of travelling riding along it. Founders (People admins) see "To
+  approve" (by person, "Approve all", a stamp lands on each decision) and "To pay back" (by
+  person, "Mark paid"), and set the rates. Status chips: waiting amber, approved emerald, paid
+  back brand, not approved rose.
 - **Reports** (owner, 4 Nov 2026: "make the monthly report more usable for founders",
   `PeopleReport.tsx`): one panel with Attendance, Travel claims (founders) and Leave year. Tiles
   count up; tables sort by any column and filter by name; "Worth a look" lists who was late three

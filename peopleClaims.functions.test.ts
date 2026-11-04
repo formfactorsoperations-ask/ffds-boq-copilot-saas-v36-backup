@@ -42,7 +42,7 @@ const code = async (p: Promise<any>) => { try { await p; return 'ok'; } catch (e
 let n = 0;
 const cid = () => `c${Date.now()}${++n}`;
 const today = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
-const trip = (over: any = {}) => ({ date: today, purpose: 'Site visit', place: 'Bandra site', from: 'Office', to: 'Bandra', mode: 'bike', km: 12, roundTrip: true, ...over });
+const trip = (over: any = {}) => ({ date: today, purpose: 'Site visit', place: 'Bandra site', from: 'Office', to: 'Bandra', mode: 'bike', km: 12, roundTrip: true, amount: 96, ...over });
 const notesOf = async (email: string, kind: string) => {
   let list: any[] = [];
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -78,7 +78,7 @@ afterAll(async () => { await Promise.all(apps.map((a) => deleteApp(a))); await e
 
 describe('travel claims', () => {
   let first = '';
-  it('a designer logs a trip with a receipt; it is worked out at the studio rate, once, and the founders are asked', async () => {
+  it('a designer logs a trip with a receipt, once; its km are kept at the studio rate, and the founders are asked', async () => {
     const same = cid();
     const r = await u.tanvi.run('log', { ...trip({ rate: 99 }), id: same, receipt: { type: 'image/png', data: PNG } });
     first = r.id;
@@ -107,7 +107,7 @@ describe('travel claims', () => {
   }, 60000);
 
   it('a founder’s own trip goes to the other founder', async () => {
-    const r = await u.anish.run('log', trip({ mode: 'cab', fare: 420, place: 'Tile gallery', purpose: 'Selections' }));
+    const r = await u.anish.run('log', trip({ mode: 'cab', amount: 420, place: 'Tile gallery', purpose: 'Selections' }));
     expect(r.view.toDecide.map((c: any) => c.id)).not.toContain(r.id);
     expect(await code(u.anish.run('decide', { claimIds: [r.id], decision: 'approve' }))).toMatch(/permission-denied/);
     expect((await u.meera.view()).toDecide.map((c: any) => c.id)).toContain(r.id);
@@ -116,7 +116,7 @@ describe('travel claims', () => {
   }, 60000);
 
   it('paid back in one go, and the person told once', async () => {
-    const second = (await u.tanvi.run('log', trip({ mode: 'auto', fare: 180, place: 'Kurla vendor', purpose: 'Vendor visit' }))).id;
+    const second = (await u.tanvi.run('log', trip({ mode: 'auto', amount: 180, place: 'Kurla vendor', purpose: 'Vendor visit' }))).id;
     await u.meera.run('decide', { claimIds: [second], decision: 'approve' });
     const r = await u.meera.run('pay', { claimIds: [first, second] });
     expect(r.view.toPay).toEqual([]);
@@ -137,8 +137,8 @@ describe('travel claims', () => {
     expect((await u.meera.run('receipt', { claimId: first })).receipt.type).toBe('image/png');
     expect(await code(u.tanvi.run('rates', { bike: 6, car: 12 }))).toMatch(/permission-denied/);
     await u.anish.run('rates', { bike: 6, car: 12 });
-    const r = await u.tanvi.run('log', trip({ place: 'Andheri site', km: 10, roundTrip: false }));
-    expect(r.view.mine.find((c: any) => c.id === r.id)).toMatchObject({ rate: 6, amount: 60 });
+    const r = await u.tanvi.run('log', trip({ place: 'Andheri site', km: 10, roundTrip: false, amount: 60 }));
+    expect(r.view.mine.find((c: any) => c.id === r.id)).toMatchObject({ rate: 6, km: 10, amount: 60 });
     expect(r.view.rates).toEqual({ bike: 6, car: 12 });
     expect(await code(u.tanvi.run('log', { ...trip(), receipt: { type: 'text/html', data: 'PGh0bWw+' } }))).toMatch(/invalid-argument/);
   }, 60000);

@@ -6,10 +6,11 @@
   should be able to approve or disapprove. I need reports of the
   reimbursement, team member wise, in the monthly report."
 
-  A claim is one trip: when, why, where, how, and what it cost. By own bike or
-  car it is the distance at the studio's rate a kilometre (doubled for a
-  return trip); by cab, auto or public transport it is the fare paid. Parking
-  and tolls go on top. A photo of the receipt can go with it.
+  A claim is one trip: when, why, where, how, and what it cost. The person
+  says what it cost (the owner, 4 Nov 2026: "make this easier"); by own bike
+  or car they can work it out from the distance at the studio's rate a
+  kilometre instead, and the distance is kept for the reports. A photo of the
+  receipt can go with it.
 
     Pending → Approved → Paid
             → Rejected (with a reason)
@@ -63,16 +64,15 @@ export interface Claim {
   from: string;
   to: string;
   mode: TravelMode;
-  /** One way, by own bike or car. */
+  /** One way, by own bike or car, when the person gave it (0 when not). */
   km: number;
   roundTrip: boolean;
-  /** The rate a kilometre when it was logged. */
+  /** The rate a kilometre when it was logged, by own bike or car. */
   rate: number;
-  /** The fare paid, by cab, auto or public transport. */
+  /** Kept for trips logged before amounts were typed in: the fare, and parking or tolls. */
   fare: number;
-  /** Parking and tolls. */
   extras: number;
-  /** What is claimed, in rupees. */
+  /** What is claimed, in rupees: what the person says the trip cost. */
   amount: number;
   note: string;
   /** A photo or PDF of the receipt is kept beside it. */
@@ -103,13 +103,12 @@ export function cleanRates(v: any): ClaimRates {
   return { bike: rupees(bike), car: rupees(car) };
 }
 
-/** What a trip comes to: the distance at the rate (twice for a return trip), or the fare, plus parking and tolls. */
-export function claimAmount(c: Pick<Claim, "mode" | "km" | "roundTrip" | "rate" | "fare" | "extras">): number {
-  const travel = byKm(c.mode) ? (c.km || 0) * (c.roundTrip ? 2 : 1) * (c.rate || 0) : c.fare || 0;
-  return Math.round(travel + (c.extras || 0));
+/** What a distance comes to at a rate: twice for a return trip. The "work it out from km" helper. */
+export function kmAmount(km: number, roundTrip: boolean, rate: number): number {
+  return Math.round((km || 0) * (roundTrip ? 2 : 1) * (rate || 0));
 }
 
-/** A trip as logged, checked; the rate is the studio's, whatever the browser sent. */
+/** A trip as logged, checked. The amount is the person's; a distance, when given, is kept with the studio's rate. */
 export function cleanClaim(d: any, rates: ClaimRates, today: string): Omit<Claim, "id" | "personId" | "status" | "createdAt" | "decisions" | "receipt"> {
   const date = String(d?.date || "");
   need(validDate(date), "Pick the day of the trip.");
@@ -120,22 +119,17 @@ export function cleanClaim(d: any, rates: ClaimRates, today: string): Omit<Claim
   const mode = d.mode as TravelMode;
   const place = text(d?.place, 80);
   need(place.length >= 2, "Say where you went: the site, shop or client.");
-  const km = byKm(mode) ? num(d?.km) : 0;
-  if (byKm(mode)) need(km > 0 && km <= 1000, "Enter the distance one way, in km.");
-  const fare = byKm(mode) ? 0 : num(d?.fare);
-  if (!byKm(mode)) need(fare > 0 && fare <= MAX_CLAIM, "Enter the fare you paid.");
-  const extras = d?.extras == null || d?.extras === "" ? 0 : num(d.extras);
-  need(extras >= 0 && extras <= 20000, "Parking and tolls should be between ₹0 and ₹20,000.");
-  const rate = mode === "bike" ? rates.bike : mode === "car" ? rates.car : 0;
-  const c = {
+  const amount = Math.round(num(d?.amount));
+  need(amount > 0, "Say what the trip cost.");
+  need(amount <= MAX_CLAIM, "That is more than one trip can claim. Ask a founder.");
+  const given = byKm(mode) && d?.km != null && d?.km !== "" ? num(d.km) : 0;
+  need(!(given < 0) && given <= 1000, "Enter the distance one way, in km.");
+  const km = Number.isFinite(given) ? rupees(given) : 0;
+  return {
     date, purpose: d.purpose as ClaimPurpose, place, from: text(d?.from, 80), to: text(d?.to, 80), mode,
-    km: rupees(km), roundTrip: byKm(mode) ? !!d?.roundTrip : false, rate, fare: rupees(fare), extras: rupees(extras),
-    note: text(d?.note, 280), amount: 0,
+    km, roundTrip: km > 0 ? !!d?.roundTrip : false, rate: km > 0 ? (mode === "bike" ? rates.bike : rates.car) : 0,
+    fare: 0, extras: 0, amount, note: text(d?.note, 280),
   };
-  c.amount = claimAmount(c);
-  need(c.amount > 0, "This trip comes to nothing to claim.");
-  need(c.amount <= MAX_CLAIM, "That is more than one trip can claim. Ask a founder.");
-  return c;
 }
 
 /* ── Who decides ─────────────────────────────────────────────────────────── */
@@ -211,7 +205,7 @@ export function totalsOf(list: Claim[]): ClaimTotals {
     const live = c.status !== "Rejected";
     return {
       trips: t.trips + (live ? 1 : 0),
-      km: t.km + (live && byKm(c.mode) ? c.km * (c.roundTrip ? 2 : 1) : 0),
+      km: t.km + (live && c.km ? c.km * (c.roundTrip ? 2 : 1) : 0),
       claimed: t.claimed + (live ? c.amount : 0),
       waiting: t.waiting + (c.status === "Pending" ? c.amount : 0),
       approved: t.approved + (c.status === "Approved" || c.status === "Paid" ? c.amount : 0),
@@ -239,7 +233,7 @@ const cell = (v: unknown) => {
 };
 /** Every trip in a month, one row each, for a spreadsheet. */
 export function claimsCsv(claims: Claim[], month: string, nameOf: (id: string) => string): string {
-  const head = ["Date", "Name", "Purpose", "Place", "From", "To", "How", "Km (total)", "Rate a km", "Fare", "Parking and tolls", "Amount", "Status", "Decided by", "Note", "Receipt"];
+  const head = ["Date", "Name", "Purpose", "Place", "From", "To", "How", "Km (total)", "Amount", "Status", "Decided by", "Note", "Receipt"];
   const rows = claims
     .filter((c) => c.date.slice(0, 7) === month && c.status !== "Withdrawn")
     .sort((a, b) => a.date.localeCompare(b.date) || nameOf(a.personId).localeCompare(nameOf(b.personId)))
@@ -247,8 +241,7 @@ export function claimsCsv(claims: Claim[], month: string, nameOf: (id: string) =
       const last = [...c.decisions].reverse().find((d) => d.status !== "Withdrawn");
       return [
         c.date, nameOf(c.personId), PURPOSE_LABELS[c.purpose], c.place, c.from, c.to, MODE_LABELS[c.mode],
-        byKm(c.mode) ? c.km * (c.roundTrip ? 2 : 1) : "", byKm(c.mode) ? c.rate : "", byKm(c.mode) ? "" : c.fare, c.extras || "",
-        c.amount, c.status, last?.byName || "", [c.note, last?.note].filter(Boolean).join(" · "), c.receipt ? "Yes" : "No",
+        c.km ? c.km * (c.roundTrip ? 2 : 1) : "", c.amount, c.status, last?.byName || "", [c.note, last?.note].filter(Boolean).join(" · "), c.receipt ? "Yes" : "No",
       ];
     });
   return [head, ...rows].map((r) => r.map(cell).join(",")).join("\n");
