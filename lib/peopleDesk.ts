@@ -556,6 +556,8 @@ export function scopeSnapshot(
     managerId: p.managerId,
     accessRole: p.id === actor.id ? p.accessRole : "employee",
     active: p.active,
+    /* Their own leave allowance, and their people's for those who approve: the yearly leave report needs it. */
+    ...(p.entitlements && (p.id === actor.id || canReview(actor, p)) ? { entitlements: p.entitlements } : {}),
   });
   const allowed = new Set(
     store.people

@@ -5,8 +5,8 @@
   and its CSV. Pure, so the tests run it.
 */
 import {
-  LEAVE_LABELS, addDays, availabilityOf, businessDate, fiscalYear, isLate, isOff, timeLabel,
-  type Attendance, type LeaveType, type Located, type Mode, type Person, type Policy, type RequestRecord, type Snapshot,
+  LEAVE_LABELS, addDays, availabilityOf, balanceFor, businessDate, fiscalYear, isLate, isOff, timeLabel,
+  type Attendance, type Balance, type Store, type LeaveType, type Located, type Mode, type Person, type Policy, type RequestRecord, type Snapshot,
 } from './peopleDesk';
 
 export const todayOf = (s: Pick<Snapshot, 'serverTime' | 'policy'>) => businessDate(s.serverTime, s.policy.timezone);
@@ -204,6 +204,47 @@ export function monthReport(s: Snapshot, month: string): ReportRow[] {
   });
 }
 
+/* ── The leave year (the owner, 4 Nov 2026: "how much leave team members have taken and have left") ── */
+
+export interface LeaveYearRow {
+  person: Person;
+  /** Paid, sick, casual and comp-off: allowed, taken, waiting and left. */
+  balances: Record<LeaveType, Balance>;
+  /** Leave taken (paid, sick, casual, comp-off), in days. */
+  taken: number;
+  /** Leave still to plan, in days. */
+  left: number;
+  /** Days from home, approved. */
+  wfh: number;
+  /** Taken in each month of the year, Apr to Mar. */
+  byMonth: number[];
+}
+/** Everyone the person may see in full (themselves, their people, or the studio), for one leave year. */
+export function leaveYear(s: Snapshot, fy: string): LeaveYearRow[] {
+  const store = { people: s.people, policy: s.policy, requests: s.requests, attendance: [], events: [] } as Store;
+  const scope = new Set(s.requests.map((r) => r.employeeId).concat(s.attendance.map((a) => a.employeeId), [s.me.id]));
+  const everyone = s.me.accessRole === 'admin' || s.me.accessRole === 'ops';
+  const people = [s.me, ...s.people.filter((p) => p.id !== s.me.id && p.active && (everyone || p.managerId === s.me.id || scope.has(p.id)))];
+  const start = s.policy.fiscalStartMonth || 4;
+  return people.map((person) => {
+    const balances = Object.fromEntries((Object.keys(LEAVE_LABELS) as LeaveType[]).map((t) => [t, balanceFor(store, person, t, fy)])) as Record<LeaveType, Balance>;
+    const byMonth = Array.from({ length: 12 }, () => 0);
+    for (const r of s.requests) {
+      if (r.employeeId !== person.id || r.kind !== 'leave' || r.type === 'WFH' || !(r.status === 'Approved' || r.status === 'Cancellation requested')) continue;
+      for (const d of r.days) {
+        if (fiscalYear(d.date, s.policy) !== fy) continue;
+        byMonth[(Number(d.date.slice(5, 7)) - start + 12) % 12] += d.units;
+      }
+    }
+    return {
+      person, balances, byMonth,
+      taken: CHARGED.reduce((n, t) => n + balances[t].used, 0),
+      left: CHARGED.reduce((n, t) => n + Math.max(0, balances[t].available), 0),
+      wfh: balances.WFH.used,
+    };
+  });
+}
+
 const cell = (v: unknown) => {
   const t = String(v ?? '');
   return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
@@ -246,4 +287,11 @@ export function mergeChange(s: Snapshot, change: { session?: Attendance | null; 
     availability = [...availability.filter((x) => x.requestId !== r.id), ...(seen ? [seen] : [])];
   }
   return a || r ? { ...s, attendance, requests, availability } : s;
+}
+
+/** The leave year, one row a person, for a spreadsheet. */
+export function leaveYearCsv(rows: LeaveYearRow[], fy: string): string {
+  const head = ['Name', ...CHARGED.flatMap((t) => [`${LEAVE_LABELS[t]} allowed`, `${LEAVE_LABELS[t]} taken`, `${LEAVE_LABELS[t]} waiting`, `${LEAVE_LABELS[t]} left`]), 'Total taken', 'Total left', 'Work from home days', 'Leave year'];
+  const body = rows.map((r) => [r.person.name, ...CHARGED.flatMap((t) => [r.balances[t].entitled, r.balances[t].used, r.balances[t].reserved, r.balances[t].available]), r.taken, r.left, r.wfh, fyLabel(fy)]);
+  return [head, ...body].map((r) => r.map(cell).join(',')).join('\n');
 }

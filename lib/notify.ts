@@ -289,6 +289,34 @@ export function emergencyOpenedDraft(reason: string, p: { byName: string; toEmai
   };
 }
 
+/* ── People: travel claims (lib/peopleClaims.ts) ─────────────────────────── */
+
+const rupee = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+/** A trip logged for reimbursement: the founders who decide it are asked; one person's trips in a day fold into one entry. */
+export function claimLoggedDraft(c: { id: string; date: string; place: string; amount: number; purpose: string }, p: { name: string; personId: string; emails: string[] }): Draft | null {
+  if (!p.emails.length) return null;
+  return {
+    kind: 'claims.logged', area: 'team', level: 'needs', title: `${p.name} logged a trip: ${rupee(c.amount)}`, line: `${c.purpose} · ${clip(c.place, 60)}`,
+    projectId: null, projectName: null, route: 'people', section: 'travel', action: 'Review', actor: p.name,
+    group: `claims:${p.personId}:${c.date}`, to: { emails: p.emails.map(inboxKey) },
+  };
+}
+
+/** A founder decided a trip, or paid trips back: the person hears it. */
+export function claimDecidedDraft(
+  what: { status: 'Approved' | 'Rejected' | 'Paid'; amount: number; count: number; place?: string; note?: string },
+  p: { byName: string; toEmail: string },
+): Draft {
+  const title = what.status === 'Paid'
+    ? `${rupee(what.amount)} paid back for ${what.count} trip${what.count === 1 ? '' : 's'}`
+    : `Your trip claim of ${rupee(what.amount)} was ${what.status === 'Approved' ? 'approved' : 'not approved'}`;
+  return {
+    kind: what.status === 'Paid' ? 'claims.paid' : 'claims.decided', area: 'team', level: 'update', title,
+    line: [what.place ? clip(what.place, 60) : '', what.note ? quote(what.note) : '', `by ${p.byName}`].filter(Boolean).join(' · '),
+    projectId: null, projectName: null, route: 'people', section: 'travel', action: null, actor: p.byName, group: null, to: { emails: [inboxKey(p.toEmail)] },
+  };
+}
+
 /* ── Ops Desk escalations ────────────────────────────────────────────────── */
 
 export function escalationDraft(
@@ -409,11 +437,12 @@ export function foldGroups(notes: Stored[], now = Date.now()): (Stored & { count
 }
 
 /** The title of a folded entry: "4 people checked in". */
-export function foldedTitle(e: { kind: string; title: string; count: number }): string {
+export function foldedTitle(e: { kind: string; title: string; count: number; actor?: string | null }): string {
   if (e.count < 2) return e.title;
   if (e.kind === 'people.checkin') return `${e.count} people checked in`;
   if (e.kind === 'people.checkout') return `${e.count} people checked out`;
   if (e.kind === 'guide.kudos.studio') return `${e.count} thank-yous on the kudos wall today`;
+  if (e.kind === 'claims.logged') return `${e.actor || 'Someone'} logged ${e.count} trips`;
   return `${e.title} and ${e.count - 1} more`;
 }
 

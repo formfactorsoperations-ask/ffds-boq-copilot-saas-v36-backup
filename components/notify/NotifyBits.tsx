@@ -1,7 +1,7 @@
 import React, { useId } from 'react';
 import {
   AlarmClock, AlertTriangle, BadgeCheck, CalendarCheck, CalendarDays, Check, CircleHelp, Clock, DoorOpen, FileSignature,
-  FileText, HardHat, IndianRupee, Layers, LogOut, MessageSquare, NotebookPen, Palette, PenTool, Sparkles, Undo2, UserPlus, Gavel,
+  FileText, HardHat, IndianRupee, Layers, LogOut, MessageSquare, NotebookPen, Palette, PenTool, Sparkles, Undo2, UserPlus, Gavel, Route, Wallet,
 } from '@/lib/lucide-shim';
 import { foldedTitle, type Stored } from '../../lib/notify';
 import { IconTile, type RingTone } from '../people/PeopleBits';
@@ -26,6 +26,9 @@ const KIND: Record<string, { icon: React.ComponentType<any>; tone: RingTone }> =
   'people.cancel': { icon: CalendarDays, tone: 'warn' },
   'people.withdrawn': { icon: CalendarDays, tone: 'slate' },
   'people.decided': { icon: CalendarCheck, tone: 'ok' },
+  'claims.logged': { icon: Route, tone: 'brand' },
+  'claims.decided': { icon: BadgeCheck, tone: 'ok' },
+  'claims.paid': { icon: Wallet, tone: 'ok' },
   'ops.escalation': { icon: AlertTriangle, tone: 'bad' },
   'ops.decided': { icon: Gavel, tone: 'brand' },
   'design.submitted': { icon: PenTool, tone: 'brand' },
@@ -126,7 +129,7 @@ export const BellGlyph: React.FC<{ size?: number }> = ({ size = 24 }) => {
 };
 
 /** The title of a row, with a folded burst counted. */
-export const titleOf = (n: Stored & { count?: number }) => foldedTitle({ kind: n.kind, title: n.title, count: n.count || 1 });
+export const titleOf = (n: Stored & { count?: number }) => foldedTitle({ kind: n.kind, title: n.title, count: n.count || 1, actor: n.actor });
 
 /** Faces for a folded burst: up to four initials, overlapping. */
 export const Faces: React.FC<{ members: Stored[] }> = ({ members }) => (

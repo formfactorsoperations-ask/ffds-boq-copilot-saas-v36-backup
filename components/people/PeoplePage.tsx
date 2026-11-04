@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useNoteArrivals } from '../notify/NotifyContext';
 import {
   Sunrise, Fingerprint, TreePalm, Stamp, CalendarDays, ChartColumn, Plus, RefreshCw, ChevronLeft, ChevronRight, MapPin, Download, Check, X, Search,
-  PartyPopper, Inbox, Users, Sparkles, Wrench, History, RotateCcw, BookUser, HandHeart, Building2, HeartPulse,
+  PartyPopper, Inbox, Users, Sparkles, Wrench, History, RotateCcw, BookUser, HandHeart, Building2, HeartPulse, Route,
 } from '@/lib/lucide-shim';
 import { LEAVE_LABELS, addDays, clock12, isLate, type Attendance, type Balance, type LeaveType, type RequestRecord, type Snapshot, type Status } from '../../lib/peopleDesk';
 import {
@@ -25,6 +25,10 @@ import { CelebrationsSection, CelebrationBanner } from './Celebrations';
 import { KudosWallSection } from './KudosWall';
 import { EssentialsSection } from './OfficeEssentials';
 import { EmergencySection } from './EmergencyContacts';
+import { TravelSection, ClaimApprovals } from './TravelClaims';
+import { ReportSection } from './PeopleReport';
+import { useClaims } from '../../services/peopleClaimsService';
+import type { ClaimsView } from '../../lib/peopleClaims';
 import { btnPri, btnSec, btnSm, input } from '../opsDesk/OpsDeskPanels';
 
 /*
@@ -40,8 +44,8 @@ import { btnPri, btnSec, btnSm, input } from '../opsDesk/OpsDeskPanels';
   celebrations, the kudos wall and each person's emergency contacts.
 */
 
-type Section = 'today' | 'attendance' | 'leave' | 'approvals' | 'calendar' | 'guide' | 'celebrations' | 'kudos' | 'essentials' | 'emergency' | 'report';
-const SECTION_IDS: Section[] = ['today', 'attendance', 'leave', 'approvals', 'calendar', 'guide', 'celebrations', 'kudos', 'essentials', 'emergency', 'report'];
+type Section = 'today' | 'attendance' | 'leave' | 'travel' | 'approvals' | 'calendar' | 'guide' | 'celebrations' | 'kudos' | 'essentials' | 'emergency' | 'report';
+const SECTION_IDS: Section[] = ['today', 'attendance', 'leave', 'travel', 'approvals', 'calendar', 'guide', 'celebrations', 'kudos', 'essentials', 'emergency', 'report'];
 const asSection = (x: string): Section | null => (SECTION_IDS.includes(x as Section) ? (x as Section) : null);
 const chip = 'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap';
 const niceDay = (d: string) => new Date(`${d}T12:00:00+05:30`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -55,6 +59,8 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   const { snapshot, loading, error, stale, at, refresh } = usePeople();
   /* The office guide, essentials, cards, kudos and emergency contacts (lib/peopleGuide.ts), loaded beside the snapshot. */
   const guide = useGuide();
+  /* Travel claims (lib/peopleClaims.ts): your trips, and the founders' to approve and pay back. */
+  const claims = useClaims();
   /* A note or a Home pin can open People at a section (lib/peopleSection.ts). */
   const [section, setSection] = useState<Section>(() => asSection(wantedPeopleSection()) || 'today');
   useEffect(() => {
@@ -77,6 +83,8 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   useNoteArrivals((n) => n.kind.startsWith('people.'), () => refresh());
   /* A thank-you, or your emergency contacts opened: the guide catches up. */
   useNoteArrivals((n) => n.kind.startsWith('guide.'), () => guide.refresh());
+  /* A trip logged, decided or paid back: the claims catch up. */
+  useNoteArrivals((n) => n.kind.startsWith('claims.'), () => claims.refresh());
   /* Thank-yous pinned up since this person last looked at the wall, counted on its rail item. */
   const meId = snapshot?.me.id || '';
   const [kudosSeen, setKudosSeen] = useState('');
@@ -100,6 +108,7 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   const s = snapshot;
   const approver = s.me.accessRole !== 'employee';
   const waiting = awaitingMe(s);
+  const tripsWaiting = claims.view?.toDecide.length || 0;
   const { session } = myDay(s);
   const fy = currentFy(s);
   const bal = s.balances[fy];
@@ -109,7 +118,8 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
       { id: 'today', label: 'Today', icon: Sunrise, show: true },
       { id: 'attendance', label: 'Attendance', icon: Fingerprint, show: true },
       { id: 'leave', label: 'Leave', icon: TreePalm, n: s.requests.filter((r) => r.employeeId === s.me.id && r.status === 'Pending').length, show: true },
-      { id: 'approvals', label: 'Approvals', icon: Stamp, n: waiting.length, show: approver },
+      { id: 'travel', label: 'Travel', icon: Route, n: tripsWaiting, show: true },
+      { id: 'approvals', label: 'Approvals', icon: Stamp, n: waiting.length + tripsWaiting, show: approver || tripsWaiting > 0 },
     ] },
     { label: 'Team', items: [
       { id: 'calendar', label: 'Calendar', icon: CalendarDays, show: true },
@@ -122,7 +132,7 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
       { id: 'emergency', label: 'Emergency contacts', icon: HeartPulse, show: true },
     ] },
     { label: 'Admin', items: [
-      { id: 'report', label: 'Monthly report', icon: ChartColumn, show: approver },
+      { id: 'report', label: 'Reports', icon: ChartColumn, show: approver },
     ] },
   ];
   const done = (msg: string) => { setLeaveOpen(null); setCorrecting(null); setNotice(msg); };
@@ -146,7 +156,7 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
             {session?.checkOut ? 'Day complete' : session ? 'Checked in' : 'Not checked in'}
           </span>
         </BarStrip>
-        <BarButton onClick={() => { refresh(); guide.refresh(); }} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh</BarButton>
+        <BarButton onClick={() => { refresh(); guide.refresh(); claims.refresh(); }} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh</BarButton>
         <BarButton primary onClick={() => setLeaveOpen({})}><Plus className="w-4 h-4" />Apply for leave</BarButton>
       </StudioBar>
 
@@ -185,17 +195,18 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
           {/* The new section swaps in at once: waiting for the old one's exit (mode="wait") delayed every switch and could stall on a blank section, as App's tabs once did. */}
           <motion.div key={section} variants={sectionV} initial="hidden" animate="show" className="space-y-6">
               {section === 'today' && <CelebrationBanner view={guide.view} onOpen={() => setSection('celebrations')} />}
-              {section === 'today' && <TodaySection s={s} sites={sites} onCorrect={setCorrecting} onLeave={(start) => setLeaveOpen({ start })} onGo={setSection} waiting={waiting.length} />}
+              {section === 'today' && <TodaySection s={s} sites={sites} onCorrect={setCorrecting} onLeave={(start) => setLeaveOpen({ start })} onGo={setSection} waiting={waiting.length + tripsWaiting} />}
               {section === 'attendance' && <AttendanceSection s={s} onCorrect={setCorrecting} approver={approver} />}
               {section === 'leave' && <LeaveSection s={s} onApply={() => setLeaveOpen({})} onDone={setNotice} />}
-              {section === 'approvals' && approver && <ApprovalsSection s={s} list={waiting} onDone={setNotice} />}
+              {section === 'travel' && <TravelSection s={s} view={claims.view} error={claims.error} onRefresh={claims.refresh} sites={sites} />}
+              {section === 'approvals' && (approver || tripsWaiting > 0) && <ApprovalsSection s={s} list={waiting} claims={claims.view} onDone={setNotice} />}
               {section === 'calendar' && <PeopleCalendar s={s} onLeave={(start) => setLeaveOpen({ start })} />}
               {section === 'guide' && <OfficeGuideSection s={s} view={guide.view} loading={guide.loading} error={guide.error} onRefresh={guide.refresh} />}
               {section === 'celebrations' && <CelebrationsSection view={guide.view} meId={s.me.id} error={guide.error} onRefresh={guide.refresh} />}
               {section === 'kudos' && <KudosWallSection view={guide.view} meId={s.me.id} error={guide.error} onRefresh={guide.refresh} />}
               {section === 'essentials' && <EssentialsSection view={guide.view} policy={s.policy} error={guide.error} onRefresh={guide.refresh} />}
               {section === 'emergency' && <EmergencySection view={guide.view} meId={s.me.id} error={guide.error} onRefresh={guide.refresh} />}
-              {section === 'report' && approver && <ReportSection s={s} />}
+              {section === 'report' && approver && <ReportSection s={s} claims={claims.view} />}
           </motion.div>
         </div>
       </div>
@@ -394,7 +405,7 @@ function LeaveSection({ s, onApply, onDone }: { s: Snapshot; onApply: () => void
 
 /* ── Approvals ───────────────────────────────────────────────────────────── */
 
-function ApprovalsSection({ s, list, onDone }: { s: Snapshot; list: RequestRecord[]; onDone: (m: string) => void }) {
+function ApprovalsSection({ s, list, claims, onDone }: { s: Snapshot; list: RequestRecord[]; claims: ClaimsView | null; onDone: (m: string) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -413,8 +424,12 @@ function ApprovalsSection({ s, list, onDone }: { s: Snapshot; list: RequestRecor
       ? (decision === 'approve' ? `${who}'s leave is cancelled and the days returned.` : `${who}'s leave stays booked.`)
       : `${decision === 'approve' ? 'Approved' : 'Rejected'}: ${who}'s ${r.kind === 'correction' ? 'correction' : LEAVE_LABELS[r.type].toLowerCase()}.`);
   };
+  const trips = claims?.founder && claims.toDecide.length ? <ClaimApprovals s={s} view={claims} onDone={onDone} /> : null;
+  if (s.me.accessRole === 'employee') return trips;
   return (
-    <Panel icon={Inbox} title="Approvals" blurb={s.me.accessRole === 'manager' ? 'Leave and corrections from the people who report to you, oldest first.' : 'Leave and corrections from across the studio, oldest first. Never your own.'}>
+    <>
+    {trips}
+    <Panel icon={Inbox} title="Leave and corrections" blurb={s.me.accessRole === 'manager' ? 'Leave and corrections from the people who report to you, oldest first.' : 'Leave and corrections from across the studio, oldest first. Never your own.'}>
       <AnimatePresence>{error && <Notice text={error} tone="bad" onClose={() => setError(null)} />}</AnimatePresence>
       {list.length === 0 ? <Empty icon={Stamp} text="Nothing waiting for you. All clear." /> : (
         <motion.div variants={listV} initial="hidden" animate="show" className="flex flex-col gap-3 mt-2">
@@ -460,83 +475,7 @@ function ApprovalsSection({ s, list, onDone }: { s: Snapshot; list: RequestRecor
         </motion.div>
       )}
     </Panel>
-  );
-}
-
-/* ── The monthly report ──────────────────────────────────────────────────── */
-
-/** The first month the snapshot covers in full; older months are fetched for the report. */
-const coveredFrom = (s: Snapshot) => shiftMonth(addDays(todayOf(s), -120).slice(0, 7), 1);
-
-function ReportSection({ s }: { s: Snapshot }) {
-  const [month, setMonth] = useState(todayOf(s).slice(0, 7));
-  const [older, setOlder] = useState<{ month: string; s: Snapshot | null; error?: string } | null>(null);
-  const old = month < coveredFrom(s);
-  useEffect(() => {
-    if (!old || older?.month === month) return;
-    let live = true;
-    setOlder({ month, s: null });
-    fetchPeopleMonth(month).then((x) => { if (live) setOlder({ month, s: x }); }).catch((e) => { if (live) setOlder({ month, s: null, error: String(e?.message || 'Could not load that month.') }); });
-    return () => { live = false; };
-  }, [month, old]);
-  const source = old ? (older?.month === month ? older.s : null) : s;
-  const rows = useMemo(() => (source ? monthReport(source, month) : []), [source, month]);
-  const label = new Date(`${month}-15T12:00:00+05:30`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-  const download = () => {
-    if (!source) return;
-    const blob = new Blob([attendanceCsv(source, month)], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `attendance-${month}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-  const totals = rows.reduce((t, r) => ({ present: t.present + r.present, late: t.late + r.late, away: t.away + r.awayDays }), { present: 0, late: 0, away: 0 });
-  return (
-    <Panel icon={ChartColumn} title="Monthly report" blurb={s.me.accessRole === 'manager' ? 'You and the people who report to you.' : 'Everyone in the studio, including months brought over from People Hub.'}
-      aside={<div className="flex items-center gap-1">
-        <button type="button" className={btnSm} aria-label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))}><ChevronLeft className="w-3.5 h-3.5" /></button>
-        <span className="text-sm font-bold text-slate-800 w-36 text-center">{label}</span>
-        <button type="button" className={btnSm} aria-label="Next month" onClick={() => setMonth(shiftMonth(month, 1))}><ChevronRight className="w-3.5 h-3.5" /></button>
-        <button type="button" className={`${btnSm} ml-2`} onClick={download} disabled={!source}><Download className="w-3.5 h-3.5" />CSV</button>
-      </div>}>
-      {old && !source && (older?.error ? <Notice text={older.error} tone="bad" /> : <div className="space-y-2 mb-4">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-9 rounded-xl" />)}</div>)}
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        {([[Fingerprint, 'Days present', totals.present, 'brand'], [Sunrise, 'Late arrivals', totals.late, 'warn'], [TreePalm, 'Leave days taken', totals.away, 'ok']] as const).map(([Icon, k, v, tone], i) => (
-          <motion.div key={k} initial={{ opacity: 0, y: 8, rotateX: -40 }} animate={{ opacity: 1, y: 0, rotateX: 0 }} transition={{ delay: i * 0.08, duration: 0.5, ease: EASE }} style={{ transformPerspective: 600 }}
-            className="group rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-center gap-3">
-            <IconTile icon={Icon} tone={tone} size="sm" />
-            <span><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{k}</p>
-            <p className="text-sm font-black text-slate-800 tabular-nums mt-1"><CountUp value={v} /></p></span>
-          </motion.div>
-        ))}
-      </div>
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
-        <table className="w-full min-w-[640px] text-xs">
-          <thead><tr className="text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50">
-            <th className="px-3 py-2">Person</th><th className="px-3 py-2 text-right">Present</th><th className="px-3 py-2 text-right">Office</th><th className="px-3 py-2 text-right">Site</th>
-            <th className="px-3 py-2 text-right">Home</th><th className="px-3 py-2 text-right">Late</th><th className="px-3 py-2 text-right">Hours</th><th className="px-3 py-2 text-right">Leave</th><th className="px-3 py-2 text-right">Open</th>
-          </tr></thead>
-          <motion.tbody variants={listV} initial="hidden" animate="show" key={month} className="divide-y divide-slate-100">
-            {rows.map((r) => (
-              <motion.tr key={r.person.id} variants={rowV}>
-                <td className="px-3 py-2"><span className="flex items-center gap-2"><Avatar name={r.person.name} size="sm" /><span className="text-sm font-semibold text-slate-800">{r.person.name}</span></span></td>
-                <td className="px-3 py-2 text-right font-bold text-slate-800 tabular-nums">{r.present}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{r.office}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{r.site}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{r.wfh}</td>
-                <td className={`px-3 py-2 text-right tabular-nums ${r.late ? 'text-amber-700 font-bold' : ''}`}>{r.late}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{duration(r.minutes)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{r.awayDays}</td>
-                <td className={`px-3 py-2 text-right tabular-nums ${r.open ? 'text-rose-700 font-bold' : ''}`}>{r.open}</td>
-              </motion.tr>
-            ))}
-          </motion.tbody>
-        </table>
-      </div>
-      <p className="text-[11px] text-slate-500 mt-2">Open: checked in, never checked out (or, from People Hub, no check-out recorded). The CSV has every session with times, mode, site and where.</p>
-    </Panel>
+    </>
   );
 }
 

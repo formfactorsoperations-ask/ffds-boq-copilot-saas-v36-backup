@@ -274,9 +274,22 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
   hearted a kudos note sit by the heart (rose tint, yours solid, three then "+N"); pointing at them
   or the heart, or tapping the faces, opens a small list of names that pops up above. The Home
   pin's heart count says who in its tooltip.
-- The People rail is grouped (owner, 28 Oct 2026): My day (Today, Attendance, Leave,
+- **Travel claims** (owner, 4 Nov 2026, `lib/peopleClaims.ts`, `TravelClaims.tsx`): "Travel" under
+  My day. Logging a trip is one sheet of tiles: when (Today, Yesterday, Earlier), what for (site
+  visit, selections, client, vendor, other), where, how (own bike or car at the studio's rate a
+  km, or cab, auto, public transport at the fare), parking or tolls, and a receipt photo; the
+  sum shows as it is typed, and a recent trip can be repeated in one tap. Chosen tiles slide a
+  brand highlight under them and turn their icon; a logged trip ends in `Confetti`. Founders
+  (People admins) see "To approve" (by person, "Approve all", a stamp lands on each decision)
+  and "To pay back" (by person, "Mark paid"), and set the rates. Status chips: waiting amber,
+  approved emerald, paid back brand, not approved rose.
+- **Reports** (owner, 4 Nov 2026: "make the monthly report more usable for founders",
+  `PeopleReport.tsx`): one panel with Attendance, Travel claims (founders) and Leave year. Tiles
+  count up; tables sort by any column and filter by name; "Worth a look" lists who was late three
+  times, left a day open or has days unaccounted for; thin bars fill in; each has its own CSV.
+- The People rail is grouped (owner, 28 Oct 2026): My day (Today, Attendance, Leave, Travel,
   Approvals), Team (Calendar, Office guide, Celebrations, Kudos), Studio (Essentials,
-  Emergency contacts) and Admin (Monthly report). Group names are field labels, shown
+  Emergency contacts) and Admin (Reports). Group names are field labels, shown
   from `lg` up; a group with nothing in it for that person is left out.
 
 ### Ops Desk motion (approved 21 Oct 2026)
