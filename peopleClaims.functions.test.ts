@@ -143,6 +143,21 @@ describe('travel claims', () => {
     expect(await code(u.tanvi.run('log', { ...trip(), receipt: { type: 'text/html', data: 'PGh0bWw+' } }))).toMatch(/invalid-argument/);
   }, 60000);
 
+  it('a trip is deleted by its person until approved, and by a founder at any stage; its receipt goes with it', async () => {
+    const mine = (await u.tanvi.run('log', { ...trip({ place: 'Bandra again' }), receipt: { type: 'image/png', data: PNG } })).id;
+    const r = await u.tanvi.run('delete', { claimId: mine });
+    expect(r.view.mine.find((c: any) => c.id === mine)).toBeUndefined();
+    expect(await code(u.tanvi.run('receipt', { claimId: mine }))).toMatch(/not-found/);
+    await u.tanvi.run('delete', { claimId: mine }); // sent again: nothing to do
+    expect(await code(u.tanvi.run('delete', { claimId: first }))).toMatch(/permission-denied/); // paid back: a founder's call
+    const other = (await u.anish.run('log', trip({ place: 'Founder trip' }))).id;
+    expect(await code(u.tanvi.run('delete', { claimId: other }))).toMatch(/permission-denied/);
+    await u.meera.run('delete', { claimId: first });
+    expect((await u.tanvi.view()).mine.find((c: any) => c.id === first)).toBeUndefined();
+    await new Promise((x) => setTimeout(x, 800));
+    expect((await notesOf('tanvi@c.in', 'claims.deleted')).map((x) => x.title)).toEqual(['Meera deleted your trip claim of ₹96']);
+  }, 60000);
+
   it('is never read from the browser', async () => {
     expect(await code(getDoc(doc(u.anish.fs, `peopleDesk/${STUDIO}/claims/${first}`)))).toMatch(/permission-denied/);
     expect(await code(getDocs(collection(u.anish.fs, `peopleDesk/${STUDIO}/claimReceipts`)))).toMatch(/permission-denied/);

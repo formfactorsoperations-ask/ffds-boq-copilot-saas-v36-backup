@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_POLICY, scopeSnapshot, type Person, type RequestRecord, type Snapshot } from '../../lib/peopleDesk';
 import {
-  cleanClaim, kmAmount, cleanRates, canDecide, decideClaim, payClaim, withdrawClaim, claimsView, totalsOf, claimsMonth, claimsCsv, recentTrips,
+  cleanClaim, kmAmount, cleanRates, canDecide, canDelete, decideClaim, payClaim, withdrawClaim, claimsView, totalsOf, claimsMonth, claimsCsv, recentTrips,
   DEFAULT_RATES, type Claim,
 } from '../../lib/peopleClaims';
-import { claimLoggedDraft, claimDecidedDraft, foldedTitle } from '../../lib/notify';
+import { claimLoggedDraft, claimDecidedDraft, claimDeletedDraft, foldedTitle } from '../../lib/notify';
 import { leaveYear, leaveYearCsv } from '../../lib/peopleView';
 
 const person = (id: string, over: Partial<Person> = {}): Person => ({ id, name: id.toUpperCase(), title: '', teamId: 'design', managerId: '', accessRole: 'employee', active: true, email: `${id}@studio.in`, ...over });
@@ -70,6 +70,21 @@ describe('founders decide and pay back', () => {
     expect(withdrawClaim(claimOf(), riya, 'now').status).toBe('Withdrawn');
     expect(() => withdrawClaim(claimOf(), anish, 'now')).toThrow(/Only the person/);
     expect(() => withdrawClaim(claimOf({ status: 'Approved' }), riya, 'now')).toThrow(/still waiting/);
+  });
+});
+
+describe('deleting a trip (the owner, 4 Nov 2026)', () => {
+  it('its person, until it is approved; a founder, anyone else’s at any stage', () => {
+    for (const status of ['Pending', 'Rejected', 'Withdrawn'] as const) expect(canDelete(riya, { personId: 'riya', status })).toBe(true);
+    for (const status of ['Approved', 'Paid'] as const) expect(canDelete(riya, { personId: 'riya', status })).toBe(false);
+    expect(canDelete(riya, { personId: 'anish', status: 'Pending' })).toBe(false);
+    expect(canDelete(anish, { personId: 'riya', status: 'Paid' })).toBe(true);
+    expect(canDelete(anish, { personId: 'anish', status: 'Approved' })).toBe(false);
+    expect(canDelete({ ...anish, active: false }, { personId: 'riya', status: 'Pending' })).toBe(false);
+  });
+  it('tells the person when a founder deletes theirs', () => {
+    expect(claimDeletedDraft({ amount: 96, place: 'Bandra site', date: TODAY }, { byName: 'Anish K', toEmail: 'riya@studio.in' }))
+      .toMatchObject({ kind: 'claims.deleted', title: 'Anish K deleted your trip claim of ₹96', section: 'travel' });
   });
 });
 

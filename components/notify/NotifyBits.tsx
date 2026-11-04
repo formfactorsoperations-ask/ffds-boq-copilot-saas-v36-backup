@@ -29,6 +29,7 @@ const KIND: Record<string, { icon: React.ComponentType<any>; tone: RingTone }> =
   'claims.logged': { icon: Route, tone: 'brand' },
   'claims.decided': { icon: BadgeCheck, tone: 'ok' },
   'claims.paid': { icon: Wallet, tone: 'ok' },
+  'claims.deleted': { icon: Route, tone: 'slate' },
   'ops.escalation': { icon: AlertTriangle, tone: 'bad' },
   'ops.decided': { icon: Gavel, tone: 'brand' },
   'design.submitted': { icon: PenTool, tone: 'brand' },

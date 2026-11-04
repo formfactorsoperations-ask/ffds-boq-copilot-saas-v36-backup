@@ -8,12 +8,12 @@ import { LEAVE_LABELS, addDays, isOff, type Snapshot } from '../../lib/peopleDes
 import {
   monthReport, attendanceCsv, shiftMonth, todayOf, duration, currentFy, fyLabel, leaveYear, leaveYearCsv, CHARGED, personName, type ReportRow, type LeaveYearRow,
 } from '../../lib/peopleView';
-import { claimsMonth, claimsCsv, inr, type ClaimsView, type ClaimRow } from '../../lib/peopleClaims';
+import { claimsMonth, claimsCsv, canDelete, inr, type ClaimsView, type ClaimRow } from '../../lib/peopleClaims';
 import { fetchPeopleMonth } from '../../services/peopleService';
 import { CountUp } from '../ui/HudBits';
 import { btnSm } from '../opsDesk/OpsDeskPanels';
 import { Panel, Notice, Skeleton, Glide, IconTile, Avatar, Empty, listV, rowV, EASE, LEAVE_ICON, type RingTone } from './PeopleBits';
-import { TripRow } from './TravelClaims';
+import { TripRow, DeleteTrip } from './TravelClaims';
 
 /*
   PEOPLE'S REPORTS (the owner, 4 Nov 2026: "make the monthly report more
@@ -286,7 +286,7 @@ function TravelReport({ s, claims, month, query }: { s: Snapshot; claims: Claims
                   {open === r.personId && (
                     <tr><td colSpan={7} className="p-0 bg-slate-50/60">
                       <motion.div variants={listV} initial="hidden" animate="show" className="divide-y divide-slate-100">
-                        {r.trips.map((c) => <TripRow key={c.id} c={c} />)}
+                        <AnimatePresence initial={false}>{r.trips.map((c) => <TripRow key={c.id} c={c} right={canDelete(s.me, c) ? <DeleteTrip c={c} /> : null} />)}</AnimatePresence>
                       </motion.div>
                     </td></tr>
                   )}

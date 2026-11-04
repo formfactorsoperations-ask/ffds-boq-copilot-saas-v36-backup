@@ -317,6 +317,14 @@ export function claimDecidedDraft(
   };
 }
 
+/** A founder deleted someone's trip: the person hears it. */
+export function claimDeletedDraft(c: { amount: number; place: string; date: string }, p: { byName: string; toEmail: string }): Draft {
+  return {
+    kind: 'claims.deleted', area: 'team', level: 'update', title: `${p.byName} deleted your trip claim of ${rupee(c.amount)}`, line: `${clip(c.place, 60)} · ${c.date}`,
+    projectId: null, projectName: null, route: 'people', section: 'travel', action: null, actor: p.byName, group: null, to: { emails: [inboxKey(p.toEmail)] },
+  };
+}
+
 /* ── Ops Desk escalations ────────────────────────────────────────────────── */
 
 export function escalationDraft(

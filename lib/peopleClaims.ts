@@ -166,6 +166,18 @@ export function withdrawClaim(c: Claim, actor: Person, now: string): Claim {
   return { ...c, status: "Withdrawn", decisions: [...c.decisions, { by: actor.id, byName: actor.name, at: now, status: "Withdrawn", note: "" }] };
 }
 
+/**
+ * Who may delete a trip (the owner, 4 Nov 2026): its person while it is not
+ * approved (waiting, turned down or taken back); a founder, anyone else's at
+ * any stage. Once approved or paid it is part of the studio's accounts, so
+ * only a founder can remove it, never their own.
+ */
+export function canDelete(actor: Person, c: Pick<Claim, "personId" | "status">): boolean {
+  if (!actor.active) return false;
+  if (c.personId === actor.id) return c.status === "Pending" || c.status === "Rejected" || c.status === "Withdrawn";
+  return isFounder(actor);
+}
+
 /* ── What each person sees ───────────────────────────────────────────────── */
 
 export interface ClaimsView {

@@ -284,6 +284,9 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
   approve" (by person, "Approve all", a stamp lands on each decision) and "To pay back" (by
   person, "Mark paid"), and set the rates. Status chips: waiting amber, approved emerald, paid
   back brand, not approved rose.
+  Deleting a trip is a bin that turns when pointed at and asks first ("Delete this trip?", a rose
+  Delete and Keep); the trip then slides away. Its person deletes it until it is approved; a
+  founder, anyone else's at any stage.
 - **Reports** (owner, 4 Nov 2026: "make the monthly report more usable for founders",
   `PeopleReport.tsx`): one panel with Attendance, Travel claims (founders) and Leave year. Tiles
   count up; tables sort by any column and filter by name; "Worth a look" lists who was late three

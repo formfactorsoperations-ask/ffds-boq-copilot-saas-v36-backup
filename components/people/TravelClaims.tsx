@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Route, Bike, Car, CarFront, Building2, CarTaxiFront, TrainFront, Footprints, HardHat, ShoppingBag, Handshake, Store, Sparkles, Plus, Check, X, Paperclip,
-  Camera, Repeat, ArrowRight, IndianRupee, Hourglass, BadgeCheck, Wallet, RefreshCw, Undo2, Pencil, ChevronDown,
+  Camera, Repeat, ArrowRight, IndianRupee, Hourglass, BadgeCheck, Wallet, RefreshCw, Pencil, ChevronDown, Trash2,
 } from '@/lib/lucide-shim';
 import {
-  CLAIM_PURPOSES, PURPOSE_LABELS, TRAVEL_MODES, MODE_LABELS, byKm, kmAmount, recentTrips, totalsOf, inr,
+  CLAIM_PURPOSES, PURPOSE_LABELS, TRAVEL_MODES, MODE_LABELS, byKm, canDelete, kmAmount, recentTrips, totalsOf, inr,
   type Claim, type ClaimPurpose, type ClaimStatus, type ClaimsView, type TravelMode,
 } from '../../lib/peopleClaims';
 import { addDays, type Snapshot } from '../../lib/peopleDesk';
@@ -113,8 +113,6 @@ export function TravelSection({ s, view, error, onRefresh, sites }: { s: Snapsho
 /* ── Your trips ──────────────────────────────────────────────────────────── */
 
 function MyTrips({ view, onRepeat, onLog, onNotice }: { view: ClaimsView; onRepeat: (c: Claim) => void; onLog: () => void; onNotice: (m: string) => void }) {
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [shown, setShown] = useState(40);
   const months = useMemo(() => {
     const out: { month: string; list: Claim[] }[] = [];
@@ -125,17 +123,9 @@ function MyTrips({ view, onRepeat, onLog, onNotice }: { view: ClaimsView; onRepe
     }
     return out;
   }, [view.mine, shown]);
-  const withdraw = async (c: Claim) => {
-    setBusy(c.id);
-    setError(null);
-    const r = await runClaims('withdraw', { claimId: c.id });
-    setBusy(null);
-    if ('error' in r) setError(r.error); else onNotice('Trip taken back.');
-  };
   if (!view.mine.length) return <FirstTrip onLog={onLog} />;
   return (
     <>
-      <AnimatePresence>{error && <Notice text={error} tone="bad" onClose={() => setError(null)} />}</AnimatePresence>
       {months.map((m) => {
         const t = totalsOf(m.list);
         return (
@@ -145,8 +135,8 @@ function MyTrips({ view, onRepeat, onLog, onNotice }: { view: ClaimsView; onRepe
               <AnimatePresence initial={false}>
                 {m.list.map((c) => (
                   <TripRow key={c.id} c={c} right={<>
-                    {c.status === 'Pending' && <button type="button" className={btnSm} disabled={busy === c.id} onClick={() => withdraw(c)}><Undo2 className="w-3.5 h-3.5" />Take back</button>}
                     {c.status !== 'Pending' && <button type="button" className={`${btnSm} opacity-0 group-hover:opacity-100 focus:opacity-100`} onClick={() => onRepeat(c)}><Repeat className="w-3.5 h-3.5" />Again</button>}
+                    {(c.status === 'Pending' || c.status === 'Rejected' || c.status === 'Withdrawn') && <DeleteTrip c={c} onDone={onNotice} />}
                   </>} />
                 ))}
               </AnimatePresence>
@@ -186,6 +176,40 @@ function FirstTrip({ onLog }: { onLog: () => void }) {
     </div>
   );
 }
+
+/** A bin that asks first: "Delete this trip?" in rose, then the trip slides away. Deleting also removes its receipt. */
+export const DeleteTrip: React.FC<{ c: Claim; onDone?: (m: string) => void }> = ({ c, onDone }) => {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const go = async () => {
+    setBusy(true);
+    setError(null);
+    const r = await runClaims('delete', { claimId: c.id });
+    setBusy(false);
+    if ('error' in r) { setError(r.error); return; }
+    onDone?.(`Deleted: ${c.place}, ${money(c.amount)}.`);
+  };
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      {asking ? (
+        <motion.span key="ask" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }} transition={{ duration: 0.18 }} className="flex flex-wrap items-center justify-end gap-1.5">
+          <span className="text-xs font-semibold text-rose-700">{error || 'Delete this trip?'}</span>
+          <button type="button" disabled={busy} onClick={go} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 disabled:opacity-50">
+            <Trash2 className="w-3.5 h-3.5" />{busy ? 'Deleting…' : 'Delete'}
+          </button>
+          <button type="button" className={btnSm} disabled={busy} onClick={() => { setAsking(false); setError(null); }}>Keep</button>
+        </motion.span>
+      ) : (
+        <motion.button key="bin" type="button" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} whileHover={{ rotate: -14, scale: 1.08 }} whileTap={{ scale: 0.9 }}
+          onClick={() => setAsking(true)} aria-label="Delete this trip" title="Delete this trip"
+          className="w-8 h-8 rounded-lg grid place-items-center text-slate-400 hover:text-rose-600 hover:bg-rose-50">
+          <Trash2 className="w-4 h-4" />
+        </motion.button>
+      )}
+    </AnimatePresence>
+  );
+};
 
 /** One trip: how, when, where, what it came to and where it stands. */
 export const TripRow: React.FC<{ c: Claim; who?: string; right?: React.ReactNode }> = ({ c, who, right }) => {
@@ -554,9 +578,10 @@ export function ClaimApprovals({ s, view, onDone, bare = false }: { s: Snapshot;
                     {g.list.map((c) => (
                       <div key={c.id} className="relative">
                         <TripRow c={c} right={rejecting === c.id ? null : (
-                          <span className="flex gap-1.5">
+                          <span className="flex items-center gap-1.5">
                             <button type="button" className={btnSm} disabled={!!busy} onClick={() => decide([c.id], 'approve', g.name)}><Check className="w-3.5 h-3.5" />Approve</button>
                             <button type="button" className={btnSm} disabled={!!busy} onClick={() => { setRejecting(c.id); setNote(''); }}><X className="w-3.5 h-3.5" />No</button>
+                            {canDelete(s.me, c) && <DeleteTrip c={c} onDone={onDone} />}
                           </span>
                         )} />
                         <AnimatePresence>
@@ -638,7 +663,7 @@ function PayBack({ s, view, onDone }: { s: Snapshot; view: ClaimsView; onDone: (
               <AnimatePresence initial={false}>
                 {open === g.personId && (
                   <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="border-t border-slate-100">
-                    <motion.div variants={listV} initial="hidden" animate="show" className="divide-y divide-slate-100">{g.list.map((c) => <TripRow key={c.id} c={c} />)}</motion.div>
+                    <motion.div variants={listV} initial="hidden" animate="show" className="divide-y divide-slate-100"><AnimatePresence initial={false}>{g.list.map((c) => <TripRow key={c.id} c={c} right={canDelete(s.me, c) ? <DeleteTrip c={c} onDone={onDone} /> : null} />)}</AnimatePresence></motion.div>
                   </motion.div>
                 )}
               </AnimatePresence>

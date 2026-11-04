@@ -2,10 +2,10 @@ import { onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { contextOf, fail, PEOPLE_REGION, type Ctx } from "./peopleDesk";
 import { notify } from "./notify";
-import { claimDecidedDraft, claimLoggedDraft } from "../../lib/notify";
+import { claimDecidedDraft, claimDeletedDraft, claimLoggedDraft } from "../../lib/notify";
 import { DomainError, addDays, businessDate } from "../../lib/peopleDesk";
 import {
-  DEFAULT_RATES, PURPOSE_LABELS, canDecide, claimsView, cleanClaim, cleanRates, decideClaim, isFounder, payClaim, withdrawClaim,
+  DEFAULT_RATES, PURPOSE_LABELS, canDecide, canDelete, claimsView, cleanClaim, cleanRates, decideClaim, isFounder, payClaim, withdrawClaim,
   type Claim, type ClaimRates, type ClaimsView,
 } from "../../lib/peopleClaims";
 
@@ -23,8 +23,8 @@ import {
 
     peopleClaims         your trips; a founder's view also has everyone's,
                          what waits for them and what is ready to pay
-    peopleClaimsCommand  log, take back, decide, mark paid, set the rates,
-                         open a receipt
+    peopleClaimsCommand  log, take back, delete, decide, mark paid, set the
+                         rates, open a receipt
 
   Who someone is, and whether they are a founder (a People admin), comes from
   People's own context (functions/src/peopleDesk.ts).
@@ -122,6 +122,24 @@ export const peopleClaimsCommand = onCall({ cors: true, region: PEOPLE_REGION, m
           if (!doc.exists) throw new DomainError("NOT_FOUND", "That trip is gone.", 404);
           tx.set(ref, plain(withdrawClaim(doc.data() as Claim, ctx.me, now)));
         });
+        break;
+      }
+      case "delete": {
+        const id = claimId(data.claimId);
+        const ref = db().doc(`${root}/claims/${id}`);
+        const gone = await db().runTransaction(async (tx) => {
+          const doc = await tx.get(ref);
+          if (!doc.exists) return null; // already deleted: sent again after a dropped connection
+          const c = doc.data() as Claim;
+          if (!canDelete(ctx.me, c)) {
+            throw new DomainError("FORBIDDEN", c.personId === ctx.me.id ? "An approved trip can only be deleted by a founder." : "Only a founder can delete someone else's trip.", 403);
+          }
+          tx.delete(ref);
+          tx.delete(db().doc(`${root}/claimReceipts/${id}`));
+          return c;
+        });
+        const person = gone && gone.personId !== ctx.me.id ? ctx.people.find((p) => p.id === gone.personId) : null;
+        if (gone && person?.email) await notify(by, [claimDeletedDraft(gone, { byName: ctx.me.name, toEmail: person.email })]);
         break;
       }
       case "decide": {
