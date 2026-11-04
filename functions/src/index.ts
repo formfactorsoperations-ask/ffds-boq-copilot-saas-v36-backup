@@ -38,6 +38,8 @@ export { peopleSnapshot, peopleCommand, peopleOutbox } from "./peopleDesk";
 export { peopleImport } from "./peopleImport";
 /* People: the office guide, essentials, celebrations, kudos and emergency contacts; see peopleGuide.ts. */
 export { peopleGuide, peopleGuideCommand, peopleCelebrations } from "./peopleGuide";
+/* People: travel claims, decided and paid by the founders; see peopleClaims.ts. */
+export { peopleClaims, peopleClaimsCommand } from "./peopleClaims";
 /* "New for you" in the client portal: a note for each thing the studio releases (lib/notify.ts portalDrafts). */
 export { onPortalViewWritten, onDecisionAnswered } from "./portalNotify";
 import { confirmMeetingByClient, portalSheetFor } from "./designMeeting";

@@ -17,9 +17,11 @@ import {
   type Store,
 } from "../../lib/peopleDesk";
 const now = "2026-10-07T05:00:00.000Z";
+/* These tests exercise the leave mechanics with a planned-leave allowance; the studio's own default has none (owner, 4 Nov 2026). */
+const WITH_PL = () => ({ ...structuredClone(DEFAULT_POLICY), allowances: { ...DEFAULT_POLICY.allowances, PL: 12 } });
 function setup(): Store {
   return {
-    policy: structuredClone(DEFAULT_POLICY),
+    policy: WITH_PL(),
     people: [
       {
         id: "a",
@@ -411,7 +413,7 @@ test("the studio team becomes People: co-founders run it, managers by who report
 
   // A designer's leave goes to Mayuri or Anish, never to a colleague or themselves.
   const store = { policy: policyOf(org), people, attendance: [], requests: [], events: [] } as any;
-  const req = applyEvent(store, execute(store, "tm-tanvi", { id: "tanvi_leave_1", action: "request", data: { type: "PL", start: "2026-10-08", end: "2026-10-08", portion: "Full day", reason: "family" } }, now));
+  const req = applyEvent(store, execute(store, "tm-tanvi", { id: "tanvi_leave_1", action: "request", data: { type: "CL", start: "2026-10-08", end: "2026-10-08", portion: "Full day", reason: "family" } }, now));
   const id = req.requests[0].id;
   for (const who of ["tm-tanvi", "tm-sougata", "tm-riya"])
     expect(() => execute(req, who, { id: `deny_${who}`, action: "decide", data: { requestId: id, version: 1, decision: "approve" } }, now)).toThrow(/cannot decide/);

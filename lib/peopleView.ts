@@ -5,8 +5,8 @@
   and its CSV. Pure, so the tests run it.
 */
 import {
-  LEAVE_LABELS, addDays, availabilityOf, businessDate, fiscalYear, isLate, isOff, timeLabel,
-  type Attendance, type LeaveType, type Located, type Mode, type Person, type Policy, type RequestRecord, type Snapshot,
+  LEAVE_LABELS, addDays, availabilityOf, balanceFor, plannedIsCasual, businessDate, fiscalYear, isLate, isOff, timeLabel,
+  type Attendance, type Balance, type Store, type LeaveType, type Located, type Mode, type Person, type Policy, type RequestRecord, type Snapshot,
 } from './peopleDesk';
 
 export const todayOf = (s: Pick<Snapshot, 'serverTime' | 'policy'>) => businessDate(s.serverTime, s.policy.timezone);
@@ -52,6 +52,14 @@ export const mapLink = (loc: Pick<Located, 'lat' | 'lng'>) => `https://www.googl
 
 export const CHARGED: LeaveType[] = ['PL', 'SL', 'CL', 'COMP'];
 export const leaveLabel = (t: LeaveType) => LEAVE_LABELS[t];
+/**
+ * The leave types a studio uses (the owner, 4 Nov 2026: "6 CLs + 6 SLs a
+ * year, plus holidays"): those with an allowance, or one already given or
+ * taken by someone in view. A type set to 0 in Studio settings drops out.
+ */
+export function leaveTypesFor(policy: Pick<Policy, 'allowances'>, balances: (Partial<Record<LeaveType, Balance>> | undefined)[] = []): LeaveType[] {
+  return CHARGED.filter((t) => (policy.allowances[t] || 0) > 0 || balances.some((b) => !!b?.[t] && (b[t]!.entitled > 0 || b[t]!.used > 0 || b[t]!.reserved > 0)));
+}
 export const fyLabel = (fy: string) => `FY ${fy}–${String(Number(fy) + 1).slice(2)}`;
 export const currentFy = (s: Snapshot) => fiscalYear(todayOf(s), s.policy);
 export const isActiveLeave = (r: Pick<RequestRecord, 'status'>) => ['Pending', 'Approved', 'Cancellation requested'].includes(r.status);
@@ -199,7 +207,71 @@ export function monthReport(s: Snapshot, month: string): ReportRow[] {
       late: mine.filter((a) => isLate(a, s.policy)).length,
       open: mine.filter((a) => !a.checkOut).length,
       minutes: mine.filter((a) => a.checkOut).reduce((n, a) => n + minutesWorked(a, a.checkOut!), 0),
-      awayDays: leave.reduce((n, r) => n + r.days.filter((d) => d.date.slice(0, 7) === month).reduce((m, d) => m + d.units, 0), 0),
+      awayDays: leave.reduce((n, r) => n + r.days.filter((d) => d.date.slice(0, 7) === month && !isOff(d.date, s.policy)).reduce((m, d) => m + d.units, 0), 0),
+    };
+  });
+}
+
+/* ── The leave year (the owner, 4 Nov 2026: "how much leave team members have taken and have left") ── */
+
+export interface LeaveYearRow {
+  person: Person;
+  /** Paid, sick, casual and comp-off: allowed, taken, waiting and left. */
+  balances: Record<LeaveType, Balance>;
+  /** Leave taken (paid, sick, casual, comp-off), in days. */
+  taken: number;
+  /** Leave still to plan, in days. */
+  left: number;
+  /** Days from home, approved. */
+  wfh: number;
+  /** Taken in each month of the year, Apr to Mar. */
+  byMonth: number[];
+  /** Leave days that fell on a weekly or monthly off or a studio holiday, so were not charged. */
+  offDays: { date: string; why: string }[];
+  /** Planned-leave days counted as casual leave (the studio gives no planned leave). */
+  plannedAsCasual: number;
+}
+/** Why a day is not a working day: "Holiday: Diwali", "Weekly off", "Monthly off". */
+export function offReason(date: string, policy: Policy): string {
+  if (policy.holidays.includes(date)) return `Holiday${policy.holidayNames?.[date] ? `: ${policy.holidayNames[date]}` : ''}`;
+  const dow = new Date(`${date}T12:00:00Z`).getUTCDay();
+  if (policy.weeklyOffDays.includes(dow)) return 'Weekly off';
+  return 'Monthly off';
+}
+/** The type a leave request now counts as: planned leave counts as casual where the studio gives none. */
+export const shownLeaveType = (t: LeaveType, policy: Pick<Policy, 'allowances'>): LeaveType => (t === 'PL' && policy.allowances.PL === 0 ? 'CL' : t);
+/** A leave type as the studio now calls it: planned leave reads as casual leave where the studio gives none. */
+export function leaveTypeLabel(t: LeaveType, policy: Pick<Policy, 'allowances'>): string {
+  return t === 'PL' && policy.allowances.PL === 0 ? LEAVE_LABELS.CL : LEAVE_LABELS[t];
+}
+/** Everyone the person may see in full (themselves, their people, or the studio), for one leave year. */
+export function leaveYear(s: Snapshot, fy: string): LeaveYearRow[] {
+  const store = { people: s.people, policy: s.policy, requests: s.requests, attendance: [], events: [] } as Store;
+  const scope = new Set(s.requests.map((r) => r.employeeId).concat(s.attendance.map((a) => a.employeeId), [s.me.id]));
+  const everyone = s.me.accessRole === 'admin' || s.me.accessRole === 'ops';
+  const people = [s.me, ...s.people.filter((p) => p.id !== s.me.id && p.active && (everyone || p.managerId === s.me.id || scope.has(p.id)))];
+  const start = s.policy.fiscalStartMonth || 4;
+  return people.map((person) => {
+    const balances = Object.fromEntries((Object.keys(LEAVE_LABELS) as LeaveType[]).map((t) => [t, balanceFor(store, person, t, fy)])) as Record<LeaveType, Balance>;
+    const byMonth = Array.from({ length: 12 }, () => 0);
+    const offDays: { date: string; why: string }[] = [];
+    let plannedAsCasual = 0;
+    const folded = plannedIsCasual(s.policy, person, fy);
+    for (const r of s.requests) {
+      if (r.employeeId !== person.id || r.kind !== 'leave' || r.type === 'WFH' || !(r.status === 'Approved' || r.status === 'Cancellation requested')) continue;
+      for (const d of r.days) {
+        if (fiscalYear(d.date, s.policy) !== fy) continue;
+        /* A day off anyway (weekly, monthly or a holiday) is not leave taken: noted, not charged. */
+        if (isOff(d.date, s.policy)) { offDays.push({ date: d.date, why: offReason(d.date, s.policy) }); continue; }
+        byMonth[(Number(d.date.slice(5, 7)) - start + 12) % 12] += d.units;
+        if (r.type === 'PL' && folded) plannedAsCasual += d.units;
+      }
+    }
+    return {
+      person, balances, byMonth, offDays: offDays.sort((a, b) => a.date.localeCompare(b.date)), plannedAsCasual,
+      taken: CHARGED.reduce((n, t) => n + balances[t].used, 0),
+      left: CHARGED.reduce((n, t) => n + Math.max(0, balances[t].available), 0),
+      wfh: balances.WFH.used,
     };
   });
 }
@@ -246,4 +318,11 @@ export function mergeChange(s: Snapshot, change: { session?: Attendance | null; 
     availability = [...availability.filter((x) => x.requestId !== r.id), ...(seen ? [seen] : [])];
   }
   return a || r ? { ...s, attendance, requests, availability } : s;
+}
+
+/** The leave year, one row a person, for a spreadsheet. */
+export function leaveYearCsv(rows: LeaveYearRow[], fy: string, types: LeaveType[] = CHARGED): string {
+  const head = ['Name', ...types.flatMap((t) => [`${LEAVE_LABELS[t]} allowed`, `${LEAVE_LABELS[t]} taken`, `${LEAVE_LABELS[t]} waiting`, `${LEAVE_LABELS[t]} left`]), 'Total taken', 'Total left', 'Work from home days', 'Not charged (offs and holidays)', 'Planned leave counted as casual', 'Leave year'];
+  const body = rows.map((r) => [r.person.name, ...types.flatMap((t) => [r.balances[t].entitled, r.balances[t].used, r.balances[t].reserved, r.balances[t].available]), r.taken, r.left, r.wfh, r.offDays.length, r.plannedAsCasual, fyLabel(fy)]);
+  return [head, ...body].map((r) => r.map(cell).join(',')).join('\n');
 }

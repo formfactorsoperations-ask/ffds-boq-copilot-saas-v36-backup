@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Sun, Users, Sparkles } from '@/lib/lucide-shim';
 import { LEAVE_LABELS, addDays, isOff, smartPreview, timeLabel, type Attendance, type LeaveType, type Mode, type Portion, type Snapshot } from '../../lib/peopleDesk';
-import { fyLabel, personName, todayOf } from '../../lib/peopleView';
+import { currentFy, fyLabel, leaveTypesFor, personName, todayOf } from '../../lib/peopleView';
 import { runPeople } from '../../services/peopleService';
 import { Sheet, Label, input, btnPri, btnSec } from '../opsDesk/OpsDeskPanels';
 import { Glide, Notice, rowV, listV } from './PeopleBits';
@@ -15,12 +15,13 @@ import { Glide, Notice, rowV, listV } from './PeopleBits';
 */
 
 const niceDay = (d: string) => new Date(`${d}T12:00:00+05:30`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-const TYPES: LeaveType[] = ['PL', 'SL', 'CL', 'COMP', 'WFH'];
 
 export function LeaveSheet({ snapshot, onClose, onSaved, start: start0 }: { snapshot: Snapshot; onClose: () => void; onSaved: (msg: string) => void; start?: string }) {
   const today = todayOf(snapshot);
   const firstWorking = (from: string) => { let d = from; for (let i = 0; i < 14 && isOff(d, snapshot.policy); i++) d = addDays(d, 1); return d; };
-  const [type, setType] = useState<LeaveType>('PL');
+  /* Only the leave the studio gives (a type at 0 in Studio settings is left out), and working from home. */
+  const TYPES: LeaveType[] = [...leaveTypesFor(snapshot.policy, [snapshot.balances[currentFy(snapshot)]]), 'WFH'];
+  const [type, setType] = useState<LeaveType>(TYPES.includes('CL') ? 'CL' : TYPES[0]);
   const [start, setStart] = useState(start0 || firstWorking(addDays(today, 1)));
   const [end, setEnd] = useState(start0 || firstWorking(addDays(today, 1)));
   const [portion, setPortion] = useState<Portion>('Full day');

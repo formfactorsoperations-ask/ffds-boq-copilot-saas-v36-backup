@@ -1,0 +1,313 @@
+/*
+  PEOPLE: TRAVEL CLAIMS (the owner, 4 Nov 2026).
+
+  "Designers travel to sites, shops for selections and they can reimburse. To
+  log reimbursement I need a UI, very easy to use yet intuitive. Founders
+  should be able to approve or disapprove. I need reports of the
+  reimbursement, team member wise, in the monthly report."
+
+  A claim is one trip: when, why, where, how, and what it cost. The person
+  says what it cost (the owner, 4 Nov 2026: "make this easier"); by own bike
+  or car they can work it out from the distance at the studio's rate a
+  kilometre instead, and the distance is kept for the reports. A photo of the
+  receipt can go with it.
+
+    Pending → Approved → Paid
+            → Rejected (with a reason)
+            → Withdrawn (by the person, while it waits)
+
+  Founders (People admins) decide and mark claims paid; never their own,
+  unless no other founder is on the team. Stored under peopleDesk/{studio},
+  which no browser may read (functions/src/peopleClaims.ts).
+
+  Pure, so the tests and the Cloud Functions run the same code.
+*/
+import { DomainError, addDays, validDate, type Person } from "./peopleDesk";
+
+export const CLAIM_PURPOSES = ["Site visit", "Selections", "Client meeting", "Vendor visit", "Other"] as const;
+export type ClaimPurpose = (typeof CLAIM_PURPOSES)[number];
+export const PURPOSE_LABELS: Record<ClaimPurpose, string> = {
+  "Site visit": "Site visit",
+  Selections: "Shopping for selections",
+  "Client meeting": "Client meeting",
+  "Vendor visit": "Vendor or factory",
+  Other: "Something else",
+};
+
+export const TRAVEL_MODES = ["bike", "car", "cab", "auto", "transit", "other"] as const;
+export type TravelMode = (typeof TRAVEL_MODES)[number];
+export const MODE_LABELS: Record<TravelMode, string> = {
+  bike: "Own bike",
+  car: "Own car",
+  cab: "Cab",
+  auto: "Auto",
+  transit: "Bus, train or metro",
+  other: "Other",
+};
+/** Paid by the kilometre, at the studio's rate; the rest are paid at the fare. */
+export const byKm = (m: TravelMode) => m === "bike" || m === "car";
+
+/*
+  Who a trip was for (the owner, 4 Nov 2026: "connected to which project…
+  it can also be for a lead, and the project is not in the system yet"): a
+  project, a lead, a new enquiry not yet in the system (by name), or the
+  studio itself (an office errand).
+*/
+export const FOR_KINDS = ["project", "lead", "enquiry", "studio"] as const;
+export type ForKind = (typeof FOR_KINDS)[number];
+export const FOR_LABELS: Record<ForKind, string> = { project: "Project", lead: "Lead", enquiry: "New enquiry", studio: "Studio" };
+export interface ClaimFor { kind: ForKind; id: string; name: string }
+/** What a trip was for; trips logged before this was asked read "Not linked". */
+export const forOf = (c: Pick<Claim, "for">): ClaimFor => c.for || { kind: "studio", id: "", name: "Not linked" };
+export const forKey = (f: ClaimFor) => (f.id ? `${f.kind}:${f.id}` : `${f.kind}:${f.name.toLowerCase()}`);
+
+export type ClaimStatus = "Pending" | "Approved" | "Rejected" | "Withdrawn" | "Paid";
+export interface ClaimRates { bike: number; car: number }
+/** Rupees a kilometre until the founders set their own. */
+export const DEFAULT_RATES: ClaimRates = { bike: 4, car: 10 };
+
+export interface ClaimDecision { by: string; byName: string; at: string; status: ClaimStatus; note: string }
+export interface Claim {
+  id: string;
+  personId: string;
+  /** The day of the trip. */
+  date: string;
+  purpose: ClaimPurpose;
+  /** The site, shop or client: where the trip went. */
+  place: string;
+  /** The project, lead or enquiry it was for, or the studio. */
+  for?: ClaimFor;
+  from: string;
+  to: string;
+  mode: TravelMode;
+  /** One way, by own bike or car, when the person gave it (0 when not). */
+  km: number;
+  /** There and back (the amount is for the whole of it). */
+  roundTrip: boolean;
+  /** The rate a kilometre when it was logged, by own bike or car. */
+  rate: number;
+  /** Kept for trips logged before amounts were typed in: the fare, and parking or tolls. */
+  fare: number;
+  extras: number;
+  /** What is claimed, in rupees: what the person says the trip cost. */
+  amount: number;
+  note: string;
+  /** A photo or PDF of the receipt is kept beside it. */
+  receipt: boolean;
+  status: ClaimStatus;
+  createdAt: string;
+  decisions: ClaimDecision[];
+}
+
+function need(ok: unknown, message: string, code = "INVALID", status = 400): asserts ok {
+  if (!ok) throw new DomainError(code, message, status);
+}
+const text = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
+const num = (v: unknown) => {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
+  return Number.isFinite(n) ? n : NaN;
+};
+const rupees = (n: number) => Math.round(n * 100) / 100;
+
+/** How far back a trip may be claimed. */
+export const CLAIM_BACK_DAYS = 90;
+export const MAX_CLAIM = 100000;
+
+export function cleanRates(v: any): ClaimRates {
+  const bike = num(v?.bike), car = num(v?.car);
+  need(bike >= 0 && bike <= 100, "Set the bike rate between ₹0 and ₹100 a km.");
+  need(car >= 0 && car <= 200, "Set the car rate between ₹0 and ₹200 a km.");
+  return { bike: rupees(bike), car: rupees(car) };
+}
+
+/** What a distance comes to at a rate: twice for a return trip. The "work it out from km" helper. */
+export function kmAmount(km: number, roundTrip: boolean, rate: number): number {
+  return Math.round((km || 0) * (roundTrip ? 2 : 1) * (rate || 0));
+}
+
+/** A trip as logged, checked. The amount is the person's; a distance, when given, is kept with the studio's rate. */
+export function cleanClaim(d: any, rates: ClaimRates, today: string): Omit<Claim, "id" | "personId" | "status" | "createdAt" | "decisions" | "receipt"> {
+  const date = String(d?.date || "");
+  need(validDate(date), "Pick the day of the trip.");
+  need(date <= today, "A trip can be claimed once it has happened.");
+  need(date >= addDays(today, -CLAIM_BACK_DAYS), `Trips older than ${CLAIM_BACK_DAYS} days cannot be claimed here. Ask a founder.`);
+  need((CLAIM_PURPOSES as readonly string[]).includes(d?.purpose), "Pick what the trip was for.");
+  need((TRAVEL_MODES as readonly string[]).includes(d?.mode), "Pick how you travelled.");
+  const mode = d.mode as TravelMode;
+  const place = text(d?.place, 80);
+  need(place.length >= 2, "Say where you went: the site, shop or client.");
+  const kind = String(d?.for?.kind || "") as ForKind;
+  need((FOR_KINDS as readonly string[]).includes(kind), "Say who the trip was for: a project, a lead, a new enquiry or the studio.");
+  const forName = kind === "studio" ? text(d?.for?.name, 80) || "Studio" : text(d?.for?.name, 80);
+  need(forName.length >= 2, kind === "project" ? "Pick the project." : kind === "lead" ? "Pick the lead." : "Say who the enquiry is from.");
+  const forId = kind === "project" || kind === "lead" ? String(d?.for?.id || "").slice(0, 120) : "";
+  if (kind === "project" || kind === "lead") need(/^[A-Za-z0-9_.:-]{1,120}$/.test(forId), kind === "project" ? "Pick the project from the list." : "Pick the lead from the list.");
+  const amount = Math.round(num(d?.amount));
+  need(amount > 0, "Say what the trip cost.");
+  need(amount <= MAX_CLAIM, "That is more than one trip can claim. Ask a founder.");
+  const given = byKm(mode) && d?.km != null && d?.km !== "" ? num(d.km) : 0;
+  need(!(given < 0) && given <= 1000, "Enter the distance one way, in km.");
+  const km = Number.isFinite(given) ? rupees(given) : 0;
+  return {
+    date, purpose: d.purpose as ClaimPurpose, place, from: text(d?.from, 80), to: text(d?.to, 80), mode,
+    for: { kind, id: forId, name: forName },
+    km, roundTrip: !!d?.roundTrip, rate: km > 0 ? (mode === "bike" ? rates.bike : rates.car) : 0,
+    fare: 0, extras: 0, amount, note: text(d?.note, 280),
+  };
+}
+
+/* ── Who decides ─────────────────────────────────────────────────────────── */
+
+export const isFounder = (p: Pick<Person, "accessRole" | "active">) => p.active && p.accessRole === "admin";
+/** A founder decides anyone's trips but their own, unless no other founder is on the team to do it. */
+export function canDecide(actor: Person, claim: Pick<Claim, "personId">, people: Person[]): boolean {
+  if (!isFounder(actor)) return false;
+  if (claim.personId !== actor.id) return true;
+  return !people.some((p) => p.id !== actor.id && p.id !== "platform-owner" && isFounder(p));
+}
+
+/** A founder's decision on a claim waiting for one; a rejection says why. */
+export function decideClaim(c: Claim, actor: Person, people: Person[], decision: "approve" | "reject", note: unknown, now: string): Claim {
+  need(canDecide(actor, c, people), isFounder(actor) ? "Another founder decides your own trips." : "Only a founder can decide travel claims.", "FORBIDDEN", 403);
+  need(c.status === "Pending", `This claim is already ${c.status.toLowerCase()}.`, "CONFLICT", 409);
+  const why = text(note, 280);
+  if (decision === "reject") need(why.length >= 3, "Say why, in a few words. They will see it.");
+  const status: ClaimStatus = decision === "approve" ? "Approved" : "Rejected";
+  return { ...c, status, decisions: [...c.decisions, { by: actor.id, byName: actor.name, at: now, status, note: why }] };
+}
+
+/** Approved claims marked as paid back. */
+export function payClaim(c: Claim, actor: Person, people: Person[], now: string): Claim {
+  need(canDecide(actor, c, people), "Only a founder can mark claims paid.", "FORBIDDEN", 403);
+  need(c.status === "Approved", c.status === "Paid" ? "Already paid." : "Only an approved claim can be paid.", "CONFLICT", 409);
+  return { ...c, status: "Paid", decisions: [...c.decisions, { by: actor.id, byName: actor.name, at: now, status: "Paid", note: "" }] };
+}
+
+/** The person takes back a claim still waiting. */
+export function withdrawClaim(c: Claim, actor: Person, now: string): Claim {
+  need(c.personId === actor.id, "Only the person who logged it can take it back.", "FORBIDDEN", 403);
+  need(c.status === "Pending", "Only a claim still waiting can be taken back.", "CONFLICT", 409);
+  return { ...c, status: "Withdrawn", decisions: [...c.decisions, { by: actor.id, byName: actor.name, at: now, status: "Withdrawn", note: "" }] };
+}
+
+/**
+ * Who may delete a trip (the owner, 4 Nov 2026): its person while it is not
+ * approved (waiting, turned down or taken back); a founder, anyone else's at
+ * any stage. Once approved or paid it is part of the studio's accounts, so
+ * only a founder can remove it, never their own.
+ */
+export function canDelete(actor: Person, c: Pick<Claim, "personId" | "status">): boolean {
+  if (!actor.active) return false;
+  if (c.personId === actor.id) return c.status === "Pending" || c.status === "Rejected" || c.status === "Withdrawn";
+  return isFounder(actor);
+}
+
+/* ── What each person sees ───────────────────────────────────────────────── */
+
+export interface ClaimsView {
+  rates: ClaimRates;
+  /** Your own trips, newest first. */
+  mine: Claim[];
+  /** Founders: everyone's trips in the window, newest first. Empty for anyone else. */
+  all: Claim[];
+  /** Founders: trips waiting for you, oldest first. */
+  toDecide: Claim[];
+  /** Founders: approved trips not yet paid back, that you may mark paid. */
+  toPay: Claim[];
+  founder: boolean;
+}
+const newest = (a: Claim, b: Claim) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
+export function claimsView(claims: Claim[], me: Person, people: Person[], rates: ClaimRates): ClaimsView {
+  const founder = isFounder(me);
+  const all = founder ? [...claims].sort(newest) : [];
+  return {
+    rates,
+    mine: claims.filter((c) => c.personId === me.id).sort(newest),
+    all,
+    toDecide: founder ? all.filter((c) => c.status === "Pending" && canDecide(me, c, people)).reverse() : [],
+    toPay: founder ? all.filter((c) => c.status === "Approved" && canDecide(me, c, people)).reverse() : [],
+    founder,
+  };
+}
+
+/* ── Totals and the monthly report ───────────────────────────────────────── */
+
+export interface ClaimTotals { trips: number; km: number; claimed: number; waiting: number; approved: number; paid: number; rejected: number }
+const ZERO: ClaimTotals = { trips: 0, km: 0, claimed: 0, waiting: 0, approved: 0, paid: 0, rejected: 0 };
+/** Trips that count: everything but those taken back. Approved includes paid; claimed is all but rejected. */
+export function totalsOf(list: Claim[]): ClaimTotals {
+  return list.reduce((t, c) => {
+    if (c.status === "Withdrawn") return t;
+    const live = c.status !== "Rejected";
+    return {
+      trips: t.trips + (live ? 1 : 0),
+      km: t.km + (live && c.km ? c.km * (c.roundTrip ? 2 : 1) : 0),
+      claimed: t.claimed + (live ? c.amount : 0),
+      waiting: t.waiting + (c.status === "Pending" ? c.amount : 0),
+      approved: t.approved + (c.status === "Approved" || c.status === "Paid" ? c.amount : 0),
+      paid: t.paid + (c.status === "Paid" ? c.amount : 0),
+      rejected: t.rejected + (c.status === "Rejected" ? c.amount : 0),
+    };
+  }, { ...ZERO });
+}
+
+export interface ClaimRow { personId: string; name: string; totals: ClaimTotals; trips: Claim[] }
+/** A month's trips, person by person (the most claimed first), and the studio's totals. */
+export function claimsMonth(claims: Claim[], month: string, nameOf: (id: string) => string): { rows: ClaimRow[]; totals: ClaimTotals } {
+  const inMonth = claims.filter((c) => c.date.slice(0, 7) === month && c.status !== "Withdrawn");
+  const by = new Map<string, Claim[]>();
+  for (const c of inMonth) by.set(c.personId, [...(by.get(c.personId) || []), c]);
+  const rows = [...by.entries()].map(([personId, trips]) => ({
+    personId, name: nameOf(personId), totals: totalsOf(trips), trips: trips.sort((a, b) => a.date.localeCompare(b.date)),
+  })).sort((a, b) => b.totals.claimed - a.totals.claimed || a.name.localeCompare(b.name));
+  return { rows, totals: totalsOf(inMonth) };
+}
+
+export interface ProjectRow { key: string; for: ClaimFor; totals: ClaimTotals; people: string[]; trips: Claim[] }
+/** A month's trips, by what they were for (the most claimed first). */
+export function claimsByProject(claims: Claim[], month: string): { rows: ProjectRow[]; totals: ClaimTotals } {
+  const inMonth = claims.filter((c) => c.date.slice(0, 7) === month && c.status !== "Withdrawn");
+  const by = new Map<string, Claim[]>();
+  for (const c of inMonth) { const k = forKey(forOf(c)); by.set(k, [...(by.get(k) || []), c]); }
+  const rows = [...by.entries()].map(([key, trips]) => ({
+    key, for: forOf(trips[0]), totals: totalsOf(trips), people: [...new Set(trips.map((c) => c.personId))], trips: trips.sort((a, b) => a.date.localeCompare(b.date)),
+  })).sort((a, b) => b.totals.claimed - a.totals.claimed || a.for.name.localeCompare(b.for.name));
+  return { rows, totals: totalsOf(inMonth) };
+}
+
+const cell = (v: unknown) => {
+  const t = String(v ?? "");
+  return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+};
+/** Every trip in a month, one row each, for a spreadsheet. */
+export function claimsCsv(claims: Claim[], month: string, nameOf: (id: string) => string): string {
+  const head = ["Date", "Name", "For", "Project, lead or enquiry", "Purpose", "Place", "From", "To", "Trip", "How", "Km (total)", "Amount", "Status", "Decided by", "Note", "Receipt"];
+  const rows = claims
+    .filter((c) => c.date.slice(0, 7) === month && c.status !== "Withdrawn")
+    .sort((a, b) => a.date.localeCompare(b.date) || nameOf(a.personId).localeCompare(nameOf(b.personId)))
+    .map((c) => {
+      const last = [...c.decisions].reverse().find((d) => d.status !== "Withdrawn");
+      return [
+        c.date, nameOf(c.personId), FOR_LABELS[forOf(c).kind], forOf(c).name, PURPOSE_LABELS[c.purpose], c.place, c.from, c.to, c.roundTrip ? "Round trip" : "One way", MODE_LABELS[c.mode],
+        c.km ? c.km * (c.roundTrip ? 2 : 1) : "", c.amount, c.status, last?.byName || "", [c.note, last?.note].filter(Boolean).join(" · "), c.receipt ? "Yes" : "No",
+      ];
+    });
+  return [head, ...rows].map((r) => r.map(cell).join(",")).join("\n");
+}
+
+/** Recent trips worth repeating: the same place and way of travel, once each, newest first. */
+export function recentTrips(mine: Claim[], n = 3): Claim[] {
+  const seen = new Set<string>();
+  const out: Claim[] = [];
+  for (const c of mine) {
+    if (c.status === "Withdrawn" || c.status === "Rejected") continue;
+    const key = `${forKey(forOf(c))}|${c.place.toLowerCase()}|${c.mode}|${c.roundTrip}|${c.from.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
+export const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
