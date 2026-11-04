@@ -8,12 +8,12 @@ import { LEAVE_LABELS, addDays, isOff, type Snapshot } from '../../lib/peopleDes
 import {
   monthReport, attendanceCsv, shiftMonth, todayOf, duration, currentFy, fyLabel, leaveYear, leaveYearCsv, CHARGED, personName, type ReportRow, type LeaveYearRow,
 } from '../../lib/peopleView';
-import { claimsMonth, claimsCsv, canDelete, inr, type ClaimsView, type ClaimRow } from '../../lib/peopleClaims';
+import { claimsMonth, claimsByProject, claimsCsv, canDelete, FOR_LABELS, inr, type ProjectRow, type ClaimsView, type ClaimRow } from '../../lib/peopleClaims';
 import { fetchPeopleMonth } from '../../services/peopleService';
 import { CountUp } from '../ui/HudBits';
 import { btnSm } from '../opsDesk/OpsDeskPanels';
 import { Panel, Notice, Skeleton, Glide, IconTile, Avatar, Empty, listV, rowV, EASE, LEAVE_ICON, type RingTone } from './PeopleBits';
-import { TripRow, DeleteTrip } from './TravelClaims';
+import { TripRow, DeleteTrip, FOR_ICON } from './TravelClaims';
 
 /*
   PEOPLE'S REPORTS (the owner, 4 Nov 2026: "make the monthly report more
@@ -239,6 +239,7 @@ type TravelKey = 'name' | 'trips' | 'km' | 'claimed' | 'waiting' | 'approved' | 
 function TravelReport({ s, claims, month, query }: { s: Snapshot; claims: ClaimsView; month: string; query: string }) {
   const [sort, setSort] = useState<Sort<TravelKey>>({ key: 'claimed', dir: -1 });
   const [open, setOpen] = useState<string | null>(null);
+  const [by, setBy] = useState<'person' | 'project'>('person');
   const nameOf = (id: string) => personName(s, id);
   const { rows, totals } = useMemo(() => claimsMonth(claims.all, month, nameOf), [claims.all, month, s]);
   const shown = sorted<ClaimRow, TravelKey>(rows.filter((r) => matches(r.name, query)), sort, (r, k) => (k === 'name' ? r.name : r.totals[k]));
@@ -251,7 +252,10 @@ function TravelReport({ s, claims, month, query }: { s: Snapshot; claims: Claims
         [BadgeCheck, 'Approved', totals.approved, 'ok', money],
         [Wallet, 'Paid back', totals.paid, 'brand', money],
       ]} />
-      {rows.length === 0 ? <Empty icon={Route} text={`No trips logged in ${monthName(month)}.`} /> : (
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        <Glide id="travel-by" label="Group by" value={by} onChange={(v) => { setBy(v); setOpen(null); }} options={[{ id: 'person', label: 'By person' }, { id: 'project', label: 'By project, lead or enquiry' }]} />
+      </div>
+      {by === 'project' ? <ByProject s={s} claims={claims} month={month} query={query} /> : rows.length === 0 ? <Empty icon={Route} text={`No trips logged in ${monthName(month)}.`} /> : (
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full min-w-[760px] text-xs">
             <thead><tr className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50">
@@ -302,6 +306,61 @@ function TravelReport({ s, claims, month, query }: { s: Snapshot; claims: Claims
         <button type="button" className={btnSm} disabled={!rows.length} onClick={() => download(claimsCsv(claims.all, month, nameOf), `travel-claims-${month}.csv`)}><Download className="w-3.5 h-3.5" />Travel CSV</button>
       </div>
     </>
+  );
+}
+
+/** A month's travel by what it was for: each project, lead and enquiry, and the studio's own errands. */
+function ByProject({ s, claims, month, query }: { s: Snapshot; claims: ClaimsView; month: string; query: string }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const { rows } = useMemo(() => claimsByProject(claims.all, month), [claims.all, month]);
+  const shown = rows.filter((r) => matches(`${r.for.name} ${r.people.map((id) => personName(s, id)).join(' ')}`, query));
+  const top = Math.max(1, ...rows.map((r) => r.totals.claimed));
+  if (!rows.length) return <Empty icon={Route} text={`No trips logged in ${monthName(month)}.`} />;
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-200">
+      <table className="w-full min-w-[760px] text-xs">
+        <thead><tr className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50">
+          <th className="px-3 py-2 text-left">For</th><th className="px-3 py-2 text-left">Who travelled</th><th className="px-3 py-2 text-right">Trips</th>
+          <th className="px-3 py-2 text-right">Claimed</th><th className="px-3 py-2 text-right">Waiting</th><th className="px-3 py-2 text-right">Approved</th><th className="px-3 py-2 text-right">Paid back</th>
+        </tr></thead>
+        <motion.tbody variants={listV} initial="hidden" animate="show" key={month} className="divide-y divide-slate-100">
+          {shown.map((r: ProjectRow) => {
+            const Icon = FOR_ICON[r.for.kind];
+            return (
+              <React.Fragment key={r.key}>
+                <motion.tr variants={rowV} className="hover:bg-slate-50/70 cursor-pointer" onClick={() => setOpen(open === r.key ? null : r.key)} aria-expanded={open === r.key}>
+                  <td className="px-3 py-2">
+                    <span className="flex items-center gap-2">
+                      <IconTile icon={Icon} size="sm" tone={r.for.kind === 'project' ? 'brand' : r.for.kind === 'lead' ? 'warn' : r.for.kind === 'enquiry' ? 'ok' : 'slate'} />
+                      <span className="min-w-0">
+                        <span className="text-sm font-semibold text-slate-800 flex items-center gap-1">{r.for.kind === 'studio' ? r.for.name === 'Studio' ? 'Studio errands' : r.for.name : r.for.name}
+                          <motion.span animate={{ rotate: open === r.key ? 180 : 0 }} className="inline-flex"><ChevronDown className="w-3.5 h-3.5 text-slate-400" /></motion.span></span>
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">{FOR_LABELS[r.for.kind]}</span>
+                        <span className="block w-32 mt-1"><Bar value={r.totals.claimed / top} /></span>
+                      </span>
+                    </span>
+                  </td>
+                  <td className="px-3 py-2"><span className="flex -space-x-1">{r.people.slice(0, 5).map((id) => <span key={id} title={personName(s, id)}><Avatar name={personName(s, id)} size="sm" /></span>)}</span></td>
+                  <td className="px-3 py-2 text-right tabular-nums">{r.totals.trips}</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-bold text-slate-800">{money(r.totals.claimed)}</td>
+                  <td className={`px-3 py-2 text-right tabular-nums ${r.totals.waiting ? 'text-amber-700 font-bold' : ''}`}>{money(r.totals.waiting)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{money(r.totals.approved)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{money(r.totals.paid)}</td>
+                </motion.tr>
+                {open === r.key && (
+                  <tr><td colSpan={7} className="p-0 bg-slate-50/60">
+                    <motion.div variants={listV} initial="hidden" animate="show" className="divide-y divide-slate-100">
+                      <AnimatePresence initial={false}>{r.trips.map((c) => <TripRow key={c.id} c={c} who={personName(s, c.personId)} right={canDelete(s.me, c) ? <DeleteTrip c={c} /> : null} />)}</AnimatePresence>
+                    </motion.div>
+                  </td></tr>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </motion.tbody>
+      </table>
+      {shown.length === 0 && <p className="text-xs text-slate-500 px-3 py-4">Nothing matches “{query}”.</p>}
+    </div>
   );
 }
 

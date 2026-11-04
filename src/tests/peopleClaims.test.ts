@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_POLICY, scopeSnapshot, type Person, type RequestRecord, type Snapshot } from '../../lib/peopleDesk';
 import {
-  cleanClaim, kmAmount, cleanRates, canDecide, canDelete, decideClaim, payClaim, withdrawClaim, claimsView, totalsOf, claimsMonth, claimsCsv, recentTrips,
+  cleanClaim, kmAmount, cleanRates, canDecide, canDelete, claimsByProject, forOf, decideClaim, payClaim, withdrawClaim, claimsView, totalsOf, claimsMonth, claimsCsv, recentTrips,
   DEFAULT_RATES, type Claim,
 } from '../../lib/peopleClaims';
 import { claimLoggedDraft, claimDecidedDraft, claimDeletedDraft, foldedTitle } from '../../lib/notify';
@@ -13,17 +13,28 @@ const anish = person('anish', { accessRole: 'admin', name: 'Anish K' });
 const meera = person('meera', { accessRole: 'admin', name: 'Meera S' });
 const riya = person('riya', { name: 'Riya Shah' });
 const team = [anish, meera, riya];
-const trip = (over: Record<string, unknown> = {}) => ({ date: TODAY, purpose: 'Site visit', place: 'Bandra site', from: 'Office', to: 'Bandra', mode: 'bike', amount: 96, ...over });
+const trip = (over: Record<string, unknown> = {}) => ({ for: { kind: 'project', id: 'p-bandra', name: 'Bandra 3BHK' }, date: TODAY, purpose: 'Site visit', place: 'Bandra site', from: 'Office', to: 'Bandra', mode: 'bike', amount: 96, roundTrip: true, ...over });
 const claimOf = (over: Partial<Claim> = {}): Claim => ({
   id: 'riya_1', personId: 'riya', ...cleanClaim(trip(), DEFAULT_RATES, TODAY), receipt: false, status: 'Pending', createdAt: `${TODAY}T10:00:00Z`, decisions: [], ...over,
 });
 
 describe('logging a trip (the owner, 4 Nov 2026: amount first)', () => {
   it('claims what the person says it cost; km, when given for own bike or car, are kept with the studio rate', () => {
-    expect(cleanClaim(trip(), DEFAULT_RATES, TODAY)).toMatchObject({ amount: 96, km: 0, roundTrip: false, rate: 0 });
+    expect(cleanClaim(trip(), DEFAULT_RATES, TODAY)).toMatchObject({ amount: 96, km: 0, roundTrip: true, rate: 0 });
+    expect(cleanClaim(trip({ roundTrip: false }), DEFAULT_RATES, TODAY).roundTrip).toBe(false);
     expect(cleanClaim(trip({ km: 12, roundTrip: true }), { bike: 5, car: 12 }, TODAY)).toMatchObject({ amount: 96, km: 12, roundTrip: true, rate: 5 });
-    expect(cleanClaim(trip({ mode: 'cab', amount: '340.4', km: 12 }), DEFAULT_RATES, TODAY)).toMatchObject({ amount: 340, km: 0, rate: 0 });
+    expect(cleanClaim(trip({ mode: 'cab', amount: '340.4', km: 12 }), DEFAULT_RATES, TODAY)).toMatchObject({ amount: 340, km: 0, rate: 0, roundTrip: true });
     expect(cleanClaim(trip({ mode: 'car', km: '', amount: 150 }), DEFAULT_RATES, TODAY).km).toBe(0);
+  });
+  it('says who it was for: a project or lead from the list, a new enquiry by name, or the studio', () => {
+    expect(cleanClaim(trip(), DEFAULT_RATES, TODAY).for).toEqual({ kind: 'project', id: 'p-bandra', name: 'Bandra 3BHK' });
+    expect(cleanClaim(trip({ for: { kind: 'enquiry', id: 'x', name: ' Mrs  Kapoor, Powai ' } }), DEFAULT_RATES, TODAY).for).toEqual({ kind: 'enquiry', id: '', name: 'Mrs Kapoor, Powai' });
+    expect(cleanClaim(trip({ for: { kind: 'studio' } }), DEFAULT_RATES, TODAY).for).toEqual({ kind: 'studio', id: '', name: 'Studio' });
+    expect(cleanClaim(trip({ for: { kind: 'lead', id: 'L1a2', name: 'Shah family' } }), DEFAULT_RATES, TODAY).for.kind).toBe('lead');
+    expect(() => cleanClaim(trip({ for: null }), DEFAULT_RATES, TODAY)).toThrow(/who the trip was for/);
+    expect(() => cleanClaim(trip({ for: { kind: 'project', id: '', name: 'Bandra' } }), DEFAULT_RATES, TODAY)).toThrow(/Pick the project from the list/);
+    expect(() => cleanClaim(trip({ for: { kind: 'enquiry', name: '' } }), DEFAULT_RATES, TODAY)).toThrow(/who the enquiry is from/);
+    expect(forOf({})).toEqual({ kind: 'studio', id: '', name: 'Not linked' });
   });
   it('works out an amount from km, for the helper', () => {
     expect(kmAmount(6, true, 2)).toBe(24);
@@ -114,7 +125,9 @@ describe('what each person sees, and the totals', () => {
     expect(m.totals.claimed).toBe(600);
     const csv = claimsCsv(list, '2026-11', (id) => team.find((p) => p.id === id)?.name || id).split('\n');
     expect(csv).toHaveLength(5); // the header and four trips (the one taken back is left out)
-    expect(csv[1]).toContain('Riya Shah,Site visit,Bandra site');
+    expect(csv[1]).toContain('Riya Shah,Project,Bandra 3BHK,Site visit,Bandra site,Office,Bandra,Round trip,Own bike');
+    const byProject = claimsByProject([...list, claimOf({ id: 'g', for: { kind: 'enquiry', id: '', name: 'Mrs Kapoor' }, amount: 210, date: '2026-11-02' })], '2026-11');
+    expect(byProject.rows.map((r) => [r.for.name, r.totals.claimed, r.people])).toEqual([['Bandra 3BHK', 600, ['riya']], ['Mrs Kapoor', 210, ['riya']]]);
   });
   it('offers recent trips to repeat, once each', () => {
     expect(recentTrips([claimOf({ id: '1' }), claimOf({ id: '2' }), claimOf({ id: '3', place: 'Tile shop' })]).map((c) => c.id)).toEqual(['1', '3']);

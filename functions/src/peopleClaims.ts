@@ -5,7 +5,7 @@ import { notify } from "./notify";
 import { claimDecidedDraft, claimDeletedDraft, claimLoggedDraft } from "../../lib/notify";
 import { DomainError, addDays, businessDate } from "../../lib/peopleDesk";
 import {
-  DEFAULT_RATES, PURPOSE_LABELS, canDecide, canDelete, claimsView, cleanClaim, cleanRates, decideClaim, isFounder, payClaim, withdrawClaim,
+  DEFAULT_RATES, FOR_LABELS, PURPOSE_LABELS, canDecide, canDelete, claimsView, cleanClaim, cleanRates, decideClaim, isFounder, payClaim, withdrawClaim,
   type Claim, type ClaimRates, type ClaimsView,
 } from "../../lib/peopleClaims";
 
@@ -110,7 +110,7 @@ export const peopleClaimsCommand = onCall({ cors: true, region: PEOPLE_REGION, m
           return true;
         });
         if (created) {
-          await notify(by, [claimLoggedDraft({ ...claim, purpose: PURPOSE_LABELS[claim.purpose] }, { name: ctx.me.name, personId: ctx.me.id, emails: decidersFor(ctx, ctx.me.id).filter((e) => e !== ctx.me.email) })]);
+          await notify(by, [claimLoggedDraft({ ...claim, purpose: PURPOSE_LABELS[claim.purpose], forName: claim.for ? `${FOR_LABELS[claim.for.kind]}: ${claim.for.name}` : '' }, { name: ctx.me.name, personId: ctx.me.id, emails: decidersFor(ctx, ctx.me.id).filter((e) => e !== ctx.me.email) })]);
         }
         extra = { id };
         break;

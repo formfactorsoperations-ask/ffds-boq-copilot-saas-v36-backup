@@ -275,15 +275,19 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
   or the heart, or tapping the faces, opens a small list of names that pops up above. The Home
   pin's heart count says who in its tooltip.
 - **Travel claims** (owner, 4 Nov 2026, `lib/peopleClaims.ts`, `TravelClaims.tsx`): "Travel" under
-  My day. Logging a trip is four short steps (where and when, what for, how, what it cost) under
-  a trip ticket in the brand gradient that fills in as you answer: the route draws itself, the
+  My day. Logging a trip is five short steps (who it was for, where and when, what for, how, what
+  it cost) under
+  a trip ticket in the brand gradient that fills in as you answer: who it was for, then the route
+  draws itself with "One way" (→) or "Round trip" (⇄) under it, the
   way you travelled rides along it, the amount springs in, and "Sent" stamps it with `Confetti`.
   Picking a tile moves on by itself; a recent trip repeats in one tap. The amount is typed in;
   by own bike or car "Work it out from km" fills it at the founders' rate. No trips yet shows a
   small road with each way of travelling riding along it. Founders (People admins) see "To
   approve" (by person, "Approve all", a stamp lands on each decision) and "To pay back" (by
   person, "Mark paid"), and set the rates. Status chips: waiting amber, approved emerald, paid
-  back brand, not approved rose.
+  back brand, not approved rose. A trip is for a project, a lead (founders and Client Relations
+  pick from the list), a new enquiry not in the studio yet (by name) or the studio; a small chip
+  in the project's tint says which, and Reports → Travel claims groups by person or by project.
   Deleting a trip is a bin that turns when pointed at and asks first ("Delete this trip?", a rose
   Delete and Keep); the trip then slides away. Its person deletes it until it is approved; a
   founder, anyone else's at any stage.

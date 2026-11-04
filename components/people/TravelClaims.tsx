@@ -1,16 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Route, Bike, Car, CarFront, Building2, CarTaxiFront, TrainFront, Footprints, HardHat, ShoppingBag, Handshake, Store, Sparkles, Plus, Check, X, Paperclip,
+  Route, Bike, Car, CarFront, Building2, FolderOpen, Target, UserPlus, Search, ArrowLeftRight, MoveRight, CarTaxiFront, TrainFront, Footprints, HardHat, ShoppingBag, Handshake, Store, Sparkles, Plus, Check, X, Paperclip,
   Camera, Repeat, ArrowRight, IndianRupee, Hourglass, BadgeCheck, Wallet, RefreshCw, Pencil, ChevronDown, Trash2,
 } from '@/lib/lucide-shim';
 import {
-  CLAIM_PURPOSES, PURPOSE_LABELS, TRAVEL_MODES, MODE_LABELS, byKm, canDelete, kmAmount, recentTrips, totalsOf, inr,
-  type Claim, type ClaimPurpose, type ClaimStatus, type ClaimsView, type TravelMode,
+  CLAIM_PURPOSES, PURPOSE_LABELS, TRAVEL_MODES, MODE_LABELS, FOR_KINDS, FOR_LABELS, forOf, byKm, canDelete, kmAmount, recentTrips, totalsOf, inr,
+  type Claim, type ClaimPurpose, type ClaimStatus, type ClaimsView, type TravelMode, type ForKind,
 } from '../../lib/peopleClaims';
 import { addDays, type Snapshot } from '../../lib/peopleDesk';
 import { personName, todayOf } from '../../lib/peopleView';
 import { runClaims, receiptOf, openReceipt } from '../../services/peopleClaimsService';
+import { loadLeads } from '../../services/leadsService';
+import { isOpen as leadIsOpen, leadName, LEAD_STAGES } from '../../lib/leads';
+import { useOrg } from '../../contexts/OrgContext';
 import { Sheet, Label, input, btnPri, btnSec, btnSm } from '../opsDesk/OpsDeskPanels';
 import { CountUp } from '../ui/HudBits';
 import { Panel, Empty, Notice, Glide, Skeleton, IconTile, Avatar, Confetti, listV, rowV, EASE, type RingTone } from './PeopleBits';
@@ -31,6 +34,8 @@ export const MODE_ICON: Record<TravelMode, React.ComponentType<any>> = {
 export const PURPOSE_ICON: Record<ClaimPurpose, React.ComponentType<any>> = {
   'Site visit': HardHat, Selections: ShoppingBag, 'Client meeting': Handshake, 'Vendor visit': Store, Other: Sparkles,
 };
+export const FOR_ICON: Record<ForKind, React.ComponentType<any>> = { project: FolderOpen, lead: Target, enquiry: UserPlus, studio: Building2 };
+const FOR_PICK: Record<ForKind, string> = { project: 'A project', lead: 'A lead', enquiry: 'New enquiry, not in the studio yet', studio: 'The studio (office errand)' };
 const STATUS_TINT: Record<ClaimStatus, string> = {
   Pending: 'bg-amber-100 text-amber-700', Approved: 'bg-emerald-100 text-emerald-700', Paid: 'bg-[#3D52A0]/10 text-[#3D52A0]',
   Rejected: 'bg-rose-100 text-rose-700', Withdrawn: 'bg-slate-100 text-slate-600',
@@ -45,17 +50,17 @@ const money = (v: number) => inr(v);
 /** How the trip is described in a line: "12 km each way by own bike" or "Cab fare". */
 export function tripLine(c: Claim): string {
   const how = c.km
-    ? `${c.km} km${c.roundTrip ? ' each way' : ''} by ${MODE_LABELS[c.mode].toLowerCase()}`
-    : c.mode === 'other' ? 'Other travel' : `By ${MODE_LABELS[c.mode].toLowerCase()}`;
-  const route = c.from || c.to ? ` · ${c.from || '…'} → ${c.to || c.place}` : '';
-  return `${PURPOSE_LABELS[c.purpose]} · ${how}${c.extras ? ` + ${money(c.extras)} parking or tolls` : ''}${route}`;
+    ? `${c.km} km each way by ${MODE_LABELS[c.mode].toLowerCase()}`
+    : c.mode === 'other' ? 'other travel' : `by ${MODE_LABELS[c.mode].toLowerCase()}`;
+  const route = c.from || c.to ? ` · ${c.from || '…'} ${c.roundTrip ? '⇄' : '→'} ${c.to || c.place}` : '';
+  return `${PURPOSE_LABELS[c.purpose]} · ${c.roundTrip ? 'Round trip' : 'One way'} ${how}${c.extras ? ` + ${money(c.extras)} parking or tolls` : ''}${route}`;
 }
 
 /* ── The section ─────────────────────────────────────────────────────────── */
 
 type Tab = 'mine' | 'decide' | 'pay';
 
-export function TravelSection({ s, view, error, onRefresh, sites }: { s: Snapshot; view: ClaimsView | null; error: string | null; onRefresh: () => void; sites: string[] }) {
+export function TravelSection({ s, view, error, onRefresh, projects }: { s: Snapshot; view: ClaimsView | null; error: string | null; onRefresh: () => void; projects: PickItem[] }) {
   const [logging, setLogging] = useState<Partial<Claim> | null>(null);
   const [tab, setTab] = useState<Tab>('mine');
   const [notice, setNotice] = useState<string | null>(null);
@@ -105,7 +110,7 @@ export function TravelSection({ s, view, error, onRefresh, sites }: { s: Snapsho
         {tab === 'decide' && view.founder && <ClaimApprovals s={s} view={view} onDone={setNotice} bare />}
         {tab === 'pay' && view.founder && <PayBack s={s} view={view} onDone={setNotice} />}
       </Panel>
-      {logging && <LogTripSheet s={s} view={view} sites={sites} from={logging} onClose={() => setLogging(null)} onSaved={logged} />}
+      {logging && <LogTripSheet s={s} view={view} projects={projects} from={logging} onClose={() => setLogging(null)} onSaved={logged} />}
     </>
   );
 }
@@ -225,7 +230,8 @@ export const TripRow: React.FC<{ c: Claim; who?: string; right?: React.ReactNode
         <p className="text-sm font-black text-slate-800 tabular-nums">{new Date(`${c.date}T12:00:00+05:30`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
       </div>
       <div className="min-w-0 flex-1 basis-56">
-        <p className="text-sm font-semibold text-slate-800 truncate">{who && <span>{who} · </span>}{c.place}</p>
+        <p className="text-sm font-semibold text-slate-800 truncate flex items-center gap-1.5">{who && <span>{who} · </span>}<span className="truncate">{c.place}</span>
+          <ForChip c={c} /></p>
         <p className="text-[11px] text-slate-500 truncate">{tripLine(c)}</p>
         {(c.note || (c.status === 'Rejected' && last?.note)) && (
           <p className="text-[11px] text-slate-600 truncate">{c.note ? `“${c.note}”` : ''}{c.status === 'Rejected' && last?.note ? `${c.note ? ' · ' : ''}${last.byName}: “${last.note}”` : ''}</p>
@@ -252,18 +258,24 @@ export const TripRow: React.FC<{ c: Claim; who?: string; right?: React.ReactNode
   itself, the way you travelled rides along it, and the amount lands at the
   end. By own bike or car the cost can be worked out from the km.
 */
-interface Form { date: string; purpose: ClaimPurpose | null; place: string; from: string; to: string; mode: TravelMode | null; amount: string; km: string; roundTrip: boolean; note: string }
-const STEPS = ['Where', 'What for', 'How', 'Cost'] as const;
+interface Form { forKind: ForKind | null; forId: string; forName: string; date: string; purpose: ClaimPurpose | null; place: string; from: string; to: string; mode: TravelMode | null; amount: string; km: string; roundTrip: boolean; note: string }
+const STEPS = ['Who for', 'Where', 'What for', 'How', 'Cost'] as const;
+/** A project or lead to pick: its id, its name and a second line. */
+export interface PickItem { id: string; name: string; sub: string }
 
-function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot; view: ClaimsView; sites: string[]; from: Partial<Claim>; onClose: () => void; onSaved: (amount: number) => void }) {
+function LogTripSheet({ s, view, projects, from, onClose, onSaved }: { s: Snapshot; view: ClaimsView; projects: PickItem[]; from: Partial<Claim>; onClose: () => void; onSaved: (amount: number) => void }) {
+  const leads = useLeadPicks();
+  const sites = useMemo(() => projects.map((p) => p.name), [projects]);
   const today = todayOf(s);
   const repeat = !!from.place;
   const [f, setF] = useState<Form>(() => ({
+    forKind: from.for?.kind || null, forId: from.for?.id || '', forName: from.for?.name || '',
     date: today, purpose: from.purpose || null, place: from.place || '', from: from.from ?? 'Office', to: from.to || '', mode: from.mode || null,
     amount: from.amount ? String(from.amount) : '', km: from.km ? String(from.km) : '', roundTrip: from.roundTrip ?? true, note: '',
   }));
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
-  const [step, setStep] = useState(repeat ? 3 : 0);
+  const [step, setStep] = useState(repeat ? 4 : 0);
+  const [find, setFind] = useState('');
   const [dir, setDir] = useState(1);
   const [kmOpen, setKmOpen] = useState(!!from.km);
   const [receipt, setReceipt] = useState<{ type: string; data: string; preview: string } | null>(null);
@@ -282,13 +294,20 @@ function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot;
   const amount = Math.round(Number(f.amount) || 0);
   const rate = f.mode === 'car' ? view.rates.car : view.rates.bike;
   const fromKm = kmAmount(Number(f.km) || 0, f.roundTrip, rate);
-  const ready = [f.place.trim().length >= 2, !!f.purpose, !!f.mode, amount > 0];
+  const forOk = !!f.forKind && (f.forKind === 'studio' || ((f.forKind === 'enquiry' || !!f.forId) && f.forName.trim().length >= 2));
+  const ready = [forOk, f.place.trim().length >= 2, !!f.purpose, !!f.mode, amount > 0];
   const go = (to: number) => { setDir(to > step ? 1 : -1); setStep(to); };
-  const pick = <K extends 'purpose' | 'mode'>(k: K, v: Form[K]) => { set(k, v); window.setTimeout(() => go(k === 'purpose' ? 2 : 3), 260); };
+  const pick = <K extends 'purpose' | 'mode'>(k: K, v: Form[K]) => { set(k, v); window.setTimeout(() => go(k === 'purpose' ? 3 : 4), 260); };
+  /* A project or lead picked: the place starts as its name, and on to Where. */
+  const pickFor = (kind: ForKind, item?: PickItem) => {
+    setF((x) => ({ ...x, forKind: kind, forId: item?.id || '', forName: item?.name || (kind === 'studio' ? 'Studio' : kind === x.forKind ? x.forName : ''), place: x.place || (item && kind === 'project' ? item.name : x.place) }));
+    if (item || kind === 'studio') window.setTimeout(() => go(1), 260);
+  };
   const again = (c: Claim) => {
-    setF((x) => ({ ...x, purpose: c.purpose, place: c.place, from: c.from, to: c.to, mode: c.mode, amount: String(c.amount), km: c.km ? String(c.km) : '', roundTrip: c.roundTrip }));
+    const was = forOf(c);
+    setF((x) => ({ ...x, forKind: c.for ? was.kind : null, forId: was.id, forName: c.for ? was.name : '', purpose: c.purpose, place: c.place, from: c.from, to: c.to, mode: c.mode, amount: String(c.amount), km: c.km ? String(c.km) : '', roundTrip: c.roundTrip }));
     setKmOpen(!!c.km);
-    go(3);
+    go(c.for ? 4 : 0);
   };
 
   const pickFile = async (file: File | undefined) => {
@@ -304,7 +323,7 @@ function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot;
     setSaving(true);
     setError(null);
     const r = await runClaims('log', {
-      date: f.date, purpose: f.purpose, place: f.place, from: f.from, to: f.to, mode: f.mode, amount, note: f.note,
+      for: { kind: f.forKind, id: f.forId, name: f.forKind === 'studio' ? 'Studio' : f.forName }, date: f.date, purpose: f.purpose, place: f.place, from: f.from, to: f.to, mode: f.mode, amount, note: f.note,
       km: kmOpen && byKm(f.mode as TravelMode) ? Number(f.km) || 0 : 0, roundTrip: f.roundTrip,
       receipt: receipt ? { type: receipt.type, data: receipt.data } : null,
     });
@@ -315,24 +334,24 @@ function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot;
   };
 
   return (
-    <Sheet eyebrow="Travel" title="Log a trip" sub="Four quick steps. A founder approves it and pays it back." onClose={onClose}
+    <Sheet eyebrow="Travel" title="Log a trip" sub="Five quick steps. A founder approves it and pays it back." onClose={onClose}
       footer={<>
         <span className="mr-auto text-[11px] font-bold uppercase tracking-wider text-slate-500">Step {step + 1} of {STEPS.length}</span>
         {step > 0 && <button type="button" className={btnSec} onClick={() => go(step - 1)} disabled={saving || sent}>Back</button>}
         {step < STEPS.length - 1
           ? <button type="button" className={btnPri} disabled={!ready[step]} onClick={() => go(step + 1)}>Next<ArrowRight className="w-4 h-4" /></button>
-          : <button type="button" className={btnPri} disabled={saving || reading || sent || !ready[3]} onClick={send}><Check className="w-4 h-4" />{sent ? 'Sent' : saving ? 'Sending…' : `Send ${amount ? money(amount) : ''} for approval`}</button>}
+          : <button type="button" className={btnPri} disabled={saving || reading || sent || !ready[4]} onClick={send}><Check className="w-4 h-4" />{sent ? 'Sent' : saving ? 'Sending…' : `Send ${amount ? money(amount) : ''} for approval`}</button>}
       </>}>
       <TripTicket f={f} amount={amount} sent={sent} today={today} />
 
-      <div className="grid grid-cols-4 gap-2" role="tablist" aria-label="Steps">
+      <div className="grid grid-cols-5 gap-2" role="tablist" aria-label="Steps">
         {STEPS.map((label, i) => (
           <button key={label} type="button" role="tab" aria-selected={step === i} disabled={i > 0 && !ready.slice(0, i).every(Boolean)} onClick={() => go(i)}
             className="group flex flex-col gap-1.5 text-left disabled:cursor-not-allowed">
             <span className="relative h-1.5 rounded-full bg-slate-100 overflow-hidden">
               <motion.span className="absolute inset-y-0 left-0 rounded-full bg-[#3D52A0]" initial={false} animate={{ width: i < step || (i === step && ready[i]) ? '100%' : i === step ? '35%' : '0%' }} transition={{ duration: 0.4, ease: EASE }} />
             </span>
-            <span className={`text-[10px] font-bold uppercase tracking-wider ${step === i ? 'text-[#3D52A0]' : ready[i] ? 'text-slate-600' : 'text-slate-400'}`}>{ready[i] && i !== step ? '✓ ' : ''}{label}</span>
+            <span className={`text-[10px] font-bold uppercase tracking-wider truncate ${step === i ? 'text-[#3D52A0]' : ready[i] ? 'text-slate-600' : 'text-slate-400'}`}>{ready[i] && i !== step ? '✓ ' : ''}{label}</span>
           </button>
         ))}
       </div>
@@ -359,9 +378,32 @@ function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot;
                   </div>
                 )}
                 <div>
+                  <Label>Who was this trip for?</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {FOR_KINDS.map((k, i) => <Choice key={k} i={i} on={f.forKind === k} icon={FOR_ICON[k]} label={FOR_PICK[k]} group="for" onPick={() => { setFind(''); pickFor(k); }} />)}
+                  </div>
+                </div>
+                {(f.forKind === 'project' || f.forKind === 'lead') && (
+                  <PickList key={f.forKind} items={f.forKind === 'project' ? projects : leads} chosen={f.forId} find={find} onFind={setFind}
+                    empty={f.forKind === 'project' ? 'No projects to show. If it is not in the studio yet, pick New enquiry.' : leads === null ? 'Only founders and Client Relations can see leads. Pick New enquiry and type the name instead.' : 'No open leads. Pick New enquiry and type the name instead.'}
+                    onPick={(item) => pickFor(f.forKind as ForKind, item)} />
+                )}
+                {f.forKind === 'enquiry' && (
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+                    <Label htmlFor="trip-enquiry">Who is the enquiry from?</Label>
+                    <input id="trip-enquiry" autoFocus className={`${input} text-base py-3`} value={f.forName} maxLength={80} placeholder="Client name, e.g. Mrs Kapoor, Powai flat"
+                      onChange={(e) => set('forName', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && ready[0]) go(1); }} />
+                    <p className="text-[11px] text-slate-500 mt-1.5">Not in the studio yet. Founders see it by this name in the reports.</p>
+                  </motion.div>
+                )}
+              </>
+            )}
+            {step === 1 && (
+              <>
+                <div>
                   <Label htmlFor="trip-place">Where did you go?</Label>
                   <input id="trip-place" autoFocus className={`${input} text-base py-3`} value={f.place} maxLength={80} placeholder="The site, shop or client"
-                    onChange={(e) => set('place', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && ready[0]) go(1); }} />
+                    onChange={(e) => set('place', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && ready[1]) go(2); }} />
                   <AnimatePresence initial={false}>
                     {places.length > 0 && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex flex-wrap gap-1.5 mt-2">
@@ -372,6 +414,11 @@ function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot;
                       </motion.div>
                     )}
                   </AnimatePresence>
+                </div>
+                <div>
+                  <Label>One way or round trip?</Label>
+                  <Glide id="trip-way" label="One way or round trip" value={f.roundTrip ? 'round' : 'one'} onChange={(v) => set('roundTrip', v === 'round')}
+                    options={[{ id: 'one', label: 'One way' }, { id: 'round', label: 'Round trip (there and back)' }]} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
                   <div><Label htmlFor="trip-from">From</Label><input id="trip-from" className={input} value={f.from} maxLength={80} placeholder="Office" onFocus={(e) => e.target.select()} onChange={(e) => set('from', e.target.value)} /></div>
@@ -389,7 +436,7 @@ function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot;
                 </div>
               </>
             )}
-            {step === 1 && (
+            {step === 2 && (
               <div>
                 <Label>What was it for?</Label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -397,7 +444,7 @@ function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot;
                 </div>
               </div>
             )}
-            {step === 2 && (
+            {step === 3 && (
               <div>
                 <Label>How did you get there?</Label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -405,10 +452,10 @@ function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot;
                 </div>
               </div>
             )}
-            {step === 3 && (
+            {step === 4 && (
               <>
                 <div>
-                  <Label htmlFor="trip-amount">What did it cost?</Label>
+                  <Label htmlFor="trip-amount">{f.roundTrip ? 'What did the round trip cost, there and back?' : 'What did the trip cost, one way?'}</Label>
                   <div className="flex items-center gap-2 rounded-2xl border-2 border-slate-200 focus-within:border-[#3D52A0] bg-white px-4 py-2 transition-colors">
                     <IndianRupee className="w-6 h-6 text-[#3D52A0]" />
                     <input id="trip-amount" autoFocus type="number" inputMode="numeric" min={0} className="flex-1 min-w-0 text-2xl font-black text-slate-800 tabular-nums outline-none bg-transparent" placeholder="0"
@@ -428,9 +475,7 @@ function LogTripSheet({ s, view, sites, from, onClose, onSaved }: { s: Snapshot;
                           <label className="flex items-center gap-2 text-sm text-slate-700">
                             <input aria-label="Distance one way, in km" type="number" inputMode="decimal" min={0} step="0.1" className={`${input.replace('w-full ', '')} w-24`} value={f.km} placeholder="12" onChange={(e) => set('km', e.target.value)} /><span className="whitespace-nowrap">km one way</span>
                           </label>
-                          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer select-none">
-                            <input type="checkbox" className="w-4 h-4 accent-[#3D52A0]" checked={f.roundTrip} onChange={(e) => set('roundTrip', e.target.checked)} />Return trip
-                          </label>
+                          <span className="text-xs font-semibold text-slate-600">{f.roundTrip ? 'Round trip, so twice' : 'One way'}</span>
                           <span className="text-xs text-slate-500 tabular-nums">{Number(f.km) || 0} km{f.roundTrip ? ' × 2' : ''} × {money(rate)} = <b className="text-slate-800">{money(fromKm)}</b></span>
                           <button type="button" className={`${btnSm} ml-auto`} disabled={!fromKm} onClick={() => set('amount', String(fromKm))}><Check className="w-3.5 h-3.5" />Use {money(fromKm)}</button>
                         </motion.div>
@@ -475,7 +520,14 @@ const TripTicket: React.FC<{ f: Form; amount: number; sent: boolean; today: stri
       <span aria-hidden className="absolute -right-3 top-1/2 -mt-3 w-6 h-6 rounded-full bg-white" />
       {sent && <Confetti pieces={26} spread={150} />}
       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-white/80">
-        <span>{day}</span>
+        <span className="shrink-0">{day}</span>
+        <AnimatePresence mode="popLayout" initial={false}>
+          {f.forKind && (
+            <motion.span key={`${f.forKind}${f.forName}`} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="min-w-0 inline-flex items-center gap-1 normal-case tracking-normal text-[11px] text-white">
+              {React.createElement(FOR_ICON[f.forKind], { className: 'w-3 h-3 shrink-0' })}<span className="truncate">{f.forKind === 'studio' ? 'Studio' : f.forName || FOR_LABELS[f.forKind]}</span>
+            </motion.span>
+          )}
+        </AnimatePresence>
         <AnimatePresence mode="popLayout" initial={false}>
           {f.purpose && (
             <motion.span key={f.purpose} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/15">
@@ -488,9 +540,15 @@ const TripTicket: React.FC<{ f: Form; amount: number; sent: boolean; today: stri
         <span className="text-sm font-bold truncate max-w-[30%]">{f.from || 'Office'}</span>
         <span className="relative flex-1 h-8">
           <motion.span className="absolute left-0 right-0 top-1/2 border-t-2 border-dashed border-white/50" style={{ transformOrigin: '0 50%' }} initial={false} animate={{ scaleX: going ? 1 : 0.15, opacity: going ? 1 : 0.5 }} transition={{ duration: 0.6, ease: EASE }} />
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span key={String(f.roundTrip)} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+              className="absolute left-1/2 -translate-x-1/2 top-full -mt-1 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/80 whitespace-nowrap">
+              {f.roundTrip ? <ArrowLeftRight className="w-3 h-3" /> : <MoveRight className="w-3 h-3" />}{f.roundTrip ? 'Round trip' : 'One way'}
+            </motion.span>
+          </AnimatePresence>
           <motion.span key={f.mode || 'none'} className="absolute top-1/2 -mt-4 w-8 h-8 rounded-full bg-white text-[#3D52A0] grid place-items-center shadow"
             initial={{ left: '0%', scale: 0.4, rotate: -30 }} animate={going ? { left: ['0%', 'calc(100% - 32px)'], scale: 1, rotate: 0 } : { left: '0%', scale: 1, rotate: 0 }}
-            transition={going ? { left: { duration: 2.2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }, scale: { type: 'spring', stiffness: 400, damping: 14 }, rotate: { duration: 0.4 } } : { type: 'spring', stiffness: 400, damping: 14 }}>
+            transition={going ? { left: { duration: 2.2, repeat: Infinity, repeatType: f.roundTrip ? 'reverse' : 'loop', ease: 'easeInOut' }, scale: { type: 'spring', stiffness: 400, damping: 14 }, rotate: { duration: 0.4 } } : { type: 'spring', stiffness: 400, damping: 14 }}>
             <Mode className="w-4 h-4" />
           </motion.span>
         </span>
@@ -498,8 +556,8 @@ const TripTicket: React.FC<{ f: Form; amount: number; sent: boolean; today: stri
           <motion.span key={going ? f.place : 'where'} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className={`text-sm font-bold truncate max-w-[34%] ${going ? '' : 'text-white/50'}`}>{going ? f.place : 'Where?'}</motion.span>
         </AnimatePresence>
       </div>
-      <div className="flex items-end justify-between gap-3 mt-3">
-        <span className="text-[11px] text-white/80">{f.mode ? MODE_LABELS[f.mode] : 'How you travelled'}{f.km && Number(f.km) > 0 && f.mode && byKm(f.mode) ? ` · ${f.km} km${f.roundTrip ? ' each way' : ''}` : ''}</span>
+      <div className="flex items-end justify-between gap-3 mt-5">
+        <span className="text-[11px] text-white/80">{f.mode ? MODE_LABELS[f.mode] : 'How you travelled'}{f.km && Number(f.km) > 0 && f.mode && byKm(f.mode) ? ` · ${f.km} km each way` : ''}</span>
         <span className="text-right">
           <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-white/70">To claim</span>
           <motion.span key={amount} initial={{ scale: 0.7, opacity: 0.4 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 420, damping: 16 }} className="block text-2xl font-black tabular-nums">{money(amount)}</motion.span>
@@ -511,6 +569,66 @@ const TripTicket: React.FC<{ f: Form; amount: number; sent: boolean; today: stri
             className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1.5 rounded-xl border-2 border-white text-white text-sm font-black uppercase tracking-[0.2em] bg-white/10 backdrop-blur-sm">Sent</motion.span>
         )}
       </AnimatePresence>
+    </motion.div>
+  );
+};
+
+/** What a trip was for, as a small chip: the project, lead or enquiry by name, or the studio. */
+export const ForChip: React.FC<{ c: Claim }> = ({ c }) => {
+  const f = forOf(c);
+  const Icon = FOR_ICON[f.kind];
+  const tint = !c.for ? 'bg-slate-100 text-slate-500' : f.kind === 'project' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : f.kind === 'lead' ? 'bg-amber-100 text-amber-700' : f.kind === 'enquiry' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600';
+  return (
+    <span title={`${FOR_LABELS[f.kind]}: ${f.name}`} className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold max-w-[180px] ${tint}`}>
+      <Icon className="w-3 h-3 shrink-0" /><span className="truncate">{c.for ? (f.kind === 'studio' ? 'Studio' : f.name) : 'Not linked'}</span>
+    </span>
+  );
+};
+
+/** The studio's leads this person may see (founders all, Client Relations their own); null when they may see none. */
+function useLeadPicks(): PickItem[] | null {
+  const org: any = useOrg();
+  const tenant = String(org?.orgData?.tenantId || '');
+  const email = String(org?.currentUserAuth?.email || '');
+  const [list, setList] = useState<PickItem[] | null>(null);
+  useEffect(() => {
+    if (!tenant || !email) return;
+    let live = true;
+    const shape = (all: any[]) => all.filter((l) => leadIsOpen(l) || (l.stage === 'won' && !l.projectId))
+      .map((l) => ({ id: l.id, name: leadName(l), sub: [LEAD_STAGES.find((x) => x.id === l.stage)?.label, l.home?.area || l.home?.city].filter(Boolean).join(' · ') }));
+    loadLeads(tenant, email, true)
+      .catch(() => loadLeads(tenant, email, false))
+      .then((all) => { if (live) setList(shape(all)); })
+      .catch(() => { if (live) setList(null); });
+    return () => { live = false; };
+  }, [tenant, email]);
+  return list;
+}
+
+/** A searchable list of projects or leads; picking one moves on. */
+const PickList: React.FC<{ items: PickItem[] | null; chosen: string; find: string; onFind: (v: string) => void; empty: string; onPick: (item: PickItem) => void }> = ({ items, chosen, find, onFind, empty, onPick }) => {
+  const q = find.trim().toLowerCase();
+  const shown = (items || []).filter((x) => !q || `${x.name} ${x.sub}`.toLowerCase().includes(q)).slice(0, 40);
+  if (!items || !items.length) return <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs text-slate-600 rounded-xl border border-dashed border-slate-300 px-4 py-3">{empty}</motion.p>;
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-2">
+      <label className="relative">
+        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        <input autoFocus aria-label="Find" className={`${input} pl-9`} placeholder="Type to find" value={find} onChange={(e) => onFind(e.target.value)} />
+      </label>
+      <motion.div variants={listV} initial="hidden" animate="show" role="radiogroup" className="max-h-52 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
+        {shown.map((x) => (
+          <motion.button key={x.id} variants={rowV} type="button" role="radio" aria-checked={chosen === x.id} onClick={() => onPick(x)}
+            className={`w-full text-left px-3 py-2 flex items-center gap-3 transition-colors ${chosen === x.id ? 'bg-[#3D52A0] text-white' : 'hover:bg-slate-50'}`}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold truncate">{x.name}</span>
+              {x.sub && <span className={`block text-[11px] truncate ${chosen === x.id ? 'text-white/80' : 'text-slate-500'}`}>{x.sub}</span>}
+            </span>
+            {chosen === x.id && <Check className="w-4 h-4 shrink-0" />}
+          </motion.button>
+        ))}
+        {shown.length === 0 && <p className="px-3 py-3 text-xs text-slate-500">Nothing matches “{find}”.</p>}
+      </motion.div>
     </motion.div>
   );
 };

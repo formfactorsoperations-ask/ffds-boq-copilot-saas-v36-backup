@@ -47,6 +47,20 @@ export const MODE_LABELS: Record<TravelMode, string> = {
 /** Paid by the kilometre, at the studio's rate; the rest are paid at the fare. */
 export const byKm = (m: TravelMode) => m === "bike" || m === "car";
 
+/*
+  Who a trip was for (the owner, 4 Nov 2026: "connected to which project…
+  it can also be for a lead, and the project is not in the system yet"): a
+  project, a lead, a new enquiry not yet in the system (by name), or the
+  studio itself (an office errand).
+*/
+export const FOR_KINDS = ["project", "lead", "enquiry", "studio"] as const;
+export type ForKind = (typeof FOR_KINDS)[number];
+export const FOR_LABELS: Record<ForKind, string> = { project: "Project", lead: "Lead", enquiry: "New enquiry", studio: "Studio" };
+export interface ClaimFor { kind: ForKind; id: string; name: string }
+/** What a trip was for; trips logged before this was asked read "Not linked". */
+export const forOf = (c: Pick<Claim, "for">): ClaimFor => c.for || { kind: "studio", id: "", name: "Not linked" };
+export const forKey = (f: ClaimFor) => (f.id ? `${f.kind}:${f.id}` : `${f.kind}:${f.name.toLowerCase()}`);
+
 export type ClaimStatus = "Pending" | "Approved" | "Rejected" | "Withdrawn" | "Paid";
 export interface ClaimRates { bike: number; car: number }
 /** Rupees a kilometre until the founders set their own. */
@@ -59,13 +73,16 @@ export interface Claim {
   /** The day of the trip. */
   date: string;
   purpose: ClaimPurpose;
-  /** The site, shop or client: where the trip was for. */
+  /** The site, shop or client: where the trip went. */
   place: string;
+  /** The project, lead or enquiry it was for, or the studio. */
+  for?: ClaimFor;
   from: string;
   to: string;
   mode: TravelMode;
   /** One way, by own bike or car, when the person gave it (0 when not). */
   km: number;
+  /** There and back (the amount is for the whole of it). */
   roundTrip: boolean;
   /** The rate a kilometre when it was logged, by own bike or car. */
   rate: number;
@@ -119,6 +136,12 @@ export function cleanClaim(d: any, rates: ClaimRates, today: string): Omit<Claim
   const mode = d.mode as TravelMode;
   const place = text(d?.place, 80);
   need(place.length >= 2, "Say where you went: the site, shop or client.");
+  const kind = String(d?.for?.kind || "") as ForKind;
+  need((FOR_KINDS as readonly string[]).includes(kind), "Say who the trip was for: a project, a lead, a new enquiry or the studio.");
+  const forName = kind === "studio" ? text(d?.for?.name, 80) || "Studio" : text(d?.for?.name, 80);
+  need(forName.length >= 2, kind === "project" ? "Pick the project." : kind === "lead" ? "Pick the lead." : "Say who the enquiry is from.");
+  const forId = kind === "project" || kind === "lead" ? String(d?.for?.id || "").slice(0, 120) : "";
+  if (kind === "project" || kind === "lead") need(/^[A-Za-z0-9_.:-]{1,120}$/.test(forId), kind === "project" ? "Pick the project from the list." : "Pick the lead from the list.");
   const amount = Math.round(num(d?.amount));
   need(amount > 0, "Say what the trip cost.");
   need(amount <= MAX_CLAIM, "That is more than one trip can claim. Ask a founder.");
@@ -127,7 +150,8 @@ export function cleanClaim(d: any, rates: ClaimRates, today: string): Omit<Claim
   const km = Number.isFinite(given) ? rupees(given) : 0;
   return {
     date, purpose: d.purpose as ClaimPurpose, place, from: text(d?.from, 80), to: text(d?.to, 80), mode,
-    km, roundTrip: km > 0 ? !!d?.roundTrip : false, rate: km > 0 ? (mode === "bike" ? rates.bike : rates.car) : 0,
+    for: { kind, id: forId, name: forName },
+    km, roundTrip: !!d?.roundTrip, rate: km > 0 ? (mode === "bike" ? rates.bike : rates.car) : 0,
     fare: 0, extras: 0, amount, note: text(d?.note, 280),
   };
 }
@@ -239,20 +263,32 @@ export function claimsMonth(claims: Claim[], month: string, nameOf: (id: string)
   return { rows, totals: totalsOf(inMonth) };
 }
 
+export interface ProjectRow { key: string; for: ClaimFor; totals: ClaimTotals; people: string[]; trips: Claim[] }
+/** A month's trips, by what they were for (the most claimed first). */
+export function claimsByProject(claims: Claim[], month: string): { rows: ProjectRow[]; totals: ClaimTotals } {
+  const inMonth = claims.filter((c) => c.date.slice(0, 7) === month && c.status !== "Withdrawn");
+  const by = new Map<string, Claim[]>();
+  for (const c of inMonth) { const k = forKey(forOf(c)); by.set(k, [...(by.get(k) || []), c]); }
+  const rows = [...by.entries()].map(([key, trips]) => ({
+    key, for: forOf(trips[0]), totals: totalsOf(trips), people: [...new Set(trips.map((c) => c.personId))], trips: trips.sort((a, b) => a.date.localeCompare(b.date)),
+  })).sort((a, b) => b.totals.claimed - a.totals.claimed || a.for.name.localeCompare(b.for.name));
+  return { rows, totals: totalsOf(inMonth) };
+}
+
 const cell = (v: unknown) => {
   const t = String(v ?? "");
   return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
 };
 /** Every trip in a month, one row each, for a spreadsheet. */
 export function claimsCsv(claims: Claim[], month: string, nameOf: (id: string) => string): string {
-  const head = ["Date", "Name", "Purpose", "Place", "From", "To", "How", "Km (total)", "Amount", "Status", "Decided by", "Note", "Receipt"];
+  const head = ["Date", "Name", "For", "Project, lead or enquiry", "Purpose", "Place", "From", "To", "Trip", "How", "Km (total)", "Amount", "Status", "Decided by", "Note", "Receipt"];
   const rows = claims
     .filter((c) => c.date.slice(0, 7) === month && c.status !== "Withdrawn")
     .sort((a, b) => a.date.localeCompare(b.date) || nameOf(a.personId).localeCompare(nameOf(b.personId)))
     .map((c) => {
       const last = [...c.decisions].reverse().find((d) => d.status !== "Withdrawn");
       return [
-        c.date, nameOf(c.personId), PURPOSE_LABELS[c.purpose], c.place, c.from, c.to, MODE_LABELS[c.mode],
+        c.date, nameOf(c.personId), FOR_LABELS[forOf(c).kind], forOf(c).name, PURPOSE_LABELS[c.purpose], c.place, c.from, c.to, c.roundTrip ? "Round trip" : "One way", MODE_LABELS[c.mode],
         c.km ? c.km * (c.roundTrip ? 2 : 1) : "", c.amount, c.status, last?.byName || "", [c.note, last?.note].filter(Boolean).join(" · "), c.receipt ? "Yes" : "No",
       ];
     });
@@ -265,7 +301,7 @@ export function recentTrips(mine: Claim[], n = 3): Claim[] {
   const out: Claim[] = [];
   for (const c of mine) {
     if (c.status === "Withdrawn" || c.status === "Rejected") continue;
-    const key = `${c.place.toLowerCase()}|${c.mode}|${c.km}|${c.from.toLowerCase()}`;
+    const key = `${forKey(forOf(c))}|${c.place.toLowerCase()}|${c.mode}|${c.roundTrip}|${c.from.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(c);

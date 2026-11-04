@@ -293,10 +293,10 @@ export function emergencyOpenedDraft(reason: string, p: { byName: string; toEmai
 
 const rupee = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 /** A trip logged for reimbursement: the founders who decide it are asked; one person's trips in a day fold into one entry. */
-export function claimLoggedDraft(c: { id: string; date: string; place: string; amount: number; purpose: string }, p: { name: string; personId: string; emails: string[] }): Draft | null {
+export function claimLoggedDraft(c: { id: string; date: string; place: string; amount: number; purpose: string; forName?: string }, p: { name: string; personId: string; emails: string[] }): Draft | null {
   if (!p.emails.length) return null;
   return {
-    kind: 'claims.logged', area: 'team', level: 'needs', title: `${p.name} logged a trip: ${rupee(c.amount)}`, line: `${c.purpose} · ${clip(c.place, 60)}`,
+    kind: 'claims.logged', area: 'team', level: 'needs', title: `${p.name} logged a trip: ${rupee(c.amount)}`, line: [c.purpose, c.forName ? clip(c.forName, 50) : '', clip(c.place, 60)].filter(Boolean).join(' · '),
     projectId: null, projectName: null, route: 'people', section: 'travel', action: 'Review', actor: p.name,
     group: `claims:${p.personId}:${c.date}`, to: { emails: p.emails.map(inboxKey) },
   };

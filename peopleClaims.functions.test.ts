@@ -42,7 +42,7 @@ const code = async (p: Promise<any>) => { try { await p; return 'ok'; } catch (e
 let n = 0;
 const cid = () => `c${Date.now()}${++n}`;
 const today = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
-const trip = (over: any = {}) => ({ date: today, purpose: 'Site visit', place: 'Bandra site', from: 'Office', to: 'Bandra', mode: 'bike', km: 12, roundTrip: true, amount: 96, ...over });
+const trip = (over: any = {}) => ({ for: { kind: 'project', id: 'p-bandra', name: 'Bandra 3BHK' }, date: today, purpose: 'Site visit', place: 'Bandra site', from: 'Office', to: 'Bandra', mode: 'bike', km: 12, roundTrip: true, amount: 96, ...over });
 const notesOf = async (email: string, kind: string) => {
   let list: any[] = [];
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -82,13 +82,13 @@ describe('travel claims', () => {
     const same = cid();
     const r = await u.tanvi.run('log', { ...trip({ rate: 99 }), id: same, receipt: { type: 'image/png', data: PNG } });
     first = r.id;
-    expect(r.view.mine[0]).toMatchObject({ amount: 96, rate: 4, status: 'Pending', receipt: true, personId: 'tm-tanvi' });
+    expect(r.view.mine[0]).toMatchObject({ amount: 96, rate: 4, status: 'Pending', receipt: true, personId: 'tm-tanvi', roundTrip: true, for: { kind: 'project', name: 'Bandra 3BHK' } });
     expect(r.view.founder).toBe(false);
     expect(r.view.all).toEqual([]);
     await u.tanvi.run('log', { ...trip(), id: same });
     expect((await u.tanvi.view()).mine).toHaveLength(1);
     await new Promise((x) => setTimeout(x, 800));
-    expect((await notesOf('anish@c.in', 'claims.logged')).map((x) => [x.title, x.level, x.section])).toEqual([['Tanvi Rao logged a trip: ₹96', 'needs', 'travel']]);
+    expect((await notesOf('anish@c.in', 'claims.logged')).map((x) => [x.title, x.line, x.level, x.section])).toEqual([['Tanvi Rao logged a trip: ₹96', 'Site visit · Project: Bandra 3BHK · Bandra site', 'needs', 'travel']]);
     expect(await notesOf('meera@c.in', 'claims.logged')).toHaveLength(1);
   }, 60000);
 

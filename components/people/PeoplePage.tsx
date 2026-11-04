@@ -71,6 +71,8 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
   const [correcting, setCorrecting] = useState<Attendance | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const sites = useMemo(() => [...new Set(projects.map((p) => String(p?.context?.name || '')).filter(Boolean))].sort(), [projects]);
+  /* Projects a trip can be for (lib/peopleClaims.ts): the ones this person can see. */
+  const projectPicks = useMemo(() => projects.filter((p) => p?.id && p?.context?.name).map((p) => ({ id: String(p.id), name: String(p.context.name), sub: [p.context.clientName, p.context.status].filter(Boolean).join(' · ') })).sort((a, b) => a.name.localeCompare(b.name)), [projects]);
   useEffect(() => { if (!notice) return; const t = window.setTimeout(() => setNotice(null), 4500); return () => window.clearTimeout(t); }, [notice]);
   /* Those who approve see arrivals as they happen: refresh every minute while People is open and on screen. */
   const approving = !!snapshot && snapshot.me.accessRole !== 'employee';
@@ -198,7 +200,7 @@ export default function PeoplePage({ projects = [] }: { projects?: any[] }) {
               {section === 'today' && <TodaySection s={s} sites={sites} onCorrect={setCorrecting} onLeave={(start) => setLeaveOpen({ start })} onGo={setSection} waiting={waiting.length + tripsWaiting} />}
               {section === 'attendance' && <AttendanceSection s={s} onCorrect={setCorrecting} approver={approver} />}
               {section === 'leave' && <LeaveSection s={s} onApply={() => setLeaveOpen({})} onDone={setNotice} />}
-              {section === 'travel' && <TravelSection s={s} view={claims.view} error={claims.error} onRefresh={claims.refresh} sites={sites} />}
+              {section === 'travel' && <TravelSection s={s} view={claims.view} error={claims.error} onRefresh={claims.refresh} projects={projectPicks} />}
               {section === 'approvals' && (approver || tripsWaiting > 0) && <ApprovalsSection s={s} list={waiting} claims={claims.view} onDone={setNotice} />}
               {section === 'calendar' && <PeopleCalendar s={s} onLeave={(start) => setLeaveOpen({ start })} />}
               {section === 'guide' && <OfficeGuideSection s={s} view={guide.view} loading={guide.loading} error={guide.error} onRefresh={guide.refresh} />}
