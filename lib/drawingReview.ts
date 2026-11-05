@@ -471,6 +471,22 @@ export const uploadPrefix = (orgId: string, projectId: string, drawingId: string
 export const versionsPrefix = (orgId: string, projectId: string, drawingId: string) =>
   `drawingReview/${orgId}/${projectId}/${drawingId}/versions/`;
 
+/*
+  The stored name for an uploaded PDF, without its extension. The function
+  refuses any upload path containing "..", so a name like "Elevation MBR..pdf"
+  (an extra dot before the extension) or "Rev.2...final.pdf" must never put two
+  dots side by side once ".pdf" is added back. The person's own file name is
+  kept as written for display; this is only the name in storage.
+*/
+export const uploadStem = (fileName: string): string =>
+  String(fileName || '')
+    .replace(/\.pdf$/i, '')
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/\.{2,}/g, '.')
+    .replace(/-+/g, '-')
+    .slice(0, 76)
+    .replace(/^[.-]+|[.-]+$/g, '') || 'drawing';
+
 /** Ids are path segments; anything that could climb out of its folder is refused. */
 export const safeId = (s: unknown) => typeof s === 'string' && /^[A-Za-z0-9_.-]{1,120}$/.test(s) && !s.includes('..');
 

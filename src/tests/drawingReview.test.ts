@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchFile, cleanShape, allowed, laneOf, canReview, canUpload, guessAudience, safeId, uploadPrefix, toView, toPage, turnShape } from '../../lib/drawingReview';
+import { matchFile, cleanShape, allowed, laneOf, canReview, canUpload, guessAudience, safeId, uploadPrefix, uploadStem, toView, toPage, turnShape } from '../../lib/drawingReview';
 
 const drawings = [
   { id: 'k1', name: 'Kitchen Elevation', roomName: 'Kitchen' },
@@ -93,5 +93,22 @@ describe('marks and paths', () => {
     expect(guessAudience('Kitchen Carpentry Detail')).toBe('studio');
     expect(guessAudience('Electrical Layout')).toBe('studio');
     expect(guessAudience('Kitchen Elevation')).toBe('client');
+  });
+});
+
+describe('the stored name of an uploaded PDF', () => {
+  /* The function refuses an upload path with ".." in it (functions/src/drawingReview.ts finalize). */
+  const path = (name: string) => `${uploadPrefix('org', 'p1', 'd1', 'u1')}abc_${uploadStem(name)}.pdf`;
+  it('never puts two dots together, whatever dots the file name has', () => {
+    for (const name of ['Elevation MBR..pdf', 'Elevation - Room Master Bedroom..PDF', 'Rev.2...final.pdf', 'plan.pdf.', '..pdf', '...', 'a. .pdf', `${'x'.repeat(75)}.y.pdf`]) {
+      expect(path(name)).not.toContain('..');
+      expect(path(name)).toMatch(/\.pdf$/);
+    }
+  });
+  it('keeps an ordinary name readable', () => {
+    expect(uploadStem('Elevation - Room Master Bedroom.pdf')).toBe('Elevation-Room-Master-Bedroom');
+    expect(uploadStem('Kitchen v1.2.pdf')).toBe('Kitchen-v1.2');
+    expect(uploadStem('Elevation MBR..pdf')).toBe('Elevation-MBR');
+    expect(uploadStem('.pdf')).toBe('drawing');
   });
 });

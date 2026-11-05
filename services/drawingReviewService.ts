@@ -2,7 +2,7 @@ import { collection, collectionGroup, doc, onSnapshot, query, where, orderBy } f
 import { ref, uploadBytesResumable, getBlob } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import { db, storage, functions } from './firebaseClient';
-import { uploadPrefix, readShape, MAX_PDF_BYTES, type ReviewSummary, type ReviewVersion, type ReviewMark, type ReviewRound, type ReviewEvent, type MarkShape } from '../lib/drawingReview';
+import { uploadPrefix, uploadStem, readShape, MAX_PDF_BYTES, type ReviewSummary, type ReviewVersion, type ReviewMark, type ReviewRound, type ReviewEvent, type MarkShape } from '../lib/drawingReview';
 
 /*
   The browser's side of Design Review: it listens, uploads into its own
@@ -114,8 +114,6 @@ export const clientKeep = (t: Target, expectedRev: number, reason?: string) => c
 
 /* ------------------------------------------------------------- uploads */
 
-const safeName = (name: string) => name.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/-+/g, '-').slice(0, 80) || 'drawing.pdf';
-
 function put(path: string, data: Blob, contentType: string, onProgress?: (fraction: number) => void): Promise<void> {
   if (!storage) return Promise.reject(new ReviewError('Not connected to the studio.', 'unavailable'));
   return new Promise((resolve, reject) => {
@@ -158,7 +156,7 @@ export async function uploadSheet(t: Target, uid: string, file: File, opts: {
     throw e;
   }
   const stamp = Date.now().toString(36);
-  const base = `${uploadPrefix(t.orgId, t.projectId, t.drawingId, uid)}${stamp}_${safeName(file.name).replace(/\.pdf$/i, '')}`;
+  const base = `${uploadPrefix(t.orgId, t.projectId, t.drawingId, uid)}${stamp}_${uploadStem(file.name)}`;
   opts.onStage?.('uploading', 0);
   await put(`${base}.pdf`, file, 'application/pdf', (f) => opts.onStage?.('uploading', f));
   let thumbPath: string | null = null;
