@@ -30,6 +30,7 @@ import AIStatusIndicator from './AIStatusIndicator';
 import { useOrg } from '../contexts/OrgContext';
 import { mayOpenStudioTab, holdsFinanceRole } from '../lib/roleAccess';
 import { HideFiguresButton } from './ui/HideFigures';
+import { Dot } from './ui/HudBits';
 import { RefreshAppButton } from './ui/RefreshApp';
 import { hardRefresh } from '../lib/appVersion';
 import { roleLabel } from '../lib/roles';
@@ -154,6 +155,22 @@ const Sidebar: React.FC<SidebarProps> = ({
   const roleText = currentRoles?.length ? roleLabel(currentRoles) : String(currentRole || '');
   
   const isCloud = db.isCloud;
+  /*
+    Storage and AI in one state. The bar no longer carries a "Live" pill: when
+    all is well nothing shows, and when something needs a look a light sits on
+    the avatar. The detail is on the Storage & sync row of the account menu.
+  */
+  const health = (() => {
+    const ai = { checking: 'AI connecting', online: 'AI online', error: 'AI error, check the key', unavailable: 'AI off, no key' }[aiStatus] || 'AI';
+    const tone: 'ok' | 'warn' | 'bad' = aiStatus === 'error' ? 'bad' : (!isCloud || aiStatus === 'unavailable') ? 'warn' : 'ok';
+    return {
+      tone,
+      chip: !isCloud ? 'Local' : tone === 'bad' ? 'AI error' : tone === 'warn' ? 'AI off' : 'Live',
+      line: `${isCloud ? 'Cloud sync on' : 'Saved on this computer only'} · ${ai}`,
+    };
+  })();
+  const healthChip = `shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+    health.tone === 'bad' ? 'bg-rose-100 text-rose-700' : health.tone === 'warn' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`;
   const activeLogo = logo || orgData?.orgLogo || orgData?.customLogo || (orgData as any)?.logoUrl;
   const userInitial = orgData?.orgName?.charAt(0).toUpperCase() || 
                       currentUserAuth?.displayName?.charAt(0).toUpperCase() || 
@@ -416,32 +433,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         <div className="flex-1 min-w-[8px]" />
 
-        {/* Telemetry: storage and AI in one quiet light. Green when both are
-            live; the tooltip and the configure dialog carry the detail. */}
-        {(() => {
-          const ai = { checking: 'AI connecting', online: 'AI online', error: 'AI error, check the key', unavailable: 'AI off, no key' }[aiStatus] || 'AI';
-          const bad = aiStatus === 'error';
-          const warn = !isCloud || aiStatus === 'unavailable';
-          const tone = bad ? 'bg-rose-50/80 text-rose-700 border-rose-200' : warn ? 'bg-amber-50/80 text-amber-700 border-amber-200' : 'bg-emerald-50/80 text-emerald-700 border-emerald-200';
-          const dot = bad ? 'bg-rose-500' : warn ? 'bg-amber-500' : 'bg-emerald-500';
-          return (
-            <button
-              onClick={() => setIsConfigOpen(true)}
-              title={`${isCloud ? 'Cloud sync active' : 'Local storage only'} · ${ai}. Click to configure.`}
-              aria-label={`${isCloud ? 'Cloud sync active' : 'Local storage only'}, ${ai}`}
-              className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer border
-                          text-[11.5px] font-bold transition-all duration-200 hover:-translate-y-px ${tone}`}
-            >
-              <span className="relative flex w-2 h-2 shrink-0">
-                {!warn && aiStatus === 'online' && <span className="absolute inline-flex w-full h-full rounded-full bg-emerald-500 opacity-60 animate-ping" />}
-                <span className={`relative inline-flex w-2 h-2 rounded-full ${dot} ${aiStatus === 'checking' ? 'animate-pulse' : ''}`} />
-              </span>
-              {isCloud ? <Cloud className="w-3.5 h-3.5" /> : <HardDrive className="w-3.5 h-3.5" />}
-              <span className="hidden xl:inline">{!isCloud ? 'Local' : bad ? 'AI error' : warn ? 'Live · AI off' : 'Live'}</span>
-            </button>
-          );
-        })()}
-
         {/* Load the latest StudioDesk; lit when a newer version is out (lib/appVersion). */}
         <RefreshAppButton />
 
@@ -457,7 +448,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => { setUserMenu(v => !v); setAdminMenu(false); }}
             aria-expanded={userMenu}
             aria-haspopup="menu"
-            title={`${userName} (${roleText})`}
+            title={`${userName} (${roleText})${health.tone === 'ok' ? '' : ` · ${health.line}`}`}
             className="group flex items-center gap-2 pl-1 pr-1.5 py-1 rounded-xl hover:bg-sky-50/80
                        transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#7091E6]/60"
           >
@@ -469,12 +460,20 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {roleText}
               </span>
             </span>
-            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#4C65B5] to-[#3D52A0] text-white
+            <span className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-[#4C65B5] to-[#3D52A0] text-white
                              flex items-center justify-center font-black text-[13px] shrink-0
                              ring-1 ring-[#7091E6]/45 shadow-[0_2px_10px_rgba(61, 82, 160,.30)]
                              transition-transform duration-200 group-hover:scale-105">
               {userInitial}
+              {/* Storage or AI needs a look: amber, or rose for an AI error. Nothing when all is live. */}
+              {health.tone !== 'ok' && (
+                <span data-testid="health-light" aria-hidden="true"
+                      className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-white flex items-center justify-center">
+                  <Dot tone={health.tone} />
+                </span>
+              )}
             </span>
+            {health.tone !== 'ok' && <span className="sr-only">{health.line}</span>}
             <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-300 ${userMenu ? 'rotate-180' : ''}`} />
           </button>
 
@@ -515,9 +514,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                              text-slate-600 hover:bg-sky-50 hover:text-[#334486] transition-colors cursor-pointer"
                 >
                   {isCloud
-                    ? <Cloud className="w-4 h-4 opacity-70 transition-transform group-hover:scale-110" />
-                    : <HardDrive className="w-4 h-4 opacity-70 transition-transform group-hover:scale-110" />}
-                  Storage &amp; sync
+                    ? <Cloud className="w-4 h-4 shrink-0 opacity-70 transition-transform group-hover:scale-110" />
+                    : <HardDrive className="w-4 h-4 shrink-0 opacity-70 transition-transform group-hover:scale-110" />}
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block">Storage &amp; sync</span>
+                    <span className="block text-[11px] font-medium text-slate-500 leading-snug">{health.line}</span>
+                  </span>
+                  <span className={healthChip}>{health.chip}</span>
                 </button>
 
                 {onLogout && (
@@ -623,6 +626,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           >
             {isCloud ? <Cloud className="w-4 h-4 opacity-70" /> : <HardDrive className="w-4 h-4 opacity-70" />}
             Storage &amp; sync
+            <span className={`ml-auto ${healthChip}`}>{health.chip}</span>
           </button>
 
           <button
