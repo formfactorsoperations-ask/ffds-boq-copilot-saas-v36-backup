@@ -61,6 +61,38 @@ describe('the copy a client is sent', () => {
   });
 });
 
+describe('the drawings a client is sent', () => {
+  const pub = { state: 'published' as const };
+  const drawing = (id: string, roomName: string, title: string, addedAt: string) =>
+    ({ id, roomName, title, url: `https://drive/${id}`, docType: 'gfc_drawing', addedAt, clientVisibility: pub });
+  const docs = [
+    drawing('d1', 'Master Bedroom', 'Elevation A', '2026-11-01T10:00:00Z'),
+    drawing('d2', 'Master Bedroom', 'Elevation B', '2026-11-02T10:00:00Z'),
+    drawing('d3', "Parents' Bedroom", 'Elevation A', '2026-11-03T10:00:00Z'),
+    { ...drawing('d4', 'Kitchen', 'Draft elevation', '2026-11-04T10:00:00Z'), clientVisibility: { state: 'draft' as const } },
+  ];
+  const sent = () => buildPortalView('p1', { name: 'x', designDocuments: docs } as any).context.designDocuments;
+  /* The same key the portal's drawingSets groups on. */
+  const cards = (list: any[]) => new Set(list.map((d) =>
+    `${(d.roomName || 'Overall').trim().toLowerCase()}|${(d.title || 'Drawing').trim().toLowerCase()}`)).size;
+
+  it('keeps one card per drawing, as the studio preview shows it', () => {
+    const published = docs.filter((d) => d.clientVisibility.state === 'published');
+    expect(sent()).toHaveLength(3);
+    expect(cards(sent())).toBe(cards(published));
+  });
+
+  it('carries the room, title, type and date of each drawing', () => {
+    expect(sent()[0]).toMatchObject({
+      roomName: 'Master Bedroom', title: 'Elevation A', docType: 'gfc_drawing', addedAt: '2026-11-01T10:00:00Z',
+    });
+  });
+
+  it('still sends no draft drawing', () => {
+    expect(JSON.stringify(sent())).not.toContain('Draft elevation');
+  });
+});
+
 describe('the client scope', () => {
   it('sends the sell rate only, never materials, labour or margin', () => {
     const rows = buildClientBoqRows({

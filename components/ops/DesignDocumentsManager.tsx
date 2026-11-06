@@ -138,7 +138,10 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
         }));
         setIsAdding(false);
         setNewDoc({ roomName: 'Overall', title: '', url: '', docType: '3d_render', thumbnailUrl: '' });
-        showToast('✅ Deliverable saved & synced to Client Portal');
+        /* Saved, not sent. A new drawing is a draft until it is published in the
+           Client portal tab, which also sends the client's copy. This used to say
+           "synced to Client Portal", which was never true. */
+        showToast('✅ Drawing saved as a draft. Publish it in Client portal to send it to the client');
     };
 
     const handleDelete = (id: string, e?: React.MouseEvent) => {
@@ -437,9 +440,9 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                             <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                                 <Sparkles className="w-4 h-4 text-amber-500" />
-                                Upload & Sync New Deliverable
+                                Add a drawing or render
                             </h4>
-                            <span className="text-[11px] text-slate-400 font-medium">Instantly updates Client Portal</span>
+                            <span className="text-[11px] text-slate-400 font-medium">Saved as a draft. The client sees it once you publish it in Client portal.</span>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -527,7 +530,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                 onClick={handleSave}
                                 className="flex items-center gap-2 px-5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold rounded-xl transition-colors shadow-2xs cursor-pointer"
                             >
-                                <Plus className="w-4 h-4" /> Save & Sync to Client
+                                <Plus className="w-4 h-4" /> Save draft
                             </button>
                         </div>
                     </motion.div>
