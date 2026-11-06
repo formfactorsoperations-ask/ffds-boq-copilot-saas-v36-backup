@@ -31,7 +31,7 @@ import NotifyBell from './notify/NotifyBell';
 import { PORTAL_OPEN_EVENT } from './notify/NotifyContext';
 import { buildClientBoqRows, groupClientBoq, ClientBoqRow } from '../lib/clientBoq';
 import { submitClientAction, ClientAction } from '../services/clientPortalActions';
-import { isVisibleToClient } from '../lib/clientVisibility';
+import { isVisibleToClient, publish as publishVisibility } from '../lib/clientVisibility';
 import PortalOverview from './client/PortalOverview';
 import PortalTimeline from './client/PortalTimeline';
 import { clientVisibleAttendees, clientActionOwner } from '../lib/clientPeople';
@@ -44,7 +44,7 @@ import PortalHero from './client/PortalHero';
 import { DecisionsTable } from './client/PortalTables';
 import PortalPayments from './client/PortalPayments';
 import { PortalMoney } from '../lib/portalMoney';
-import { issuePortalAccess } from '../services/portalAccessService';
+import { issuePortalAccess, portalTokenOf } from '../services/portalAccessService';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { CLIENT_VISIT_TYPES, CLIENT_MOM_TYPES, CLIENT_MOM_STATUSES, toMillis } from '../lib/meetingTypes';
 import { httpsCallable } from 'firebase/functions';
@@ -191,8 +191,24 @@ interface ClientPortalProps {
      * 'demo-tenant-01' — the wrong studio — and be refused. Worse, if they ever
      * were readable they would bypass the projection entirely, which is the one
      * thing that makes "not published" mean "not sent".
+     *
+     * 'preview' is the studio's Client portal tab (components/ops/
+     * StudioPortalPreview). projectData is the client's copy exactly as a send
+     * would store it, and the screen reads it the way a client session does --
+     * so the studio sees precisely what the client will. It is still the
+     * studio's session: approvals are taken in person and saved, through
+     * onPreviewEdit, to the project (lib/portalPreview applyPreviewEdit).
      */
-    source?: 'studio' | 'client';
+    source?: 'studio' | 'client' | 'preview';
+    /*
+      Preview only. Called with the client's copy before and after an edit, so
+      the studio can apply exactly that change to the project. The copy leaves
+      out costs, vendors, notes and drafts; saving it back whole would erase
+      them, which is why a preview never calls onProjectUpdate.
+    */
+    onPreviewEdit?: (before: ProjectContext, after: ProjectContext) => void;
+    /* Preview only. The project's portal link, which the client's copy does not carry. */
+    portalToken?: string | null;
     /*
       The scope rows App is sending to the client, for the studio's preview.
 
@@ -205,7 +221,7 @@ interface ClientPortalProps {
     clientBoq?: ClientBoqRow[];
 }
 
-export default function ClientPortal({ projectData, bank, onLogout, onProjectUpdate, source = 'studio', clientBoq }: ClientPortalProps) {
+export default function ClientPortal({ projectData, bank, onLogout, onProjectUpdate, source = 'studio', clientBoq, onPreviewEdit, portalToken }: ClientPortalProps) {
     const isInternalStudioView = !onLogout;
 
     /*
@@ -240,35 +256,24 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     /**
      * A link the client can actually open, copied to the clipboard.
      *
-     * Reuses the project's live token so an already-issued link keeps working;
-     * mints and persists one when there is none, or when the last one has
-     * lapsed. Minting invalidates whatever was sent before, which is the
-     * intended way to revoke a link that went to the wrong inbox.
+     * Reuses the project's link, which does not expire; mints and saves one
+     * only when none was ever issued. The preview is drawn from the client's
+     * copy, which does not carry the link, so the preview is handed it.
      */
     const copyClientLink = async () => {
-        const existing = (context as any)?.portalAccess as
-            | { token: string; expiresAt?: string }
-            | undefined;
-        const live =
-            existing?.token &&
-            (!existing.expiresAt || new Date(existing.expiresAt).getTime() > Date.now());
-
-        let token = existing?.token;
+        let token = source === 'preview' ? (portalToken || null) : portalTokenOf(context);
+        const live = !!token;
         if (!live) {
             const access = issuePortalAccess(projectData.id, (context as any)?.clientEmail);
             token = access.token;
-            onProjectUpdate?.({
-                ...projectData,
-                context: { ...(context as any), portalAccess: access },
-                lastModified: Date.now(),
-            } as any);
+            setProjectContext((prev: any) => ({ ...prev, portalAccess: access }));
         }
 
         const link = `${publicAppOrigin()}/?portal=${token}`;
         try {
             await navigator.clipboard?.writeText(link);
             setSignSuccessMessage(
-                live ? 'Client link copied' : 'New client link copied — any earlier link has stopped working',
+                live ? 'Client link copied' : 'Client link created and copied',
             );
         } catch {
             setSignSuccessMessage(link);
@@ -313,7 +318,10 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
        Firestore read on this screen: the two listeners below and all three
        hooks already bail on a blank studioId. The client's copy comes from the
        projection instead. */
-    const studioId = source === 'client' ? '' : (orgData?.tenantId || 'demo-tenant-01');
+    /* The preview reads exactly what a client reads, so it is blank there too. */
+    const studioId = source === 'studio' ? (orgData?.tenantId || 'demo-tenant-01') : '';
+    /* Housekeeping the studio's session does whichever way it is drawing the portal. */
+    const housekeepingStudioId = source === 'client' ? '' : (orgData?.tenantId || 'demo-tenant-01');
 
     const { steps: stepProgressSteps } = useStepProgress(projectData.id, studioId);
 
@@ -326,7 +334,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
      * anchor of 27 Jul 2026.
      */
     const { phases: designPhases } = useTimelinePhases(projectData.id, studioId);
-    usePaymentOverdueCheck(projectData.id, studioId);
+    usePaymentOverdueCheck(projectData.id, housekeepingStudioId);
     
     // Active Tab State.
     // Five of these are lenses the client can navigate to (see PORTAL_LENSES).
@@ -713,6 +721,12 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
           as actions through persistClientAction, which is the only path the
           rules still allow.
         */
+        /* The preview is drawn from the client's copy: hand over the change
+           itself, for the studio to apply to the project field by field. */
+        if (source === 'preview') {
+            if (onPreviewEdit) setTimeout(() => onPreviewEdit(current, nextContext), 0);
+            return;
+        }
         if (source !== 'client' && onProjectUpdate) {
             setTimeout(() => {
                 onProjectUpdate({
@@ -1316,7 +1330,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                     type: 'project_update',
                     title: `Scope Variation: ${pu.title}`,
                     date: new Date(pu.date),
-                    description: `Requested scope adjustment (${pu.type.replace('_', ' ')}) with net impact ${formatINR(pu.netImpact)}.`,
+                    description: `Requested scope adjustment (${String(pu.type || 'variation').replace('_', ' ')}) with net impact ${formatINR(Number(pu.netImpact) || 0)}.`,
                     status: pu.status,
                     data: pu
                 });
@@ -2004,8 +2018,12 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             description: newUpdateDesc,
             author: `${studioCompanyName} Operations`,
             images: newUpdateImageUrl ? [newUpdateImageUrl] : [],
-            tags: ['Site Inspection']
-        };
+            tags: ['Site Inspection'],
+            /* The button says "Publish to Client Feed", so it is published:
+               without this it was saved as a draft and never reached the
+               client. It still goes out with the next send, after review. */
+            clientVisibility: publishVisibility(currentUserAuth?.email || currentUserAuth?.displayName || undefined),
+        } as SiteUpdateRecord;
 
         setProjectContext((prev: any) => ({
             ...prev,
@@ -3465,6 +3483,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                                         selection={mat}
                                                         highlight={focusSelectionId === mat.id}
                                                         onBehalf={isInternalStudioView}
+                                                        asClientSees={source === 'preview'}
                                                         onConfirm={(id) => {
                                                             handleConfirmMaterialSelection(id);
                                                             setSignSuccessMessage(`Finish confirmed: ${mat.itemName || 'selection'}`);

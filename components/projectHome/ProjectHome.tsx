@@ -39,7 +39,7 @@ import { buildScheduleFromProject, scheduleForEngagement } from '../../lib/sched
 import { useTimelinePhases } from '../../hooks/useTimelinePhases';
 import { buildProjectPnl, marginAssumption, CONFIDENCE_LABEL, MARGIN_SOURCE_LABEL } from '../../lib/projectPnl';
 import { resolveDocumentState } from '../../services/documentIssueEngine';
-import { issuePortalAccess } from '../../services/portalAccessService';
+import { issuePortalAccess, portalTokenOf } from '../../services/portalAccessService';
 import { readPortalView } from '../../services/portalViewService';
 import { buildPortalView, portalViewSummary } from '../../lib/portalProjection';
 import { isVisibleToClient } from '../../lib/clientVisibility';
@@ -293,34 +293,22 @@ function Home(p: ProjectHomeProps) {
   };
 
   /* ───────────── portal link ───────────── */
-  const [confirmRenew, setConfirmRenew] = useState(false);
-  // Renewing revokes the link the client already has, so it takes a second click — and the first one expires.
-  useEffect(() => {
-    if (!confirmRenew) return;
-    const t = window.setTimeout(() => setConfirmRenew(false), 5000);
-    return () => window.clearTimeout(t);
-  }, [confirmRenew]);
+  /* Links do not expire (services/portalAccessService), so this copies the
+     project's one link, minting it only the first time. There is no Renew here:
+     replacing a client's link is Reissue Link in the Clients directory. */
   const issueLink = () => {
     const access = issuePortalAccess(p.projectId, ctx.clientEmail);
     p.setProjectContext(prev => ({ ...(prev as any), portalAccess: access }));
     return access;
   };
-  const renewLink = () => {
-    if (!confirmRenew) { setConfirmRenew(true); return; }
-    setConfirmRenew(false);
-    issueLink();
-    ui.say('New client link issued — the old one has stopped working');
-  };
   const copyLink = async () => {
     setShareOpen(false);
-    const existing = ctx.portalAccess;
-    const live = existing?.token && (!existing.expiresAt || anyMs(existing.expiresAt) > Date.now());
-    const token = live ? existing.token : issueLink().token;
+    const existing = portalTokenOf(ctx);
+    const token = existing || issueLink().token;
     const link = `${publicAppOrigin()}/?portal=${token}`;
     const copied = await copyText(link);
-    if (copied) ui.say(live ? 'Client link copied' : 'New client link copied — any earlier link has stopped working');
-    else ui.say(live ? 'The browser blocked copying. Try again, or copy it from the Client portal screen.'
-      : 'New link issued, but the browser blocked copying. Copy it from the Client portal screen.');
+    if (copied) ui.say('Client link copied');
+    else ui.say('The browser blocked copying. Try again, or copy it from the Client portal screen.');
   };
 
   /* ───────────── header ───────────── */
@@ -502,7 +490,7 @@ function Home(p: ProjectHomeProps) {
         <aside className="ph-rail">
           <RecordCard record={record} flash={flash} />
 
-          <PortalCard portal={portal} go={go} renew={renewLink} confirmRenew={confirmRenew} copyLink={copyLink}
+          <PortalCard portal={portal} go={go} copyLink={copyLink}
             shareOpen={shareOpen} setShareOpen={setShareOpen} shareRef={shareRef} />
 
           <section className="ph-card ph-box ph-tilt ph-rise" style={{ animationDelay: '.08s' }}>
@@ -824,11 +812,10 @@ const SECTION_NAME: Record<string, string> = {
   'Payment milestones': 'payments', 'Scope lines': 'scope lines', 'Programme tasks': 'programme tasks',
 };
 
-function PortalCard({ portal, go, renew, confirmRenew, copyLink, shareOpen, setShareOpen, shareRef }: {
-  portal: ReturnType<typeof portalModel> | null; go: (r: string) => void; renew: () => void; confirmRenew: boolean;
+function PortalCard({ portal, go, copyLink, shareOpen, setShareOpen, shareRef }: {
+  portal: ReturnType<typeof portalModel> | null; go: (r: string) => void;
   copyLink: () => void; shareOpen: boolean; setShareOpen: (f: (o: boolean) => boolean) => void; shareRef: React.RefObject<HTMLDivElement>;
 }) {
-  const soon = portal?.linkExpires ? portal.linkExpires - Date.now() < 7 * 86400000 : false;
   const status = !portal ? { cls: 'none', text: 'Checking…', sub: '' }
     : !portal.sentAt ? { cls: 'none', text: 'Not sent yet', sub: 'The client has no copy of this project.' }
     : portal.behind ? { cls: 'warn', text: 'Their copy is behind', sub: `Last sent ${new Date(portal.sentAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}` }
@@ -848,13 +835,10 @@ function PortalCard({ portal, go, renew, confirmRenew, copyLink, shareOpen, setS
       {portal?.programmeMissing && (
         <div className="ph-pt-line"><span className="ic2">{Icon.bars(13)}</span><span className="t">The <b>programme</b> isn&rsquo;t in their copy yet.</span></div>
       )}
-      {portal && (portal.linkExpired || soon || !portal.linkExpires) && (
-        <div className={`ph-pt-line${portal.linkExpired || soon ? ' warn' : ''}`}>
+      {portal && !portal.hasLink && (
+        <div className="ph-pt-line">
           <span className="ic2">{Icon.link(13)}</span>
-          <span className="t">{!portal.linkExpires ? <>No client link issued yet.</>
-            : portal.linkExpired ? <>Their link <b>expired {shortDate(portal.linkExpires)}</b>.</>
-            : <>Their link <b>expires {shortDate(portal.linkExpires)}</b>.</>}</span>
-          {portal.linkExpires && <button className="ph-link" style={{ fontSize: 11.5 }} onClick={renew}>{confirmRenew ? 'Confirm renew' : 'Renew'}</button>}
+          <span className="t">No client link issued yet.</span>
         </div>
       )}
       <div className="ph-pt-actions">

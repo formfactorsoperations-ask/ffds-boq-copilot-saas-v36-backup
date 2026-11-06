@@ -11,7 +11,8 @@ import { ClientBoqRow } from '../../lib/clientBoq';
 import { PortalMoney } from '../../lib/portalMoney';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
-import { buildPortalView, portalViewSummary } from '../../lib/portalProjection';
+import { buildPortalView, portalViewSummary, type PortalView } from '../../lib/portalProjection';
+import { differenceLabels, viewDifferences } from '../../lib/portalPreview';
 import { PUBLISHABLE } from '../../lib/publishStatus';
 import {
   ClientVisibilityState,
@@ -64,6 +65,14 @@ interface Props {
     reconstructed from the BOQ alone. See the note in lib/portalProjection.
   */
   clientSchedule?: ProjectSchedule;
+  /*
+    The client's copy as a send would store it now: what the preview below is
+    drawn from. With it, "is the client behind" is answered by comparing the
+    whole copy with the one they have, not by counting sections.
+  */
+  previewView?: PortalView | null;
+  /** Called after a send succeeds, so the preview re-reads what a send reads. */
+  onSent?: () => void;
 }
 
 const STATE_STYLE: Record<ClientVisibilityState | 'unmigrated', string> = {
@@ -73,7 +82,7 @@ const STATE_STYLE: Record<ClientVisibilityState | 'unmigrated', string> = {
   unmigrated:'text-slate-400 bg-slate-50 border-slate-200',
 };
 
-export default function PortalPublishControls({ projectContext, setProjectContext, currentUser, projectId, clientBoq, clientBoqBaseline, portalMoney, clientSchedule }: Props) {
+export default function PortalPublishControls({ projectContext, setProjectContext, currentUser, projectId, clientBoq, clientBoqBaseline, portalMoney, clientSchedule, previewView, onSent }: Props) {
   const [open, setOpen] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [releasing, setReleasing] = useState(false);
@@ -94,6 +103,15 @@ export default function PortalPublishControls({ projectContext, setProjectContex
   const [sendError, setSendError] = useState<string | null>(null);
   /** What the client's stored copy actually contains, section by section. */
   const [sentSummary, setSentSummary] = useState<{ section: string; count: number }[] | null>(null);
+  /* The client's stored copy itself, compared in full with the preview. */
+  const [sentView, setSentView] = useState<PortalView | null>(null);
+  /* Read again when the window regains focus: the client may have acted since. */
+  const [probeTick, setProbeTick] = useState(0);
+  useEffect(() => {
+    const again = () => setProbeTick((t) => t + 1);
+    window.addEventListener('focus', again);
+    return () => window.removeEventListener('focus', again);
+  }, []);
   useEffect(() => {
     if (!projectId) { setEverSent(null); return; }
     let cancelled = false;
@@ -103,9 +121,10 @@ export default function PortalPublishControls({ projectContext, setProjectContex
       setSendError(error || null);
       if (view?.builtAt) setReleasedAt(view.builtAt);
       setSentSummary(view ? portalViewSummary(view).filter(r => r.count > 0) : null);
+      setSentView(view);
     });
     return () => { cancelled = true; };
-  }, [projectId]);
+  }, [projectId, probeTick]);
 
   /*
     Publishing decides what *may* be shown; releasing is what actually sends it.
@@ -136,6 +155,9 @@ export default function PortalPublishControls({ projectContext, setProjectContex
         setReleasedAt(view.builtAt);
         setEverSent(true);
         setSentSummary(portalViewSummary(view).filter(r => r.count > 0));
+        /* Stored copies drop undefined fields; keep what the client will read. */
+        setSentView(JSON.parse(JSON.stringify(view)));
+        onSent?.();
       }
     } catch (e: any) {
       setSendError(e?.message || String(e));
@@ -238,11 +260,18 @@ export default function PortalPublishControls({ projectContext, setProjectContex
     renamed — changes the project without touching the client's copy. It sits
     stale until somebody sends again.
 
-    Compared by section counts, which catches things appearing and disappearing.
-    It will not notice an edit in place; for that, the timestamp is the honest
-    signal and it is shown alongside.
+    With the preview's copy to hand (StudioPortalPreview), the whole copy is
+    compared with the client's: an edit in place, a changed amount or a drawing
+    that lost its room all count, and the parts that differ are named. Section
+    counts are the fallback where no preview is shown; they catch things
+    appearing and disappearing, and the timestamp is shown alongside.
   */
+  const differs = useMemo(
+    () => (previewView && sentView ? differenceLabels(viewDifferences(sentView, previewView)) : null),
+    [previewView, sentView],
+  );
   const behind = useMemo(() => {
+    if (differs) return differs.length > 0;
     if (!sentSummary) return false;
     const now = new Map(preview.map(r => [r.section, r.count]));
     const sent = new Map(sentSummary.map(r => [r.section, r.count]));
@@ -250,7 +279,7 @@ export default function PortalPublishControls({ projectContext, setProjectContex
       if ((now.get(key) || 0) !== (sent.get(key) || 0)) return true;
     }
     return false;
-  }, [preview, sentSummary]);
+  }, [differs, preview, sentSummary]);
 
   /* The refusal, in the studio's own words rather than the console's.
      Firestore's message is shown verbatim: "Missing or insufficient
@@ -428,9 +457,9 @@ export default function PortalPublishControls({ projectContext, setProjectContex
               : everSent === false
                 ? 'Never sent — they cannot open this project'
                 : behind
-                  ? `Their copy is behind${releasedAt ? ` — last sent ${new Date(releasedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}`
+                  ? `Their portal differs from this preview${differs?.length ? ` in ${differs.join(', ')}` : ''}${releasedAt ? ` — last sent ${new Date(releasedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}`
                   : releasedAt
-                    ? `Last sent ${new Date(releasedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`
+                    ? `${differs ? 'Their portal matches this preview · ' : ''}Last sent ${new Date(releasedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`
                     : 'Checking their copy…'}
         </span>
       </div>

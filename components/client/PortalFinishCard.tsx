@@ -54,9 +54,17 @@ interface Props {
    * selections anyway. This says so rather than duplicating it.
    */
   onBehalf?: boolean;
+  /*
+    The studio's Client portal preview: the card reads word for word as the
+    client sees it, while confirming stays theirs (the button is still held,
+    with the note on where to approve for them).
+  */
+  asClientSees?: boolean;
 }
 
-const PortalFinishCard: React.FC<Props> = ({ selection: m, onConfirm, onAsk, readOnly, highlight, onBehalf }) => {
+const PortalFinishCard: React.FC<Props> = ({ selection: m, onConfirm, onAsk, readOnly, highlight, onBehalf, asClientSees }) => {
+  /* Wording addressed to studio staff, which the preview replaces with the client's own. */
+  const staffWords = !!onBehalf && !asClientSees;
   const st = String(m.status || "");
   const settled = ["approved", "confirmed", "locked", "ordered"].includes(st);
   /* Sent to them and waiting: the only state with something to decide. */
@@ -187,7 +195,7 @@ const PortalFinishCard: React.FC<Props> = ({ selection: m, onConfirm, onAsk, rea
       {(m as any).changeReason && !settled && (
         <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-            {onBehalf ? 'Client asked' : 'You asked'}
+            {staffWords ? 'Client asked' : 'You asked'}
             {(m as any).changeRequestedAt && (
               <span className="font-normal normal-case tracking-normal">
                 {' '}· {new Date((m as any).changeRequestedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
@@ -199,7 +207,7 @@ const PortalFinishCard: React.FC<Props> = ({ selection: m, onConfirm, onAsk, rea
               directly above the studio's answer telling them one was coming. */}
           {!(m as any).studioReply && (
             <p className="mt-1.5 text-[11.5px] text-slate-500">
-              {onBehalf
+              {staffWords
                 ? 'Waiting on the studio to reply. Answer it on SOF & Selections.'
                 : 'Your studio has this and will come back to you.'}
             </p>
@@ -232,7 +240,7 @@ const PortalFinishCard: React.FC<Props> = ({ selection: m, onConfirm, onAsk, rea
       {!settled && !awaitingClient && !queried && (
         <div className="px-4 py-3 border-t border-slate-100 flex items-center gap-2">
           <span className="flex-1 text-[12px] text-slate-500">
-            {onBehalf
+            {staffWords
               ? "Not sent to the client yet — still being sourced."
               : "Your studio is still sourcing this. Nothing needed from you yet."}
           </span>

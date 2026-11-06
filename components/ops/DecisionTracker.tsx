@@ -56,7 +56,7 @@ import DecisionAuditTimeline from './decisions/DecisionAuditTimeline';
 import DecisionAttentionPanel, { AttentionItem } from './decisions/DecisionAttentionPanel';
 import { sendDecisionNotification, sendSignoffRequest } from '../../services/emailService';
 import { useOrg } from '../../contexts/OrgContext';
-import { issuePortalAccess } from '../../services/portalAccessService';
+import { issuePortalAccess, portalTokenOf } from '../../services/portalAccessService';
 import { publicAppOrigin } from '../../lib/publicUrl';
 
 interface DecisionTrackerProps {
@@ -658,15 +658,10 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
         disputed: serverDecisions.filter(d => d.status === 'disputed').length,
     };
 
-    /** A live portal token for this project, minting one if there is none. */
+    /** The project's portal token, minting one only if none was ever issued. */
     const ensurePortalToken = (): string | null => {
-        const access = (projectContext as any)?.portalAccess as
-            | { token: string; expiresAt?: string }
-            | undefined;
-        const live =
-            access?.token &&
-            (!access.expiresAt || new Date(access.expiresAt).getTime() > Date.now());
-        if (live) return access!.token;
+        const existing = portalTokenOf(projectContext);
+        if (existing) return existing;
 
         if (!projectId) return null;
         const fresh = issuePortalAccess(projectId, projectContext.clientEmail);

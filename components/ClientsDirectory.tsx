@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { FullProjectData } from "../types";
 import { classifyProject } from "../lib/projectClassification";
 import { formatINR, timeAgo } from "../lib/utils";
@@ -8,7 +8,7 @@ import { useOrg } from "../contexts/OrgContext";
 import { useFiguresHidden } from "./ui/HideFigures";
 import { usePageHeader } from "../contexts/PageHeaderContext";
 import { db } from "../services/dbService";
-import { issuePortalAccess, PortalAccess } from "../services/portalAccessService";
+import { issuePortalAccess, PortalAccess, portalTokenOf } from "../services/portalAccessService";
 import { httpsCallable } from "firebase/functions";
 import { functions as fbFunctions } from "../services/firebaseClient";
 import { 
@@ -273,15 +273,11 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
       return;
     }
 
-    const existing = (project.context as any)?.portalAccess as
-      | { token: string; expiresAt?: string }
-      | undefined;
-    const live =
-      !forceNew &&
-      existing?.token &&
-      (!existing.expiresAt || new Date(existing.expiresAt).getTime() > Date.now());
+    // Links do not expire; a new one is minted only on Reissue, or when none exists.
+    const existing = portalTokenOf(project.context);
+    const live = !forceNew && !!existing;
 
-    let token = existing?.token;
+    let token = existing || undefined;
     if (!live || forceNew) {
       const access = issuePortalAccess(project.id, (project.context as any)?.clientEmail);
       token = access.token;
@@ -310,6 +306,13 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
 
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [dossierClient, setDossierClient] = useState<AggregatedClient | null>(null);
+  /* The first click on Reissue Link only arms it; it lapses after five seconds. */
+  const [confirmReissueFor, setConfirmReissueFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!confirmReissueFor) return;
+    const t = window.setTimeout(() => setConfirmReissueFor(null), 5000);
+    return () => window.clearTimeout(t);
+  }, [confirmReissueFor]);
   const [activeWhatsAppMenu, setActiveWhatsAppMenu] = useState<string | null>(null);
 
   // Client notes stored locally per client key
@@ -1864,11 +1867,23 @@ Temporary password: ${issuedLogin.tempPassword}`
                       </button>
                       <button
                         type="button"
-                        onClick={(e) => handleCopyPortalUrl(dossierClient.projects[0].id, e, true)}
+                        onClick={(e) => {
+                          /* Replaces the link the client already has, so it takes a
+                             second click, as Renew does on Project Home. */
+                          const id = dossierClient.projects[0].id;
+                          if (confirmReissueFor !== id) { e.stopPropagation(); setConfirmReissueFor(id); return; }
+                          setConfirmReissueFor(null);
+                          handleCopyPortalUrl(id, e, true);
+                        }}
                         className="px-3 py-2 bg-white hover:bg-[#F6F7FB] border border-[#E2E5F0] text-[#3A416B] font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-                        title="Generate a brand new link and revoke earlier links"
+                        title="Replace the client's link with a new one. Send them the new link: the old one no longer shows your studio on the sign-in page."
                       >
-                        {copiedId === "newportal-" + dossierClient.projects[0].id ? (
+                        {confirmReissueFor === dossierClient.projects[0].id ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Confirm reissue</span>
+                          </>
+                        ) : copiedId === "newportal-" + dossierClient.projects[0].id ? (
                           <>
                             <Check className="w-3.5 h-3.5 text-emerald-600" />
                             <span>New Link Copied</span>

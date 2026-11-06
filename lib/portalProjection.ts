@@ -323,8 +323,13 @@ export function buildPortalView(
         id: i.id, title: i.title, note: i.note || i.caption, date: i.date,
         photos: i.photos || i.images, clientVisibility: i.clientVisibility
       })),
+      /* A scope variation: its status and its net effect on the price travel,
+         because the portal says both ("net impact ₹…"). Without them the
+         client read ₹0 for a variation the studio's preview priced. The line
+         changes and their rationale stay with the studio. */
       projectUpdates: published(c.projectUpdates, (i) => ({
         id: i.id, title: i.title, summary: i.summary, date: i.date, type: i.type,
+        status: i.status, netImpact: i.netImpact,
         clientVisibility: i.clientVisibility
       })),
       siteVisits: published(c.siteVisits, (i) => ({
@@ -384,8 +389,22 @@ export function buildPortalView(
         studioReply: i.studioReply,
         studioReplyAt: i.studioReplyAt,
       })),
+      /*
+        Room, title, type and date travel with every drawing.
+
+        The portal groups drawings into one card per room and title
+        (ClientPortal: drawingSets), and the timeline dates them by addedAt.
+        This copy used to send only id, name and url, so in the client's
+        portal every drawing fell into one "Overall · Drawing" card showing the
+        newest sheet as "Rev N", while the studio's preview -- built from the
+        project, with every field -- showed each drawing on its own. That is
+        how Unique Vistas saw 8 drawings in the studio's screenshot and far
+        fewer when they signed in.
+      */
       designDocuments: published(c.designDocuments, (i) => ({
-        id: i.id, name: i.name || i.title, url: i.url, date: i.date || i.issuedAt,
+        id: i.id, title: i.title || i.name, name: i.name || i.title, roomName: i.roomName,
+        docType: i.docType, thumbnailUrl: i.thumbnailUrl, addedAt: i.addedAt || i.date || i.issuedAt,
+        url: i.url, date: i.date || i.issuedAt,
         kind: i.kind, clientVisibility: i.clientVisibility
       })),
       boqRevisions: published(c.boqRevisions, (i) => ({
