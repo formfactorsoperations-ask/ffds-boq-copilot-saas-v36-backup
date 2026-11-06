@@ -323,8 +323,13 @@ export function buildPortalView(
         id: i.id, title: i.title, note: i.note || i.caption, date: i.date,
         photos: i.photos || i.images, clientVisibility: i.clientVisibility
       })),
+      /* A scope variation: its status and its net effect on the price travel,
+         because the portal says both ("net impact ₹…"). Without them the
+         client read ₹0 for a variation the studio's preview priced. The line
+         changes and their rationale stay with the studio. */
       projectUpdates: published(c.projectUpdates, (i) => ({
         id: i.id, title: i.title, summary: i.summary, date: i.date, type: i.type,
+        status: i.status, netImpact: i.netImpact,
         clientVisibility: i.clientVisibility
       })),
       siteVisits: published(c.siteVisits, (i) => ({

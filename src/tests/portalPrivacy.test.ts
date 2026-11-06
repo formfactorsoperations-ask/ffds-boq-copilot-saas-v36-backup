@@ -93,6 +93,19 @@ describe('the drawings a client is sent', () => {
   });
 });
 
+describe('a scope variation a client is sent', () => {
+  it('carries its status and net price, not its line changes or rationale', () => {
+    const u = buildPortalView('p1', { name: 'x', projectUpdates: [{
+      id: 'v1', title: 'Wardrobe upgrade', date: '2026-11-04', type: 'client_upgrade', status: 'pending_approval', netImpact: 42000,
+      changes: [{ boqItemId: 'b1', itemName: 'Wardrobe', changeType: 'upgrade', oldValue: 1, newValue: 2, delta: 1, rationale: 'carpenter quoted low' }],
+      clientVisibility: { state: 'published' },
+    }] } as any).context.projectUpdates[0];
+    expect(u).toMatchObject({ status: 'pending_approval', netImpact: 42000, type: 'client_upgrade' });
+    expect(u.changes).toBeUndefined();
+    expect(JSON.stringify(u)).not.toContain('carpenter quoted low');
+  });
+});
+
 describe('the client scope', () => {
   it('sends the sell rate only, never materials, labour or margin', () => {
     const rows = buildClientBoqRows({

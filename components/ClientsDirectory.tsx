@@ -1881,7 +1881,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                         {confirmReissueFor === dossierClient.projects[0].id ? (
                           <>
                             <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Replace their link? Click again</span>
+                            <span>Confirm reissue</span>
                           </>
                         ) : copiedId === "newportal-" + dossierClient.projects[0].id ? (
                           <>

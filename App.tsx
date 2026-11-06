@@ -129,7 +129,6 @@ import {
 import { db, dbWriteCount, hydrateProjectDetail, projectFromDoc } from "./services/dbService";
 import { mergeClientOwned } from "./lib/clientOwned";
 import { db as firestoreDb } from "./services/firebaseClient";
-import { normaliseAddition, scopeAdditionsPath } from "./lib/scopeAdditions";
 import { collection, doc, getDoc, getDocs, writeBatch, serverTimestamp, onSnapshot, query, orderBy } from "firebase/firestore";
 import { toProjectDecisionRecords } from "./services/decisionProjection";
 import { issuePortalAccess, projectIdFromToken } from "./services/portalAccessService";
@@ -143,7 +142,7 @@ import { httpsCallable } from "firebase/functions";
 import { roleLabel } from "./lib/roles";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth as firebaseAuth } from "./services/firebaseClient";
-import PortalPublishControls from "./components/ops/PortalPublishControls";
+import StudioPortalPreview from "./components/ops/StudioPortalPreview";
 import { buildClientBoqRows, baselineFromSentRows, ClientBoqRow } from "./lib/clientBoq";
 import { buildPortalMoney } from "./lib/portalMoney";
 import { buildScheduleFromProject } from "./lib/scheduleBuilder";
@@ -1601,59 +1600,8 @@ export default function App() {
     checkAndPromote();
   }, [activeInternalId, projectContext?.status, projectContext?.paymentMilestones, projectContext?.onboardingData, projectContext?.lifecycle?.stage, orgData?.tenantId, currentRole]);
 
-  /*
-    Scope additions for the portal preview.
-
-    The ops-side portal renders from live project state rather than the stored
-    projection -- that is what makes it a preview of what the client will see
-    once released. Additions live in a subcollection, so they have to be read
-    separately or the preview shows a Payments tab with no mention of invoices
-    the client has already been sent.
-  */
-  const [portalScopeAdditions, setPortalScopeAdditions] = useState<any[] | undefined>(undefined);
-  useEffect(() => {
-    let alive = true;
-    const tenant = orgData?.tenantId;
-    if (!firestoreDb || !tenant || !activeInternalId) { setPortalScopeAdditions(undefined); return; }
-    (async () => {
-      try {
-        const snap = await getDocs(collection(firestoreDb, scopeAdditionsPath(tenant, activeInternalId)));
-        if (!alive) return;
-        const rows = snap.docs
-          .map((d) => normaliseAddition(d.id, d.data()))
-          .filter((a) => a.invoiceStatus !== 'cancelled' && a.invoiceStatus !== 'void' && a.invoiceStatus !== 'draft')
-          .map((a) => ({
-            ref: a.ref,
-            request: a.clientRequest,
-            nature: a.type === 'TYPE_A' ? 'Finish change' : a.type === 'TYPE_C' ? 'New scope' : 'Alteration',
-            issuedAt: a.createdAt ? new Date(a.createdAt).toISOString() : null,
-            designFeeTotal: a.designFeeTotal,
-            designFeeBase: a.designFeeBase,
-            designFeeGst: a.designFeeGst,
-            executionSubtotal: a.executionSubtotal,
-            executionGst: a.executionGst,
-            executionTotal: a.executionTotal,
-            grandTotal: a.grandTotal,
-            released: a.workAuthorized,
-            designFeePaid: a.designFeePaid,
-            executionPaid: a.executionPaid,
-            lines: (a.miniBoq || [])
-              .map((l: any) => ({
-                description: String(l?.description || 'Item'),
-                qty: Number(l?.qty) || 0,
-                unit: String(l?.unit || ''),
-                amount: Number(l?.baseCost) || 0,
-              }))
-              .filter((l: any) => l.amount > 0 || l.qty > 0),
-          }));
-        setPortalScopeAdditions(rows.length ? rows : undefined);
-      } catch {
-        /* A failed read must not read as "no additions". */
-        if (alive) setPortalScopeAdditions(undefined);
-      }
-    })();
-    return () => { alive = false; };
-  }, [activeInternalId, orgData?.tenantId]);
+  /* Scope additions for the portal preview are read with everything else a
+     send reads, in services/portalRelease (gatherPortalRelease). */
 
   const activeCalculatedTier = useMemo(() => {
     return tiersWithCalculatedSummaries.find((t) => t.id === activeTierId);
@@ -3735,44 +3683,20 @@ export default function App() {
                           currentRole={currentRole}
                         />
                       )}
-                      {activeTab === "client-portal" && (
-                        <>
-                        {/* Ops-only. Sits above the preview because ops must see
-                            the state of items the client cannot see at all. */}
-                        <PortalPublishControls
+                      {activeTab === "client-portal" && activeInternalId && (
+                        /* What the client will see, drawn from their copy exactly
+                           as a send builds it, with the publish panel above it. */
+                        <StudioPortalPreview
+                          projectId={activeInternalId}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           currentUser={currentUserAuth?.email || currentUserAuth?.displayName || undefined}
-                          projectId={activeInternalId || undefined}
                           clientBoq={clientBoqRows}
                           clientBoqBaseline={clientBoqBaseline}
                           portalMoney={portalMoney}
                           clientSchedule={portalSchedule}
-                        />
-                        <ClientPortal
-                          clientBoq={clientBoqRows}
-                          projectData={{
-                            id: activeInternalId!,
-                            lastModified: Date.now(),
-                            context: { ...projectContext, portalMoney },
-                            tiers: tiersWithCalculatedSummaries,
-                            materials: materialSuggestions,
-                            timeline: timelinePhases,
-                            activeTierId: activeTierId,
-                            activeProject: activeProject,
-                            leadProfile: leadProfile,
-                            decisionBrainOutput: decisionBrainOutput,
-                            scopeAdditions: portalScopeAdditions,
-                          }}
                           bank={bank}
-                          onProjectUpdate={(updated) => {
-                            // Approvals recorded while the studio previews the
-                            // portal must persist — otherwise a sign-off taken
-                            // in-office is lost on tab change.
-                            setProjectContext(updated.context);
-                          }}
                         />
-                        </>
                       )}
                       {activeTab === "onboarding" && (
                         <OnboardingKitPage
@@ -4491,44 +4415,20 @@ export default function App() {
                           currentRole={currentRole}
                         />
                       )}
-                      {activeTab === "client-portal" && (
-                        <>
-                        {/* Ops-only. Sits above the preview because ops must see
-                            the state of items the client cannot see at all. */}
-                        <PortalPublishControls
+                      {activeTab === "client-portal" && activeInternalId && (
+                        /* What the client will see, drawn from their copy exactly
+                           as a send builds it, with the publish panel above it. */
+                        <StudioPortalPreview
+                          projectId={activeInternalId}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           currentUser={currentUserAuth?.email || currentUserAuth?.displayName || undefined}
-                          projectId={activeInternalId || undefined}
                           clientBoq={clientBoqRows}
                           clientBoqBaseline={clientBoqBaseline}
                           portalMoney={portalMoney}
                           clientSchedule={portalSchedule}
-                        />
-                        <ClientPortal
-                          clientBoq={clientBoqRows}
-                          projectData={{
-                            id: activeInternalId!,
-                            lastModified: Date.now(),
-                            context: { ...projectContext, portalMoney },
-                            tiers: tiersWithCalculatedSummaries,
-                            materials: materialSuggestions,
-                            timeline: timelinePhases,
-                            activeTierId: activeTierId,
-                            activeProject: activeProject,
-                            leadProfile: leadProfile,
-                            decisionBrainOutput: decisionBrainOutput,
-                            scopeAdditions: portalScopeAdditions,
-                          }}
                           bank={bank}
-                          onProjectUpdate={(updated) => {
-                            // Approvals recorded while the studio previews the
-                            // portal must persist — otherwise a sign-off taken
-                            // in-office is lost on tab change.
-                            setProjectContext(updated.context);
-                          }}
                         />
-                        </>
                       )}
                       {activeTab === "onboarding" && (
                         <OnboardingKitPage

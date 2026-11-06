@@ -3,7 +3,7 @@ import { db as fsDb } from './firebaseClient';
 import { db as storageDb } from './dbService';
 import { writePortalView } from './portalViewService';
 import { normaliseAddition, scopeAdditionsPath } from '../lib/scopeAdditions';
-import type { PortalScopeAddition, PortalView } from '../lib/portalProjection';
+import { buildPortalView, type PortalScopeAddition, type PortalStudio, type PortalView } from '../lib/portalProjection';
 import type { ClientBoqRow } from '../lib/clientBoq';
 import { portalDesignRecord, type DesignMeeting, type PortalDesignMeeting } from '../lib/designMeeting';
 import type { PortalMoney } from '../lib/portalMoney';
@@ -105,8 +105,43 @@ export async function portalScheduleToSend(projectId: string | undefined, fallba
   return fallback;
 }
 
-/** Rewrites the client's portal copy from `ctx`. Throws if the write is refused. */
-export async function releasePortal(ctx: ProjectContext, inputs: PortalReleaseInputs): Promise<PortalView | null> {
+/*
+  What a release reads from outside the project itself: the studio's details,
+  the scope additions, the saved schedule and the design meetings.
+
+  Split out so the studio's Client portal preview builds the client's copy with
+  exactly the code a send uses (buildReleaseView). The preview and the client
+  can only disagree if they are built two ways; now there is one.
+*/
+export interface PortalReleaseGathered {
+  studio: PortalStudio;
+  scopeAdditions?: PortalScopeAddition[];
+  /** The studio's saved schedule, if any. The derived programme is the fallback. */
+  savedSchedule?: ProjectSchedule;
+  designRecord?: PortalDesignMeeting[];
+}
+
+/** The studio's details as the client's copy carries them. */
+export function portalStudioFrom(settings: any, orgData: any): PortalStudio {
+  return {
+    name: settings?.companyName || orgData?.orgName,
+    logoUrl: settings?.logoUrl || orgData?.orgLogo,
+    phone: settings?.phone || orgData?.contactPhone,
+    email: settings?.email || orgData?.contactEmail,
+    address: settings?.address || orgData?.officeAddress,
+    bankDetails: settings?.bankDetails || orgData?.bankDetails,
+    cityState: orgData?.cityState,
+    gstin: orgData?.gstin,
+    legalName: orgData?.legalName,
+    signatoryName: orgData?.signatoryName,
+    signatoryTitle: orgData?.signatoryTitle,
+    tagline: orgData?.tagline,
+    about: orgData?.about,
+    themeColor: orgData?.themeColor,
+  } as any;
+}
+
+export async function gatherPortalRelease(inputs: PortalReleaseInputs): Promise<PortalReleaseGathered> {
   const { orgData } = inputs;
   let settings = inputs.settings;
   /* Bank and contact details may live only in the studio's settings document;
@@ -120,30 +155,41 @@ export async function releasePortal(ctx: ProjectContext, inputs: PortalReleaseIn
       /* Studio Settings below still carry name, contact and bank details. */
     }
   }
+  const [scopeAdditions, saved, designRecord] = await Promise.all([
+    gatherPortalScopeAdditions(tenant, inputs.projectId),
+    portalScheduleToSend(inputs.projectId, undefined),
+    gatherPortalDesignRecord(tenant, inputs.projectId),
+  ]);
+  return { studio: portalStudioFrom(settings, orgData), scopeAdditions, savedSchedule: saved, designRecord };
+}
+
+/** The client's copy of `ctx`, exactly as a send would store it. Writes nothing. */
+export function buildReleaseView(ctx: ProjectContext, inputs: PortalReleaseInputs, gathered: PortalReleaseGathered): PortalView {
+  return buildPortalView(
+    inputs.projectId,
+    ctx,
+    gathered.studio,
+    inputs.clientBoq,
+    inputs.clientBoqBaseline,
+    gathered.scopeAdditions,
+    inputs.portalMoney,
+    gathered.savedSchedule || inputs.clientSchedule,
+    gathered.designRecord,
+  );
+}
+
+/** Rewrites the client's portal copy from `ctx`. Throws if the write is refused. */
+export async function releasePortal(ctx: ProjectContext, inputs: PortalReleaseInputs): Promise<PortalView | null> {
+  const gathered = await gatherPortalRelease(inputs);
   return writePortalView(
     inputs.projectId,
     ctx,
-    {
-      name: settings?.companyName || orgData?.orgName,
-      logoUrl: settings?.logoUrl || orgData?.orgLogo,
-      phone: settings?.phone || orgData?.contactPhone,
-      email: settings?.email || orgData?.contactEmail,
-      address: settings?.address || orgData?.officeAddress,
-      bankDetails: settings?.bankDetails || orgData?.bankDetails,
-      cityState: orgData?.cityState,
-      gstin: orgData?.gstin,
-      legalName: orgData?.legalName,
-      signatoryName: orgData?.signatoryName,
-      signatoryTitle: orgData?.signatoryTitle,
-      tagline: orgData?.tagline,
-      about: orgData?.about,
-      themeColor: orgData?.themeColor,
-    } as any,
+    gathered.studio,
     inputs.clientBoq,
     inputs.clientBoqBaseline,
-    await gatherPortalScopeAdditions(inputs.tenantId || orgData?.tenantId, inputs.projectId),
+    gathered.scopeAdditions,
     inputs.portalMoney,
-    await portalScheduleToSend(inputs.projectId, inputs.clientSchedule),
-    await gatherPortalDesignRecord(inputs.tenantId || orgData?.tenantId, inputs.projectId),
+    gathered.savedSchedule || inputs.clientSchedule,
+    gathered.designRecord,
   );
 }
