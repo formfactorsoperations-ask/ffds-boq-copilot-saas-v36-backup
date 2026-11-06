@@ -44,7 +44,7 @@ import PortalHero from './client/PortalHero';
 import { DecisionsTable } from './client/PortalTables';
 import PortalPayments from './client/PortalPayments';
 import { PortalMoney } from '../lib/portalMoney';
-import { issuePortalAccess } from '../services/portalAccessService';
+import { issuePortalAccess, portalTokenOf } from '../services/portalAccessService';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { CLIENT_VISIT_TYPES, CLIENT_MOM_TYPES, CLIENT_MOM_STATUSES, toMillis } from '../lib/meetingTypes';
 import { httpsCallable } from 'firebase/functions';
@@ -246,14 +246,9 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
      * intended way to revoke a link that went to the wrong inbox.
      */
     const copyClientLink = async () => {
-        const existing = (context as any)?.portalAccess as
-            | { token: string; expiresAt?: string }
-            | undefined;
-        const live =
-            existing?.token &&
-            (!existing.expiresAt || new Date(existing.expiresAt).getTime() > Date.now());
-
-        let token = existing?.token;
+        // Links do not expire: one is minted only when none was ever issued.
+        let token = portalTokenOf(context);
+        const live = !!token;
         if (!live) {
             const access = issuePortalAccess(projectData.id, (context as any)?.clientEmail);
             token = access.token;
@@ -268,7 +263,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         try {
             await navigator.clipboard?.writeText(link);
             setSignSuccessMessage(
-                live ? 'Client link copied' : 'New client link copied — any earlier link has stopped working',
+                live ? 'Client link copied' : 'Client link created and copied',
             );
         } catch {
             setSignSuccessMessage(link);

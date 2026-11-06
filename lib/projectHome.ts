@@ -522,8 +522,8 @@ export interface PortalModel {
   sees: { section: string; count: number }[];
   behind: boolean;
   programmeMissing: boolean;
-  linkExpires: number | null;
-  linkExpired: boolean;
+  /** Whether the project has a client link at all. Links do not expire. */
+  hasLink: boolean;
 }
 
 /**
@@ -549,14 +549,12 @@ export function portalModel(
   new Set([...sentMap.keys(), ...nowMap.keys()]).forEach(k => {
     if (!skip.has(k) && (sentMap.get(k) || 0) !== (nowMap.get(k) || 0)) behind = true;
   });
-  const exp = portalAccess?.expiresAt ? anyMs(portalAccess.expiresAt) : null;
   return {
     sentAt: sentAt ? anyMs(sentAt) : null,
     sees: (sent || []).filter(r => r.count > 0),
     behind: !!sent && behind,
     programmeMissing: !!sent && hasProgramme && !(sentMap.get('Programme tasks') || 0),
-    linkExpires: exp,
-    linkExpired: !!exp && exp < Date.now(),
+    hasLink: !!portalAccess?.token,
   };
 }
 

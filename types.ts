@@ -957,7 +957,8 @@ export interface ProjectContext {
      */
     portalAccess?: {
         token: string;
-        expiresAt: string;
+        /** Written by older versions only. Links no longer expire. */
+        expiresAt?: string;
         issuedAt: string;
         issuedTo?: string;
         firstUsedAt?: string;

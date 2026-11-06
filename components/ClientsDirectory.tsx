@@ -8,7 +8,7 @@ import { useOrg } from "../contexts/OrgContext";
 import { useFiguresHidden } from "./ui/HideFigures";
 import { usePageHeader } from "../contexts/PageHeaderContext";
 import { db } from "../services/dbService";
-import { issuePortalAccess, PortalAccess } from "../services/portalAccessService";
+import { issuePortalAccess, PortalAccess, portalTokenOf } from "../services/portalAccessService";
 import { httpsCallable } from "firebase/functions";
 import { functions as fbFunctions } from "../services/firebaseClient";
 import { 
@@ -273,15 +273,11 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
       return;
     }
 
-    const existing = (project.context as any)?.portalAccess as
-      | { token: string; expiresAt?: string }
-      | undefined;
-    const live =
-      !forceNew &&
-      existing?.token &&
-      (!existing.expiresAt || new Date(existing.expiresAt).getTime() > Date.now());
+    // Links do not expire; a new one is minted only on Reissue, or when none exists.
+    const existing = portalTokenOf(project.context);
+    const live = !forceNew && !!existing;
 
-    let token = existing?.token;
+    let token = existing || undefined;
     if (!live || forceNew) {
       const access = issuePortalAccess(project.id, (project.context as any)?.clientEmail);
       token = access.token;

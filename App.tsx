@@ -2041,7 +2041,6 @@ export default function App() {
       project.context?.name || "your project",
       project.context?.clientName || "",
       link,
-      access.expiresAt,
     );
     // Delivery is best-effort: the token is already live, so ops can copy the
     // link from the project if the email bounced.

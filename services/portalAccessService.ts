@@ -15,13 +15,27 @@ import { ProjectContext } from '../types';
  * access on their own, because anyone can guess or overhear them.
  */
 
-/** How long an issued portal link stays usable. */
-const TOKEN_DAYS = 30;
+/*
+  A portal link does not expire.
+
+  The token was the client's only credential when this was written, so it was
+  given 30 days. Clients now sign in with their own email and password, and
+  that login is what the rules check (projectIds and portalView in
+  firestore.rules). The link only says which project, and which studio's name
+  the sign-in page shows. An expiry protected nothing, and every "copy link"
+  after it lapsed quietly minted a new one, so the link a client had been sent
+  stopped matching the one in the app: Unique Vistas got a link on 18 Oct and
+  the app showed a different one on 6 Nov.
+
+  A link is replaced only when somebody asks for it (Reissue Link in the
+  Clients directory). Links issued before this carry an expiresAt; it is
+  ignored.
+*/
 
 export interface PortalAccess {
   token: string;
-  /** ISO string. Compared against the clock at verification time. */
-  expiresAt: string;
+  /** Written by older versions only. Ignored: links do not expire. */
+  expiresAt?: string;
   issuedAt: string;
   /** Email the link was sent to, so ops can see where access went. */
   issuedTo?: string;
@@ -39,14 +53,17 @@ function randomPart(): string {
  * be resolved without scanning every project, exactly as the decision tokens do.
  */
 export function issuePortalAccess(projectId: string, issuedTo?: string): PortalAccess {
-  const expires = new Date();
-  expires.setDate(expires.getDate() + TOKEN_DAYS);
   return {
     token: `${projectId}_${randomPart()}`,
-    expiresAt: expires.toISOString(),
     issuedAt: new Date().toISOString(),
     issuedTo: issuedTo || undefined
   };
+}
+
+/** The project's portal link token, if one was ever issued. It never lapses. */
+export function portalTokenOf(context: unknown): string | null {
+  const t = (context as any)?.portalAccess?.token;
+  return typeof t === 'string' && t ? t : null;
 }
 
 /** The project id a token claims to be for. Claim only — still verify. */
@@ -90,8 +107,6 @@ export function verifyPortalToken(token: string, context: ProjectContext | undef
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ token.charCodeAt(i);
   if (diff !== 0) return deny('mismatch');
-
-  if (access.expiresAt && new Date(access.expiresAt).getTime() < Date.now()) return deny('expired');
 
   return { ok: true };
 }

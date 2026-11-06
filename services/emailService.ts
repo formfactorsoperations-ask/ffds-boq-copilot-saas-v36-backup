@@ -660,10 +660,8 @@ export const sendSignoffRequest = async (decisionId: string, projectId: string, 
             const access = projectSnap.exists()
                 ? (projectSnap.data() as any)?.context?.portalAccess
                 : null;
-            const live =
-                access?.token &&
-                (!access.expiresAt || new Date(access.expiresAt).getTime() > Date.now());
-            if (live) signoffUrl = `${appDomain}/?portal=${access.token}`;
+            // Links do not expire (services/portalAccessService).
+            if (access?.token) signoffUrl = `${appDomain}/?portal=${access.token}`;
         } catch {
             // Fall back to the app root.
         }
@@ -1015,20 +1013,19 @@ export const sendConsolidatedPendingSelectionsEmail = async (
 /**
  * Emails a client their portal link.
  *
- * The link is the credential — the portal has no password — so this is the only
- * sanctioned way for a client to gain access. Delivery failure is reported to
- * the caller rather than thrown, so ops can fall back to copying the link.
+ * The client signs in with their own email and password; the link takes them
+ * to their project's sign-in page and does not expire. Delivery failure is
+ * reported to the caller rather than thrown, so ops can fall back to copying
+ * the link.
  */
 export const sendPortalAccessLink = async (
     clientEmail: string,
     projectName: string,
     clientName: string,
     link: string,
-    expiresAt: string
 ): Promise<{ success: boolean; error?: string }> => {
     if (!clientEmail) return { success: false, error: 'No client email on file' };
     try {
-        const expires = new Date(expiresAt).toLocaleDateString('en-IN', { dateStyle: 'medium' });
         const body = [
             `Hello ${clientName || 'there'},`,
             ``,
@@ -1036,7 +1033,7 @@ export const sendPortalAccessLink = async (
             ``,
             `<a href="${link}" style="display:inline-block;padding:12px 22px;background:#3D52A0;color:#ffffff;border-radius:10px;font-weight:700;text-decoration:none">Open your portal</a>`,
             ``,
-            `This link works until ${expires}. Please don't forward it — anyone with the link can see your project.`,
+            `Sign in with this email address and the password we sent you. The link does not change, so you can bookmark it.`,
             ``,
             `${STUDIO_NAME}`
         ].join('\n');
