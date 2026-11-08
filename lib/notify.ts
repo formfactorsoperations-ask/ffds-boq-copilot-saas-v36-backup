@@ -599,10 +599,9 @@ export function portalDrafts(before: any, after: any, p: { projectId: string; st
       out.push({ ...base, kind: 'portal.finish', level: 'needs', title: `A finish waits for you: ${clip(s.itemName, 50) || 'a selection'}`, line: 'Have a look and confirm it, or ask about it', route: 'materials', action: 'Choose' });
     }
   }
-  for (const m of fresh(before?.designRecord, after?.designRecord)) {
-    if (m?.confirmation) continue;
-    out.push({ ...base, kind: 'portal.meeting', level: 'needs', title: 'Your design meeting record is ready', line: 'Check what was agreed, room by room, and confirm it', route: 'designScope:record', action: 'Confirm it' });
-  }
+  /* No note for a design meeting: the Design record is not shown in the portal
+     without the studio owner's approval (lib/portalTabs), so there is nothing
+     for the client to open. */
   const beforePay = new Map((Array.isArray(b.paymentMilestones) ? b.paymentMilestones : []).map((x: any) => [String(x?.id), x]));
   for (const m of Array.isArray(a.paymentMilestones) ? a.paymentMilestones : []) {
     const was: any = beforePay.get(String(m?.id));
