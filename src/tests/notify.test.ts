@@ -293,10 +293,10 @@ describe('the client portal: what is new for the client', () => {
     expect(portalDrafts(before, after, p)).toEqual([]);
   });
 
-  it('a meeting record to confirm opens Design and Scope; site news is one quiet update', () => {
+  it('a design meeting tells the client nothing (no Design record in the portal); site news is one quiet update', () => {
     const d = portalDrafts(view({}), view({ siteUpdates: [{ id: 'u1', title: 'Carcass up' }, { id: 'u2', title: 'Tiles' }] }, { designRecord: [{ id: 'dm1', confirmation: null }] }), p);
-    expect(d.map((x) => [x.kind, x.route, x.level])).toEqual([['portal.meeting', 'designScope:record', 'needs'], ['portal.update', 'feed', 'update']]);
-    expect(d[1].title).toBe('2 new updates from your project');
+    expect(d.map((x) => [x.kind, x.route, x.level])).toEqual([['portal.update', 'feed', 'update']]);
+    expect(d[0].title).toBe('2 new updates from your project');
   });
 
   it('more than five new things become one note that counts them', () => {

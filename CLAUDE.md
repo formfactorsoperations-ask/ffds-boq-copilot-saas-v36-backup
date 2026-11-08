@@ -15,6 +15,13 @@ new work must look like part of the existing app, not a new design.
 - Do not use half-pixel font sizes, new accent colours or new fonts.
 - Before shipping a screen, compare a screenshot of it with Studio settings.
 
+## Client portal: no new tabs without the owner's approval
+
+The studio owner approves every tab a client sees. The portal draws only the tabs listed in
+`lib/portalTabs.ts`, and `src/tests/portalTabs.test.ts` pins that list. Do not add a tab, a sub-tab,
+or anything that makes one appear (for example data that unlocks a tab when it exists) without the
+owner asking for it in so many words. If a change would add one, stop and ask.
+
 ## Shipping a PR: deploy notes
 
 The studio owner deploys by hand. Every PR description ends with a **Deploy notes** section they can follow

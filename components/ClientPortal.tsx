@@ -32,6 +32,7 @@ import { PORTAL_OPEN_EVENT } from './notify/NotifyContext';
 import { buildClientBoqRows, groupClientBoq, ClientBoqRow } from '../lib/clientBoq';
 import { submitClientAction, ClientAction } from '../services/clientPortalActions';
 import { isVisibleToClient, publish as publishVisibility } from '../lib/clientVisibility';
+import { approvedLenses, approvedDesignScopeTabs, type ApprovedDesignScopeTab } from '../lib/portalTabs';
 import PortalOverview from './client/PortalOverview';
 import PortalTimeline from './client/PortalTimeline';
 import { clientVisibleAttendees, clientActionOwner } from '../lib/clientPeople';
@@ -60,9 +61,6 @@ import { buildSignoffPatch, buildDisputePatch, resolveApprovals, AgreementKind }
 import DocumentReadingRoom from './client/DocumentReadingRoom';
 import PortalScopePanel from './client/PortalScopePanel';
 import { LineSpecDetail, LineSpecSummary, SpecView, SpecViewSwitch, readSpec } from './client/PortalLineSpec';
-import PortalDesignRecord from './client/PortalDesignRecord';
-import { portalDesignRecord, type PortalDesignMeeting } from '../lib/designMeeting';
-import { watchMeetings } from '../services/designMeetingService';
 import { FFDSLogo } from './FFDSLogo';
 import BoqVersionCompare from './client/BoqVersionCompare';
 import { describeVersions } from '../lib/boqVersions';
@@ -362,7 +360,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
      * look like" and "what am I getting" — so they get two sub-tabs rather than
      * a scroll.
      */
-    const [designScopeTab, setDesignScopeTab] = useState<'drawings' | 'scope' | 'record'>('drawings');
+    const [designScopeTab, setDesignScopeTab] = useState<ApprovedDesignScopeTab>('drawings');
     /* A "New for you" note opens the lens that owns it (App.tsx, lib/notify.ts portalDrafts). */
     useEffect(() => {
         const LENS = new Set<PortalTab>(['overview', 'timeline', 'decisions', 'documents', 'financials', 'approvals', 'roadmap', 'feed', 'designs', 'materials', 'scope', 'designScope']);
@@ -371,21 +369,19 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
             const [tab, sub] = route.split(':');
             if (!LENS.has(tab as PortalTab)) { setActiveTab('overview'); return; }
             setActiveTab(tab as PortalTab);
-            if (tab === 'designScope' && (sub === 'record' || sub === 'scope' || sub === 'drawings')) setDesignScopeTab(sub);
+            /* An older note may still point at the removed Design record: it opens Drawings. */
+            if (tab === 'designScope') setDesignScopeTab(sub === 'scope' ? 'scope' : 'drawings');
         };
         window.addEventListener(PORTAL_OPEN_EVENT, open);
         return () => window.removeEventListener(PORTAL_OPEN_EVENT, open);
     }, []);
 
-    /* The design meetings held, from the projection; updated in place when the client confirms one. */
-    const [designRecord, setDesignRecord] = useState<PortalDesignMeeting[]>(() => (projectData as any).designRecord || []);
-    useEffect(() => { setDesignRecord((projectData as any).designRecord || []); }, [(projectData as any).designRecord]);
-    /* The studio's preview has no published copy to read from, so it follows the meetings themselves. */
-    useEffect(() => {
-        if (source === 'client' || !studioId || !projectData.id) return;
-        return watchMeetings(studioId, projectData.id, (list) => setDesignRecord(portalDesignRecord(list)), () => undefined);
-    }, [source, studioId, projectData.id]);
-    const recordWaiting = designRecord.filter((m) => !m.confirmation).length;
+    /*
+      No Design record here. The design meetings still travel in the client's
+      copy (functions/src/designMeeting refreshPortalRecord), but the studio
+      owner has not approved showing them to the client, and only approved tabs
+      are drawn (lib/portalTabs).
+    */
 
     /** The scope revision history, and whether the compare modal is open. */
     const [showBoqVersions, setShowBoqVersions] = useState(false);
@@ -1054,28 +1050,12 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                     consequence: revision ? 'Nothing in the revised BOQ is built until you approve it.' : undefined,
                 };
             });
-        /* A design meeting the client has not confirmed yet. */
-        const meetingActions = source === 'client' ? designRecord.filter((m) => !m.confirmation).map((m) => ({
-            id: `meeting-${m.id}`,
-            category: 'meeting' as const,
-            severity: 'high' as const,
-            owner: 'client' as const,
-            title: `Confirm the design meeting of ${new Date(m.heldAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`,
-            subtitle: m.rooms.map((r) => `${r.room}: ${r.outcome === 'agreed' ? 'agreed' : `${r.changes.length} change${r.changes.length === 1 ? '' : 's'}`}`).join(' · '),
-            description: '',
-            targetTab: 'designs' as const,
-            actionLabel: 'Review & confirm',
-            actionType: 'confirm_meeting' as const,
-            actionPayload: { meetingId: m.id },
-            date: m.heldAt,
-            statusBadge: 'To confirm',
-            consequence: 'Your designer goes ahead once you confirm what was agreed.',
-        })) : [];
-        const extra = [...meetingActions, ...scopeActions, ...momActions];
+        /* No "confirm the design meeting" item: the Design record is not shown (lib/portalTabs). */
+        const extra = [...scopeActions, ...momActions];
         return extra.length
             ? { ...clientActionSummary, clientActions: [...clientActionSummary.clientActions, ...extra] }
             : clientActionSummary;
-    }, [clientActionSummary, syncedMoms, context.documents, designRecord, source]);
+    }, [clientActionSummary, syncedMoms, context.documents, source]);
 
     /* Downloads from "Your scope", reported for the studio's trail. Only the client's own portal counts. */
     useEffect(() => {
@@ -1765,7 +1745,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
      * document in the file, a link from the overview) instead of being browsed.
      * Adding a lens here means claiming a client would go looking for it.
      */
-    const PORTAL_LENSES: {
+    const PORTAL_LENSES_DECLARED: {
         id: PortalTab; label: string; badge?: () => number;
         dividerBefore?: boolean;
         /** True when the count is something the client must clear, not a total. */
@@ -1794,6 +1774,8 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         */
         { id: 'designScope', label: 'Design & Scope', badge: () => drawingSets.length + pendingScopeRevisions },
     ];
+    /* Only the tabs the studio owner approved reach the client (lib/portalTabs). */
+    const PORTAL_LENSES = approvedLenses(PORTAL_LENSES_DECLARED);
 
     useLayoutEffect(() => {
         const track = lensTrackRef.current;
@@ -1886,7 +1868,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                 break;
             case 'confirm_meeting':
                 setActiveTab('designScope');
-                setDesignScopeTab('record');
+                setDesignScopeTab('drawings');
                 break;
             case 'review_minutes': {
                 const m = syncedMoms.find((x: any) => x.id === item.actionPayload?.momId);
@@ -3066,10 +3048,9 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                         {/* Tab 4: 3D RENDERS & DRAWINGS */}
                         {activeTab === 'designScope' && (
                           <div className="flex gap-1 rounded-2xl bg-slate-50 p-1 w-fit ring-1 ring-slate-200/70 mb-5">
-                            {([
+                            {approvedDesignScopeTabs([
                               { id: 'drawings' as const, label: 'Drawings & renders', n: drawingSets.length },
                               { id: 'scope' as const, label: 'Scope & BOQ', n: 0 },
-                              ...(designRecord.length ? [{ id: 'record' as const, label: 'Design record', n: recordWaiting }] : []),
                             ]).map(t => {
                               const on = designScopeTab === t.id;
                               return (
@@ -3094,9 +3075,6 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                           </div>
                         )}
 
-                        {activeTab === 'designScope' && designScopeTab === 'record' && (
-                            <PortalDesignRecord projectId={projectData.id} record={designRecord} canConfirm={source === 'client'} onRecord={setDesignRecord} clientName={(context as any).clientName} />
-                        )}
 
                         {activeTab === 'designScope' && designScopeTab === 'drawings' && (
                             <motion.div
