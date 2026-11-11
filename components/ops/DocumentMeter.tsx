@@ -44,34 +44,12 @@ const BOX = 78;
 const CX = BOX / 2;
 const C = 2 * Math.PI * R;
 const TRACK = '#EDF0F5';
-/* A project with nothing signed draws no arc at all, so on a card whose
-   contract is the problem the ring would read as calmly neutral. Tinting the
-   track keeps the alarm on the instrument without reintroducing fragments. */
-/* Darkened once the panel behind it went rose: at #F8E7EE the track and its
-   own ground were the same colour, so a project with nothing signed -- which
-   draws no arc at all -- showed a ring that was barely there. */
 const TRACK_ALERT = '#F2C9DA';
 
-/* The surface the card variant sits on.
-
-   Darkening the type was the wrong read of "make it darker": the block was
-   faint because it had no ground of its own, floating on the card's white
-   between two hairline rules. Giving it a tinted panel separates it from the
-   money above it and lets the six names sit on something.
-
-   The tint follows the same three states as the ring, so the section states
-   its own condition before you read a word of it: quiet indigo while work is
-   in progress, green once everything is signed, rose while the execution
-   agreement is outstanding. Kept shallow -- these are 3-5% tints, not a
-   coloured box; the ring is still the loudest thing in the block.
-
-   Written as inline style deliberately. A Tailwind arbitrary value containing
-   commas compiles to nothing at all, which is how an earlier shadow in this
-   project silently disappeared. */
 const SURFACE: Record<'good' | 'brand' | 'critical', { bg: string; border: string }> = {
-  good:     { bg: 'linear-gradient(135deg, #F7FCFA 0%, #E3F3EC 100%)', border: '#CCE7DC' },
-  brand:    { bg: 'linear-gradient(135deg, #FAFBFE 0%, #E9EDF8 100%)', border: '#DDE3F1' },
-  critical: { bg: 'linear-gradient(135deg, #FFF8FA 0%, #FAE4EC 100%)', border: '#F2D0DC' },
+  good:     { bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0%, rgba(209, 250, 229, 0.38) 100%)', border: 'rgba(255, 255, 255, 0.85)' },
+  brand:    { bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.35) 100%)', border: 'rgba(255, 255, 255, 0.85)' },
+  critical: { bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 228, 230, 0.45) 100%)', border: 'rgba(255, 255, 255, 0.85)' },
 };
 
 /* Light stop -> full stop, so the sweep has depth rather than reading flat. */
@@ -81,16 +59,6 @@ const TONE: Record<'good' | 'brand' | 'critical', [string, string]> = {
   critical: ['#D2708F', '#B4436A'],
 };
 
-/* Darkened two steps across the board.
-
-   At slate-300/slate-500 on white the six document names were the faintest
-   thing on a card that was otherwise legible, and the one line a reader
-   actually needs -- which paperwork is missing -- was the hardest to read. One
-   step was not enough to register as a change on a card whose documents are
-   mostly not yet due, so everything here sits a further step down: the lightest
-   value in the block is now slate-500, which clears 7:1 on white. The ramp is
-   what carries the meaning, not the faintness -- not due, then signed, then
-   outstanding, then the execution agreement. */
 const TEXT: Record<DocStatus, string> = {
   complete:  'text-emerald-700',
   issued:    'text-sky-800',
@@ -146,23 +114,19 @@ const DocumentMeter: React.FC<Props> = ({ projectContext, report, variant = 'car
 
   return (
     <div
-      className={`${className} ${variant === 'card' ? 'rounded-2xl border px-3.5 py-3' : ''}`}
+      className={`${className} ${variant === 'card' ? 'rounded-2xl border px-3.5 py-2.5 backdrop-blur-md' : ''}`}
       style={
         variant === 'card'
           ? {
               background: surface.bg,
               borderColor: surface.border,
-              /* A one-pixel highlight along the top edge, so the panel reads as
-                 set into the card rather than pasted onto it. */
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.8)',
+              boxShadow: 'inset 0 1.5px 1px rgba(255, 255, 255, 0.95), 0 4px 12px -4px rgba(15, 23, 42, 0.05)',
             }
           : undefined
       }
     >
-      {/* In `panel` the surrounding Panel already carries the heading, so
-          printing it again here read as "Documents / Documents". */}
       {variant === 'card' && (
-        <p className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.14em] mb-2">
+        <p className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.14em] mb-1.5">
           Documents
         </p>
       )}
@@ -187,7 +151,7 @@ const DocumentMeter: React.FC<Props> = ({ projectContext, report, variant = 'car
                 unsignedContract
                   ? TRACK_ALERT
                   : variant === 'card'
-                    ? '#FFFFFF'
+                    ? 'rgba(255, 255, 255, 0.72)'
                     : TRACK
               }
               strokeWidth={STROKE}
@@ -246,9 +210,6 @@ const DocumentMeter: React.FC<Props> = ({ projectContext, report, variant = 'car
         {/* ── The six, by name ─────────────────────────────────────────── */}
         <div className="min-w-0 flex-1 grid grid-cols-2 gap-x-3 gap-y-1">
           {slots.map((s, i) => (
-            /* The tick animation sits on a wrapper. `.hud-tick` also sets
-               display: inline-block, which beat `flex` on the row itself and
-               stacked every icon above its name. */
             <div
               key={s.kind}
               className="min-w-0 hud-tick"
@@ -273,16 +234,9 @@ const DocumentMeter: React.FC<Props> = ({ projectContext, report, variant = 'car
         </div>
       </div>
 
-      {/* Always rendered, even when there is nothing to say.
-
-          It used to appear only when a document was outstanding, which made the
-          panel two different heights -- and because it sits below the money on
-          the project card, the figures on a row of cards no longer lined up.
-          A line that reads "nothing outstanding" is information; a line that
-          disappears is a layout shift. */}
       {variant === 'card' || headline ? (
         <p className={`mt-2 text-[9.5px] leading-tight flex items-start gap-1 ${
-          unsignedContract ? 'text-rose-700 font-bold' : headline ? 'text-slate-700 font-semibold' : 'text-slate-400 font-medium'
+          unsignedContract ? 'text-rose-700 font-bold' : headline ? 'text-slate-700 font-semibold' : 'text-slate-500 font-medium'
         }`}>
           {unsignedContract && <AlertTriangle className="w-2.5 h-2.5 shrink-0 mt-[1px]" />}
           <span className="truncate">
