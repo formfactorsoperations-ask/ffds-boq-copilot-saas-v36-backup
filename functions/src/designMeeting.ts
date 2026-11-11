@@ -12,7 +12,7 @@ import {
   presentableRooms, clientRoundsByRoom, includedRoundsFrom, isOverIncluded, cleanChanges, cleanFee,
   cleanSignerName, cleanSignature, portalDesignRecord, cleanRoomBoxes, cleanPresenters, mayRunThis,
   needsApproval, blankApproval, approvalSheets, approvalEmail, addWorkingDays, reminderDue, mayDeem, agreementsFrom,
-  cleanEmails, cleanLink, APPROVAL_WORKING_DAYS, sendsApprovals, needsApproval as needsWrittenApproval, type ClientApproval, type ApprovalVia, type ApprovalItem,
+  cleanEmails, cleanLink, cleanEmailText, cleanEmailSubject, textEmailHtml, APPROVAL_WORKING_DAYS, sendsApprovals, needsApproval as needsWrittenApproval, type ClientApproval, type ApprovalVia, type ApprovalItem,
   type DesignMeeting, type MeetingConfirmation, type PortalDesignMeeting, type MeetingLayout, type LayoutSetup, type MeetingRoom, type MeetingSheet, type RoomCharge, type ChargeStatus, type RoomDrawing,
 } from "../../lib/designMeeting";
 
@@ -534,7 +534,13 @@ async function sendApproval(actor: Actor, orgId: string, projectId: string, inpu
   const now = Date.now();
   const dueAt = addWorkingDays(now, APPROVAL_WORKING_DAYS);
   const sheets = approvalSheets(m0);
-  const mail = approvalEmail({ kind: "request", clientName, projectName: m0.projectName || actor.projectName || "your project", sheets, driveLink, dueAt, senderName: actor.name, studioName: contact.studioName });
+  const standard = approvalEmail({ kind: "request", clientName, projectName: m0.projectName || actor.projectName || "your project", sheets, driveLink, dueAt, senderName: actor.name, studioName: contact.studioName });
+  /* The sender may have edited the wording: their subject and text, made safe (lib/designMeeting textEmailHtml). */
+  const subject = input.subject !== undefined ? cleanEmailSubject(input.subject) : standard.subject;
+  const body = input.body !== undefined ? cleanEmailText(input.body) : null;
+  if (!subject) throw new HttpsError("invalid-argument", "Write a subject for the email.");
+  if (body !== null && body.length < 20) throw new HttpsError("invalid-argument", "The email is empty. Write it, or go back to the standard wording.");
+  const mail = body !== null ? { subject, html: textEmailHtml(body), text: body } : { ...standard, subject };
   const copies = [...new Set([actor.email, ...cc].filter((e) => e && !to.includes(e)))];
   const sent = await sendMail({ to, cc: copies, replyTo: actor.email, subject: mail.subject, html: mail.html, text: mail.text, fromName: actor.name });
 

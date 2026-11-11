@@ -131,3 +131,24 @@ describe('who sends the approval email', () => {
     expect(sendsApprovals('Viewer')).toBe(false);
   });
 });
+
+describe('the approval email, as the sender edited it', () => {
+  it('keeps their paragraphs and line breaks, and makes links clickable', async () => {
+    const { textEmailHtml } = await import('../../lib/designMeeting');
+    const html = textEmailHtml('Hi Ms. Sharma,\n\nPlease see:\n1. Wardrobe\n2. Bookshelf\n\nLink: https://drive.google.com/drive/folders/abc.');
+    expect(html).toContain('<p style="margin:0 0 14px">Hi Ms. Sharma,</p>');
+    expect(html).toContain('Please see:<br>1. Wardrobe<br>2. Bookshelf');
+    expect(html).toContain('<a href="https://drive.google.com/drive/folders/abc">https://drive.google.com/drive/folders/abc</a>.');
+  });
+
+  it('never lets typed markup or scripts into the client\'s inbox', async () => {
+    const { textEmailHtml, cleanEmailSubject } = await import('../../lib/designMeeting');
+    const html = textEmailHtml('<script>alert(1)</script> <a href="javascript:x">click</a> http://plain.example.com');
+    expect(html).not.toContain('<script>');
+    expect(html).not.toContain('<a href="javascript');
+    expect(html).toContain('&lt;script&gt;');
+    /* Only https links become links. */
+    expect(html).not.toContain('<a href="http://');
+    expect(cleanEmailSubject('  Drawings\n for   approval ')).toBe('Drawings for approval');
+  });
+});

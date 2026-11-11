@@ -96,6 +96,21 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
     driveLink: cleanLink(drive), dueAt: addWorkingDays(Date.now(), APPROVAL_WORKING_DAYS), senderName: me.name || '', studioName: contact?.studio || '',
   }), [greet, drive, contact, m.id]);
 
+  /*
+    The email itself, editable. It follows the standard wording (greeting,
+    Drive link, date) until the sender changes it; then it is theirs, and
+    "Standard wording" puts the standard back.
+  */
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [edited, setEdited] = useState(false);
+  useEffect(() => {
+    if (edited) return;
+    setSubject(preview.subject);
+    setBody(preview.text);
+  }, [preview.subject, preview.text, edited]);
+  const bodyOk = body.trim().length >= 20 && subject.trim().length > 0;
+
   const toOk = !!cleanEmails(to)?.length;
   const ccOk = cleanEmails(cc) !== null;
   const driveOk = !drive.trim() || !!cleanLink(drive);
@@ -104,7 +119,7 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
   async function send() {
     setBusy('send');
     try {
-      const r = await sendApproval(t, m.id, { to, cc, clientName: greet, driveLink: drive.trim() });
+      const r = await sendApproval(t, m.id, { to, cc, clientName: greet, driveLink: drive.trim(), ...(edited ? { subject, body } : {}) });
       toast({ ok: true, title: r?.sandbox ? 'Approval email simulated' : 'Approval email sent', sub: r?.sandbox ? 'The email service is not set up, so nothing left the studio.' : `Reminders go on working days ${REMINDER_WORKING_DAYS.join(' and ')}. Replies come to you.` });
       setMode(null);
       onChanged?.();
@@ -182,16 +197,24 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
             <div><label className={label} htmlFor={`drive-${m.id}`}>Google Drive link to the drawings</label>
               <input id={`drive-${m.id}`} value={drive} onChange={(e) => setDrive(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" className={input} style={{ borderColor: !driveOk ? '#B4232F' : undefined }} /></div>
             <div className="flex flex-wrap gap-2 pt-1">
-              <button type="button" disabled={!toOk || !ccOk || !driveOk || greet.trim().length < 2 || !!busy} onClick={send} className={primary}>
+              <button type="button" disabled={!toOk || !ccOk || !driveOk || greet.trim().length < 2 || !bodyOk || !!busy} onClick={send} className={primary}>
                 {busy === 'send' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}Send approval email
               </button>
               <button type="button" onClick={() => setMode(null)} disabled={!!busy} className={secondary}><X size={15} />Cancel</button>
             </div>
           </div>
-          <div className="min-w-0">
-            <div className={label}>{preview.subject}</div>
-            {/* The email exactly as it goes; built and escaped by lib/designMeeting approvalEmail. */}
-            <div className="max-h-[360px] overflow-auto rounded-[10px] border border-[#EEEEEA] bg-[#FAFAF7] p-3 [&_a]:text-[#3A3FB8] [&_a]:underline [&_ol]:list-decimal" dangerouslySetInnerHTML={{ __html: preview.html }} />
+          <div className="flex min-w-0 flex-col gap-2.5">
+            <div><label className={label} htmlFor={`subj-${m.id}`}>Subject</label>
+              <input id={`subj-${m.id}`} value={subject} onChange={(e) => { setSubject(e.target.value); setEdited(true); }} maxLength={200} className={input} /></div>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className={`${label} !mb-0`} htmlFor={`body-${m.id}`}>Email <span className="font-medium text-[#8A8E97]">(edit freely; links stay clickable)</span></label>
+                {edited && <button type="button" onClick={() => setEdited(false)} className="text-[12px] font-bold text-[#3A3FB8] hover:underline">Standard wording</button>}
+              </div>
+              <textarea id={`body-${m.id}`} value={body} onChange={(e) => { setBody(e.target.value); setEdited(true); }} rows={16} maxLength={8000}
+                className="min-h-[300px] w-full flex-1 rounded-[10px] border border-[#DCDCD5] bg-[#FAFAF7] px-3 py-2.5 text-[13px] leading-relaxed outline-none focus:border-[#4146C8] focus:bg-white focus:shadow-[0_0_0_3px_rgba(65,70,200,0.15)]" />
+            </div>
+            <div className="text-[12px] text-[#5F636D]">The reminders on working days 3 and 5 use the standard wording.</div>
           </div>
         </div>
       )}

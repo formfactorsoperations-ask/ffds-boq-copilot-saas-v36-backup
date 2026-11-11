@@ -531,9 +531,40 @@ export function approvalEmail(i: ApprovalEmailInput): { subject: string; html: s
     + outro.map(p).join('')
     + (sign.length ? `<p style="margin:0">Warm regards,<br>${sign.map(esc).join('<br>')}</p>` : '')
     + `</div>`;
-  const text = [`Hi ${i.clientName},`, ...intro, 'Drawings for Approval:', ...lines.map((l, k) => `${k + 1}. ${l}`),
-    ...(i.driveLink ? [`You can access the latest drawings here: ${i.driveLink}`] : []), ...outro, ...(sign.length ? ['Warm regards,', ...sign] : [])].join('\n\n');
+  /* The list and the sign-off each stay one block, so the text reads (and edits) like the email. */
+  const text = [`Hi ${i.clientName},`, ...intro, ['Drawings for Approval:', ...lines.map((l, k) => `${k + 1}. ${l}`)].join('\n'),
+    ...(i.driveLink ? [`You can access the latest drawings here: ${i.driveLink}`] : []), ...outro, ...(sign.length ? [['Warm regards,', ...sign].join('\n')] : [])].join('\n\n');
   return { subject, html, text };
+}
+
+/*
+  THE EMAIL, AS THE STUDIO EDITED IT.
+
+  The send form starts from approvalEmail's wording, and the sender may change
+  any of it. What comes back is plain text: it is escaped here, paragraphs
+  come from blank lines, line breaks are kept, and web addresses become links,
+  so nothing typed can put markup into a client's inbox.
+*/
+export const MAX_EMAIL_SUBJECT = 200;
+export const MAX_EMAIL_BODY = 8000;
+
+export function cleanEmailText(raw: unknown, max = MAX_EMAIL_BODY): string {
+  return String(raw ?? '').replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, max);
+}
+
+export const cleanEmailSubject = (raw: unknown) => cleanEmailText(raw, MAX_EMAIL_SUBJECT).replace(/\s+/g, ' ');
+
+/** Plain text to the email's HTML: escaped, paragraphs on blank lines, links made clickable. */
+export function textEmailHtml(text: string): string {
+  const link = (s: string) => s.replace(/https:\/\/[^\s<>"]+/g, (u) => {
+    const trail = /[.,;:)]+$/.exec(u)?.[0] || '';
+    const url = trail ? u.slice(0, -trail.length) : u;
+    return `<a href="${url}">${url}</a>${trail}`;
+  });
+  const paras = cleanEmailText(text).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#17191E">`
+    + paras.map((p) => `<p style="margin:0 0 14px">${p.split('\n').map((l) => link(esc(l))).join('<br>')}</p>`).join('')
+    + `</div>`;
 }
 
 /** Up to ten valid addresses, from a list or a comma-separated line; null when one is not an address. */

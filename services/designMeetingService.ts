@@ -65,7 +65,7 @@ export async function setPresenters(t: Target, drawings: Record<string, string[]
 /* ------------------------------------------------------------ the client's written approval */
 
 /** Sends the approval email for a held meeting's agreed rooms; the meeting then waits for the client's answer. */
-export const sendApproval = (t: Target, meetingId: string, p: { to: string; cc: string; clientName: string; driveLink: string }) =>
+export const sendApproval = (t: Target, meetingId: string, p: { to: string; cc: string; clientName: string; driveLink: string; subject?: string; body?: string }) =>
   call({ ...t, action: 'sendApproval', meetingId, ...p }, 'designMeeting') as Promise<{ sandbox?: boolean }>;
 
 /** Records the client's answer: approved (their reply), changes, or taken as approved once the date in the email passed. */
