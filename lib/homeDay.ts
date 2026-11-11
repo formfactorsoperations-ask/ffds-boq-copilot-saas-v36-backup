@@ -119,7 +119,7 @@ export function pinWeight(kind: PinKind, i: DayInput): number {
     if (i.life.tomorrow) return 18;
     return 12;
   }
-  if (!i.team) return 0;
+  if (!i.team || i.team.closed) return 0;
   if (i.team.asked.length) return 48;
   return i.team.away.length + i.team.home.length ? 10 : 0;
 }
@@ -156,6 +156,7 @@ export function dayOrder(i: DayInput): { pins: DayPin[]; toDo: number; ready: bo
     /* A reviewer's "for you" also lists the review queue, which has its own pin: say only that their own work is clear. */
     const why = kind === 'sheets' && !weight && i.reviewer ? 'Yours: all clear'
       : kind === 'checkin' && i.checkin && i.checkin.state !== 'out' ? (i.checkin.since ? `In since ${i.checkin.since}` : DONE[i.checkin.state])
+      : kind === 'team' && i.team?.closed ? 'Studio closed'
       : WHY[kind][weight] || '';
     return { kind, weight, why: loading(kind, i) ? '' : why };
   })

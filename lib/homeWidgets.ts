@@ -16,8 +16,8 @@ import { stateOf } from './drawingReview';
 import { dueOf, dueRank, needsMe, reviewQueue, statsOf, type DeskRow, type Stats, type Viewer } from './designDesk';
 import type { VisitRequest } from './clientCare';
 import type { Snapshot } from './peopleDesk';
-import { addDays } from './peopleDesk';
-import { awayOn, todayOf, type DayAway } from './peopleView';
+import { addDays, isOff } from './peopleDesk';
+import { awayOn, offReason, todayOf, type DayAway } from './peopleView';
 
 const DAY = 86_400_000;
 
@@ -105,14 +105,20 @@ export interface TeamToday {
   asked: DayAway[];
   /** Everyone on attendance. */
   team: number;
+  /** Why the studio is closed today (the holiday's name, "Weekly off", "Monthly off"); null on a working day. */
+  closed: string | null;
+  /** The next holiday after today; today's own holiday is `closed`. */
   nextHoliday: { date: string; name: string; days: number } | null;
 }
 export function teamToday(s: Snapshot): TeamToday {
   const today = todayOf(s);
   const list = awayOn(s, today);
-  const next = s.policy.holidays.find((d) => d >= today) || null;
+  const next = [...s.policy.holidays].sort().find((d) => d > today) || null;
+  const closed = !isOff(today, s.policy) ? null
+    : s.policy.holidays.includes(today) ? s.policy.holidayNames?.[today] || 'Holiday' : offReason(today, s.policy);
   return {
     today,
+    closed,
     away: list.filter((a) => a.mode === 'Away' && !a.pending),
     home: list.filter((a) => a.mode === 'WFH' && !a.pending),
     asked: list.filter((a) => a.pending),

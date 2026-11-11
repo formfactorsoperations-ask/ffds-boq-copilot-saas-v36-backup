@@ -85,6 +85,13 @@ test('the team today: away and from home, never why, and the next holiday', () =
   expect(t.home.map((a) => a.name)).toEqual(['Sougata']);
   expect(t.asked.map((a) => a.name)).toEqual(['Riya']);
   expect(t.team).toBe(4);
+  expect(t.closed).toBeNull();
   expect(t.nextHoliday).toEqual({ date: '2026-10-20', name: 'Dussehra', days: 6 });
+  /* On the holiday itself the studio is closed, and the countdown moves on to the one after. */
+  const h = teamToday(scopeSnapshot(store, 'r', '2026-10-20T05:00:00.000Z'));
+  expect(h.closed).toBe('Dussehra');
+  expect(h.nextHoliday).toEqual({ date: '2026-11-09', name: 'Holiday', days: 20 });
+  /* The weekly off is closed too. */
+  expect(teamToday(scopeSnapshot(store, 'r', '2026-10-19T05:00:00.000Z')).closed).toBe('Weekly off');
   expect(JSON.stringify(t)).not.toContain('Wedding');
 });

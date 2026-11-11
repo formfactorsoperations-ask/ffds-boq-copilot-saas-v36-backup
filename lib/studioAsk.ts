@@ -66,7 +66,8 @@ export function studioRecord(i: StudioRecordInput): string {
     next: r.actions[0]?.title || null, idleDays: r.idle,
   }));
   const team = i.team ? {
-    working: Math.max(0, i.team.team - i.team.away.length), onTeam: i.team.team,
+    closedToday: i.team.closed || undefined,
+    working: i.team.closed ? 0 : Math.max(0, i.team.team - i.team.away.length), onTeam: i.team.team,
     onLeave: i.team.away.map((a) => a.name), fromHome: i.team.home.map((a) => a.name), askedOff: i.team.asked.map((a) => a.name),
     nextHoliday: i.team.nextHoliday ? `${i.team.nextHoliday.name}, ${i.team.nextHoliday.date}` : null,
   } : null;
