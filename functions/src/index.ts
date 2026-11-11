@@ -25,6 +25,7 @@ export { sendStudioEmail } from "./email";
 /* Optional Zoho Books add-in: drafts milestone invoices in the studio's own books; see zohoBooks.ts. */
 export { zohoBooks } from "./zohoBooks";
 export { onProjectWrittenDesignView, onDesignerAssignmentChange, rebuildDesignViews, onOpsAccessChange, opsCoverExpiry } from "./designView";
+export { sendFridayDigest } from "./fridayDigest";
 /* Design Review: the only writer of a drawing's review state; see drawingReview.ts. */
 export { drawingReview } from "./drawingReview";
 /* Design meetings: presenting approved rooms to the client; see designMeeting.ts. */

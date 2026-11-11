@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Inbox, Clock, IndianRupee, ListChecks, Flag, FileText, Phone, MessageCircle, Users, CalendarCheck, ClipboardCheck, FolderOpen, Star,
-  UserPlus, Target, CircleHelp, Check, CalendarClock, ChevronDown, AlertTriangle, BookOpen, X, } from '@/lib/lucide-shim';
+  UserPlus, Target, CircleHelp, Check, CalendarClock, ChevronDown, AlertTriangle, BookOpen, X,   Send,
+} from '@/lib/lucide-shim';
 import { Dot } from '../ui/HudBits';
 import { Glide, IconTile, DoneTick, listV, rowV } from '../people/PeopleBits';
 import { draftMessage, dayKey, addDays, type QueueItem, type QueueKind } from '../../lib/opsDesk';
@@ -36,13 +37,14 @@ export const KIND: Record<QueueKind, { icon: React.ComponentType<any>; label: st
   ask: { icon: Star, label: 'Client care' },
   lead: { icon: UserPlus, label: 'Leads' },
   lead_open: { icon: UserPlus, label: 'Lead to open' },
+  digest: { icon: Send, label: 'Friday update' },
 };
 const GROUP_TONE = { overdue: 'bad', today: 'warn', week: 'ok', later: 'ok' } as const;
 const GROUP_LABEL = { overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later' } as const;
 
 export const ACTION: Record<QueueKind, string> = {
   next: 'Done', payment: 'Remind', decision: 'Remind', mom_review: 'Review', escalation_open: 'Decide', escalation_decided: 'Open',
-  visit: 'Confirm', documents: 'Chase', checklist: 'Open', ask: 'Ask', lead: 'Call', lead_open: 'Open',
+  visit: 'Confirm', documents: 'Chase', checklist: 'Open', ask: 'Ask', lead: 'Call', lead_open: 'Open', digest: 'Open',
 };
 
 /** The message for a payment or decision, in the tone its reminders call for. Amounts only for roles that see money. */

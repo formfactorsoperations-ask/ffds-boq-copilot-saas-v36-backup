@@ -56,16 +56,16 @@ export const WORK_FILTERS: { id: WorkFilter; label: string }[] = [
 const WORK: Record<QueueKind, WorkFilter> = {
   next: 'calls', payment: 'calls', decision: 'calls', ask: 'calls', lead: 'calls', escalation_decided: 'calls',
   visit: 'meetings', mom_review: 'meetings',
-  documents: 'paperwork', checklist: 'paperwork', escalation_open: 'paperwork', lead_open: 'paperwork',
+  documents: 'paperwork', checklist: 'paperwork', escalation_open: 'paperwork', lead_open: 'paperwork', digest: 'paperwork',
 };
 export const matchesWork = (q: Pick<QueueItem, 'kind'>, f: WorkFilter) => f === 'all' || WORK[q.kind] === f;
 
 /* ── Playbooks: the "?" on every row ─────────────────────────────────────── */
 
-export type PlaybookKind = 'payment' | 'decision' | 'next' | 'lead' | 'minutes' | 'escalation' | 'visit' | 'documents' | 'ask';
+export type PlaybookKind = 'payment' | 'decision' | 'next' | 'lead' | 'minutes' | 'escalation' | 'visit' | 'documents' | 'ask' | 'digest';
 export const PLAYBOOK_OF: Record<QueueKind, PlaybookKind> = {
   payment: 'payment', decision: 'decision', next: 'next', lead: 'lead', lead_open: 'lead', mom_review: 'minutes',
-  escalation_open: 'escalation', escalation_decided: 'escalation', visit: 'visit', documents: 'documents', checklist: 'documents', ask: 'ask',
+  escalation_open: 'escalation', escalation_decided: 'escalation', visit: 'visit', documents: 'documents', checklist: 'documents', ask: 'ask', digest: 'digest',
 };
 
 export interface Playbook { title: string; steps: string[]; dont: string }
@@ -155,6 +155,16 @@ export const DEFAULT_PLAYBOOKS: Record<PlaybookKind, Playbook> = {
     ],
     dont: 'Do not ask while a payment is late or an escalation is open.',
   },
+  digest: {
+    title: 'The Friday update',
+    steps: [
+      'Open Friday digest: each client’s update is drafted from the week’s Weekly Pulse, site updates, approvals and decisions.',
+      'Read it as the client will. Cut anything unclear, add what only you know, and send it for approval.',
+      'A lead approves it, or sends it back with a note. Once approved, send it on WhatsApp or by email.',
+      'A quiet week can be skipped; say so to the client on the next call.',
+    ],
+    dont: 'Do not put amounts, rates or payment reminders in the update. Payments are chased on their own.',
+  },
 };
 
 /** The studio's playbook for a kind of work: what a lead wrote, else the desk's own. */
@@ -241,6 +251,12 @@ export function explain(q: QueueItem, x: { waiting?: WaitingItem | null; setting
         why: q.detail || 'Some of the checklist is still open.',
         todo: 'Ask for everything missing in one message, then tick each item as it arrives.',
         ifWaits: q.kind === 'documents' ? 'Work that needs the document, or the handover, waits for it.' : 'The stage cannot be marked complete until it is.',
+      };
+    case 'digest':
+      return {
+        why: q.detail || 'Each client hears from the studio once a week.',
+        todo: 'Open Friday digest, read the drafted update, and send it on (for approval, or to the client once approved).',
+        ifWaits: 'The week goes by without the client hearing how their home moved.',
       };
     case 'ask':
     default:

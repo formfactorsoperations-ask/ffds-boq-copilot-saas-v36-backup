@@ -299,7 +299,9 @@ export type QueueKind = 'next' | 'payment' | 'decision' | 'mom_review' | 'escala
   /* Client care (lib/clientCare.ts). */
   | 'visit' | 'documents' | 'checklist' | 'ask'
   /* Leads (lib/leads.ts): one to call or chase, and one a lead is asked to open as a project. */
-  | 'lead' | 'lead_open';
+  | 'lead' | 'lead_open'
+  /* The Friday digest (lib/fridayDigest.ts): one to write, approve or send. */
+  | 'digest';
 
 export interface QueueItem {
   id: string;
@@ -431,7 +433,7 @@ export function buildQueue(input: QueueInput): QueueItem[] {
   const order: Record<QueueGroup, number> = { overdue: 0, today: 1, week: 2, later: 3 };
   /* Within a day: what needs a decision, then money, then the rest. */
   const weight: Record<QueueKind, number> = {
-    escalation_open: 0, escalation_decided: 1, payment: 2, lead: 3, lead_open: 3, decision: 4, visit: 5, mom_review: 6, next: 7, documents: 8, checklist: 9, ask: 10,
+    escalation_open: 0, escalation_decided: 1, payment: 2, lead: 3, lead_open: 3, decision: 4, visit: 5, mom_review: 6, next: 7, documents: 8, checklist: 9, ask: 10, digest: 6,
   };
   return items.sort((a, b) => order[a.group] - order[b.group] || String(a.due || '').localeCompare(String(b.due || ''))
     || weight[a.kind] - weight[b.kind] || a.title.localeCompare(b.title));

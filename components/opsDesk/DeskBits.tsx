@@ -29,7 +29,7 @@ import type { TeamRow } from '../../lib/opsTeam';
 
 export type Section =
   | 'today' | 'leads' | 'pulse' | 'waiting' | 'payments' | 'visits' | 'minutes' | 'prep'
-  | 'log' | 'checklists' | 'escalations' | 'team' | 'ask' | 'guide' | 'approvals' | 'clients' | 'client' | 'access';
+  | 'log' | 'checklists' | 'escalations' | 'team' | 'ask' | 'guide' | 'approvals' | 'clients' | 'client' | 'access' | 'digest';
 
 /**
  * A client as the 2.1 screens show it (lib/opsDesk2): the project's health,

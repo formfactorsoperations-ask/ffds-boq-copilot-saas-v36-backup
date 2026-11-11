@@ -392,7 +392,13 @@ the brand, slate, and rose/amber/emerald for state. Light only: the owner chose 
   person to send; nothing reaches a client by itself. "Log a promise" pauses them until the date.
 - **Client moments** on My day: a handover a week away, a design just approved, a month and each
   year in their home, each with the message drafted. No birthdays are stored.
-- The Friday digest is on hold by the owner's choice.
+- **Friday digest** (owner's choices, 11 Nov 2026; `lib/fridayDigest.ts`, `FridayDigest.tsx`): one update a
+  week per client in design or on site, built on that week's Weekly Pulse, else drafted from the
+  records only (site updates, approvals, decisions, visits), with amounts masked and no payment
+  asks. The writer sends it for approval, a lead approves or sends it back with a note, and only
+  then does it go on WhatsApp (a person presses send) or by email (`sendFridayDigest`, which checks
+  the approval again). Its words are fixed once approved. The screen pairs a list of clients with a
+  WhatsApp-style preview beside the editable text.
 - Everything stops under `prefers-reduced-motion`.
 
 ### Notifications motion (approved 22 Oct 2026)

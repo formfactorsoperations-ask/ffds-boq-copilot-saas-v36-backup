@@ -3,7 +3,7 @@ import { useNoteArrivals } from '../notify/NotifyContext';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Inbox, Clock, IndianRupee, ListChecks, Flag, FileText, Plus, RefreshCw, Search, CalendarClock,
-  Activity, CalendarCheck, ClipboardCheck, UserPlus, GraduationCap, Eye, Layers, Sun, ShieldCheck,
+  Activity, CalendarCheck, ClipboardCheck, UserPlus, GraduationCap, Eye, Layers, Sun, ShieldCheck, Send,
 } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { FileCheck2 } from 'lucide-react';
@@ -51,6 +51,9 @@ import {
   WaitingScreen, PaymentsScreen, PulseScreen, LogScreen, EscalationsScreen, MinutesScreen, ApprovalsScreen, LeadsBand, CallingMode, VisitsBand, SimpleBand, Inner, PromiseSheet,
 } from './DeskScreens';
 import { WhoSeesWhat } from './WhoSeesWhat';
+import { FridayDigest } from './FridayDigest';
+import { digestWeekOf, digestQueue, type Digest } from '../../lib/fridayDigest';
+import { loadDigests } from '../../services/digestService';
 import { opsAccessOf, coversOf, type OpsAccess, type OpsCover } from '../../lib/opsAccess';
 import { saveOpsAccess, saveOpsCover } from '../../services/opsAccessService';
 import { DeskRail, SeeAs, useTiltCards, type DeskRailItem } from './Od2Bits';
@@ -267,14 +270,32 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
     prompts: pulseRows.find((r) => r.project.id === p.id)?.prompts || [],
   })), fu, isLead, now), [deskProjects, care, pulseRows, fu, isLead, now]);
 
+  /* The Friday digest (lib/fridayDigest): this week's update for each client, and what it asks of this person. */
+  const week = digestWeekOf(now);
+  const [digests, setDigests] = useState<Record<string, Digest>>({});
+  const digestIds = deskProjects.map((p) => p.id).join('|');
+  const [digestTick, setDigestTick] = useState(0);
+  useEffect(() => {
+    if (!tenantId || !digestIds) return;
+    let live = true;
+    loadDigests(digestIds.split('|'), week).then((m) => { if (live) setDigests(m); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [tenantId, digestIds, week, digestTick]);
+  const [digestFocus, setDigestFocus] = useState<string | null>(null);
+  const inWork = (p: DeskProjectFull) => { const ph = phaseOf({ ...(p.raw?.context || {}), status: p.status }, { now }); return ph.index >= 1 && !ph.complete; };
+  const digestItems = useMemo(() => digestQueue({
+    projects: deskProjects.map((p) => ({ id: p.id, name: p.name, inWork: inWork(p) })), digests, isLead,
+    canWrite: isLead || isCR || !['Viewer', 'Designer', 'Site Supervisor', 'Vendor'].includes(primaryRole(roles)), week, now,
+  }), [deskProjects, digests, isLead, isCR, week, now]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [bumped, setBumped] = useState<string[]>([]);
   const queue = useMemo(() => {
-    const all = buildQueue({ now, me: myEmail, isLead, followUps: fu, waiting, moms: mm, escalations: esc, extra: [...careItems, ...leadQueue(leads, myEmail, isLead, now)] });
+    const all = buildQueue({ now, me: myEmail, isLead, followUps: fu, waiting, moms: mm, escalations: esc, extra: [...careItems, ...leadQueue(leads, myEmail, isLead, now), ...digestItems] });
     const { shown } = withSnoozes(all, record?.snoozes, now);
     const order = { overdue: 0, today: 1, week: 2, later: 3 } as const;
     /* "Later today" sends a row to the end of its day; the order is otherwise the desk's. */
     return shown.map((q, i) => ({ q, i })).sort((a, b) => order[a.q.group] - order[b.q.group] || Number(bumped.includes(a.q.id)) - Number(bumped.includes(b.q.id)) || a.i - b.i).map((x) => x.q);
-  }, [now, myEmail, isLead, fu, waiting, mm, esc, careItems, leads, record?.snoozes, bumped]);
+  }, [now, myEmail, isLead, fu, waiting, mm, esc, careItems, leads, digestItems, record?.snoozes, bumped]);
   /* The projects' meetings and visits, and the meetings booked with leads (lib/leads leadMeeting). */
   const allVisits = useMemo(() => [
     ...Object.values(care).flatMap((c: ProjectCare) => c.visits),
@@ -338,6 +359,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
       setCareFocus({ projectId: q.projectId, kind: q.ref as ChecklistKind });
       return go('checklists');
     }
+    if (q.kind === 'digest') { setDigestFocus(q.ref || null); return go('digest'); }
     if (q.kind === 'ask') return setAskFor({ projectId: q.projectId, kind: q.ref as AskKind });
   };
 
@@ -426,6 +448,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
       { id: 'leads', label: 'Leads', icon: UserPlus, n: n.leads, alert: true },
       ...(sendsDrawingApprovals ? [{ id: 'approvals' as Section, label: 'Drawings for approval', icon: FileCheck2, n: n.approvals, alert: (approvalItems || []).some((i) => approvalStage({ approval: i.approval, confirmation: i.confirmation as any }) === 'overdue') }] : []),
       { id: 'payments', label: 'Payments', icon: IndianRupee, n: n.payments },
+      { id: 'digest', label: 'Friday digest', icon: Send, n: digestItems.length, alert: digestItems.some((x) => x.id.startsWith('dg:approve') || x.id.startsWith('dg:returned')) },
     ] },
     { label: 'Meetings', items: [
       { id: 'visits', label: 'Meetings & visits', icon: CalendarCheck, n: n.visits },
@@ -701,6 +724,11 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
                 <AskProjectPanel projects={deskProjects as DeskProject[]} rawProjects={scoped} waiting={waiting} tenantId={tenantId} initialQuestion={askQ} />
               </Inner>
             </>
+          )}
+
+          {section === 'digest' && (
+            <FridayDigest key={digestFocus || 'all'} week={week} digests={digests} focus={digestFocus}
+              onSaved={(dg) => { setDigests((m) => ({ ...m, [dg.projectId]: dg })); setDigestTick((t) => t + 1); }} />
           )}
 
           {section === 'access' && managesAccess && (
