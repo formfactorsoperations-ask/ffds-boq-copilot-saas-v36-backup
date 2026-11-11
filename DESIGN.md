@@ -351,6 +351,40 @@ of Client Relations people, not one (mockups OD1 to OD7 and L1 to L4, approved
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent
   colours, no half-pixel sizes.
 
+### Ops Desk 2.1 (approved 11 Nov 2026)
+
+The owner approved the Ops Desk 2.1 mockup ("Ops Desk 2.1.1") for the whole desk, for the Ops
+Director, Admins and Client Relations (the ops exec). It replaces the look above for the Ops Desk;
+the motion kit above still applies. Same font (never set; `kbd` takes `font-family: inherit`),
+the brand, slate, and rose/amber/emerald for state. Light only: the owner chose no dark mode.
+
+- Styles live in `components/opsDesk/od2Styles.ts`, added to the page on first import like
+  `peopleStyles.ts`. Every class is `od-` prefixed and sits under `.od2` (the desk) or `.od-ov`
+  (its overlays), so nothing leaks to other tabs. Pieces are in `Od2Bits.tsx`.
+- **Shell.** Under the shell's title row, a toolbar instead of the `StudioBar`: Ctrl K search,
+  Actual/Dummy for the leads, Refresh, and Log a follow-up. A white rail grouped Today, Clients,
+  Meetings, Records, Team (leads) and Help, with a sliding brand highlight and rose badges.
+- **Bands.** Each screen opens on a light band (brand glow on white), eyebrow, title, a line and
+  its buttons, with frosted stat tiles (`Tiles`) whose figures count up or fill a ring.
+- **My day.** A hero with the day ring, the greeting naming how many things make the day, health
+  counts and the streak of closed days (Client Relations); the client wall (a curved canvas
+  carousel that drifts, drags, steps and pauses); then a bento: Up next as a stack of cards with
+  what to say (D, S, F keys), focus mode full screen, today's meetings on one line with a red
+  "now", client pulse tiles, payments to chase, the leads at a glance, the day in order, and
+  Who's on what for the leads.
+- **Clients** (new): the wall or a grid, how they feel, handovers coming, what they owe. A
+  client opens a page (not a drawer): rings for progress, health and handover, the journey
+  Proposal, Design, Approvals, Execution, Handover, and tabs Story, Drawings, Decisions, Payments.
+- **Other screens** keep their workings and sheets: waiting cards with how long they waited,
+  payments by ageing with reminder pips and "Log a promise", pulse cards with every point, the
+  log as a river, escalation and minutes cards, the approval runway (fanned sheets, a five-day
+  countdown ring, the stamp), calling mode for hot leads, the week above Meetings & visits.
+- Statuses map onto the new screens in `lib/opsDesk2.ts` (tested); nothing new is stored.
+- Amounts appear only for roles that see money (`Amt`); everyone else sees "Hidden".
+- Not in 2.1 yet: Who sees what (switches for the Owner and Ops Director, coming next), client
+  moments, payment auto-chase and cover. The Friday digest is on hold by the owner's choice.
+- Everything stops under `prefers-reduced-motion`.
+
 ### Notifications motion (approved 22 Oct 2026)
 
 The owner chose four of the fifteen notification patterns in the round-two

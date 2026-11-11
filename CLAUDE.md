@@ -10,7 +10,7 @@ new work must look like part of the existing app, not a new design.
 - Use only the existing motion classes (`hud-panel-in`, `hud-swap`, `hud-row-in`, `hud-rail-active`,
   `phd-scrim`, `phd-pop`, `CountUp`).
   People (`components/people/`) and the Ops Desk (`components/opsDesk/`) also use the richer
-  motion kit the owner approved: see "People motion" and "Ops Desk motion" in DESIGN.md.
+  motion kit the owner approved: see "People motion", "Ops Desk motion" and "Ops Desk 2.1" in DESIGN.md.
   Same fonts and colours.
 - Do not use half-pixel font sizes, new accent colours or new fonts.
 - Before shipping a screen, compare a screenshot of it with Studio settings.

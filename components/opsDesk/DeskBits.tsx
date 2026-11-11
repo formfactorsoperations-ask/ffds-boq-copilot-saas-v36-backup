@@ -11,6 +11,10 @@ import type { VisitRequest } from '../../lib/clientCare';
 import type { ClientMoney } from '../../lib/clientMoney';
 import type { PulseRow } from './ClientCare';
 import type { LogPrefill, Person } from './OpsDeskPanels';
+import type { Health, Phase } from '../../lib/opsDesk2';
+import type { Pulse } from '../../lib/clientCare';
+import type { ApprovalItem } from '../../lib/designMeeting';
+import type { TeamRow } from '../../lib/opsTeam';
 
 /*
   The pieces every screen of the Ops Desk shares (DESIGN.md → "Ops Desk
@@ -24,7 +28,33 @@ import type { LogPrefill, Person } from './OpsDeskPanels';
 
 export type Section =
   | 'today' | 'leads' | 'pulse' | 'waiting' | 'payments' | 'visits' | 'minutes' | 'prep'
-  | 'log' | 'checklists' | 'escalations' | 'team' | 'ask' | 'guide' | 'approvals';
+  | 'log' | 'checklists' | 'escalations' | 'team' | 'ask' | 'guide' | 'approvals' | 'clients' | 'client';
+
+/**
+ * A client as the 2.1 screens show it (lib/opsDesk2): the project's health,
+ * where it stands from proposal to handover, how far along, and the next
+ * thing to do on it. Built from the records the desk already reads.
+ */
+export interface DeskClient {
+  id: string;
+  name: string;
+  client: string;
+  /** "3 BHK · Powai" */
+  line: string;
+  phone: string;
+  health: Health;
+  score: number;
+  pulse: Pulse;
+  phase: Phase;
+  progress: number;
+  handoverKey: string | null;
+  handoverDays: number | null;
+  /** The first thing on the desk for this client, or what the pulse says. */
+  next: string;
+  nextWhy: string;
+  /** Queue item behind `next`, when there is one. */
+  nextItem: QueueItem | null;
+}
 
 export interface DeskProjectFull {
   id: string;
@@ -56,6 +86,10 @@ export interface DeskActions {
   sendReminder: (w: WaitingItem, text: string) => Promise<void>;
   refresh: () => void;
   closeDay: () => void;
+  /** Ctrl K: find a client or a lead, or run a command. */
+  palette: () => void;
+  /** Up next, full screen, one at a time. */
+  focus: () => void;
 }
 
 export interface Desk {
@@ -87,6 +121,18 @@ export interface Desk {
   record: DeskRecord | null;
   /** Ids moved to the end of today with "Later today". */
   bumped: string[];
+  /** The 2.1 view of each client on the desk. */
+  clients: DeskClient[];
+  /** The days this person closed, newest first (for the streak). */
+  closedDays: string[];
+  /** Each project's decisions, as the desk read them. */
+  decisions: Record<string, any[]>;
+  /** Drawings waiting for, or given, the client's written approval; null while loading or not for this role. */
+  approvals: ApprovalItem[] | null;
+  /** The leads' view of the Client Relations team. */
+  teamRows: TeamRow[];
+  /** The client page being shown, when section is 'client'. */
+  clientId: string | null;
   act: DeskActions;
 }
 

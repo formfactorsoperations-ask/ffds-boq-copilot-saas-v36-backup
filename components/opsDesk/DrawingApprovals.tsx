@@ -23,7 +23,7 @@ import { Panel, Empty, Loading } from './DeskBits';
 */
 
 /** The item, in the shape the approval panel reads: only the agreed rooms and their sheets. */
-function asMeeting(i: ApprovalItem): DesignMeeting {
+export function asMeeting(i: ApprovalItem): DesignMeeting {
   const rooms = new Map<string, ApprovalItem['sheets']>();
   i.sheets.forEach((s) => rooms.set(s.room, [...(rooms.get(s.room) || []), s]));
   return {
@@ -44,7 +44,7 @@ const btnSec = 'inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border 
 
 /* ------------------------------------------------------------ presented outside the Studio Desk */
 
-function PresentedOutside({ orgId, projectId, projectName, onDone, onCancel }: { orgId: string; projectId: string; projectName: string; onDone: () => void; onCancel: () => void }) {
+export function PresentedOutside({ orgId, projectId, projectName, onDone, onCancel }: { orgId: string; projectId: string; projectName: string; onDone: () => void; onCancel: () => void }) {
   const toast = useToast();
   const [list, setList] = useState<{ drawingId: string; name: string; room: string; versionNo: number }[] | null>(null);
   const [err, setErr] = useState<string | null>(null);

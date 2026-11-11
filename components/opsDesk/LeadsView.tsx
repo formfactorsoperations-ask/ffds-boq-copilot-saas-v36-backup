@@ -47,7 +47,7 @@ const STAGE_ICON: Record<LeadStage, React.ComponentType<any>> = {
 
 /* ── L1: the board ───────────────────────────────────────────────────────── */
 
-export function LeadsBoard({ opener, onOpen, onAdd, onPaste, onMoved, onConvert }: { opener: string; onOpen: (id: string) => void; onAdd: () => void; onPaste: () => void; onMoved: (l: Lead) => void; onConvert: (l: Lead) => void }) {
+export function LeadsBoard({ opener, onOpen, onAdd, onPaste, onMoved, onConvert, hideHead }: { opener: string; onOpen: (id: string) => void; onAdd: () => void; onPaste: () => void; onMoved: (l: Lead) => void; onConvert: (l: Lead) => void; /** The 2.1 band above carries the title, figures and buttons. */ hideHead?: boolean }) {
   const d = useDesk();
   /*
     Drag a card to another stage (with a mouse, trackpad or pen; on a phone,
@@ -102,7 +102,7 @@ export function LeadsBoard({ opener, onOpen, onAdd, onPaste, onMoved, onConvert 
 
   return (
     <div className="flex flex-col gap-5">
-      <Panel icon={UserPlus} title="Leads" blurb="Every enquiry from its first message to a signed project. Add one in under a minute; the desk tells you who to call first."
+      {!hideHead && <Panel icon={UserPlus} title="Leads" blurb="Every enquiry from its first message to a signed project. Add one in under a minute; the desk tells you who to call first."
         right={
           <div className="hidden md:grid grid-cols-4 gap-2">
             {([['New', stats.added], ['Meetings', stats.meetings], ['Won', stats.won], ['Avg first call', stats.avgFirstCallMin]] as [string, number | null][]).map(([k, v]) => (
@@ -120,7 +120,7 @@ export function LeadsBoard({ opener, onOpen, onAdd, onPaste, onMoved, onConvert 
           {d.canWrite && <button type="button" className={btnSec} onClick={onPaste}><MessageCircle className="w-4 h-4" />From a WhatsApp chat</button>}
           {toCall > 0 && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 ml-1"><Dot tone="warn" live />{toCall} to call now</span>}
         </div>
-      </Panel>
+      </Panel>}
 
       <AnimatePresence>{moved && <Notice text={moved.text} tone={moved.tone} onClose={() => setMoved(null)} />}</AnimatePresence>
       <div className="flex flex-wrap items-center gap-3">
