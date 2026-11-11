@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { projectNameOf } from '../../lib/drawingReview';
 import '../projectHeader/projectHeader.css';
 import { Mic, Square, Upload, Check, Copy, Search, Sparkles, NotebookPen, CalendarClock } from '@/lib/lucide-shim';
 import { dayKey, inr, type Escalation, type FollowUp, type WaitingItem } from '../../lib/opsDesk';
@@ -51,7 +52,7 @@ function useBrief(tenantId: string, raw: any | null, waiting: WaitingItem[]) {
     if (!id || !tenantId) { setBrief(null); return; }
     let live = true;
     setLoading(true);
-    const name = String(raw?.context?.name || 'Project');
+    const name = projectNameOf(raw) || 'Project';
     loadProjectOps(tenantId, { id, name })
       .then((ops) => {
         if (!live) return;

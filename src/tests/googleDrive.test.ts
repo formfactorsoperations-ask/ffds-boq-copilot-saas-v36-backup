@@ -27,3 +27,15 @@ describe('Google Drive names and links', () => {
     expect(callbackUrl('gen-lang-client-0431334259')).toBe('https://us-central1-gen-lang-client-0431334259.cloudfunctions.net/driveOAuthCallback');
   });
 });
+
+describe('the project\'s name, wherever it was saved', () => {
+  it('reads context.name, then the project\'s own name, then context.projectName', async () => {
+    const { projectNameOf } = await import('../../lib/drawingReview');
+    expect(projectNameOf({ context: { name: 'Harmony 704' }, name: 'Old' })).toBe('Harmony 704');
+    /* The case that named a Drive folder "Project": the name lives on the project itself. */
+    expect(projectNameOf({ name: 'Test Project for T&C', context: { clientName: 'Test Client' } })).toBe('Test Project for T&C');
+    expect(projectNameOf({ context: { name: '  ', projectName: 'Lakeview 1102' } })).toBe('Lakeview 1102');
+    expect(projectNameOf({ context: { clientName: 'Only a client' } })).toBeNull();
+    expect(projectNameOf(undefined)).toBeNull();
+  });
+});

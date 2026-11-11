@@ -9,7 +9,7 @@ import {
   DRIVE_SCOPE, ROOT_FOLDER, FOLDER_MIME, DRIVE_ADMIN_ROLES, callbackUrl, folderLink, projectFolderName, drawingFileName,
   type DriveStatus,
 } from "../../lib/googleDrive";
-import { safeId } from "../../lib/drawingReview";
+import { safeId, projectNameOf } from "../../lib/drawingReview";
 
 /*
   GOOGLE DRIVE, ON THE SERVER (lib/googleDrive says what and why).
@@ -106,9 +106,16 @@ async function projectFolder(tenantId: string, token: string, projectId: string)
     root = await makeFolder(token, ROOT_FOLDER, null);
     await conn(tenantId).set({ rootFolderId: root }, { merge: true });
   }
+  const name = projectFolderName(projectNameOf((await db().doc(`projects/${projectId}`).get()).data()));
   const known = data.projects?.[projectId];
-  if (known?.folderId && (await stillThere(token, known.folderId))) return { id: known.folderId, link: known.link || folderLink(known.folderId) };
-  const name = projectFolderName((await db().doc(`projects/${projectId}`).get()).data()?.context?.name);
+  if (known?.folderId && (await stillThere(token, known.folderId))) {
+    /* Named before the project's name was read right (or the project was renamed): the folder follows. */
+    if (known.name !== name) {
+      await drive(token, `files/${encodeURIComponent(known.folderId)}`, { method: "PATCH", body: JSON.stringify({ name }) });
+      await conn(tenantId).set({ projects: { [projectId]: { name } } }, { merge: true });
+    }
+    return { id: known.folderId, link: known.link || folderLink(known.folderId) };
+  }
   const id = await makeFolder(token, name, root);
   await drive(token, `files/${encodeURIComponent(id)}/permissions?sendNotificationEmail=false`, { method: "POST", body: JSON.stringify({ type: "anyone", role: "reader" }) });
   const link = folderLink(id);
@@ -138,9 +145,62 @@ function statusOf(data: any): DriveStatus {
   };
 }
 
+/*
+  One approved client drawing into its project's folder, landscape, once per
+  version: a record under driveConnections/{tenant}/files claims it first, so
+  the approval trigger and the catch-up below never both copy it. Returns
+  whether it was copied now. A failure is recorded (and shown in Studio
+  settings), and a later run tries again.
+*/
+async function copyDrawing(orgId: string, token: string, projectId: string, drawingId: string, d: any): Promise<boolean> {
+  const review = d?.review;
+  if (!review || review.state !== "APPROVED" || !review.pdfPath || !review.versionId) return false;
+  if ((review.audience || "client") !== "client") return false;
+  const record = conn(orgId).collection("files").doc(`${projectId}_${drawingId}_${review.versionId}`.slice(0, 400));
+  const claimed = await db().runTransaction(async (tx) => {
+    const r = await tx.get(record);
+    if (r.exists && r.data()?.status !== "failed") return false;
+    tx.set(record, { status: "copying", projectId, drawingId, versionNo: review.versionNo, at: Date.now() });
+    return true;
+  });
+  if (!claimed) return false;
+  try {
+    const [bytes] = await admin.storage().bucket().file(review.pdfPath).download();
+    const { bytes: landscape } = await landscapePdf(new Uint8Array(bytes));
+    const folder = await projectFolder(orgId, token, projectId);
+    const file = await uploadPdf(token, folder.id, drawingFileName(d.roomName, String(d.name || "Drawing"), review.versionNo), landscape);
+    await record.set({ status: "copied", fileId: file.id, link: file.link, folderLink: folder.link, at: Date.now() }, { merge: true });
+    logger.info("Approved drawing copied to Drive", { orgId, projectId, drawingId, versionNo: review.versionNo });
+    return true;
+  } catch (e: any) {
+    logger.error("Copy to Drive failed", { orgId, projectId, drawingId, message: e?.message });
+    await record.set({ status: "failed", error: String(e?.message || "").slice(0, 300) }, { merge: true });
+    await conn(orgId).set({ lastError: { at: Date.now(), message: `${String(d?.name || "A drawing")}: ${String(e?.message || "could not be copied").slice(0, 240)}` } }, { merge: true });
+    return false;
+  }
+}
+
+/*
+  The catch-up: every client drawing of the project that is approved now but
+  not in its folder yet (approved before Drive was connected, or a copy that
+  failed). Run when the folder's link is asked for, so the folder the client
+  is sent to has the drawings in it. Bounded, so the call stays quick; the
+  rest follow on the next ask.
+*/
+const CATCH_UP_MAX = 12;
+async function catchUp(orgId: string, token: string, projectId: string): Promise<number> {
+  const approved = await db().collection(`organizations/${orgId}/projects/${projectId}/drawingTracker`).where("review.state", "==", "APPROVED").get();
+  let copied = 0;
+  for (const doc of approved.docs) {
+    if (copied >= CATCH_UP_MAX) break;
+    if (await copyDrawing(orgId, token, projectId, doc.id, doc.data())) copied++;
+  }
+  return copied;
+}
+
 /* ---------------------------------------------------------------- the callable */
 
-export const googleDrive = onCall({ cors: true, secrets: SECRETS, timeoutSeconds: 60 }, async (request) => {
+export const googleDrive = onCall({ cors: true, secrets: SECRETS, timeoutSeconds: 300, memory: "1GiB" }, async (request) => {
   const staff = await requireStaff(request);
   const input: any = request.data || {};
   const tenantId = staff.platformOwner ? String(input.tenantId || "") : String(staff.tenantId || "");
@@ -184,7 +244,9 @@ export const googleDrive = onCall({ cors: true, secrets: SECRETS, timeoutSeconds
       if (!p || (p.tenantId ?? null) !== tenantId) throw new HttpsError("not-found", "That project could not be found.");
       const token = await accessToken(tenantId);
       if (!token) return { link: null };
-      return { link: (await projectFolder(tenantId, token, projectId)).link };
+      const folder = await projectFolder(tenantId, token, projectId);
+      const copied = await catchUp(tenantId, token, projectId);
+      return { link: folder.link, copied };
     }
 
     default:
@@ -251,30 +313,8 @@ export const onDrawingApprovedToDrive = onDocumentWritten(
     if (before?.state === "APPROVED" && before?.versionId === after.versionId) return;
     if ((after.audience || "client") !== "client") return;
     if (!(await conn(orgId).get()).data()?.refreshToken) return;
-
-    const record = conn(orgId).collection("files").doc(`${projectId}_${drawingId}_${after.versionId}`.slice(0, 400));
-    const claimed = await db().runTransaction(async (tx) => {
-      const r = await tx.get(record);
-      if (r.exists && r.data()?.status !== "failed") return false;
-      tx.set(record, { status: "copying", projectId, drawingId, versionNo: after.versionNo, at: Date.now() });
-      return true;
-    });
-    if (!claimed) return;
-
-    try {
-      const token = await accessToken(orgId);
-      if (!token) { await record.delete(); return; }
-      const d = event.data!.after!.data() || {};
-      const [bytes] = await admin.storage().bucket().file(after.pdfPath).download();
-      const { bytes: landscape } = await landscapePdf(new Uint8Array(bytes));
-      const folder = await projectFolder(orgId, token, projectId);
-      const file = await uploadPdf(token, folder.id, drawingFileName(d.roomName, String(d.name || "Drawing"), after.versionNo), landscape);
-      await record.set({ status: "copied", fileId: file.id, link: file.link, folderLink: folder.link, at: Date.now() }, { merge: true });
-      logger.info("Approved drawing copied to Drive", { orgId, projectId, drawingId, versionNo: after.versionNo });
-    } catch (e: any) {
-      logger.error("Copy to Drive failed", { orgId, projectId, drawingId, message: e?.message });
-      await record.set({ status: "failed", error: String(e?.message || "").slice(0, 300) }, { merge: true });
-      await conn(orgId).set({ lastError: { at: Date.now(), message: `${String(event.data?.after?.data()?.name || "A drawing")}: ${String(e?.message || "could not be copied").slice(0, 240)}` } }, { merge: true });
-    }
+    const token = await accessToken(orgId).catch(() => null);
+    if (!token) return;
+    await copyDrawing(orgId, token, projectId, drawingId, event.data!.after!.data());
   },
 );

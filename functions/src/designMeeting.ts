@@ -5,7 +5,7 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { resolveActor, person, type Actor } from "./drawingReview";
 import {
-  canRunMeeting, canPresentAssigned, canSetAudience, cleanText, storeShape, safeId, trackerPatch, clientPending, reclaimPatch,
+  canRunMeeting, canPresentAssigned, canSetAudience, cleanText, storeShape, safeId, trackerPatch, clientPending, reclaimPatch, projectNameOf,
   type ReviewSummary, type ReviewMark, type ReviewEvent,
 } from "../../lib/drawingReview";
 import {
@@ -534,7 +534,7 @@ async function sendApproval(actor: Actor, orgId: string, projectId: string, inpu
   const now = Date.now();
   const dueAt = addWorkingDays(now, APPROVAL_WORKING_DAYS);
   const sheets = approvalSheets(m0);
-  const standard = approvalEmail({ kind: "request", clientName, projectName: m0.projectName || actor.projectName || "your project", sheets, driveLink, dueAt, senderName: actor.name, studioName: contact.studioName });
+  const standard = approvalEmail({ kind: "request", clientName, projectName: actor.projectName || m0.projectName || "your project", sheets, driveLink, dueAt, senderName: actor.name, studioName: contact.studioName });
   /* The sender may have edited the wording: their subject and text, made safe (lib/designMeeting textEmailHtml). */
   const subject = input.subject !== undefined ? cleanEmailSubject(input.subject) : standard.subject;
   const body = input.body !== undefined ? cleanEmailText(input.body) : null;
@@ -610,7 +610,7 @@ async function approvals(actor: Actor, orgId: string, projectId: string): Promis
     .sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0))
     .slice(0, 20)
     .map((m) => ({
-      meetingId: m.id, projectId, projectName: m.projectName || actor.projectName || "Project", closedAt: m.closedAt || m.startedAt,
+      meetingId: m.id, projectId, projectName: actor.projectName || m.projectName || "Project", closedAt: m.closedAt || m.startedAt,
       presentedBy: m.startedBy?.name || "", sheets: approvalSheets(m), approval: m.approval || null,
       confirmation: m.confirmation?.at ? { via: m.confirmation.via, name: m.confirmation.name, at: m.confirmation.at } : null,
       contact: { name: contact.clientName, email: contact.clientEmails.join(", "), studio: contact.studioName },
@@ -689,7 +689,8 @@ export const designApprovalReminders = onSchedule(
         });
         if (!claimed) continue;
         const mail = approvalEmail({
-          kind: "reminder", reminder: which, clientName: a.clientName || "there", projectName: m.projectName || "your project",
+          kind: "reminder", reminder: which, clientName: a.clientName || "there",
+          projectName: (m.projectId ? projectNameOf((await db().doc(`projects/${m.projectId}`).get()).data()) : null) || m.projectName || "your project",
           sheets: approvalSheets(m), driveLink: a.driveLink, dueAt: a.dueAt!, senderName: a.sentBy?.name || "", studioName: a.studioName || "",
         });
         await sendMail({ to: a.sentTo, cc: a.cc || [], replyTo: a.sentBy?.email || null, subject: mail.subject, html: mail.html, text: mail.text, fromName: a.sentBy?.name || null });

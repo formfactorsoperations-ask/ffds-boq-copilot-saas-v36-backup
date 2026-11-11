@@ -7,7 +7,7 @@ import { isTeamViewMember } from "./teamView";
 import { createHash } from "crypto";
 import { PLATFORM_OWNER_EMAILS } from "./guards";
 import {
-  allowed, refusal, canReview, canUpload, canSetAudience, cleanShape, cleanText, guessAudience, storeShape, clientPending, trackerPatch,
+  allowed, refusal, canReview, canUpload, canSetAudience, cleanShape, cleanText, guessAudience, storeShape, clientPending, trackerPatch, projectNameOf,
   uploadPrefix, versionsPrefix, safeId, MAX_PDF_BYTES, MAX_THUMB_BYTES,
   type ReviewSummary, type ReviewPerson, type ReviewVersion, type ReviewRound, type ReviewMark, type ReviewEvent,
 } from "../../lib/drawingReview";
@@ -54,7 +54,7 @@ export async function resolveActor(request: any, orgId: string, projectId: strin
   const projectTenant = projectSnap.exists ? (projectSnap.data()?.tenantId ?? null) : null;
   const projectInOrg = projectSnap.exists && (projectTenant === orgId || (projectTenant == null && orgId === "demo-tenant-01"));
   if (!projectInOrg) throw new HttpsError("not-found", "That project could not be found.");
-  const projectName = String(projectSnap.data()?.context?.name || "").slice(0, 120) || null;
+  const projectName = projectNameOf(projectSnap.data());
 
   if (token.email_verified === true && PLATFORM_OWNER_EMAILS.includes(email)) {
     return { uid, email, name: String(token.name || email), role: "Super Admin", roles: ["Super Admin"], platformOwner: true, projectName };

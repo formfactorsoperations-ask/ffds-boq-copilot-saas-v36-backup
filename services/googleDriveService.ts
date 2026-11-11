@@ -14,7 +14,7 @@ export const NOT_DEPLOYED = 'not-deployed';
 async function driveCall<T>(action: string, payload: Record<string, unknown> = {}, tenantId?: string): Promise<T> {
   if (!functions) throw new Error('No server is configured.');
   try {
-    const res: any = await httpsCallable(functions, 'googleDrive', { timeout: 60000 })({ action, tenantId, ...payload });
+    const res: any = await httpsCallable(functions, 'googleDrive', { timeout: 300000 })({ action, tenantId, ...payload });
     return res.data as T;
   } catch (e: any) {
     const code = String(e?.code || '');

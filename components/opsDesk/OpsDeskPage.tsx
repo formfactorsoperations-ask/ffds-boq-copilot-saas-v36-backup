@@ -10,6 +10,7 @@ import { FileCheck2 } from 'lucide-react';
 import DrawingApprovals from './DrawingApprovals';
 import { listApprovals } from '../../services/designMeetingService';
 import { approvalStage, sendsApprovals, type ApprovalItem } from '../../lib/designMeeting';
+import { projectNameOf } from '../../lib/drawingReview';
 import { hasRole, primaryRole, memberRoles } from '../../lib/roles';
 import { seesStudioFinance, assignedDesignersFor } from '../../lib/roleAccess';
 import { clientMoneyOf, withoutAmounts, type ClientMoney } from '../../lib/clientMoney';
@@ -118,7 +119,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
     const money = ((p as any).clientMoney !== undefined ? (p as any).clientMoney : clientMoneyOf(p)) as ClientMoney | null;
     return {
       id: String(p.id),
-      name: String(p.context?.name || 'Project'),
+      name: projectNameOf(p) || 'Project',
       clientName: String(p.context?.clientName || p.context?.client?.name || ''),
       clientEmail: clientContactOf(p.context).emails[0] || '',
       status: String(p.context?.status || ''),

@@ -423,6 +423,17 @@ export function reclaimPatch(
   };
 }
 
+/**
+ * A project's name, wherever it was saved: projects made in the setup wizard
+ * keep it in `context.name`, older and imported ones on the project itself.
+ * The same order the Design Desk uses, so every screen, email and Drive
+ * folder names the project the same way. Null when it has none.
+ */
+export function projectNameOf(p: any): string | null {
+  const name = [p?.context?.name, p?.name, p?.context?.projectName].map((v) => String(v ?? '').trim()).find(Boolean);
+  return name ? name.slice(0, 120) : null;
+}
+
 /* ------------------------------------------------------------- validation */
 
 const clamp01 = (n: unknown) => typeof n === 'number' && Number.isFinite(n) && n >= -0.05 && n <= 1.05;
