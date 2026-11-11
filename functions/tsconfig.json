@@ -8,7 +8,13 @@
     "sourceMap": true,
     "strict": false,
     "target": "es2017",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "pdf-lib": [
+        "node_modules/pdf-lib"
+      ]
+    }
   },
   "compileOnSave": true,
   "include": [
