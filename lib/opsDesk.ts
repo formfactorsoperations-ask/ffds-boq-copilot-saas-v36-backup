@@ -321,6 +321,20 @@ const groupFor = (due: string, today: string): QueueGroup =>
 /** How long a chased item rests before it comes back onto the desk. */
 export const CHASE_REST_DAYS = 3;
 
+/*
+  A late payment is reminded on days 1, 7 and 14 after it fell due (Ops Desk
+  2.1). The desk drafts each reminder and puts it on the owner's Today list;
+  a person checks it and sends it. Nothing goes to the client by itself.
+  After the third, it comes back every few days as before, until it is paid
+  or a lead decides on the escalation.
+*/
+export const CHASE_DAYS = [1, 7, 14] as const;
+/** The reminder due now for a payment this many days late with this many sent, or null when the next one's day has not come. */
+export function chaseStep(overdueDays: number, reminders: number): { n: number } | null {
+  const reached = CHASE_DAYS.filter((d) => overdueDays >= d).length;
+  return reached > reminders && reminders < CHASE_DAYS.length ? { n: reminders + 1 } : null;
+}
+
 export interface QueueInput {
   now: number;
   me: string;
@@ -359,11 +373,24 @@ export function buildQueue(input: QueueInput): QueueItem[] {
     if (rested) continue;
     if (w.kind === 'payment') {
       if (!w.overdueDays) continue;
-      items.push({
-        id: `pay:${w.projectId}:${w.key}`, group: 'overdue', kind: 'payment', projectId: w.projectId, projectName: w.projectName,
-        title: `Chase payment: ${w.label}`, detail: `${w.overdueDays} day${w.overdueDays === 1 ? '' : 's'} late${w.reminders ? ` · ${w.reminders} reminder${w.reminders === 1 ? '' : 's'} so far` : ' · not chased yet'}`,
-        due: w.dueKey || null, ref: w.key,
-      });
+      /* A date the client promised and that has not passed: the promise's own next step brings it back on the day. */
+      const promised = input.followUps.some((f) => f.projectId === w.projectId && f.subject?.key === w.key && f.outcome === 'promised' && f.next && !f.nextDone && f.next.due >= today);
+      if (promised) continue;
+      const step = chaseStep(w.overdueDays, w.reminders);
+      /* Between the reminder days, it waits for the next one. */
+      if (!step && w.reminders < CHASE_DAYS.length) continue;
+      const late = `${w.overdueDays} day${w.overdueDays === 1 ? '' : 's'} late`;
+      items.push(step
+        ? {
+          id: `pay:${w.projectId}:${w.key}`, group: w.overdueDays > CHASE_DAYS[step.n - 1] ? 'overdue' : 'today', kind: 'payment', projectId: w.projectId, projectName: w.projectName,
+          title: `Reminder ${step.n} of ${CHASE_DAYS.length}: ${w.label}`, detail: `${late} · the message is drafted; check it and send`,
+          due: w.dueKey || null, ref: w.key,
+        }
+        : {
+          id: `pay:${w.projectId}:${w.key}`, group: 'overdue', kind: 'payment', projectId: w.projectId, projectName: w.projectName,
+          title: `Chase payment: ${w.label}`, detail: `${late}${w.reminders ? ` · ${w.reminders} reminder${w.reminders === 1 ? '' : 's'} so far` : ' · not chased yet'}`,
+          due: w.dueKey || null, ref: w.key,
+        });
     } else if (w.days >= CHASE_REST_DAYS) {
       items.push({
         id: `dec:${w.projectId}:${w.key}`, group: 'today', kind: 'decision', projectId: w.projectId, projectName: w.projectName,

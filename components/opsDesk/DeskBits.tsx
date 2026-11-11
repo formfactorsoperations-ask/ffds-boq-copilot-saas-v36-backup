@@ -11,7 +11,8 @@ import type { VisitRequest } from '../../lib/clientCare';
 import type { ClientMoney } from '../../lib/clientMoney';
 import type { PulseRow } from './ClientCare';
 import type { LogPrefill, Person } from './OpsDeskPanels';
-import type { Health, Phase } from '../../lib/opsDesk2';
+import type { Health, Phase, Moment } from '../../lib/opsDesk2';
+import type { OpsAccess } from '../../lib/opsAccess';
 import type { Pulse } from '../../lib/clientCare';
 import type { ApprovalItem } from '../../lib/designMeeting';
 import type { TeamRow } from '../../lib/opsTeam';
@@ -28,7 +29,7 @@ import type { TeamRow } from '../../lib/opsTeam';
 
 export type Section =
   | 'today' | 'leads' | 'pulse' | 'waiting' | 'payments' | 'visits' | 'minutes' | 'prep'
-  | 'log' | 'checklists' | 'escalations' | 'team' | 'ask' | 'guide' | 'approvals' | 'clients' | 'client';
+  | 'log' | 'checklists' | 'escalations' | 'team' | 'ask' | 'guide' | 'approvals' | 'clients' | 'client' | 'access';
 
 /**
  * A client as the 2.1 screens show it (lib/opsDesk2): the project's health,
@@ -90,6 +91,12 @@ export interface DeskActions {
   palette: () => void;
   /** Up next, full screen, one at a time. */
   focus: () => void;
+  /** A client moment: WhatsApp opens with the message, it is logged, and it stays away until its window closes. */
+  sendMoment: (m: Moment) => Promise<void>;
+  /** A client moment marked done without sending. */
+  doneMoment: (m: Moment) => void;
+  /** The date a client promised to pay: logged, and it comes back on that day if still unpaid. */
+  promise: (w: WaitingItem) => void;
 }
 
 export interface Desk {
@@ -133,6 +140,10 @@ export interface Desk {
   teamRows: TeamRow[];
   /** The client page being shown, when section is 'client'. */
   clientId: string | null;
+  /** Small touches the desk spotted, with the message drafted (lib/opsDesk2 clientMoments). */
+  moments: Moment[];
+  /** The studio's "Who sees what" switches (lib/opsAccess). */
+  access: OpsAccess;
   act: DeskActions;
 }
 

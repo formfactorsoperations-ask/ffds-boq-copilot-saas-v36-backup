@@ -10,6 +10,8 @@ import { approvalStage, sheetLine, type ApprovalItem, type ApprovalStage } from 
 import { leadName, homeLine, mainPerson, isOpen as leadIsOpen, leadStats, sourceLabel, type Lead } from '../../lib/leads';
 import { leadHeat, templateText } from '../../lib/leadSmart';
 import { saveLead, withTouch } from '../../services/leadsService';
+import { logFollowUp } from '../../services/opsDeskService';
+import '../projectHeader/projectHeader.css';
 import { clock12 } from '../../lib/peopleDesk';
 import { payAgeing, payState, byLateness, runwayOf, APPROVAL_LABEL, HEALTH_LABEL } from '../../lib/opsDesk2';
 import type { AskKind, VisitRequest } from '../../lib/clientCare';
@@ -150,6 +152,11 @@ export function PaymentsScreen() {
       {toggle}
       {view === 'chase' ? (
         <div className="od-paylist">
+          <section className="od-card flex items-start gap-3">
+            <span className="od-tile"><Clock /></span>
+            <div className="min-w-0"><b className="text-sm block">Reminders on days 1, 7 and 14</b>
+              <small className="text-xs text-slate-500">On each of those days after a payment falls due, the reminder is written for you and put at the top of Today. You check it and send it; nothing goes to the client by itself. A promised date pauses them, and a missed one brings it back that day. They stop the moment it is paid.</small></div>
+          </section>
           {!items.length ? <div className="od-lockbox"><Check /><b>Nothing to chase</b><span>No invoiced payment is unpaid.</span></div> : items.map((w, i) => {
             const s = payState(w, d.now);
             const c = d.clients.find((x) => x.id === w.projectId);
@@ -165,7 +172,7 @@ export function PaymentsScreen() {
                 {d.canWrite && (
                   <div className="od-acts !mt-0">
                     <button type="button" className="od-btn sm pri" onClick={() => d.act.sendReminder(w, reminderText(d, w))}><MessageCircle />Remind</button>
-                    <button type="button" className="od-btn sm" onClick={() => d.act.log({ projectId: w.projectId, subjectKey: w.key, outcome: 'promised' })}><Calendar />Log a promise</button>
+                    <button type="button" className="od-btn sm" onClick={() => d.act.promise(w)}><Calendar />Log a promise</button>
                     <button type="button" className="od-btn sm" onClick={() => d.act.log({ projectId: w.projectId, subjectKey: w.key, outcome: 'replied' })}><Check />They paid</button>
                   </div>
                 )}
@@ -635,3 +642,55 @@ export function SimpleBand({ eyebrow, title, sub, right, tiles }: { eyebrow: str
 export const Inner: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
   <section className={`od-card od-inner od-rise ${className}`} style={{ ['--d' as any]: 2 }}>{children}</section>
 );
+
+/* ── A promise to pay: the date, and it comes back that day if still unpaid ── */
+
+export function PromiseSheet({ w, onClose, onSaved }: { w: WaitingItem; onClose: () => void; onSaved: () => void }) {
+  const d = useDesk();
+  const today = dayKey(d.now);
+  const dow = new Date(`${today}T12:00:00+05:30`).getUTCDay();
+  const nextOf = (target: number) => addDays(today, ((target - dow + 7) % 7) || 7);
+  const end = (() => { const [y, m] = today.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); })();
+  const picks: [string, string][] = [[nextOf(5), 'Friday'], [nextOf(1), 'Monday'], [addDays(today, 7), 'In a week'], [end > today ? end : addDays(today, 30), 'End of month']];
+  const [day, setDay] = useState(picks[0][0]);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const save = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await logFollowUp({
+        tenantId: d.tenantId, projectId: w.projectId, projectName: w.projectName, me: d.me, channel: 'call', outcome: 'promised',
+        note: note.trim() || `Promised to pay by ${fmtDay(day)}.`, subject: { kind: 'payment', key: w.key, label: w.label },
+        next: { text: `Check ${w.label} is paid (promised ${fmtDay(day)})`, ownerEmail: d.me.email, ownerName: d.me.name, due: day },
+      });
+      onSaved();
+    } catch (e: any) {
+      setErr(e?.code === 'permission-denied' ? 'You cannot log on this project. Ask a lead to assign it to you.' : 'That was not saved. Try again.');
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Promise to pay">
+      <div className="absolute inset-0 phd-scrim bg-[#12182F]/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative phd-pop w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
+        <div className="px-5 pt-5 pb-3">
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">Promise to pay · {w.projectName}</p>
+          <h3 className="font-bold text-slate-800 mt-1">When did they say?</h3>
+          <p className="text-xs text-slate-500 mt-0.5">{w.label}. Reminders pause until then. If the day passes unpaid, it comes back to the top of your Today list.</p>
+        </div>
+        <div className="px-5 pb-4 flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">{picks.map(([k, l]) => <button key={l} type="button" className={`od-btn sm ${day === k ? 'pri' : ''}`} onClick={() => setDay(k)}>{l} · {fmtDay(k)}</button>)}</div>
+          <label className="flex flex-col gap-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Or a date</span>
+            <input type="date" className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm" min={today} value={day} onChange={(e) => e.target.value && setDay(e.target.value)} /></label>
+          <label className="flex flex-col gap-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">What they said (optional)</span>
+            <input className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm" maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Transfer on Friday after the salary comes in" /></label>
+          {err && <p className="text-xs text-rose-700">{err}</p>}
+        </div>
+        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+          <button type="button" className="od-btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="od-btn pri" disabled={busy || !day} onClick={save}>{busy ? <Loader2 className="animate-spin" /> : <Calendar />}Log the promise</button>
+        </div>
+      </div>
+    </div>
+  );
+}

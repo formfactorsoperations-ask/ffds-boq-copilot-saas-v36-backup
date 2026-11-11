@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ChevronLeft, Phone, MessageCircle, Mail, CalendarCheck, Plus, FolderOpen, Clock, Wallet, Activity, Layers, Key, LayoutGrid, FileCheck2, Check,
-  Flag, FileText, ListChecks, Target, Users, IndianRupee, ArrowRight, Pen,
+  Flag, FileText, ListChecks, Target, Users, IndianRupee, ArrowRight, Pen, Hammer, Trophy, EyeOff, ExternalLink, Image as ImageIcon, ShieldCheck,
 } from '@/lib/lucide-shim';
 import { CountUp } from '../ui/HudBits';
 import { dayKey, daysBetween, decisionKey, paymentKey } from '../../lib/opsDesk';
@@ -15,6 +15,8 @@ import { useDesk, fmtDay, fmtWhen, dialable, waLink, type DeskClient } from './D
 import { ClientWall } from './ClientWall';
 import { wallItem, briefOf } from './MyDay';
 import { reminderText } from './TodayView';
+import { maskAmounts, acceptedProposalOf, ACCESS_META, type OpsAccessKey } from '../../lib/opsAccess';
+import { projectDriveLink } from '../../services/googleDriveService';
 import { RingSvg, SeeAs, Amt, Fan, Countdown, ScoreBar } from './Od2Bits';
 
 /*
@@ -107,7 +109,7 @@ export function ClientsScreen() {
 
 /* ── One client ──────────────────────────────────────────────────────────── */
 
-type Tab = 'story' | 'drawings' | 'decisions' | 'payments';
+type Tab = 'story' | 'site' | 'drawings' | 'decisions' | 'payments' | 'messages' | 'files';
 type StoryFilter = 'all' | 'touches' | 'drawings' | 'decisions' | 'money' | 'meetings';
 interface Ev { at: number; f: StoryFilter; icon: React.ComponentType<any>; tone: 'brand' | 'good' | 'warn' | 'bad'; title: string; sub: string; next?: { text: string; done: boolean }; amount?: number | null }
 
@@ -151,13 +153,20 @@ export function ClientPage({ id }: { id: string }) {
   const worst = c.pulse.reasons.filter((r) => r.points < 0).sort((a, b) => a.points - b.points)[0];
   const names = people.slice(0, 2).map((x) => x.name).filter(Boolean).join(' & ') || c.client || 'The client';
 
-  const tabs: [Tab, string, number][] = [['story', 'Story', 0], ['drawings', 'Drawings', draws.length], ['decisions', 'Decisions', decs.length], ['payments', 'Payments', ms.length]];
+  const ex = extrasOf(p.raw, d.seesMoney);
+  const tabs: [Tab, string, number, OpsAccessKey | null][] = [
+    ['story', 'Story', 0, null], ['site', 'Site', ex.site === 'off' ? 0 : ex.site.updates.length, 'site'], ['drawings', 'Drawings', draws.length, null],
+    ['decisions', 'Decisions', decs.length, null], ['payments', 'Payments', ms.length, null],
+    ['messages', 'Messages', ex.messages === 'off' ? 0 : ex.messages.length, 'messages'], ['files', 'Files', 0, 'drive'],
+  ];
+  const covering = (Array.isArray(p.raw?.cover) ? p.raw.cover : []).find((x: any) => x?.email === d.me.email);
 
   return (
     <div className="flex flex-col gap-5">
       <section className="od-band od-c3 od-rise">
         <div className="od-c3-top">
           <button type="button" className="od-back" onClick={() => d.act.go('clients')}><ChevronLeft />All clients</button>
+          {covering && <span className="od-chip brand"><ShieldCheck />Covering for {covering.forName} until {fmtDay(dayKey(covering.until))}</span>}
           <span className={`od-chip ${c.health}`}>{HEALTH_LABEL[c.health]}</span>
         </div>
         <div className="od-c3-g">
@@ -193,15 +202,18 @@ export function ClientPage({ id }: { id: string }) {
       </section>
       <SeeAs />
       <div className="od-ptabs" role="group" aria-label="Client">
-        {tabs.map(([k, l, n]) => (
+        {tabs.map(([k, l, n, gate]) => (
           <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)}>
             {tab === k && <motion.span layoutId="od-ptab" className="od-ind" transition={{ type: 'spring', stiffness: 480, damping: 36 }} />}
-            <span>{l}{n ? ` · ${n}` : ''}</span>
+            <span>{l}{n ? ` · ${n}` : ''}{gate && isOff(ex, gate) ? <EyeOff className="inline w-3.5 h-3.5 ml-1 opacity-60" aria-label="Off" /> : null}</span>
           </button>
         ))}
       </div>
       <div key={tab} className="od-rise">
-        {tab === 'story' && <Story c={c} sf={sf} setSf={setSf} />}
+        {tab === 'story' && <Story c={c} sf={sf} setSf={setSf} proposal={ex.proposal} />}
+        {tab === 'site' && (ex.site === 'off' ? <Off k="site" /> : <Site work={ex.site} />)}
+        {tab === 'messages' && (ex.messages === 'off' ? <Off k="messages" /> : <Messages list={ex.messages} client={c.client} masked={ex.masked} />)}
+        {tab === 'files' && (ex.drive === 'off' ? <Off k="drive" /> : <Files projectId={id} link={ex.drive} name={c.name} />)}
         {tab === 'drawings' && <Drawings items={draws} />}
         {tab === 'decisions' && <Decisions projectId={id} decs={decs} client={c.client} />}
         {tab === 'payments' && <Payments projectId={id} />}
@@ -211,7 +223,7 @@ export function ClientPage({ id }: { id: string }) {
   );
 }
 
-function Story({ c, sf, setSf }: { c: DeskClient; sf: StoryFilter; setSf: (s: StoryFilter) => void }) {
+function Story({ c, sf, setSf, proposal }: { c: DeskClient; sf: StoryFilter; setSf: (s: StoryFilter) => void; proposal: Extras['proposal'] }) {
   const d = useDesk();
   const id = c.id;
   const p = d.projects.find((x) => x.id === id)!;
@@ -300,6 +312,13 @@ function Story({ c, sf, setSf }: { c: DeskClient; sf: StoryFilter; setSf: (s: St
               {b.whatsapp && <button type="button" className="od-btn" onClick={b.whatsapp}><MessageCircle />WhatsApp it</button>}
               <button type="button" className="od-btn" onClick={() => d.act.later(b.q)}><Clock />Later today</button>
             </div>
+          )}
+        </section>
+        <section className="od-card od-tilt">
+          <div className="od-ch"><span className="od-tile"><Trophy /></span><div><h3>What they chose</h3>
+            <p>{proposal === 'off' ? 'Hidden for Client Relations. A lead can turn it on in Who sees what.' : proposal ? proposal.name : 'No proposal accepted yet.'}</p></div></div>
+          {proposal && proposal !== 'off' && (
+            <div className="od-prow"><div className="od-who"><b>Accepted proposal</b><small>{proposal.via ? `By ${proposal.via}` : 'Its scope is in the BOQ, by quantity'}{proposal.at ? ` · ${fmtDay(dayKey(proposal.at))}` : ''}</small></div><Amt n={proposal.amount} /></div>
           )}
         </section>
         <section className="od-card">
@@ -408,6 +427,122 @@ function Payments({ projectId }: { projectId: string }) {
           })}
         </div>
       )}
+    </section>
+  );
+}
+
+/* ── What "Who sees what" lets this person see of a project (lib/opsAccess) ── */
+
+interface Extras {
+  site: { updates: any[]; blockers: any[] } | 'off';
+  messages: { id: string; text: string; sentAt: string; sentBy: string; aboutLabel: string | null; readAt: string | null }[] | 'off';
+  proposal: { name: string; at: number | null; via: string | null; amount: number | null } | null | 'off';
+  /** A link, null to look up (the leads), or off. */
+  drive: string | null | 'off';
+  masked: boolean;
+}
+
+/**
+ * Client Relations read their copy of the project: what a switch left out
+ * is simply not in it. The leads read the project itself, all of it.
+ */
+function extrasOf(raw: any, seesMoney: boolean): Extras {
+  if (raw?._teamView === 'ops') {
+    return {
+      site: raw.siteWork ? { updates: raw.siteWork.updates || [], blockers: raw.siteWork.blockers || [] } : 'off',
+      messages: Array.isArray(raw.portalMessages) ? raw.portalMessages : 'off',
+      proposal: raw.acceptedProposal === undefined ? 'off' : raw.acceptedProposal ? { ...raw.acceptedProposal, amount: null } : null,
+      drive: raw.driveFolder === undefined ? 'off' : raw.driveFolder || '',
+      masked: true,
+    };
+  }
+  const ctx = raw?.context || {};
+  const ex = raw?.activeProject?.executionData || {};
+  const prop = acceptedProposalOf(ctx);
+  return {
+    site: { updates: Array.isArray(ex.updates) ? ex.updates : [], blockers: Array.isArray(ex.blockers) ? ex.blockers : [] },
+    messages: (Array.isArray(ctx.clientMessages) ? ctx.clientMessages : []).map((m: any) => ({
+      id: String(m?.id || ''), text: seesMoney ? String(m?.text || '') : maskAmounts(String(m?.text || '')), sentAt: String(m?.sentAt || ''), sentBy: String(m?.sentBy || ''),
+      aboutLabel: m?.aboutLabel || null, readAt: m?.readAt || null,
+    })),
+    proposal: prop ? { ...prop, amount: seesMoney && typeof ctx.proposalAcceptance?.amount === 'number' ? ctx.proposalAcceptance.amount : null } : null,
+    drive: null,
+    masked: !seesMoney,
+  };
+}
+const isOff = (e: Extras, k: OpsAccessKey) => (k === 'site' ? e.site === 'off' : k === 'messages' ? e.messages === 'off' : k === 'drive' ? e.drive === 'off' : e.proposal === 'off');
+
+const Off: React.FC<{ k: OpsAccessKey }> = ({ k }) => (
+  <div className="od-lockbox"><EyeOff /><b>{ACCESS_META[k].label}: off for Client Relations</b><span>{ACCESS_META[k].why}</span><span>The Owner or the Ops Director can turn it on in Who sees what.</span></div>
+);
+
+const when = (v: any) => {
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return fmtDay(v);
+  const t = typeof v === 'number' ? v : Date.parse(String(v || ''));
+  return Number.isNaN(t) ? '' : fmtWhen(t);
+};
+
+function Site({ work }: { work: { updates: any[]; blockers: any[] } }) {
+  const open = work.blockers.filter((b) => !b?.resolved);
+  const ups = [...work.updates].sort((a, b) => String(b?.date || b?.at || '').localeCompare(String(a?.date || a?.at || '')));
+  if (!ups.length && !open.length) return <div className="od-lockbox"><Hammer /><b>No site work yet</b><span>Updates from the site team appear here once execution starts.</span></div>;
+  return (
+    <div className="flex flex-col gap-4">
+      {open.length > 0 && <div className="rounded-2xl bg-amber-50 text-amber-800 px-4 py-3 text-sm flex items-center gap-2"><Flag className="w-4 h-4 shrink-0" /><span><b>Blocked:</b> {open.map((b) => b.description || b.text || b.title).filter(Boolean).join(' · ')}</span></div>}
+      <div className="grid gap-3.5 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
+        {ups.slice(0, 40).map((u, i) => {
+          const pics: string[] = [...(u.images || []), ...(u.photos || []), ...(u.photoUrls || [])].filter((x: any) => typeof x === 'string' && /^https:\/\//.test(x)).slice(0, 4);
+          return (
+            <figure key={u.id || i} className="od-card od-tilt od-in !m-0" style={{ ['--i' as any]: Math.min(i, 10) }}>
+              {pics.length > 0 && <div className="flex gap-1.5 mb-2.5">{pics.map((src) => <a key={src} href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt="" loading="lazy" className="w-[72px] h-[54px] object-cover rounded-lg border border-slate-200" /></a>)}</div>}
+              <figcaption><b className="text-sm block">{u.title || u.text || u.note || u.description || 'Site update'}</b>
+                <small className="text-[11px] text-slate-500">{[u.by || u.author || u.reportedBy, when(u.date || u.at || u.createdAt)].filter(Boolean).join(' · ')}{!pics.length ? '' : ` · ${pics.length} photo${pics.length === 1 ? '' : 's'}`}</small></figcaption>
+            </figure>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-slate-500 inline-flex items-center gap-1.5"><ImageIcon className="w-3.5 h-3.5" />The order list and its costs stay with the site team.</p>
+    </div>
+  );
+}
+
+function Messages({ list, client, masked }: { list: Extras['messages'] & any[]; client: string; masked: boolean }) {
+  const sorted = [...list].sort((a, b) => String(a.sentAt).localeCompare(String(b.sentAt)));
+  return (
+    <section className="od-card !p-0 overflow-hidden">
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-200 bg-slate-50">
+        <span className="od-tile"><MessageCircle /></span>
+        <div><b className="text-sm block">{client || 'The client'}</b><small className="text-[11px] text-slate-500">From the client portal{masked ? ' · amounts masked' : ' · as written'}</small></div>
+      </div>
+      <div className="flex flex-col gap-2 p-4 min-h-[200px]">
+        {!sorted.length ? <div className="od-empty2">No messages from the portal yet.</div> : sorted.map((m) => (
+          <div key={m.id || m.sentAt} className="max-w-[82%] rounded-2xl rounded-bl-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+            {m.aboutLabel && <span className="od-eyebrow block mb-1">About {m.aboutLabel}</span>}
+            <span className="whitespace-pre-line">{m.text}</span>
+            <small className="block text-[10px] text-slate-400 mt-1">{[m.sentBy, when(m.sentAt), m.readAt ? 'dealt with' : ''].filter(Boolean).join(' · ')}</small>
+          </div>
+        ))}
+      </div>
+      <p className="px-4 pb-4 text-[11px] text-slate-500">Answer on WhatsApp or a call, then log it, so the reply is on the record.</p>
+    </section>
+  );
+}
+
+function Files({ projectId, link, name }: { projectId: string; link: string | null; name: string }) {
+  const d = useDesk();
+  const [found, setFound] = useState<string | null | undefined>(link || undefined);
+  useEffect(() => {
+    if (link !== null) { setFound(link || null); return; }
+    let live = true;
+    projectDriveLink(projectId, d.tenantId).then((l) => { if (live) setFound(l); });
+    return () => { live = false; };
+  }, [projectId, link, d.tenantId]);
+  return (
+    <section className="od-card">
+      <div className="od-ch"><span className="od-tile"><FolderOpen /></span><div><h3>Google Drive</h3><p>{name} · the approved drawings the client can open</p></div></div>
+      {found === undefined ? <div className="od-empty2">Looking for the folder…</div> : found ? (
+        <a className="od-btn pri" href={found} target="_blank" rel="noopener noreferrer"><ExternalLink />Open the folder</a>
+      ) : <div className="od-empty2">No folder yet. It is made the first time drawings are uploaded from Drawings for approval.</div>}
     </section>
   );
 }

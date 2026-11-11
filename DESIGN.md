@@ -381,8 +381,18 @@ the brand, slate, and rose/amber/emerald for state. Light only: the owner chose 
   countdown ring, the stamp), calling mode for hot leads, the week above Meetings & visits.
 - Statuses map onto the new screens in `lib/opsDesk2.ts` (tested); nothing new is stored.
 - Amounts appear only for roles that see money (`Amt`); everyone else sees "Hidden".
-- Not in 2.1 yet: Who sees what (switches for the Owner and Ops Director, coming next), client
-  moments, payment auto-chase and cover. The Friday digest is on hold by the owner's choice.
+- **Who sees what** (phase 2, owner's choices 11 Nov 2026): five switches for the Owner and the Ops
+  Director, all off at first (site work, portal messages with amounts masked, the accepted
+  proposal's name, the Drive folder, cover). The server writes only what is on into Client
+  Relations' copy (`lib/opsAccess.ts`). The client page adds Site, Messages and Files tabs and
+  "What they chose"; a tab that is off shows a dashed lock card saying so.
+- **Cover**: a lead gives one Client Relations person another's projects until the end of a day;
+  they work them fully and it ends by itself (hourly `opsCoverExpiry`).
+- **Payment reminders on days 1, 7 and 14** after the due date are drafted onto Today for a
+  person to send; nothing reaches a client by itself. "Log a promise" pauses them until the date.
+- **Client moments** on My day: a handover a week away, a design just approved, a month and each
+  year in their home, each with the message drafted. No birthdays are stored.
+- The Friday digest is on hold by the owner's choice.
 - Everything stops under `prefers-reduced-motion`.
 
 ### Notifications motion (approved 22 Oct 2026)
