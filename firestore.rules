@@ -88,7 +88,7 @@ service cloud.firestore {
     function teamMayRead(kind, sub) {
       return (kind == 'ops' && sub in ['designGate', 'decisions', 'timelinePhases', 'schedule', 'tasks', 'deliverables', 'journeySteps',
                                        'stepProgress', 'moms', 'siteVisits', 'communicationLog', 'drawingTracker', 'drawingVersions',
-                                       'followUps', 'escalations', 'checklists', 'visitRequests'])
+                                       'followUps', 'escalations', 'checklists', 'visitRequests', 'digests'])
         || (kind == 'site' && sub in ['decisions', 'timelinePhases', 'schedule', 'tasks', 'siteVisits', 'drawingTracker', 'drawingVersions']);
     }
 
@@ -961,6 +961,50 @@ service cloud.firestore {
             && request.resource.data.next.due is string && request.resource.data.next.due.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
             && request.resource.data.nextMovedBy == myEmail()
           ));
+        allow delete: if false;
+      }
+      /*
+        THE FRIDAY DIGEST (lib/fridayDigest.ts): one short update a week per
+        client, kept per week (the Friday's date). Client Relations on an
+        assigned project, or the studio's staff, write it and send it for
+        approval; only a lead approves it or sends it back; once approved its
+        words cannot change, and it can only be marked sent. Email goes from
+        the server (functions/src/fridayDigest.ts), which checks the approval
+        again; WhatsApp is pressed by a person, who then marks it sent here.
+      */
+      function digestShape(d) {
+        return d.keys().hasOnly(['tenantId', 'projectId', 'projectName', 'week', 'status', 'subject', 'body', 'photos', 'sources',
+                 'preparedBy', 'preparedByName', 'preparedAt', 'reviewNote', 'approvedBy', 'approvedByName', 'approvedAt',
+                 'sentAt', 'sentBy', 'sentVia', 'updatedAt'])
+          && d.tenantId == parentTenant() && d.projectId == projectId
+          && d.subject is string && d.subject.size() <= 200
+          && d.body is string && d.body.size() > 0 && d.body.size() <= 6000
+          && d.photos is list && d.photos.size() <= 12
+          && d.sources is list && d.sources.size() <= 12;
+      }
+      match /digests/{week} {
+        allow read: if ownsParentProject();
+        allow create, update: if mayWriteOps()
+          && week.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+          && request.resource.data.week == week
+          && digestShape(request.resource.data)
+          && (
+            /* Writing it, sending it for approval, or skipping the week: never approved by the writer. */
+            (request.resource.data.status in ['draft', 'pending_review', 'skipped']
+              && (resource == null || resource.data.status in ['draft', 'pending_review', 'returned', 'skipped'])
+              && request.resource.data.get('approvedBy', null) == null
+              && request.resource.data.get('sentAt', null) == null)
+            /* A lead approves it, or sends it back with a note. */
+            || (ownsParentProject() && isStudioLead()
+              && resource != null && resource.data.status == 'pending_review'
+              && ((request.resource.data.status == 'approved' && request.resource.data.approvedBy == myEmail())
+                  || (request.resource.data.status == 'returned' && request.resource.data.get('approvedBy', null) == null))
+              && request.resource.data.get('sentAt', null) == null)
+            /* Sent on WhatsApp by a person, after approval: only the sending is recorded, the words stay. */
+            || (resource != null && resource.data.status == 'approved' && request.resource.data.status == 'sent'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'sentAt', 'sentBy', 'sentVia', 'updatedAt'])
+              && request.resource.data.sentBy == myEmail() && request.resource.data.sentVia == 'whatsapp')
+          );
         allow delete: if false;
       }
       match /escalations/{eid} {
