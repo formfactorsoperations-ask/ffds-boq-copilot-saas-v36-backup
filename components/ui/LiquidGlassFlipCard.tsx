@@ -263,6 +263,8 @@ a.lgf-face:focus-visible{outline:2px solid var(--lgf-focus);outline-offset:4px}
 @media (prefers-reduced-transparency:reduce){
   .lgf .lgf-surface{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(255,255,255,.92)!important}
 }
+[data-lgf-scrolling] .lgf .lgf-surface{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(255,255,255,.92)!important}
+[data-lgf-scrolling] .lgf *{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 @media (forced-colors:active){
   .lgf-card{border:2px solid CanvasText}
   .lgf-body,.lgf-deco{display:none}

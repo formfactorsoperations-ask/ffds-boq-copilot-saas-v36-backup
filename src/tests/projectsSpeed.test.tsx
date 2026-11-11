@@ -90,4 +90,21 @@ describe('Projects screen speed', () => {
     await act(async () => { view!.rerender(<ProjectListTab projects={[project(1)] as any} loading {...props} />); });
     expect(view!.queryByText('Loading your projects…')).toBeNull();
   });
+
+  it('rests the glass while the page scrolls, and brings it back once scrolling stops', async () => {
+    const { default: ProjectListTab } = await import('../../components/ProjectListTab');
+    let view: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      view = render(
+        <ProjectListTab projects={[project(1)] as any} activeProjectId={null} onOpenProject={() => {}}
+          onCreateNew={() => {}} onDeleteProject={() => {}} onDuplicateProject={() => {}} />,
+      );
+    });
+    const paused = () => view!.container.querySelector('[data-lgf-scrolling]');
+    expect(paused()).toBeNull();
+    document.dispatchEvent(new Event('scroll'));
+    expect(paused()).not.toBeNull();
+    await new Promise((r) => setTimeout(r, 200));
+    expect(paused()).toBeNull();
+  });
 });

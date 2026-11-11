@@ -491,6 +491,38 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
     const timer = setTimeout(() => setCardLimit((n) => n + FIRST_CARDS), 16);
     return () => clearTimeout(timer);
   }, [cardLimit, filteredProjects.length]);
+  /*
+    The glass rests while the page scrolls (owner's call, 11 Nov 2026).
+
+    Every card's surface refracts and blurs what is behind it, and the panels
+    inside blur again; while the page moves, all of that is redrawn every frame,
+    and scrolling the Projects screen ran at about ten frames a second. While a
+    scroll is under way the grid carries data-lgf-scrolling, which swaps the
+    glass for the same solid white the card already falls back to for people
+    who turn transparency off (LiquidGlassFlipCard's stylesheet); 150ms after
+    the last scroll it comes back. Set on the element directly, not through
+    state, so scrolling never re-renders the cards.
+
+    Captured at the document because the page may scroll in the window or in
+    the app shell's own scroll area.
+  */
+  const cardGridRef = React.useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    let rest: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      const grid = cardGridRef.current;
+      if (!grid) return;
+      if (!grid.hasAttribute('data-lgf-scrolling')) grid.setAttribute('data-lgf-scrolling', '');
+      clearTimeout(rest);
+      rest = setTimeout(() => cardGridRef.current?.removeAttribute('data-lgf-scrolling'), 150);
+    };
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('scroll', onScroll, { capture: true });
+      clearTimeout(rest);
+    };
+  }, []);
+
   const shownProjects = useMemo(
     () => (cardLimit >= filteredProjects.length ? filteredProjects : filteredProjects.slice(0, cardLimit)),
     [filteredProjects, cardLimit],
@@ -1268,7 +1300,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                 <div className="absolute bottom-8 left-[32%] h-72 w-96 rounded-full bg-violet-100/45 blur-3xl" />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
+              <div ref={cardGridRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
                 <AnimatePresence>
                 {shownProjects.map((project, index) => {
                   const metrics = getProjectMetrics(project);
