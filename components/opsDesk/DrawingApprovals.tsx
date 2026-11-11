@@ -119,23 +119,25 @@ interface Props {
   /** The Design Head, Owner or Admin: may take overdue drawings as approved. */
   lead: boolean;
   onChanged: (projectId: string) => void;
+  /** Inside one project (the Drawings table): that project only, no picker. */
+  fixedProjectId?: string;
 }
 
-export default function DrawingApprovals({ orgId, items, projects, me, lead, onChanged }: Props) {
+export default function DrawingApprovals({ orgId, items, projects, me, lead, onChanged, fixedProjectId }: Props) {
   const waiting = useMemo(() => (items || []).filter((i) => approvalStage(asMeeting(i)) !== 'approved'), [items]);
   const count = (id: string) => waiting.filter((i) => i.projectId === id).length;
   /* Projects waiting on the client first, then the rest by name. */
   const sorted = useMemo(() => [...projects].sort((a, b) => count(b.id) - count(a.id) || a.name.localeCompare(b.name)), [projects, waiting]);
   const [pick, setPick] = useState<string>('');
-  const projectId = projects.some((p) => p.id === pick) ? pick : '';
+  const projectId = fixedProjectId || (projects.some((p) => p.id === pick) ? pick : '');
   const project = projects.find((p) => p.id === projectId) || null;
   const open = projectId ? waiting.filter((i) => i.projectId === projectId) : waiting;
   const [recording, setRecording] = useState(false);
 
   return (
     <Panel icon={FileCheck2} title="Drawings for approval"
-      blurb="Drawings the client has seen, in a design meeting or outside the Studio Desk. Pick the project, upload the drawings you choose to its Drive folder, send the approval email (it goes in your name, and replies come to you), then record their answer. Reminders go on working days 3 and 5."
-      right={
+      blurb={`Drawings the client has seen, in a design meeting or outside the Studio Desk. ${fixedProjectId ? '' : 'Pick the project, '}upload the drawings you choose to its Drive folder, send the approval email (it goes in your name, and replies come to you), then record their answer. Reminders go on working days 3 and 5.`}
+      right={fixedProjectId ? undefined :
         <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Project
           <select value={projectId} onChange={(e) => { setPick(e.target.value); setRecording(false); }} className={`${field} max-w-[260px] font-semibold`}>
             <option value="">All projects ({waiting.length} waiting)</option>

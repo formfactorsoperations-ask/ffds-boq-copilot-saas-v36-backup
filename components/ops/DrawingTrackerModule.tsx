@@ -1,5 +1,5 @@
 import { showSuccessWithNext } from '../SuccessWithNextToast';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import LockedState from '../LockedState';
 import { collection, onSnapshot, doc, updateDoc, setDoc, getDoc, getDocs, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../../services/firebaseClient';
@@ -17,7 +17,11 @@ import {
 import { openInDesignReview } from '../../services/drawingReviewService';
 import { STATE_LABEL, stateOf, trackerPatch, isApprovedSheet, finalApprovalAt, strayApprovalPatch, clientPending, canSetAudience, type ClientAgreement } from '../../lib/drawingReview';
 import { agreementsFrom, awaitingFrom, approvalDate, type AwaitingClient } from '../../lib/designMeeting';
-import { watchMeetings, reconcileApprovals } from '../../services/designMeetingService';
+import { watchMeetings, reconcileApprovals, listApprovals } from '../../services/designMeetingService';
+import { sendsApprovals, type ApprovalItem } from '../../lib/designMeeting';
+import { canRunMeeting, canPresentAssigned, projectNameOf } from '../../lib/drawingReview';
+import DrawingApprovals from '../opsDesk/DrawingApprovals';
+import { FileCheck2 } from 'lucide-react';
 import { classifyRevisionCause, RevisionClassification } from '../../services/geminiService';
 import { useOrg } from '../../contexts/OrgContext';
 import { isDesignerRole } from '../../lib/roleAccess';
@@ -40,7 +44,7 @@ function AnimatedNumber({ value }: { value: number }) {
 export default function DrawingTrackerModule({ projectId, projectContext, fullBoq }: DrawingTrackerModuleProps) {
     const designGateActive = (projectContext as any)?.designGate?.gateActivated || (projectContext as any)?.lifecycle?.gates?.designGateActive?.done;
     
-    const { orgData, currentRole } = useOrg();
+    const { orgData, currentRole, currentRoles, currentUserAuth } = useOrg() as any;
     const orgId = orgData?.tenantId || 'demo-tenant-01';
     const studioName = orgData?.orgName || 'Studio';
 
@@ -215,6 +219,27 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         if (!projectId) return;
         return watchMeetings(orgId, projectId, list => { setAgreements(agreementsFrom(list)); setAwaiting(awaitingFrom(list)); }, () => { setAgreements({}); setAwaiting({}); });
     }, [projectId, orgId]);
+
+    /*
+      The client's approval, from the Drawings table: the same panel as Ops
+      Desk → Drawings for approval, for this project only. Record drawings
+      presented outside the Studio Desk, upload the chosen ones to Drive, send
+      the approval email and record the answer, without leaving the project.
+      For whoever may send approvals: operations, the Design Head and leads,
+      and a designer presenting.
+    */
+    const approvalRoles: string[] = currentRoles?.length ? currentRoles : [String(currentRole || '')];
+    const mayApprove = sendsApprovals(approvalRoles) || canRunMeeting(approvalRoles) || canPresentAssigned(approvalRoles);
+    const [approvalItems, setApprovalItems] = useState<ApprovalItem[] | null>(null);
+    const [approvalsOpen, setApprovalsOpen] = useState(false);
+    const loadApprovals = useCallback(() => {
+        if (!projectId || !mayApprove) return;
+        listApprovals({ orgId, projectId }).then(setApprovalItems).catch(() => setApprovalItems([]));
+    }, [orgId, projectId, mayApprove]);
+    useEffect(() => { loadApprovals(); }, [loadApprovals]);
+    const approvalsWaiting = (approvalItems || []).filter((i) => !(i.approval?.status === 'approved' || i.approval?.status === 'deemed' || i.confirmation?.at)).length;
+    const approvalProjectName = projectNameOf({ context: projectContext }) || 'This project';
+    const approvalMe = { email: String(currentUserAuth?.email || ''), name: currentUserAuth?.displayName || null };
 
     /*
       Approvals the client never gave (the Design Head's approval on a sheet
@@ -2185,6 +2210,26 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                             )}
                         </div>
                     </div>
+
+            {mayApprove && (
+                <div className="bg-white border border-slate-200 rounded-2xl">
+                    <button type="button" onClick={() => setApprovalsOpen((o) => !o)} aria-expanded={approvalsOpen}
+                        className="w-full flex flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 rounded-2xl">
+                        <FileCheck2 className="w-4 h-4 text-[#2E7D6B] shrink-0" />
+                        <span className="min-w-0 flex-1 text-sm text-slate-700">
+                            <b className="text-slate-900">Client approval</b>
+                            <span className="text-slate-500"> · {approvalItems === null ? 'checking…' : approvalsWaiting ? `${approvalsWaiting} waiting for the client` : 'nothing waiting'} · send the approval email, upload drawings to Drive, or record drawings presented outside the Studio Desk</span>
+                        </span>
+                        <span className="text-xs font-bold text-[#2E7D6B]">{approvalsOpen ? 'Hide' : 'Open'}</span>
+                    </button>
+                    {approvalsOpen && (
+                        <div className="hud-panel-in border-t border-slate-100 p-3">
+                            <DrawingApprovals orgId={orgId} items={approvalItems} projects={[{ id: projectId, name: approvalProjectName }]} fixedProjectId={projectId}
+                                me={approvalMe} lead={canRunMeeting(approvalRoles)} onChanged={loadApprovals} />
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/*
               Filters, search, then actions — in that order and on one line.
