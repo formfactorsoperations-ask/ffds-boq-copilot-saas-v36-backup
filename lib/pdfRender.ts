@@ -42,28 +42,53 @@ export function loadPdf(key: string, bytes: () => Promise<ArrayBuffer>): Promise
 
 export interface Rendered { width: number; height: number }
 
+/** A drawing pass that was overtaken by a newer one; not an error worth showing. */
+export const isCancelled = (e: any) => e?.name === 'RenderingCancelledException' || e?.name === 'AbortError' || /cancel/i.test(String(e?.message || ''));
+
 /**
  * Draws one page into a canvas, `cssWidth` pixels wide on screen and sharp on
  * high-density screens. Returns the page's displayed size, which the overlay
  * uses to turn pointer positions into fractions of the page.
+ *
+ * The page is drawn off screen first and copied in only once it is finished,
+ * so the sheet on screen never blanks while it is redrawn (a meeting resizing
+ * to fit, a zoom, a turn), and two passes never draw into the same canvas at
+ * once, which pdf.js refuses. A pass the `signal` aborts stops and throws a
+ * cancellation (isCancelled), leaving the last finished page on screen.
  */
-export async function renderPage(doc: PDFDocumentProxy, pageIndex: number, canvas: HTMLCanvasElement, cssWidth: number, turn = 0): Promise<Rendered> {
+export async function renderPage(doc: PDFDocumentProxy, pageIndex: number, canvas: HTMLCanvasElement, cssWidth: number, turn = 0, signal?: AbortSignal): Promise<Rendered> {
   const page = await doc.getPage(Math.min(doc.numPages, Math.max(1, pageIndex + 1)));
+  if (signal?.aborted) throw Object.assign(new Error('Rendering cancelled'), { name: 'AbortError' });
   /* `turn` is the viewer's own rotation (0, 90, 180, 270), on top of any the PDF carries. */
   const rotation = (((page.rotate || 0) + turn) % 360 + 360) % 360;
   const base = page.getViewport({ scale: 1, rotation });
   const scale = cssWidth / base.width;
   const dpr = Math.min(3, window.devicePixelRatio || 1);
   const viewport = page.getViewport({ scale: scale * dpr, rotation });
-  canvas.width = Math.floor(viewport.width);
-  canvas.height = Math.floor(viewport.height);
+  const off = document.createElement('canvas');
+  off.width = Math.floor(viewport.width);
+  off.height = Math.floor(viewport.height);
+  const octx = off.getContext('2d');
+  if (!octx) throw new Error('No canvas');
+  octx.fillStyle = '#ffffff';
+  octx.fillRect(0, 0, off.width, off.height);
+  const task = page.render({ canvasContext: octx, viewport });
+  const stop = () => task.cancel();
+  signal?.addEventListener('abort', stop, { once: true });
+  try {
+    await task.promise;
+  } finally {
+    signal?.removeEventListener('abort', stop);
+  }
+  if (signal?.aborted) throw Object.assign(new Error('Rendering cancelled'), { name: 'AbortError' });
+  canvas.width = off.width;
+  canvas.height = off.height;
   canvas.style.width = `${Math.floor(viewport.width / dpr)}px`;
   canvas.style.height = `${Math.floor(viewport.height / dpr)}px`;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('No canvas');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  await page.render({ canvasContext: ctx, viewport }).promise;
+  ctx.drawImage(off, 0, 0);
+  off.width = 0; off.height = 0;
   return { width: viewport.width / dpr, height: viewport.height / dpr };
 }
 

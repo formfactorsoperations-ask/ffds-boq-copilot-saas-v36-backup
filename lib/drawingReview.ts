@@ -74,6 +74,12 @@ export interface ReviewSummary {
    * function only; a new PDF keeps it.
    */
   presenters?: string[] | null;
+  /**
+   * Set once the sheet's audience has been checked against the old guess from
+   * its name (designMeeting: reconcile). A sheet the name made studio-only,
+   * that the Design Head never marked so, is the client's.
+   */
+  audienceChecked?: boolean;
   updatedAt: number;
 }
 
@@ -373,6 +379,61 @@ export function strayApprovalPatch(d: TrackerFields | null | undefined, review: 
   return added ? { approvedAt: null, rounds: next, currentRound: next.reduce((mx, r) => Math.max(mx, r.roundNumber), 0) } : { approvedAt: null, rounds: next };
 }
 
+/*
+  APPROVALS THE CLIENT NEVER GAVE.
+
+  Before the client's written approval was a step of its own, two things
+  marked a client drawing approved in the table without the client: the
+  Design Head's approval of a sheet whose name made it look studio-only, and
+  closing a design meeting where the client agreed the room. Both left their
+  mark: the approval dated to the millisecond of the Design Head's decision,
+  or of the meeting's close (`machineTimes`), which a person setting a status
+  by hand does not produce.
+
+  This takes such a drawing back to waiting for the client, when nothing the
+  client said approves it now (`agreement`, from lib/designMeeting). A
+  drawing released for construction is left alone: releasing it was the
+  studio's own decision. Null when there is nothing to take back.
+*/
+export function reclaimPatch(
+  d: TrackerFields | null | undefined,
+  review: Partial<ReviewSummary> | null | undefined,
+  agreement: ClientAgreement | null | undefined,
+  machineTimes: number[],
+): Partial<TrackerFields> | null {
+  const at = d?.approvedAt;
+  if (at == null || d?.gfc?.status === 'issued') return null;
+  if (!review || (review.audience || guessAudience()) !== 'client') return null;
+  if (finalApprovalAt(review, agreement) != null) return null;
+  const machine = at === review.decidedAt || machineTimes.includes(at);
+  if (!machine) return null;
+  const rounds = Array.isArray(d?.rounds) ? d!.rounds : [];
+  const n = Math.max(1, Number(d?.currentRound) || 0);
+  const current = rounds.find((r) => r.roundNumber === n);
+  if (!current || current.status !== 'approved') return { approvedAt: null };
+  /* A round the sync added (no one issued it) goes; one the studio had keeps its place, waiting on the client. */
+  const added = current.issuedBy == null && (current.issuedAt == null || current.issuedAt === at);
+  if (added) {
+    const next = rounds.filter((r) => r !== current);
+    return { approvedAt: null, rounds: next, currentRound: next.reduce((mx, r) => Math.max(mx, r.roundNumber), 0) };
+  }
+  return {
+    approvedAt: null,
+    rounds: rounds.map((r) => (r === current ? { ...r, status: 'in_review', clientFeedbackSubmittedAt: r.clientFeedbackSubmittedAt === at ? null : r.clientFeedbackSubmittedAt } : r)),
+  };
+}
+
+/**
+ * A project's name, wherever it was saved: projects made in the setup wizard
+ * keep it in `context.name`, older and imported ones on the project itself.
+ * The same order the Design Desk uses, so every screen, email and Drive
+ * folder names the project the same way. Null when it has none.
+ */
+export function projectNameOf(p: any): string | null {
+  const name = [p?.context?.name, p?.name, p?.context?.projectName].map((v) => String(v ?? '').trim()).find(Boolean);
+  return name ? name.slice(0, 120) : null;
+}
+
 /* ------------------------------------------------------------- validation */
 
 const clamp01 = (n: unknown) => typeof n === 'number' && Number.isFinite(n) && n >= -0.05 && n <= 1.05;
@@ -528,10 +589,16 @@ export function matchFile(fileName: string, drawings: MatchableDrawing[]): FileM
 /* ------------------------------------------------------------- audience */
 
 /**
- * A first guess at who a drawing is for, from its name. Carpentry and
- * services sheets are the studio's; room elevations and layouts are shown to
- * the client. The Design Head can change it on any drawing.
+ * Who a new drawing is for, before the Design Head says. Always the client.
+ *
+ * This used to be guessed from the name: anything called a "detail",
+ * "electrical" or "carpentry" sheet was taken as the studio's own, and the
+ * Design Head's approval then counted as final. But the studio sends wardrobe
+ * and bookshelf details to clients for approval, so those were approved
+ * without the client ever answering. A drawing now waits for the client
+ * unless the Design Head marks it studio-only; a wrong default then means a
+ * wait, never an approval nobody gave.
  */
-export function guessAudience(name: string): ReviewAudience {
-  return /carpentry|detail|section|electrical|plumbing|services|hvac|working|joinery|cutting|gfc/i.test(name) ? 'studio' : 'client';
+export function guessAudience(_name?: string): ReviewAudience {
+  return 'client';
 }

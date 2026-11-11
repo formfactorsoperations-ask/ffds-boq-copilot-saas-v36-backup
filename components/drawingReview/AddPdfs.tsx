@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, FileUp, Loader2, Send, Upload, X } from 'lucide-react';
+import { Check, FileUp, Loader2, RotateCcw, RotateCw, Send, Upload, X } from 'lucide-react';
 import { watchProjectDrawings, uploadSheet, type ReviewDrawing } from '../../services/drawingReviewService';
 import { matchFile, allowed, type FileMatch } from '../../lib/drawingReview';
 import { thumbnailOf } from '../../lib/pdfRender';
+import { landscapeFile, portraitPages, type TurnWay } from '../../lib/pdfLandscape';
 import { roomLabel, useToast } from './ui';
 import { ProjectMark, SheetThumb } from './DeskParts';
 import type { Me } from './SheetStudio';
@@ -35,6 +36,11 @@ type Placing = {
   stage: 'ready' | 'thumb' | 'uploading' | 'checking' | 'done' | 'error';
   fraction?: number;
   error?: string;
+  /** Pages that read portrait; they are turned to landscape before upload (lib/pdfLandscape). */
+  portrait?: number | null;
+  way: TurnWay;
+  /** Page one as it will be stored, once turned: undefined while it is drawn, null when it could not be. */
+  preview?: string | null;
 };
 
 export default function AddPdfs({ orgId, me, files: initial, projects, projectId, onClose, onDone }: Props) {
@@ -61,9 +67,32 @@ export default function AddPdfs({ orgId, me, files: initial, projects, projectId
     const list = drawings.map((d) => ({ id: d.id, name: d.name, roomName: d.roomName }));
     setPlacing(files.map((file, i) => {
       const match = matchFile(file.name, list);
-      return { file, key: `${file.name}-${i}-${file.size}`, match, pick: match.kind === 'exact' ? match.id : null, stage: 'ready' };
+      return { file, key: `${file.name}-${i}-${file.size}`, match, pick: match.kind === 'exact' ? match.id : null, stage: 'ready', way: 'right' as TurnWay };
     }));
   }, [files, drawings === null, pid]);
+  /* Which files are portrait, and a picture of each as it will be stored once turned. */
+  const keys = placing.map((p) => `${p.key}:${p.way}`).join('|');
+  useEffect(() => {
+    let live = true;
+    const made: string[] = [];
+    placing.forEach(async (p) => {
+      if (p.match.kind === 'refused' || p.stage !== 'ready') return;
+      let portrait: number | null = p.portrait ?? null;
+      let preview: string | null = null;
+      try {
+        if (p.portrait === undefined) portrait = await portraitPages(await p.file.arrayBuffer());
+        if (portrait) {
+          const { file } = await landscapeFile(p.file, p.way);
+          const blob = await thumbnailOf(file, 240);
+          if (blob) { preview = URL.createObjectURL(blob); made.push(preview); }
+        }
+      } catch {
+        /* No preview; the file is still turned as chosen when it is sent. */
+      }
+      if (live) setPlacing((all) => all.map((x) => (x.key === p.key && x.way === p.way ? { ...x, portrait, preview } : x)));
+    });
+    return () => { live = false; setTimeout(() => made.forEach((u) => URL.revokeObjectURL(u)), 30_000); };
+  }, [keys]);
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !sending) onClose(); };
     window.addEventListener('keydown', esc);
@@ -91,9 +120,11 @@ export default function AddPdfs({ orgId, me, files: initial, projects, projectId
       const update = (patch: Partial<Placing>) => setPlacing((all) => all.map((x) => (x.key === p.key ? { ...x, ...patch } : x)));
       try {
         update({ stage: 'thumb', error: undefined });
-        const thumb = await thumbnailOf(p.file);
+        /* Stored landscape, so every download and copy reads the right way round. */
+        const { file } = await landscapeFile(p.file, p.way);
+        const thumb = await thumbnailOf(file);
         const d = list.find((x) => x.id === id);
-        await uploadSheet({ orgId, projectId: pid, drawingId: id }, me.uid, p.file, {
+        await uploadSheet({ orgId, projectId: pid, drawingId: id }, me.uid, file, {
           note, submit: sendNow, thumb, expectedRev: d?.review?.rev,
           onStage: (stage, fraction) => update({ stage: stage === 'uploading' ? 'uploading' : 'checking', fraction }),
         });
@@ -178,6 +209,29 @@ export default function AddPdfs({ orgId, me, files: initial, projects, projectId
                   </span>
                   {p.stage === 'done' && <span className="dd-pop grid h-7 w-7 place-items-center rounded-full bg-[#2E9D71] text-white"><Check size={15} strokeWidth={3} /></span>}
                 </div>
+                {!refused && !!p.portrait && p.stage === 'ready' && (
+                  <div className="flex items-center gap-2.5 rounded-xl bg-[#FAFAF7] p-2 pl-11">
+                    {p.preview === null
+                      ? <span className="grid h-[46px] w-[64px] shrink-0 place-items-center rounded-md border border-[#E4E4DE] bg-white" title="No preview for this file. It is still turned as chosen."><FileUp size={16} className="text-[#8A8E97]" /></span>
+                      : p.preview
+                      ? <img src={p.preview} alt={`${p.file.name}, page one as it will be stored`} className="h-[46px] w-auto max-w-[72px] shrink-0 rounded-md border border-[#E4E4DE] bg-white object-contain" />
+                      : <span className="grid h-[46px] w-[64px] shrink-0 place-items-center rounded-md border border-[#E4E4DE] bg-white"><Loader2 size={14} className="animate-spin text-[#8A8E97]" /></span>}
+                    <span className="min-w-0 flex-1 text-[12px] leading-snug text-[#5F636D]">
+                      <b className="block text-[13px] text-[#17191E]">{p.way === 'keep' ? 'Kept portrait' : 'Turned to landscape'}</b>
+                      {p.way === 'keep' ? 'Stored the way it was exported.' : `${p.portrait} portrait page${p.portrait === 1 ? '' : 's'}. Upside down? Turn it the other way.`}
+                    </span>
+                    <span className="flex shrink-0 gap-1">
+                      {([['right', RotateCw, 'Turn right'], ['left', RotateCcw, 'Turn left'], ['keep', null, 'Keep portrait']] as const).map(([way, Icon, label]) => (
+                        <button key={way} type="button" disabled={sending} aria-pressed={p.way === way} title={label} aria-label={label}
+                          onClick={() => setPlacing((all) => all.map((x) => (x.key === p.key ? { ...x, way, preview: undefined } : x)))}
+                          className="grid h-8 min-w-[32px] place-items-center rounded-lg border px-1.5 text-[12px] font-bold transition disabled:opacity-45"
+                          style={{ borderColor: p.way === way ? '#4146C8' : '#DCDCD5', background: p.way === way ? '#ECEDFB' : '#fff', color: p.way === way ? '#3A3FB8' : '#4F535C' }}>
+                          {Icon ? <Icon size={14} strokeWidth={2.4} /> : 'Keep'}
+                        </button>
+                      ))}
+                    </span>
+                  </div>
+                )}
                 {p.match.kind === 'choose' && p.stage === 'ready' && (
                   <div className="flex flex-col gap-1.5 pl-11">
                     {p.match.options.map((oid) => { const o = list.find((x) => x.id === oid); return o ? option(p, o, p.pick === oid, true) : null; })}

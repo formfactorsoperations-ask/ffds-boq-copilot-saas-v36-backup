@@ -4,6 +4,7 @@ import { LayoutGroup, motion } from 'framer-motion';
 import { useOrg } from '../../contexts/OrgContext';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
 import { canPresentAssigned, canReview, canRunMeeting, canSetAudience, canUpload, stateOf } from '../../lib/drawingReview';
+import { sendsApprovals } from '../../lib/designMeeting';
 import { useProjectTeam } from '../../services/projectTeam';
 import type { DesignMeeting } from '../../lib/designMeeting';
 import { attention, projectLook, pushRecent, reviewQueue, statsOf, suggestions as pickSuggestions, type Suggestion, type Viewer } from '../../lib/designDesk';
@@ -77,6 +78,8 @@ function Desk({ projects, activeProjectId }: Props) {
   const canRun = canRunMeeting(role);
   const canBill = canSetAudience(role);
   const presenter = canPresentAssigned(role);
+  /* Operations sends the client's approval email from Meetings too (lib/designMeeting sendsApprovals). */
+  const approver = sendsApprovals(role);
   const meetsTab = canRun || canBill || presenter;
   const team = useProjectTeam();
   const me: Me = {
@@ -368,7 +371,7 @@ function Desk({ projects, activeProjectId }: Props) {
                 <div className="grid min-h-[30vh] place-items-center"><Loader2 className="animate-spin text-[#8A8E97]" /></div>
               ) : <div key={tab} className="dd-swap">{tab === 'meetings' && meetsTab ? (
                 <Meetings orgId={orgId} projectId={isAll || !current ? null : project} projectName={current?.name || ''} look={current ? projectOf(project) : null}
-                  drawings={scope} meetings={meetings} canRun={canRun} canBill={canBill} presenter={presenter} me={me} designers={designersOf(project)}
+                  drawings={scope} meetings={meetings} canRun={canRun} canBill={canBill} presenter={presenter} approver={approver} me={me} designers={designersOf(project)}
                   onResume={(m) => { setRunning(m); window.scrollTo({ top: 0 }); }}
                   projects={infos.map((p) => ({ id: p.id, name: p.name, code: p.code, color: p.color }))} onPickProject={pickProject} />
               ) : tab === 'foryou' ? (

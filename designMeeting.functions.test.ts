@@ -117,6 +117,8 @@ describe('a design meeting', { timeout: 60000 }, () => {
     k1Version = (await approved('k1', 'k1')).versionId;
     await approved('k2', 'k2');
     /* In the Drawings table: the studio-only sheet is approved by the Design Head; the client's wait for the client. */
+    /* Every drawing is the client's until the Design Head marks it studio-only; a name never decides. */
+    await users.head.review({ drawingId: 's1', action: 'audience', audience: 'studio' });
     const s1 = await approved('s1', 's1');
     expect((await read(`${DT}/s1`)).approvedAt).toBe(s1.decidedAt);
     expect((await read(`${DT}/s1`)).rounds).toEqual([expect.objectContaining({ roundNumber: 1, status: 'approved', clientFeedbackSubmittedAt: null })]);
@@ -218,13 +220,37 @@ describe('a design meeting', { timeout: 60000 }, () => {
     expect(again.meeting.state).toBe('OPEN');
   });
 
-  it('a room the client agrees is approved in the Drawings table, dated by the meeting', async () => {
+  it('a room the client agrees waits for their approval in writing, then is approved in the Drawings table, dated by their answer', async () => {
     const open = (await list(`${P}/designMeetings`)).find((m) => m.state === 'OPEN');
     await users.head.meet({ action: 'room', meetingId: open.id, room: 'Living Room', outcome: 'agreed' });
     const res = await users.head.meet({ action: 'close', meetingId: open.id });
+    /* Agreed at the meeting is not approved. */
+    expect((await read(`${DT}/l1`)).approvedAt ?? null).toBeNull();
+    expect(res.meeting.approval).toMatchObject({ status: 'awaiting', sentAt: null });
+
+    /* The approval email: a real address is needed; with no email service set up it is simulated, and recorded. */
+    expect(await code(users.head.meet({ action: 'sendApproval', meetingId: open.id, to: 'not an address', clientName: 'Mr. Mehta' }))).toBe('functions/invalid-argument');
+    expect(await code(users.head.meet({ action: 'sendApproval', meetingId: open.id, to: 'mehta@gmail.com', clientName: 'Mr. Mehta', driveLink: 'javascript:alert(1)' }))).toBe('functions/invalid-argument');
+    expect(await code(users.ops.meet({ action: 'sendApproval', meetingId: open.id, to: 'mehta@gmail.com', clientName: 'Mr. Mehta' }))).toBe('functions/permission-denied');
+    const sent = await users.head.meet({ action: 'sendApproval', meetingId: open.id, to: 'mehta@gmail.com', clientName: 'Mr. Mehta', driveLink: 'https://drive.google.com/drive/folders/x' });
+    expect(sent.sandbox).toBe(true);
+    const held = await read(`${P}/designMeetings/${open.id}`);
+    expect(held.approval).toMatchObject({ status: 'awaiting', sentTo: ['mehta@gmail.com'], driveLink: 'https://drive.google.com/drive/folders/x', reminders: [] });
+    expect(held.approval.dueAt).toBeGreaterThan(held.approval.sentAt);
+    expect((await read(`${DT}/l1`)).approvedAt ?? null).toBeNull();
+
+    /* Taken as approved only after the date in the email. */
+    expect(await code(users.head.meet({ action: 'recordApproval', meetingId: open.id, outcome: 'deemed' }))).toBe('functions/failed-precondition');
+    /* The client replied "Approved". */
+    const answeredAt = Date.now() - 60_000;
+    const rec = await users.head.meet({ action: 'recordApproval', meetingId: open.id, outcome: 'approved', note: 'Approved.', answeredAt });
+    expect(rec.approved).toEqual(['Living Room Layout']);
     const l1 = await read(`${DT}/l1`);
-    expect(l1.approvedAt).toBe(res.meeting.closedAt);
-    expect(l1.rounds).toEqual([expect.objectContaining({ roundNumber: 1, status: 'approved', clientFeedbackSubmittedAt: res.meeting.closedAt })]);
+    expect(l1.approvedAt).toBe(answeredAt);
+    expect(l1.rounds).toEqual([expect.objectContaining({ roundNumber: 1, status: 'approved', clientFeedbackSubmittedAt: answeredAt })]);
+    expect((await read(`${P}/designMeetings/${open.id}`)).approval).toMatchObject({ status: 'approved', via: 'email', note: 'Approved.' });
+    /* Once is enough. */
+    expect(await code(users.head.meet({ action: 'recordApproval', meetingId: open.id, outcome: 'approved' }))).toBe('functions/failed-precondition');
   });
 
   const SIGNATURE = `data:image/png;base64,${'iVBORw0KGgo'.padEnd(400, 'A')}`;

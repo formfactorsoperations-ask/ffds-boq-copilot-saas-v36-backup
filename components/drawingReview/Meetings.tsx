@@ -8,6 +8,7 @@ import type { ReviewDrawing } from '../../services/drawingReviewService';
 import { roomLabel, shortDate, firstName, useToast } from './ui';
 import { Chip, ProjectMark, SectionHead, TONE } from './DeskParts';
 import ClientSign from './ClientSign';
+import ClientApproval, { ApprovalChip } from './ClientApproval';
 
 /*
   MEETINGS: presenting approved rooms to the client.
@@ -32,7 +33,9 @@ interface Props {
   canBill: boolean;
   /** A Designer presenting only what the Design Head gave them (lib/drawingReview canPresentAssigned). */
   presenter: boolean;
-  me: { uid: string; email: string };
+  me: { uid: string; email: string; name?: string | null };
+  /** Operations (Ops Director, Client Relations): sends the approval email and records the client's answer on any held meeting. */
+  approver?: boolean;
   /** The project's Designers, for "Who presents". */
   designers: TeamMember[];
   onResume: (m: DesignMeeting) => void;
@@ -45,7 +48,7 @@ const CHARGE: Record<string, { label: string; tone: 'red' | 'green' | 'grey' }> 
   to_bill: { label: 'To bill', tone: 'red' }, billed: { label: 'Billed', tone: 'green' }, waived: { label: 'Waived', tone: 'grey' },
 };
 
-export default function Meetings({ orgId, projectId, projectName, look, drawings, meetings, canRun, canBill, presenter, me, designers, onResume, projects, onPickProject }: Props) {
+export default function Meetings({ orgId, projectId, projectName, look, drawings, meetings, canRun, canBill, presenter, approver, me, designers, onResume, projects, onPickProject }: Props) {
   const toast = useToast();
   const rooms = useMemo(() => presentableRooms(drawings, presenter ? me.email : null), [drawings, presenter, me.email]);
   /* Leads, and a Designer with something to present, start a meeting. */
@@ -227,14 +230,15 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
                     <span className="block font-bold">{shortDate(m.closedAt || m.startedAt)} · {meetingSummary(m)}</span>
                     <span className="block truncate text-[12.5px] text-[#5F636D]">{[m.attendees, `presented by ${firstName(m.startedBy?.name)}`].filter(Boolean).join(' · ')}</span>
                   </span>
-                  {isConfirmed(m)
-                    ? <Chip tone="green" icon={BadgeCheck} small>{m.confirmation!.via === 'portal' ? 'Confirmed in portal' : 'Signed'}</Chip>
-                    : <Chip tone="amber" icon={Clock} small>Awaiting client</Chip>}
+                  {m.rooms.some((r) => r.outcome === 'agreed')
+                    ? <ApprovalChip m={m} />
+                    : isConfirmed(m) ? <Chip tone="green" icon={BadgeCheck} small>{m.confirmation!.via === 'portal' ? 'Confirmed in portal' : 'Signed'}</Chip> : null}
                   <ChevronRight size={16} className="shrink-0 text-[#8A8E97] transition-transform" style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }} />
                 </button>
                 {isOpen && (
                   <div className="dd-rise flex flex-col gap-2 px-4 pb-4 pt-1">
                     {m.rooms.map((r) => <RoomRecord key={r.room} r={r} included={m.includedRounds} billing={!presenter} />)}
+                    <ClientApproval orgId={orgId} projectId={projectId} m={m} mine={mine(m) || !!approver} lead={canRun} me={me} />
                     <div className="flex flex-wrap items-center gap-3 rounded-[14px] border border-[#E4E4DE] px-3.5 py-3 text-[13px]">
                       {isConfirmed(m) ? <BadgeCheck size={18} className="shrink-0 text-[#1B6E4F]" /> : <Clock size={18} className="shrink-0 text-[#8F4C07]" />}
                       <span className="min-w-0 flex-[1_1_240px]">
@@ -242,7 +246,7 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
                         <span className="block text-[12.5px] text-[#5F636D]">
                           {isConfirmed(m)
                             ? (m.confirmation!.via === 'studio' ? `Taken on the studio's screen by ${firstName(m.confirmation!.recordedBy?.name)}.` : 'Signed in to their portal; their login, address and the time are recorded.')
-                            : 'The client sees this meeting in their portal and can confirm it there, or sign here if they are with you.'}
+                            : 'If the client is with you, they can sign the record here. Their signature counts as their written approval of the agreed rooms.'}
                         </span>
                       </span>
                       {m.confirmation?.signature && <img src={m.confirmation.signature} alt={`Signature of ${m.confirmation.name}`} className="h-12 max-w-[180px] rounded-lg border border-[#EEEEEA] bg-white object-contain" />}

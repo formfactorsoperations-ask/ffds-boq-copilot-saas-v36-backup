@@ -1,7 +1,7 @@
 import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from './firebaseClient';
 import { readShape } from '../lib/drawingReview';
-import type { ChargeStatus, DesignMeeting, LayoutSetup, MeetingChange, PlanBox, RoomOutcome } from '../lib/designMeeting';
+import type { ApprovalItem, ChargeStatus, DesignMeeting, LayoutSetup, MeetingChange, PlanBox, RoomOutcome } from '../lib/designMeeting';
 import { call } from './drawingReviewService';
 
 /*
@@ -61,3 +61,28 @@ export async function setPresenters(t: Target, drawings: Record<string, string[]
   const res = await call({ ...t, action: 'presenters', drawings }, 'designMeeting');
   return res?.presenters || {};
 }
+
+/* ------------------------------------------------------------ the client's written approval */
+
+/** Sends the approval email for a held meeting's agreed rooms; the meeting then waits for the client's answer. */
+export const sendApproval = (t: Target, meetingId: string, p: { to: string; cc: string; clientName: string; driveLink: string; subject?: string; body?: string }) =>
+  call({ ...t, action: 'sendApproval', meetingId, ...p }, 'designMeeting') as Promise<{ sandbox?: boolean }>;
+
+/** Records the client's answer: approved (their reply), changes, or taken as approved once the date in the email passed. */
+export const recordApproval = (t: Target, meetingId: string, outcome: 'approved' | 'changes' | 'deemed', note: string, answeredAt?: number) =>
+  call({ ...t, action: 'recordApproval', meetingId, outcome, note, answeredAt }, 'designMeeting') as Promise<{ approved: string[]; movedOn: string[] }>;
+
+/** Brings the project's drawings in line with the written-approval rule (designMeeting: reconcile). Writes only what is wrong. */
+export const reconcileApprovals = (t: Target) => call({ ...t, action: 'reconcile' }, 'designMeeting') as Promise<{ audience: number; reclaimed: number }>;
+
+/** A project's held meetings waiting on (or done with) the client's written approval, for the Ops Desk. */
+export const listApprovals = (t: Target) =>
+  call({ ...t, action: 'approvals' }, 'designMeeting').then((r: any) => (r?.items || []) as ApprovalItem[]);
+
+/** A project's client drawings the Design Head approved and the client has not: what can be sent for approval. */
+export const listApprovable = (t: Target) =>
+  call({ ...t, action: 'approvable' }, 'designMeeting') as Promise<{ projectName: string | null; drawings: { drawingId: string; name: string; room: string; versionNo: number }[] }>;
+
+/** Records drawings shown to the client outside the Studio Desk, so their approval can be asked for. */
+export const recordPresentedOutside = (t: Target, drawingIds: string[], how: string, presentedOn: number) =>
+  call({ ...t, action: 'presentedOutside', drawingIds, how, presentedOn }, 'designMeeting');

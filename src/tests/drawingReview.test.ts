@@ -89,9 +89,11 @@ describe('marks and paths', () => {
     expect(safeId('a/b')).toBe(false);
     expect(uploadPrefix('s', 'p', 'd', 'u')).toBe('drawingReview/s/p/d/uploads/u/');
   });
-  it('guesses who a drawing is for', () => {
-    expect(guessAudience('Kitchen Carpentry Detail')).toBe('studio');
-    expect(guessAudience('Electrical Layout')).toBe('studio');
+  it('takes every new drawing as the client\'s until the Design Head says otherwise', () => {
+    /* Wardrobe and bookshelf details go to the client for approval; a name never makes a sheet studio-only. */
+    expect(guessAudience('Master Bedroom – Wardrobe detail')).toBe('client');
+    expect(guessAudience('Kitchen Carpentry Detail')).toBe('client');
+    expect(guessAudience('Electrical Layout')).toBe('client');
     expect(guessAudience('Kitchen Elevation')).toBe('client');
   });
 });

@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { fileBlob } from '../../services/drawingReviewService';
-import { loadPdf, renderPage } from '../../lib/pdfRender';
+import { loadPdf, renderPage, isCancelled } from '../../lib/pdfRender';
 import { turnShape, type MarkShape, type ReviewMark, type Turn } from '../../lib/drawingReview';
 import { MARK, FIXED, CLIENT } from './ui';
 
@@ -52,25 +52,51 @@ interface Props {
   areas?: { x: number; y: number; w: number; h: number; label?: string; active?: boolean }[] | null;
 }
 
-/* `mode` changes when the canvas element is swapped (compare on or off), so the page is drawn again into the new one. */
+/*
+  `mode` changes when the canvas element is swapped (compare on or off), so the page is drawn again into the new one.
+
+  Each change (a resize, a zoom, a turn, another sheet) aborts the pass before
+  it, and the new pass is drawn off screen and swapped in when done (lib/
+  pdfRender), so the sheet never blanks or flickers. A width settles for a
+  moment before it is drawn, so a meeting fitting itself to the screen draws
+  once, not on every step. Only a real failure, after one retry, is shown.
+*/
 function useCanvasPage(path: string | null | undefined, page: number, width: number, mode: string, turn: Turn, loader?: () => Promise<ArrayBuffer>) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pages, setPages] = useState<number | null>(null);
+  /* The page drawn last, so a new sheet starts from its spinner rather than the old sheet's size. */
+  const drawn = useRef<string>('');
   useEffect(() => {
-    let live = true;
-    if (!path || !canvas.current || width < 50) return;
+    if (!path || width < 50) return;
+    const ctrl = new AbortController();
+    const key = `${path}|${page}|${mode}`;
+    if (drawn.current !== key) setSize(null);
     setError(null);
-    loadPdf(path, loader || (async () => (await fileBlob(path)).arrayBuffer()))
-      .then(async (doc) => {
-        if (!live) return;
+    const draw = async (attempt: number): Promise<void> => {
+      try {
+        const doc = await loadPdf(path, loader || (async () => (await fileBlob(path)).arrayBuffer()));
+        if (ctrl.signal.aborted || !canvas.current) return;
         setPages(doc.numPages);
-        const s = await renderPage(doc, page, canvas.current!, width, turn);
-        if (live) setSize(s);
-      })
-      .catch((e) => live && setError(/unauthori|permission/i.test(String(e?.code || e?.message)) ? 'You cannot open this drawing.' : 'This drawing could not be opened. Check the connection and try again.'));
-    return () => { live = false; };
+        const s = await renderPage(doc, page, canvas.current, width, turn, ctrl.signal);
+        if (ctrl.signal.aborted) return;
+        drawn.current = key;
+        setSize(s);
+      } catch (e: any) {
+        if (ctrl.signal.aborted || isCancelled(e)) return;
+        if (attempt === 0 && !/unauthori|permission/i.test(String(e?.code || e?.message))) {
+          await new Promise((r) => setTimeout(r, 600));
+          if (!ctrl.signal.aborted) return draw(1);
+          return;
+        }
+        setError(/unauthori|permission/i.test(String(e?.code || e?.message)) ? 'You cannot open this drawing.' : 'This drawing could not be opened. Check the connection and try again.');
+      }
+    };
+    /* A new sheet draws at once; a resize waits until the size has settled. */
+    const wait = drawn.current === key ? 120 : 0;
+    const t = setTimeout(() => { void draw(0); }, wait);
+    return () => { clearTimeout(t); ctrl.abort(); };
   }, [path, page, width, mode, turn]);
   return { canvas, size, error, pages };
 }
@@ -109,7 +135,11 @@ export default function PdfStage(props: Props) {
   const [boxWidth, setBoxWidth] = useState(0);
   useLayoutEffect(() => {
     if (!wrap.current) return;
-    const ro = new ResizeObserver(([e]) => setBoxWidth(Math.floor(e.contentRect.width)));
+    /* Small changes (a scrollbar coming and going as the page fits) are ignored, so the page is not redrawn back and forth. */
+    const ro = new ResizeObserver(([e]) => {
+      const w = Math.floor(e.contentRect.width);
+      setBoxWidth((prev) => (!prev || Math.abs(w - prev) >= 24 ? w : prev));
+    });
     ro.observe(wrap.current);
     return () => ro.disconnect();
   }, []);
@@ -117,7 +147,8 @@ export default function PdfStage(props: Props) {
   const [aspect, setAspect] = useState<number | null>(null);
   const box = props.fitWidth || boxWidth;
   const fitted = props.fitHeight && aspect ? Math.min(box, props.fitHeight / aspect) : box;
-  const width = Math.max(200, Math.min(fitted, props.maxWidth || 1100) * zoom);
+  /* In steps of 8 px: a scrollbar appearing and going as the page is fitted no longer redraws it back and forth. */
+  const width = Math.max(200, Math.floor((Math.min(fitted, props.maxWidth || 1100) * zoom) / 8) * 8);
   const mode = comparePath ? 'compare' : 'single';
   const main = useCanvasPage(pdfPath, page, width, mode, turn, props.loader);
   useEffect(() => { if (main.size) setAspect(main.size.height / main.size.width); }, [main.size?.width, main.size?.height]);

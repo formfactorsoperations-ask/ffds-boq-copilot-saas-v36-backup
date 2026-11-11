@@ -17,7 +17,8 @@
     "@types/pako": "^2.0.4",
     "firebase-admin": "^13.10.0",
     "firebase-functions": "^7.4.0",
-    "pako": "^3.0.1"
+    "pako": "^3.0.1",
+    "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

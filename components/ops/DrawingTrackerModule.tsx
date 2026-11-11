@@ -15,9 +15,9 @@ import {
     LayoutGrid, List, AlertTriangle, X, Zap, Edit3, Trash2, PenTool
 } from '@/lib/lucide-shim';
 import { openInDesignReview } from '../../services/drawingReviewService';
-import { STATE_LABEL, stateOf, trackerPatch, isApprovedSheet, finalApprovalAt, strayApprovalPatch, clientPending, type ClientAgreement } from '../../lib/drawingReview';
-import { agreementsFrom } from '../../lib/designMeeting';
-import { watchMeetings } from '../../services/designMeetingService';
+import { STATE_LABEL, stateOf, trackerPatch, isApprovedSheet, finalApprovalAt, strayApprovalPatch, clientPending, canSetAudience, type ClientAgreement } from '../../lib/drawingReview';
+import { agreementsFrom, awaitingFrom, approvalDate, type AwaitingClient } from '../../lib/designMeeting';
+import { watchMeetings, reconcileApprovals } from '../../services/designMeetingService';
 import { classifyRevisionCause, RevisionClassification } from '../../services/geminiService';
 import { useOrg } from '../../contexts/OrgContext';
 import { isDesignerRole } from '../../lib/roleAccess';
@@ -204,12 +204,33 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         return () => unsub();
     }, [projectId, orgId]);
 
-    /* What the client agreed at the project's design meetings: a client drawing is approved only then. */
+    /*
+      What the client approved in writing after the project's design meetings:
+      a client drawing is approved only then. Agreed at a meeting and not yet
+      approved, it waits for the client (lib/designMeeting: awaitingFrom).
+    */
     const [agreements, setAgreements] = useState<Record<string, ClientAgreement>>({});
+    const [awaiting, setAwaiting] = useState<Record<string, AwaitingClient>>({});
     useEffect(() => {
         if (!projectId) return;
-        return watchMeetings(orgId, projectId, list => setAgreements(agreementsFrom(list)), () => setAgreements({}));
+        return watchMeetings(orgId, projectId, list => { setAgreements(agreementsFrom(list)); setAwaiting(awaitingFrom(list)); }, () => { setAgreements({}); setAwaiting({}); });
     }, [projectId, orgId]);
+
+    /*
+      Approvals the client never gave (the Design Head's approval on a sheet
+      whose name made it look studio-only, or a meeting closing with the room
+      agreed) go back to waiting for the client, once, on the server
+      (designMeeting: reconcile). Only the studio's leads may ask.
+    */
+    const reconciled = useRef(new Set<string>());
+    useEffect(() => {
+        if (!projectId || !canSetAudience(currentRole as any) || reconciled.current.has(projectId)) return;
+        reconciled.current.add(projectId);
+        reconcileApprovals({ orgId, projectId })
+            .then(r => { if (r?.reclaimed) addLog('info', `${r.reclaimed} drawing${r.reclaimed === 1 ? '' : 's'} went back to waiting for the client's written approval.`); })
+            .catch(err => console.warn('Could not check approvals against the client\'s answers', err));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectId, orgId, currentRole]);
 
     /*
       Sheets approved before the Desk and the design meetings wrote their
@@ -833,8 +854,20 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         if (d.review?.versionNo) {
             const s = stateOf(d.review);
             if (finalApprovalAt(d.review, agreements[d.id]) != null) return 'Approved';
-            /* The Design Head's approval on a client drawing is the studio's; the client has not agreed yet. */
-            if (s === 'APPROVED') return clientPending(d.review) ? 'Client Changes' : 'Ready for Client';
+            /*
+              The Design Head's approval on a client drawing is the studio's.
+              Then the meeting, then the client's approval in writing.
+            */
+            if (s === 'APPROVED') {
+                if (clientPending(d.review)) return 'Client Changes';
+                const aw = awaiting[d.id];
+                if (aw && aw.versionNo === d.review.versionNo) {
+                    if (aw.stage === 'changes') return 'Client Changes';
+                    if (aw.stage === 'presented') return 'Presented';
+                    return aw.stage === 'overdue' ? 'Client Overdue' : 'Awaiting Client';
+                }
+                return 'Ready for Client';
+            }
             if (s === 'IN_REVIEW') return 'Studio Review';
             if (s === 'CHANGES_REQUESTED') return 'Returned';
             if (s === 'DRAFT') return 'In Progress';
@@ -952,17 +985,17 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         for (const d of drawings) {
             const st = statusOf(d);
             // A submitted round, one ready for the client or the client's changes need the studio; a returned one, the Designer.
-            if (st === 'Client Review' || st === 'Site Hold' || d.isGapFlagged || ((st === 'Studio Review' || st === 'Ready for Client' || st === 'Client Changes') && isOwner) || (st === 'Returned' && !isOwner)) c['Action Required']++;
+            if (st === 'Client Review' || st === 'Site Hold' || d.isGapFlagged || ((st === 'Studio Review' || st === 'Ready for Client' || st === 'Client Changes' || st === 'Presented' || st === 'Client Overdue') && isOwner) || (st === 'Returned' && !isOwner)) c['Action Required']++;
             if (st === 'Studio Review') c['Studio Review']++;
             if (st === 'Not Started') c['Not Started']++;
-            if (st === 'Client Review') c['Client Review']++;
+            if (st === 'Client Review' || st === 'Presented' || st === 'Awaiting Client' || st === 'Client Overdue') c['Client Review']++;
             if (st === 'Approved') c['Approved']++;
             if (st === 'GFC Issued') c['GFC Issued']++;
             if (st === 'Missing' || d.isGapFlagged) c['Missing']++;
         }
         return c;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [drawings, agreements, isOwner]);
+    }, [drawings, agreements, awaiting, isOwner]);
 
     const stats = {
         total: drawings.length,
@@ -987,10 +1020,10 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
         // Pill filter
         if (filter === 'All') return true;
-        if (filter === 'Action Required') return status === 'Client Review' || status === 'Site Hold' || d.isGapFlagged || ((status === 'Studio Review' || status === 'Ready for Client' || status === 'Client Changes') && isOwner) || (status === 'Returned' && !isOwner);
+        if (filter === 'Action Required') return status === 'Client Review' || status === 'Site Hold' || d.isGapFlagged || ((status === 'Studio Review' || status === 'Ready for Client' || status === 'Client Changes' || status === 'Presented' || status === 'Client Overdue') && isOwner) || (status === 'Returned' && !isOwner);
         if (filter === 'Studio Review') return status === 'Studio Review';
         if (filter === 'Not Started') return status === 'Not Started';
-        if (filter === 'Client Review') return status === 'Client Review';
+        if (filter === 'Client Review') return (status === 'Client Review' || status === 'Presented' || status === 'Awaiting Client' || status === 'Client Overdue');
         if (filter === 'Approved') return status === 'Approved';
         if (filter === 'GFC Issued') return status === 'GFC Issued';
         if (filter === 'Missing') return status === 'Missing' || d.isGapFlagged;
@@ -1149,7 +1182,8 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
     };
 
     // Custom Status Badge Renderer
-    const renderStatusBadge = (status: string) => {
+    const renderStatusBadge = (status: string, d?: DrawingTrackerItem) => {
+        const aw = d ? awaiting[d.id] : undefined;
         switch (status) {
             case 'GFC Issued':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs"><ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />GFC Released</span>;
@@ -1167,6 +1201,12 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs"><AlertCircle className="w-3.5 h-3.5 text-amber-600" />Returned</span>;
             case 'Ready for Client':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs"><CheckCircle2 className="w-3.5 h-3.5 text-[#2E7D6B]" />Ready for client</span>;
+            case 'Presented':
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs" title="Agreed at the design meeting. Send the approval email from Design Desk, Meetings."><Send className="w-3.5 h-3.5 text-[#2E7D6B]" />Presented · send for approval</span>;
+            case 'Awaiting Client':
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs"><Clock className="w-3.5 h-3.5 text-[#2E7D6B]" />Awaiting client{aw?.sentAt ? ` · day ${aw.days}` : ''}{aw?.dueAt ? ` · by ${approvalDate(aw.dueAt)}` : ''}</span>;
+            case 'Client Overdue':
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-rose-50 text-rose-800 border border-rose-200 shadow-2xs"><AlertCircle className="w-3.5 h-3.5 text-rose-600" />Client approval overdue{aw?.dueAt ? ` · was due ${approvalDate(aw.dueAt)}` : ''}</span>;
             case 'Client Changes':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs"><User className="w-3.5 h-3.5 text-amber-600" />Client changes</span>;
             case 'In Progress':
@@ -1615,7 +1655,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
                     {/* status, and where the sheet is in Design Review */}
                     <div className="hidden lg:block min-w-0">
-                        {renderStatusBadge(status)}
+                        {renderStatusBadge(status, d)}
                         {d.review?.state && (
                             <button
                                 type="button"
@@ -2626,7 +2666,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                             <td className="p-3 text-slate-400 font-bold">{i + 1}</td>
                                             <td className="p-3 font-bold text-slate-900">{d.name}</td>
                                             <td className="p-3 text-slate-600">{d.boqTriggers.join(', ')}</td>
-                                            <td className="p-3">{renderStatusBadge(statusOf(d))}</td>
+                                            <td className="p-3">{renderStatusBadge(statusOf(d), d)}</td>
                                             <td className="p-3 font-bold">R{d.currentRound || 0}</td>
                                             <td className="p-3 text-slate-600">{formatDate(d.approvedAt)}</td>
                                             <td className="p-3 font-mono font-bold text-slate-900">{d.gfc?.boqVersionRef || '—'}</td>

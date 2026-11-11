@@ -28,7 +28,9 @@ export { onProjectWrittenDesignView, onDesignerAssignmentChange, rebuildDesignVi
 /* Design Review: the only writer of a drawing's review state; see drawingReview.ts. */
 export { drawingReview } from "./drawingReview";
 /* Design meetings: presenting approved rooms to the client; see designMeeting.ts. */
-export { designMeeting } from "./designMeeting";
+export { designMeeting, designApprovalReminders } from "./designMeeting";
+/* Google Drive: the approved drawings operations pick, copied landscape to a folder per project; see googleDrive.ts. */
+export { googleDrive, driveOAuthCallback } from "./googleDrive";
 /* The Ops Desk: escalation emails and the daily check; see opsDesk.ts. */
 export { onEscalationWritten, opsDeskDailyCheck, opsDeskCheckNow } from "./opsDesk";
 export { onVisitRequestWritten, onDeskMeetingWritten, onMinutesWritten, onDesignMeetingWritten } from "./meetingSync";
