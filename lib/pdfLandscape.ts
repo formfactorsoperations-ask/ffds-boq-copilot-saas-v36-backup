@@ -79,5 +79,5 @@ export async function landscapePdf(bytes: ArrayBuffer | Uint8Array, way: TurnWay
 export async function landscapeFile(file: File, way: TurnWay = 'right'): Promise<{ file: File; turned: number }> {
   const out = await landscapePdf(await file.arrayBuffer(), way);
   if (!out.turned) return { file, turned: 0 };
-  return { file: new File([out.bytes], file.name, { type: 'application/pdf', lastModified: file.lastModified }), turned: out.turned };
+  return { file: new File([out.bytes as unknown as BlobPart], file.name, { type: 'application/pdf', lastModified: file.lastModified }), turned: out.turned };
 }

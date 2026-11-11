@@ -7,6 +7,7 @@ import {
   APPROVAL_WORKING_DAYS, REMINDER_WORKING_DAYS, type DesignMeeting, type ApprovalStage,
 } from '../../lib/designMeeting';
 import { sendApproval, recordApproval } from '../../services/designMeetingService';
+import { projectDriveLink } from '../../services/googleDriveService';
 import { shortDate, firstName, useToast } from './ui';
 import { Chip, type Tone } from './DeskParts';
 
@@ -79,6 +80,8 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me }: 
     setTo((v) => v || a?.sentTo?.join(', ') || contact.email);
     setGreet((v) => v || a?.clientName || contact.name);
     setDrive((v) => v || a?.driveLink || '');
+    /* The project's Drive folder, when the studio has connected Google Drive (Studio settings). */
+    if (!a?.driveLink) projectDriveLink(projectId, orgId).then((link) => { if (link) setDrive((v) => v || link); });
   }, [contact]);
 
   const [note, setNote] = useState('');

@@ -1242,6 +1242,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    /*
+      Google Drive (functions/src/googleDrive.ts): the studio's Google refresh
+      token, its project folders and the copies made. Only the googleDrive
+      functions read or write it, through the Admin SDK. Closed by name, like
+      the Zoho connection: a token that writes to the studio's Drive is never
+      readable from a browser. The studio sees the connection through the
+      googleDrive callable's status.
+    */
+    match /driveConnections/{tenantId}/{document=**} {
+      allow read, write: if false;
+    }
+    match /driveConnections/{tenantId} {
+      allow read, write: if false;
+    }
+
     match /studios/{studioId} {
       allow read: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());
       allow write: if isAuthenticated() && (studioId == getUserTenantId() || isSuperAdmin());

@@ -25,6 +25,7 @@ import { connectGoogleCalendar, isGoogleCalendarConnected } from '../../services
 import { CountUp, Dot } from '../ui/HudBits';
 import StudioTeamSection from './StudioTeamSection';
 import ZohoBooksCard from './ZohoBooksCard';
+import GoogleDriveCard from './GoogleDriveCard';
 import OpsDeskSettings from './OpsDeskSettings';
 import MinutesMigration from './MinutesMigration';
 import PeopleSettings from './PeopleSettings';
@@ -658,6 +659,11 @@ export default function StudioSettingsConsole(props: {
                   Collapsed and off unless a studio connects it. */}
               <div className="mt-6 pt-6 border-t border-slate-100">
                 <ZohoBooksCard />
+              </div>
+
+              {/* Approved client drawings copied to a Drive folder per project, linked from the approval email. */}
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <GoogleDriveCard />
               </div>
 
               {/* Destructive, and the only thing on this screen that is — kept
