@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
-  trackerPatch, isApprovedSheet, finalApprovalAt, strayApprovalPatch,
+  trackerPatch, isApprovedSheet, finalApprovalAt, strayApprovalPatch, reclaimPatch,
   type ReviewSummary, type ReviewState, type TrackerFields, type ClientAgreement,
 } from '../../lib/drawingReview';
-import { agreementsFrom } from '../../lib/designMeeting';
+import { agreementsFrom, blankApproval } from '../../lib/designMeeting';
 
 /*
   The Drawings table follows the Design Desk, and approved means approved by
   whoever has the last word: the Design Head for a studio-only drawing, the
-  client at a design meeting for one the client sees.
+  client, in writing after the design meeting, for one the client sees.
 */
 
 const NOW = new Date('2026-10-22T10:00:00').getTime();
@@ -120,14 +120,59 @@ describe('agreementsFrom', () => {
   const sheet = (drawingId: string, versionNo: number) => ({ drawingId, name: drawingId, versionId: `v${versionNo}`, versionNo, pdfPath: null, thumbPath: null, pageCount: 1 });
   const room = (outcome: 'agreed' | 'changes' | null, sheets: any[]) => ({ room: 'Kitchen', sheets, outcome, changes: [], round: 0, charge: null });
 
-  it('takes the latest agreed version per drawing from held meetings only', () => {
+  const ok = (at: number) => ({ ...blankApproval(), status: 'approved', answeredAt: at, via: 'email' });
+
+  it('counts a meeting only once the client approved it in writing', () => {
     const out = agreementsFrom([
-      { id: 'a', state: 'CLOSED', closedAt: 10, rooms: [room('agreed', [sheet('k1', 1), sheet('k2', 1)])] },
-      { id: 'b', state: 'CLOSED', closedAt: 20, rooms: [room('agreed', [sheet('k1', 2)])] },
-      { id: 'c', state: 'CLOSED', closedAt: 30, rooms: [room('changes', [sheet('k2', 2)])] },
+      { id: 'a', state: 'CLOSED', closedAt: 10, approval: ok(12), rooms: [room('agreed', [sheet('k1', 1), sheet('k2', 1)])] },
+      { id: 'b', state: 'CLOSED', closedAt: 20, approval: ok(25), rooms: [room('agreed', [sheet('k1', 2)])] },
+      { id: 'c', state: 'CLOSED', closedAt: 30, approval: ok(31), rooms: [room('changes', [sheet('k2', 2)])] },
       { id: 'd', state: 'OPEN', closedAt: null, rooms: [room('agreed', [sheet('k3', 1)])] },
+      /* Agreed at the meeting, no written approval yet: not approved. */
+      { id: 'e', state: 'CLOSED', closedAt: 40, approval: blankApproval(), rooms: [room('agreed', [sheet('k4', 1)])] },
+      /* Signed on the studio's screen: that is written approval. */
+      { id: 'f', state: 'CLOSED', closedAt: 50, confirmation: { via: 'studio', name: 'G', at: 51 }, rooms: [room('agreed', [sheet('k5', 1)])] },
     ] as any);
-    expect(out).toEqual({ k1: { meetingId: 'b', at: 20, versionNo: 2 }, k2: { meetingId: 'a', at: 10, versionNo: 1 } });
+    expect(out).toEqual({
+      k1: { meetingId: 'b', at: 25, versionNo: 2 },
+      k2: { meetingId: 'a', at: 12, versionNo: 1 },
+      k5: { meetingId: 'f', at: 51, versionNo: 1 },
+    });
+  });
+
+  it('dates an approval by the client\'s answer, and never counts changes', () => {
+    const changes = { ...blankApproval(), status: 'changes', answeredAt: 15 };
+    expect(agreementsFrom([{ id: 'a', state: 'CLOSED', closedAt: 10, approval: changes, rooms: [room('agreed', [sheet('k1', 1)])] }] as any)).toEqual({});
+    const deemed = { ...blankApproval(), status: 'deemed', answeredAt: 99 };
+    expect(agreementsFrom([{ id: 'a', state: 'CLOSED', closedAt: 10, approval: deemed, rooms: [room('agreed', [sheet('k1', 1)])] }] as any).k1.at).toBe(99);
+  });
+});
+
+describe('reclaimPatch: approvals the client never gave', () => {
+  const client = (extra: Partial<ReviewSummary> = {}) => review('APPROVED', { decidedAt: DECIDED, ...extra });
+
+  it('takes back the approval a meeting close wrote, keeping a round the studio issued', () => {
+    const d = { currentRound: 1, approvedAt: 700, rounds: [round(1, 'approved', { issuedBy: 'Riya', issuedAt: 100, clientFeedbackSubmittedAt: 700 })] };
+    expect(reclaimPatch(d, client(), null, [700])).toEqual({ approvedAt: null, rounds: [round(1, 'in_review', { issuedBy: 'Riya', issuedAt: 100, clientFeedbackSubmittedAt: null })] });
+  });
+
+  it('removes a round the sync added', () => {
+    const d = { currentRound: 2, approvedAt: 700, rounds: [round(1, 'issued', { issuedBy: 'Riya' }), round(2, 'approved', { issuedAt: 700, issuedBy: null, clientFeedbackSubmittedAt: 700 })] };
+    expect(reclaimPatch(d, client(), null, [700])).toEqual({ approvedAt: null, rounds: [round(1, 'issued', { issuedBy: 'Riya' })], currentRound: 1 });
+  });
+
+  it('takes back the Design Head\'s approval on a sheet the old name guess made studio-only', () => {
+    const d = { currentRound: 1, approvedAt: DECIDED, rounds: [round(1, 'approved', { issuedAt: null, issuedBy: null })] };
+    expect(reclaimPatch(d, client({ audience: 'client' }), null, [])!.approvedAt).toBeNull();
+    /* Still studio-only (the Design Head said so): left approved. */
+    expect(reclaimPatch(d, client({ audience: 'studio' }), null, [])).toBeNull();
+  });
+
+  it('leaves alone what the client did approve, a hand-set approval and a released drawing', () => {
+    const d = { currentRound: 1, approvedAt: 700, rounds: [round(1, 'approved')] };
+    expect(reclaimPatch(d, client(), { meetingId: 'm', at: 720, versionNo: 2 }, [700])).toBeNull();
+    expect(reclaimPatch({ ...d, approvedAt: 555 }, client(), null, [700])).toBeNull();
+    expect(reclaimPatch({ ...d, gfc: { status: 'issued' } }, client(), null, [700])).toBeNull();
   });
 });
 

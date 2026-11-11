@@ -1,9 +1,10 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, BadgeCheck, Check, ChevronLeft, ChevronRight, Download, ListChecks, Loader2, MapPin, MapPinned, Maximize2, Minimize2, Minus, MonitorUp, PanelRightClose, PanelRightOpen, PenLine, Plus, ReceiptText, RotateCw, Trash2, Undo2, X } from 'lucide-react';
+import { landscapePdf } from '../../lib/pdfLandscape';
 import { clientRoundsByRoom, isOverIncluded, plural, type DesignMeeting, type MeetingChange, type RoomOutcome } from '../../lib/designMeeting';
 import type { MarkShape, ReviewMark, Turn } from '../../lib/drawingReview';
 import { decideRoom, closeMeeting } from '../../services/designMeetingService';
-import { fileUrl } from '../../services/drawingReviewService';
+import { fileBlob } from '../../services/drawingReviewService';
 import PdfStage from './PdfStage';
 import { CLIENT, roomLabel, useToast } from './ui';
 import { Chip, ProjectMark } from './DeskParts';
@@ -155,10 +156,14 @@ const MeetingMode: React.FC<Props> = ({ orgId, projectId, projectName, look, mee
     if (!sh.pdfPath) return;
     setSaving(true);
     try {
+      /* Saved landscape: a version uploaded before the Desk turned files is turned as it downloads (lib/pdfLandscape). */
+      const { bytes } = await landscapePdf(await (await fileBlob(sh.pdfPath)).arrayBuffer());
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
       const a = document.createElement('a');
-      a.href = await fileUrl(sh.pdfPath);
+      a.href = url;
       a.download = `${sh.name.replace(/[\\/:*?"<>|]+/g, '-')} v${sh.versionNo}.pdf`;
       document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e: any) {
       toast({ title: 'The PDF did not download', sub: e?.message });
     } finally { setSaving(false); }

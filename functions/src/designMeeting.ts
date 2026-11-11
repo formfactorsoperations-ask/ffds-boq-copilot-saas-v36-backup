@@ -1,14 +1,18 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import { sendMail } from "./mail";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { resolveActor, person, type Actor } from "./drawingReview";
 import {
-  canRunMeeting, canPresentAssigned, canSetAudience, cleanText, storeShape, safeId, trackerPatch,
+  canRunMeeting, canPresentAssigned, canSetAudience, cleanText, storeShape, safeId, trackerPatch, clientPending, reclaimPatch,
   type ReviewSummary, type ReviewMark, type ReviewEvent,
 } from "../../lib/drawingReview";
 import {
   presentableRooms, clientRoundsByRoom, includedRoundsFrom, isOverIncluded, cleanChanges, cleanFee,
   cleanSignerName, cleanSignature, portalDesignRecord, cleanRoomBoxes, cleanPresenters, mayRunThis,
+  needsApproval, blankApproval, approvalSheets, approvalEmail, addWorkingDays, reminderDue, mayDeem, agreementsFrom,
+  cleanEmails, cleanLink, APPROVAL_WORKING_DAYS, type ClientApproval, type ApprovalVia,
   type DesignMeeting, type MeetingConfirmation, type PortalDesignMeeting, type MeetingLayout, type LayoutSetup, type MeetingRoom, type MeetingSheet, type RoomCharge, type ChargeStatus, type RoomDrawing,
 } from "../../lib/designMeeting";
 
@@ -187,10 +191,8 @@ async function close(actor: Actor, orgId: string, projectId: string, input: Inpu
         const s = drawingSnaps.get(sh.drawingId)!.data()!.review as ReviewSummary;
         const mine = r.changes.filter((c) => c.drawingId === sh.drawingId);
         if (r.outcome === "agreed" || !mine.length) {
-          tx.set(dref.collection("reviewEvents").doc(), { type: "client", at: now, by, versionNo: sh.versionNo, text: r.outcome === "agreed" ? "Agreed with the client at the design meeting" : "Shown at the design meeting; the client's changes were on other sheets of the room" } as ReviewEvent);
-          /* The client agreed the room: its sheets are approved in the Drawings table (lib/drawingReview: finalApprovalAt). */
-          const patch = r.outcome === "agreed" ? trackerPatch(drawingSnaps.get(sh.drawingId)!.data(), s, { meetingId: m.id, at: now, versionNo: sh.versionNo }, now) : null;
-          if (patch) tx.update(dref, patch);
+          tx.set(dref.collection("reviewEvents").doc(), { type: "client", at: now, by, versionNo: sh.versionNo, text: r.outcome === "agreed" ? "Agreed with the client at the design meeting; waiting for their approval in writing" : "Shown at the design meeting; the client's changes were on other sheets of the room" } as ReviewEvent);
+          /* Agreeing at the meeting is not the approval: that comes back in writing (recordApproval, below). */
           continue;
         }
         let seq = s.marksSeq || 0;
@@ -209,8 +211,10 @@ async function close(actor: Actor, orgId: string, projectId: string, input: Inpu
     }
 
     const stored = rooms.map((r) => ({ ...r, changes: r.changes.map((c) => ({ ...c, shape: storeShape(c.shape) })) }));
-    tx.update(ref, { state: "CLOSED", rooms: stored, closedAt: now, closedBy: by, rev: m.rev + 1 });
-    return { meeting: { ...m, state: "CLOSED", rooms, closedAt: now, closedBy: by, rev: m.rev + 1 } as DesignMeeting };
+    /* Rooms the client agreed now wait for their approval in writing. */
+    const approval: ClientApproval | null = needsApproval({ state: "CLOSED", rooms }) ? blankApproval() : null;
+    tx.update(ref, { state: "CLOSED", rooms: stored, closedAt: now, closedBy: by, rev: m.rev + 1, approval });
+    return { meeting: { ...m, state: "CLOSED", rooms, closedAt: now, closedBy: by, rev: m.rev + 1, approval } as DesignMeeting };
   });
   await refreshPortalRecord(orgId, projectId);
   return out;
@@ -255,9 +259,14 @@ async function sign(actor: Actor, orgId: string, projectId: string, input: Input
     mustRunThis(actor, m);
     if (m.state !== "CLOSED") throw new HttpsError("failed-precondition", "Save the meeting before the client confirms it.");
     if (m.confirmation?.at) throw new HttpsError("failed-precondition", "The client has already confirmed this meeting.");
-    const confirmation: MeetingConfirmation = { via: "studio", name, email: null, uid: null, at: Date.now(), signature, recordedBy: person(actor) };
-    tx.update(ref, { confirmation, rev: m.rev + 1 });
-    return { meeting: { ...m, confirmation, rev: m.rev + 1 } };
+    const snaps = await readAgreedSheets(tx, orgId, projectId, m);
+    const now = Date.now();
+    const confirmation: MeetingConfirmation = { via: "studio", name, email: null, uid: null, at: now, signature, recordedBy: person(actor) };
+    /* The client's signature on the record is their approval in writing. */
+    const approval = settleApproval(m, "approved", "signature", now, `Signed by ${name} in the studio`, person(actor), now);
+    const result = writeApprovedSheets(tx, orgId, projectId, m, snaps, now, person(actor), "Approved by the client: signed the meeting record in the studio");
+    tx.update(ref, { confirmation, rev: m.rev + 1, ...(approval ? { approval } : {}) });
+    return { meeting: { ...m, confirmation, rev: m.rev + 1, ...(approval ? { approval } : {}) }, ...result };
   });
   await refreshPortalRecord(orgId, projectId);
   return out;
@@ -283,11 +292,16 @@ export async function confirmMeetingByClient(p: {
     const m = snap.data() as DesignMeeting | undefined;
     if (!m || m.state !== "CLOSED") throw new HttpsError("not-found", "That meeting is not in your design record.");
     if (m.confirmation?.at) throw new HttpsError("failed-precondition", "This meeting is already confirmed.");
+    const snaps = await readAgreedSheets(tx, orgId, p.projectId, m);
+    const now = Date.now();
     const confirmation: MeetingConfirmation = {
-      via: "portal", name, email: p.email, uid: p.uid, at: Date.now(),
+      via: "portal", name, email: p.email, uid: p.uid, at: now,
       ip: p.ip, userAgent: String(p.userAgent || "").slice(0, 300),
     };
-    tx.update(ref, { confirmation, rev: m.rev + 1 });
+    const client = { uid: p.uid, email: p.email || "", name };
+    const approval = settleApproval(m, "approved", "portal", now, `Confirmed by ${name} in the portal`, client, now);
+    writeApprovedSheets(tx, orgId, p.projectId, m, snaps, now, client, "Approved by the client: confirmed the meeting record in the portal");
+    tx.update(ref, { confirmation, rev: m.rev + 1, ...(approval ? { approval } : {}) });
   });
   return refreshPortalRecord(orgId, p.projectId);
 }
@@ -418,7 +432,234 @@ async function charge(actor: Actor, orgId: string, projectId: string, input: Inp
   });
 }
 
-export const designMeeting = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
+/* ------------------------------------------------------------ the client's written approval */
+
+/*
+  After a meeting, the rooms the client agreed wait for their approval in
+  writing (lib/designMeeting: ClientApproval). The studio sends the approval
+  email from here, the reminders go on working days 3 and 5
+  (designApprovalReminders, below), and the studio records the client's
+  answer: approved (their reply pasted in), changes, or, once the date in the
+  email has passed, taken as approved by the Design Head. Approving writes
+  the Drawings table in the same transaction, on the versions the client was
+  shown; a sheet that has moved on since is left as it is and named.
+*/
+
+type Snaps = Map<string, FirebaseFirestore.DocumentSnapshot>;
+
+/** The agreed rooms' drawings, read before any write. */
+async function readAgreedSheets(tx: FirebaseFirestore.Transaction, orgId: string, projectId: string, m: DesignMeeting): Promise<Snaps> {
+  const base = projectPath(orgId, projectId);
+  const snaps: Snaps = new Map();
+  for (const sh of approvalSheets(m)) {
+    if (!snaps.has(sh.drawingId)) snaps.set(sh.drawingId, await tx.get(db().doc(`${base}/drawingTracker/${sh.drawingId}`)));
+  }
+  return snaps;
+}
+
+/** Approves the agreed sheets in the Drawings table: only those still on the version the client was shown. */
+function writeApprovedSheets(tx: FirebaseFirestore.Transaction, orgId: string, projectId: string, m: DesignMeeting, snaps: Snaps,
+  at: number, by: { uid: string; email: string; name: string }, text: string): { approved: string[]; movedOn: string[] } {
+  const base = projectPath(orgId, projectId);
+  const approved: string[] = [];
+  const movedOn: string[] = [];
+  for (const sh of approvalSheets(m)) {
+    const snap = snaps.get(sh.drawingId);
+    const s: ReviewSummary | undefined = snap?.data()?.review;
+    if (!snap?.exists || !s || s.state !== "APPROVED" || s.versionNo !== sh.versionNo || clientPending(s)) { movedOn.push(sh.name); continue; }
+    const dref = db().doc(`${base}/drawingTracker/${sh.drawingId}`);
+    const patch = trackerPatch(snap.data(), s, { meetingId: m.id, at, versionNo: sh.versionNo }, Date.now());
+    if (patch) tx.update(dref, patch);
+    tx.set(dref.collection("reviewEvents").doc(), { type: "client", at: Date.now(), by, versionNo: sh.versionNo, text } as ReviewEvent);
+    approved.push(sh.name);
+  }
+  return { approved, movedOn };
+}
+
+/** The meeting's approval, settled. Null for a meeting that never asked for one (no agreed rooms). */
+function settleApproval(m: DesignMeeting, status: "approved" | "deemed" | "changes", via: ApprovalVia, answeredAt: number, note: string | null,
+  by: { uid: string; email: string; name: string }, now: number): ClientApproval | null {
+  if (!needsApproval(m)) return null;
+  return { ...blankApproval(), ...(m.approval || {}), status, via, answeredAt, note, recordedBy: by, recordedAt: now };
+}
+
+function mustAwait(m: DesignMeeting) {
+  if (m.state !== "CLOSED") throw new HttpsError("failed-precondition", "Save the meeting first.");
+  if (!needsApproval(m)) throw new HttpsError("failed-precondition", "The client did not agree any room at this meeting, so there is nothing to approve.");
+  if (m.confirmation?.at || m.approval?.status === "approved" || m.approval?.status === "deemed") {
+    throw new HttpsError("failed-precondition", "The client's approval is already recorded for this meeting.");
+  }
+}
+
+/** What the approval email needs that the meeting does not carry: the client and the studio, from the project. */
+async function projectContact(projectId: string) {
+  const ctx = (await db().doc(`projects/${projectId}`).get()).data()?.context || {};
+  return {
+    clientName: String(ctx.clientName || "").trim().slice(0, 80),
+    clientEmails: cleanEmails(ctx.clientEmail || "") || [],
+    studioName: String(ctx.portalStudio?.name || "").trim().slice(0, 80),
+  };
+}
+
+async function sendApproval(actor: Actor, orgId: string, projectId: string, input: Input) {
+  mustPresent(actor);
+  const ref = meetingRef(orgId, projectId, input.meetingId);
+  const to = cleanEmails(input.to);
+  if (!to || !to.length) throw new HttpsError("invalid-argument", "Add the client's email address.");
+  const cc = cleanEmails(input.cc || []);
+  if (!cc) throw new HttpsError("invalid-argument", "One of the CC addresses is not an email address.");
+  const driveLink = input.driveLink ? cleanLink(input.driveLink) : null;
+  if (input.driveLink && !driveLink) throw new HttpsError("invalid-argument", "The Drive link has to start with https://");
+  const clientName = cleanSignerName(input.clientName);
+  if (!clientName) throw new HttpsError("invalid-argument", "Write the client's name as the email should greet them.");
+  const contact = await projectContact(projectId);
+
+  /* Checked first, sent next, recorded last: a failed send records nothing, a failed record is reported. */
+  const first = await ref.get();
+  const m0 = first.data() as DesignMeeting | undefined;
+  if (!m0) throw new HttpsError("not-found", "That meeting could not be found.");
+  mustRunThis(actor, m0);
+  mustAwait(m0);
+  const now = Date.now();
+  const dueAt = addWorkingDays(now, APPROVAL_WORKING_DAYS);
+  const sheets = approvalSheets(m0);
+  const mail = approvalEmail({ kind: "request", clientName, projectName: m0.projectName || actor.projectName || "your project", sheets, driveLink, dueAt, senderName: actor.name, studioName: contact.studioName });
+  const copies = [...new Set([actor.email, ...cc].filter((e) => e && !to.includes(e)))];
+  const sent = await sendMail({ to, cc: copies, replyTo: actor.email, subject: mail.subject, html: mail.html, text: mail.text, fromName: actor.name });
+
+  const out = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const m = snap.data() as DesignMeeting;
+    mustAwait(m);
+    const approval: ClientApproval = {
+      ...blankApproval(), ...(m.approval || {}),
+      status: "awaiting", sentAt: now, sentBy: person(actor), sentTo: to, cc: copies, clientName, studioName: contact.studioName,
+      driveLink, dueAt, reminders: [], answeredAt: null, via: null, note: null, recordedBy: null, recordedAt: null,
+    };
+    tx.update(ref, { approval, rev: m.rev + 1 });
+    return { meeting: { ...m, approval, rev: m.rev + 1 } };
+  });
+  return { ...out, sandbox: !!sent.sandbox };
+}
+
+async function recordApproval(actor: Actor, orgId: string, projectId: string, input: Input) {
+  mustPresent(actor);
+  const outcome = input.outcome === "approved" || input.outcome === "changes" || input.outcome === "deemed" ? input.outcome : null;
+  if (!outcome) throw new HttpsError("invalid-argument", "Approved, changes, or taken as approved?");
+  const note = cleanText(input.note, 2000) || null;
+  if (outcome === "changes" && !note) throw new HttpsError("invalid-argument", "Paste what the client asked to change.");
+  const ref = meetingRef(orgId, projectId, input.meetingId);
+  return db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const m = snap.data() as DesignMeeting | undefined;
+    if (!m) throw new HttpsError("not-found", "That meeting could not be found.");
+    mustRunThis(actor, m);
+    mustAwait(m);
+    const now = Date.now();
+    if (outcome === "deemed") {
+      if (!isLead(actor)) throw new HttpsError("permission-denied", "Only the Design Head, the Owner or an Admin takes drawings as approved.");
+      if (!mayDeem(m.approval, now)) throw new HttpsError("failed-precondition", "The date in the approval email has not passed yet.");
+    }
+    /* The date on the client's reply: not before the meeting, not in the future. Taken as approved: the date in the email. */
+    const asked = Number(input.answeredAt);
+    const answeredAt = outcome === "deemed" ? m.approval!.dueAt! : Number.isFinite(asked) && asked >= (m.closedAt || 0) && asked <= now ? asked : now;
+    const snaps = outcome === "changes" ? new Map() as Snaps : await readAgreedSheets(tx, orgId, projectId, m);
+    const approval = settleApproval(m, outcome, outcome === "deemed" ? "deemed" : "email", answeredAt,
+      outcome === "deemed" ? note || `No answer by ${new Date(m.approval!.dueAt!).toISOString().slice(0, 10)}; taken as approved, as the approval email said.` : note, person(actor), now)!;
+    let result = { approved: [] as string[], movedOn: [] as string[] };
+    if (outcome !== "changes") {
+      result = writeApprovedSheets(tx, orgId, projectId, m, snaps, answeredAt, person(actor),
+        outcome === "deemed" ? "Taken as approved: the client did not answer by the date in the approval email" : "Approved by the client in writing (email)");
+    }
+    tx.update(ref, { approval, rev: m.rev + 1 });
+    return { meeting: { ...m, approval, rev: m.rev + 1 }, ...result };
+  });
+}
+
+/*
+  Brings a project's drawings in line with the written-approval rule, once
+  each: a sheet the old name guess made studio-only (and the Design Head
+  never marked so) becomes the client's, and an approval in the table that
+  the client never gave goes back to waiting for them (lib/drawingReview:
+  reclaimPatch). Run from the Drawings table by the studio's leads; it writes
+  only what is wrong, so running it again writes nothing.
+*/
+async function reconcile(actor: Actor, orgId: string, projectId: string) {
+  if (!canSetAudience(actor.roles)) throw new HttpsError("permission-denied", "Only the Design Head or the studio's leads can do this.");
+  const base = projectPath(orgId, projectId);
+  const [tracker, held] = await Promise.all([
+    db().collection(`${base}/drawingTracker`).get(),
+    db().collection(`${base}/designMeetings`).where("state", "==", "CLOSED").get(),
+  ]);
+  const meetings = held.docs.map((d) => ({ ...(d.data() as DesignMeeting), id: d.id }));
+  const agreements = agreementsFrom(meetings);
+  /* When each drawing's room was agreed at a meeting: the old close wrote its approval at exactly that time. */
+  const closedAt: Record<string, number[]> = {};
+  meetings.forEach((m) => m.rooms.forEach((r) => {
+    if (r.outcome === "agreed" && m.closedAt) r.sheets.forEach((sh) => (closedAt[sh.drawingId] = [...(closedAt[sh.drawingId] || []), m.closedAt!]));
+  }));
+  let audience = 0, reclaimed = 0;
+  for (const d of tracker.docs) {
+    const data = d.data();
+    let review: ReviewSummary | undefined = data.review;
+    if (!review) continue;
+    const write: Record<string, any> = {};
+    if (!review.audienceChecked) {
+      let next: ReviewSummary = { ...review, audienceChecked: true };
+      if (review.audience === "studio") {
+        const chose = await d.ref.collection("reviewEvents").where("type", "==", "audience").limit(1).get();
+        if (chose.empty) { next = { ...next, audience: "client" }; audience++; }
+      }
+      review = next;
+      write.review = next;
+    }
+    const patch = reclaimPatch(data as any, review, agreements[d.id], closedAt[d.id] || []);
+    if (patch) { Object.assign(write, patch); reclaimed++; }
+    if (Object.keys(write).length) await d.ref.update(write);
+    if (patch) await d.ref.collection("reviewEvents").add({ type: "client", at: Date.now(), by: person(actor), versionNo: review.versionNo, text: "Back to waiting for the client: approved in the table before the client approved it in writing" } as ReviewEvent);
+  }
+  return { audience, reclaimed };
+}
+
+/*
+  The reminders: every morning, each approval email still unanswered gets
+  its reminder on working days 3 and 5 after it went, from the person who
+  sent it (replies go to them). Once the date in the email passes, the studio
+  sees it as overdue and the Design Head decides.
+*/
+export const designApprovalReminders = onSchedule(
+  { schedule: "every day 10:00", timeZone: "Asia/Kolkata", secrets: ["RESEND_API_KEY", "EMAIL_FROM"], timeoutSeconds: 300 },
+  async () => {
+    const now = Date.now();
+    const waiting = await db().collectionGroup("designMeetings").where("approval.status", "==", "awaiting").get();
+    for (const doc of waiting.docs) {
+      const m = doc.data() as DesignMeeting;
+      const which = reminderDue(m.approval, now);
+      if (which === null || !m.approval?.sentTo?.length || !m.approval.dueAt) continue;
+      const a = m.approval;
+      try {
+        /* Claimed first, so a retried run never sends the same reminder twice. */
+        const claimed = await db().runTransaction(async (tx) => {
+          const fresh = (await tx.get(doc.ref)).data() as DesignMeeting;
+          if (reminderDue(fresh.approval, now) !== which) return false;
+          tx.update(doc.ref, { "approval.reminders": [...(fresh.approval!.reminders || []), now] });
+          return true;
+        });
+        if (!claimed) continue;
+        const mail = approvalEmail({
+          kind: "reminder", reminder: which, clientName: a.clientName || "there", projectName: m.projectName || "your project",
+          sheets: approvalSheets(m), driveLink: a.driveLink, dueAt: a.dueAt!, senderName: a.sentBy?.name || "", studioName: a.studioName || "",
+        });
+        await sendMail({ to: a.sentTo, cc: a.cc || [], replyTo: a.sentBy?.email || null, subject: mail.subject, html: mail.html, text: mail.text, fromName: a.sentBy?.name || null });
+        logger.info("Drawings approval reminder sent", { path: doc.ref.path, reminder: which + 1 });
+      } catch (e: any) {
+        logger.error("Drawings approval reminder failed", { path: doc.ref.path, message: e?.message });
+      }
+    }
+  },
+);
+
+export const designMeeting = onCall({ cors: true, timeoutSeconds: 120, secrets: ["RESEND_API_KEY", "EMAIL_FROM"] }, async (request) => {
   const input: Input = request.data || {};
   const { orgId, projectId, action } = input;
   if (![orgId, projectId].every(safeId)) throw new HttpsError("invalid-argument", "Which project?");
@@ -433,6 +674,9 @@ export const designMeeting = onCall({ cors: true, timeoutSeconds: 60 }, async (r
       case "sign": return await sign(actor, orgId, projectId, input);
       case "layoutRooms": return await layoutRooms(actor, orgId, projectId, input);
       case "presenters": return await presenters(actor, orgId, projectId, input);
+      case "sendApproval": return await sendApproval(actor, orgId, projectId, input);
+      case "recordApproval": return await recordApproval(actor, orgId, projectId, input);
+      case "reconcile": return await reconcile(actor, orgId, projectId);
       default: throw new HttpsError("invalid-argument", "Unknown action.");
     }
   } catch (e: any) {

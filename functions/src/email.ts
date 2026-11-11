@@ -1,7 +1,7 @@
 import { onCall, HttpsError, CallableOptions } from "firebase-functions/v2/https";
 import { rateLimiter, requireStaff, STAFF_ROLES } from "./guards";
 import * as admin from "firebase-admin";
-import * as logger from "firebase-functions/logger";
+import { sendMail } from "./mail";
 
 /**
  * STUDIO EMAIL, SENT FROM THE SERVER.
@@ -62,49 +62,9 @@ export const sendStudioEmail = onCall(OPTS, async (request) => {
     throw new HttpsError("invalid-argument", "A subject of up to 300 characters is needed.");
   }
 
-  const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  if (!RESEND_API_KEY) {
-    logger.warn("[sendStudioEmail] RESEND_API_KEY not configured. Simulating dispatch.", { to: recipients });
-    return { success: true, sandbox: true, message: "Email simulated in sandbox mode (RESEND_API_KEY not configured)." };
-  }
-
-  const senderAddress = (process.env.EMAIL_FROM || "onboarding@resend.dev").trim();
-  const displayName = String(from || "").split("<")[0].replace(/["\r\n]/g, "").trim().slice(0, 60);
-  const senderEmail = displayName && !senderAddress.includes("<") ? `${displayName} <${senderAddress}>` : senderAddress;
-
-  const payload: any = { from: senderEmail, to: recipients, subject: String(subject), html };
-  if (ccList.length) payload.cc = ccList;
-  if (Array.isArray(attachments) && attachments.length > 0) payload.attachments = attachments;
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-    const text = await response.text();
-    let data: any;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text };
-    }
-    if (!response.ok) {
-      logger.error("[sendStudioEmail] Resend refused the email", { status: response.status, data });
-      throw new HttpsError("internal", data?.message || data?.error?.message || `Resend error ${response.status}`);
-    }
-    return { success: true, data };
-  } catch (e: any) {
-    if (e instanceof HttpsError) throw e;
-    if (e?.name === "AbortError") {
-      throw new HttpsError("deadline-exceeded", "The email service did not answer in time.");
-    }
-    logger.error("[sendStudioEmail] failed", { message: e?.message });
-    throw new HttpsError("internal", e?.message || "Failed to send email");
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  return sendMail({
+    to: recipients, cc: ccList, subject: String(subject), html,
+    fromName: from ? String(from) : null,
+    attachments: Array.isArray(attachments) ? attachments : undefined,
+  });
 });

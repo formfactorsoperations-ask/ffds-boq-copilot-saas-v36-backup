@@ -61,3 +61,16 @@ export async function setPresenters(t: Target, drawings: Record<string, string[]
   const res = await call({ ...t, action: 'presenters', drawings }, 'designMeeting');
   return res?.presenters || {};
 }
+
+/* ------------------------------------------------------------ the client's written approval */
+
+/** Sends the approval email for a held meeting's agreed rooms; the meeting then waits for the client's answer. */
+export const sendApproval = (t: Target, meetingId: string, p: { to: string; cc: string; clientName: string; driveLink: string }) =>
+  call({ ...t, action: 'sendApproval', meetingId, ...p }, 'designMeeting') as Promise<{ sandbox?: boolean }>;
+
+/** Records the client's answer: approved (their reply), changes, or taken as approved once the date in the email passed. */
+export const recordApproval = (t: Target, meetingId: string, outcome: 'approved' | 'changes' | 'deemed', note: string, answeredAt?: number) =>
+  call({ ...t, action: 'recordApproval', meetingId, outcome, note, answeredAt }, 'designMeeting') as Promise<{ approved: string[]; movedOn: string[] }>;
+
+/** Brings the project's drawings in line with the written-approval rule (designMeeting: reconcile). Writes only what is wrong. */
+export const reconcileApprovals = (t: Target) => call({ ...t, action: 'reconcile' }, 'designMeeting') as Promise<{ audience: number; reclaimed: number }>;
