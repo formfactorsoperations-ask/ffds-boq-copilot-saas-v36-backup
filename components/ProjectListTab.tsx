@@ -9,7 +9,7 @@ import { BuildingOfficeIcon, PlusIcon, NewFileIcon, DeleteIcon } from "./Icons";
 import { formatClientValue, timeAgo, formatCurrency } from "../lib/utils";
 import { getSingleProjectValue } from "../lib/financialsUtils";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Info, PlayCircle, PauseCircle, CheckCircle, FileText, Send, MessageSquare, Briefcase, Zap, Trophy, LayoutDashboard, SlidersHorizontal, XCircle, Pin } from '@/lib/lucide-shim';
+import { Info, PlayCircle, PauseCircle, CheckCircle, CheckCircle2, FileText, Send, MessageSquare, Briefcase, Zap, Trophy, LayoutDashboard, SlidersHorizontal, XCircle, Pin, Home, MapPin, Layers, Palette, Hammer } from '@/lib/lucide-shim';
 import { ProjectPaymentBadge } from "./PaymentHealth";
 import DocumentMeter from "./ops/DocumentMeter";
 import { ClockIcon } from "./Icons";
@@ -30,9 +30,9 @@ import AssignProjectsModal from "./projectHeader/AssignProjectsModal";
 import { useMomActions } from "../hooks/useMomActions";
 import { getNextActions, NextAction } from "../services/nextActionEngine";
 import { buildDocumentCompleteness, DocumentCompleteness } from "../lib/documentCompleteness";
-import { Lock, ArrowRight, CheckSquare, ChevronDown, ChevronUp, Flag, History } from '@/lib/lucide-shim';
+import { Lock, ArrowRight, CheckSquare, ChevronDown, ChevronUp, Flag } from '@/lib/lucide-shim';
 import ProjectStatusTransitionModal from "./ProjectStatusTransitionModal";
-import { CardContainer, CardBody, CardItem } from "./ui/3d-card";
+import LiquidGlassFlipCard from "./ui/LiquidGlassFlipCard";
 import MarginReveal from "./projects/MarginReveal";
 
 interface ProjectListTabProps {
@@ -223,23 +223,6 @@ const AnimatedRing = ({
   rather than by coincidence.
 */
 const valueOf = (p: FullProjectData): number => getSingleProjectValue(p);
-
-/*
-  Three planes, not nine numbers.
-
-  The card lifted its layers to 25, 35, 28, 25, 20, 15, 30, 15 and 0 reading
-  downward, which put the project name in front of the money and the badges in
-  front of the indicators. That is not a hierarchy, it is nine values that each
-  happened to look fine alone. Depth should say the same thing the type sizes
-  say: chrome sits on the surface, supporting detail lifts a little, and the
-  three things you came to read lift most.
-*/
-/** Card chrome and running detail -- flat with the card's own surface. */
-const Z_SURFACE = 0;
-/** Contained panels that read as objects: the next move, the documents block. */
-const Z_DETAIL = 14;
-/** What the card is for: the project name and the money. */
-const Z_LEAD = 26;
 
 /** Nothing is owed on a project that is finished, lost or filed away. */
 const DORMANT = ['completed', 'lost', 'archived'];
@@ -1224,49 +1207,31 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                 </div>
               </motion.div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <AnimatePresence>
+            <div className="relative">
+              {/* Ambient refractive light field & subtle architectural blueprint grid behind crystal glass cards */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -inset-4 -z-10 overflow-hidden rounded-[2rem]"
+              >
+                <div
+                  className="absolute inset-0 opacity-45"
+                  style={{
+                    backgroundImage:
+                      'radial-gradient(rgba(99, 102, 241, 0.22) 1px, transparent 1px), radial-gradient(rgba(14, 165, 233, 0.16) 1px, transparent 1px)',
+                    backgroundSize: '24px 24px',
+                    backgroundPosition: '0 0, 12px 12px',
+                  }}
+                />
+                <div className="absolute -top-16 left-[8%] h-72 w-72 rounded-full bg-indigo-200/45 blur-3xl" />
+                <div className="absolute top-1/3 right-[6%] h-80 w-80 rounded-full bg-sky-200/40 blur-3xl" />
+                <div className="absolute bottom-8 left-[32%] h-72 w-96 rounded-full bg-violet-100/45 blur-3xl" />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
+                <AnimatePresence>
                 {filteredProjects.map((project, index) => {
                   const metrics = getProjectMetrics(project);
                   const isActive = activeProjectId === project.id;
-                  
-                  const getLatestActivity = (): { time: number; text: string }[] => {
-                      let events: { time: number, text: string }[] = [];
-
-                      const updates = project.activeProject?.executionData?.updates;
-                      if (updates && updates.length > 0) {
-                          const latestUpdate = [...updates].sort((a, b) => b.timestamp - a.timestamp)[0];
-                          events.push({ time: latestUpdate.timestamp, text: `Update: ${latestUpdate.text.substring(0, 30)}${latestUpdate.text.length > 30 ? '...' : ''}`});
-                      }
-
-                      const contract = project.context?.contractSignoff;
-                      if (contract?.signedAt) {
-                          events.push({ time: new Date(contract.signedAt).getTime(), text: "Contract signed" });
-                      } else if (contract?.sentAt) {
-                          events.push({ time: new Date(contract.sentAt).getTime(), text: "Contract sent" });
-                      }
-
-                      project.materials?.forEach(m => {
-                          if (m.clientConfirmedAt) events.push({ time: new Date(m.clientConfirmedAt).getTime(), text: `Confirmed: ${m.itemName.substring(0, 20)}`});
-                          if (m.changeRequestedAt) events.push({ time: new Date(m.changeRequestedAt).getTime(), text: `CR: ${m.itemName.substring(0, 20)}`});
-                      });
-                      
-                      const blockers = project.activeProject?.executionData?.blockers;
-                      if (blockers) {
-                          blockers.forEach(b => {
-                              if (b.resolvedAt) events.push({ time: b.resolvedAt, text: `Resolved: ${b.title || 'Blocker'}`});
-                          });
-                      }
-                      
-                      /* It built the whole list and returned one line of it.
-                         Three costs nothing more and gives the short cards
-                         something to say in the space the grid stretches them
-                         into. */
-                      events.sort((a, b) => b.time - a.time);
-                      return events.slice(0, 3);
-                  };
-
-                  const recentAct = getLatestActivity();
                   
                   const statusStyle =
                     STATUS_CONFIG[metrics.status] || STATUS_CONFIG["draft"];
@@ -1381,6 +1346,714 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                       ? null
                       : intel.get(project.id)?.action || null;
 
+                  const progressValue = (() => {
+                    if (metrics.status === 'completed') return 100;
+                    if (metrics.status === 'execution' || metrics.status === 'work_paused') {
+                      return 60 + Math.floor(((project.context?.journeySummary?.pct || 0) / 100) * 40);
+                    }
+                    if (metrics.status === 'won') return 40;
+                    if (metrics.status === 'negotiation') return 30;
+                    if (metrics.status === 'proposal_sent') return 20;
+                    if (metrics.status === 'draft') return 10;
+                    return 0;
+                  })();
+
+                  const renderFinancialSummary = () => (
+                    <div className="w-full" data-lgf-interactive="true">
+                      {project.tiers && project.tiers.length > 0 ? (
+                        <>
+                          {project.tiers
+                            .filter((t) => t.id === project.context?.approvedTierId)
+                            .map((tier) => {
+                              const total = valueOf(project);
+                              return (
+                                <div key={tier.id} className="flex justify-between items-end">
+                                  <div>
+                                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.1em] mb-0.5">
+                                      Approved
+                                    </p>
+                                    <p className="text-lg font-bold text-slate-900 leading-none tabular-nums">
+                                      {formatClientValue(total)}
+                                    </p>
+                                  </div>
+                                  {showFinance && !isFeeOnly(engagementOf(project.context)) && (
+                                    <MarginReveal
+                                      variant="glass"
+                                      value={Number(
+                                        tier.summary.blendedGm?.toFixed(0) ||
+                                          tier.summary.totalGm?.toFixed(0) ||
+                                          0,
+                                      )}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          {!project.context?.approvedTierId && (
+                            <div className="flex justify-between items-end">
+                              <div>
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.1em] mb-0.5">
+                                  Pipeline
+                                </p>
+                                {valueOf(project) > 0 ? (
+                                  <p className="text-lg font-bold text-slate-900 leading-none tabular-nums">
+                                    {formatClientValue(valueOf(project))}
+                                  </p>
+                                ) : (
+                                  <p className="text-sm font-semibold text-slate-400 leading-none h-[18px] flex items-end">
+                                    Not priced yet
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex justify-between items-end">
+                          <div>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.1em] mb-0.5">
+                              Est. Value
+                            </p>
+                            {valueOf(project) > 0 ? (
+                              <p className="text-lg font-bold text-slate-800 leading-none tabular-nums">
+                                {formatClientValue(valueOf(project))}
+                              </p>
+                            ) : (
+                              <p className="text-sm font-semibold text-slate-400 leading-none h-[18px] flex items-end">
+                                Not priced yet
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+
+                  const activeOrApprovedTier =
+                    project.tiers?.find((t) => t.id === project.context?.approvedTierId) ||
+                    project.tiers?.find((t) => t.id === project.activeTierId) ||
+                    project.tiers?.[0];
+                  const boqLineCount =
+                    (activeOrApprovedTier as any)?.fullBoq?.length ||
+                    (activeOrApprovedTier as any)?.boq?.length ||
+                    0;
+                  const roomCount = project.context?.rooms?.length || 0;
+                  const roomNames = (project.context?.rooms || [])
+                    .map((r) => r.name?.trim())
+                    .filter(Boolean) as string[];
+
+                  const primaryConfigLabel =
+                    project.context?.config?.trim() ||
+                    engagementDef(engagementOf(project.context)).label;
+                  const areaLabel = project.context?.area
+                    ? `${Number(project.context.area).toLocaleString('en-IN', { maximumFractionDigits: 0 })} sft`
+                    : null;
+                  const locationLabel = project.context?.location?.trim() || 'Location TBD';
+                  const themeLabel = project.context?.theme?.trim() || null;
+
+                  // Radial gauge fill (0..1) for scope density (rooms + BOQ lines)
+                  const scopeDensityPct = Math.min(
+                    100,
+                    Math.max(12, Math.round((roomCount * 4 + boqLineCount * 1.2))),
+                  );
+                  const gaugeRadius = 15;
+                  const gaugeCircumference = 2 * Math.PI * gaugeRadius;
+                  const gaugeStrokeOffset =
+                    gaugeCircumference * (1 - scopeDensityPct / 100);
+
+                  // Lifecycle 5-node visual stepper mapping
+                  const lifecycleStages = [
+                    { key: 'draft', label: 'Lead', icon: FileText, threshold: 10 },
+                    { key: 'proposal', label: 'Quote', icon: Send, threshold: 25 },
+                    { key: 'won', label: 'Won', icon: Trophy, threshold: 40 },
+                    { key: 'execution', label: 'Site', icon: Hammer, threshold: 70 },
+                    { key: 'completed', label: 'Done', icon: CheckCircle2, threshold: 100 },
+                  ];
+                  const activeStageIdx =
+                    metrics.status === 'completed'
+                      ? 4
+                      : metrics.status === 'execution' || metrics.status === 'work_paused'
+                        ? 3
+                        : metrics.status === 'won'
+                          ? 2
+                          : metrics.status === 'proposal_sent' || metrics.status === 'negotiation'
+                            ? 1
+                            : 0;
+
+                  const frontFace = (
+                    <div className="flex flex-col h-full w-full select-none text-slate-900">
+                      {/* Front Top: Status, Classification, Progress & Dossier Header */}
+                      <div className="shrink-0">
+                        <div className="pb-3 border-b border-white/60">
+                          <div className="flex justify-between items-start pr-11 gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <button
+                                type="button"
+                                data-lgf-interactive="true"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setStatusModalProject(project);
+                                }}
+                                className="group/status flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full whitespace-nowrap bg-gradient-to-br from-white/85 via-white/65 to-white/45 backdrop-blur-md text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-800 border border-white/95 shadow-[inset_0_1.5px_1px_rgba(255,255,255,1),0_4px_10px_-2px_rgba(15,23,42,0.08)] transition-all hover:scale-105 hover:from-white/95 hover:to-white/70 cursor-pointer"
+                                title="Click to change project status & manage downstream impacts"
+                              >
+                                <ProjectStatusIllustration status={metrics.status} size={22} />
+                                <span>{statusStyle.label}</span>
+                                <ChevronDown className="w-2.5 h-2.5 opacity-60 group-hover/status:opacity-100 transition-opacity" />
+                              </button>
+
+                              {/* Waving Pinned-Note Classification Tag */}
+                              {(() => {
+                                const kind = classifyProject(project);
+                                const isDummy = kind === 'test';
+                                const untagged = kind === 'untagged';
+                                return (
+                                  <motion.div
+                                    animate={{ rotate: [-2, 4, -3, 2, -2], y: [0, -1, 0, -1, 0] }}
+                                    transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut" }}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-md border transition-colors shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.95)] ${
+                                      untagged
+                                        ? 'bg-rose-50/75 text-rose-700 border-rose-200/80'
+                                        : isDummy
+                                          ? 'bg-amber-50/75 text-amber-800 border-amber-200/80'
+                                          : 'bg-sky-50/75 text-sky-800 border-sky-200/85'
+                                    }`}
+                                    title={
+                                      untagged
+                                        ? 'Not classified yet — open the project and tag it Actual or Dummy'
+                                        : `Project is marked as ${isDummy ? 'Dummy / Demo' : 'Actual Site'}`
+                                    }
+                                  >
+                                    <Pin className={`w-2.5 h-2.5 ${untagged ? 'text-rose-500' : isDummy ? 'text-amber-500' : 'text-sky-600'}`} />
+                                    <span className="capitalize">{untagged ? 'Untagged' : isDummy ? 'Dummy' : 'Actual'}</span>
+                                  </motion.div>
+                                );
+                              })()}
+
+                              {isFeeOnly(engagementOf(project.context)) && (
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/70 border border-white/90 text-slate-600 shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.95)]"
+                                  title={engagementDef(engagementOf(project.context)).blurb}
+                                >
+                                  {engagementDef(engagementOf(project.context)).label}
+                                </span>
+                              )}
+
+                              {metrics.riskScore > 0 && (
+                                <span className="flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.15em] bg-rose-50/80 text-rose-700 border border-rose-200/85 shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.9)]">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                  At Risk
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Status Progress Bar */}
+                          <div className="flex items-center justify-between gap-3 mt-2.5">
+                            <div className="flex gap-[2px] flex-1">
+                              {[...Array(10)].map((_, i) => {
+                                const barColor =
+                                  metrics.status === 'completed'
+                                    ? 'bg-emerald-500'
+                                    : metrics.status === 'execution'
+                                      ? 'bg-[#3D52A0]'
+                                      : metrics.status === 'work_paused'
+                                        ? 'bg-rose-500'
+                                        : metrics.status === 'won'
+                                          ? 'bg-emerald-500'
+                                          : metrics.status === 'negotiation'
+                                            ? 'bg-amber-500'
+                                            : metrics.status === 'proposal_sent'
+                                              ? 'bg-sky-500'
+                                              : 'bg-slate-400';
+
+                                const isFilled = (i + 1) * 10 <= progressValue + 5;
+
+                                return (
+                                  <div
+                                    key={i}
+                                    className={`h-1.5 flex-1 rounded-[1px] transition-colors duration-300 ${
+                                      isFilled ? barColor : 'bg-slate-900/10'
+                                    }`}
+                                  />
+                                );
+                              })}
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-600 tracking-wider tabular-nums min-w-[28px] text-right">
+                              {progressValue}%
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Project Name & Client Dossier */}
+                        <div className="pt-3 pb-2">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.12em]">
+                              Project Dossier
+                            </p>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <div className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 bg-[#3D52A0] shadow-xs">
+                                {(project.context?.clientName || "U").charAt(0).toUpperCase()}
+                              </div>
+                              <p className="text-[10.5px] text-slate-700 font-semibold truncate max-w-[150px]">
+                                {project.context?.clientName || "Unknown Client"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <h3
+                            className="text-[1.28rem] font-semibold tracking-tight text-slate-900 leading-snug line-clamp-2"
+                            title={displayName(project)}
+                          >
+                            {displayName(project)}
+                          </h3>
+                        </div>
+                      </div>
+
+                      {/* Front Middle: Static Spatial Bento + Lifecycle Stepper + Darker-Shaded Room Text Band */}
+                      <div className="flex-1 flex flex-col justify-between py-3 border-y border-white/60 gap-3">
+                        {/* 1. 2-Column Visual Bento: Property Footprint & BOQ Scope */}
+                        <div className="grid grid-cols-2 gap-2.5">
+                          {/* Left Tile: Property Footprint & Location */}
+                          <div className="rounded-2xl bg-gradient-to-br from-white/82 via-white/58 to-white/35 backdrop-blur-md border border-white/95 p-3 shadow-[inset_0_1.5px_1px_rgba(255,255,255,1),0_6px_14px_-6px_rgba(15,23,42,0.08)] flex flex-col justify-between gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-xl bg-indigo-500/12 border border-indigo-200/70 flex items-center justify-center shrink-0 text-[#3D52A0] shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.9)]">
+                                <Home className="w-4 h-4" strokeWidth={2.2} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-[13.5px] font-extrabold text-slate-900 leading-tight truncate">
+                                  {primaryConfigLabel}
+                                </p>
+                                <p className="text-[11px] font-bold text-[#3D52A0] tabular-nums leading-tight truncate mt-0.5">
+                                  {areaLabel || 'Area TBD'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-slate-200/50 text-[10.5px] font-semibold text-slate-600">
+                              <span className="inline-flex items-center gap-1 min-w-0 truncate" title={locationLabel}>
+                                <MapPin className="w-3 h-3 text-sky-600 shrink-0" strokeWidth={2.3} />
+                                <span className="truncate">{locationLabel}</span>
+                              </span>
+                              {themeLabel && (
+                                <span
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-white/80 border border-white/90 text-[9.5px] font-bold capitalize text-slate-700 shrink-0"
+                                  title={`Theme: ${themeLabel}`}
+                                >
+                                  <Palette className="w-2.5 h-2.5 text-indigo-500 shrink-0" />
+                                  <span className="truncate max-w-[56px]">{themeLabel}</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Right Tile: Radial Scope & BOQ Density */}
+                          <div className="rounded-2xl bg-gradient-to-br from-white/82 via-white/58 to-white/35 backdrop-blur-md border border-white/95 p-3 shadow-[inset_0_1.5px_1px_rgba(255,255,255,1),0_6px_14px_-6px_rgba(15,23,42,0.08)] flex flex-col justify-between gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <div className="relative w-9 h-9 shrink-0 flex items-center justify-center">
+                                <svg className="w-9 h-9 -rotate-90" viewBox="0 0 38 38">
+                                  <circle
+                                    cx="19"
+                                    cy="19"
+                                    r={gaugeRadius}
+                                    fill="none"
+                                    stroke="rgba(148,163,184,0.22)"
+                                    strokeWidth="3.2"
+                                  />
+                                  <circle
+                                    cx="19"
+                                    cy="19"
+                                    r={gaugeRadius}
+                                    fill="none"
+                                    stroke="#3D52A0"
+                                    strokeWidth="3.2"
+                                    strokeLinecap="round"
+                                    strokeDasharray={gaugeCircumference}
+                                    strokeDashoffset={gaugeStrokeOffset}
+                                  />
+                                </svg>
+                                <Layers className="w-3.5 h-3.5 text-[#3D52A0] absolute" strokeWidth={2.3} />
+                              </div>
+
+                              <div className="min-w-0">
+                                <p className="text-[13.5px] font-extrabold text-slate-900 tabular-nums leading-tight truncate">
+                                  {roomCount} {roomCount === 1 ? 'Room' : 'Rooms'}
+                                </p>
+                                <p className="text-[11px] font-bold text-[#3D52A0] tabular-nums leading-tight truncate mt-0.5">
+                                  {boqLineCount > 0 ? `${boqLineCount} BOQ Lines` : 'BOQ Pending'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-200/50">
+                              <span className="text-[10px] font-bold text-slate-500 truncate">
+                                {boqLineCount > 0 ? 'Priced Scope' : 'Takeoff Queue'}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-600 tabular-nums shrink-0">
+                                {scopeDensityPct}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 2. Static 5-Stage Lifecycle Stepper Track */}
+                        <div className="rounded-2xl bg-gradient-to-br from-white/78 via-white/50 to-white/28 backdrop-blur-md border border-white/95 px-3.5 py-2.5 shadow-[inset_0_1.5px_1px_rgba(255,255,255,1),0_4px_12px_-4px_rgba(15,23,42,0.05)]">
+                          <div className="relative flex items-center justify-between">
+                            <div className="absolute left-3 right-3 top-[13px] h-[2px] bg-slate-200/80 rounded-full" />
+                            <div
+                              style={{
+                                width: `${Math.min(100, Math.max(0, (activeStageIdx / (lifecycleStages.length - 1)) * 88))}%`,
+                              }}
+                              className="absolute left-3 top-[13px] h-[2px] bg-gradient-to-r from-[#3D52A0] via-sky-500 to-emerald-500 rounded-full"
+                            />
+
+                            {lifecycleStages.map((st, idx) => {
+                              const StageIcon = st.icon;
+                              const isDone = idx < activeStageIdx;
+                              const isCurrent = idx === activeStageIdx;
+                              return (
+                                <div key={st.key} className="relative z-10 flex flex-col items-center gap-1">
+                                  <div
+                                    className={`w-7 h-7 rounded-full flex items-center justify-center border ${
+                                      isCurrent
+                                        ? 'bg-[#3D52A0] text-white border-white shadow-[0_2px_8px_rgba(61,82,160,0.4)] scale-105'
+                                        : isDone
+                                          ? 'bg-emerald-500 text-white border-white shadow-xs'
+                                          : 'bg-white/90 text-slate-400 border-slate-200/90'
+                                    }`}
+                                  >
+                                    <StageIcon className="w-3.5 h-3.5" strokeWidth={2.3} />
+                                  </div>
+                                  <span
+                                    className={`text-[8.5px] font-extrabold uppercase tracking-wider leading-none ${
+                                      isCurrent
+                                        ? 'text-[#3D52A0]'
+                                        : isDone
+                                          ? 'text-slate-700'
+                                          : 'text-slate-400'
+                                    }`}
+                                  >
+                                    {st.label}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* 3. Calm Darker-Shaded Recessed Surface with Static Room Scope Text */}
+                        <div className="rounded-2xl bg-slate-900/[0.06] border border-slate-900/[0.08] shadow-[inset_0_2px_4px_rgba(15,23,42,0.06)] px-3.5 py-3 flex flex-col justify-center gap-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                              Mapped Spaces
+                            </span>
+                            {roomNames.length > 4 && (
+                              <span
+                                className="text-[9.5px] font-bold text-[#3D52A0] tabular-nums"
+                                title={roomNames.slice(4).join(' · ')}
+                              >
+                                +{roomNames.length - 4} more
+                              </span>
+                            )}
+                          </div>
+                          <p
+                            className="text-[12px] font-semibold text-slate-700 leading-relaxed line-clamp-2"
+                            title={roomNames.join(' · ')}
+                          >
+                            {roomNames.length > 0
+                              ? roomNames.slice(0, 4).join('  ·  ')
+                              : 'Spatial rooms not mapped yet'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Front Bottom: Primary Open CTA + Flip Hint */}
+                      <div className="mt-auto pt-2.5 shrink-0 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          data-lgf-interactive="true"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenProject(project);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#3D52A0] hover:bg-[#314388] text-white text-[10px] font-bold uppercase tracking-[0.14em] shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.4),0_8px_18px_-6px_rgba(61,82,160,0.5)] transition-colors cursor-pointer"
+                        >
+                          <span>Open Project</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+
+                        <span className="text-[9.5px] font-bold uppercase tracking-widest text-slate-500">
+                          {conditions.length > 0
+                            ? `${conditions.length} ${conditions.length === 1 ? 'flag' : 'flags'} · Flip →`
+                            : 'Flip for commercials & ops →'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+
+                  const backFace = (
+                    <div className="flex flex-col h-full w-full justify-between select-none text-slate-900">
+                      <div>
+                        {/* Back Header: Team Assignment & Last Modified */}
+                        <div className="pb-2.5 border-b border-white/60 pr-11 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#3D52A0] truncate">
+                              {displayName(project)}
+                            </p>
+                            <p className="text-[10px] font-semibold text-slate-500 tabular-nums mt-0.5">
+                              Modified {timeAgo(project.lastModified)}
+                              {project.context?.bookedOn ? ` · Booked ${project.context.bookedOn}` : ''}
+                            </p>
+                          </div>
+                          <div className="shrink-0" data-lgf-interactive="true">
+                            <ProjectTeamButton project={project} size="sm" align="right" />
+                          </div>
+                        </div>
+
+                        {/* Commercials, Margin & Governance (Exclusive to Back) */}
+                        <div className="py-2.5 border-b border-white/60 flex flex-col gap-2">
+                          <div className="bg-gradient-to-br from-white/78 via-white/52 to-white/32 backdrop-blur-md border border-white/90 shadow-[inset_0_1.5px_1px_rgba(255,255,255,1),0_4px_12px_-4px_rgba(15,23,42,0.06)] rounded-xl px-3 py-2">
+                            {renderFinancialSummary()}
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <div className="bg-gradient-to-br from-white/75 to-white/38 border border-white/90 shadow-[inset_0_1px_0.5px_rgba(255,255,255,1)] rounded-lg px-2 py-1">
+                              <p className="text-[8px] font-bold uppercase tracking-wider text-slate-500">
+                                Rooms
+                              </p>
+                              <p className="text-[11px] font-bold text-slate-800 tabular-nums">
+                                {roomCount > 0 ? `${roomCount} spaces` : 'Unmapped'}
+                              </p>
+                            </div>
+                            <div className="bg-gradient-to-br from-white/75 to-white/38 border border-white/90 shadow-[inset_0_1px_0.5px_rgba(255,255,255,1)] rounded-lg px-2 py-1">
+                              <p className="text-[8px] font-bold uppercase tracking-wider text-slate-500">
+                                BOQ Scope
+                              </p>
+                              <p className="text-[11px] font-bold text-slate-800 tabular-nums">
+                                {boqLineCount > 0 ? `${boqLineCount} lines` : 'No lines'}
+                              </p>
+                            </div>
+                            <div className="bg-gradient-to-br from-white/75 to-white/38 border border-white/90 shadow-[inset_0_1px_0.5px_rgba(255,255,255,1)] rounded-lg px-2 py-1">
+                              <p className="text-[8px] font-bold uppercase tracking-wider text-slate-500">
+                                Governance
+                              </p>
+                              <p className="text-[11px] font-bold text-slate-800 truncate">
+                                {project.context?.boqFrozen
+                                  ? 'BOQ Frozen'
+                                  : project.context?.portalAccess?.token
+                                    ? 'Portal Live'
+                                    : 'Editable'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Operational Signals, Payment Health & Flags (Exclusive to Back) */}
+                        <div className="py-2.5 border-b border-white/60 flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                              <Flag className="w-2.5 h-2.5 shrink-0 text-[#3D52A0]" strokeWidth={2.6} />
+                              Flags & Payment Health
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {(project.context?.commsSummary?.pendingCount || 0) > 0 && (
+                                <span className="text-[9.5px] font-bold uppercase tracking-wider text-amber-700">
+                                  {project.context!.commsSummary!.pendingCount} comms
+                                </span>
+                              )}
+                              {showFinance && metrics.status !== 'lost' && (
+                                <div className="scale-90 origin-right" data-lgf-interactive="true">
+                                  <ProjectPaymentBadge projectId={project.id} size="sm" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {conditions.length === 0 ? (
+                            <p className="text-[11px] font-medium text-slate-500">
+                              No active blockers, pending sign-offs or overdue flags.
+                            </p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {conditions.slice(0, 3).map((c: any, idx: number) => (
+                                <span
+                                  key={idx}
+                                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[9.5px] font-bold uppercase tracking-wider border shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.9)] ${
+                                    c.isAlert
+                                      ? 'bg-rose-50/80 border-rose-200/85 text-rose-700'
+                                      : 'bg-white/75 border-white/90 text-slate-700'
+                                  }`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} />
+                                  <span className="truncate max-w-[200px]">{c.text}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Document Meter (Exclusive to Back) */}
+                        <div className="py-2 border-b border-white/60" data-lgf-interactive="true">
+                          <DocumentMeter projectContext={project.context} />
+                        </div>
+
+                        {/* Immediate Next Move (Moved to Back in place of Recent Activity) */}
+                        <div className="pt-2.5 flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                              <Zap className="w-2.5 h-2.5 shrink-0 text-[#3D52A0]" strokeWidth={2.6} />
+                              Immediate Next Move
+                            </span>
+                            {nextMove?.priority && (
+                              <span
+                                className={`text-[8.5px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${
+                                  nextMove.priority === 'blocker'
+                                    ? 'bg-rose-50/90 text-rose-700 border-rose-200'
+                                    : nextMove.priority === 'due'
+                                      ? 'bg-amber-50/90 text-amber-800 border-amber-200'
+                                      : 'bg-indigo-50/90 text-[#3D52A0] border-indigo-200'
+                                }`}
+                              >
+                                {nextMove.priority}
+                              </span>
+                            )}
+                          </div>
+                          {nextMove ? (
+                            (() => {
+                              const urgent =
+                                nextMove.priority === 'blocker' || nextMove.priority === 'due';
+                              const skin =
+                                nextMove.priority === 'blocker'
+                                  ? 'bg-gradient-to-br from-rose-50/90 to-rose-100/55 text-rose-800 border-rose-200/90 shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.95)]'
+                                  : nextMove.priority === 'due'
+                                    ? 'bg-gradient-to-br from-amber-50/90 to-amber-100/55 text-amber-900 border-amber-200/90 shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.95)]'
+                                    : 'bg-gradient-to-br from-white/85 to-white/50 text-slate-800 border-white/95 shadow-[inset_0_1.5px_1px_rgba(255,255,255,1)]';
+                              return (
+                                <motion.div
+                                  title={nextMove.why}
+                                  animate={
+                                    urgent && !reduceMotion
+                                      ? { rotate: [-0.4, 0.4, -0.3, 0.3, -0.4] }
+                                      : undefined
+                                  }
+                                  transition={{ repeat: Infinity, duration: 5, ease: 'easeInOut' }}
+                                  className={`w-full flex items-start gap-2 px-3 py-2 rounded-xl border backdrop-blur-md text-[11.5px] font-semibold leading-snug origin-left ${skin}`}
+                                >
+                                  {nextMove.blockedBy && (
+                                    <Lock className="w-3 h-3 shrink-0 mt-[2px]" strokeWidth={2.4} />
+                                  )}
+                                  <span className="min-w-0 line-clamp-2">
+                                    {nextMove.title}
+                                    {nextMove.blockedBy && (
+                                      <span className="font-medium opacity-75">
+                                        {' '}· waiting on {nextMove.blockedBy}
+                                      </span>
+                                    )}
+                                  </span>
+                                </motion.div>
+                              );
+                            })()
+                          ) : (
+                            <div className="px-3 py-2 rounded-xl bg-gradient-to-br from-white/75 to-white/40 border border-white/90 text-[11px] font-medium text-slate-500 shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.95)]">
+                              {isDesignerRole(currentRole) ? 'Open project to view drawings' : 'Nothing blocking or waiting'}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Back Footer: Management Toolbar (Status, Clone, Select, Delete) */}
+                      <div
+                        className="mt-3 pt-2.5 border-t border-white/60 flex items-center justify-between gap-2"
+                        data-lgf-interactive="true"
+                      >
+                        <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                          Manage Card
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setStatusModalProject(project);
+                            }}
+                            className="px-2.5 py-1.5 flex items-center gap-1 bg-gradient-to-br from-white/85 to-white/55 border border-white/95 text-slate-700 hover:from-white hover:to-white/80 rounded-lg text-[10.5px] font-bold transition-colors shadow-[inset_0_1px_0.5px_rgba(255,255,255,1),0_2px_6px_-2px_rgba(15,23,42,0.06)] cursor-pointer"
+                            title="Change Status & Phase"
+                          >
+                            <SlidersHorizontal className="w-3 h-3 text-[#3D52A0]" />
+                            <span>Status</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDuplicateProject(project);
+                            }}
+                            className="px-2.5 py-1.5 flex items-center gap-1 bg-gradient-to-br from-white/85 to-white/55 border border-white/95 text-slate-700 hover:from-white hover:to-white/80 rounded-lg text-[10.5px] font-bold transition-colors shadow-[inset_0_1px_0.5px_rgba(255,255,255,1),0_2px_6px_-2px_rgba(15,23,42,0.06)] cursor-pointer"
+                            title="Clone as template — copies rooms and priced scope, not the client, payments or sign-offs"
+                          >
+                            <svg
+                              width="11"
+                              height="11"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            <span>Clone</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSelected(project.id);
+                            }}
+                            className={`w-7 h-7 flex items-center justify-center border rounded-lg transition-colors shadow-[inset_0_1px_0.5px_rgba(255,255,255,1)] cursor-pointer ${
+                              selectedForDelete.has(project.id)
+                                ? 'bg-[#3D52A0] border-[#3D52A0] text-white'
+                                : 'bg-gradient-to-br from-white/85 to-white/55 border-white/95 text-slate-500 hover:text-slate-800 hover:from-white'
+                            }`}
+                            title={selectedForDelete.has(project.id) ? 'Selected' : 'Select'}
+                            aria-pressed={selectedForDelete.has(project.id)}
+                          >
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="3"
+                            >
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTargets([project.id]);
+                            }}
+                            className="w-7 h-7 flex items-center justify-center bg-gradient-to-br from-white/85 to-white/55 border border-white/95 text-slate-500 hover:text-rose-600 hover:from-rose-50 hover:to-rose-100/70 hover:border-rose-200 rounded-lg transition-colors shadow-[inset_0_1px_0.5px_rgba(255,255,255,1)] cursor-pointer"
+                            title="Delete"
+                          >
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+
                   return (
                     <motion.div
                       key={project.id}
@@ -1388,638 +2061,42 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ duration: 0.4, delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
-                      /* No h-full. height:100% on a grid item resolves against
-                         the row, not the content, so it quietly defeated the
-                         grid's items-start and every card came back at exactly
-                         the row height -- 636.32px across the board. The card's
-                         own inner h-full chain now resolves against an auto
-                         parent and follows the content. */
                     >
-                      <CardContainer containerClassName="w-full h-full p-0 flex items-stretch" className="w-full h-full">
-                        <CardBody
-                          className="fx-tilt-card h-full w-full bg-white border relative group/card flex flex-col cursor-pointer overflow-hidden rounded-2xl"
-                          onClick={() => onOpenProject(project)}
-                          style={{
-                            borderColor: isActive ? '#3D52A0' : 'rgb(226, 232, 240)',
-                            /* The shadow moved to .fx-tilt-card so it can track
-                               the tilt; only the active ring stays inline, fed
-                               to that rule as a second shadow. */
-                            ['--tilt-ring' as any]: isActive
-                              ? '0 0 0 1px #3D52A0'
-                              : '0 0 0 0 rgba(0, 0, 0, 0)',
-                          }}
-                        >
-                          {/* One hover wash, in the app's own indigo.
-
-                              The white shimmer that used to sweep across on
-                              hover -- a rotated gradient translated 200% over a
-                              second -- is gone. It is the most recognisable
-                              "template" flourish there is, it fired on all
-                              forty-two cards, and it was animating a layer
-                              twice the card's size on every pointer entry. */}
-                          <div className="absolute inset-0 bg-gradient-to-br from-[#EDE8F5]/60 via-transparent to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-500 pointer-events-none z-0"></div>
-
-                          {/* Card Header & Status */}
-                          <CardItem translateZ={Z_SURFACE} className="w-full">
-                            <div className="p-5 pb-0 flex flex-col gap-3 border-b border-slate-50/50 bg-slate-50/30 w-full relative z-20">
-                              <div className="flex justify-between items-start">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setStatusModalProject(project);
-                                    }}
-                                    /* An illustrated status chip (option 26 of the
-                                       status-chip mockups): a small full-colour drawing
-                                       on a white pill, the label in ink. */
-                                    className="group/status flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full whitespace-nowrap bg-white text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#1d2238] border border-[#e3e6ef] shadow-2xs transition-all hover:scale-105 hover:shadow-sm cursor-pointer"
-                                    title="Click to change project status & manage downstream impacts"
-                                  >
-                                    <ProjectStatusIllustration status={metrics.status} size={22} />
-                                    <span>{statusStyle.label}</span>
-                                    <ChevronDown className="w-2.5 h-2.5 opacity-60 group-hover/status:opacity-100 transition-opacity" />
-                                  </button>
-
-                                  {/* Waving Pinned-Note Classification Tag */}
-                                  {(() => {
-                                    const kind = classifyProject(project);
-                                    const isDummy = kind === 'test';
-                                    const untagged = kind === 'untagged';
-                                    return (
-                                      <motion.div
-                                        animate={{ rotate: [-2, 4, -3, 2, -2], y: [0, -1, 0, -1, 0] }}
-                                        transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut" }}
-                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-xs border transition-colors ${
-                                          untagged
-                                            ? 'bg-rose-50 text-rose-700 border-rose-200/80'
-                                            : isDummy
-                                              ? 'bg-amber-50 text-amber-700 border-amber-200/80'
-                                              : 'bg-sky-50 text-sky-700 border-sky-200/80'
-                                        }`}
-                                        title={
-                                          untagged
-                                            ? 'Not classified yet — open the project and tag it Actual or Dummy'
-                                            : `Project is marked as ${isDummy ? 'Dummy / Demo' : 'Actual Site'}`
-                                        }
-                                      >
-                                        <Pin className={`w-2.5 h-2.5 ${untagged ? 'text-rose-600' : isDummy ? 'text-amber-600' : 'text-sky-600'}`} />
-                                        <span className="capitalize">{untagged ? 'Untagged' : isDummy ? 'Dummy' : 'Actual'}</span>
-                                      </motion.div>
-                                    );
-                                  })()}
-
-                                  {/* Turnkey is the default and goes unmarked; the other engagements say so. */}
-                                  {isFeeOnly(engagementOf(project.context)) && (
-                                    <span
-                                      className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#3D52A0]/10 text-[#3D52A0]"
-                                      title={engagementDef(engagementOf(project.context)).blurb}
-                                    >
-                                      {engagementDef(engagementOf(project.context)).label}
-                                    </span>
-                                  )}
-
-                                  {metrics.riskScore > 0 && (
-                                    <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-[0.15em] bg-rose-50 text-rose-600 border border-rose-100">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                                      At Risk
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="flex items-center gap-2 shrink-0">
-                                  {/* A3: who designs this project, changeable from the card. */}
-                                  <ProjectTeamButton project={project} size="sm" align="right" />
-                                  <span className="text-[10px] text-slate-400 font-semibold tracking-wider mt-0.5">
-                                    {timeAgo(project.lastModified)}
-                                  </span>
-                                </span>
-                              </div>
-                              
-                              {/* Status Progress Bar */}
-                              <div className="flex flex-col gap-1.5 mt-3 mb-1">
-                                <div className="flex items-center justify-between">
-                                   <div className="flex gap-[2px] flex-1 mr-3">
-                                      {[...Array(10)].map((_, i) => {
-                                        const baseProgressPct = metrics.status === 'completed' ? 100 : 
-                                          (metrics.status === 'execution' || metrics.status === 'work_paused') ? 60 : 
-                                          metrics.status === 'won' ? 40 : 
-                                          metrics.status === 'negotiation' ? 30 : 
-                                          metrics.status === 'proposal_sent' ? 20 : 
-                                          metrics.status === 'draft' ? 10 : 0;
-                                          
-                                        // For execution phase, interpolate between 60% and 100% based on journeySummary pct
-                                        let progressPct = baseProgressPct;
-                                        if ((metrics.status === 'execution' || metrics.status === 'work_paused') && project.context?.journeySummary?.pct !== undefined) {
-                                            // Scale 0-100 execution progress into the remaining 40% (60% to 100%)
-                                            progressPct = 60 + Math.floor((project.context.journeySummary.pct / 100) * 40);
-                                        }
-
-                                        const barColor = metrics.status === 'completed' ? 'bg-emerald-500' : 
-                                          metrics.status === 'execution' ? 'bg-[#3D52A0]' : 
-                                          metrics.status === 'work_paused' ? 'bg-rose-500' : 
-                                          metrics.status === 'won' ? 'bg-emerald-400' : 
-                                          metrics.status === 'negotiation' ? 'bg-amber-400' : 
-                                          metrics.status === 'proposal_sent' ? 'bg-sky-400' : 
-                                          'bg-slate-400';
-
-                                        const isFilled = (i + 1) * 10 <= (progressPct + 5);
-
-                                        return (
-                                          <motion.div 
-                                            key={i} 
-                                            initial={{ opacity: 0, scale: 0.5 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            transition={{ duration: 0.3, delay: i * 0.03 }}
-                                            className={`h-1.5 flex-1 rounded-[1px] transition-colors duration-500 ${
-                                              isFilled ? barColor : 'bg-slate-200/60'
-                                            }`}
-                                          ></motion.div>
-                                        );
-                                      })}
-                                   </div>
-                                   <span className="text-[10px] font-bold text-slate-500 tracking-wider min-w-[28px] text-right">
-                                      {(() => {
-                                        if (metrics.status === 'completed') return 100;
-                                        if (metrics.status === 'execution' || metrics.status === 'work_paused') {
-                                            return 60 + Math.floor(((project.context?.journeySummary?.pct || 0) / 100) * 40);
-                                        }
-                                        if (metrics.status === 'won') return 40;
-                                        if (metrics.status === 'negotiation') return 30;
-                                        if (metrics.status === 'proposal_sent') return 20;
-                                        if (metrics.status === 'draft') return 10;
-                                        return 0;
-                                      })()}%
-                                   </span>
-                                </div>
-                              </div>
-                            </div>
-                          </CardItem>
-
-                          {/* Card Content (Name, Client, Metrics, Financial Summary) */}
-                          <div className="p-5 flex-grow flex flex-col relative z-20">
-                            {/* Plain type under a hairline, not a second panel.
-
-                                This was briefly given the same rounded, tinted,
-                                inset-highlit treatment as the documents block,
-                                to bookend it. Two identical surfaces on one card
-                                is worse than none: border, fill and radius each
-                                say "separate object", and spending them twice
-                                flattens the hierarchy instead of building it.
-                                The documents panel keeps the tint because its
-                                colour carries state; the name is the loudest
-                                thing on the card on type alone. */}
-                            <CardItem translateZ={Z_LEAD} className="w-full mb-4">
-                              <div className="pb-3 border-b border-slate-100">
-                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mb-0.5">
-                                  Project Name
-                                </p>
-                                <h3
-                                  className="text-[1.1rem] font-semibold tracking-tight text-slate-900 leading-snug line-clamp-2"
-                                  title={displayName(project)}
-                                >
-                                  {displayName(project)}
-                                </h3>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em]">
-                                    Client:
-                                  </p>
-                                  {/* The one place on the card where a gradient
-                                      costs nothing to read. The project name is
-                                      what you scan, so it stays solid; a disc
-                                      holding a single letter can be decorative.
-                                      Also retires the last sky-50 on the card.
-
-                                      Stops chosen so white holds at both ends:
-                                      about 5:1 on #4F6BC4 and 10:1 on #2E3C78. */}
-                                  <div
-                                    className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
-                                    style={{
-                                      background:
-                                        'linear-gradient(135deg, #4F6BC4 0%, #2E3C78 100%)',
-                                    }}
-                                  >
-                                    {(project.context?.clientName || "U")
-                                      .charAt(0)
-                                      .toUpperCase()}
-                                  </div>
-                                  <p className="text-[11px] text-slate-500 font-medium truncate">
-                                    {project.context?.clientName || "Unknown Client"}
-                                  </p>
-                                </div>
-                              </div>
-                            </CardItem>
-
-                            {/*
-                              THE MIDDLE BAND: three slots, always all three.
-
-                              This was four independent blocks -- a next-move
-                              chip, a payment badge row, an indicator list and a
-                              recent line -- each rendering only when it had
-                              something to say. Across a grid that produced a
-                              different middle on every card: one showed a chip
-                              then two dots, its neighbour showed a single green
-                              pill and then nothing, the third showed a chip, a
-                              dot and an activity line. Nothing lined up, so
-                              nothing could be compared at a glance.
-
-                              Now every card answers the same three questions in
-                              the same order, in the same place, with a labelled
-                              gutter so the eye can run straight down a column:
-                              what is next, what is flagged, what happened last.
-                              Each has an explicit empty state -- saying "nothing
-                              waiting" is information; showing nothing is not.
-                            */}
-                            <CardItem translateZ={Z_SURFACE} className="w-full grow flex flex-col">
-                              <div className="mt-3 flex flex-col gap-2.5 h-full">
-
-                                {/* NEXT ------------------------------------
-
-                                    min-h of two lines, and the text clamped to
-                                    two. Without it a long title or a "waiting
-                                    on" sub-line wrapped and pushed the money row
-                                    20px down on that card alone, so the figures
-                                    no longer sat on one line across the row --
-                                    the last thing left that broke the scan. */}
-                                <div className="flex items-start gap-2.5 min-h-[30px]">
-                                  <span className="w-[52px] shrink-0 pt-[3px] flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-[0.1em] text-slate-400">
-                                    <Zap className="w-2.5 h-2.5 shrink-0" strokeWidth={2.6} />
-                                    Next
-                                  </span>
-                                  {nextMove ? (
-                                    (() => {
-                                      const urgent =
-                                        nextMove.priority === 'blocker' || nextMove.priority === 'due';
-                                      const skin =
-                                        nextMove.priority === 'blocker'
-                                          ? 'bg-rose-50 text-rose-700'
-                                          : nextMove.priority === 'due'
-                                            ? 'bg-amber-50 text-amber-800'
-                                            : 'bg-[#F4F6FC] text-[#3D52A0]';
-                                      return (
-                                        <motion.span
-                                          title={nextMove.why}
-                                          /* Only the ones that actually want you
-                                             wave. A banner that flutters on every
-                                             card is wallpaper; one that flutters
-                                             on the four that are blocked is a
-                                             signal. Rotation is a transform, so
-                                             it costs the row no height and the
-                                             alignment holds. */
-                                          animate={
-                                            urgent && !reduceMotion
-                                              ? { rotate: [-0.7, 0.7, -0.5, 0.6, -0.7], y: [0, -0.6, 0, -0.6, 0] }
-                                              : undefined
-                                          }
-                                          transition={{ repeat: Infinity, duration: 5, ease: 'easeInOut' }}
-                                          className={`flex-1 min-w-0 inline-flex items-start gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold leading-snug origin-left ${skin}`}
-                                        >
-                                          {nextMove.blockedBy && (
-                                            <Lock className="w-2.5 h-2.5 shrink-0 mt-[3px]" strokeWidth={2.6} />
-                                          )}
-                                          <span className="min-w-0 line-clamp-1">
-                                            {nextMove.title}
-                                            {nextMove.blockedBy && (
-                                              <span className="font-medium opacity-70">
-                                                {' '}· waiting on {nextMove.blockedBy}
-                                              </span>
-                                            )}
-                                          </span>
-                                        </motion.span>
-                                      );
-                                    })()
-                                  ) : (
-                                    <span className="flex-1 px-2 py-1 text-[11px] font-medium text-slate-400">
-                                      {isDesignerRole(currentRole) ? 'Open to see your drawings' : 'Nothing waiting'}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* FLAGS ----------------------------------- */}
-                                <div className="flex items-start gap-2.5 min-h-[22px]">
-                                  <span className="w-[52px] shrink-0 pt-[3px] flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-[0.1em] text-slate-400">
-                                    <Flag className="w-2.5 h-2.5 shrink-0" strokeWidth={2.6} />
-                                    Flags
-                                  </span>
-                                  {/* One line, never two.
-
-                                      This wrapped when a card had a badge plus
-                                      two conditions, and the wrap pushed Recent
-                                      13px down on that card alone -- the last
-                                      row that would not line up across the grid.
-                                      One condition plus a count says the same
-                                      thing in the space available. */}
-                                  <div className="flex-1 min-w-0 px-2 h-[22px] overflow-hidden flex flex-nowrap items-center gap-x-3">
-                                    {/* Payment health is studio finance: those who cannot see it are not asked to read it. */}
-                                    {showFinance && metrics.status !== 'lost' && (
-                                      <div className="scale-90 origin-left shrink-0">
-                                        <ProjectPaymentBadge projectId={project.id} size="sm" />
-                                      </div>
-                                    )}
-                                    {(project.context?.commsSummary?.pendingCount || 0) > 0 && (
-                                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-                                        {project.context!.commsSummary!.pendingCount} comms
-                                      </span>
-                                    )}
-                                    {conditions.slice(0, 1).map((c: any, i: number) => (
-                                      <span
-                                        key={i}
-                                        className={`flex items-center gap-1.5 min-w-0 text-[10px] font-semibold uppercase tracking-wider ${
-                                          c.isAlert ? 'text-rose-600 font-bold' : 'text-slate-600'
-                                        }`}
-                                      >
-                                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} />
-                                        <span className="truncate">{c.text}</span>
-                                      </span>
-                                    ))}
-                                    {conditions.length > 1 && (
-                                      <span
-                                        className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-slate-400"
-                                        title={conditions.slice(1).map((c: any) => c.text).join(' · ')}
-                                      >
-                                        +{conditions.length - 1} more
-                                      </span>
-                                    )}
-                                    {metrics.status === 'lost' && conditions.length === 0 && (
-                                      <span className="text-[11px] font-medium text-slate-400">None</span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* RECENT ---------------------------------- */}
-                                <div className="flex items-start gap-2.5 grow">
-                                  <span className="w-[52px] shrink-0 pt-[3px] flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-[0.1em] text-slate-400">
-                                    <History className="w-2.5 h-2.5 shrink-0" strokeWidth={2.6} />
-                                    Recent
-                                  </span>
-                                  {/* Fixed height, not just clamped to two rows.
-
-                                      The row grows to eat the slack, but its
-                                      CONTENT has to be a constant or a card
-                                      with two logged events pushes the money
-                                      down past a card with one -- which is what
-                                      was left of the misalignment on the
-                                      shorter rows.
-
-                                      One event now rather than two: the sticker
-                                      needs room to sit askew without the
-                                      overflow clipping its corner, and two
-                                      stickers stacked read as clutter. */}
-                                  <div className="flex-1 min-w-0 px-2 h-[26px] overflow-hidden flex items-center">
-                                    {recentAct.length === 0 ? (
-                                      <span className="text-[11px] font-medium text-slate-400">
-                                        No activity logged
-                                      </span>
-                                    ) : (
-                                      <div className="flex w-full justify-between items-center gap-2 text-[10px]">
-                                        <span className="truncate text-slate-600 font-medium">
-                                          {recentAct[0].text}
-                                        </span>
-                                        {/* A stuck-on label: rotated, bordered,
-                                            with a hairline of white under it so
-                                            it sits on the card rather than in
-                                            it. Rotation is a transform, so the
-                                            row keeps its measured height. */}
-                                        <span
-                                          className="shrink-0 -rotate-3 px-1.5 py-[2px] rounded-[5px] bg-[#EDE8F5] border border-[#D5CEE8] text-[8.5px] font-bold uppercase tracking-wider text-[#3A416B] tabular-nums"
-                                          style={{ boxShadow: '0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 4px -2px rgba(18, 24, 47, 0.25)' }}
-                                        >
-                                          {timeAgo(recentAct[0].time)}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </CardItem>
-
-                            {/* Financial Summary */}
-                            <CardItem
-                              translateZ={Z_LEAD}
-                              className="w-full pt-4 border-t border-slate-100"
-                            >
-                              <div className="w-full">
-                                {project.tiers && project.tiers.length > 0 ? (
-                                  <>
-                                    {project.tiers
-                                      .filter(
-                                        (t) =>
-                                          t.id === project.context?.approvedTierId,
-                                      )
-                                      .map((tier) => {
-                                        /* Not the tier's own total: that is the
-                                           price list, and it ignores approved
-                                           changes. valueOf is what the rest of
-                                           the app quotes for this project. */
-                                        const total = valueOf(project);
-
-                                        return (
-                                          <div
-                                            key={tier.id}
-                                            className="flex justify-between items-end"
-                                          >
-                                            <div>
-                                              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mb-0.5">
-                                                Approved
-                                              </p>
-                                              <p className="text-lg font-semibold text-slate-900 leading-none">
-                                                {formatClientValue(total)}
-                                              </p>
-                                            </div>
-                                            {/* Covered until pointed at or clicked: the
-                                                grid is often on screen with a client in the room. */}
-                                            {/* A design-only fee has no BOQ margin behind it. */}
-                                            {showFinance && !isFeeOnly(engagementOf(project.context)) && (
-                                              <MarginReveal
-                                                value={Number(
-                                                  tier.summary.blendedGm?.toFixed(0) ||
-                                                    tier.summary.totalGm?.toFixed(0) ||
-                                                    0,
-                                                )}
-                                              />
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    {!project.context?.approvedTierId && (
-                                      <div className="flex justify-between items-end">
-                                        <div>
-                                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mb-0.5">
-                                            Pipeline
-                                          </p>
-                                          {/* A project nobody has priced yet is worth
-                                              nothing only in the arithmetic sense.
-                                              Printing "Rs 0" states a price; this
-                                              states the absence of one. */}
-                                          {valueOf(project) > 0 ? (
-                                            <p className="text-lg font-semibold text-slate-900 leading-none">
-                                              {formatClientValue(valueOf(project))}
-                                            </p>
-                                          ) : (
-                                            <p className="text-sm font-semibold text-slate-400 leading-none h-[18px] flex items-end">
-                                              Not priced yet
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </>
-                                ) : (
-                                  <div className="flex justify-between items-end">
-                                    <div>
-                                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] mb-0.5">
-                                        Est. Value
-                                      </p>
-                                      {valueOf(project) > 0 ? (
-                                        <p className="text-lg font-semibold text-slate-500 leading-none">
-                                          {formatClientValue(valueOf(project))}
-                                        </p>
-                                      ) : (
-                                        <p className="text-sm font-semibold text-slate-400 leading-none h-[18px] flex items-end">
-                                          Not priced yet
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </CardItem>
-
-                            {/* Document completeness — sits with the money because
-                                an unsigned contract is a money problem.
-
-                                No rule above it any more: the meter now carries
-                                its own tinted panel, and a hairline divider
-                                immediately above a bordered box reads as a
-                                stray line. */}
-                            <CardItem translateZ={Z_DETAIL} className="w-full">
-                              <div className="mt-3">
-                                <DocumentMeter projectContext={project.context} />
-                              </div>
-                            </CardItem>
-
-
-                          </div>
-
-                          {/* Footer actions.
-
-                              translateZ={0}, not 25. Under the container's
-                              perspective:1000px a lifted element below the
-                              card's centre projects upward, and this one sits
-                              at the very bottom -- it rendered 88px above its
-                              own layout box and left that much bare card
-                              beneath it. That strip of nothing at the foot of
-                              every card was this, not spacing. */}
-                          <CardItem translateZ={0} className="w-full">
-                            <div className="border-t border-slate-100 bg-slate-50/80 px-5 py-3 flex items-center justify-between">
-                              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#3D52A0] flex items-center gap-1.5 group-hover/card:text-[#334486] transition-colors">
-                                Open Project{" "}
-                                <svg
-                                  width="12"
-                                  height="12"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                >
-                                  <path d="M5 12h14M12 5l7 7-7 7" />
-                                </svg>
-                              </span>
-
-                              {/* The three controls still wait for hover, but
-                                  pointer-events go with the opacity.
-
-                                  They were previously invisible AND live: the
-                                  whole bar sat at opacity-0 while every button
-                                  on it stayed clickable, so Delete was armed
-                                  inside what looked like blank card. Now the
-                                  bar is visible, that would have been three
-                                  invisible hit targets sitting in plain sight. */}
-                              <div className="flex items-center gap-1.5 opacity-0 pointer-events-none group-hover/card:opacity-100 group-hover/card:pointer-events-auto transition-opacity duration-200">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setStatusModalProject(project);
-                                  }}
-                                  className="px-2 py-1 flex items-center gap-1 bg-white border border-slate-200 text-slate-600 hover:text-[#3D52A0] hover:border-sky-200 rounded text-[11px] font-bold transition-colors shadow-sm cursor-pointer"
-                                  title="Change Status & Phase"
-                                >
-                                  <SlidersHorizontal className="w-3 h-3 text-[#3D52A0]" />
-                                  <span>Status</span>
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDuplicateProject(project);
-                                  }}
-                                  className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-slate-500 hover:text-[#3D52A0] rounded hover:border-sky-200 transition-colors shadow-sm cursor-pointer"
-                                  title="Clone as template — copies rooms and priced scope, not the client, payments or sign-offs"
-                                >
-                                  <svg
-                                    width="12"
-                                    height="12"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                  >
-                                    <rect
-                                      x="9"
-                                      y="9"
-                                      width="13"
-                                      height="13"
-                                      rx="2"
-                                      ry="2"
-                                    ></rect>
-                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleSelected(project.id);
-                                  }}
-                                  className={`w-7 h-7 flex items-center justify-center border rounded transition-colors shadow-sm cursor-pointer ${
-                                    selectedForDelete.has(project.id)
-                                      ? 'bg-[#3D52A0] border-[#3D52A0] text-white'
-                                      : 'bg-white border-slate-200 text-slate-400 hover:text-slate-700 hover:border-slate-300'
-                                  }`}
-                                  title={selectedForDelete.has(project.id) ? 'Selected' : 'Select'}
-                                  aria-pressed={selectedForDelete.has(project.id)}
-                                >
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                                       stroke="currentColor" strokeWidth="3">
-                                    <polyline points="20 6 9 17 4 12"></polyline>
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDeleteTargets([project.id]);
-                                  }}
-                                  className="w-7 h-7 flex items-center justify-center bg-white border border-slate-200 text-slate-500 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 rounded transition-colors shadow-sm cursor-pointer"
-                                  title="Delete"
-                                >
-                                  <svg
-                                    width="12"
-                                    height="12"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                  >
-                                    <polyline points="3 6 5 6 21 6"></polyline>
-                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                          </CardItem>
-                        </CardBody>
-                      </CardContainer>
+                      <LiquidGlassFlipCard
+                        ariaLabel={displayName(project)}
+                        trigger="click"
+                        drag={true}
+                        axis="horizontal"
+                        surface="light"
+                        material="clear"
+                        tint={isActive ? "#E0E7FF" : "#FFFFFF"}
+                        textColor="#0F172A"
+                        radius="24px"
+                        padding="20px"
+                        liquidity={45}
+                        tilt={60}
+                        flipButton={true}
+                        shadow="prism"
+                        focusColor="#3D52A0"
+                        optics={{
+                          blur: 14,
+                          depth: 28,
+                          refraction: 85,
+                          dispersion: 55,
+                          light: 92,
+                        }}
+                        style={{
+                          boxShadow: isActive ? "0 0 0 2px #3D52A0" : undefined,
+                          borderRadius: "24px",
+                        }}
+                        frontLayer={frontFace}
+                        backLayer={backFace}
+                      />
                     </motion.div>
                   );
                 })}
-              </AnimatePresence>
+                </AnimatePresence>
+              </div>
             </div>
             </>
           )}
