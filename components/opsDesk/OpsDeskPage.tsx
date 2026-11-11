@@ -147,7 +147,13 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
   */
   const sendsDrawingApprovals = sendsApprovals(roles) || isLead;
   const [approvalItems, setApprovalItems] = useState<ApprovalItem[] | null>(null);
-  const approvalProjects = useMemo(() => deskProjects.slice(0, 40).map((p) => p.id).join('|'), [deskProjects]);
+  /*
+    Every project the person can see, not only the desk's Actual/Dummy choice:
+    a test or dummy project's approvals are found here too, and the panel
+    picks one project at a time itself.
+  */
+  const approvalProjectList = useMemo(() => live.slice(0, 60).map((p) => ({ id: String(p.id), name: projectNameOf(p) || 'Project' })), [live]);
+  const approvalProjects = useMemo(() => approvalProjectList.map((p) => p.id).join('|'), [approvalProjectList]);
   const loadApprovals = useCallback(async (only?: string) => {
     if (!tenantId || !sendsDrawingApprovals) return;
     const ids = only ? [only] : approvalProjects.split('|').filter(Boolean);
@@ -558,7 +564,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
 
           {section === 'approvals' && sendsDrawingApprovals && (
             <DrawingApprovals orgId={tenantId} items={approvalItems} me={me} lead={hasRole(roles, new Set(['Design Head', 'Owner', 'Admin', 'Super Admin']))}
-              onChanged={(projectId) => { void loadApprovals(projectId); }} />
+              projects={approvalProjectList} onChanged={(projectId) => { void loadApprovals(projectId); }} />
           )}
 
           {section === 'waiting' && (

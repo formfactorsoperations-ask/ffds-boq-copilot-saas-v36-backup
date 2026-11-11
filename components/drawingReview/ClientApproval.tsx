@@ -175,12 +175,12 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
   const line = stage === 'approved'
     ? `Approved ${VIA[a?.via || (m.confirmation?.via === 'portal' ? 'portal' : 'signature')] || ''}, ${shortDate(a?.answeredAt || m.confirmation?.at || 0)}`
     : stage === 'changes' ? `The client asked for changes, ${shortDate(a?.answeredAt || 0)}`
-    : stage === 'presented' ? 'Agreed at the meeting. Send the approval email next.'
+    : stage === 'presented' ? (m.outside ? 'Shown to the client outside the Studio Desk. Send the approval email next.' : 'Agreed at the meeting. Send the approval email next.')
     : stage === 'overdue' ? `No answer by ${approvalDate(a!.dueAt!)}`
     : `Emailed ${shortDate(a!.sentAt!)} to ${a!.sentTo.join(', ')}. Answer by ${approvalDate(a!.dueAt!)}.`;
   const sub = stage === 'approved' ? (a?.note || (a?.recordedBy ? `Recorded by ${firstName(a.recordedBy.name)}.` : ''))
     : stage === 'changes' ? a?.note || ''
-    : stage === 'presented' ? `${sheets.length} drawing${sheets.length === 1 ? '' : 's'} wait for the client's written approval. They are not approved in the Drawings table until it comes back.`
+    : stage === 'presented' ? `${sheets.length === 1 ? '1 drawing waits' : `${sheets.length} drawings wait`} for the client's written approval. ${sheets.length === 1 ? 'It is' : 'They are'} not approved in the Drawings table until it comes back.`
     : stage === 'overdue' ? (lead ? 'The email said the drawings would be taken as approved. You can do that, or record their answer if it came.' : 'The Design Head can take the drawings as approved, as the email said.')
     : `${reminders ? `${reminders} reminder${reminders === 1 ? '' : 's'} sent.` : `Reminders go on working days ${REMINDER_WORKING_DAYS.join(' and ')}.`} Replies go to ${firstName(a?.sentBy?.name)}.`;
 

@@ -78,3 +78,11 @@ export const reconcileApprovals = (t: Target) => call({ ...t, action: 'reconcile
 /** A project's held meetings waiting on (or done with) the client's written approval, for the Ops Desk. */
 export const listApprovals = (t: Target) =>
   call({ ...t, action: 'approvals' }, 'designMeeting').then((r: any) => (r?.items || []) as ApprovalItem[]);
+
+/** A project's client drawings the Design Head approved and the client has not: what can be sent for approval. */
+export const listApprovable = (t: Target) =>
+  call({ ...t, action: 'approvable' }, 'designMeeting') as Promise<{ projectName: string | null; drawings: { drawingId: string; name: string; room: string; versionNo: number }[] }>;
+
+/** Records drawings shown to the client outside the Studio Desk, so their approval can be asked for. */
+export const recordPresentedOutside = (t: Target, drawingIds: string[], how: string, presentedOn: number) =>
+  call({ ...t, action: 'presentedOutside', drawingIds, how, presentedOn }, 'designMeeting');

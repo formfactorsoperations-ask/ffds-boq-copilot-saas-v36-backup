@@ -90,6 +90,8 @@ export interface DesignMeeting {
   confirmation?: MeetingConfirmation | null;
   /** The client's written approval of the rooms they agreed, asked for by email after the meeting. */
   approval?: ClientApproval | null;
+  /** Presented outside the Studio Desk (at site, in person, on WhatsApp); recorded by operations so the approval can follow. */
+  outside?: boolean;
   /** The approved layout plan shown alongside each room, fixed at the start. */
   layout?: MeetingLayout | null;
   /** When the client opened the meeting's drawings in their portal (server time). */
@@ -361,6 +363,9 @@ export interface ApprovalItem {
   approval: ClientApproval | null;
   confirmation: Pick<MeetingConfirmation, 'via' | 'name' | 'at'> | null;
   contact: { name: string; email: string; studio: string };
+  /** Presented outside the Studio Desk, and how ("Shown at site"). */
+  outside?: boolean;
+  how?: string;
 }
 
 export const blankApproval = (): ClientApproval => ({

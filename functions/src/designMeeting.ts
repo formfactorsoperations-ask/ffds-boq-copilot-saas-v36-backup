@@ -10,7 +10,7 @@ import {
 } from "../../lib/drawingReview";
 import {
   presentableRooms, clientRoundsByRoom, includedRoundsFrom, isOverIncluded, cleanChanges, cleanFee,
-  cleanSignerName, cleanSignature, portalDesignRecord, cleanRoomBoxes, cleanPresenters, mayRunThis,
+  cleanSignerName, cleanSignature, portalDesignRecord, cleanRoomBoxes, cleanPresenters, mayRunThis, GENERAL_ROOM,
   needsApproval, blankApproval, approvalSheets, approvalEmail, addWorkingDays, reminderDue, mayDeem, agreementsFrom,
   cleanEmails, cleanLink, cleanEmailText, cleanEmailSubject, textEmailHtml, APPROVAL_WORKING_DAYS, sendsApprovals, needsApproval as needsWrittenApproval, type ClientApproval, type ApprovalVia, type ApprovalItem,
   type DesignMeeting, type MeetingConfirmation, type PortalDesignMeeting, type MeetingLayout, type LayoutSetup, type MeetingRoom, type MeetingSheet, type RoomCharge, type ChargeStatus, type RoomDrawing,
@@ -599,9 +599,7 @@ async function recordApproval(actor: Actor, orgId: string, projectId: string, in
   the client's pins.
 */
 async function approvals(actor: Actor, orgId: string, projectId: string): Promise<{ items: ApprovalItem[] }> {
-  if (!sendsApprovals(actor.roles) && !isLead(actor) && !canPresentAssigned(actor.roles)) {
-    throw new HttpsError("permission-denied", "This account does not send approval emails.");
-  }
+  mustSendApprovals(actor);
   const held = await db().collection(`${projectPath(orgId, projectId)}/designMeetings`).where("state", "==", "CLOSED").get();
   const contact = await projectContact(projectId);
   const items: ApprovalItem[] = held.docs
@@ -612,10 +610,82 @@ async function approvals(actor: Actor, orgId: string, projectId: string): Promis
     .map((m) => ({
       meetingId: m.id, projectId, projectName: actor.projectName || m.projectName || "Project", closedAt: m.closedAt || m.startedAt,
       presentedBy: m.startedBy?.name || "", sheets: approvalSheets(m), approval: m.approval || null,
+      outside: !!m.outside, how: m.outside ? m.attendees || "" : undefined,
       confirmation: m.confirmation?.at ? { via: m.confirmation.via, name: m.confirmation.name, at: m.confirmation.at } : null,
       contact: { name: contact.clientName, email: contact.clientEmails.join(", "), studio: contact.studioName },
     }));
   return { items };
+}
+
+/*
+  DRAWINGS PRESENTED OUTSIDE THE STUDIO DESK.
+
+  Not every presentation happens in a design meeting here: drawings are
+  shown at site, in person or sent on WhatsApp. Operations record that the
+  client saw them, picking the Design Head-approved client drawings; that
+  makes a held meeting with those rooms agreed (presentedOutside, with how
+  and when), and from there the approval runs exactly as after a meeting:
+  the email, Drive, reminders and the client's answer.
+*/
+function mustSendApprovals(actor: Actor) {
+  if (!sendsApprovals(actor.roles) && !isLead(actor) && !canPresentAssigned(actor.roles)) {
+    throw new HttpsError("permission-denied", "This account does not send approval emails.");
+  }
+}
+
+/** The project's client drawings the Design Head has approved and the client has not: what can be sent for approval. */
+async function approvable(actor: Actor, orgId: string, projectId: string) {
+  mustSendApprovals(actor);
+  const tracker = await db().collection(`${projectPath(orgId, projectId)}/drawingTracker`).get();
+  const drawings = tracker.docs
+    .map((d) => ({ id: d.id, data: d.data() }))
+    .filter(({ data }) => {
+      const s = data.review as ReviewSummary | undefined;
+      return !!s && s.state === "APPROVED" && !!s.versionId && (s.audience || "client") === "client" && !clientPending(s) && data.approvedAt == null;
+    })
+    .map(({ id, data }) => ({ drawingId: id, name: String(data.name || "Drawing"), room: data.roomName || GENERAL_ROOM, versionNo: (data.review as ReviewSummary).versionNo }))
+    .sort((a, b) => a.room.localeCompare(b.room) || a.name.localeCompare(b.name));
+  return { projectName: actor.projectName, drawings };
+}
+
+async function presentedOutside(actor: Actor, orgId: string, projectId: string, input: Input) {
+  mustSendApprovals(actor);
+  const ids: string[] = Array.isArray(input.drawingIds) ? [...new Set(input.drawingIds.map((x: unknown) => String(x)))].filter(safeId).slice(0, 40) as string[] : [];
+  if (!ids.length) throw new HttpsError("invalid-argument", "Tick the drawings the client was shown.");
+  const how = cleanText(input.how, 200) || "Presented outside the Studio Desk";
+  const on = Number(input.presentedOn);
+  const now = Date.now();
+  const presentedOn = Number.isFinite(on) && on <= now && on > now - 365 * 86_400_000 ? on : now;
+  const base = projectPath(orgId, projectId);
+  const ref = db().collection(`${base}/designMeetings`).doc();
+  return db().runTransaction(async (tx) => {
+    const snaps = await Promise.all(ids.map((id) => tx.get(db().doc(`${base}/drawingTracker/${id}`))));
+    const byRoom = new Map<string, MeetingSheet[]>();
+    snaps.forEach((snap) => {
+      const data = snap.data();
+      const s = data?.review as ReviewSummary | undefined;
+      if (!snap.exists || !s || s.state !== "APPROVED" || !s.versionId || (s.audience || "client") !== "client" || clientPending(s)) {
+        throw new HttpsError("failed-precondition", `${data?.name || "A drawing"} is not approved by the Design Head for the client, so it cannot be sent for approval yet.`);
+      }
+      const room = String(data!.roomName || GENERAL_ROOM);
+      byRoom.set(room, [...(byRoom.get(room) || []), {
+        drawingId: snap.id, name: String(data!.name || "Drawing"), versionId: s.versionId, versionNo: s.versionNo,
+        pdfPath: s.pdfPath, thumbPath: s.thumbPath, pageCount: s.pageCount ?? null,
+      }]);
+    });
+    const rooms: MeetingRoom[] = [...byRoom].map(([room, sheets]) => ({ room, sheets, outcome: "agreed", changes: [], round: 0, charge: null }));
+    const by = person(actor);
+    const meeting: DesignMeeting = {
+      id: ref.id, orgId, projectId, projectName: actor.projectName, state: "CLOSED", rev: 1,
+      attendees: how, includedRounds: 0, rooms, startedAt: presentedOn, startedBy: by, closedAt: presentedOn, closedBy: by,
+      approval: blankApproval(), outside: true,
+    };
+    tx.set(ref, meeting);
+    snaps.forEach((snap) => tx.set(snap.ref.collection("reviewEvents").doc(), {
+      type: "client", at: now, by, versionNo: (snap.data()!.review as ReviewSummary).versionNo, text: `Shown to the client outside the Studio Desk (${how}); waiting for their approval in writing`,
+    } as ReviewEvent));
+    return { meeting };
+  });
 }
 
 /*
@@ -721,6 +791,8 @@ export const designMeeting = onCall({ cors: true, timeoutSeconds: 120, secrets: 
       case "recordApproval": return await recordApproval(actor, orgId, projectId, input);
       case "reconcile": return await reconcile(actor, orgId, projectId);
       case "approvals": return await approvals(actor, orgId, projectId);
+      case "approvable": return await approvable(actor, orgId, projectId);
+      case "presentedOutside": return await presentedOutside(actor, orgId, projectId, input);
       default: throw new HttpsError("invalid-argument", "Unknown action.");
     }
   } catch (e: any) {
