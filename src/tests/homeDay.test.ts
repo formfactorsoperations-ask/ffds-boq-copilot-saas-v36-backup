@@ -14,7 +14,7 @@ const sheet = (id: string, state: string, extra: Partial<DeskRow> = {}, review: 
   review: { state, designer: { email: ME, name: 'Tanvi', uid: 'u' }, updatedAt: 1, submittedAt: null, decidedAt: null, ...review } as any,
 });
 const visit = (daysAway: number): Upcoming => ({ visit: { id: `v${daysAway}`, kind: 'meeting', status: 'confirmed' } as any, date: '2026-10-14', time: '11:00', daysAway });
-const team = (over: Partial<TeamToday> = {}): TeamToday => ({ today: '2026-10-14', away: [], home: [], asked: [], team: 6, nextHoliday: null, ...over });
+const team = (over: Partial<TeamToday> = {}): TeamToday => ({ today: '2026-10-14', away: [], home: [], asked: [], team: 6, closed: null, nextHoliday: null, ...over });
 const designer = { reviewer: false, email: ME };
 const head = { reviewer: true, email: 'mayuri@s.in' };
 
@@ -46,6 +46,8 @@ test('a day off asked for today needs a decision; someone away is only worth kno
   const asked = [{ personId: 'r', name: 'Riya', mode: 'Away', pending: true }] as any;
   expect(dayOrder({ team: team({ asked }) }).pins[0]).toEqual({ kind: 'team', weight: 48, why: 'Asked off today' });
   expect(dayOrder({ team: team({ away: asked }) }).pins[0].weight).toBe(10);
+  /* A holiday: nobody is "in", and nobody has "asked off". */
+  expect(dayOrder({ team: team({ asked, closed: 'Diwali' }) }).pins[0]).toEqual({ kind: 'team', weight: 0, why: 'Studio closed' });
   /* Loading pins stay in place with no weight. */
   expect(dayOrder({ rows: null, reviewer: true, viewer: head, visits: null, team: null }).pins.map((p) => p.weight + p.why)).toEqual(['0', '0', '0', '0']);
 });

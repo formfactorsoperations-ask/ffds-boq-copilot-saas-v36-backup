@@ -224,7 +224,7 @@ function studioStories(i: StoryInput): Stories {
       });
     }
   }
-  if (i.team && i.team.away.length + i.team.home.length) {
+  if (i.team && !i.team.closed && i.team.away.length + i.team.home.length) {
     const out = [...i.team.away, ...i.team.home];
     cards.push({
       id: 'team-away', ring: 'team', eyebrow: 'Out today', figure: String(out.length),

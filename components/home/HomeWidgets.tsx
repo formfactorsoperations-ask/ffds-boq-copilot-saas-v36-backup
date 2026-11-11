@@ -377,13 +377,22 @@ export function TeamWidget({ t, onAll, index, span, compact }: { t: TeamToday; o
   const out = t.away.length + t.home.length;
   return (
     <Widget index={index} icon={Users} eyebrow="Team today" action={{ label: 'People', onClick: onAll }} span={span}>
-      <Figure value={Math.max(0, t.team - t.away.length)} label="working today" small={`of ${t.team} on the team`} />
-      <div className={`${compact ? 'mt-3' : 'mt-4'} flex flex-col gap-2.5`}>
+      {/* A holiday or an off day: nobody is "working today", and nobody is "in". */}
+      {t.closed ? (
+        <div className="flex items-center gap-3">
+          <IconTile icon={PartyPopper} tone="ok" size="sm" />
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-slate-800">Studio closed today</p>
+            <p className="text-xs text-slate-500 truncate">{t.closed}</p>
+          </div>
+        </div>
+      ) : <Figure value={Math.max(0, t.team - t.away.length)} label="working today" small={`of ${t.team} on the team`} />}
+      {!t.closed && <div className={`${compact ? 'mt-3' : 'mt-4'} flex flex-col gap-2.5`}>
         {t.away.length > 0 && <Faces list={t.away} icon={TreePalm} tint="bg-amber-100 text-amber-700" label="on leave" delay={0.3} />}
         {t.home.length > 0 && <Faces list={t.home} icon={House} tint="bg-[#3D52A0]/10 text-[#3D52A0]" label="from home" delay={0.4} />}
         {t.asked.length > 0 && <Faces list={t.asked} icon={Hourglass} tint="bg-slate-100 text-slate-600" label="asked off" delay={0.5} />}
         {out === 0 && t.asked.length === 0 && <p className="flex items-center gap-2 text-xs font-semibold text-emerald-700"><Sparkles className="w-4 h-4" />Everyone's in today.</p>}
-      </div>
+      </div>}
       <Holiday h={t.nextHoliday} />
     </Widget>
   );
@@ -406,7 +415,7 @@ function Holiday({ h }: { h: TeamToday['nextHoliday'] }) {
           <motion.span key={`${h.date}-${k}`} initial={{ rotateX: -90, opacity: 0 }} animate={{ rotateX: 0, opacity: 1 }} transition={{ delay: 0.5 + k * 0.12, duration: 0.55, ease: EASE }}
             style={{ transformPerspective: 500 }} className="pp-tile w-8 h-10 rounded-lg bg-emerald-100 text-emerald-700 grid place-items-center text-xl font-black tabular-nums">{ch}</motion.span>
         ))}
-        <span className="text-[11px] text-slate-500 pb-0.5 pl-1">{h.days === 0 ? 'today!' : h.days === 1 ? 'day' : 'days'}</span>
+        <span className="text-[11px] text-slate-500 pb-0.5 pl-1">{h.days === 1 ? 'day' : 'days'}</span>
       </div>
     </div>
   );
