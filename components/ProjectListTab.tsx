@@ -34,6 +34,7 @@ import { Lock, ArrowRight, CheckSquare, ChevronDown, ChevronUp, Flag } from '@/l
 import ProjectStatusTransitionModal from "./ProjectStatusTransitionModal";
 import LiquidGlassFlipCard from "./ui/LiquidGlassFlipCard";
 import MarginReveal from "./projects/MarginReveal";
+import { Dot } from "./ui/HudBits";
 
 interface ProjectListTabProps {
   projects: FullProjectData[];
@@ -44,6 +45,8 @@ interface ProjectListTabProps {
   onDuplicateProject: (project: FullProjectData) => void;
   onQuickUpdate?: (projectId: string, field: string, value: any) => void;
   onStatusChange?: (projectId: string, newStatus: ProjectStatus, note?: string) => Promise<void> | void;
+  /** The library is still on its way; App loads it without holding the screen. */
+  loading?: boolean;
 }
 
 const STATUS_CONFIG: Record<
@@ -254,6 +257,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   onDuplicateProject,
   onQuickUpdate,
   onStatusChange,
+  loading = false,
 }) => {
   const { orgData, currentRole } = useOrg();
   /* Margins, portfolio totals and cash are the studio's own figures; see
@@ -944,7 +948,16 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
 
           {/* A Designer's list is only what they are assigned, so an empty one
               says how to get a project rather than showing a row of zeros. */}
-          {isLimitedRole(currentRole) && projects.length === 0 && (
+          {/* While the library is still arriving, say so, rather than an empty
+              screen that reads as "you have no projects". */}
+          {loading && projects.length === 0 && (
+            <div className="mb-4 rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-6 flex items-center justify-center gap-2.5">
+              <Dot tone="warn" live />
+              <p className="text-sm font-bold text-slate-800">Loading your projects…</p>
+            </div>
+          )}
+
+          {!loading && isLimitedRole(currentRole) && projects.length === 0 && (
             <div className="mb-4 rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-6 text-center">
               <p className="text-sm font-bold text-slate-800">No projects are assigned to you yet.</p>
               <p className="text-[13px] text-slate-500 mt-1">
@@ -1536,8 +1549,21 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                 const isDummy = kind === 'test';
                                 const untagged = kind === 'untagged';
                                 return (
+                                  /* The same wave as before, written as one transform so
+                                     framer-motion hands it to the browser's compositor.
+                                     As separate rotate and y it ran in JavaScript every
+                                     frame on every card, over a blurred backdrop, forever:
+                                     the screen held the main thread ~45% busy while idle. */
                                   <motion.div
-                                    animate={{ rotate: [-2, 4, -3, 2, -2], y: [0, -1, 0, -1, 0] }}
+                                    animate={reduceMotion ? undefined : {
+                                      transform: [
+                                        'translateY(0px) rotate(-2deg)',
+                                        'translateY(-1px) rotate(4deg)',
+                                        'translateY(0px) rotate(-3deg)',
+                                        'translateY(-1px) rotate(2deg)',
+                                        'translateY(0px) rotate(-2deg)',
+                                      ],
+                                    }}
                                     transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut" }}
                                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-md border transition-colors shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.95)] ${
                                       untagged
@@ -1960,7 +1986,8 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                   title={nextMove.why}
                                   animate={
                                     urgent && !reduceMotion
-                                      ? { rotate: [-0.4, 0.4, -0.3, 0.3, -0.4] }
+                                      /* One transform, so it runs on the compositor; see the tag above. */
+                                      ? { transform: ['rotate(-0.4deg)', 'rotate(0.4deg)', 'rotate(-0.3deg)', 'rotate(0.3deg)', 'rotate(-0.4deg)'] }
                                       : undefined
                                   }
                                   transition={{ repeat: Infinity, duration: 5, ease: 'easeInOut' }}

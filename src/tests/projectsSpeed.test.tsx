@@ -80,4 +80,14 @@ describe('Projects screen speed', () => {
     expect(cards()).toBe(30);
     expect(reads).toEqual({ getDoc: 0, getDocs: 0, onSnapshot: 0 });
   }, 30000);
+
+  it('says the projects are loading, rather than showing an empty screen, while they arrive', async () => {
+    const { default: ProjectListTab } = await import('../../components/ProjectListTab');
+    const props = { activeProjectId: null, onOpenProject: () => {}, onCreateNew: () => {}, onDeleteProject: () => {}, onDuplicateProject: () => {} };
+    let view: ReturnType<typeof render> | undefined;
+    await act(async () => { view = render(<ProjectListTab projects={[]} loading {...props} />); });
+    expect(view!.getByText('Loading your projects…')).toBeTruthy();
+    await act(async () => { view!.rerender(<ProjectListTab projects={[project(1)] as any} loading {...props} />); });
+    expect(view!.queryByText('Loading your projects…')).toBeNull();
+  });
 });

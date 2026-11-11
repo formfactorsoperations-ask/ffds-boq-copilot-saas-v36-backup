@@ -561,19 +561,32 @@ export default function LiquidGlassFlipCard(props: LiquidGlassFlipCardProps) {
     const element = cardRef.current;
     if (!element) return;
     let frame = 0;
-    const measure = () => {
-      const w = element.offsetWidth;
-      const h = element.offsetHeight;
+    const apply = (w: number, h: number) => {
       if (!w || !h) return;
       setSize((previous) =>
         previous.w === w && previous.h === h ? previous : { w, h },
       );
     };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
+    /*
+      The size comes from the observer, which reports it as soon as the card is
+      first laid out and on every change after.
+
+      It used to be read straight away on mount as well, with offsetWidth. On a
+      screen mounting forty of these, each read forced the whole page through
+      layout while the next card was still being added -- a quarter of a second
+      of forced layouts on the Projects screen. The observer's box size needs
+      no layout at all, and is applied a frame later as before.
+    */
+    if (typeof ResizeObserver === "undefined") {
+      apply(element.offsetWidth, element.offsetHeight);
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[entries.length - 1]?.borderBoxSize?.[0];
+      const w = box ? Math.round(box.inlineSize) : element.offsetWidth;
+      const h = box ? Math.round(box.blockSize) : element.offsetHeight;
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(measure);
+      frame = requestAnimationFrame(() => apply(w, h));
     });
     observer.observe(element);
     return () => {
