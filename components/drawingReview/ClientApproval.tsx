@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BadgeCheck, CalendarClock, Check, Clock, Loader2, Mail, MessageSquareWarning, Send, X } from 'lucide-react';
+import { BadgeCheck, CalendarClock, Check, Clock, FolderUp, Loader2, Mail, MessageSquareWarning, Send, X } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebaseClient';
 import {
@@ -7,7 +7,7 @@ import {
   APPROVAL_WORKING_DAYS, REMINDER_WORKING_DAYS, type DesignMeeting, type ApprovalStage,
 } from '../../lib/designMeeting';
 import { sendApproval, recordApproval } from '../../services/designMeetingService';
-import { projectDriveLink } from '../../services/googleDriveService';
+import { projectDriveLink, uploadToDrive, type UploadResult } from '../../services/googleDriveService';
 import { shortDate, firstName, useToast } from './ui';
 import { Chip, type Tone } from './DeskParts';
 
@@ -87,6 +87,29 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
     /* The project's Drive folder, when the studio has connected Google Drive (Studio settings). */
     if (!a?.driveLink) projectDriveLink(projectId, orgId).then((link) => { if (link) setDrive((v) => v || link); });
   }, [contact]);
+
+  /*
+    The Drive folder: operations tick which of the meeting's drawings go into
+    the project's folder and upload them; nothing goes there by itself. The
+    upload fills the link in.
+  */
+  const [ticked, setTicked] = useState<Record<string, boolean>>(() => Object.fromEntries(sheets.map((x) => [x.drawingId, true])));
+  const [uploaded, setUploaded] = useState<Record<string, UploadResult>>({});
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
+  const picked = sheets.filter((x) => ticked[x.drawingId]).map((x) => x.drawingId);
+  async function upload() {
+    setBusy('upload'); setUploadErr(null);
+    try {
+      const r = await uploadToDrive(projectId, picked, orgId);
+      setUploaded((u) => ({ ...u, ...r.results }));
+      if (r.link) setDrive(r.link);
+      const copied = Object.values(r.results).filter((x) => x === 'copied').length;
+      toast({ ok: true, title: copied ? `${copied} drawing${copied === 1 ? '' : 's'} uploaded to Drive` : 'Already in the Drive folder', sub: `Folder: ${r.folderName}. Its link is in the email.` });
+    } catch (e: any) {
+      setUploadErr(e?.message || 'The drawings were not uploaded.');
+    } finally { setBusy(null); }
+  }
+  const RESULT: Record<UploadResult, string> = { copied: 'Uploaded', already: 'Already in the folder', 'not-approved': 'Not approved on this version', studio: 'Studio-only, not uploaded', failed: 'Did not upload' };
 
   const [note, setNote] = useState('');
   const [on, setOn] = useState(() => new Date().toISOString().slice(0, 10));
@@ -194,6 +217,25 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
               <input id={`cc-${m.id}`} value={cc} onChange={(e) => setCc(e.target.value)} placeholder="designer@yourstudio.in" className={input} style={{ borderColor: !ccOk ? '#B4232F' : undefined }} /></div>
             <div><label className={label} htmlFor={`greet-${m.id}`}>Greeting</label>
               <input id={`greet-${m.id}`} value={greet} onChange={(e) => setGreet(e.target.value)} placeholder="Ms. Sharma" className={input} /></div>
+            <div className="rounded-[10px] border border-[#E4E4DE] bg-[#FAFAF7] p-2.5">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className={`${label} !mb-0`}>Drawings for the Drive folder <span className="font-medium text-[#8A8E97]">· {m.projectName || 'this project'}</span></span>
+                <button type="button" disabled={!picked.length || !!busy} onClick={upload} className={`${secondary} !min-h-[34px] !px-3`}>
+                  {busy === 'upload' ? <Loader2 size={14} className="animate-spin" /> : <FolderUp size={14} />}Upload to Drive
+                </button>
+              </div>
+              <div className="flex flex-col gap-1">
+                {sheets.map((x) => (
+                  <label key={x.drawingId} className="flex min-h-[32px] items-center gap-2 text-[13px] text-[#17191E]">
+                    <input type="checkbox" checked={!!ticked[x.drawingId]} disabled={!!busy} onChange={(e) => setTicked((t) => ({ ...t, [x.drawingId]: e.target.checked }))} className="h-4 w-4 accent-[#4146C8]" />
+                    <span className="min-w-0 flex-1 truncate">{sheetLine(x.room, x.name)} <span className="text-[#8A8E97]">v{x.versionNo}</span></span>
+                    {uploaded[x.drawingId] && <span className="shrink-0 text-[12px] font-bold" style={{ color: uploaded[x.drawingId] === 'copied' || uploaded[x.drawingId] === 'already' ? '#1B6E4F' : '#8F4C07' }}>{RESULT[uploaded[x.drawingId]]}</span>}
+                  </label>
+                ))}
+              </div>
+              {uploadErr && <div className="mt-1.5 text-[12px] text-[#B4232F]">{uploadErr}</div>}
+              <div className="mt-1.5 text-[12px] text-[#5F636D]">Only the ticked drawings are uploaded, landscape, to My Drive / Studio Desk / {m.projectName || 'the project'}.</div>
+            </div>
             <div><label className={label} htmlFor={`drive-${m.id}`}>Google Drive link to the drawings</label>
               <input id={`drive-${m.id}`} value={drive} onChange={(e) => setDrive(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" className={input} style={{ borderColor: !driveOk ? '#B4232F' : undefined }} /></div>
             <div className="flex flex-wrap gap-2 pt-1">

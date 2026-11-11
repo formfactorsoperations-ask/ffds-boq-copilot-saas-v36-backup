@@ -39,3 +39,9 @@ export const disconnectDrive = (tenantId?: string) => driveCall<DriveStatus>('di
 /** The project's shared folder, for the approval email; null while Drive is not connected. */
 export const projectDriveLink = (projectId: string, tenantId?: string) =>
   driveCall<{ link: string | null }>('folder', { projectId }, tenantId).then((r) => r.link).catch(() => null);
+
+export type UploadResult = 'copied' | 'already' | 'not-approved' | 'studio' | 'failed';
+
+/** Uploads the drawings operations ticked into the project's folder; returns the folder link and what happened to each. */
+export const uploadToDrive = (projectId: string, drawingIds: string[], tenantId?: string) =>
+  driveCall<{ link: string; folderName: string; results: Record<string, UploadResult> }>('upload', { projectId, drawingIds }, tenantId);

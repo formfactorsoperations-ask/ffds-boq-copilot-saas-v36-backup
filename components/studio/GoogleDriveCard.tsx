@@ -64,7 +64,7 @@ const GoogleDriveCard: React.FC = () => {
           <div>
             <div className="flex items-center gap-2"><h3 className="text-base font-bold text-slate-900">Google Drive</h3>{pill}</div>
             <p className="text-xs text-slate-500 mt-0.5">
-              {connected ? `Approved drawings are copied to ${status?.email || 'your Drive'}` : 'Copy approved drawings to a Drive folder per project, and put its link in the approval email.'}
+              {connected ? `Drawings you pick are uploaded to ${status?.email || 'your Drive'}` : 'Upload the drawings you pick to a Drive folder per project, and put its link in the approval email.'}
             </p>
           </div>
         </div>
@@ -84,8 +84,9 @@ const GoogleDriveCard: React.FC = () => {
           <div className="flex items-start gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-xl p-3">
             <CheckCircle className="w-4 h-4 mt-0.5 text-emerald-600 shrink-0" />
             <span>
-              When the Design Head approves a drawing for the client, it is copied, landscape, into <b>My Drive / {ROOT_FOLDER} / &lt;Project&gt;</b>.
-              That folder is shared as <b>view-only to anyone with the link</b>, and the link fills itself into the approval email.
+              When operations send a client the approval email, they tick which of the meeting's drawings to upload. Only those are copied,
+              landscape, into <b>My Drive / {ROOT_FOLDER} / &lt;Project&gt;</b>. Nothing is copied by itself.
+              That folder is shared as <b>view-only to anyone with the link</b>, and the link goes into the approval email.
               Studio-only drawings are never copied. The app can see only the folders and files it made, nothing else in the account.
             </span>
           </div>
@@ -95,7 +96,7 @@ const GoogleDriveCard: React.FC = () => {
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
               <span>
                 The Google Drive service is not on the server yet. Once the OAuth client ID and secret are saved as secrets, deploy it once
-                with <code className="font-mono text-xs bg-white/70 px-1 rounded">firebase deploy --only functions:googleDrive,functions:driveOAuthCallback,functions:onDrawingApprovedToDrive</code>, then reload this page.
+                with <code className="font-mono text-xs bg-white/70 px-1 rounded">firebase deploy --only functions:googleDrive,functions:driveOAuthCallback</code>, then reload this page.
               </span>
             </div>
           )}

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { FileCheck2 } from 'lucide-react';
 import { approvalStage, sheetLine, type ApprovalItem, type DesignMeeting } from '../../lib/designMeeting';
 import ClientApproval, { ApprovalChip } from '../drawingReview/ClientApproval';
@@ -41,11 +41,28 @@ interface Props {
 }
 
 export default function DrawingApprovals({ orgId, items, me, lead, onChanged }: Props) {
-  const open = useMemo(() => (items || []).filter((i) => approvalStage(asMeeting(i)) !== 'approved'), [items]);
-  const done = (items || []).length - open.length;
+  const waiting = useMemo(() => (items || []).filter((i) => approvalStage(asMeeting(i)) !== 'approved'), [items]);
+  /* One project at a time: the projects with meetings waiting, by name. */
+  const projects = useMemo(() => {
+    const by = new Map<string, string>();
+    waiting.forEach((i) => by.set(i.projectId, i.projectName));
+    return [...by].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [waiting]);
+  const [pick, setPick] = useState<string>('');
+  const projectId = projects.some((p) => p.id === pick) ? pick : projects.length === 1 ? projects[0].id : '';
+  const open = projectId ? waiting.filter((i) => i.projectId === projectId) : waiting;
+  const done = (items || []).length - waiting.length;
   return (
     <Panel icon={FileCheck2} title="Drawings for approval"
-      blurb="Rooms the client agreed at a design meeting. Send the approval email (it goes in your name, and replies come to you), then record their answer. Reminders go on working days 3 and 5.">
+      blurb="Rooms the client agreed at a design meeting. Pick the project, upload the drawings you choose to its Drive folder, send the approval email (it goes in your name, and replies come to you), then record their answer. Reminders go on working days 3 and 5."
+      right={projects.length > 1 ? (
+        <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Project
+          <select value={projectId} onChange={(e) => setPick(e.target.value)} className="min-h-[36px] rounded-xl border border-slate-200 bg-white px-2.5 text-sm font-semibold text-slate-800">
+            <option value="">All projects ({waiting.length})</option>
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.name} ({waiting.filter((i) => i.projectId === p.id).length})</option>)}
+          </select>
+        </label>
+      ) : undefined}>
       {items === null ? <Loading /> : !open.length ? <Empty icon={FileCheck2} text={done ? `Nothing waiting. ${done} meeting${done === 1 ? ' is' : 's are'} approved by the client.` : 'No design meetings are waiting for the client\'s approval.'} /> : (
         <ToastHost>
           <div className="space-y-3">

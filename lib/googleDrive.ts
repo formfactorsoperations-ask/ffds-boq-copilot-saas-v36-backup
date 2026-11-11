@@ -2,8 +2,9 @@
   GOOGLE DRIVE: THE APPROVED DRAWINGS, IN A FOLDER THE CLIENT CAN OPEN.
 
   The studio connects its main Google account once (Studio settings →
-  Google Drive). From then on, every drawing for the client that the Design
-  Head approves is copied, landscape, into one folder per project:
+  Google Drive). Then, when operations send a client the approval email,
+  they tick which of the meeting's approved drawings go into the project's
+  folder, and those are copied, landscape, into one folder per project:
 
     My Drive / Studio Desk / <Project name> / <Room> – <Drawing> v<n>.pdf
 

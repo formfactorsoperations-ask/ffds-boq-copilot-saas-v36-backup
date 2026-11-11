@@ -1,5 +1,4 @@
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
-import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { randomBytes } from "crypto";
@@ -9,18 +8,21 @@ import {
   DRIVE_SCOPE, ROOT_FOLDER, FOLDER_MIME, DRIVE_ADMIN_ROLES, callbackUrl, folderLink, projectFolderName, drawingFileName,
   type DriveStatus,
 } from "../../lib/googleDrive";
-import { safeId, projectNameOf } from "../../lib/drawingReview";
+import { safeId, projectNameOf, canRunMeeting, canSetAudience } from "../../lib/drawingReview";
+import { sendsApprovals } from "../../lib/designMeeting";
+import { resolveActor } from "./drawingReview";
 
 /*
   GOOGLE DRIVE, ON THE SERVER (lib/googleDrive says what and why).
 
-  - googleDrive (callable): the connection's status, starting the connection,
-    disconnecting, and a project's folder link for the approval email.
+  - googleDrive (callable): the connection's status, starting the
+    connection, disconnecting, a project's folder link, and uploading the
+    approved drawings operations picked into the project's folder.
   - driveOAuthCallback (https): where Google sends the studio back after it
     allows the app. Swaps the one-time code for a refresh token.
-  - onDrawingApprovedToDrive (Firestore): when the Design Head approves a
-    client drawing, copies the approved PDF, landscape, into the project's
-    folder.
+
+  Nothing is copied by itself: a drawing reaches Drive only when someone
+  picks it in the approval email's form and uploads it.
 
   The refresh token lives in driveConnections/{tenantId}, which no browser can
   read (firestore.rules), like the Zoho Books token. Needs, once:
@@ -148,14 +150,14 @@ function statusOf(data: any): DriveStatus {
 /*
   One approved client drawing into its project's folder, landscape, once per
   version: a record under driveConnections/{tenant}/files claims it first, so
-  the approval trigger and the catch-up below never both copy it. Returns
-  whether it was copied now. A failure is recorded (and shown in Studio
+  a drawing ticked twice is not copied twice. Says what happened to it. A failure is recorded (and shown in Studio
   settings), and a later run tries again.
 */
-async function copyDrawing(orgId: string, token: string, projectId: string, drawingId: string, d: any): Promise<boolean> {
+type CopyResult = "copied" | "already" | "not-approved" | "studio" | "failed";
+async function copyDrawing(orgId: string, token: string, projectId: string, drawingId: string, d: any): Promise<CopyResult> {
   const review = d?.review;
-  if (!review || review.state !== "APPROVED" || !review.pdfPath || !review.versionId) return false;
-  if ((review.audience || "client") !== "client") return false;
+  if (!review || review.state !== "APPROVED" || !review.pdfPath || !review.versionId) return "not-approved";
+  if ((review.audience || "client") !== "client") return "studio";
   const record = conn(orgId).collection("files").doc(`${projectId}_${drawingId}_${review.versionId}`.slice(0, 400));
   const claimed = await db().runTransaction(async (tx) => {
     const r = await tx.get(record);
@@ -163,7 +165,7 @@ async function copyDrawing(orgId: string, token: string, projectId: string, draw
     tx.set(record, { status: "copying", projectId, drawingId, versionNo: review.versionNo, at: Date.now() });
     return true;
   });
-  if (!claimed) return false;
+  if (!claimed) return "already";
   try {
     const [bytes] = await admin.storage().bucket().file(review.pdfPath).download();
     const { bytes: landscape } = await landscapePdf(new Uint8Array(bytes));
@@ -171,31 +173,13 @@ async function copyDrawing(orgId: string, token: string, projectId: string, draw
     const file = await uploadPdf(token, folder.id, drawingFileName(d.roomName, String(d.name || "Drawing"), review.versionNo), landscape);
     await record.set({ status: "copied", fileId: file.id, link: file.link, folderLink: folder.link, at: Date.now() }, { merge: true });
     logger.info("Approved drawing copied to Drive", { orgId, projectId, drawingId, versionNo: review.versionNo });
-    return true;
+    return "copied";
   } catch (e: any) {
     logger.error("Copy to Drive failed", { orgId, projectId, drawingId, message: e?.message });
     await record.set({ status: "failed", error: String(e?.message || "").slice(0, 300) }, { merge: true });
     await conn(orgId).set({ lastError: { at: Date.now(), message: `${String(d?.name || "A drawing")}: ${String(e?.message || "could not be copied").slice(0, 240)}` } }, { merge: true });
-    return false;
+    return "failed";
   }
-}
-
-/*
-  The catch-up: every client drawing of the project that is approved now but
-  not in its folder yet (approved before Drive was connected, or a copy that
-  failed). Run when the folder's link is asked for, so the folder the client
-  is sent to has the drawings in it. Bounded, so the call stays quick; the
-  rest follow on the next ask.
-*/
-const CATCH_UP_MAX = 12;
-async function catchUp(orgId: string, token: string, projectId: string): Promise<number> {
-  const approved = await db().collection(`organizations/${orgId}/projects/${projectId}/drawingTracker`).where("review.state", "==", "APPROVED").get();
-  let copied = 0;
-  for (const doc of approved.docs) {
-    if (copied >= CATCH_UP_MAX) break;
-    if (await copyDrawing(orgId, token, projectId, doc.id, doc.data())) copied++;
-  }
-  return copied;
 }
 
 /* ---------------------------------------------------------------- the callable */
@@ -242,11 +226,34 @@ export const googleDrive = onCall({ cors: true, secrets: SECRETS, timeoutSeconds
       if (!safeId(projectId)) throw new HttpsError("invalid-argument", "Which project?");
       const p = (await db().doc(`projects/${projectId}`).get()).data();
       if (!p || (p.tenantId ?? null) !== tenantId) throw new HttpsError("not-found", "That project could not be found.");
+      /* Only a folder already made: nothing is created or copied until someone uploads drawings. */
+      const known = (await conn(tenantId).get()).data()?.projects?.[projectId];
+      return { link: known?.folderId ? known.link || folderLink(known.folderId) : null };
+    }
+
+    /*
+      The drawings operations picked, into the project's folder. Only that
+      project's drawings, only approved client drawings, each version once.
+      Client Relations only on the projects assigned to them (resolveActor).
+    */
+    case "upload": {
+      const projectId = String(input.projectId || "");
+      if (!safeId(projectId)) throw new HttpsError("invalid-argument", "Which project?");
+      const ids: string[] = Array.isArray(input.drawingIds) ? [...new Set(input.drawingIds.map((x: unknown) => String(x)))].filter(safeId).slice(0, 30) as string[] : [];
+      if (!ids.length) throw new HttpsError("invalid-argument", "Tick the drawings to upload.");
+      const actor = await resolveActor(request, tenantId, projectId);
+      if (!sendsApprovals(actor.roles) && !canRunMeeting(actor.roles) && !canSetAudience(actor.roles)) {
+        throw new HttpsError("permission-denied", "This account does not upload drawings to Drive.");
+      }
       const token = await accessToken(tenantId);
-      if (!token) return { link: null };
+      if (!token) throw new HttpsError("failed-precondition", "Google Drive is not connected. The Owner connects it in Studio settings → Google Drive.");
       const folder = await projectFolder(tenantId, token, projectId);
-      const copied = await catchUp(tenantId, token, projectId);
-      return { link: folder.link, copied };
+      const results: Record<string, CopyResult> = {};
+      for (const id of ids) {
+        const snap = await db().doc(`organizations/${tenantId}/projects/${projectId}/drawingTracker/${id}`).get();
+        results[id] = snap.exists ? await copyDrawing(tenantId, token, projectId, id, snap.data()) : "not-approved";
+      }
+      return { link: folder.link, folderName: projectFolderName(actor.projectName), results };
     }
 
     default:
@@ -294,27 +301,3 @@ export const driveOAuthCallback = onRequest({ secrets: SECRETS, timeoutSeconds: 
     res.redirect(back("error"));
   }
 });
-
-/* ---------------------------------------------------------------- approved → Drive */
-
-/*
-  A client drawing the Design Head approves (a new approval, or a new version
-  approved) is copied into the project's folder, landscape. Each version once:
-  a retried event finds its record and stops. A failure is recorded on the
-  connection for Studio settings to show; the approval itself is never held up.
-*/
-export const onDrawingApprovedToDrive = onDocumentWritten(
-  { document: "organizations/{orgId}/projects/{projectId}/drawingTracker/{drawingId}", secrets: SECRETS, memory: "1GiB", timeoutSeconds: 300 },
-  async (event) => {
-    const before: any = event.data?.before?.data()?.review || null;
-    const after: any = event.data?.after?.data()?.review || null;
-    const { orgId, projectId, drawingId } = event.params as Record<string, string>;
-    if (!after || after.state !== "APPROVED" || !after.pdfPath || !after.versionId) return;
-    if (before?.state === "APPROVED" && before?.versionId === after.versionId) return;
-    if ((after.audience || "client") !== "client") return;
-    if (!(await conn(orgId).get()).data()?.refreshToken) return;
-    const token = await accessToken(orgId).catch(() => null);
-    if (!token) return;
-    await copyDrawing(orgId, token, projectId, drawingId, event.data!.after!.data());
-  },
-);
