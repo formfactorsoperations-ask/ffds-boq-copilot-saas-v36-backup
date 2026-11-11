@@ -1,7 +1,7 @@
 import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from './firebaseClient';
 import { readShape } from '../lib/drawingReview';
-import type { ChargeStatus, DesignMeeting, LayoutSetup, MeetingChange, PlanBox, RoomOutcome } from '../lib/designMeeting';
+import type { ApprovalItem, ChargeStatus, DesignMeeting, LayoutSetup, MeetingChange, PlanBox, RoomOutcome } from '../lib/designMeeting';
 import { call } from './drawingReviewService';
 
 /*
@@ -74,3 +74,7 @@ export const recordApproval = (t: Target, meetingId: string, outcome: 'approved'
 
 /** Brings the project's drawings in line with the written-approval rule (designMeeting: reconcile). Writes only what is wrong. */
 export const reconcileApprovals = (t: Target) => call({ ...t, action: 'reconcile' }, 'designMeeting') as Promise<{ audience: number; reclaimed: number }>;
+
+/** A project's held meetings waiting on (or done with) the client's written approval, for the Ops Desk. */
+export const listApprovals = (t: Target) =>
+  call({ ...t, action: 'approvals' }, 'designMeeting').then((r: any) => (r?.items || []) as ApprovalItem[]);

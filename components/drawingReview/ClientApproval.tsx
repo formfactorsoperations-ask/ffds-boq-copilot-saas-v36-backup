@@ -52,9 +52,13 @@ interface Props {
   /** The Design Head, the Owner or an Admin: may take overdue drawings as approved. */
   lead: boolean;
   me: { email: string; name?: string | null };
+  /** The client and the studio, when the caller already has them (the Ops Desk, from the server). */
+  contact?: { name: string; email: string; studio: string } | null;
+  /** Told after a change, for a screen that does not watch meetings live (the Ops Desk). */
+  onChanged?: () => void;
 }
 
-export default function ClientApproval({ orgId, projectId, m, mine, lead, me }: Props) {
+export default function ClientApproval({ orgId, projectId, m, mine, lead, me, contact: given, onChanged }: Props) {
   const toast = useToast();
   const stage = approvalStage(m);
   const a = m.approval;
@@ -63,7 +67,7 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me }: 
   const [busy, setBusy] = useState<string | null>(null);
 
   /* The client's name and address, from the project, to start the email from. */
-  const [contact, setContact] = useState<{ name: string; email: string; studio: string } | null>(null);
+  const [contact, setContact] = useState<{ name: string; email: string; studio: string } | null>(given || null);
   useEffect(() => {
     if (mode !== 'send' || contact || !db) return;
     getDoc(doc(db, 'projects', projectId)).then((s) => {
@@ -103,6 +107,7 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me }: 
       const r = await sendApproval(t, m.id, { to, cc, clientName: greet, driveLink: drive.trim() });
       toast({ ok: true, title: r?.sandbox ? 'Approval email simulated' : 'Approval email sent', sub: r?.sandbox ? 'The email service is not set up, so nothing left the studio.' : `Reminders go on working days ${REMINDER_WORKING_DAYS.join(' and ')}. Replies come to you.` });
       setMode(null);
+      onChanged?.();
     } catch (e: any) {
       toast({ title: 'The email did not go', sub: e?.message });
     } finally { setBusy(null); }
@@ -120,6 +125,7 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me }: 
         sub: moved || (outcome === 'changes' ? 'Upload the revised sheets in Design Desk and present them again.' : 'The Drawings table shows them approved.'),
       });
       setMode(null); setNote('');
+      onChanged?.();
     } catch (e: any) {
       toast({ title: 'Not recorded', sub: e?.message });
     } finally { setBusy(null); }

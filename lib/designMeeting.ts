@@ -1,3 +1,4 @@
+import { hasRole, type RoleSet } from './roles';
 import { stateOf, guessAudience, cleanShape, cleanText, type MarkShape, type ReviewPerson, type ReviewSummary, type ClientAgreement } from './drawingReview';
 
 /*
@@ -339,6 +340,27 @@ export function workingDaysSince(from: number, now: number): number {
   let n = 0;
   for (let day = istDay(from) + 1; day <= istDay(now); day++) if (!isSunday(day)) n++;
   return n;
+}
+
+/**
+ * Who sends the approval email and records the client's answer, besides the
+ * Design Head and whoever presented the meeting: operations. Client Relations
+ * on the projects assigned to them (the Ops Desk), the Ops Director on any.
+ */
+export const APPROVAL_SENDER_ROLES = new Set(['Ops Director', 'Client Relations']);
+export const sendsApprovals = (roles?: RoleSet) => hasRole(roles, APPROVAL_SENDER_ROLES);
+
+/** A held meeting's approval as operations sees it on the Ops Desk: no billing, no pins, no files. */
+export interface ApprovalItem {
+  meetingId: string;
+  projectId: string;
+  projectName: string;
+  closedAt: number;
+  presentedBy: string;
+  sheets: { room: string; name: string; drawingId: string; versionNo: number }[];
+  approval: ClientApproval | null;
+  confirmation: Pick<MeetingConfirmation, 'via' | 'name' | 'at'> | null;
+  contact: { name: string; email: string; studio: string };
 }
 
 export const blankApproval = (): ClientApproval => ({

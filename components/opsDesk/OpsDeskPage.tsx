@@ -6,6 +6,10 @@ import {
   Activity, CalendarCheck, ClipboardCheck, UserPlus, GraduationCap, Sunset, Eye,
 } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
+import { FileCheck2 } from 'lucide-react';
+import DrawingApprovals from './DrawingApprovals';
+import { listApprovals } from '../../services/designMeetingService';
+import { approvalStage, sendsApprovals, type ApprovalItem } from '../../lib/designMeeting';
 import { hasRole, primaryRole, memberRoles } from '../../lib/roles';
 import { seesStudioFinance, assignedDesignersFor } from '../../lib/roleAccess';
 import { clientMoneyOf, withoutAmounts, type ClientMoney } from '../../lib/clientMoney';
@@ -134,6 +138,24 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [decisions, setDecisions] = useState<Record<string, any[]>>({});
   const [moms, setMoms] = useState<OpsMom[]>([]);
+
+  /*
+    Drawings for approval: held design meetings whose agreed rooms wait for the
+    client's written approval. Operations sends the email and records the
+    answer here; the server hands the list over (designMeeting: approvals).
+  */
+  const sendsDrawingApprovals = sendsApprovals(roles) || isLead;
+  const [approvalItems, setApprovalItems] = useState<ApprovalItem[] | null>(null);
+  const approvalProjects = useMemo(() => deskProjects.slice(0, 40).map((p) => p.id).join('|'), [deskProjects]);
+  const loadApprovals = useCallback(async (only?: string) => {
+    if (!tenantId || !sendsDrawingApprovals) return;
+    const ids = only ? [only] : approvalProjects.split('|').filter(Boolean);
+    const lists = await Promise.all(ids.map((projectId) => listApprovals({ orgId: tenantId, projectId }).catch(() => [] as ApprovalItem[])));
+    const fresh = lists.flat();
+    setApprovalItems((prev) => (only ? [...(prev || []).filter((i) => i.projectId !== only), ...fresh] : fresh)
+      .sort((a, b) => b.closedAt - a.closedAt));
+  }, [tenantId, sendsDrawingApprovals, approvalProjects]);
+  useEffect(() => { void loadApprovals(); }, [loadApprovals]);
   const [care, setCare] = useState<Record<string, ProjectCare>>({});
   const [leads, setLeads] = useState<Lead[]>([]);
   const [record, setRecord] = useState<DeskRecord | null>(null);
@@ -353,6 +375,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
     minutes: isLead ? mm.filter((m) => m.status === 'pending_review').length : mm.filter((m) => m.status === 'draft' || m.status === 'pending_review').length,
     log: 0,
     checklists: careItems.filter((q) => q.kind === 'documents' || q.kind === 'checklist').length,
+    approvals: (approvalItems || []).filter((i) => approvalStage({ approval: i.approval, confirmation: i.confirmation as any }) !== 'approved').length,
     escalations: esc.filter((e) => e.status !== 'closed').length,
     team: rows.filter((r) => r.overdue).length,
   };
@@ -366,6 +389,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
       { id: 'leads', label: 'Leads', icon: UserPlus, n: n.leads },
       { id: 'pulse', label: 'Client pulse', icon: Activity, n: n.pulse, alert: true },
       { id: 'waiting', label: 'Waiting on client', icon: Clock, n: n.waiting },
+      ...(sendsDrawingApprovals ? [{ id: 'approvals' as Section, label: 'Drawings for approval', icon: FileCheck2, n: n.approvals, alert: (approvalItems || []).some((i) => approvalStage({ approval: i.approval, confirmation: i.confirmation as any }) === 'overdue') }] : []),
       { id: 'payments', label: 'Payments', icon: IndianRupee, n: n.payments },
     ] },
     { label: 'Meetings', items: [
@@ -529,6 +553,11 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
               onTick={(id: GuideStepId) => record && saveRecord({ ...record, guide: { ...record.guide, [id]: Date.now() } })}
               onHide={() => record && saveRecord({ ...record, guideHiddenUntil: dayKey(now + 86400000) })}
               onAsk={(q) => { setAskQ(q); go('ask'); }} />
+          )}
+
+          {section === 'approvals' && sendsDrawingApprovals && (
+            <DrawingApprovals orgId={tenantId} items={approvalItems} me={me} lead={hasRole(roles, new Set(['Design Head', 'Owner', 'Admin', 'Super Admin']))}
+              onChanged={(projectId) => { void loadApprovals(projectId); }} />
           )}
 
           {section === 'waiting' && (

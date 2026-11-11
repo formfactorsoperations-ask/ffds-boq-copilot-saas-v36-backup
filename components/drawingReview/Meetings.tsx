@@ -34,6 +34,8 @@ interface Props {
   /** A Designer presenting only what the Design Head gave them (lib/drawingReview canPresentAssigned). */
   presenter: boolean;
   me: { uid: string; email: string; name?: string | null };
+  /** Operations (Ops Director, Client Relations): sends the approval email and records the client's answer on any held meeting. */
+  approver?: boolean;
   /** The project's Designers, for "Who presents". */
   designers: TeamMember[];
   onResume: (m: DesignMeeting) => void;
@@ -46,7 +48,7 @@ const CHARGE: Record<string, { label: string; tone: 'red' | 'green' | 'grey' }> 
   to_bill: { label: 'To bill', tone: 'red' }, billed: { label: 'Billed', tone: 'green' }, waived: { label: 'Waived', tone: 'grey' },
 };
 
-export default function Meetings({ orgId, projectId, projectName, look, drawings, meetings, canRun, canBill, presenter, me, designers, onResume, projects, onPickProject }: Props) {
+export default function Meetings({ orgId, projectId, projectName, look, drawings, meetings, canRun, canBill, presenter, approver, me, designers, onResume, projects, onPickProject }: Props) {
   const toast = useToast();
   const rooms = useMemo(() => presentableRooms(drawings, presenter ? me.email : null), [drawings, presenter, me.email]);
   /* Leads, and a Designer with something to present, start a meeting. */
@@ -236,7 +238,7 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
                 {isOpen && (
                   <div className="dd-rise flex flex-col gap-2 px-4 pb-4 pt-1">
                     {m.rooms.map((r) => <RoomRecord key={r.room} r={r} included={m.includedRounds} billing={!presenter} />)}
-                    <ClientApproval orgId={orgId} projectId={projectId} m={m} mine={mine(m)} lead={canRun} me={me} />
+                    <ClientApproval orgId={orgId} projectId={projectId} m={m} mine={mine(m) || !!approver} lead={canRun} me={me} />
                     <div className="flex flex-wrap items-center gap-3 rounded-[14px] border border-[#E4E4DE] px-3.5 py-3 text-[13px]">
                       {isConfirmed(m) ? <BadgeCheck size={18} className="shrink-0 text-[#1B6E4F]" /> : <Clock size={18} className="shrink-0 text-[#8F4C07]" />}
                       <span className="min-w-0 flex-[1_1_240px]">

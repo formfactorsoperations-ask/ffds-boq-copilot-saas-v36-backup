@@ -120,3 +120,14 @@ describe('the approval email', () => {
     expect(cleanLink('http://drive.google.com/x')).toBeNull();
   });
 });
+
+describe('who sends the approval email', () => {
+  it('is operations, besides the Design Head and whoever ran the meeting', async () => {
+    const { sendsApprovals } = await import('../../lib/designMeeting');
+    expect(sendsApprovals('Client Relations')).toBe(true);
+    expect(sendsApprovals('Ops Director')).toBe(true);
+    expect(sendsApprovals(['Designer', 'Client Relations'])).toBe(true);
+    expect(sendsApprovals('Designer')).toBe(false);
+    expect(sendsApprovals('Viewer')).toBe(false);
+  });
+});

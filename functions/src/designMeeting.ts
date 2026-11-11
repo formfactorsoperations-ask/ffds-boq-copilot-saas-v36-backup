@@ -12,7 +12,7 @@ import {
   presentableRooms, clientRoundsByRoom, includedRoundsFrom, isOverIncluded, cleanChanges, cleanFee,
   cleanSignerName, cleanSignature, portalDesignRecord, cleanRoomBoxes, cleanPresenters, mayRunThis,
   needsApproval, blankApproval, approvalSheets, approvalEmail, addWorkingDays, reminderDue, mayDeem, agreementsFrom,
-  cleanEmails, cleanLink, APPROVAL_WORKING_DAYS, type ClientApproval, type ApprovalVia,
+  cleanEmails, cleanLink, APPROVAL_WORKING_DAYS, sendsApprovals, needsApproval as needsWrittenApproval, type ClientApproval, type ApprovalVia, type ApprovalItem,
   type DesignMeeting, type MeetingConfirmation, type PortalDesignMeeting, type MeetingLayout, type LayoutSetup, type MeetingRoom, type MeetingSheet, type RoomCharge, type ChargeStatus, type RoomDrawing,
 } from "../../lib/designMeeting";
 
@@ -491,6 +491,18 @@ function mustAwait(m: DesignMeeting) {
   }
 }
 
+/*
+  Who sends the approval email and records the answer: operations (the Ops
+  Director, and Client Relations on their own projects; resolveActor already
+  checked the project is theirs), and, as before, whoever ran the meeting or
+  the Design Head. The email goes out in the sender's name and the client's
+  reply comes back to them.
+*/
+function mustHandleApproval(actor: Actor, m: DesignMeeting) {
+  if (sendsApprovals(actor.roles)) return;
+  mustRunThis(actor, m);
+}
+
 /** What the approval email needs that the meeting does not carry: the client and the studio, from the project. */
 async function projectContact(projectId: string) {
   const ctx = (await db().doc(`projects/${projectId}`).get()).data()?.context || {};
@@ -502,7 +514,6 @@ async function projectContact(projectId: string) {
 }
 
 async function sendApproval(actor: Actor, orgId: string, projectId: string, input: Input) {
-  mustPresent(actor);
   const ref = meetingRef(orgId, projectId, input.meetingId);
   const to = cleanEmails(input.to);
   if (!to || !to.length) throw new HttpsError("invalid-argument", "Add the client's email address.");
@@ -518,7 +529,7 @@ async function sendApproval(actor: Actor, orgId: string, projectId: string, inpu
   const first = await ref.get();
   const m0 = first.data() as DesignMeeting | undefined;
   if (!m0) throw new HttpsError("not-found", "That meeting could not be found.");
-  mustRunThis(actor, m0);
+  mustHandleApproval(actor, m0);
   mustAwait(m0);
   const now = Date.now();
   const dueAt = addWorkingDays(now, APPROVAL_WORKING_DAYS);
@@ -543,7 +554,6 @@ async function sendApproval(actor: Actor, orgId: string, projectId: string, inpu
 }
 
 async function recordApproval(actor: Actor, orgId: string, projectId: string, input: Input) {
-  mustPresent(actor);
   const outcome = input.outcome === "approved" || input.outcome === "changes" || input.outcome === "deemed" ? input.outcome : null;
   if (!outcome) throw new HttpsError("invalid-argument", "Approved, changes, or taken as approved?");
   const note = cleanText(input.note, 2000) || null;
@@ -553,7 +563,7 @@ async function recordApproval(actor: Actor, orgId: string, projectId: string, in
     const snap = await tx.get(ref);
     const m = snap.data() as DesignMeeting | undefined;
     if (!m) throw new HttpsError("not-found", "That meeting could not be found.");
-    mustRunThis(actor, m);
+    mustHandleApproval(actor, m);
     mustAwait(m);
     const now = Date.now();
     if (outcome === "deemed") {
@@ -574,6 +584,32 @@ async function recordApproval(actor: Actor, orgId: string, projectId: string, in
     tx.update(ref, { approval, rev: m.rev + 1 });
     return { meeting: { ...m, approval, rev: m.rev + 1 }, ...result };
   });
+}
+
+/*
+  The project's held meetings with agreed rooms, for operations on the Ops
+  Desk, who do not read meetings themselves: what was agreed, where its
+  approval stands, and who the client is. Nothing about billing, the files or
+  the client's pins.
+*/
+async function approvals(actor: Actor, orgId: string, projectId: string): Promise<{ items: ApprovalItem[] }> {
+  if (!sendsApprovals(actor.roles) && !isLead(actor) && !canPresentAssigned(actor.roles)) {
+    throw new HttpsError("permission-denied", "This account does not send approval emails.");
+  }
+  const held = await db().collection(`${projectPath(orgId, projectId)}/designMeetings`).where("state", "==", "CLOSED").get();
+  const contact = await projectContact(projectId);
+  const items: ApprovalItem[] = held.docs
+    .map((d) => ({ ...(d.data() as DesignMeeting), id: d.id }))
+    .filter((m) => needsWrittenApproval(m))
+    .sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0))
+    .slice(0, 20)
+    .map((m) => ({
+      meetingId: m.id, projectId, projectName: m.projectName || actor.projectName || "Project", closedAt: m.closedAt || m.startedAt,
+      presentedBy: m.startedBy?.name || "", sheets: approvalSheets(m), approval: m.approval || null,
+      confirmation: m.confirmation?.at ? { via: m.confirmation.via, name: m.confirmation.name, at: m.confirmation.at } : null,
+      contact: { name: contact.clientName, email: contact.clientEmails.join(", "), studio: contact.studioName },
+    }));
+  return { items };
 }
 
 /*
@@ -677,6 +713,7 @@ export const designMeeting = onCall({ cors: true, timeoutSeconds: 120, secrets: 
       case "sendApproval": return await sendApproval(actor, orgId, projectId, input);
       case "recordApproval": return await recordApproval(actor, orgId, projectId, input);
       case "reconcile": return await reconcile(actor, orgId, projectId);
+      case "approvals": return await approvals(actor, orgId, projectId);
       default: throw new HttpsError("invalid-argument", "Unknown action.");
     }
   } catch (e: any) {

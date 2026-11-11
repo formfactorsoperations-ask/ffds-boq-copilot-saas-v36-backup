@@ -24,7 +24,7 @@ import type { LogPrefill, Person } from './OpsDeskPanels';
 
 export type Section =
   | 'today' | 'leads' | 'pulse' | 'waiting' | 'payments' | 'visits' | 'minutes' | 'prep'
-  | 'log' | 'checklists' | 'escalations' | 'team' | 'ask' | 'guide';
+  | 'log' | 'checklists' | 'escalations' | 'team' | 'ask' | 'guide' | 'approvals';
 
 export interface DeskProjectFull {
   id: string;
