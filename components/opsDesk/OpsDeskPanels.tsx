@@ -51,7 +51,7 @@ export const Seg: React.FC<{ value: string; options: { id: string; label: string
 
 /* ── Log a follow-up, with a message to copy ───────────────────────────── */
 
-export interface LogPrefill { projectId?: string; subjectKey?: string; nextDue?: string; channel?: Channel; outcome?: Outcome }
+export interface LogPrefill { projectId?: string; subjectKey?: string; nextDue?: string; channel?: Channel; outcome?: Outcome; /** What was said, typed in Ctrl K. */ note?: string }
 
 export function LogFollowUpPanel({ projects, waiting, team, me, tenantId, studioName, prefill, onClose, onSaved }: {
   projects: DeskProject[];
@@ -86,7 +86,7 @@ export function LogFollowUpPanel({ projects, waiting, team, me, tenantId, studio
 
   const [channel, setChannel] = useState<Channel>(prefill?.channel || 'whatsapp');
   const [outcome, setOutcome] = useState<Outcome>(prefill?.outcome || (item ? 'reminded' : 'info'));
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(prefill?.note || '');
   const [nextText, setNextText] = useState('');
   const [nextOwner, setNextOwner] = useState(me.email);
   const [nextDue, setNextDue] = useState(prefill?.nextDue || addDays(dayKey(Date.now()), 3));

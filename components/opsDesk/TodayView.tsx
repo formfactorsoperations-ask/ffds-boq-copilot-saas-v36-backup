@@ -1,20 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Inbox, Clock, IndianRupee, ListChecks, Flag, FileText, Phone, MessageCircle, Users, CalendarCheck, ClipboardCheck, FolderOpen, Star,
-  UserPlus, Target, CircleHelp, Check, Lightbulb, CalendarClock, ChevronDown, AlertTriangle, BookOpen, X, ArrowRight, GraduationCap,
-} from '@/lib/lucide-shim';
+  UserPlus, Target, CircleHelp, Check, CalendarClock, ChevronDown, AlertTriangle, BookOpen, X, } from '@/lib/lucide-shim';
 import { Dot } from '../ui/HudBits';
-import { Glide, IconTile, Tilt, DoneTick, listV, rowV } from '../people/PeopleBits';
+import { Glide, IconTile, DoneTick, listV, rowV } from '../people/PeopleBits';
 import { draftMessage, dayKey, addDays, type QueueItem, type QueueKind } from '../../lib/opsDesk';
-import { explain, upNextLines, matchesWork, playbookOf, PLAYBOOK_OF, tipOfDay, WORK_FILTERS, guideProgress, type WorkFilter, type DoneToday } from '../../lib/opsTeam';
+import { explain, matchesWork, playbookOf, PLAYBOOK_OF, WORK_FILTERS, type WorkFilter, type DoneToday } from '../../lib/opsTeam';
 import { handoverSlip } from '../../lib/opsAssist';
 import { clock12 } from '../../lib/peopleDesk';
-import { leadName, mainPerson } from '../../lib/leads';
+import { leadName } from '../../lib/leads';
 import { btnPri, btnSec, btnSm } from './OpsDeskPanels';
-import { useDesk, seenSteps, Panel, Chip, Empty, Loading, EYEBROW, BRAND_EYEBROW, fmtDay, fmtTime, dialable, cardV } from './DeskBits';
+import { useDesk, Panel, Chip, Empty, EYEBROW, BRAND_EYEBROW, fmtDay, fmtTime } from './DeskBits';
 import '../projectHeader/projectHeader.css';
-import WaitingOnYou from '../notify/WaitingOnYou';
 
 /*
   TODAY (mockups OD1 and OD2): the desk opens on what to do now. "Up next" is
@@ -42,135 +40,13 @@ export const KIND: Record<QueueKind, { icon: React.ComponentType<any>; label: st
 const GROUP_TONE = { overdue: 'bad', today: 'warn', week: 'ok', later: 'ok' } as const;
 const GROUP_LABEL = { overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later' } as const;
 
-const ACTION: Record<QueueKind, string> = {
+export const ACTION: Record<QueueKind, string> = {
   next: 'Done', payment: 'Remind', decision: 'Remind', mom_review: 'Review', escalation_open: 'Decide', escalation_decided: 'Open',
   visit: 'Confirm', documents: 'Chase', checklist: 'Open', ask: 'Ask', lead: 'Call', lead_open: 'Open',
 };
 
-/* ── The whole Today section ─────────────────────────────────────────────── */
-
-export function TodayView() {
-  const d = useDesk();
-  const open = d.queue;
-  const progress = d.record ? guideProgress(d.record.guide, seenSteps(d)) : null;
-  const newJoiner = !!d.record && !d.isLead && progress && progress.count < progress.total
-    && d.now - d.record.startedAt < 14 * 86400000 && (!d.record.guideHiddenUntil || d.record.guideHiddenUntil <= dayKey(d.now));
-  const head = open.find((q) => q.group === 'overdue' || q.group === 'today') || null;
-  const dueCount = open.filter((q) => q.group === 'overdue' || q.group === 'today').length;
-
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
-      <div className="flex flex-col gap-6 min-w-0">
-        {newJoiner && progress && (
-          <motion.button type="button" variants={cardV} initial="hidden" animate="show" onClick={() => d.act.go('guide')}
-            className="group w-full text-left rounded-2xl border border-[#3D52A0]/30 bg-[#3D52A0]/5 px-5 py-3 flex items-center gap-3 pp-lift">
-            <IconTile icon={GraduationCap} size="sm" />
-            <span className="flex-1 min-w-0">
-              <span className={BRAND_EYEBROW}>Your first week · {progress.count} of {progress.total} done</span>
-              <span className="block text-sm font-semibold text-slate-800 truncate">Next: {progress.next?.title}</span>
-            </span>
-            <ArrowRight className="w-4 h-4 text-[#3D52A0] transition-transform group-hover:translate-x-1" />
-          </motion.button>
-        )}
-        {d.loading && !open.length ? <Loading rows={2} /> : head ? <UpNext q={head} index={1} of={dueCount} /> : (
-          <motion.div variants={cardV} initial="hidden" animate="show" className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6 flex items-center gap-4">
-            <DoneTick size={44} />
-            <div>
-              <p className="font-bold text-slate-800">Nothing is due today.</p>
-              <p className="text-xs text-slate-500 mt-0.5">{open.length ? 'What is left is for later this week.' : 'Log a call, add a lead, or look in on a client.'}</p>
-            </div>
-          </motion.div>
-        )}
-        {/* Someone waiting on you right now, with how long (components/notify). */}
-        <WaitingOnYou />
-        <Panel icon={Inbox} title="Today, in order" tour="today"
-          blurb={d.isLead ? 'Escalations to decide and minutes to approve come first, then your own. Every row says why it is here; the ? explains the kind of work.' : 'Overdue first, then today. Every row says why it is here; the ? explains the kind of work.'}>
-          <TodayList queue={open} done={d.done} />
-        </Panel>
-      </div>
-      <div className="flex flex-col gap-6">
-        <YourClients />
-        <ThisWeek />
-        <motion.div variants={cardV} initial="hidden" animate="show" className="group rounded-2xl border border-slate-200 bg-white shadow-sm p-4 flex gap-3 items-start">
-          <IconTile icon={Lightbulb} size="sm" />
-          <p className="text-xs text-slate-600"><b className="text-slate-800">Tip of the day.</b> {tipOfDay(d.now)}</p>
-        </motion.div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Up next ─────────────────────────────────────────────────────────────── */
-
-function UpNext({ q, index, of }: { q: QueueItem; index: number; of: number }) {
-  const d = useDesk();
-  const still = useReducedMotion();
-  const w = d.waiting.find((x) => x.projectId === q.projectId && x.key === q.ref) || null;
-  const project = d.projects.find((p) => p.id === q.projectId);
-  const slip = w ? handoverSlip(w, project?.targetHandover).days : 0;
-  const e = explain(q, { waiting: w, settings: d.settings, slipDays: slip });
-  const lines = upNextLines(q, e);
-  const lead = q.kind === 'lead' || q.kind === 'lead_open' ? d.leads.find((l) => l.id === q.ref) : null;
-  const phone = lead ? mainPerson(lead)?.phone : project?.raw?.context?.clientPhone;
-  const message = w ? reminderText(d, w, q) : '';
-
-  return (
-    <div style={{ perspective: 1200 }}>
-      <AnimatePresence mode="wait">
-        <motion.div key={q.id}
-          initial={still ? false : { opacity: 0, rotateX: -55, y: 24 }} animate={{ opacity: 1, rotateX: 0, y: 0 }} exit={still ? undefined : { opacity: 0, rotateX: 55, y: -24 }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }} style={{ transformOrigin: '50% 0%' }}>
-          <Tilt max={4} className="rounded-2xl">
-            <section className="group pp-glass rounded-2xl p-5 sm:p-6 relative overflow-hidden" data-tour="upnext">
-              <span className="pp-glow" aria-hidden />
-              <span className="absolute inset-y-0 left-0 w-1 bg-[#3D52A0]" aria-hidden />
-              <div className="relative flex items-start gap-4">
-                <IconTile icon={Target} size="md" />
-                <div className="flex-1 min-w-0">
-                  <p className={BRAND_EYEBROW}>Up next · {index} of {of}</p>
-                  <h3 className="text-lg font-bold text-slate-800">{q.title}</h3>
-                  <p className="text-sm text-slate-600 mt-0.5">
-                    {q.projectId ? <button type="button" className="font-semibold text-slate-700 hover:text-[#3D52A0] hover:underline" onClick={() => d.act.openClient(q.projectId)}>{q.projectName}</button> : <b className="font-semibold text-slate-700">{q.projectName}</b>}
-                    {' · '}{KIND[q.kind].label} · {q.detail}
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
-                    {lines.map(([k, v], i) => (
-                      <motion.div key={k} initial={still ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.07 }}
-                        className="rounded-xl bg-white/70 border border-slate-200 px-3 py-2.5">
-                        <p className={EYEBROW}>{k}</p>
-                        <p className="text-xs text-slate-700 mt-1">{v}</p>
-                      </motion.div>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 mt-4">
-                    {(q.kind === 'payment' || q.kind === 'decision' || q.kind === 'lead') && phone ? (
-                      <a href={`tel:+${dialable(phone)}`} onClick={() => (lead ? d.act.openLead(lead.id) : d.act.log({ projectId: q.projectId, subjectKey: q.ref, channel: 'call' }))}
-                        className={`${btnPri} pp-press`}><Phone className="w-4 h-4" />Call now</a>
-                    ) : (
-                      <button type="button" className={`${btnPri} pp-press`} onClick={() => d.act.openItem(q)}>
-                        {q.kind === 'next' ? <><Check className="w-4 h-4" />Mark it done</> : <>{ACTION[q.kind]}<ArrowRight className="w-4 h-4" /></>}
-                      </button>
-                    )}
-                    {w && d.canWrite && (
-                      <button type="button" className={btnSec} onClick={() => d.act.sendReminder(w, message)}><MessageCircle className="w-4 h-4" />WhatsApp the reminder</button>
-                    )}
-                    {lead && <button type="button" className={btnSec} onClick={() => d.act.openLead(lead.id)}><UserPlus className="w-4 h-4" />Open the lead</button>}
-                    <button type="button" className={btnSec} onClick={() => d.act.later(q)}><Clock className="w-4 h-4" />Later today</button>
-                    <span className="flex-1" />
-                    <span className="text-[11px] text-slate-500">After you act, log it in one tap; the next one comes up.</span>
-                  </div>
-                </div>
-              </div>
-            </section>
-          </Tilt>
-        </motion.div>
-      </AnimatePresence>
-    </div>
-  );
-}
-
 /** The message for a payment or decision, in the tone its reminders call for. Amounts only for roles that see money. */
-function reminderText(d: ReturnType<typeof useDesk>, w: NonNullable<ReturnType<typeof useDesk>['waiting'][number]>, q?: QueueItem) {
+export function reminderText(d: ReturnType<typeof useDesk>, w: NonNullable<ReturnType<typeof useDesk>['waiting'][number]>, q?: QueueItem) {
   const project = d.projects.find((p) => p.id === w.projectId);
   const slip = handoverSlip(w, project?.targetHandover);
   return draftMessage(w.kind, w.reminders >= 1 ? 'clear' : 'gentle', {
@@ -351,42 +227,9 @@ export function PlaybookSheet({ kind, onClose }: { kind: QueueKind; onClose: () 
   );
 }
 
-/* ── Your clients ────────────────────────────────────────────────────────── */
-
-function YourClients() {
-  const d = useDesk();
-  const rows = [...d.pulseRows].sort((a, b) => a.pulse.score - b.pulse.score);
-  const tone = (b: string) => (b === 'at_risk' ? 'bad' : b === 'watch' ? 'warn' : 'ok') as 'bad' | 'warn' | 'ok';
-  const blurb = d.isLead ? `${rows.length} on the desk` : `${rows.length} assigned to you`;
-  return (
-    <Panel icon={Users} title={d.isLead ? 'Clients on the desk' : 'Your clients'} blurb={blurb} tour="clients">
-      {!rows.length ? <Empty text="No clients yet." /> : (
-        <motion.div variants={listV} initial="hidden" animate="show" className="divide-y divide-slate-100 -mx-1">
-          {rows.slice(0, 8).map(({ project: p, pulse }) => {
-            const worst = pulse.reasons.filter((r) => r.points < 0).sort((a, b) => a.points - b.points)[0];
-            const full = d.projects.find((x) => x.id === p.id);
-            return (
-              <motion.button variants={rowV} key={p.id} type="button" onClick={() => d.act.openClient(p.id)}
-                className="w-full flex items-center gap-2.5 px-1 py-2 text-left rounded-lg hover:bg-slate-50 transition-colors">
-                <Dot tone={tone(pulse.band)} live={pulse.band === 'at_risk'} />
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-semibold text-slate-800 truncate">{p.name}</span>
-                  <span className="block text-[11px] text-slate-500 truncate">{[p.clientName, full?.status?.replace('_', ' ')].filter(Boolean).join(' · ')}</span>
-                </span>
-                <span className="text-[11px] text-slate-500 text-right max-w-[110px] truncate">{worst ? worst.label : 'On track'}</span>
-              </motion.button>
-            );
-          })}
-          {rows.length > 8 && <button type="button" className="w-full text-left px-1 pt-2 text-xs font-bold text-[#3D52A0]" onClick={() => d.act.go('pulse')}>All {rows.length} clients</button>}
-        </motion.div>
-      )}
-    </Panel>
-  );
-}
-
 /* ── This week ───────────────────────────────────────────────────────────── */
 
-function ThisWeek() {
+export function ThisWeek() {
   const d = useDesk();
   const today = dayKey(d.now);
   const days = Array.from({ length: 6 }, (_, i) => addDays(today, i));

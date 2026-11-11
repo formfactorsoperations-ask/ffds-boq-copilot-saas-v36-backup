@@ -2,12 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNoteArrivals } from '../notify/NotifyContext';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
-  Inbox, Clock, IndianRupee, ListChecks, Flag, FileText, Plus, RefreshCw, Check, Phone, MessageCircle, Mail, Users, Mic, Search, CalendarClock,
-  Activity, CalendarCheck, ClipboardCheck, UserPlus, GraduationCap, Sunset, Eye,
+  Inbox, Clock, IndianRupee, ListChecks, Flag, FileText, Plus, RefreshCw, Search, CalendarClock,
+  Activity, CalendarCheck, ClipboardCheck, UserPlus, GraduationCap, Eye, Layers, Sun,
 } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { FileCheck2 } from 'lucide-react';
-import DrawingApprovals from './DrawingApprovals';
 import { listApprovals } from '../../services/designMeetingService';
 import { approvalStage, sendsApprovals, type ApprovalItem } from '../../lib/designMeeting';
 import { projectNameOf } from '../../lib/drawingReview';
@@ -15,11 +14,10 @@ import { hasRole, primaryRole, memberRoles } from '../../lib/roles';
 import { seesStudioFinance, assignedDesignersFor } from '../../lib/roleAccess';
 import { clientMoneyOf, withoutAmounts, type ClientMoney } from '../../lib/clientMoney';
 import {
-  buildQueue, decisionWaiting, paymentWaiting, withChases, opsSettingsOf, inr, dayKey, daysBetween,
-  type Escalation, type FollowUp, type QueueItem, type WaitingItem,
+  buildQueue, decisionWaiting, paymentWaiting, withChases, opsSettingsOf, dayKey, type Escalation, type FollowUp, type QueueItem, type WaitingItem,
 } from '../../lib/opsDesk';
 import {
-  DESK_SCOPES, inDeskScope, scopeCounts, doneToday, dayRing, withSnoozes, liveSnoozes, teamRows, personQueue, weekNumbers, guideProgress,
+  DESK_SCOPES, inDeskScope, scopeCounts, doneToday, withSnoozes, liveSnoozes, teamRows, personQueue, weekNumbers, guideProgress,
   type DeskScope, type GuideStep, type GuideStepId,
 } from '../../lib/opsTeam';
 import { leadQueue, leadToProject, leadMeeting, linkLeadProject, isOpen as leadIsOpen, type Lead } from '../../lib/leads';
@@ -27,13 +25,11 @@ import { projectGuesses, projectRefOf } from '../../lib/leadSmart';
 import { loadProjectOps, loadStudioOps, markNextDone, closeEscalation, logFollowUp, type OpsMom } from '../../services/opsDeskService';
 import { loadLeads, saveLead, withTouch, deleteLead } from '../../services/leadsService';
 import {
-  loadDeskRecord, saveDeskRecord, loadTeamRecords, closeDay, loadDayNotes, markNoteRead, moveNextStep, type DeskRecord, type DayNote,
+  loadDeskRecord, saveDeskRecord, loadTeamRecords, closeDay, loadDayNotes, loadMyDay, markNoteRead, moveNextStep, type DeskRecord, type DayNote,
 } from '../../services/opsPeopleService';
 import { useProjectTeam } from '../../services/projectTeam';
-import { LogFollowUpPanel, RaiseEscalationPanel, DecideEscalationPanel, btnPri, btnSec, btnSm, input, type DeskProject, type LogPrefill, type Person } from './OpsDeskPanels';
-import { StudioBar, BarStrip, BarChip, BarButton } from '../ui/StudioBar';
-import { CountUp, Dot } from '../ui/HudBits';
-import { Glide, Ring, Notice, listV, rowV } from '../people/PeopleBits';
+import { LogFollowUpPanel, RaiseEscalationPanel, DecideEscalationPanel, btnSec, type DeskProject, type LogPrefill, type Person } from './OpsDeskPanels';
+import { Glide, Notice } from '../people/PeopleBits';
 import { MomReviewModal } from '../ops/MomReviewModal';
 import { MomCaptureModal } from '../ops/MomCaptureModal';
 import AssignProjectsModal from '../projectHeader/AssignProjectsModal';
@@ -43,13 +39,19 @@ import { CapturePanel, AskProjectPanel, MeetingPrepPanel } from './OpsAssist';
 import { CalendarAccountBar } from './MeetLink';
 import { mirrorVisitOf } from '../../lib/meetingSync';
 import { clientPulse, askPrompts, careQueue, type AskKind, type Checklist, type ChecklistKind, type VisitRequest, type VisitStatus } from '../../lib/clientCare';
-import { PulseList, AskSheet, ChecklistsView, VisitsView, VisitSheet, askReasonOf, type PulseRow } from './ClientCare';
+import { AskSheet, ChecklistsView, VisitsView, VisitSheet, askReasonOf, type PulseRow } from './ClientCare';
 import {
-  DeskProvider, Panel, Rail, Empty, Loading, Chip, deskSectionV, fmtDay, fmtWhen, firstName, waLink,
-  type Desk, type DeskProjectFull, type RailGroup, type Section,
+  DeskProvider, Panel, Loading, deskSectionV, firstName, waLink,
+  type Desk, type DeskProjectFull, type DeskClient, type Section,
 } from './DeskBits';
-import { TodayView } from './TodayView';
-import { ClientSheet } from './ClientSheet';
+import { MyDay, FocusMode } from './MyDay';
+import { ClientsScreen, ClientPage } from './ClientsView';
+import { CommandPalette } from './CommandPalette';
+import {
+  WaitingScreen, PaymentsScreen, PulseScreen, LogScreen, EscalationsScreen, MinutesScreen, ApprovalsScreen, LeadsBand, CallingMode, VisitsBand, SimpleBand, Inner,
+} from './DeskScreens';
+import { DeskRail, SeeAs, useTiltCards, type DeskRailItem } from './Od2Bits';
+import { healthOf, phaseOf, progressOf, daysUntil, streakOf, lastDays } from '../../lib/opsDesk2';
 import { FirstWeek, Spotlight, type AskPerson } from './FirstWeek';
 import { DayClose, type Rolled } from './DayClose';
 import { TeamView } from './TeamView';
@@ -83,8 +85,6 @@ const quiet = (p: any) => {
 };
 const SCOPE_KEY = 'opsDesk.scope';
 
-const CHANNEL_ICON: Record<string, React.ComponentType<any>> = { call: Phone, whatsapp: MessageCircle, email: Mail, meeting: Users, other: MessageCircle };
-const chip = 'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap';
 
 export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead }: {
   projects: any[];
@@ -218,6 +218,17 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
 
   useEffect(() => { load(); }, [load]);
 
+  /* The days this person closed, for the streak on My day: the last three weeks, read once and after each close. */
+  const [closedDays, setClosedDays] = useState<string[]>([]);
+  const [closedTick, setClosedTick] = useState(0);
+  useEffect(() => {
+    if (!tenantId || !myEmail || isLead) return;
+    let live = true;
+    Promise.all(lastDays(Date.now(), 21).map((day) => loadMyDay(tenantId, myEmail, day).catch(() => null)))
+      .then((notes) => { if (live) setClosedDays(notes.filter(Boolean).map((n) => (n as DayNote).day)); });
+    return () => { live = false; };
+  }, [tenantId, myEmail, isLead, closedTick]);
+
   /* A client's reply, an escalation or a new enquiry: the desk catches up at once, once for a burst (components/notify). */
   const arrival = useRef<number | null>(null);
   useNoteArrivals((n) => /^(client|ops|lead|site)\./.test(n.kind), () => {
@@ -267,7 +278,6 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
     ...(leads.map(leadMeeting).filter(Boolean) as VisitRequest[]),
   ], [care, leads]);
   const done = useMemo(() => doneToday(fu, myEmail, now), [fu, myEmail, now]);
-  const ring = dayRing(queue, done);
 
   /* ── Panels ── */
   const [logFor, setLogFor] = useState<LogPrefill | null>(null);
@@ -280,7 +290,11 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
   const [askFor, setAskFor] = useState<{ projectId: string; kind: AskKind } | null>(null);
   const [visitAct, setVisitAct] = useState<{ visit: VisitRequest | null; to: VisitStatus | null; projectId?: string } | null>(null);
   const [careFocus, setCareFocus] = useState<{ projectId: string; kind: ChecklistKind }>({ projectId: '', kind: 'onboarding' });
-  const [clientFor, setClientFor] = useState<string | null>(null);
+  const [clientId, setClientId] = useState<string | null>(null);
+  const setClientFor = (id: string | null) => { if (!id) return; setClientId(id); setSection('client'); setLeadOpen(null); window.scrollTo?.({ top: 0, behavior: still ? 'auto' : 'smooth' }); };
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [focusing, setFocusing] = useState(false);
+  const [calling, setCalling] = useState(false);
   const [leadOpen, setLeadOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ paste: boolean } | null>(null);
   const [converting, setConverting] = useState<Lead | null>(null);
@@ -290,7 +304,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
   const [assignFor, setAssignFor] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const go = (s: Section) => { setSection(s); if (s !== 'leads') setLeadOpen(null); };
+  const go = (s: Section) => { setSection(s); if (s !== 'leads') setLeadOpen(null); if (s !== 'client') setClientId(null); };
   const done_ = async (f: FollowUp) => {
     setBusy(f.id);
     try { await markNextDone(f.projectId, f.id, myEmail); await load(); } catch { setError('That was not saved. Try again.'); } finally { setBusy(null); }
@@ -390,12 +404,15 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
     logged: fu.some((f) => f.by === myEmail), minutes: mm.some((m) => String(m.raw?.preparedBy?.email || '').toLowerCase() === myEmail),
     lead: leads.some((l) => l.createdBy === myEmail), escalated: esc.some((e) => e.raisedBy === myEmail),
   }) : null;
-  const groups: RailGroup[] = [
-    { items: [{ id: 'today', label: 'Today', icon: Inbox, n: n.today, alert: overdue > 0 }] },
-    { label: 'Clients', items: [
-      { id: 'leads', label: 'Leads', icon: UserPlus, n: n.leads },
-      { id: 'pulse', label: 'Client pulse', icon: Activity, n: n.pulse, alert: true },
+  const groups: { label?: string; items: DeskRailItem<Section>[] }[] = [
+    { label: 'Today', items: [
+      { id: 'today', label: 'My day', icon: Sun, n: n.today, alert: overdue > 0 },
       { id: 'waiting', label: 'Waiting on client', icon: Clock, n: n.waiting },
+    ] },
+    { label: 'Clients', items: [
+      { id: 'clients', label: 'Clients', icon: Layers, n: deskProjects.length },
+      { id: 'pulse', label: 'Client pulse', icon: Activity, n: n.pulse, alert: true },
+      { id: 'leads', label: 'Leads', icon: UserPlus, n: n.leads, alert: true },
       ...(sendsDrawingApprovals ? [{ id: 'approvals' as Section, label: 'Drawings for approval', icon: FileCheck2, n: n.approvals, alert: (approvalItems || []).some((i) => approvalStage({ approval: i.approval, confirmation: i.confirmation as any }) === 'overdue') }] : []),
       { id: 'payments', label: 'Payments', icon: IndianRupee, n: n.payments },
     ] },
@@ -415,22 +432,45 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
       { id: 'guide', label: !isLead && record && now - record.startedAt < 14 * 86400000 && progress && progress.count < progress.total ? `Your first week · ${progress.count}/${progress.total}` : 'How the desk works', icon: GraduationCap },
     ] },
   ];
+  const paletteSections = groups.flatMap((g) => g.items.map((x) => ({ id: x.id, label: x.label, icon: x.icon })));
+
+  /*
+    The 2.1 view of each client (lib/opsDesk2): health from the pulse, the
+    step from proposal to handover from the project's status, progress from
+    its journey, and the first thing on the desk for it.
+  */
+  const clients: DeskClient[] = useMemo(() => deskProjects.map((p) => {
+    const row = pulseRows.find((r) => r.project.id === p.id);
+    const pulse = row?.pulse || { score: 80, band: 'good' as const, confidence: 'low' as const, reasons: [], lastHeardAt: null };
+    const ctx = p.raw?.context || {};
+    const handover = care[p.id]?.checklists.handover;
+    const phase = phaseOf({ ...ctx, status: p.status }, { now, handoverStarted: !!handover && (handover.items || []).some((x: any) => x?.state && x.state !== 'open') });
+    const item = queue.find((q) => q.projectId === p.id) || null;
+    const worst = pulse.reasons.filter((r) => r.points < 0).sort((a, b) => a.points - b.points)[0];
+    const people = ctx.clientName || ctx.client?.name || p.clientName;
+    return {
+      id: p.id, name: p.name, client: String(people || ''), line: [p.config, p.location].filter(Boolean).join(' · '), phone: String(ctx.clientPhone || ''),
+      health: healthOf(pulse.band), score: pulse.score, pulse, phase, progress: progressOf(ctx, phase),
+      handoverKey: p.targetHandover, handoverDays: daysUntil(p.targetHandover, now),
+      next: item ? item.title : worst ? worst.label : phase.complete ? 'Handed over. Ask for a review when the time is right.' : 'Nothing due. A good moment to check in.',
+      nextWhy: item ? `${item.detail}` : worst ? 'What the pulse says' : 'Nothing is waiting on this client.',
+      nextItem: item,
+    };
+  }), [deskProjects, pulseRows, care, queue, now]);
 
   const canWrite = isLead || isCR || !['Viewer', 'Designer', 'Site Supervisor', 'Vendor'].includes(primaryRole(roles));
   const projectName = (id: string) => deskProjects.find((p) => p.id === id)?.name || '';
-  const hour = Number(new Date(now).toLocaleString('en-IN', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }));
-  const hello = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const due = overdue + dueToday;
-  const clientsWord = `${deskProjects.length} client${deskProjects.length === 1 ? '' : 's'}`;
 
   const desk: Desk = {
     tenantId, studioName: orgData?.orgName || '', me, isLead, isCR, canWrite, seesMoney, now, loading, settings, team,
     projects: deskProjects, projectRefs, queue, waiting, followUps: fu, escalations: esc, moms: mm, visits: allVisits, pulseRows, leads, done, record, bumped,
+    clients, closedDays, decisions, approvals: sendsDrawingApprovals ? approvalItems : null, teamRows: rows, clientId,
     act: {
       go, log: setLogFor, escalate: setEscFor, capture: () => setCapturing(true), openItem: onItem, openClient: setClientFor, openLead,
       addLead: () => setAdding({ paste: false }), bookVisit: (projectId) => setVisitAct({ visit: null, to: null, projectId }),
       openProject: (id, tab) => onOpenProject(id, tab), markDone: done_, later: (q) => setBumped((b) => [...b.filter((x) => x !== q.id), q.id]),
       sendReminder, refresh: load, closeDay: () => setClosing(true),
+      palette: () => setPaletteOpen(true), focus: () => setFocusing(true),
     },
   };
 
@@ -459,53 +499,39 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
     }
   }, [leads, projectRefs, canWrite, isLead, myEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* Ctrl K (or /) opens the palette from anywhere on the desk; cards lean towards the pointer. */
+  const rootRef = useRef<HTMLDivElement>(null);
+  useTiltCards(rootRef);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement as HTMLElement | null)?.tagName || '') || (document.activeElement as HTMLElement | null)?.isContentEditable;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPaletteOpen((o) => !o); return; }
+      if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !document.querySelector('[role="dialog"]')) { e.preventDefault(); setPaletteOpen(true); }
+    };
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, []);
+
   return (
     <DeskProvider value={desk}>
-    <div className="pb-28">
-      {/* Named by the shell's title row, like Projects; this is the bar under it. */}
-      <StudioBar className="mb-4">
-        <BarStrip label="Your day">
-          <Ring value={ring.ratio} size={34} stroke={4} tone={ring.total && ring.done === ring.total ? 'ok' : 'brand'} label={`${ring.done} of ${ring.total} done today`}>
-            <span className="block text-[10px] leading-none font-black text-slate-800 tabular-nums"><CountUp value={ring.done} />/{ring.total}</span>
-          </Ring>
-          <span className="text-xs font-semibold text-slate-700 mr-1">
-            {loading ? 'Loading your desk…' : due
-              ? `${hello}, ${firstName(me.name)}. Start with the one at the top.`
-              : `${hello}, ${firstName(me.name)}. Nothing is due today across ${isLead ? 'the studio’s' : 'your'} ${clientsWord}.`}
-          </span>
-          {!loading && (
-            <>
-              <BarChip n={overdue} word="overdue" tone="bad" onClick={() => go('today')} />
-              <BarChip n={dueToday} word="due today" tone="warn" onClick={() => go('today')} />
-              <BarChip n={atRisk} word={atRisk === 1 ? 'client at risk' : 'clients at risk'} tone="bad" onClick={() => go('pulse')} />
-              <BarChip n={done.length} word="done today" tone="ok" onClick={() => go('today')} />
-            </>
-          )}
-        </BarStrip>
-        {canWrite && (
-          <>
-            <BarButton onClick={() => setCapturing(true)}><Mic className="w-4 h-4" />Capture a chat or call</BarButton>
-            <BarButton data-tour="lead" onClick={() => setAdding({ paste: false })}><UserPlus className="w-4 h-4" />Add a lead</BarButton>
-            <BarButton data-tour="escalate" onClick={() => setEscFor({})}><Flag className="w-4 h-4" />Raise an escalation</BarButton>
-            {!isLead && <BarButton onClick={() => setClosing(true)}><Sunset className="w-4 h-4" />Close my day</BarButton>}
-            <BarButton primary data-tour="log" className="pp-press" onClick={() => setLogFor({})}><Plus className="w-4 h-4" />Log a follow-up</BarButton>
-          </>
-        )}
-      </StudioBar>
-
-      {/* The toolbar, as on Projects: which projects the desk is looking at, and a refresh. */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-1 pb-3 mb-6 border-b border-slate-200/50">
-        {isLead ? (
+    <div className="od2 pb-28" ref={rootRef}>
+      {/* Named by the shell's title row, like Projects. Under it, the desk's toolbar: search, which projects, refresh, log. */}
+      <div className="od-top">
+        <button type="button" className="od-kbar" onClick={() => setPaletteOpen(true)} aria-label="Search or run a command" aria-keyshortcuts="Control+K">
+          <Search /><span className="od-lbl">Search or say what to do…</span><kbd className="od-kbd">Ctrl K</kbd>
+        </button>
+        {isLead && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mr-1">Projects:</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Projects:</span>
             <Glide id="desk-scope" label="Which projects" value={scope} onChange={setScope}
               options={DESK_SCOPES.map((s) => ({ id: s.id, label: `${s.label} ${counts[s.id]}` }))} />
           </div>
-        ) : <span />}
-        <button type="button" onClick={load} disabled={loading} aria-label="Refresh" title="Refresh"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-800 hover:border-slate-400 transition-colors disabled:opacity-50">
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />Refresh
+        )}
+        <span className="flex-1" />
+        <button type="button" onClick={load} disabled={loading} aria-label="Refresh" title="Refresh" className="od-btn sm">
+          <RefreshCw className={loading ? 'animate-spin' : ''} />Refresh
         </button>
+        {canWrite && <button type="button" className="od-btn pri pp-press" onClick={() => setLogFor({})}><Plus />Log a follow-up</button>}
       </div>
 
       <AnimatePresence>{notice && <div className="mb-4"><Notice text={notice} onClose={() => setNotice(null)} /></div>}</AnimatePresence>
@@ -516,20 +542,22 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
           {canWrite ? <button type="button" className={btnSec} onClick={() => setAdding({ paste: false })}><UserPlus className="w-4 h-4" />Add a lead</button> : null}
         </Panel>
       ) : (
-      <div className="grid grid-cols-1 lg:grid-cols-[230px_1fr] gap-6 items-start">
-        <Rail groups={groups} on={section} onPick={go} />
+      <div className="od-shell">
+        <DeskRail groups={groups} on={section === 'client' ? 'clients' : section} onPick={go} />
 
-        <div className="min-w-0" style={{ perspective: 1600 }}>
-          {error && <p className="mb-4 text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
+        <div className="od-main">
+          {error && <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
           {/*
             A section turns in when it changes. No exit is waited on: a swap that waits
             for the old section to finish leaving can be left waiting (framer-motion 11
             with React 19), and the screen then stays empty with no error.
           */}
-          <motion.div key={section === 'leads' ? `leads:${leadOpen || ''}` : section} variants={still ? undefined : deskSectionV} initial={still ? false : 'hidden'} animate="show"
-            className="flex flex-col gap-6 min-w-0" style={{ transformOrigin: '50% 0%' }}>
+          <motion.div key={section === 'leads' ? `leads:${leadOpen || ''}` : section === 'client' ? `client:${clientId}` : section} variants={still ? undefined : deskSectionV} initial={still ? false : 'hidden'} animate="show"
+            className="flex flex-col gap-5 min-w-0" style={{ transformOrigin: '50% 0%' }}>
 
-          {section === 'today' && <TodayView />}
+          {section === 'today' && <MyDay />}
+          {section === 'clients' && <ClientsScreen />}
+          {section === 'client' && clientId && <ClientPage id={clientId} />}
 
           {section === 'leads' && (currentLead ? (
             <LeadPage lead={currentLead} owners={crPeople} opener={opener} onBack={() => setLeadOpen(null)}
@@ -537,240 +565,124 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
               onDelete={async (l) => { try { await deleteLead(l.id); setLeads((ls) => ls.filter((x) => x.id !== l.id)); setLeadOpen(null); } catch { setError('The lead was not deleted. Try again.'); } }}
               onOpenProject={setConverting} />
           ) : (
-            <LeadsBoard opener={opener} onOpen={setLeadOpen} onAdd={() => setAdding({ paste: false })} onPaste={() => setAdding({ paste: true })} onMoved={replaceLead} onConvert={setConverting} />
+            <>
+              <LeadsBand onAdd={() => setAdding({ paste: false })} onPaste={() => setAdding({ paste: true })} onCalling={() => setCalling(true)} />
+              <SeeAs />
+              <LeadsBoard hideHead opener={opener} onOpen={setLeadOpen} onAdd={() => setAdding({ paste: false })} onPaste={() => setAdding({ paste: true })} onMoved={replaceLead} onConvert={setConverting} />
+            </>
           ))}
 
           {section === 'team' && isLead && (
-            <TeamView rows={rows}
-              queueOf={(email) => personQueue(email, teamInput)}
-              doneOf={(email) => doneToday(fu, email, now)}
-              notes={notes}
-              guideOf={(email) => {
-                const rec = teamRecords.find((r) => r.email === email);
-                return guideProgress(rec?.guide, { logged: fu.some((f) => f.by === email), minutes: false, lead: leads.some((l) => l.createdBy === email), escalated: esc.some((e) => e.raisedBy === email) }).count;
-              }}
-              week={weekNumbers(fu, leads, esc, now)}
-              onAssign={setAssignFor}
-              onRead={async (note) => { try { await markNoteRead(note, myEmail); setNotes((ns) => ns.map((x) => (x === note ? { ...x, readBy: [...(x.readBy || []), myEmail] } : x))); } catch { setError('That was not saved. Try again.'); } }} />
+            <>
+              <SimpleBand eyebrow="The team" title="Everyone’s desk at a glance" sub="Who has what today, what they closed, how their first week is going, and the note they left when they closed the day."
+                tiles={[
+                  { count: rows.reduce((s, r) => s + (r.total - r.done), 0), title: 'Open today', sub: 'Across the team' },
+                  { count: rows.reduce((s, r) => s + r.done, 0), title: 'Done today', sub: 'So far' },
+                  { count: weekNumbers(fu, leads, esc, now).logged, title: 'Touches this week', sub: 'Calls, WhatsApps, emails' },
+                ]} />
+              <TeamView rows={rows}
+                queueOf={(email) => personQueue(email, teamInput)}
+                doneOf={(email) => doneToday(fu, email, now)}
+                notes={notes}
+                guideOf={(email) => {
+                  const rec = teamRecords.find((r) => r.email === email);
+                  return guideProgress(rec?.guide, { logged: fu.some((f) => f.by === email), minutes: false, lead: leads.some((l) => l.createdBy === email), escalated: esc.some((e) => e.raisedBy === email) }).count;
+                }}
+                week={weekNumbers(fu, leads, esc, now)}
+                onAssign={setAssignFor}
+                onRead={async (note) => { try { await markNoteRead(note, myEmail); setNotes((ns) => ns.map((x) => (x === note ? { ...x, readBy: [...(x.readBy || []), myEmail] } : x))); } catch { setError('That was not saved. Try again.'); } }} />
+            </>
           )}
 
           {section === 'guide' && (
-            <FirstWeek people={askPeople}
-              onShowMe={(s) => { if (s.target === 'clients' || s.target === 'today') setSection('today'); window.setTimeout(() => setSpot(s), 450); }}
-              onTick={(id: GuideStepId) => record && saveRecord({ ...record, guide: { ...record.guide, [id]: Date.now() } })}
-              onHide={() => record && saveRecord({ ...record, guideHiddenUntil: dayKey(now + 86400000) })}
-              onAsk={(q) => { setAskQ(q); go('ask'); }} />
+            <>
+              <SimpleBand eyebrow="How the desk works" title={progress ? `Your first week · ${progress.count} of ${progress.total}` : 'How the desk works'}
+                sub="The things that make the desk yours. “Show me” takes you there and lights the button."
+                tiles={[
+                  ...(progress ? [{ ring: { p: progress.count / Math.max(1, progress.total), label: <b className="od-num">{progress.count}/{progress.total}</b> }, title: 'First week', sub: 'Steps done' }] : []),
+                  ...(!isLead ? [{ count: streakOf(closedDays, now), unit: 'd', title: 'Streak', sub: 'Days closed in a row' }] : []),
+                ]} />
+              <FirstWeek people={askPeople}
+                onShowMe={(s) => { if (s.target === 'clients' || s.target === 'today') setSection('today'); window.setTimeout(() => setSpot(s), 450); }}
+                onTick={(id: GuideStepId) => record && saveRecord({ ...record, guide: { ...record.guide, [id]: Date.now() } })}
+                onHide={() => record && saveRecord({ ...record, guideHiddenUntil: dayKey(now + 86400000) })}
+                onAsk={(q) => { setAskQ(q); go('ask'); }} />
+            </>
           )}
 
           {section === 'approvals' && sendsDrawingApprovals && (
-            <DrawingApprovals orgId={tenantId} items={approvalItems} me={me} lead={hasRole(roles, new Set(['Design Head', 'Owner', 'Admin', 'Super Admin']))}
-              projects={approvalProjectList} onChanged={(projectId) => { void loadApprovals(projectId); }} />
+            <ApprovalsScreen projects={approvalProjectList} lead={hasRole(roles, new Set(['Design Head', 'Owner', 'Admin', 'Super Admin']))}
+              onChanged={(projectId) => { void loadApprovals(projectId); }} />
           )}
 
-          {section === 'waiting' && (
-            <Panel icon={Clock} title="Waiting on client" blurb="Every payment and decision the studio is waiting for, how long it has waited, when it was last chased, and how far it can push the handover.">
-              {loading && !waiting.length ? <Loading /> : waiting.length === 0 ? <Empty icon={Clock} text="Nothing is waiting on a client." /> : (
-                <motion.div variants={listV} initial="hidden" animate="show" className="rounded-xl border border-slate-200 divide-y divide-slate-100">
-                  {[...waiting].sort((a, b) => b.days - a.days).map((w) => {
-                    const slip = handoverSlip(w, deskProjects.find((p) => p.id === w.projectId)?.targetHandover);
-                    return (
-                    <motion.div variants={rowV} key={`${w.projectId}:${w.key}`} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
-                      <Dot tone={w.overdueDays || w.days >= 7 ? 'bad' : w.days >= 3 ? 'warn' : 'ok'} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-slate-800">{w.kind === 'payment' ? 'Payment' : 'Decision'}: {w.label}</p>
-                        <p className="text-xs text-slate-500"><button type="button" className="font-semibold text-slate-700 hover:text-[#3D52A0] hover:underline" onClick={() => setClientFor(w.projectId)}>{w.projectName}</button> · waiting {w.days} day{w.days === 1 ? '' : 's'}
-                          {w.kind === 'payment' && w.amount && seesMoney ? ` · ${inr(w.amount)}` : ''}{w.overdueDays ? ` · ${w.overdueDays} day${w.overdueDays === 1 ? '' : 's'} late` : ''}</p>
-                        <p className="text-[11px] text-slate-500">{w.lastChaseAt ? `Last chased ${fmtWhen(w.lastChaseAt)} · ${w.reminders} reminder${w.reminders === 1 ? '' : 's'}` : 'Not chased yet'}</p>
-                      </div>
-                      {slip.days > 0 && (
-                        <span className={`${chip} ${slip.days >= 7 ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}
-                          title="An estimate: a late payment holds the next stage by the days it is late; a decision, by the days past a three-day grace period.">
-                          Handover +{slip.days}d{slip.newHandoverKey ? ` · ${fmtDay(slip.newHandoverKey)}` : ''}
-                        </span>
-                      )}
-                      {canWrite && <button type="button" className={btnSm} onClick={() => setEscFor({ projectId: w.projectId, subjectKey: w.key })}><Flag className="w-3.5 h-3.5" />Escalate</button>}
-                      {canWrite && <button type="button" className={btnSm} onClick={() => setLogFor({ projectId: w.projectId, subjectKey: w.key })}><MessageCircle className="w-3.5 h-3.5" />Remind</button>}
-                    </motion.div>
-                    );
-                  })}
-                </motion.div>
-              )}
-            </Panel>
-          )}
+          {section === 'waiting' && <WaitingScreen slipOf={(w) => handoverSlip(w, deskProjects.find((p) => p.id === w.projectId)?.targetHandover).days} />}
 
-          {section === 'payments' && (
-            deskProjects.every((p) => !p.money) && !loading
-              ? <Panel icon={IndianRupee} title="Payments" blurb="No payment schedules on these projects yet.">{null}</Panel>
-              : deskProjects.filter((p) => p.money).map((p) => {
-                const m = p.money!;
-                const shown = seesMoney && !m.amountsHidden && m.totalPaid != null;
-                const paid = m.milestones.filter((x) => x.status === 'paid').length;
-                return (
-                <Panel key={p.id} icon={IndianRupee} title={p.name}
-                  blurb={shown
-                    ? `Paid ${inr(m.totalPaid ?? 0)} of ${inr(m.projectValue ?? 0)} · ${inr(m.balanceDue ?? 0)} still to come. Late ${settings.paymentDueDays} days after the invoice.`
-                    : `${paid} of ${m.milestones.length} milestones paid. Late ${settings.paymentDueDays} days after the invoice. Amounts are with the leads.`}
-                  right={<button type="button" className={btnSm} onClick={() => setClientFor(p.id)}><Users className="w-3.5 h-3.5" />Client</button>}>
-                  <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[520px] text-xs">
-                      <thead><tr className="text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50">
-                        <th className="px-3 py-2">Milestone</th><th className="px-3 py-2">Status</th>
-                        {shown && <th className="px-3 py-2 text-right">Owed</th>}<th className="px-3 py-2">Invoiced</th><th className="px-3 py-2">Due</th><th className="px-3 py-2" />
-                      </tr></thead>
-                      <motion.tbody variants={listV} initial="hidden" animate="show" className="divide-y divide-slate-100">
-                        {m.milestones.map((ms) => {
-                          const w = waiting.find((x) => x.projectId === p.id && x.key === `pay:${ms.id}`);
-                          return (
-                            <motion.tr variants={rowV} key={ms.id}>
-                              <td className="px-3 py-2 text-sm font-semibold text-slate-800">{ms.name}{ms.invoiceNumber ? <span className="font-mono text-xs font-normal text-slate-400"> · {ms.invoiceNumber}</span> : null}</td>
-                              <td className="px-3 py-2"><span className={`${chip} ${ms.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : ms.status === 'invoiced' ? (w?.overdueDays ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700') : 'bg-slate-100 text-slate-600'}`}>{ms.status === 'invoiced' && w?.overdueDays ? `${w.overdueDays}d late` : ms.status}</span></td>
-                              {shown && <td className="px-3 py-2 text-right font-bold text-slate-800 tabular-nums">{inr(ms.owed ?? 0)}</td>}
-                              <td className="px-3 py-2 text-slate-600">{ms.invoiceDate ? fmtDay(String(ms.invoiceDate).slice(0, 10)) : '—'}</td>
-                              <td className="px-3 py-2 text-slate-600">{w?.dueKey ? fmtDay(w.dueKey) : '—'}</td>
-                              <td className="px-3 py-2 text-right">{w && canWrite && <button type="button" className={btnSm} onClick={() => setLogFor({ projectId: p.id, subjectKey: w.key })}>Remind</button>}</td>
-                            </motion.tr>
-                          );
-                        })}
-                      </motion.tbody>
-                    </table>
-                  </div>
-                </Panel>
-                );
-              })
-          )}
+          {section === 'payments' && <PaymentsScreen />}
 
-          {section === 'log' && (
-            <Panel icon={ListChecks} title="Follow-up log" blurb="Every call, WhatsApp and email to a client, logged by hand, newest first. Tick a next step when it is done.">
-              {loading && !fu.length ? <Loading /> : fu.length === 0 ? <Empty icon={ListChecks} text="Nothing logged yet. Use Log a follow-up after your next call." /> : (
-                <motion.div variants={listV} initial="hidden" animate="show" className="rounded-xl border border-slate-200 divide-y divide-slate-100">
-                  {[...fu].sort((a, b) => b.at - a.at).slice(0, 200).map((f) => {
-                    const Icon = CHANNEL_ICON[f.channel] || MessageCircle;
-                    return (
-                      <motion.div variants={rowV} key={f.id} className="group flex gap-3 px-3 py-2.5">
-                        <span className="pp-tile w-8 h-8 shrink-0 rounded-lg bg-[#3D52A0]/10 text-[#3D52A0]"><Icon className="w-4 h-4" /></span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-slate-800"><button type="button" className="hover:text-[#3D52A0] hover:underline" onClick={() => setClientFor(f.projectId)}>{f.projectName || projectName(f.projectId)}</button>{f.subject ? <span className="font-normal text-slate-500"> · {f.subject.label}</span> : null}</p>
-                          {f.note && <p className="text-xs text-slate-700 whitespace-pre-line">{f.note}</p>}
-                          <p className="text-[11px] text-slate-500">{f.byName || f.by} · {fmtWhen(f.at)} · {String(f.outcome).replace('_', ' ')} · logged by hand</p>
-                          {f.next && (
-                            <p className={`mt-1 text-xs ${f.nextDone ? 'text-slate-400 line-through' : 'text-slate-700'}`}>Next: {f.next.text} · {f.next.ownerName} · {fmtDay(f.next.due)}</p>
-                          )}
-                        </div>
-                        {f.next && !f.nextDone && canWrite && <button type="button" className={`${btnSm} self-start`} disabled={busy === f.id} onClick={() => done_(f)}><Check className="w-3.5 h-3.5" />Done</button>}
-                      </motion.div>
-                    );
-                  })}
-                </motion.div>
-              )}
-            </Panel>
-          )}
+          {section === 'log' && <LogScreen busy={busy} onDone={(id) => { const f = fu.find((x) => x.id === id); if (f) void done_(f); }} />}
 
-          {section === 'escalations' && (
-            <Panel icon={Flag} title="Escalations" blurb={isLead ? 'Stuck things put in front of the leads. Decide each one; the decision goes back to whoever raised it.' : 'What you have put in front of the leads, and their decisions. Close one once you have acted on it.'}>
-              {esc.filter((e) => e.status !== 'closed').length === 0 ? (loading ? <Loading /> : <Empty icon={Flag} text="No open escalations." />) : (
-                <motion.div variants={listV} initial="hidden" animate="show" className="rounded-xl border border-slate-200 divide-y divide-slate-100">
-                  {[...esc].filter((e) => e.status !== 'closed').sort((a, b) => (a.status === 'open' ? -1 : 1) - (b.status === 'open' ? -1 : 1) || b.raisedAt - a.raisedAt).map((e) => (
-                    <motion.div variants={rowV} key={e.id} className="flex flex-wrap items-start gap-3 px-3 py-3">
-                      <span className="pt-1.5"><Dot tone={e.status === 'open' ? 'bad' : 'ok'} live={e.status === 'open'} /></span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-slate-800">{e.title}</p>
-                        <p className="text-xs text-slate-500"><button type="button" className="font-semibold text-slate-700 hover:text-[#3D52A0] hover:underline" onClick={() => setClientFor(e.projectId)}>{e.projectName}</button> · {e.auto ? 'raised by the daily check' : `raised by ${e.raisedByName || e.raisedBy}`} · {daysBetween(e.raisedAt, now) === 0 ? 'today' : `${daysBetween(e.raisedAt, now)} day${daysBetween(e.raisedAt, now) === 1 ? '' : 's'} ago`}</p>
-                        {e.detail && <p className="text-xs text-slate-700 mt-1 whitespace-pre-line">{e.detail}</p>}
-                        {e.status === 'decided' && <p className="mt-2 text-xs bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg px-3 py-2"><b>{e.decidedByName || e.decidedBy}:</b> {e.decision}</p>}
-                      </div>
-                      <span className={`${chip} ${e.status === 'open' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>{e.status === 'open' ? 'Waiting for a decision' : 'Decided'}</span>
-                      {e.status === 'open' && isLead && <button type="button" className={btnSm} onClick={() => setDeciding(e)}>Decide</button>}
-                      {e.status === 'decided' && (e.raisedBy === myEmail || e.auto || isLead) && canWrite && <button type="button" className={btnSm} disabled={busy === e.id} onClick={() => close(e)}><Check className="w-3.5 h-3.5" />Done, close it</button>}
-                    </motion.div>
-                  ))}
-                </motion.div>
-              )}
-            </Panel>
-          )}
+          {section === 'escalations' && <EscalationsScreen busy={busy} onDecide={setDeciding} onClose={(e) => { void close(e); }} />}
 
-          {section === 'minutes' && (
-            <Panel icon={FileText} title={isLead ? 'Minutes to approve' : 'Minutes'} blurb={isLead ? 'Minutes written by Client Relations. Read, edit if needed, then approve: that finalises them and opens the email to the client.' : 'Write the minutes of a client meeting and send them for approval. They reach the client only once a lead approves them.'}>
-              <div className="flex flex-col gap-4">
-                {canWrite && (
-                  <div className="max-w-sm">
-                    <label htmlFor="mom-project" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Write minutes for</label>
-                    <select id="mom-project" className={input} value={writingFor?.projectId || ''} onChange={(e) => setWritingFor(e.target.value ? { projectId: e.target.value, notes: '' } : null)}>
-                      <option value="">Choose a project</option>
-                      {deskProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </div>
-                )}
-                {mm.filter((m) => (isLead ? m.status === 'pending_review' : true)).length === 0 ? (loading ? <Loading /> : <Empty icon={FileText} text={isLead ? 'No minutes are waiting for approval.' : 'No minutes on your projects yet.'} />) : (
-                  <motion.div variants={listV} initial="hidden" animate="show" className="rounded-xl border border-slate-200 divide-y divide-slate-100">
-                    {[...mm].filter((m) => (isLead ? m.status === 'pending_review' : true)).sort((a, b) => (b.meetingDate || 0) - (a.meetingDate || 0)).map((m) => (
-                      <motion.div variants={rowV} key={`${m.projectId}:${m.id}`} className="group flex flex-wrap items-center gap-3 px-3 py-2.5">
-                        <span className="pp-tile w-8 h-8 shrink-0 rounded-lg bg-[#3D52A0]/10 text-[#3D52A0]"><FileText className="w-4 h-4" /></span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-slate-800">{m.meetingTitle || m.momRef || 'Meeting'}</p>
-                          <p className="text-xs text-slate-500"><b className="font-semibold text-slate-700">{m.projectName || projectName(m.projectId)}</b>{m.momRef ? <span className="font-mono"> · {m.momRef}</span> : ''}{m.meetingDate ? ` · ${fmtDay(dayKey(m.meetingDate))}` : ''}</p>
-                        </div>
-                        <span className={`${chip} ${m.status === 'pending_review' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : m.status === 'draft' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                          {m.status === 'pending_review' ? 'Awaiting approval' : m.status === 'draft' ? 'Draft' : m.status.replace('_', ' ')}
-                        </span>
-                        {(isLead || m.status === 'draft' || m.status === 'pending_review') && (
-                          <button type="button" className={btnSm} onClick={() => setReviewing(m)}>{isLead ? 'Review & approve' : m.status === 'draft' ? 'Edit & send' : 'Open'}</button>
-                        )}
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                )}
-              </div>
-            </Panel>
-          )}
+          {section === 'minutes' && <MinutesScreen onReview={setReviewing} onWrite={(projectId) => setWritingFor({ projectId, notes: '' })} />}
 
-          {section === 'pulse' && (
-            <Panel icon={Activity} title="Client pulse" blurb="How each client relationship stands, out of 100, lowest first, with every point it gained or lost. Ask for a review or a referral when a client is happy.">
-              {loading && !fu.length ? <Loading /> : (
-                <PulseList rows={pulseRows} onAsk={(projectId, kind) => setAskFor({ projectId, kind })} onOpenProject={(id) => setClientFor(id)} />
-              )}
-            </Panel>
-          )}
+          {section === 'pulse' && <PulseScreen onAsk={(projectId, kind) => setAskFor({ projectId, kind })} />}
 
           {section === 'visits' && (
-            <div className="flex flex-col gap-5">
-              <Panel icon={CalendarCheck} title="Meetings & visits" blurb="Every meeting and site visit a client asked for on a project, or the studio needs, and the ones logged on each project's timeline: agree a time, confirm it, move it, and close it out with the minutes. Meetings with leads are in their own table below.">
+            <>
+              <VisitsBand onLog={() => setVisitAct({ visit: null, to: null })} />
+              <SeeAs />
+              <Inner>
                 <div className="flex flex-col gap-4">
-                  {canWrite && <button type="button" className={`${btnSec} self-start`} onClick={() => setVisitAct({ visit: null, to: null })}><Plus className="w-4 h-4" />Log a request</button>}
                   {canWrite && <CalendarAccountBar onError={setError} />}
                   {loading && !allVisits.length ? <Loading /> : <VisitsView visits={allVisits.filter((v) => v.source !== 'lead')} projects={deskProjects as DeskProject[]} canWrite={canWrite} now={now} onAct={(visit, to) => setVisitAct({ visit, to })} onOpenLead={openLead} />}
                 </div>
-              </Panel>
+              </Inner>
               {/* Leads have no project yet, so their meetings are tracked apart, each marked as a lead's (lib/leads leadMeetingRows). */}
               <LeadMeetingsTable onOpenLead={openLead} />
-            </div>
+            </>
           )}
 
           {section === 'checklists' && (
-            <Panel icon={ClipboardCheck} title="Checklists" blurb="Onboarding, the documents the studio needs from the client, and handover. Client Relations works them; a lead marks each one complete.">
-              <ChecklistsView projects={deskProjects as DeskProject[]} care={Object.fromEntries(Object.entries(care).map(([k, v]: [string, ProjectCare]) => [k, v.checklists]))}
-                money={Object.fromEntries(deskProjects.map((p) => [p.id, p.money]))}
-                focus={{ projectId: careFocus.projectId || deskProjects[0]?.id || '', kind: careFocus.kind }} onFocus={setCareFocus}
-                me={me} isLead={isLead} canWrite={canWrite} tenantId={tenantId} studioName={orgData?.orgName || ''} onChanged={load} />
-            </Panel>
+            <>
+              <SimpleBand eyebrow="Checklists" title="Onboarding, documents and handover" sub="Client Relations works them; a lead marks each one complete."
+                tiles={[
+                  { count: n.checklists, title: 'Waiting on you', sub: 'Items to chase or tick', alarm: n.checklists > 0 },
+                  { count: deskProjects.filter((p) => care[p.id]?.checklists.handover?.completedAt).length, title: 'Handed over', sub: 'Handover marked complete' },
+                  { count: deskProjects.filter((p) => care[p.id]?.checklists.onboarding?.completedAt).length, title: 'Onboarded', sub: 'Onboarding marked complete' },
+                ]} />
+              <SeeAs />
+              <Inner>
+                <ChecklistsView projects={deskProjects as DeskProject[]} care={Object.fromEntries(Object.entries(care).map(([k, v]: [string, ProjectCare]) => [k, v.checklists]))}
+                  money={Object.fromEntries(deskProjects.map((p) => [p.id, p.money]))}
+                  focus={{ projectId: careFocus.projectId || deskProjects[0]?.id || '', kind: careFocus.kind }} onFocus={setCareFocus}
+                  me={me} isLead={isLead} canWrite={canWrite} tenantId={tenantId} studioName={orgData?.orgName || ''} onChanged={load} />
+              </Inner>
+            </>
           )}
 
           {section === 'ask' && (
-            <Panel key={`ask:${askQ}`} icon={Search} title="Ask a project" blurb={`Answers about one project from its payments, decisions, minutes and follow-ups, with where each came from. Costs and margins are never part of it${seesMoney ? '' : ', nor are amounts'}.`}>
-              <AskProjectPanel projects={deskProjects as DeskProject[]} rawProjects={scoped} waiting={waiting} tenantId={tenantId} initialQuestion={askQ} />
-            </Panel>
+            <>
+              <SimpleBand eyebrow="Ask a project" title="Ask anything about a project" sub={`Answers from its payments, decisions, minutes and follow-ups, with where each came from. Costs and margins are never part of it${seesMoney ? '' : ', nor are amounts'}.`} />
+              <Inner key={`ask:${askQ}`}>
+                <AskProjectPanel projects={deskProjects as DeskProject[]} rawProjects={scoped} waiting={waiting} tenantId={tenantId} initialQuestion={askQ} />
+              </Inner>
+            </>
           )}
 
           {section === 'prep' && (
-            <Panel icon={CalendarClock} title="Meeting prep" blurb="Before a client meeting: what each side owes, where the payments stand, what was said last time, and an agenda to send or to start the minutes from.">
-              <MeetingPrepPanel projects={deskProjects as DeskProject[]} rawProjects={scoped} waiting={waiting} tenantId={tenantId} canWrite={canWrite && !isLead}
-                onStartMinutes={(projectId, notes) => setWritingFor({ projectId, notes })} />
-            </Panel>
+            <>
+              <SimpleBand eyebrow="Meeting prep" title="Before you meet a client" sub="What each side owes, where the payments stand, what was said last time, and an agenda to send or to start the minutes from." />
+              <SeeAs />
+              <Inner>
+                <MeetingPrepPanel projects={deskProjects as DeskProject[]} rawProjects={scoped} waiting={waiting} tenantId={tenantId} canWrite={canWrite && !isLead}
+                  onStartMinutes={(projectId, notes) => setWritingFor({ projectId, notes })} />
+              </Inner>
+            </>
           )}
           </motion.div>
         </div>
       </div>
       )}
-
       {logFor && (
         <LogFollowUpPanel projects={deskProjects as DeskProject[]} waiting={waiting} team={team} me={me} tenantId={tenantId}
           studioName={orgData?.orgName || ''} prefill={logFor} onClose={() => setLogFor(null)} onSaved={() => { setLogFor(null); load(); }} />
@@ -827,7 +739,9 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
           }}
         />
       )}
-      <AnimatePresence>{clientFor && <ClientSheet key={clientFor} projectId={clientFor} onClose={() => setClientFor(null)} />}</AnimatePresence>
+      {paletteOpen && <CommandPalette sections={paletteSections} onClose={() => setPaletteOpen(false)} />}
+      {focusing && <FocusMode onClose={() => setFocusing(false)} />}
+      {calling && <CallingMode onClose={() => setCalling(false)} onSaved={replaceLead} />}
       {adding && (
         <AddLeadSheet owners={crPeople} paste={adding.paste} onClose={() => setAdding(null)}
           onOpenExisting={(id) => { setAdding(null); openLead(id); }}
@@ -870,6 +784,8 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
               rolled: rolled.map(({ q, to }) => ({ title: `${q.title} · ${q.projectName}`.slice(0, 200), to })).slice(0, 60),
             });
             if (record) setRecord({ ...record, snoozes });
+            setClosedDays((ds) => [...new Set([dayKey(now), ...ds])]);
+            setClosedTick((t) => t + 1);
             load();
           }} />
       )}
