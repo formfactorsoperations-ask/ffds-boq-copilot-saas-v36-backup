@@ -1029,41 +1029,44 @@ export default function App() {
     reloadTenantData();
   }, [orgData?.tenantId, isDataLoaded]);
 
-  // Refresh Project Library on Tab Switch with Smart Merge
-  useEffect(() => {
-    if (activeTab === "projects") {
-      db.getProjects().then((fetchedProjects) => {
-        setProjectLibrary((currentLib) => {
-          // Critical: If we have an active project in memory (e.g. just created/imported),
-          // ensure it overrides the DB fetch if the DB is stale/empty.
-          const currentActiveId = activeIdRef.current;
-          if (currentActiveId) {
-            const inMemoryActive = currentLib.find(
-              (p) => p.id === currentActiveId,
-            );
-            if (inMemoryActive) {
-              const dbIndex = fetchedProjects.findIndex(
-                (p) => p.id === currentActiveId,
-              );
+  /*
+    Refresh the library on entering the Projects tab.
 
-              if (dbIndex === -1) {
-                // Project exists locally but not in DB yet -> Prepend it
-                return [inMemoryActive, ...fetchedProjects];
-              } else {
-                // Project exists in DB, but check which is newer
-                if (
-                  inMemoryActive.lastModified >
-                  fetchedProjects[dbIndex].lastModified
-                ) {
-                  fetchedProjects[dbIndex] = inMemoryActive;
-                }
-              }
-            }
-          }
-          return fetchedProjects;
-        });
+    Through readProjects, like every other library read, rather than straight
+    to the database. db.getProjects downloads both stored copies of every
+    project in the studio and inflates each one -- a few MB for a busy studio --
+    and this ran on every visit, so opening Projects just after sign-in read the
+    whole library a second time within the same few seconds. A read for the same
+    person, studio and role, with no save since, is shared for half a minute;
+    any save or delete reads afresh.
+
+    The fetched list is shared with the other readers now, so the open
+    project's newer copy is put into a new array, never written into it.
+  */
+  useEffect(() => {
+    if (activeTab !== "projects") return;
+    let live = true;
+    readProjects().then((fetchedProjects) => {
+      if (!live) return;
+      setProjectLibrary((currentLib) => {
+        // Critical: If we have an active project in memory (e.g. just created/imported),
+        // ensure it overrides the DB fetch if the DB is stale/empty.
+        const currentActiveId = activeIdRef.current;
+        const inMemoryActive = currentActiveId
+          ? currentLib.find((p) => p.id === currentActiveId)
+          : null;
+        if (!inMemoryActive) return fetchedProjects;
+        const dbIndex = fetchedProjects.findIndex((p) => p.id === currentActiveId);
+        // Project exists locally but not in DB yet -> Prepend it
+        if (dbIndex === -1) return [inMemoryActive, ...fetchedProjects];
+        // Project exists in DB, but check which is newer
+        return inMemoryActive.lastModified > fetchedProjects[dbIndex].lastModified
+          ? fetchedProjects.map((p, j) => (j === dbIndex ? inMemoryActive : p))
+          : fetchedProjects;
       });
-    }
+    }).catch(() => { /* the library already on screen stays */ });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   /*

@@ -4,9 +4,19 @@ import { PaymentHealth, usePaymentHealthScore } from '../hooks/usePaymentHealthS
 import { AlertTriangle, CheckCircle, Info } from '@/lib/lucide-shim';
 import { useOrg } from '../contexts/OrgContext';
 
-export function ProjectPaymentBadge({ projectId, size = 'sm' }: { projectId: string, size?: 'sm' | 'md' }) {
+/*
+  `milestones`, when the caller already holds the project.
+
+  The Projects screen has every project in memory, and without them each card's
+  badge went back to Firestore for its own project document -- the whole of it,
+  hundreds of KB, inflated again on the main thread -- just to read the payment
+  milestones the card was already holding. Forty cards, forty downloads, every
+  time the screen opened. Passing them here costs no read at all; a project
+  with none falls back to the two small legacy collections, never the document.
+*/
+export function ProjectPaymentBadge({ projectId, milestones, size = 'sm' }: { projectId: string, milestones?: any[], size?: 'sm' | 'md' }) {
     const { orgData } = useOrg();
-    const health = usePaymentHealthScore(projectId, orgData?.tenantId || 'demo-tenant-01');
+    const health = usePaymentHealthScore(projectId, orgData?.tenantId || 'demo-tenant-01', milestones, milestones !== undefined);
     return <PaymentHealthBadge health={health} size={size} />;
 }
 

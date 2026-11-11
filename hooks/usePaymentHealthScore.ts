@@ -147,6 +147,30 @@ export function calculateLocalPaymentHealth(paymentMilestones?: any[], legacySte
     };
 }
 
+/*
+  The older projects' fallback, for a caller that already holds the project.
+
+  Two small subcollections, no project document. Remembered for a minute per
+  project, so leaving the Projects screen and coming back does not ask again
+  for every card; a failed read is forgotten at once so the next one retries.
+*/
+const LEGACY_TTL_MS = 60 * 1000;
+const legacyHealth = new Map<string, { at: number; health: Promise<PaymentHealth> }>();
+
+export function fetchLegacyPaymentHealth(projectId: string, studioId: string): Promise<PaymentHealth> {
+    const key = `${studioId}/${projectId}`;
+    const hit = legacyHealth.get(key);
+    if (hit && Date.now() - hit.at < LEGACY_TTL_MS) return hit.health;
+    const health = Promise.all([
+        getDocs(collection(db, `studios/${studioId}/projects/${projectId}/stepProgress`)),
+        getDocs(collection(db, `studios/${studioId}/projects/${projectId}/paymentRequests`)),
+    ]).then(([stepsSnap, paymentsSnap]) =>
+        calculateLocalPaymentHealth([], stepsSnap.docs.map(d => d.data()), paymentsSnap.docs.map(d => d.data())));
+    legacyHealth.set(key, { at: Date.now(), health });
+    health.catch(() => { if (legacyHealth.get(key)?.health === health) legacyHealth.delete(key); });
+    return health;
+}
+
 export async function fetchPaymentHealthScore(projectId: string, studioId: string): Promise<PaymentHealth> {
     try {
         const projectRef = doc(db, `projects`, projectId);
@@ -190,18 +214,26 @@ export async function fetchPaymentHealthScore(projectId: string, studioId: strin
     }
 }
 
-export function usePaymentHealthScore(projectId: string | null | undefined, studioId: string | null | undefined, localMilestones?: any[]): PaymentHealth {
-    const [health, setHealth] = useState<PaymentHealth>({
-        healthStatus: 'neutral',
-        healthRatio: 0,
-        completionPercent: 0,
-        expectedReceived: 0,
-        actualReceived: 0,
-        pendingCount: 0,
-        pendingAmount: 0,
-        outstandingAmount: 0,
-        loading: true,
-    });
+/**
+ * `projectInHand`: the caller passed the project's own milestones, so an empty
+ * list means the project has none -- not that they still need reading -- and
+ * the project document is never fetched.
+ */
+export function usePaymentHealthScore(projectId: string | null | undefined, studioId: string | null | undefined, localMilestones?: any[], projectInHand = false): PaymentHealth {
+    /* Milestones in hand are the answer already: start from it rather than a "..." for one frame. */
+    const [health, setHealth] = useState<PaymentHealth>(() => localMilestones && localMilestones.length > 0
+        ? calculateLocalPaymentHealth(localMilestones)
+        : {
+            healthStatus: 'neutral',
+            healthRatio: 0,
+            completionPercent: 0,
+            expectedReceived: 0,
+            actualReceived: 0,
+            pendingCount: 0,
+            pendingAmount: 0,
+            outstandingAmount: 0,
+            loading: true,
+        });
 
     const localMilestonesStr = useMemo(() => JSON.stringify(localMilestones || []), [localMilestones]);
 
@@ -218,14 +250,17 @@ export function usePaymentHealthScore(projectId: string | null | undefined, stud
             return;
         }
 
-        fetchPaymentHealthScore(projectId, studioId).then(res => {
+        const read = projectInHand
+            ? fetchLegacyPaymentHealth(projectId, studioId)
+            : fetchPaymentHealthScore(projectId, studioId);
+        read.then(res => {
             if (mounted) setHealth(res);
         }).catch(() => {
             if (mounted) setHealth(h => ({ ...h, loading: false }));
         });
 
         return () => { mounted = false; };
-    }, [projectId, studioId, localMilestonesStr]);
+    }, [projectId, studioId, localMilestonesStr, projectInHand]);
 
     return health;
 }

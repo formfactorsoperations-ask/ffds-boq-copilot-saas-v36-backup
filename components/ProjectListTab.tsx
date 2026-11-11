@@ -281,14 +281,16 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   const siteSupervisors =
     orgData?.team?.filter((m) => m.role === "Site Supervisor") || [];
   const [viewMode, setViewMode] = useState<"grid" | "compare">("grid");
-  const { openActions, overdueActions } = useMomActions(
-    undefined,
-    orgData?.tenantId || "demo-tenant-01",
-  );
   const [selectedForCompare, setSelectedForCompare] = useState<Set<string>>(
     new Set(),
   );
   const [activeTab, setActiveTab] = useState<"projects" | "intelligence" | "analytics">("projects");
+  /* The open and overdue action counts appear on Intelligence only, so the
+     listener behind them opens there and not on every visit to the cards. */
+  const { openActions, overdueActions } = useMomActions(
+    undefined,
+    activeTab === "intelligence" ? orgData?.tenantId || "demo-tenant-01" : undefined,
+  );
   const [statusFilter, setStatusFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState<"all" | "actual" | "dummy" | "untagged">("all");
   /* Turnkey, design only, design + PMC (lib/engagement.ts). */
@@ -462,6 +464,32 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
           matchesAlert(proj),
       ),
     [projects, kindFilter, statusFilter, engagementFilter, searchQuery, alertFilter, intel],
+  );
+
+  /*
+    The cards go in a screenful at a time.
+
+    Every card is a flip card with both faces, a payment badge, a document
+    meter and the team button -- some 30ms of work each -- and all of them used
+    to be built before anything was painted, so a studio with forty projects
+    waited on the fortieth before it saw the first. The first screenful is
+    built straight away and the rest follow a batch at a time, below the
+    fold where nobody is looking yet. Once every card is in, it stays that way:
+    filtering and searching work on the whole list as before.
+  */
+  const FIRST_CARDS = 12;
+  const [cardLimit, setCardLimit] = useState(FIRST_CARDS);
+  useEffect(() => {
+    if (cardLimit >= filteredProjects.length) return;
+    /* A timer, not requestAnimationFrame: a frame callback waits for as long
+       as the browser tab is in the background, and the rest of the cards
+       would wait with it. Sixteen milliseconds leaves room for one paint. */
+    const timer = setTimeout(() => setCardLimit((n) => n + FIRST_CARDS), 16);
+    return () => clearTimeout(timer);
+  }, [cardLimit, filteredProjects.length]);
+  const shownProjects = useMemo(
+    () => (cardLimit >= filteredProjects.length ? filteredProjects : filteredProjects.slice(0, cardLimit)),
+    [filteredProjects, cardLimit],
   );
 
   /*
@@ -1229,7 +1257,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
                 <AnimatePresence>
-                {filteredProjects.map((project, index) => {
+                {shownProjects.map((project, index) => {
                   const metrics = getProjectMetrics(project);
                   const isActive = activeProjectId === project.id;
                   
@@ -1862,7 +1890,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                               )}
                               {showFinance && metrics.status !== 'lost' && (
                                 <div className="scale-90 origin-right" data-lgf-interactive="true">
-                                  <ProjectPaymentBadge projectId={project.id} size="sm" />
+                                  <ProjectPaymentBadge projectId={project.id} milestones={project.context?.paymentMilestones || []} size="sm" />
                                 </div>
                               )}
                             </div>
@@ -2060,7 +2088,9 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                       initial={{ opacity: 0, y: 30, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.4, delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
+                      /* The ripple stops at the first screenful. Uncapped, the fortieth
+                         card waited two seconds to begin appearing. */
+                      transition={{ duration: 0.4, delay: Math.min(index, FIRST_CARDS - 1) * 0.05, ease: [0.16, 1, 0.3, 1] }}
                     >
                       <LiquidGlassFlipCard
                         ariaLabel={displayName(project)}
