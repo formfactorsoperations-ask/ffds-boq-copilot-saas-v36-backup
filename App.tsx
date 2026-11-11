@@ -493,6 +493,56 @@ export default function App() {
     return projects;
   };
 
+  /*
+    Put a fetched library on screen, keeping the open project's newer copy.
+
+    A project open in memory (just created, imported, or mid-edit) wins over the
+    fetched one when it is newer, and is kept when the fetch does not have it
+    yet. The fetched array is shared with other readers, so this never writes
+    into it.
+  */
+  const withOpenProject = (current: FullProjectData[], fetched: FullProjectData[]): FullProjectData[] => {
+    const activeId = activeIdRef.current;
+    const inMemory = activeId ? current.find((p) => p.id === activeId) : null;
+    if (!inMemory) return fetched;
+    const i = fetched.findIndex((p) => p.id === activeId);
+    if (i === -1) return [inMemory, ...fetched];
+    return inMemory.lastModified > fetched[i].lastModified
+      ? fetched.map((p, j) => (j === i ? inMemory : p))
+      : fetched;
+  };
+
+  /*
+    Load the library in the background, and only ever show the newest answer.
+
+    Start-up used to hold the whole app on its loading screen until every
+    project in the studio had downloaded and inflated -- both stored copies of
+    each, several MB for a busy studio, with an eight-second allowance. Nothing
+    else waits on the library (an empty one was already the fallback when that
+    allowance ran out), so the app opens as soon as the item bank and templates
+    are in, and the projects arrive when they arrive; the Projects screen says
+    it is loading them meanwhile.
+
+    Several steps ask for the library -- start-up, the studio check, sign-in,
+    entering Projects -- and they can now overlap, so each load is numbered and
+    a slower, older one (say, the one begun before sign-in settled) cannot land
+    on top of a newer one.
+  */
+  const libraryGen = useRef(0);
+  const [libraryLoading, setLibraryLoading] = useState(true);
+  const loadLibrary = (): Promise<void> => {
+    const gen = ++libraryGen.current;
+    /* Only shown while the list is empty, so a refresh over projects already
+       on screen goes unnoticed. */
+    setLibraryLoading(true);
+    return readProjects()
+      .then((fetched) => {
+        if (gen === libraryGen.current) setProjectLibrary((current) => withOpenProject(current, fetched));
+      })
+      .catch((e) => { console.warn("Could not load the projects", e); /* the library on screen stays */ })
+      .finally(() => { if (gen === libraryGen.current) setLibraryLoading(false); });
+  };
+
   // --- INITIALIZATION ---
   useEffect(() => {
     const init = async () => {
@@ -695,14 +745,14 @@ export default function App() {
       let storedBank = INITIAL_BANK;
       let storedDraftBank = INITIAL_BANK;
       let storedTemplates = INITIAL_TEMPLATES;
-      let storedProjects: FullProjectData[] = [];
 
       try {
-        const [bankResult, draftBankResult, templatesResult, projectsResult] = await Promise.allSettled([
+        /* The projects load alongside, without holding the app; see loadLibrary. */
+        loadLibrary();
+        const [bankResult, draftBankResult, templatesResult] = await Promise.allSettled([
           timeoutWrapper(db.getBank(), 5000),
           timeoutWrapper(db.getDraftBank(), 5000),
           timeoutWrapper(db.getTemplates(), 5000),
-          timeoutWrapper(readProjects(), 8000)
         ]);
 
         if (bankResult.status === 'fulfilled') {
@@ -727,12 +777,6 @@ export default function App() {
           storedTemplates = p ? JSON.parse(p) : INITIAL_TEMPLATES;
         }
 
-        if (projectsResult.status === 'fulfilled') {
-          storedProjects = projectsResult.value;
-        } else {
-          console.warn("Failed to load projects from DB, falling back to local memory:", projectsResult.reason);
-          storedProjects = [];
-        }
 
       } catch (e) {
         console.warn("Fatal error during DB initialization, using local fallbacks", e);
@@ -788,7 +832,6 @@ export default function App() {
       setBank(storedBank);
       setDraftBank(storedDraftBank);
       setTemplates(storedTemplates);
-      setProjectLibrary(storedProjects);
 
       setIsDataLoaded(true);
 
@@ -1007,20 +1050,16 @@ export default function App() {
     async function reloadTenantData() {
       console.log(`Tenant changed to ${orgData?.tenantId} - reloading library...`);
       try {
-        const [bankResult, draftBankResult, templatesResult, projectsResult] = await Promise.allSettled([
+        loadLibrary();
+        const [bankResult, draftBankResult, templatesResult] = await Promise.allSettled([
           db.getBank(),
           db.getDraftBank(),
           db.getTemplates(),
-          readProjects()
         ]);
 
         if (bankResult.status === 'fulfilled') setBank(bankResult.value);
         if (draftBankResult.status === 'fulfilled') setDraftBank(draftBankResult.value);
         if (templatesResult.status === 'fulfilled') setTemplates(templatesResult.value || INITIAL_TEMPLATES);
-        if (projectsResult.status === 'fulfilled') {
-          setProjectLibrary(projectsResult.value);
-          console.log(`Successfully reloaded ${projectsResult.value.length} projects for tenant ${orgData?.tenantId}`);
-        }
       } catch (err) {
         console.error("Error reloading tenant data:", err);
       }
@@ -1029,41 +1068,23 @@ export default function App() {
     reloadTenantData();
   }, [orgData?.tenantId, isDataLoaded]);
 
-  // Refresh Project Library on Tab Switch with Smart Merge
-  useEffect(() => {
-    if (activeTab === "projects") {
-      db.getProjects().then((fetchedProjects) => {
-        setProjectLibrary((currentLib) => {
-          // Critical: If we have an active project in memory (e.g. just created/imported),
-          // ensure it overrides the DB fetch if the DB is stale/empty.
-          const currentActiveId = activeIdRef.current;
-          if (currentActiveId) {
-            const inMemoryActive = currentLib.find(
-              (p) => p.id === currentActiveId,
-            );
-            if (inMemoryActive) {
-              const dbIndex = fetchedProjects.findIndex(
-                (p) => p.id === currentActiveId,
-              );
+  /*
+    Refresh the library on entering the Projects tab.
 
-              if (dbIndex === -1) {
-                // Project exists locally but not in DB yet -> Prepend it
-                return [inMemoryActive, ...fetchedProjects];
-              } else {
-                // Project exists in DB, but check which is newer
-                if (
-                  inMemoryActive.lastModified >
-                  fetchedProjects[dbIndex].lastModified
-                ) {
-                  fetchedProjects[dbIndex] = inMemoryActive;
-                }
-              }
-            }
-          }
-          return fetchedProjects;
-        });
-      });
-    }
+    Through readProjects, like every other library read, rather than straight
+    to the database. db.getProjects downloads both stored copies of every
+    project in the studio and inflates each one -- a few MB for a busy studio --
+    and this ran on every visit, so opening Projects just after sign-in read the
+    whole library a second time within the same few seconds. A read for the same
+    person, studio and role, with no save since, is shared for half a minute;
+    any save or delete reads afresh.
+
+    The open project's newer copy is kept; see withOpenProject.
+  */
+  useEffect(() => {
+    if (activeTab !== "projects") return;
+    loadLibrary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   /*
@@ -1078,20 +1099,7 @@ export default function App() {
   */
   useEffect(() => {
     if (!authProfile?.uid || authProfile.role === "Client" || !isDataLoaded) return;
-    let live = true;
-    readProjects().then((fetched) => {
-      if (!live) return;
-      setProjectLibrary((current) => {
-        // Keep an open project's unsaved copy, as the Projects tab refresh does.
-        const activeId = activeIdRef.current;
-        const inMemory = activeId ? current.find((p) => p.id === activeId) : null;
-        if (!inMemory) return fetched;
-        const i = fetched.findIndex((p) => p.id === activeId);
-        if (i === -1) return [inMemory, ...fetched];
-        return inMemory.lastModified > fetched[i].lastModified ? fetched.map((p, j) => (j === i ? inMemory : p)) : fetched;
-      });
-    }).catch(() => { /* the library loaded at start stays */ });
-    return () => { live = false; };
+    loadLibrary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authProfile?.uid, authProfile?.role, isDataLoaded]);
 
@@ -3243,6 +3251,7 @@ export default function App() {
                   {activeTab === "projects" && (
                     <ProjectListTab
                       projects={visibleProjects}
+                      loading={libraryLoading}
                       activeProjectId={activeInternalId}
                       onOpenProject={handleOpenProject}
                       onCreateNew={handleCreateNewProject}
@@ -3976,6 +3985,7 @@ export default function App() {
                   {activeTab === "projects" && (
                     <ProjectListTab
                       projects={visibleProjects}
+                      loading={libraryLoading}
                       activeProjectId={activeInternalId}
                       onOpenProject={handleOpenProject}
                       onCreateNew={handleCreateNewProject}

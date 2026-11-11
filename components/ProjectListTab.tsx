@@ -34,6 +34,7 @@ import { Lock, ArrowRight, CheckSquare, ChevronDown, ChevronUp, Flag } from '@/l
 import ProjectStatusTransitionModal from "./ProjectStatusTransitionModal";
 import LiquidGlassFlipCard from "./ui/LiquidGlassFlipCard";
 import MarginReveal from "./projects/MarginReveal";
+import { Dot } from "./ui/HudBits";
 
 interface ProjectListTabProps {
   projects: FullProjectData[];
@@ -44,6 +45,8 @@ interface ProjectListTabProps {
   onDuplicateProject: (project: FullProjectData) => void;
   onQuickUpdate?: (projectId: string, field: string, value: any) => void;
   onStatusChange?: (projectId: string, newStatus: ProjectStatus, note?: string) => Promise<void> | void;
+  /** The library is still on its way; App loads it without holding the screen. */
+  loading?: boolean;
 }
 
 const STATUS_CONFIG: Record<
@@ -254,6 +257,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   onDuplicateProject,
   onQuickUpdate,
   onStatusChange,
+  loading = false,
 }) => {
   const { orgData, currentRole } = useOrg();
   /* Margins, portfolio totals and cash are the studio's own figures; see
@@ -281,14 +285,16 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   const siteSupervisors =
     orgData?.team?.filter((m) => m.role === "Site Supervisor") || [];
   const [viewMode, setViewMode] = useState<"grid" | "compare">("grid");
-  const { openActions, overdueActions } = useMomActions(
-    undefined,
-    orgData?.tenantId || "demo-tenant-01",
-  );
   const [selectedForCompare, setSelectedForCompare] = useState<Set<string>>(
     new Set(),
   );
   const [activeTab, setActiveTab] = useState<"projects" | "intelligence" | "analytics">("projects");
+  /* The open and overdue action counts appear on Intelligence only, so the
+     listener behind them opens there and not on every visit to the cards. */
+  const { openActions, overdueActions } = useMomActions(
+    undefined,
+    activeTab === "intelligence" ? orgData?.tenantId || "demo-tenant-01" : undefined,
+  );
   const [statusFilter, setStatusFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState<"all" | "actual" | "dummy" | "untagged">("all");
   /* Turnkey, design only, design + PMC (lib/engagement.ts). */
@@ -462,6 +468,64 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
           matchesAlert(proj),
       ),
     [projects, kindFilter, statusFilter, engagementFilter, searchQuery, alertFilter, intel],
+  );
+
+  /*
+    The cards go in a screenful at a time.
+
+    Every card is a flip card with both faces, a payment badge, a document
+    meter and the team button -- some 30ms of work each -- and all of them used
+    to be built before anything was painted, so a studio with forty projects
+    waited on the fortieth before it saw the first. The first screenful is
+    built straight away and the rest follow a batch at a time, below the
+    fold where nobody is looking yet. Once every card is in, it stays that way:
+    filtering and searching work on the whole list as before.
+  */
+  const FIRST_CARDS = 12;
+  const [cardLimit, setCardLimit] = useState(FIRST_CARDS);
+  useEffect(() => {
+    if (cardLimit >= filteredProjects.length) return;
+    /* A timer, not requestAnimationFrame: a frame callback waits for as long
+       as the browser tab is in the background, and the rest of the cards
+       would wait with it. Sixteen milliseconds leaves room for one paint. */
+    const timer = setTimeout(() => setCardLimit((n) => n + FIRST_CARDS), 16);
+    return () => clearTimeout(timer);
+  }, [cardLimit, filteredProjects.length]);
+  /*
+    The glass rests while the page scrolls (owner's call, 11 Nov 2026).
+
+    Every card's surface refracts and blurs what is behind it, and the panels
+    inside blur again; while the page moves, all of that is redrawn every frame,
+    and scrolling the Projects screen ran at about ten frames a second. While a
+    scroll is under way the grid carries data-lgf-scrolling, which swaps the
+    glass for the same solid white the card already falls back to for people
+    who turn transparency off (LiquidGlassFlipCard's stylesheet); 150ms after
+    the last scroll it comes back. Set on the element directly, not through
+    state, so scrolling never re-renders the cards.
+
+    Captured at the document because the page may scroll in the window or in
+    the app shell's own scroll area.
+  */
+  const cardGridRef = React.useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    let rest: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      const grid = cardGridRef.current;
+      if (!grid) return;
+      if (!grid.hasAttribute('data-lgf-scrolling')) grid.setAttribute('data-lgf-scrolling', '');
+      clearTimeout(rest);
+      rest = setTimeout(() => cardGridRef.current?.removeAttribute('data-lgf-scrolling'), 150);
+    };
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('scroll', onScroll, { capture: true });
+      clearTimeout(rest);
+    };
+  }, []);
+
+  const shownProjects = useMemo(
+    () => (cardLimit >= filteredProjects.length ? filteredProjects : filteredProjects.slice(0, cardLimit)),
+    [filteredProjects, cardLimit],
   );
 
   /*
@@ -916,7 +980,16 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
 
           {/* A Designer's list is only what they are assigned, so an empty one
               says how to get a project rather than showing a row of zeros. */}
-          {isLimitedRole(currentRole) && projects.length === 0 && (
+          {/* While the library is still arriving, say so, rather than an empty
+              screen that reads as "you have no projects". */}
+          {loading && projects.length === 0 && (
+            <div className="mb-4 rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-6 flex items-center justify-center gap-2.5">
+              <Dot tone="warn" live />
+              <p className="text-sm font-bold text-slate-800">Loading your projects…</p>
+            </div>
+          )}
+
+          {!loading && isLimitedRole(currentRole) && projects.length === 0 && (
             <div className="mb-4 rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-6 text-center">
               <p className="text-sm font-bold text-slate-800">No projects are assigned to you yet.</p>
               <p className="text-[13px] text-slate-500 mt-1">
@@ -1227,9 +1300,9 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                 <div className="absolute bottom-8 left-[32%] h-72 w-96 rounded-full bg-violet-100/45 blur-3xl" />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
+              <div ref={cardGridRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
                 <AnimatePresence>
-                {filteredProjects.map((project, index) => {
+                {shownProjects.map((project, index) => {
                   const metrics = getProjectMetrics(project);
                   const isActive = activeProjectId === project.id;
                   
@@ -1508,8 +1581,21 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                 const isDummy = kind === 'test';
                                 const untagged = kind === 'untagged';
                                 return (
+                                  /* The same wave as before, written as one transform so
+                                     framer-motion hands it to the browser's compositor.
+                                     As separate rotate and y it ran in JavaScript every
+                                     frame on every card, over a blurred backdrop, forever:
+                                     the screen held the main thread ~45% busy while idle. */
                                   <motion.div
-                                    animate={{ rotate: [-2, 4, -3, 2, -2], y: [0, -1, 0, -1, 0] }}
+                                    animate={reduceMotion ? undefined : {
+                                      transform: [
+                                        'translateY(0px) rotate(-2deg)',
+                                        'translateY(-1px) rotate(4deg)',
+                                        'translateY(0px) rotate(-3deg)',
+                                        'translateY(-1px) rotate(2deg)',
+                                        'translateY(0px) rotate(-2deg)',
+                                      ],
+                                    }}
                                     transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut" }}
                                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-md border transition-colors shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.95)] ${
                                       untagged
@@ -1862,7 +1948,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                               )}
                               {showFinance && metrics.status !== 'lost' && (
                                 <div className="scale-90 origin-right" data-lgf-interactive="true">
-                                  <ProjectPaymentBadge projectId={project.id} size="sm" />
+                                  <ProjectPaymentBadge projectId={project.id} milestones={project.context?.paymentMilestones || []} size="sm" />
                                 </div>
                               )}
                             </div>
@@ -1932,7 +2018,8 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                                   title={nextMove.why}
                                   animate={
                                     urgent && !reduceMotion
-                                      ? { rotate: [-0.4, 0.4, -0.3, 0.3, -0.4] }
+                                      /* One transform, so it runs on the compositor; see the tag above. */
+                                      ? { transform: ['rotate(-0.4deg)', 'rotate(0.4deg)', 'rotate(-0.3deg)', 'rotate(0.3deg)', 'rotate(-0.4deg)'] }
                                       : undefined
                                   }
                                   transition={{ repeat: Infinity, duration: 5, ease: 'easeInOut' }}
@@ -2060,7 +2147,9 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                       initial={{ opacity: 0, y: 30, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.4, delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
+                      /* The ripple stops at the first screenful. Uncapped, the fortieth
+                         card waited two seconds to begin appearing. */
+                      transition={{ duration: 0.4, delay: Math.min(index, FIRST_CARDS - 1) * 0.05, ease: [0.16, 1, 0.3, 1] }}
                     >
                       <LiquidGlassFlipCard
                         ariaLabel={displayName(project)}
