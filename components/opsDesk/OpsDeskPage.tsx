@@ -3,7 +3,7 @@ import { useNoteArrivals } from '../notify/NotifyContext';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Inbox, Clock, IndianRupee, ListChecks, Flag, FileText, Plus, RefreshCw, Search, CalendarClock,
-  Activity, CalendarCheck, ClipboardCheck, UserPlus, GraduationCap, Eye, Layers, Sun,
+  Activity, CalendarCheck, ClipboardCheck, UserPlus, GraduationCap, Eye, Layers, Sun, ShieldCheck,
 } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { FileCheck2 } from 'lucide-react';
@@ -14,7 +14,7 @@ import { hasRole, primaryRole, memberRoles } from '../../lib/roles';
 import { seesStudioFinance, assignedDesignersFor } from '../../lib/roleAccess';
 import { clientMoneyOf, withoutAmounts, type ClientMoney } from '../../lib/clientMoney';
 import {
-  buildQueue, decisionWaiting, paymentWaiting, withChases, opsSettingsOf, dayKey, type Escalation, type FollowUp, type QueueItem, type WaitingItem,
+  buildQueue, decisionWaiting, paymentWaiting, withChases, opsSettingsOf, dayKey, addDays, type Escalation, type FollowUp, type QueueItem, type WaitingItem,
 } from '../../lib/opsDesk';
 import {
   DESK_SCOPES, inDeskScope, scopeCounts, doneToday, withSnoozes, liveSnoozes, teamRows, personQueue, weekNumbers, guideProgress,
@@ -48,10 +48,13 @@ import { MyDay, FocusMode } from './MyDay';
 import { ClientsScreen, ClientPage } from './ClientsView';
 import { CommandPalette } from './CommandPalette';
 import {
-  WaitingScreen, PaymentsScreen, PulseScreen, LogScreen, EscalationsScreen, MinutesScreen, ApprovalsScreen, LeadsBand, CallingMode, VisitsBand, SimpleBand, Inner,
+  WaitingScreen, PaymentsScreen, PulseScreen, LogScreen, EscalationsScreen, MinutesScreen, ApprovalsScreen, LeadsBand, CallingMode, VisitsBand, SimpleBand, Inner, PromiseSheet,
 } from './DeskScreens';
+import { WhoSeesWhat } from './WhoSeesWhat';
+import { opsAccessOf, coversOf, type OpsAccess, type OpsCover } from '../../lib/opsAccess';
+import { saveOpsAccess, saveOpsCover } from '../../services/opsAccessService';
 import { DeskRail, SeeAs, useTiltCards, type DeskRailItem } from './Od2Bits';
-import { healthOf, phaseOf, progressOf, daysUntil, streakOf, lastDays } from '../../lib/opsDesk2';
+import { healthOf, phaseOf, progressOf, daysUntil, streakOf, lastDays, clientMoments, type Moment } from '../../lib/opsDesk2';
 import { FirstWeek, Spotlight, type AskPerson } from './FirstWeek';
 import { DayClose, type Rolled } from './DayClose';
 import { TeamView } from './TeamView';
@@ -356,6 +359,14 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
     }
   };
 
+  /* Who sees what (lib/opsAccess): the Owner and the Ops Director turn the switches and give cover. */
+  const managesAccess = hasRole(roles, ['Super Admin', 'Owner', 'Ops Director']);
+  const [access, setAccess] = useState<OpsAccess>(() => opsAccessOf(orgData));
+  const [covers, setCovers] = useState<OpsCover[]>(() => coversOf(orgData));
+  useEffect(() => { setAccess(opsAccessOf(orgData)); setCovers(coversOf(orgData)); }, [orgData?.opsDesk]); // eslint-disable-line react-hooks/exhaustive-deps
+  const liveCovers = covers.filter((c) => c.until > now).length;
+  const [promiseFor, setPromiseFor] = useState<WaitingItem | null>(null);
+
   const saveRecord = async (r: DeskRecord) => {
     setRecord(r);
     try { await saveDeskRecord(r); } catch { setError('Your desk could not be saved. Try again.'); }
@@ -427,6 +438,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
       { id: 'escalations', label: 'Escalations', icon: Flag, n: n.escalations, alert: true },
     ] },
     ...(isLead ? [{ label: 'Team', items: [{ id: 'team' as Section, label: 'The team', icon: Eye, n: n.team, alert: true }] }] : []),
+    ...(managesAccess ? [{ label: 'Access', items: [{ id: 'access' as Section, label: 'Who sees what', icon: ShieldCheck, n: liveCovers }] }] : []),
     { label: 'Help', items: [
       { id: 'ask', label: 'Ask a project', icon: Search },
       { id: 'guide', label: !isLead && record && now - record.startedAt < 14 * 86400000 && progress && progress.count < progress.total ? `Your first week · ${progress.count}/${progress.total}` : 'How the desk works', icon: GraduationCap },
@@ -461,16 +473,38 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
   const canWrite = isLead || isCR || !['Viewer', 'Designer', 'Site Supervisor', 'Vendor'].includes(primaryRole(roles));
   const projectName = (id: string) => deskProjects.find((p) => p.id === id)?.name || '';
 
+  /* Client moments (lib/opsDesk2): handovers, approved designs, a month and each year in their home; one marked done stays away until its window closes. */
+  const moments: Moment[] = useMemo(() => {
+    const today = dayKey(now);
+    const snoozed = record?.snoozes || {};
+    return clientMoments(deskProjects.map((p) => ({ id: p.id, name: p.name, client: p.clientName, status: p.status, targetHandover: p.targetHandover, ctx: p.raw?.context || {} })),
+      now, { me: me.name, studio: orgData?.orgName || '' }).filter((m) => !(snoozed[m.id] && snoozed[m.id] > today));
+  }, [deskProjects, now, me.name, orgData?.orgName, record?.snoozes]);
+  const doneMoment = (m: Moment) => {
+    if (!record) return;
+    void saveRecord({ ...record, snoozes: { ...liveSnoozes(record.snoozes, now), [m.id]: addDays(m.until, 1) } });
+  };
+  const sendMoment = async (m: Moment) => {
+    const phone = clients.find((c) => c.id === m.projectId)?.phone;
+    window.open(waLink(phone, m.message), '_blank', 'noopener');
+    doneMoment(m);
+    try {
+      await logFollowUp({ tenantId, projectId: m.projectId, projectName: m.projectName, me, channel: 'whatsapp', outcome: 'info', note: `Sent on WhatsApp: ${m.title}`.slice(0, 300), subject: null, next: null });
+      load();
+    } catch { setError('The message was sent but not logged. Log it by hand.'); }
+  };
+
   const desk: Desk = {
     tenantId, studioName: orgData?.orgName || '', me, isLead, isCR, canWrite, seesMoney, now, loading, settings, team,
     projects: deskProjects, projectRefs, queue, waiting, followUps: fu, escalations: esc, moms: mm, visits: allVisits, pulseRows, leads, done, record, bumped,
-    clients, closedDays, decisions, approvals: sendsDrawingApprovals ? approvalItems : null, teamRows: rows, clientId,
+    clients, closedDays, decisions, approvals: sendsDrawingApprovals ? approvalItems : null, teamRows: rows, clientId, moments, access,
     act: {
       go, log: setLogFor, escalate: setEscFor, capture: () => setCapturing(true), openItem: onItem, openClient: setClientFor, openLead,
       addLead: () => setAdding({ paste: false }), bookVisit: (projectId) => setVisitAct({ visit: null, to: null, projectId }),
       openProject: (id, tab) => onOpenProject(id, tab), markDone: done_, later: (q) => setBumped((b) => [...b.filter((x) => x !== q.id), q.id]),
       sendReminder, refresh: load, closeDay: () => setClosing(true),
       palette: () => setPaletteOpen(true), focus: () => setFocusing(true),
+      sendMoment, doneMoment, promise: setPromiseFor,
     },
   };
 
@@ -669,6 +703,12 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
             </>
           )}
 
+          {section === 'access' && managesAccess && (
+            <WhoSeesWhat access={access} covers={covers} people={crPeople} projectsOf={projectsOf}
+              onAccess={async (a) => { await saveOpsAccess(tenantId, a); setAccess(a); setNotice('Saved. Client Relations’ copies of the projects update within a minute.'); }}
+              onCovers={async (c) => { await saveOpsCover(tenantId, c); setCovers(c); setNotice('Saved. Cover reaches their desk within a minute, and ends by itself.'); }} />
+          )}
+
           {section === 'prep' && (
             <>
               <SimpleBand eyebrow="Meeting prep" title="Before you meet a client" sub="What each side owes, where the payments stand, what was said last time, and an agenda to send or to start the minutes from." />
@@ -739,6 +779,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
           }}
         />
       )}
+      {promiseFor && <PromiseSheet w={promiseFor} onClose={() => setPromiseFor(null)} onSaved={() => { setPromiseFor(null); setNotice('Promise logged. Reminders pause until then; it comes back that day if still unpaid.'); load(); }} />}
       {paletteOpen && <CommandPalette sections={paletteSections} onClose={() => setPaletteOpen(false)} />}
       {focusing && <FocusMode onClose={() => setFocusing(false)} />}
       {calling && <CallingMode onClose={() => setCalling(false)} onSaved={replaceLead} />}

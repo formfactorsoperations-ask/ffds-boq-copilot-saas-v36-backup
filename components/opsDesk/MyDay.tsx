@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Target, Mic, UserPlus, Plus, Flag, Moon, Clock, Check, Phone, MessageCircle, ArrowRight, Calendar, Video, MapPin, Activity, Wallet, Users,
-  Flame, Maximize2, Inbox, GraduationCap,
+  Flame, Maximize2, Inbox, GraduationCap, Gift, Key, Star, PartyPopper, Send,
 } from '@/lib/lucide-shim';
 import { CountUp } from '../ui/HudBits';
 import { Confetti } from '../people/PeopleBits';
@@ -122,14 +122,15 @@ export function MyDay() {
         <PulseTiles />
         <PaymentsCard />
         <LeadsCard />
-        <section className="od-card od-c-7 od-rise" style={{ ['--d' as any]: 8 }} data-tour="today">
+        <MomentsCard />
+        {d.isLead && d.teamRows.length ? <TeamCard /> : <div className="od-c-5 od-rise" style={{ ['--d' as any]: 9 }}><ThisWeek /></div>}
+        <section className="od-card od-rise" style={{ ['--d' as any]: 10 }} data-tour="today">
           <div className="od-ch">
             <span className="od-tile"><Inbox /></span>
             <div><h3>The day, in order</h3><p>{d.isLead ? 'Escalations to decide and minutes to approve come first, then your own.' : 'Overdue first, then today. Every row says why it is here.'}</p></div>
           </div>
           <TodayList queue={open} done={d.done} />
         </section>
-        {d.isLead && d.teamRows.length ? <TeamCard /> : <div className="od-c-5 od-rise" style={{ ['--d' as any]: 9 }}><ThisWeek /></div>}
       </div>
     </div>
   );
@@ -522,6 +523,50 @@ function TeamCard() {
           <div className="od-load"><span className="od-num">{r.done}/{r.total} today</span><div className="od-mini"><i style={{ width: `${r.total ? Math.min(100, (r.done / r.total) * 100) : 0}%` }} /></div></div>
         </div>
       ))}
+    </section>
+  );
+}
+
+/* ── Client moments: small touches, with the message drafted ── */
+
+const MOMENT_ICON = { handover_soon: Key, design_approved: PartyPopper, handover_month: Gift, handover_year: Star } as const;
+
+function MomentsCard() {
+  const d = useDesk();
+  const [sent, setSent] = useState<string[]>([]);
+  const list = d.moments.slice(0, 6);
+  return (
+    <section className="od-card od-c-7 od-lift od-rise" style={{ ['--d' as any]: 8 }}>
+      <div className="od-ch">
+        <span className="od-tile"><Gift /></span>
+        <div><h3>Client moments</h3><p>Small touches the desk spots for you, with the message drafted. You check it, you send it.</p></div>
+      </div>
+      {!list.length ? <div className="od-empty2">Nothing to mark this week. Handovers, approved designs and anniversaries show up here.</div> : (
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          {list.map((m) => {
+            const Icon = MOMENT_ICON[m.kind];
+            const done = sent.includes(m.id);
+            const phone = d.clients.find((c) => c.id === m.projectId)?.phone || '';
+            return (
+              <div key={m.id} className={`rounded-2xl border border-slate-200 p-3 flex gap-2.5 items-start transition-opacity ${done ? 'opacity-50' : ''}`}>
+                <span className={`od-tile !w-[34px] !h-[34px] ${m.kind === 'handover_soon' || m.kind === 'handover_year' ? '!bg-emerald-100 !text-emerald-700' : ''}`}><Icon /></span>
+                <div className="min-w-0">
+                  <b className="text-sm block">{m.title}</b>
+                  <p className="text-xs text-slate-500 mt-0.5 mb-2">{m.body}</p>
+                  {d.canWrite && !done && (
+                    <div className="od-acts !mt-0">
+                      <button type="button" className="od-btn sm pri" disabled={!dialable(phone)} title={dialable(phone) ? 'Opens WhatsApp with the message ready, and logs it' : 'No phone number on this client'}
+                        onClick={() => { setSent((s) => [...s, m.id]); void d.act.sendMoment(m); }}><Send />{m.act}</button>
+                      <button type="button" className="od-btn sm ghost" onClick={() => { setSent((s) => [...s, m.id]); d.act.doneMoment(m); }}><Check />Done</button>
+                    </div>
+                  )}
+                  {done && <span className="od-chip good"><Check />Done</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

@@ -3,6 +3,7 @@ import * as pako from "pako";
 import { createHash } from "crypto";
 import { cleanEmails } from "./designViewStrip";
 import { opsViewOf, siteViewOf } from "./teamViewStrip";
+import { opsAccessOf, coverEmailsFor, activeCovers } from "../../lib/opsAccess";
 
 /*
   THE CLIENT RELATIONS AND SITE SUPERVISOR COPIES OF A PROJECT.
@@ -37,20 +38,32 @@ export function supervisorEmails(project: any, team: any[]): string[] {
   return cleanEmails((Array.isArray(team) ? team : []).filter((m: any) => m && ids.has(String(m.id))).map((m: any) => m.email));
 }
 
-const builders: Record<TeamViewKind, (p: any) => any> = { ops: opsViewOf, site: siteViewOf };
+/** The project's Drive folder, as Studio settings → Google Drive made it (googleDrive.ts). */
+async function driveFolderOf(tenantId: string | null, projectId: string): Promise<{ link?: string | null } | null> {
+  if (!tenantId) return null;
+  const conn = (await db().doc(`driveConnections/${tenantId}`).get().catch(() => null))?.data();
+  const known = conn?.projects?.[projectId];
+  return known?.folderId ? { link: known.link || `https://drive.google.com/drive/folders/${known.folderId}` } : null;
+}
 
 /**
  * Write both copies for one project. `assigned` is the project's people from
  * the projectDesigners map; `team` is the studio's team list, for the
- * Supervisors named by id.
+ * Supervisors named by id; `org` is the studio, for the Ops Desk's "Who sees
+ * what" switches and any cover a lead has given (lib/opsAccess).
  */
-export async function writeTeamViews(projectId: string, project: any, assigned: string[], team: any[]): Promise<void> {
+export async function writeTeamViews(projectId: string, project: any, assigned: string[], team: any[], org?: any): Promise<void> {
   const tenantId = project?.tenantId || null;
   const supervisors = supervisorEmails(project, team);
+  const access = opsAccessOf(org);
+  const now = Date.now();
+  const drive = access.drive ? await driveFolderOf(tenantId, projectId) : null;
+  const covers = activeCovers(org, now).filter((c) => c.projectIds.includes(projectId))
+    .map((c) => ({ email: c.email, name: c.name, forName: c.forName, until: c.until }));
   for (const kind of TEAM_VIEW_KINDS) {
-    const view = builders[kind](project);
+    const view = kind === "ops" ? { ...opsViewOf(project, access, drive), cover: covers } : siteViewOf(project);
     const json = JSON.stringify(view);
-    const members = [...new Set(kind === "site" ? [...assigned, ...supervisors] : assigned)];
+    const members = [...new Set(kind === "site" ? [...assigned, ...supervisors] : [...assigned, ...coverEmailsFor(projectId, org, now)])];
     const hash = createHash("sha256").update(json).update(members.join(",")).digest("hex").slice(0, 32);
     const ref = viewRef(projectId, kind);
     const existing = await ref.get();

@@ -250,3 +250,87 @@ export const greeting = (now: number) => {
 
 const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
 export const countWord = (n: number) => (n >= 0 && n < WORDS.length ? WORDS[n] : String(n));
+
+/* ── Client moments (Ops Desk 2.1, phase 2) ──────────────────────────────── */
+
+/*
+  Small touches the desk spots from what it already knows, each with the
+  message drafted for a person to check and send: the handover a week away,
+  a design just approved, a month in their new home, and each year since the
+  handover. Nothing new is stored about the client (no birthdays, by the
+  owner's choice), and nothing is sent by itself. A moment marked done stays
+  away until its window closes.
+*/
+
+export type MomentKind = 'handover_soon' | 'design_approved' | 'handover_month' | 'handover_year';
+export interface Moment {
+  id: string;
+  kind: MomentKind;
+  projectId: string;
+  projectName: string;
+  client: string;
+  title: string;
+  body: string;
+  act: string;
+  message: string;
+  /** The last day it is worth doing; marked done, it stays away until then. */
+  until: string;
+}
+
+export interface MomentProject { id: string; name: string; client: string; status: string; targetHandover: string | null; ctx: any }
+
+const msAny = (v: any): number | null => {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v?.toMillis === 'function') return v.toMillis();
+  if (typeof v?.seconds === 'number') return v.seconds * 1000;
+  const t = v ? Date.parse(String(v)) : NaN;
+  return Number.isNaN(t) ? null : t;
+};
+const firstOf = (client: string) => String(client || '').split(/\s*(?:&|,| and )\s*/)[0].trim() || 'there';
+
+export function clientMoments(projects: MomentProject[], now: number, x: { me: string; studio: string }): Moment[] {
+  const today = dayKey(now);
+  const sign = `${x.me ? firstName2(x.me) : ''}${x.studio ? `, ${x.studio}` : ''}`.replace(/^, /, '');
+  const out: Moment[] = [];
+  for (const p of projects) {
+    const hi = `Hi ${firstOf(p.client)},`;
+    const handedOver = p.status === 'completed';
+    const handoverAt = msAny(p.ctx?.handoverDate) ?? (p.targetHandover ? new Date(`${p.targetHandover}T12:00:00+05:30`).getTime() : null);
+    if (!handedOver && p.targetHandover) {
+      const d = daysUntil(p.targetHandover, now);
+      if (d != null && d >= 0 && d <= 7) out.push({
+        id: `handover_soon:${p.id}:${p.targetHandover}`, kind: 'handover_soon', projectId: p.id, projectName: p.name, client: p.client,
+        title: `Handover in ${d === 0 ? 'today' : `${d} day${d === 1 ? '' : 's'}`} · ${p.name}`.replace('in today', 'today'),
+        body: 'Send the handover checklist and the care guide, and confirm the walk-through.', act: 'Send checklist',
+        message: `${hi} your home is almost ready. Before the handover on ${shortDate(p.targetHandover, now)}, here is what we will walk through together, and a short guide to caring for the finishes. Do tell me a time that suits you for the walk-through.\n\n${sign}`,
+        until: p.targetHandover,
+      });
+    }
+    const approved = msAny(p.ctx?.designApprovedAt);
+    if (!handedOver && approved && now - approved >= 0 && now - approved <= 7 * 86400000) out.push({
+      id: `design_approved:${p.id}:${dayKey(approved)}`, kind: 'design_approved', projectId: p.id, projectName: p.name, client: p.client,
+      title: `Design approved · ${p.name}`, body: 'Thank them, and tell them what happens next and when.', act: 'Send a thank-you',
+      message: `${hi} thank you for approving the design. Next we prepare the drawings for site and plan the work; I will share the dates with you this week.\n\n${sign}`,
+      until: addDays(dayKey(approved), 7),
+    });
+    if (handedOver && handoverAt) {
+      const since = Math.floor((now - handoverAt) / 86400000);
+      if (since >= 28 && since <= 35) out.push({
+        id: `handover_month:${p.id}`, kind: 'handover_month', projectId: p.id, projectName: p.name, client: p.client,
+        title: `A month in their home · ${p.name}`, body: 'A short check-in: is everything working as it should?', act: 'Check in',
+        message: `${hi} it has been a month since the handover. How is the home treating you? If anything needs a look, a hinge, a light or a drawer, tell me and we will send someone.\n\n${sign}`,
+        until: addDays(dayKey(handoverAt), 35),
+      });
+      const years = Math.round(since / 365.25);
+      const off = since - Math.round(years * 365.25);
+      if (years >= 1 && off >= -7 && off <= 7) out.push({
+        id: `handover_year:${p.id}:${years}`, kind: 'handover_year', projectId: p.id, projectName: p.name, client: p.client,
+        title: `${years === 1 ? 'A year' : `${years} years`} in their home · ${p.name}`, body: 'Ask for a Google review and a photo for the portfolio.', act: 'Ask for a review',
+        message: `${hi} it is ${years === 1 ? 'a year' : `${years} years`} since we handed over your home. We hope you are loving it. If you have a minute, a Google review would mean a lot to the team, and we would love a photo of how you have made it yours.\n\n${sign}`,
+        until: addDays(today, 7 - off),
+      });
+    }
+  }
+  return out.sort((a, b) => a.until.localeCompare(b.until));
+}
+const firstName2 = (n: string) => String(n || '').trim().split(/[\s@]+/)[0];

@@ -153,3 +153,60 @@ describe('the streak', () => {
     expect(w[3].future).toBe(true);
   });
 });
+
+import { buildQueue, chaseStep } from '../../lib/opsDesk';
+
+describe('reminders on days 1, 7 and 14, drafted for a person to send', () => {
+  const late = (overdueDays: number, reminders: number, lastChaseAt: number | null = null): WaitingItem => pay({ key: 'pay:m1', overdueDays, reminders, lastChaseAt, dueKey: '2026-11-01' });
+  const q = (w: WaitingItem, followUps: any[] = []) => buildQueue({ now: NOW, me: 'a@s.in', isLead: false, followUps, waiting: [w], moms: [], escalations: [] });
+
+  it('knows which reminder is due', () => {
+    expect(chaseStep(0, 0)).toBeNull();
+    expect(chaseStep(1, 0)).toEqual({ n: 1 });
+    expect(chaseStep(6, 1)).toBeNull();
+    expect(chaseStep(7, 1)).toEqual({ n: 2 });
+    expect(chaseStep(30, 1)).toEqual({ n: 2 });
+    expect(chaseStep(14, 2)).toEqual({ n: 3 });
+    expect(chaseStep(20, 3)).toBeNull();
+  });
+
+  it('puts the due reminder on Today, and waits between them', () => {
+    expect(q(late(1, 0))[0]).toMatchObject({ title: 'Reminder 1 of 3: Payment 2', group: 'today' });
+    expect(q(late(9, 1))[0]).toMatchObject({ title: 'Reminder 2 of 3: Payment 2', group: 'overdue' });
+    expect(q(late(4, 1))).toHaveLength(0);
+    expect(q(late(20, 3))[0].title).toBe('Chase payment: Payment 2');
+  });
+
+  it('rests while a promised date has not come', () => {
+    const promise = { id: 'f1', projectId: 'p1', subject: { kind: 'payment', key: 'pay:m1', label: '' }, outcome: 'promised', next: { text: 'Check it is paid', ownerEmail: 'a@s.in', ownerName: 'A', due: '2026-11-14' }, nextDone: false };
+    expect(q(late(9, 0), [promise]).filter((x) => x.kind === 'payment')).toHaveLength(0);
+    const missed = { ...promise, next: { ...promise.next, due: '2026-11-10' } };
+    expect(q(late(9, 0), [missed]).filter((x) => x.kind === 'payment')).toHaveLength(1);
+  });
+});
+
+import { clientMoments } from '../../lib/opsDesk2';
+
+describe('client moments', () => {
+  const p = (over: any) => ({ id: 'p1', name: 'Sea Breeze', client: 'Mrs Shah', status: 'execution', targetHandover: null, ctx: {}, ...over });
+  const kinds = (ps: any[]) => clientMoments(ps, NOW, { me: 'Anushka K', studio: 'Form Factors' }).map((m) => m.kind);
+
+  it('spots a handover a week away', () => {
+    const m = clientMoments([p({ targetHandover: '2026-11-15' })], NOW, { me: 'Anushka K', studio: 'Form Factors' })[0];
+    expect(m).toMatchObject({ kind: 'handover_soon', title: 'Handover in 4 days · Sea Breeze', until: '2026-11-15' });
+    expect(m.message).toContain('Hi Mrs Shah,');
+    expect(m.message).toContain('Anushka, Form Factors');
+    expect(kinds([p({ targetHandover: '2026-11-30' })])).toEqual([]);
+  });
+
+  it('spots a design just approved', () => {
+    expect(kinds([p({ status: 'won', ctx: { designApprovedAt: NOW - 2 * 86400000 } })])).toEqual(['design_approved']);
+    expect(kinds([p({ status: 'won', ctx: { designApprovedAt: NOW - 20 * 86400000 } })])).toEqual([]);
+  });
+
+  it('spots a month, and each year, in their home', () => {
+    expect(kinds([p({ status: 'completed', ctx: { handoverDate: NOW - 30 * 86400000 } })])).toEqual(['handover_month']);
+    expect(kinds([p({ status: 'completed', ctx: { handoverDate: NOW - 366 * 86400000 } })])).toEqual(['handover_year']);
+    expect(kinds([p({ status: 'completed', ctx: { handoverDate: NOW - 200 * 86400000 } })])).toEqual([]);
+  });
+});

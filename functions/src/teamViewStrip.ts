@@ -9,6 +9,7 @@
 */
 import { designViewOf, scrub } from "./designViewStrip";
 import { clientMoneyOf, withoutAmounts } from "../../lib/clientMoney";
+import { opsExtrasOf, NO_ACCESS, type OpsAccess } from "../../lib/opsAccess";
 
 export { clientMoneyOf };
 
@@ -18,8 +19,12 @@ export { clientMoneyOf };
  * no amounts (the owner, 21 Oct 2026: no financials for the ops team).
  * Contacts, timeline, decisions and drawings are in the copy already.
  */
-export function opsViewOf(project: any): any {
-  return { ...designViewOf(project), clientMoney: withoutAmounts(clientMoneyOf(project)) };
+export function opsViewOf(project: any, access: OpsAccess = NO_ACCESS, drive?: { link?: string | null } | null): any {
+  /*
+    Plus what the studio's "Who sees what" switches add (lib/opsAccess): each
+    off unless a lead turned it on, and only the named fields, never money.
+  */
+  return { ...designViewOf(project), clientMoney: withoutAmounts(clientMoneyOf(project)), ...opsExtrasOf(project, access, drive) };
 }
 
 /** The site work a Supervisor reports on. The order list and its costs are not part of it. */
