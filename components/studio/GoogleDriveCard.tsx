@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, ChevronDown, ChevronUp, FolderOpen, Loader2 } from 'lucide-react';
 import { useOrg } from '../../contexts/OrgContext';
 import { DRIVE_ADMIN_ROLES, ROOT_FOLDER, type DriveStatus } from '../../lib/googleDrive';
-import { driveStatus, connectDrive, disconnectDrive } from '../../services/googleDriveService';
+import { driveStatus, connectDrive, disconnectDrive, NOT_DEPLOYED } from '../../services/googleDriveService';
 
 /**
  * Studio Settings → Google Drive.
@@ -24,6 +24,8 @@ const GoogleDriveCard: React.FC = () => {
   const [status, setStatus] = useState<DriveStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* The googleDrive function is not deployed yet: say so, with the command, rather than "internal". */
+  const [missing, setMissing] = useState(false);
   /* Back from Google: ?drive=connected | cancelled | error. Said once, then taken out of the address. */
   const [returned, setReturned] = useState<string | null>(null);
 
@@ -39,12 +41,12 @@ const GoogleDriveCard: React.FC = () => {
   }, []);
   useEffect(() => {
     if (!tenantId) return;
-    driveStatus(tenantId).then(setStatus).catch((e) => setError(e?.message || 'Could not check Google Drive.'));
+    driveStatus(tenantId).then(setStatus).catch((e) => (e?.code === NOT_DEPLOYED ? setMissing(true) : setError(e?.message || 'Could not check Google Drive.')));
   }, [tenantId]);
 
   const run = async (fn: () => Promise<DriveStatus | void>) => {
     setBusy(true); setError(null);
-    try { const next = await fn(); if (next) setStatus(next); } catch (e: any) { setError(e?.message || 'Something went wrong.'); } finally { setBusy(false); }
+    try { const next = await fn(); if (next) setStatus(next); } catch (e: any) { if (e?.code === NOT_DEPLOYED) setMissing(true); else setError(e?.message || 'Something went wrong.'); } finally { setBusy(false); }
   };
   const connected = !!status?.connected;
   const pill = connected
@@ -87,6 +89,16 @@ const GoogleDriveCard: React.FC = () => {
               Studio-only drawings are never copied. The app can see only the folders and files it made, nothing else in the account.
             </span>
           </div>
+
+          {missing && (
+            <div className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-xl p-3">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>
+                The Google Drive service is not on the server yet. Once the OAuth client ID and secret are saved as secrets, deploy it once
+                with <code className="font-mono text-xs bg-white/70 px-1 rounded">firebase deploy --only functions:googleDrive,functions:driveOAuthCallback,functions:onDrawingApprovedToDrive</code>, then reload this page.
+              </span>
+            </div>
+          )}
 
           {connected ? (
             <div className="flex flex-wrap items-center justify-between gap-3">

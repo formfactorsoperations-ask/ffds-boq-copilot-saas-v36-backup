@@ -8,10 +8,22 @@ import type { DriveStatus } from '../lib/googleDrive';
   through `status`.
 */
 
+/** The googleDrive function is not on the server (not deployed yet): the browser sees a blocked request, reported as "internal". */
+export const NOT_DEPLOYED = 'not-deployed';
+
 async function driveCall<T>(action: string, payload: Record<string, unknown> = {}, tenantId?: string): Promise<T> {
   if (!functions) throw new Error('No server is configured.');
-  const res: any = await httpsCallable(functions, 'googleDrive', { timeout: 60000 })({ action, tenantId, ...payload });
-  return res.data as T;
+  try {
+    const res: any = await httpsCallable(functions, 'googleDrive', { timeout: 60000 })({ action, tenantId, ...payload });
+    return res.data as T;
+  } catch (e: any) {
+    const code = String(e?.code || '');
+    /* A function that answered says why; one that is missing comes back as a bare "internal" or "not-found". */
+    if ((code === 'functions/internal' && /^internal$/i.test(String(e?.message || '').trim())) || code === 'functions/not-found' || code === 'functions/unavailable') {
+      throw Object.assign(new Error('The Google Drive service is not on the server yet.'), { code: NOT_DEPLOYED });
+    }
+    throw e;
+  }
 }
 
 export const driveStatus = (tenantId?: string) => driveCall<DriveStatus>('status', {}, tenantId);
