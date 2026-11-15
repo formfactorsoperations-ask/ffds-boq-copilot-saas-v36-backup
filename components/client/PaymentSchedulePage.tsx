@@ -1,14 +1,23 @@
 import React, { useState } from 'react';
 import { ProjectContext, PaymentSchedule, ProjectEngagement } from '../../types';
-import { FileText, Send, Download, AlertTriangle, ArrowRight, History, Eye } from '@/lib/lucide-shim';
+import { FileText, Send, Download, AlertTriangle, Eye, RefreshCw, PencilLine, Info } from '@/lib/lucide-shim';
 import { formatCurrency, id as generateId } from '../../lib/utils';
 import { resolveFinancials, billingSummary } from '../../lib/paymentSchedule';
 import { engagementOf, isFeeOnly } from '../../lib/engagement';
 import { useOrg } from '../../contexts/OrgContext';
 import { resolveDocumentState, getCurrentIssue } from '../../services/documentIssueEngine';
 import ExecutionStamp from '../documents/ExecutionStamp';
-import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
+import PaymentScheduleSheet from '../documents/PaymentScheduleSheet';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
+import { releaseDocument } from '../../services/documentReleaseEngine';
+import {
+    advancePaymentStatus,
+    designInProgress,
+    resolveProvisionalNote,
+    heldScheduleVersion,
+    nextScheduleVersion,
+    DEFAULT_PROVISIONAL_NOTE
+} from '../../lib/paymentScheduleStatus';
 
 interface PaymentSchedulePageProps {
     projectContext: ProjectContext;
@@ -37,7 +46,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
     const designGstMul = (psFin.designGstEnabled !== false ? psRate : 0) / 100;
     const execGstMul = (psFin.executionGstEnabled !== false ? psRate : 0) / 100;
 
-    const { orgData, currentRole } = useOrg();
+    const { orgData, currentRole, currentUserAuth } = useOrg();
     const [previewMode, setPreviewMode] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
     const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
@@ -72,9 +81,34 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
     // Sort history by version desc
     const sortedHistory = [...schedules].sort((a,b) => b.version - a.version);
 
-    let latestSchedule = sortedHistory.find(s => selectedScheduleId ? s.id === selectedScheduleId : !s.supersededBy) || sortedHistory[0]; // Active version
+    /*
+      Which version the client already holds.
+
+      "Locked" used to switch every edit off, and it was true far too often:
+      acknowledging the Terms of Engagement sets the engagement to
+      'acknowledged', so from that moment the schedule could not be
+      regenerated, revised or re-issued from anywhere. A lock protects what the
+      client holds; it does not stop the studio drafting the next version.
+
+      So the page now asks which version went out (marked sent here, frozen into
+      an issue from the Documents board, or locked into the engagement on the
+      older flow), and treats only a draft numbered above it as open.
+    */
+    const issuedScheduleVersion = canonicalSent
+        ? ((canonicalIssue as any)?.snapshot?.schedule?.version ?? canonicalIssue?.version ?? 0)
+        : 0;
+    const lockedHasSchedule = isLocked && !!(lockedSnapshot?.paymentStructure || lockedSnapshot?.advances);
+    const heldVersion = heldScheduleVersion(schedules, {
+        scheduleVersion: issuedScheduleVersion,
+        lockedVersion: lockedHasSchedule ? (engagement?.paymentScheduleVersion || 1) : 0
+    });
+    const openDraft = schedules.find(s => s.status === 'draft' && s.version > heldVersion) || null;
+
+    let latestSchedule = selectedScheduleId
+        ? (sortedHistory.find(s => s.id === selectedScheduleId) || sortedHistory[0])
+        : (openDraft || sortedHistory.find(s => !s.supersededBy) || sortedHistory[0]); // Active version
     
-    if (isLocked && lockedSnapshot?.paymentStructure && !selectedScheduleId) {
+    if (lockedHasSchedule && lockedSnapshot?.paymentStructure && !selectedScheduleId && !openDraft) {
         const contractValue = (engagement.executionValue || 0) + (engagement.designFee || 0);
         
         const engagementSnapshot = {
@@ -110,12 +144,54 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
         };
     }
 
+    /** The draft as sent: earlier versions are marked as replaced by it. */
+    const markDraftSent = (prevSchedules: PaymentSchedule[] | undefined, draftId: string | undefined) =>
+        (prevSchedules || []).map(d => {
+            if (d.id === draftId) return { ...d, status: 'sent' as const, provisionalNote: resolveProvisionalNote(d, projectContext) };
+            if (d.status !== 'draft' && !d.supersededBy) return { ...d, supersededBy: draftId || null };
+            return d;
+        });
+
     const handleSend = () => {
         if (!latestSchedule) return;
-        const updated = { ...latestSchedule, status: 'sent' as const };
         setProjectContext(prev => ({
             ...prev,
-            paymentSchedules: prev.paymentSchedules?.map(d => d.id === latestSchedule.id ? updated : d)
+            paymentSchedules: markDraftSent(prev.paymentSchedules, latestSchedule.id)
+        }));
+    };
+
+    /*
+      Re-issue: the client already has a version in their portal.
+
+      The same release the Documents board does (`releaseDocument`), so the
+      new version is frozen, numbered above the last and staged. The client
+      keeps reading the version they have until it is published from the
+      Client Portal controls.
+    */
+    const handleReissue = () => {
+        if (!openDraft) return;
+        const issuedBy = currentUserAuth?.displayName || currentRole || 'Studio';
+        setProjectContext(prev => {
+            const withIssue = releaseDocument('payment_schedule', prev, undefined, {
+                issuedBy,
+                via: ['portal'],
+                note: openDraft.revisionNote || undefined,
+                org: {
+                    orgName: orgData?.orgName,
+                    officeAddress: (orgData as any)?.officeAddress,
+                    contactEmail: (orgData as any)?.contactEmail
+                }
+            })(prev);
+            return { ...withIssue, paymentSchedules: markDraftSent(withIssue.paymentSchedules, openDraft.id) };
+        });
+    };
+
+    /** Saves the note under the execution table on the open draft. */
+    const setDraftNote = (note: string | null | undefined) => {
+        if (!openDraft) return;
+        setProjectContext(prev => ({
+            ...prev,
+            paymentSchedules: (prev.paymentSchedules || []).map(s => s.id === openDraft.id ? { ...s, provisionalNote: note } : s)
         }));
     };
 
@@ -170,6 +246,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                     amount = Math.round(amount);
                     const autoCode = m.type === 'design' ? `D${++dIndex}` : `E${++eIndex}`;
                     return {
+                        milestoneId: m.id,
                         advanceCode: autoCode,
                         label: (m.name || '').replace(' (Gross)', ''),
                         phase: m.type as 'design' | 'execution' | 'handover',
@@ -232,7 +309,10 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
             }
             const fallbackDocketRef = latestDocket?.docketRef || '____';
 
-            const nextVersion = (latestSchedule && latestSchedule.status !== 'draft') ? latestSchedule.version + 1 : (latestSchedule?.version || 1);
+            /* Above whatever the client holds, so a revision never reuses the
+               number of the version it replaces. */
+            const nextVersion = nextScheduleVersion(schedules, heldVersion);
+            const isRevision = heldVersion > 0;
 
             const newSchedule: PaymentSchedule = {
                 id: generateId(),
@@ -244,8 +324,10 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                 issuedBy: 'System',
                 contractValue,
                 advances: newAdvances as any,
-                revisionNote: (latestSchedule && latestSchedule.status !== 'draft') ? 'Revised schedule' : (latestSchedule?.revisionNote || 'Initial Payment Schedule issued with Design Agreement'),
+                revisionNote: isRevision ? (openDraft?.revisionNote && openDraft.revisionNote !== 'Initial Payment Schedule issued with Design Agreement' ? openDraft.revisionNote : 'Revised schedule') : (openDraft?.revisionNote || latestSchedule?.revisionNote || 'Initial Payment Schedule issued with Design Agreement'),
                 supersededBy: null,
+                // The studio's own choice about the note survives a regenerate.
+                ...(openDraft && openDraft.provisionalNote !== undefined ? { provisionalNote: openDraft.provisionalNote } : {}),
                 snapshotPaymentStructure: paymentStructure,
                 snapshotEngagement: engagementSnapshot,
                 snapshotTermsConfig: termsSettings
@@ -253,7 +335,12 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
 
             setProjectContext(prev => {
                 const existing = prev.paymentSchedules || [];
-                const filtered = existing.filter(s => s.status !== 'draft');
+                /* Only the open draft is replaced. A draft the client already
+                   holds (released from the Documents board without being
+                   marked sent here) is kept, and recorded as sent. */
+                const filtered = existing
+                    .filter(s => !(s.status === 'draft' && s.version > heldVersion))
+                    .map(s => s.status === 'draft' ? { ...s, status: 'sent' as const } : s);
                 return {
                     ...prev,
                     paymentSchedules: [...filtered, newSchedule]
@@ -363,33 +450,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
         );
     }
 
-    // Grouping & Natural Sorting logic for the PDF table
-    const designAdvances = latestSchedule.advances
-        .filter(a => a.phase === 'design')
-        .sort((a, b) => {
-            const numA = parseInt((a.advanceCode || '').replace(/\D/g, '') || '0', 10);
-            const numB = parseInt((b.advanceCode || '').replace(/\D/g, '') || '0', 10);
-            return (numA && numB) ? numA - numB : 0;
-        });
-
-    // All execution stages (including handover stages) in unified natural chronological sequence
-    const allExecutionAdvances = latestSchedule.advances
-        .filter(a => a.phase === 'execution' || a.phase === 'handover' || a.isHandoverAdvance)
-        .sort((a, b) => {
-            const numA = parseInt((a.advanceCode || '').replace(/\D/g, '') || '0', 10);
-            const numB = parseInt((b.advanceCode || '').replace(/\D/g, '') || '0', 10);
-            return (numA && numB) ? numA - numB : 0;
-        });
-
-    const handoverAdvances = allExecutionAdvances.filter(a => a.phase === 'handover' || a.isHandoverAdvance || (a.label && a.label.toLowerCase().includes('handover')));
-
     const isOwner = currentRole === 'Super Admin' || currentRole === 'Admin';
-    const studioName = orgData.orgName || '[set in Studio Settings]';
-    const signatoryName = orgData.signatoryName || latestSchedule.snapshotTermsConfig?.signatory?.name || (latestSchedule.snapshotTermsConfig as any)?.signatoryName || '[Principal Name]';
-    const signatoryTitle = orgData.signatoryTitle || latestSchedule.snapshotTermsConfig?.signatory?.title || (latestSchedule.snapshotTermsConfig as any)?.signatoryTitle || '[Principal Title]';
-
-    const baseDesignFee = latestSchedule.snapshotEngagement?.designFee || projectContext.financials?.approvedDesignValue || activeTier?.summary?.designFee || 0;
-    const baseExecutionValue = feeOnly ? 0 : (latestSchedule.snapshotEngagement?.executionValue || projectContext.financials?.approvedExecutionValue || activeTier?.summary?.totalSell || 0);
 
     const termsDockets = projectContext.termsDockets || [];
     let latestDocket = null;
@@ -400,31 +461,39 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
         ? latestSchedule.docketRef 
         : (projectContext.engagement?.docketRef || latestDocket?.docketRef || '____');
 
-    if (latestSchedule?.snapshotEngagement && latestSchedule?.snapshotPaymentStructure) {
-        const { designFee, executionValue } = latestSchedule.snapshotEngagement;
-        const struct = latestSchedule.snapshotPaymentStructure;
-        for (const adv of latestSchedule.advances) {
-            const base = adv.phase === 'design' ? baseDesignFee : baseExecutionValue;
-            const expectedAmount = Math.round((adv.percentage / 100) * base);
-            if (!adv.amount || adv.amount === 0) {
-                adv.amount = expectedAmount;
-            } else if (adv.amount !== expectedAmount) {
-                console.warn(`Data Integrity Error: Advance amount for ${adv.label} (${adv.amount}) does not match computed value ${expectedAmount} (Base: ${base}, Pct: ${adv.percentage}%)`);
-            }
-            
-            // Validate percentage against stored structure
-            const stages = adv.phase === 'design' ? struct.designStages : struct.executionStages;
-            const originalStage = stages?.find(s => s.code === adv.advanceCode || s.name === adv.label);
-            if (originalStage && adv.percentage !== originalStage.pct) {
-                console.warn(`Data Integrity Error: Advance percentage for ${adv.label} (${adv.percentage}%) does not match stored structure (${originalStage.pct}%)`);
-            }
-        }
-    }
+    /* The schedule on screen is an open draft only while it is numbered above
+       what the client holds. */
+    const isOpenDraft = !!openDraft && latestSchedule.id === openDraft.id;
+    const hasExecution = !feeOnly && latestSchedule.advances.some(a => a.phase !== 'design');
 
-    const designPctTotal = designAdvances.reduce((sum, a) => sum + a.percentage, 0);
-    const designAmountTotal = designAdvances.reduce((sum, a) => sum + (a.amount || 0), 0);
-    const executionPctTotal = allExecutionAdvances.reduce((sum, a) => sum + a.percentage, 0);
-    const executionAmountTotal = allExecutionAdvances.reduce((sum, a) => sum + (a.amount || 0), 0);
+    /* A draft shows the note it will go out with; a sent version shows only
+       the note it actually went out with. */
+    const shownSchedule: PaymentSchedule = {
+        ...latestSchedule,
+        provisionalNote: isOpenDraft
+            ? resolveProvisionalNote(latestSchedule, projectContext)
+            : (typeof latestSchedule.provisionalNote === 'string' ? latestSchedule.provisionalNote : null)
+    };
+    const draftNoteOn = isOpenDraft && !!shownSchedule.provisionalNote;
+    const inDesign = designInProgress(projectContext);
+
+    /* Staged: frozen for the client, waiting to be published from the portal. */
+    const staged = !!canonicalIssue && (canonicalIssue as any).clientVisibility?.state === 'draft';
+    const clientHasPortalCopy = hasIssue && !(canonicalIssue as any)?.legacyNeverReleased;
+
+    const milestones = projectContext.paymentMilestones || [];
+    const statusFor = (adv: any) => advancePaymentStatus(adv, milestones);
+
+    const chip = isOpenDraft
+        ? { cls: 'bg-amber-100 text-amber-700', label: heldVersion > 0 ? `Draft · client has v${heldVersion}` : 'Draft version' }
+        : staged ? { cls: 'bg-amber-100 text-amber-700', label: 'Staged · publish from Client Portal' }
+        : canonicalDone ? { cls: 'bg-emerald-100 text-emerald-700', label: 'Acknowledged by client' }
+        : canonicalState === 'queried' && hasIssue ? { cls: 'bg-amber-100 text-amber-700', label: 'Question open' }
+        : canonicalSent ? { cls: 'bg-[#3D52A0]/10 text-[#3D52A0]', label: 'Sent to client' }
+        : { cls: 'bg-emerald-100 text-emerald-700', label: 'Sent & current' };
+
+    const secondaryBtn = 'px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed';
+    const primaryBtn = 'px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] transition flex items-center gap-2 shadow-sm disabled:opacity-50';
 
     return (
         <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in pb-20 font-sans">
@@ -447,7 +516,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                                     <option value="">Latest ({sortedHistory[0].versionLabel})</option>
                                     {sortedHistory.map(sh => (
                                         <option key={sh.id} value={sh.id}>
-                                            {sh.versionLabel} {sh.status === 'draft' ? '(Draft)' : ''}
+                                            {sh.versionLabel} {sh.status === 'draft' && sh.version > heldVersion ? '(Draft)' : ''}
                                         </option>
                                     ))}
                                 </select>
@@ -456,17 +525,8 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                             )}
                         </div>
                         <div className="flex items-center gap-2 mt-1">
-                            <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded ${
-                                canonicalDone ? 'bg-emerald-100 text-emerald-700'
-                                : canonicalState === 'queried' && hasIssue ? 'bg-violet-100 text-violet-700'
-                                : canonicalSent ? 'bg-sky-100 text-[#334486]'
-                                : latestSchedule.status === 'draft' ? 'bg-amber-100 text-amber-700'
-                                : 'bg-emerald-100 text-emerald-700'
-                            }`}>
-                                {canonicalDone ? 'Acknowledged by client'
-                                  : canonicalState === 'queried' && hasIssue ? 'Question open'
-                                  : canonicalSent ? 'Sent to client'
-                                  : latestSchedule.status === 'draft' ? 'Draft Version' : 'Sent & Current'}
+                            <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded ${chip.cls}`}>
+                                {chip.label}
                             </span>
                             <span className="text-xs text-slate-500">
                                 Governed by Docket: <strong className="text-slate-700 font-mono">{resolvedDocketRef === '____' ? '----' : resolvedDocketRef}</strong>
@@ -474,28 +534,31 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button onClick={() => setPreviewMode(!previewMode)} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2">
+                <div className="flex items-center gap-3 flex-wrap justify-end">
+                    <button onClick={() => setPreviewMode(!previewMode)} className={secondaryBtn}>
                         <Eye className="w-4 h-4" /> {previewMode ? 'Exit Preview' : 'Preview as PDF'}
                     </button>
-                    <button onClick={handleDownloadPdf} disabled={!isValid} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button onClick={handleDownloadPdf} disabled={!isValid} className={secondaryBtn}>
                         <Download className="w-4 h-4" /> Download PDF
                     </button>
-                    {latestSchedule.status === 'draft' && !canonicalSent && (
+                    {isOpenDraft ? (
                         <>
-                            {!isLocked && (
-                                <button onClick={handleRegenerate} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2">
-                                    Regenerate
+                            <button onClick={handleRegenerate} disabled={isGenerating} className={secondaryBtn} title="Rebuild this draft from the current fees, BOQ and milestones">
+                                <RefreshCw className="w-4 h-4" /> {isGenerating ? 'Regenerating…' : 'Regenerate'}
+                            </button>
+                            {clientHasPortalCopy ? (
+                                <button onClick={handleReissue} className={primaryBtn} title="Freeze this version for the client. It reaches them once published from Client Portal.">
+                                    <Send className="w-4 h-4" /> Re-issue to client as {latestSchedule.versionLabel}
+                                </button>
+                            ) : (
+                                <button onClick={handleSend} className={primaryBtn}>
+                                    <Send className="w-4 h-4" /> Mark as Sent
                                 </button>
                             )}
-                            <button onClick={handleSend} className="px-4 py-2 bg-[#3D52A0] border border-[#3D52A0] text-white font-bold text-sm rounded-lg hover:bg-[#334486] transition flex items-center gap-2 shadow-sm">
-                                <Send className="w-4 h-4" /> Mark as Sent
-                            </button>
                         </>
-                    )}
-                    {(latestSchedule.status !== 'draft' || canonicalSent) && !isLocked && (
-                        <button onClick={handleRegenerate} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2">
-                            Regenerate
+                    ) : !selectedScheduleId && (
+                        <button onClick={handleRegenerate} disabled={isGenerating} className={primaryBtn} title="Start a new version from the current fees, BOQ and milestones. The client keeps the version they have until you send this one.">
+                            <PencilLine className="w-4 h-4" /> {isGenerating ? 'Preparing…' : `Revise as v${nextScheduleVersion(schedules, heldVersion)}.0`}
                         </button>
                     )}
                 </div>
@@ -508,178 +571,106 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                 </div>
             )}
 
-            {/* Document Render Container */}
-            <div className={`transition-all duration-500 ${previewMode ? 'bg-[#e2e8f0] p-8 -mx-8 flex justify-center rounded-3xl overflow-x-auto shadow-inner' : ''}`}>
-                <div id="payment-schedule-pdf-render" className={`payment-schedule-template ${previewMode ? 'print-only' : ''}`}>
-                    <style dangerouslySetInnerHTML={{__html: `
-                        :root{
-                            --ink:#1f2328; --ink-soft:#3f464e; --muted:#727a82;
-                            --line:#e6e3dc; --line-soft:#efece6; --paper:#fbfaf7; --card:#ffffff;
-                            --slate:#1f2328; --accent:#1e3a8a; --accent-soft:#eef2fb; --gold:#b08d57;
-                        }
-                        .payment-schedule-template {
-                            background:var(--paper); color:var(--ink);
-                            font-family:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-                            line-height:1.6; font-size:14px; -webkit-font-smoothing:antialiased;
-                            width: 100%; max-width: 820px;
-                        }
-                        .payment-schedule-template * { box-sizing:border-box; }
-                        .payment-schedule-template .sheet{max-width:820px; margin:0 auto; background:var(--card); padding:40px 52px 50px;}
-                        .payment-schedule-template header.mast{border-bottom:2px solid var(--slate); padding-bottom:18px; display:flex; justify-content:space-between; align-items:flex-end;}
-                        .payment-schedule-template .brand{font-size:14px; letter-spacing:.22em; text-transform:uppercase; font-weight:800;}
-                        .payment-schedule-template .tagline{font-size:11px; color:var(--muted); letter-spacing:.05em; margin-top:3px;}
-                        .payment-schedule-template .docnum{font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--gold); font-weight:700; text-align:right;}
-                        .payment-schedule-template .title{margin:20px 0 4px; font-size:21px; font-weight:800; letter-spacing:-.01em;}
-                        .payment-schedule-template .preamble{font-size:12.5px; color:var(--ink-soft); margin:0 0 14px;}
-                        .payment-schedule-template .metabar{display:grid; grid-template-columns:1fr 1fr 1fr; border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:18px 0 6px;}
-                        .payment-schedule-template .metabar div{padding:10px 14px; border-bottom:1px solid var(--line-soft); border-right:1px solid var(--line-soft);}
-                        .payment-schedule-template .metabar div:nth-child(3n){border-right:none;}
-                        .payment-schedule-template .metabar div:nth-child(-n+3){background:#faf9f5;}
-                        .payment-schedule-template .metabar .k{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700;}
-                        .payment-schedule-template .metabar .v{font-weight:700; color:var(--ink); margin-top:2px; font-size:13px;}
-                        .payment-schedule-template .valuebar{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0 6px;}
-                        .payment-schedule-template .vb{border:1px solid var(--line); border-radius:10px; padding:12px 16px; background:#fff;}
-                        .payment-schedule-template .vb .k{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700;}
-                        .payment-schedule-template .vb .v{font-weight:800; color:var(--slate); font-size:18px; margin-top:3px; font-variant-numeric:tabular-nums;}
-                        .payment-schedule-template h2.sec{font-size:13px; letter-spacing:.1em; text-transform:uppercase; font-weight:800; color:var(--slate);
-                            margin:24px 0 8px; padding-top:14px; border-top:1px solid var(--line); display:flex; align-items:center; gap:10px;}
-                        .payment-schedule-template .pill{font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:2px 9px; border-radius:999px;}
-                        .payment-schedule-template .pill.d{background:var(--accent-soft); color:var(--accent);} 
-                        .payment-schedule-template .pill.e{background:#f3efe7; color:var(--gold);}
-                        .payment-schedule-template table{width:100%; border-collapse:collapse; margin:4px 0; font-size:13px;}
-                        .payment-schedule-template thead th{background:var(--slate); color:#fff; text-align:left; padding:7px 10px; font-size:10px; letter-spacing:.05em; text-transform:uppercase; font-weight:700;}
-                        .payment-schedule-template thead th.r{text-align:right;}
-                        .payment-schedule-template tbody td{padding:9px 10px; border-bottom:1px solid var(--line-soft); vertical-align:top; color:var(--ink-soft); font-size: 12.5px;}
-                        .payment-schedule-template tbody td .nm{font-weight:700; color:var(--ink); display:block;}
-                        .payment-schedule-template tbody td .sm{font-size:11.5px; color:var(--muted);}
-                        .payment-schedule-template td.pct{text-align:right; font-weight:800; color:var(--slate); font-variant-numeric:tabular-nums; white-space:nowrap;}
-                        .payment-schedule-template td.amt{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:600; color:var(--ink);}
-                        .payment-schedule-template tfoot td{padding:8px 10px; font-weight:800; color:var(--slate); border-top:2px solid var(--slate); font-variant-numeric:tabular-nums; font-size: 13px;}
-                        .payment-schedule-template tfoot td.r{text-align:right;}
-                        .payment-schedule-template .highlight{background:#fdf8ef; border:1px solid #ecdcc0; border-left:3px solid var(--gold); border-radius:0 10px 10px 0; padding:12px 16px; margin:16px 0;}
-                        .payment-schedule-template .highlight .lab{font-size:10px; letter-spacing:.12em; text-transform:uppercase; font-weight:800; color:#8a6b34; display:block; margin-bottom:5px;}
-                        .payment-schedule-template .highlight p{margin:0; color:#5c4a2a; font-size:12.5px;}
-                        .payment-schedule-template .note{font-size:11px; color:var(--muted); margin:8px 0 0; font-style:italic;}
-                        .payment-schedule-template .sig{display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:32px;}
-                        .payment-schedule-template .sig .line{border-top:1px solid var(--ink); padding-top:9px; margin-top:40px; font-size:12px; color:var(--muted);}
-                        .payment-schedule-template .sig .line b{display:block; color:var(--ink); font-size:12.5px; margin-bottom:2px;}
-                        .payment-schedule-template footer{margin-top:32px; padding-top:12px; border-top:1px solid var(--line); font-size:10.5px; color:var(--muted); text-align:center; letter-spacing:.04em;}
-                        @media print{ 
-                            .payment-schedule-template {background:#fff;} 
-                            .payment-schedule-template .sheet{padding:0 8px;} 
-                            .payment-schedule-template .sec-group { break-inside: avoid; page-break-inside: avoid; }
-                            .payment-schedule-template h2.sec{break-after:avoid;}
-                            .payment-schedule-template .highlight, .payment-schedule-template tr{break-inside:avoid; page-break-inside:avoid;} 
-                            .payment-schedule-template footer { display: none; }
-                        }
-                        @media(max-width:600px){ 
-                            .payment-schedule-template .sheet{padding:32px 22px 56px;} 
-                            .payment-schedule-template .metabar{grid-template-columns:1fr;} 
-                            .payment-schedule-template .metabar div{border-right:none;} 
-                            .payment-schedule-template .valuebar, .payment-schedule-template .sig{grid-template-columns:1fr;} 
-                        }
-                    `}} />
+            {staged && !isOpenDraft && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-start gap-3 no-print hud-panel-in">
+                    <div className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] flex items-center justify-center shrink-0">
+                        <Info className="w-4 h-4" />
+                    </div>
+                    <div>
+                        <div className="text-sm font-semibold text-slate-800">v{issuedScheduleVersion || latestSchedule.version} is frozen and waiting to be published</div>
+                        <p className="text-xs text-slate-500 mt-0.5">{projectContext.clientName || 'The client'} keeps reading the version they have until you publish this one from Client Portal.</p>
+                    </div>
+                </div>
+            )}
 
-                    <div className="sheet">
-                        <header className="mast">
+            {/* The note on execution amounts, while the draft is open. */}
+            {isOpenDraft && hasExecution && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 no-print hud-panel-in">
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div className="flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] flex items-center justify-center shrink-0">
+                                <Info className="w-4 h-4" />
+                            </div>
                             <div>
-                                <div className="brand">{orgData.orgName || 'Form Factors Design Studio'}</div>
-                                <div className="tagline">Minimal Design. Maximum Impact.</div>
-                            </div>
-                            <div className="docnum">Document 2 of 2<br/>Payment Schedule</div>
-                        </header>
-
-                        <h1 className="title">Advance Payment Schedule</h1>
-                        <p className="preamble">Project-specific advance payment structure for this engagement. Governed by and to be read alongside the Terms of Engagement Governing Docket ({resolvedDocketRef === '____' ? '----' : resolvedDocketRef}). It may be revised by mutual agreement; revisions do not require re-acknowledgement of the Docket.</p>
-
-                        <div className="metabar">
-                            <div><div className="k">Version</div><div className="v">v{latestSchedule.version}.0</div></div>
-                            <div><div className="k">Issued</div><div className="v">{new Date(latestSchedule.issuedAt).toLocaleDateString('en-IN')}</div></div>
-                            <div><div className="k">Governs Docket</div><div className="v">{resolvedDocketRef === '____' ? '----' : resolvedDocketRef}</div></div>
-                            <div><div className="k">Client</div><div className="v">{projectContext.clientName}</div></div>
-                            <div><div className="k">Project</div><div className="v">{projectContext.name}</div></div>
-                            <div><div className="k">GST</div><div className="v">18% extra</div></div>
-                        </div>
-
-                        <div className="valuebar">
-                            <div className="vb"><div className="k">Design Fee (excl. GST)</div><div className="v">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(baseDesignFee).toLocaleString('en-IN')}` : '[HIDDEN]'}</div></div>
-                            <div className="vb"><div className="k">Execution Value (excl. GST)</div><div className="v">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(baseExecutionValue).toLocaleString('en-IN')}` : '[HIDDEN]'}</div></div>
-                        </div>
-
-                        {designAdvances.length > 0 && (
-                            <div className="sec-group">
-                                <h2 className="sec">A &middot; Design Phase <span className="pill d">% OF DESIGN FEE</span></h2>
-                                <table>
-                                    <thead><tr><th>STAGE</th><th>PAID WHEN</th><th className="r">%</th><th className="r">AMOUNT (EXCL. GST)</th><th className="r">+18% GST</th><th className="r">TOTAL (INCL. GST)</th></tr></thead>
-                                    <tbody>
-                                        {designAdvances.map((adv, i) => (
-                                            <tr key={`d-${i}`}>
-                                                <td><span className="nm">{adv.advanceCode || `D${i+1}`} &middot; {adv.label}</span><span className="sm">{adv.unlocks || ''}</span></td>
-                                                <td>{adv.dueCondition}</td>
-                                                <td className="pct">{adv.percentage}%</td>
-                                                <td className="amt">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0)).toLocaleString('en-IN')}` : '--'}</td>
-                                                <td className="amt text-slate-500">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * designGstMul).toLocaleString('en-IN')}` : '--'}</td>
-                                                <td className="amt font-bold">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * (1 + designGstMul)).toLocaleString('en-IN')}` : '--'}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                    <tfoot><tr><td colSpan={2}>Design Fee total</td><td className="r">{designPctTotal}%</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal * designGstMul).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal * (1 + designGstMul)).toLocaleString('en-IN')}` : '--'}</td></tr></tfoot>
-                                </table>
-                            </div>
-                        )}
-
-                        {allExecutionAdvances.length > 0 && (
-                            <div className="sec-group">
-                                <h2 className="sec">B &middot; Execution Phase <span className="pill e">% OF EXECUTION VALUE</span></h2>
-                                <table>
-                                    <thead><tr><th>STAGE</th><th>PAID WHEN</th><th className="r">%</th><th className="r">AMOUNT (EXCL. GST)</th><th className="r">+18% GST</th><th className="r">TOTAL (INCL. GST)</th></tr></thead>
-                                    <tbody>
-                                        {allExecutionAdvances.map((adv, i) => (
-                                            <tr key={`e-${i}`}>
-                                                <td><span className="nm">{adv.advanceCode || `E${i+1}`} &middot; {adv.label}</span><span className="sm">{adv.unlocks || ''}</span></td>
-                                                <td>{adv.dueCondition}</td>
-                                                <td className="pct">{adv.percentage}%</td>
-                                                <td className="amt">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0)).toLocaleString('en-IN')}` : '--'}</td>
-                                                <td className="amt text-slate-500">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * execGstMul).toLocaleString('en-IN')}` : '--'}</td>
-                                                <td className="amt font-bold">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * (1 + execGstMul)).toLocaleString('en-IN')}` : '--'}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                    <tfoot><tr><td colSpan={2}>Execution total</td><td className="r">{executionPctTotal}%</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * execGstMul).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * (1 + execGstMul)).toLocaleString('en-IN')}` : '--'}</td></tr></tfoot>
-                                </table>
-                                <p className="note">Percentages are fixed; amounts are calculated from the values above. Each payment is triggered by the completed milestone shown, not by a calendar date.</p>
-                                <p className="note" style={{ marginTop: '6px', lineHeight: '1.5' }}>
-                                    <strong>GST &amp; Statutory Applicability:</strong> Goods and Services Tax (GST) is a statutory levy governed by prevailing Government of India tax regulations and shall apply in accordance with the specific commercial and execution structure stipulated in the signed Execution Agreement. Milestone GST values indicated in this schedule reflect standard applicable statutory rates (18%) and are subject to final tax invoice terms, SAC/HSN classifications, direct procurement allowances, and executed agreement conditions.
+                                <div className="font-bold text-slate-800">Note on execution amounts</div>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    {inDesign
+                                        ? 'The design phase is in progress and the BOQ is not frozen, so the execution amounts may still change.'
+                                        : 'The BOQ is frozen. Switch the note off unless the execution amounts may still change.'}
                                 </p>
                             </div>
-                        )}
+                        </div>
+                        <div className="inline-flex p-1 rounded-xl bg-slate-100">
+                            <button
+                                onClick={() => setDraftNote(latestSchedule.provisionalNote && latestSchedule.provisionalNote.trim() ? latestSchedule.provisionalNote : DEFAULT_PROVISIONAL_NOTE)}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${draftNoteOn ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+                            >
+                                Show on schedule
+                            </button>
+                            <button
+                                onClick={() => setDraftNote(null)}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${!draftNoteOn ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+                            >
+                                Hide
+                            </button>
+                        </div>
+                    </div>
+                    {draftNoteOn && (
+                        <div className="mt-4">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Wording on the schedule</label>
+                            <textarea
+                                rows={3}
+                                value={shownSchedule.provisionalNote || ''}
+                                onChange={e => setDraftNote(e.target.value)}
+                                onBlur={e => { if (!e.target.value.trim()) setDraftNote(null); }}
+                                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] resize-y"
+                            />
+                            {shownSchedule.provisionalNote !== DEFAULT_PROVISIONAL_NOTE && (
+                                <button onClick={() => setDraftNote(DEFAULT_PROVISIONAL_NOTE)} className="mt-1.5 text-[11px] font-semibold text-[#3D52A0] hover:text-[#334486]">
+                                    Use the standard wording
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
 
-                        {handoverAdvances.length > 0 && (
-                            <div className="highlight">
-                                <span className="lab">Regarding the Completion &amp; Handover Advance</span>
-                                <p>{latestSchedule.snapshotPaymentStructure?.handoverClause || "The Completion & Handover Advance unlocks the formal handover package — keys, dossier and warranty certificate. It is due upon completion of all installation and finishing work and is not conditional upon snag clearance. Snag items are addressed under warranty as per Clause 6.4 of the Terms of Engagement Governing Docket."}</p>
-                            </div>
-                        )}
-
-                        {/*
+            {/* Document Render Container */}
+            <div className={`transition-all duration-500 ${previewMode ? 'bg-[#e2e8f0] p-8 -mx-8 flex justify-center rounded-3xl overflow-x-auto shadow-inner' : ''}`}>
+                {/*
+                    One renderer for the studio page and the client portal
+                    (PaymentScheduleSheet), so a change to the document reaches
+                    both. The Status column is the studio's live view from
+                    Money; the client's frozen copy carries no status.
+                */}
+                <PaymentScheduleSheet
+                    schedule={shownSchedule}
+                    projectContext={projectContext}
+                    org={{
+                        orgName: orgData.orgName,
+                        officeAddress: (orgData as any).officeAddress,
+                        contactEmail: (orgData as any).contactEmail,
+                        signatoryName: orgData.signatoryName || latestSchedule.snapshotTermsConfig?.signatory?.name || (latestSchedule.snapshotTermsConfig as any)?.signatoryName,
+                        signatoryTitle: orgData.signatoryTitle || latestSchedule.snapshotTermsConfig?.signatory?.title || (latestSchedule.snapshotTermsConfig as any)?.signatoryTitle
+                    }}
+                    activeTier={activeTier}
+                    showAmounts={isOwner}
+                    previewMode={previewMode}
+                    feeOnly={feeOnly}
+                    statusFor={statusFor}
+                    signature={
+                        /*
                             Once the client has acted, the real record replaces the
                             blank rule. The printed placeholder said "Client
                             Signature & Date · ABC test client" whether or not
                             anyone had signed, which reads on the page exactly like
                             evidence and is not.
-                        */}
-                        {canonicalIssue?.clientSignature || canonicalIssue?.counterSignature ? (
-                            <ExecutionStamp issue={canonicalIssue} mode="acknowledge" />
-                        ) : (
-                            <div className="sig">
-                                <div><div className="line"><b>Client Signature &amp; Date</b>{projectContext.clientName}</div></div>
-                                <div><div className="line"><b>For {studioName}</b>{signatoryName} &middot; {signatoryTitle}</div></div>
-                            </div>
-                        )}
-
-                        <footer>{orgData.orgName || 'Form Factors Design Studio'} &middot; Minimal Design. Maximum Impact. &middot; {orgData.officeAddress || '[studio address]'} &middot; {orgData.contactEmail || 'formfactors.operations@gmail.com'}</footer>
-                    </div>
-                </div>
+                        */
+                        !isOpenDraft && (canonicalIssue?.clientSignature || canonicalIssue?.counterSignature)
+                            ? <ExecutionStamp issue={canonicalIssue} mode="acknowledge" />
+                            : undefined
+                    }
+                />
             </div>
         </div>
     );

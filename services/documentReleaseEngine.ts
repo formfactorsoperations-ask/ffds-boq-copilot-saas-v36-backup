@@ -37,6 +37,7 @@ import { bankItemForLine, bankSpecForLine } from '../lib/bankSpecs';
 import { specWithLists, listOf } from '../lib/specText';
 import { lockedTierId } from '../lib/scopeFlow';
 import { approvedOption, resolveAgreement } from '../lib/executionAgreement';
+import { resolveProvisionalNote } from '../lib/paymentScheduleStatus';
 
 // ---------------------------------------------------------------------------
 // CATALOGUE
@@ -474,7 +475,10 @@ export function buildSnapshot(
             docketRef:
               latestSchedule.docketRef && latestSchedule.docketRef !== '____'
                 ? latestSchedule.docketRef
-                : ctx.engagement?.docketRef || latestSchedule.docketRef
+                : ctx.engagement?.docketRef || latestSchedule.docketRef,
+            /* Resolved here, so the client's copy says exactly what the studio
+               saw: the note is frozen as text, or as null for none. */
+            provisionalNote: resolveProvisionalNote(latestSchedule, context)
           }
         : null;
 

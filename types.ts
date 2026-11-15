@@ -2093,6 +2093,8 @@ export interface PaymentAdvance {
   invoiceRef: string | null;
   receivedAt: number | null;
   isHandoverAdvance: boolean;
+  /** The Money milestone this stage was generated from, where known. */
+  milestoneId?: string;
 }
 
 export interface PaymentSchedule {
@@ -2111,6 +2113,12 @@ export interface PaymentSchedule {
   snapshotTermsConfig?: TermsSettings;
   revisionNote: string;
   supersededBy: string | null;
+  /**
+   * The note under the execution table saying the amounts may change once the
+   * BOQ is final. Undefined: shown in the default wording while the design
+   * phase is in progress. Null or empty: switched off. Text: shown as written.
+   */
+  provisionalNote?: string | null;
 }
 
 export interface TermsSectionBlock {
