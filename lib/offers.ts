@@ -1,5 +1,6 @@
 import { Item, ProposalTier, ProjectDiscount } from '../types';
 import { resolveBoqLine } from './boqPricing';
+import { gstOn, type GstTerms } from './paymentSchedule';
 import { asScopeBucket, bucketForItem } from './scopeBuckets';
 
 // ============================================================================
@@ -122,4 +123,45 @@ export function discountTotal(base: number, discounts: ProjectDiscount[], target
 export function marginWith(sell: number, cost: number, offOnExecution: number): { before: number | null; after: number | null } {
   const pct = (s: number) => (s > 0 ? ((s - cost) / s) * 100 : null);
   return { before: pct(sell), after: pct(Math.max(0, sell - offOnExecution)) };
+}
+
+/** What an option comes to with the project's offers: the figures Money & Offers and Pricing both show. */
+export interface Deal {
+  sell: number;
+  fee: number;
+  execOff: number;
+  designOff: number;
+  gst: number;
+  clientPays: number;
+  margin: { before: number | null; after: number | null };
+}
+
+export function dealFor(
+  summary: { totalSell?: number; designFee?: number; totalCost?: number } | undefined,
+  discounts: ProjectDiscount[],
+  terms: GstTerms,
+): Deal {
+  const sell = summary?.totalSell || 0;
+  const fee = summary?.designFee || 0;
+  const execOff = discountTotal(sell, discounts, 'execution');
+  const designOff = discountTotal(fee, discounts, 'design');
+  const taxExec = Math.max(0, sell - execOff);
+  const taxDesign = Math.max(0, fee - designOff);
+  const g = gstOn(taxExec, taxDesign, terms);
+  return {
+    sell, fee, execOff, designOff,
+    gst: g.execution + g.design,
+    clientPays: taxExec + taxDesign + g.execution + g.design,
+    margin: marginWith(sell, summary?.totalCost || 0, execOff),
+  };
+}
+
+/** Billable lines priced under this margin (%): the one finding from the retired Health Check worth keeping. */
+export function lowMarginLines(tier: Pick<ProposalTier, 'boq'> | undefined, bankMap: Map<string, Item>, under = 15): number {
+  return (tier?.boq || []).filter((line: any) => {
+    const priced = resolveBoqLine(line, bankMap);
+    if (!priced.billable || priced.asActuals || priced.total <= 0) return false;
+    const margin = line.marginOverride ?? bankMap.get(line.bankId)?.margin;
+    return typeof margin === 'number' && margin < under;
+  }).length;
 }

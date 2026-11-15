@@ -3,10 +3,10 @@ import { Gift, Percent, Wallet, Trash2, AlertTriangle, Layers } from '@/lib/luci
 import { Item, ProjectContext, ProposalTier } from '../../types';
 import { buildBankMap } from '../../lib/boqPricing';
 import { formatINR as formatCurrency, id as newId } from '../../lib/utils';
-import { computeSchedule, contractInForce, gstOn, gstTermsOf } from '../../lib/paymentSchedule';
+import { computeSchedule, contractInForce, gstTermsOf } from '../../lib/paymentSchedule';
 import { otherBenchmarks, medianGm } from '../../lib/tierBenchmarks';
 import {
-  SCOPE_PARTS, partLabel, scopeSplit, offerDiscount, offerValue, offerName, staleOffer, discountTotal, marginWith,
+  SCOPE_PARTS, partLabel, scopeSplit, offerDiscount, offerValue, offerName, staleOffer, marginWith, dealFor,
   type ScopePart, type OfferBasis, type OfferDiscount,
 } from '../../lib/offers';
 
@@ -111,16 +111,10 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
   }
 
   /* ---- the deal on this option ---- */
-  const sell = tier.summary.totalSell || 0;
-  const fee = tier.summary.designFee || 0;
-  const execOff = discountTotal(sell, discounts, 'execution');
-  const designOff = discountTotal(fee, discounts, 'design');
   const terms = gstTermsOf(ctx);
-  const taxExec = Math.max(0, sell - execOff);
-  const taxDesign = Math.max(0, fee - designOff);
-  const gst = gstOn(taxExec, taxDesign, terms);
-  const clientPays = taxExec + taxDesign + gst.execution + gst.design;
-  const margin = marginWith(sell, tier.summary.totalCost || 0, execOff);
+  const deal = dealFor(tier.summary, discounts, terms);
+  const { sell, fee, execOff, designOff, clientPays, margin } = deal;
+  const gstTotal = deal.gst;
   const marginIfAdded = marginWith(sell, tier.summary.totalCost || 0, execOff + draftOnExecution);
   /* Worth flagging: a loss on the option, or a margin under the studio's usual one. */
   const belowMedian = (m: number | null) => m !== null && (m < 0 || (median !== null && m < median));
@@ -330,7 +324,7 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
               {execOff > 0 && <div className="flex justify-between"><dt className="text-slate-600">Offers on execution</dt><dd className="tabular-nums text-emerald-700">− {formatCurrency(Math.round(execOff))}</dd></div>}
               <div className="flex justify-between"><dt className="text-slate-600">Design fee</dt><dd className="tabular-nums text-slate-800">{formatCurrency(Math.round(fee))}</dd></div>
               {designOff > 0 && <div className="flex justify-between"><dt className="text-slate-600">Offers on design</dt><dd className="tabular-nums text-emerald-700">− {formatCurrency(Math.round(designOff))}</dd></div>}
-              <div className="flex justify-between"><dt className="text-slate-600">GST</dt><dd className="tabular-nums text-slate-800">{formatCurrency(Math.round(gst.execution + gst.design))}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-600">GST</dt><dd className="tabular-nums text-slate-800">{formatCurrency(Math.round(gstTotal))}</dd></div>
               <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline">
                 <dt className="font-bold text-slate-800">Client pays</dt>
                 <dd className="text-2xl font-black text-slate-800 tabular-nums">{formatCurrency(Math.round(clientPays))}</dd>

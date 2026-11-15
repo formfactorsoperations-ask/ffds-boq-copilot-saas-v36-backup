@@ -20,10 +20,12 @@ interface OperationsTabProps {
     projectId?: string;
     /** The studio's own typology templates, for regenerating the BOQ. */
     templates?: TemplateData;
+    /** Opens an option's BOQ over Pricing & Tiers (App's slide-over). */
+    onEditBoq?: (tierId: string) => void;
 }
 
 const OperationsTab: React.FC<OperationsTabProps> = (props) => {
-    const { tiers, setTiers, activeTierId, setActiveTierId, projectContext, setProjectContext, bank, setBank, setActiveTab, projects, projectId, templates } = props;
+    const { tiers, setTiers, activeTierId, setActiveTierId, projectContext, setProjectContext, bank, setBank, setActiveTab, projects, projectId, templates, onEditBoq } = props;
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     const handleImportComplete = (newTier: ProposalTier, newBankItems: Item[]) => {
@@ -75,6 +77,7 @@ const OperationsTab: React.FC<OperationsTabProps> = (props) => {
                 projects={projects}
                 projectId={projectId}
                 templates={templates}
+                onEditBoq={onEditBoq}
             />
 
             <ExcelImportModal 

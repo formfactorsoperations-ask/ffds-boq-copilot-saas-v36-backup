@@ -10,6 +10,7 @@ import { buildBankMap, designFeeFor, isAsActuals } from '../lib/boqPricing';
 import { compareTiers, optionPrice } from '../lib/tierComparison';
 import { builtInSpecsName } from '../lib/comparison';
 import { otherBenchmarks, medianGm, closestInSize } from '../lib/tierBenchmarks';
+import OptionColumns from './pricing/OptionColumns';
 import { contextWithApproved, tiersWithApproved, describeApproval, contextWithoutApproved, tiersWithoutApproved, previousBaseline } from '../lib/tierApproval';
 import { useOrg } from '../contexts/OrgContext';
 import { contextWithTierRenamed, contextWithTierCopied } from '../lib/specOverrides';
@@ -30,9 +31,11 @@ interface TierManagerProps {
     projectId?: string;
     /** The studio's own typology templates. Falls back to the built-ins. */
     templates?: TemplateData;
+    /** Opens an option's BOQ over this screen (App's BOQ slide-over). */
+    onEditBoq?: (tierId: string) => void;
 }
 
-const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId, setActiveTierId, projectContext, setProjectContext, bank, setActiveTab, onImportClick, projects, projectId, templates }) => {
+const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId, setActiveTierId, projectContext, setProjectContext, bank, setActiveTab, onImportClick, projects, projectId, templates, onEditBoq }) => {
     /* Signed scope: the version the client signed changes only through a
        Scope Revision, so it cannot be synced, re-approved or deleted here. */
     const scopeFlowOn = isScopeFlowOn(projectContext);
@@ -44,7 +47,6 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
     /* Where the name is being edited: its card in the rail, or the Selected heading. */
     const [editingSpot, setEditingSpot] = useState<'rail' | 'header'>('rail');
     const [revertOpen, setRevertOpen] = useState(false);
-    const [discountHeadroom, setDiscountHeadroom] = useState<number>(0);
     const [marginShiftAmount, setMarginShiftAmount] = useState<number>(0);
 
     /*
@@ -273,31 +275,6 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         showSuccessWithNext(`Successfully applied systematic margin shift to all items in ${activeTier.name}. Updated Execution Sell: ${formatCurrency(newTotalSell)}.`);
     };
 
-    const minAcceptableRevenue = useMemo(() => {
-        return activeTierCost / 0.80; // 20% floor blended GM means Cost / 0.80
-    }, [activeTierCost]);
-
-    const headroomRupees = useMemo(() => {
-        return Math.max(0, displayValue - minAcceptableRevenue);
-    }, [displayValue, minAcceptableRevenue]);
-
-    const maxDiscountPct = useMemo(() => {
-        return displayValue > 0 ? (headroomRupees / displayValue) * 100 : 0;
-    }, [displayValue, headroomRupees]);
-
-    const clientPays = useMemo(() => {
-        return displayValue * (1 - discountHeadroom / 100);
-    }, [displayValue, discountHeadroom]);
-
-    const giveUp = useMemo(() => {
-        return displayValue * (discountHeadroom / 100);
-    }, [displayValue, discountHeadroom]);
-
-    const newBlendedGm = useMemo(() => {
-        if (clientPays === 0) return 0;
-        const newProfit = clientPays - activeTierCost;
-        return (newProfit / clientPays) * 100;
-    }, [clientPays, activeTierCost]);
 
     /* The studio's own projects, never invented ones (lib/tierBenchmarks.ts). */
     const benchmarks = useMemo(
@@ -675,8 +652,20 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         activeTier.lifecycleTag?.toLowerCase().includes('annexure');
 
     return (
-        <div className="w-full flex flex-col md:flex-row gap-8 max-w-[1400px] mx-auto items-start font-sans pb-12">
-            
+        <div className="w-full max-w-[1400px] mx-auto flex flex-col gap-8 font-sans pb-12">
+            {/* Every option side by side, with Edit BOQ and Offers on each (components/pricing/OptionColumns). */}
+            <OptionColumns
+                tiers={tiers}
+                bank={bank || []}
+                projectContext={projectContext}
+                activeTierId={activeTierId}
+                setActiveTierId={setActiveTierId}
+                specLabel={comparison.specLabel}
+                onEditBoq={onEditBoq}
+                onOffers={(id) => { setActiveTierId(id); setActiveTab('analytics'); }}
+            />
+        <div className="w-full flex flex-col md:flex-row gap-8 items-start">
+
             {/* LEFT SIDEBAR: Lineage Tree */}
             <div className="w-full md:w-[320px] shrink-0 flex flex-col gap-5">
                     <div className="flex items-center justify-between px-2 pb-1 border-b border-slate-200">
@@ -937,59 +926,6 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
 
                         {compareOpen && (
                             <div className="flex flex-col gap-3">
-
-                                {/* The options themselves, side by side. */}
-                                <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(tiers.length, 3)}, minmax(0, 1fr))` }}>
-                                    {tiers.map(t => {
-                                        const price = optionPrice(t);
-                                        const total = price.total;
-                                        const area = projectContext.area || 0;
-                                        const cheapest = Math.min(...tiers.map(x => optionPrice(x).total).filter(v => v > 0));
-                                        const isActive = t.id === activeTierId;
-                                        return (
-                                            <button
-                                                key={t.id}
-                                                onClick={() => setActiveTierId(t.id)}
-                                                className={`text-left rounded-xl border p-4 transition-all ${
-                                                    isActive
-                                                        ? 'border-indigo-400 bg-indigo-50/50 ring-1 ring-indigo-300'
-                                                        : 'border-slate-200 bg-white hover:border-slate-300'
-                                                }`}
-                                            >
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-xs font-black text-slate-900">{t.name}</span>
-                                                    {projectContext.approvedTierId === t.id && (
-                                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-600 text-white">Current</span>
-                                                    )}
-                                                </div>
-                                                <div className="text-lg font-bold text-slate-900 tabular-nums mt-1.5 tracking-tight">
-                                                    {formatCurrency(Math.round(total))}
-                                                </div>
-                                                <div className="text-[11px] text-slate-500 font-medium tabular-nums">
-                                                    {area > 0 && <>₹{Math.round(total / area).toLocaleString('en-IN')}/sq ft · </>}
-                                                    {(t.summary.blendedGm ?? 0).toFixed(1)}% GM
-                                                    {cheapest > 0 && total > cheapest && (
-                                                        <span className="text-amber-600 font-semibold">
-                                                            {' '}· +{Math.round(((total / cheapest) - 1) * 100)}%
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {price.designFee > 0 && (
-                                                    <div className="text-[11px] text-slate-400 tabular-nums mt-0.5" data-testid="option-split">
-                                                        work {formatCurrency(Math.round(price.work))} + design fee {formatCurrency(Math.round(price.designFee))}
-                                                    </div>
-                                                )}
-                                                {/* The one sentence explaining why two identical
-                                                    items are priced differently. */}
-                                                {comparison.specLabel[t.id] && (
-                                                    <div className="text-[10px] text-slate-400 mt-2 leading-snug">
-                                                        {comparison.specLabel[t.id]}
-                                                    </div>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
 
                                 {/* Coverage: which trades, and how much of each option they are. */}
                                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -1319,118 +1255,6 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                     </div>
                 </div>
 
-                {/* 4. Discount Headroom Simulator */}
-                <div className="flex flex-col gap-3 mt-2">
-                    <div className="flex items-center gap-2 pl-1">
-                        <div className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-[9px] font-bold text-slate-400">2</div>
-                        <h4 className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Discount Headroom</h4>
-                    </div>
-                    <div className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-6">
-                        
-                        <div className="flex items-center gap-4">
-                            <input 
-                                type="range" 
-                                min="0" max="10" step="0.1" 
-                                value={discountHeadroom} 
-                                onChange={(e) => setDiscountHeadroom(parseFloat(e.target.value))}
-                                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                            />
-                            <span className="text-xl font-bold text-slate-900 w-20 text-right">{discountHeadroom.toFixed(2)}%</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 pt-2">
-                            <div className="flex flex-col gap-1 border-r border-slate-100 pr-4">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Client Pays</span>
-                                <h3 className="text-xl font-semibold text-slate-900 tracking-tight mt-1">{formatCurrency(clientPays)}</h3>
-                                <span className="text-[11px] text-slate-500 font-medium">was {formatCurrency(displayValue)}</span>
-                            </div>
-                            <div className="flex flex-col gap-1 border-r border-slate-100 pr-4">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">You Give Up</span>
-                                <h3 className="text-xl font-semibold text-slate-900 tracking-tight mt-1">{formatCurrency(giveUp)}</h3>
-                                <span className="text-[11px] text-slate-500 font-medium">{formatCurrency(displayValue * 0.01)} per 1%</span>
-                            </div>
-                            <div className="flex flex-col gap-1 border-r border-slate-100 pr-4">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">New GM</span>
-                                <h3 className="text-xl font-semibold text-slate-900 tracking-tight mt-1">
-                                    {newBlendedGm.toFixed(1)}%
-                                </h3>
-                                <span className={`text-[11px] font-medium ${newBlendedGm >= 20 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                    {newBlendedGm >= 20 ? 'above floor' : 'below floor'}
-                                </span>
-                            </div>
-                            <div className="flex flex-col gap-1 pr-4">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Headroom</span>
-                                <h3 className="text-xl font-semibold text-slate-900 tracking-tight mt-1">
-                                    {maxDiscountPct.toFixed(2)}%
-                                </h3>
-                                <span className="text-[11px] text-slate-500 font-medium">{formatCurrency(headroomRupees)} total</span>
-                            </div>
-                        </div>
-
-                        {/* Derived Client Negotiation Analysis Note */}
-                        {(() => {
-                            const isCustom = discountHeadroom > 0;
-                            const askPct = isCustom ? discountHeadroom : 5;
-                            const askRupees = displayValue * (askPct / 100);
-                            const simulatedClientPays = displayValue - askRupees;
-                            const simulatedGm = simulatedClientPays > 0 ? ((simulatedClientPays - activeTierCost) / simulatedClientPays) * 100 : 0;
-                            const isBelowFloor = simulatedGm < 20;
-
-                            return (
-                                <div className={`rounded-lg p-3.5 text-[13px] border leading-relaxed ${
-                                    isBelowFloor 
-                                        ? 'bg-amber-50/70 border-amber-200 text-slate-800' 
-                                        : 'bg-emerald-50/70 border-emerald-200 text-slate-800'
-                                }`}>
-                                    A client asking <strong className="font-bold text-slate-900">{askPct % 1 === 0 ? `${askPct}%` : `${askPct.toFixed(1)}%`}</strong> wants <strong className="font-bold text-slate-900">{formatCurrency(askRupees)}</strong> — against headroom of <strong className="font-bold text-slate-900">{formatCurrency(headroomRupees)}</strong>. That lands at <strong className="font-bold text-slate-900">{simulatedGm.toFixed(1)}%</strong>, {isBelowFloor ? 'below the 20% floor.' : 'above the 20% floor.'}
-                                </div>
-                            );
-                        })()}
-                    </div>
-                </div>
-                
-                {/* 5. Health Check Placeholders */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
-                    <div className="flex flex-col gap-3">
-                         <div className="flex items-center gap-2 pl-1">
-                            <div className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-[9px] font-bold text-slate-400">3</div>
-                            <h4 className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Scope Completeness</h4>
-                        </div>
-                        <div className="bg-white rounded-xl border border-slate-200 p-5 h-full flex flex-col gap-4">
-                            <div className="flex gap-3 items-start bg-amber-50/30 p-3 rounded-lg border border-amber-100">
-                                <span className="text-amber-500 mt-0.5 text-xs">▲</span>
-                                <div>
-                                    <h5 className="font-bold text-sm text-slate-900">T.V. Unit (Drawer)</h5>
-                                    <p className="text-[12px] text-slate-500 mt-0.5">missing · in 17 of 23 past projects</p>
-                                </div>
-                            </div>
-                            <div className="flex gap-3 items-start bg-amber-50/30 p-3 rounded-lg border border-amber-100">
-                                <span className="text-amber-500 mt-0.5 text-xs">▲</span>
-                                <div>
-                                    <h5 className="font-bold text-sm text-slate-900">Floor Protection</h5>
-                                    <p className="text-[12px] text-slate-500 mt-0.5">missing · in 13 of 23 past projects</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div className="flex flex-col gap-3">
-                         <div className="flex items-center gap-2 pl-1">
-                            <div className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-[9px] font-bold text-slate-400">4</div>
-                            <h4 className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Rate Outliers</h4>
-                        </div>
-                        <div className="bg-white rounded-xl border border-slate-200 p-5 h-full flex flex-col gap-4">
-                             <div className="flex flex-col gap-1 p-3 rounded-lg border border-slate-100 bg-slate-50/50">
-                                <h5 className="font-bold text-sm text-slate-900">Wardrobe with Loft</h5>
-                                <p className="text-[12px] text-slate-500">bank ₹1,240 · <span className="text-slate-400 font-medium">+60%</span></p>
-                            </div>
-                            <div className="flex flex-col gap-1 p-3 rounded-lg border border-slate-100 bg-slate-50/50">
-                                <h5 className="font-bold text-sm text-slate-900">Interior Painting</h5>
-                                <p className="text-[12px] text-slate-500">history ₹41 · <span className="text-slate-400 font-medium">-32%</span></p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
             </div>
 
@@ -1523,6 +1347,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                     </div>
                 </div>
             )}
+        </div>
         </div>
     );
 };
