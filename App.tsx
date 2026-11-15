@@ -102,6 +102,7 @@ const OpsDeskPage = lazyWithRetry(() => import("./components/opsDesk/OpsDeskPage
 const PeoplePage = lazyWithRetry(() => import("./components/people/PeoplePage"));
 /* Whole tabs, loaded when first opened rather than with the app (each renders inside the tab's Suspense). */
 const DesignDeskTab = lazyWithRetry(() => import("./components/drawingReview/DesignDeskTab"));
+const StartProjectModal = lazyWithRetry(() => import("./components/projects/StartProjectModal"));
 const DataPrivacyPage = lazyWithRetry(() => import("./components/studio/DataPrivacyPage"));
 const SupportDeskPage = lazyWithRetry(() => import("./components/studio/SupportDeskPage"));
 const TermsOfUsePage = lazyWithRetry(() => import("./components/studio/TermsOfUsePage"));
@@ -196,6 +197,8 @@ export default function App() {
   const figuresHidden = useFiguresHidden();
   useHideFiguresShortcut(holdsFinanceRole(currentRoles));
   const [showWizardOverride, setShowWizardOverride] = useState(false);
+  /* The New Project window (components/projects/StartProjectModal). */
+  const [startingProject, setStartingProject] = useState(false);
   useEffect(() => {
     const handleTabChange = (e: any) => {
         if (e.detail) {
@@ -1896,8 +1899,22 @@ export default function App() {
     setActiveTab(targetTab || "dashboard");
   };
 
+  /*
+    New Project starts from a lead (components/projects/StartProjectModal): the
+    window asks which lead, or adds one, and opens the project from it. Owner,
+    Admin and Ops Director may; anyone else is told whom to ask.
+  */
   const handleCreateNewProject = () => {
     // Designers and the other limited roles are given projects; they do not start them (lib/roleAccess).
+    if (isLimitedRole(currentRole)) return;
+    setStartingProject(true);
+  };
+
+  /**
+   * A blank project, without a lead: the practice or demo project the start
+   * window offers (tagged Dummy), and Studio settings' "start over".
+   */
+  const startBlankProject = (opts: { practice?: boolean } = {}) => {
     if (isLimitedRole(currentRole)) return;
     const newId = generateId();
     setActiveInternalId(newId);
@@ -1916,6 +1933,8 @@ export default function App() {
       name: nextDefaultProjectName(DEFAULT_CONTEXT.name, projectLibrary),
       // New projects work on signed scope from the start; the switch is for older ones.
       scopeFlow: { enabled: true, enabledAt: Date.now(), enabledBy: currentUserAuth?.displayName || currentUserAuth?.email || "Studio" },
+      // Practice and demo projects are kept out of the desk and the numbers.
+      ...(opts.practice ? { isDummy: true, projectCategory: 'dummy' as const } : {}),
     });
     setTiers([]);
     setActiveTierId(null);
@@ -1959,8 +1978,11 @@ export default function App() {
     } as FullProjectData;
     await db.saveProject(project);
     setProjectLibrary((prev) => [project, ...prev]);
+    justCreatedRef.current[newId] = project;
     return newId;
   };
+  /* Projects just made from a lead, so the start window can open one before the library state catches up. */
+  const justCreatedRef = useRef<Record<string, FullProjectData>>({});
 
   /**
    * Issue a fresh portal link for a project and email it to the client.
@@ -2293,7 +2315,7 @@ export default function App() {
 
   const handleClearProject = () => {
     if (confirmReset) {
-      handleCreateNewProject();
+      startBlankProject();
       setConfirmReset(false);
     } else {
       setConfirmReset(true);
@@ -4644,6 +4666,21 @@ export default function App() {
       )}
       {!(isProjectTab && hasProjectData) && (
         <SuccessWithNextToast projectId={activeInternalId || undefined} projectContext={projectContext} />
+      )}
+      {startingProject && (
+        <Suspense fallback={null}>
+        <StartProjectModal
+          canStart={holdsFinanceRole(currentRoles?.length ? currentRoles : currentRole)}
+          createProject={handleCreateFromLead}
+          onOpened={(id) => {
+            const project = justCreatedRef.current[id] || projectLibrary.find((p) => p.id === id);
+            setStartingProject(false);
+            if (project) handleOpenProject(project, "dashboard");
+          }}
+          onPractice={() => { setStartingProject(false); startBlankProject({ practice: true }); }}
+          onClose={() => setStartingProject(false)}
+        />
+        </Suspense>
       )}
       <OfflineIndicator />
         </div>

@@ -20,7 +20,7 @@ import {
   DESK_SCOPES, inDeskScope, scopeCounts, doneToday, withSnoozes, liveSnoozes, teamRows, personQueue, weekNumbers, guideProgress,
   type DeskScope, type GuideStep, type GuideStepId,
 } from '../../lib/opsTeam';
-import { leadQueue, leadToProject, leadMeeting, linkLeadProject, isOpen as leadIsOpen, type Lead } from '../../lib/leads';
+import { leadQueue, leadToProject, leadOpenedAsProject, leadMeeting, linkLeadProject, isOpen as leadIsOpen, type Lead } from '../../lib/leads';
 import { projectGuesses, projectRefOf } from '../../lib/leadSmart';
 import { loadProjectOps, loadStudioOps, markNextDone, closeEscalation, logFollowUp, type OpsMom } from '../../services/opsDeskService';
 import { loadLeads, saveLead, withTouch, deleteLead } from '../../services/leadsService';
@@ -827,9 +827,9 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
           onOpen={async () => {
             if (!onCreateFromLead) throw new Error('Opening a project is not available here.');
             const projectId = await onCreateFromLead(leadToProject(converting));
-            /* Opened for the proposal, and linked to the lead; it is won later, when the client says yes. */
-            const early = ['new', 'talking', 'meeting', 'measured'].includes(converting.stage);
-            const l = withTouch({ ...converting, stage: early ? 'proposal' : converting.stage, projectId, openRequest: null }, { kind: 'stage', text: early ? 'Moved to Proposal sent' : 'The project is open for the proposal' }, me);
+            /* Opened for the proposal, and linked to the lead; it is won later, when the client says yes (lib/leads). */
+            const opened = leadOpenedAsProject(converting, projectId);
+            const l = withTouch(opened.lead, opened.touch, me);
             replaceLead(await saveLead(l, myEmail));
             if (converting.ownerEmail && converting.ownerEmail !== myEmail) await assign({ id: projectId }, converting.ownerEmail).catch(() => undefined);
             setConverting(null);
