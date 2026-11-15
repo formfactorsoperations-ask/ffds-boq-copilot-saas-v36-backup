@@ -76,6 +76,8 @@ export interface LinkRecord {
   invoiceId: string;
   invoiceNumber: string;
   createdAt: number;
+  /** True when the studio raised the invoice in Zoho itself and linked it here, rather than the app drafting it. */
+  linked?: boolean;
 }
 
 export interface LinkStore {
@@ -91,7 +93,10 @@ export class ZohoError extends Error {
 
 /** A precondition the studio can fix in the app, as opposed to a Zoho failure. */
 export class NeedsAttention extends Error {
-  constructor(public reason: "place_of_supply" | "studio_gstin" | "tax_missing" | "invoice_sent", message: string) {
+  constructor(
+    public reason: "place_of_supply" | "studio_gstin" | "tax_missing" | "invoice_sent" | "invoice_missing" | "invoice_customer" | "invoice_void" | "invoice_linked",
+    message: string,
+  ) {
     super(message);
   }
 }
@@ -160,6 +165,30 @@ export async function revokeRefreshToken(fetchImpl: FetchFn, region: ZohoRegion,
   try {
     await timedFetch(fetchImpl, `https://${ZOHO_REGIONS[region].accounts}/oauth/v2/token/revoke?token=${encodeURIComponent(token)}`, { method: "POST" });
   } catch { /* disconnecting must not hinge on Zoho answering */ }
+}
+
+export interface ZohoInvoiceSummary {
+  id: string;
+  number: string;
+  status: string;
+  total: number;
+  /** Still owed on it, as Zoho has it. */
+  balance: number;
+  /** YYYY-MM-DD, as Zoho has it. */
+  date: string;
+  customerId: string;
+}
+
+function invoiceSummary(inv: any, fallbackId = ""): ZohoInvoiceSummary {
+  return {
+    id: String(inv.invoice_id || fallbackId),
+    number: String(inv.invoice_number || ""),
+    status: String(inv.status || ""),
+    total: Number(inv.total) || 0,
+    balance: Number(inv.balance) || 0,
+    date: /^\d{4}-\d{2}-\d{2}$/.test(String(inv.date || "")) ? String(inv.date) : "",
+    customerId: String(inv.customer_id || ""),
+  };
 }
 
 /** "Mrs. Nivedita Jamnis" -> "Nivedita Jamnis". */
@@ -331,15 +360,24 @@ export class ZohoBooksApi {
     return out;
   }
 
-  async getInvoice(id: string): Promise<{ id: string; number: string; status: string; total: number } | null> {
+  async getInvoice(id: string): Promise<ZohoInvoiceSummary | null> {
     try {
       const json = await this.request("GET", `/invoices/${encodeURIComponent(id)}`);
-      const inv = json.invoice || {};
-      return { id: String(inv.invoice_id || id), number: String(inv.invoice_number || ""), status: String(inv.status || ""), total: Number(inv.total) || 0 };
+      return invoiceSummary(json.invoice || {}, id);
     } catch (e) {
       if (e instanceof ZohoError && (e.status === 404 || e.zohoCode === 1002)) return null;
       throw e;
     }
+  }
+
+  /** One customer's invoices, newest first, void ones left out: what the studio picks from to link one to a milestone. */
+  async customerInvoices(contactId: string): Promise<ZohoInvoiceSummary[]> {
+    const json = await this.request("GET", "/invoices", {
+      query: { customer_id: contactId, per_page: 50, sort_column: "date", sort_order: "D" },
+    });
+    return (json.invoices || [])
+      .map((inv: any) => invoiceSummary(inv))
+      .filter((inv: ZohoInvoiceSummary) => inv.status !== "void" && inv.customerId === contactId);
   }
 
   async createInvoice(body: Record<string, unknown>, query: Record<string, string>): Promise<{ id: string; number: string; status: string; total: number }> {
@@ -386,6 +424,10 @@ export interface RaiseResult {
   reused: boolean;
   gstLabel: string;
   placeOfSupply: string;
+  /** Set when an invoice the studio raised in Zoho itself was linked to the milestone. */
+  linked?: boolean;
+  /** The invoice's own date in Zoho, as an ISO timestamp (midday IST). Set when linking. */
+  invoiceDate?: string;
 }
 
 export interface RaiseDeps {
@@ -490,4 +532,63 @@ export async function raiseDraftInvoice(input: RaiseInput, deps: RaiseDeps): Pro
     invoiceId: created.id, invoiceNumber: created.number, status: created.status, total: created.total,
     expectedTotal, url: api.invoiceUrl(created.id), reused: false, gstLabel: split.label, placeOfSupply: clientState.zoho,
   };
+}
+
+// ── Linking an invoice raised in Zoho by hand ────────────────────────────────
+
+export interface LinkInput {
+  contactId: string;
+  invoiceId: string;
+  /** What the studio's schedule says the milestone should total, for the mismatch warning. */
+  expectedTotal: number;
+}
+
+export interface LinkDeps {
+  api: ZohoBooksApi;
+  links: LinkStore & {
+    /** The key of another milestone this invoice is already linked to, if any. */
+    keyForInvoice(invoiceId: string, notKey: string): Promise<string | null>;
+  };
+  linkKey: string;
+  now?: Date;
+}
+
+/**
+ * Tie an invoice the studio already raised in Zoho Books to one milestone, so
+ * the app shows Zoho's number and does not draft a second invoice for it.
+ *
+ * Nothing is written to Zoho. The invoice must belong to the customer linked
+ * to the project, must not be void, and must not already belong to another
+ * milestone; a milestone that already has a live invoice keeps it.
+ */
+export async function linkExistingInvoice(input: LinkInput, deps: LinkDeps): Promise<RaiseResult> {
+  const { api, links, linkKey } = deps;
+  const inv = await api.getInvoice(input.invoiceId);
+  if (!inv) throw new NeedsAttention("invoice_missing", "Zoho Books has no such invoice. It may have been deleted.");
+  if (inv.customerId !== input.contactId) {
+    throw new NeedsAttention("invoice_customer", `${inv.number} is for a different Zoho customer than this project's client.`);
+  }
+  if (inv.status === "void") throw new NeedsAttention("invoice_void", `${inv.number} is void in Zoho Books, so it cannot be linked.`);
+
+  const result = (reused: boolean): RaiseResult => ({
+    invoiceId: inv.id, invoiceNumber: inv.number, status: inv.status, total: inv.total,
+    expectedTotal: input.expectedTotal, url: api.invoiceUrl(inv.id), reused, gstLabel: "", placeOfSupply: "",
+    linked: true,
+    invoiceDate: inv.date ? new Date(`${inv.date}T12:00:00+05:30`).toISOString() : (deps.now || new Date()).toISOString(),
+  });
+
+  const prior = await links.get(linkKey);
+  if (prior && prior.invoiceId === inv.id) return result(true);
+  if (prior) {
+    const current = await api.getInvoice(prior.invoiceId);
+    if (current && current.status !== "void") {
+      throw new NeedsAttention("invoice_linked", `This milestone already has invoice ${current.number} in Zoho. Delete or void it there first.`);
+    }
+  }
+
+  const other = await links.keyForInvoice(inv.id, linkKey);
+  if (other) throw new NeedsAttention("invoice_linked", `${inv.number} is already linked to another milestone.`);
+
+  await links.set(linkKey, { invoiceId: inv.id, invoiceNumber: inv.number, createdAt: (deps.now || new Date()).getTime(), linked: true });
+  return result(false);
 }

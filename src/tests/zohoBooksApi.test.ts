@@ -8,6 +8,7 @@ import {
   ZohoConnection,
   ZohoError,
   exchangeGrantCode,
+  linkExistingInvoice,
   raiseDraftInvoice,
 } from '../../functions/src/zohoBooksApi';
 
@@ -319,5 +320,91 @@ describe('finding a Zoho customer', () => {
   it('returns nothing rather than the whole list when no one matches', async () => {
     const { api } = zoho();
     expect(await api.searchContacts('Zzyzx Quill')).toEqual([]);
+  });
+});
+
+describe('linking an invoice raised in Zoho by hand', () => {
+  const NIVEDITA = 'C-NJ';
+  const zohoInvoices = [
+    { invoice_id: 'Z25', invoice_number: 'INV-26/27-0025', status: 'draft', total: 50071, balance: 50071, date: '2026-11-15', customer_id: NIVEDITA },
+    { invoice_id: 'Z20', invoice_number: 'INV-26/27-0020', status: 'paid', total: 80000, balance: 0, date: '2026-08-01', customer_id: NIVEDITA },
+    { invoice_id: 'Z19', invoice_number: 'INV-26/27-0019', status: 'void', total: 10000, balance: 0, date: '2026-07-01', customer_id: NIVEDITA },
+    { invoice_id: 'Z24', invoice_number: 'INV-26/27-0024', status: 'paid', total: 36827, balance: 0, date: '2026-11-01', customer_id: 'C-GD' },
+  ];
+  const zoho = () => {
+    const calls: { path: string; query: Record<string, string>; method: string }[] = [];
+    const fetchImpl = async (url: string, init: any = {}) => {
+      const u = new URL(url);
+      if (u.hostname.startsWith('accounts.')) return { ok: true, status: 200, json: async () => ({ access_token: 'a', expires_in: 3600 }) };
+      const path = u.pathname.replace('/books/v3', '');
+      const query = Object.fromEntries(u.searchParams.entries());
+      calls.push({ path, query, method: init.method || 'GET' });
+      const ok = (body: any) => ({ ok: true, status: 200, json: async () => ({ code: 0, ...body }) });
+      if (path === '/invoices') return ok({ invoices: zohoInvoices.filter((i) => i.customer_id === query.customer_id) });
+      const one = zohoInvoices.find((i) => path === `/invoices/${i.invoice_id}`);
+      return one ? ok({ invoice: one }) : { ok: false, status: 404, json: async () => ({ code: 1002, message: 'Invoice does not exist.' }) };
+    };
+    return { calls, api: new ZohoBooksApi(conn(), store, fetchImpl, () => NOW.getTime()) };
+  };
+  const links = () => {
+    const m = memoryLinks();
+    return { ...m, keyForInvoice: async (id: string, notKey: string) => [...m.map.entries()].find(([k, r]) => k !== notKey && r.invoiceId === id)?.[0] || null };
+  };
+  const input = (invoiceId: string, contactId = NIVEDITA) => ({ contactId, invoiceId, expectedTotal: 50071 });
+
+  it("lists only that customer's invoices, newest first, without void ones", async () => {
+    const { api, calls } = zoho();
+    const list = await api.customerInvoices(NIVEDITA);
+    expect(list.map((i) => i.number)).toEqual(['INV-26/27-0025', 'INV-26/27-0020']);
+    expect(calls[0].query).toMatchObject({ customer_id: NIVEDITA, sort_column: 'date', sort_order: 'D' });
+  });
+
+  it("links the invoice, takes Zoho's number and date, and writes nothing to Zoho", async () => {
+    const { api, calls } = zoho();
+    const l = links();
+    const res = await linkExistingInvoice(input('Z25'), { api, links: l, linkKey: 'K1', now: NOW });
+    expect(res).toMatchObject({ invoiceId: 'Z25', invoiceNumber: 'INV-26/27-0025', total: 50071, expectedTotal: 50071, linked: true, reused: false });
+    expect(res.invoiceDate).toBe('2026-11-15T06:30:00.000Z'); // midday IST on Zoho's date
+    expect(l.map.get('K1')).toMatchObject({ invoiceId: 'Z25', invoiceNumber: 'INV-26/27-0025', linked: true });
+    expect(calls.every((c) => c.method === 'GET')).toBe(true);
+  });
+
+  it('linking the same invoice again is harmless', async () => {
+    const { api } = zoho();
+    const l = links();
+    await linkExistingInvoice(input('Z25'), { api, links: l, linkKey: 'K1' });
+    expect((await linkExistingInvoice(input('Z25'), { api, links: l, linkKey: 'K1' })).reused).toBe(true);
+  });
+
+  it("refuses another customer's invoice", async () => {
+    const { api } = zoho();
+    await expect(linkExistingInvoice(input('Z24'), { api, links: links(), linkKey: 'K1' })).rejects.toMatchObject({ reason: 'invoice_customer' });
+  });
+
+  it('refuses a void or missing invoice', async () => {
+    const { api } = zoho();
+    await expect(linkExistingInvoice(input('Z19'), { api, links: links(), linkKey: 'K1' })).rejects.toMatchObject({ reason: 'invoice_void' });
+    await expect(linkExistingInvoice(input('NOPE'), { api, links: links(), linkKey: 'K1' })).rejects.toMatchObject({ reason: 'invoice_missing' });
+  });
+
+  it('will not put one invoice on two milestones', async () => {
+    const { api } = zoho();
+    const l = links();
+    await linkExistingInvoice(input('Z25'), { api, links: l, linkKey: 'K1' });
+    await expect(linkExistingInvoice(input('Z25'), { api, links: l, linkKey: 'K2' })).rejects.toMatchObject({ reason: 'invoice_linked' });
+  });
+
+  it('will not replace a live invoice already on the milestone', async () => {
+    const { api } = zoho();
+    const l = links();
+    await linkExistingInvoice(input('Z20'), { api, links: l, linkKey: 'K1' });
+    await expect(linkExistingInvoice(input('Z25'), { api, links: l, linkKey: 'K1' })).rejects.toMatchObject({ reason: 'invoice_linked' });
+  });
+
+  it('can replace an invoice that was deleted in Zoho', async () => {
+    const { api } = zoho();
+    const l = links();
+    await l.set('K1', { invoiceId: 'GONE', invoiceNumber: 'INV-OLD', createdAt: 0 });
+    expect((await linkExistingInvoice(input('Z25'), { api, links: l, linkKey: 'K1' })).invoiceNumber).toBe('INV-26/27-0025');
   });
 });
