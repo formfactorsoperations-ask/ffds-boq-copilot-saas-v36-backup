@@ -30,7 +30,8 @@ interface ProjectSetupWizardProps {
   setLeadProfile: (profile: LeadProfile) => void;
   setDecisionBrainOutput: (output: DecisionBrainOutput | null) => void;
   templates: TemplateData;
-  onComplete?: () => void;
+  /** Closes the wizard. `next` says what was made, so the app can open it: generated options, or a manual BOQ. */
+  onComplete?: (next?: 'options' | 'manual') => void;
   onCancel?: () => void;
 }
 
@@ -311,11 +312,12 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       if (setAiStrategy) setAiStrategy(selectedStrategy);
       setTiers([newTier]);
       setActiveTierId(newTier.id);
+      if (onComplete) onComplete('manual');
   }
 
   const finalizeGeneration = async (newTiers: ProposalTier[]) => {
       setTiers(newTiers);
-      if (onComplete) onComplete();
+      if (onComplete) onComplete('options');
       const premiumTier = newTiers.find(t => t.name === "Comfort Upgrade") || newTiers[0];
       setActiveTierId(premiumTier.id);
 

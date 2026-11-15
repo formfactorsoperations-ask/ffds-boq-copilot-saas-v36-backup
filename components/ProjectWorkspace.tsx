@@ -3,7 +3,7 @@ import { ProjectContextTier } from './ProjectContextTier';
 import { ProjectContext, ProjectStatus, FullProjectData } from '../types';
 import { STAGE_LABELS, PHASES } from '../constants/journeyConstants';
 import { Lock, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, X, Compass, Activity, Check, Info, Settings, Edit3, AlertTriangle, LayoutGrid, Handshake, Palette, Layers, FileText, Truck, Hammer, Key, Sparkles, SlidersHorizontal, Eye, Pencil } from '@/lib/lucide-shim';
-import { NAV_CONFIG, ALWAYS_ON_BAND } from './navConfig';
+import { NAV_CONFIG, ALWAYS_ON_BAND, nextScreen } from './navConfig';
 import { engagementOf, navItemsFor, stageLabel, routeLabel, isRouteHidden, engagementDef } from '../lib/engagement';
 import { useProjectJourney } from '../hooks/useProjectJourney';
 import { useOrg } from '../contexts/OrgContext';
@@ -265,6 +265,9 @@ export function ProjectWorkspace({
   const hiddenForRole = (item: any): boolean =>
     (!seesStudioFinance(currentRole) && !!item?.money) ||
     (isLimited && !limitedMayOpen(currentRole, item?.route));
+
+  /* The screen after this one in the workflow, for the Next button: never one this person cannot open, nor a locked stage. */
+  const next = nextScreen(NAV, activeTab, { isHidden: hiddenForRole, isStageLocked });
 
   /* Notes on this project, by the screen they open: a red number where someone is waiting on you, a dot for something new (lib/notify). */
   const inbox = useInbox();
@@ -607,7 +610,10 @@ export function ProjectWorkspace({
           </div>
         </div>
 
-        {/* Row 3: Stage Sub-Menus (Screens in active/selected stage) */}
+        {/*
+          Row 3: Stage Sub-Menus (Screens in active/selected stage), ending in
+          the way forward: the next screen in the workflow (navConfig nextScreen).
+        */}
         {activeTab !== 'dashboard' && !BAND.some(i => i.route === activeTab) && selectedStage > 0 && activeStageConfig && activeStageConfig.items.length > 0 && (
           <div className="bg-slate-50/60 border-b border-slate-200 px-4 lg:px-6 py-2 flex items-center gap-2 shrink-0 flex-wrap">
             {activeStageConfig.items.map(item => {
@@ -651,6 +657,17 @@ export function ProjectWorkspace({
                 </button>
               );
             })}
+            {next && activeStageConfig.items.some(i => i.route === activeTab) && (
+              <button
+                type="button"
+                onClick={() => setActiveTab(next.route)}
+                className="ml-auto inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486] shadow-sm"
+                title={`Next in the workflow: ${next.label}`}
+              >
+                Next: {next.label}
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         )}
 

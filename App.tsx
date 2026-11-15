@@ -128,6 +128,8 @@ import {
 } from "./types";
 import { db, dbWriteCount, hydrateProjectDetail, projectFromDoc } from "./services/dbService";
 import { mergeClientOwned } from "./lib/clientOwned";
+import { engagementOf, isRouteHidden } from "./lib/engagement";
+import { landingAfterSetup } from "./components/navConfig";
 import { db as firestoreDb } from "./services/firebaseClient";
 import { collection, doc, getDoc, getDocs, writeBatch, serverTimestamp, onSnapshot, query, orderBy } from "firebase/firestore";
 import { toProjectDecisionRecords } from "./services/decisionProjection";
@@ -3428,7 +3430,11 @@ export default function App() {
                               setLeadProfile={setLeadProfile}
                               setDecisionBrainOutput={setDecisionBrainOutput}
                               templates={templates}
-                              onComplete={() => setShowWizardOverride(false)}
+                              onComplete={(next) => {
+                                setShowWizardOverride(false);
+                                /* Open what the wizard just made, not the Hub (components/navConfig landingAfterSetup). */
+                                if (next) setActiveTab(landingAfterSetup((r) => isRouteHidden(engagementOf(projectContext), r), next));
+                              }}
                               onCancel={tiers.length > 0 ? () => setShowWizardOverride(false) : undefined}
                             />
                           </div>
@@ -4154,7 +4160,11 @@ export default function App() {
                               setLeadProfile={setLeadProfile}
                               setDecisionBrainOutput={setDecisionBrainOutput}
                               templates={templates}
-                              onComplete={() => setShowWizardOverride(false)}
+                              onComplete={(next) => {
+                                setShowWizardOverride(false);
+                                /* Open what the wizard just made, not the Hub (components/navConfig landingAfterSetup). */
+                                if (next) setActiveTab(landingAfterSetup((r) => isRouteHidden(engagementOf(projectContext), r), next));
+                              }}
                               onCancel={tiers.length > 0 ? () => setShowWizardOverride(false) : undefined}
                             />
                           </div>
