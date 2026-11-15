@@ -666,3 +666,40 @@ export function linkLeadProject(l: Lead, project: { id: string; name: string }, 
   const touch: LeadTouch = { id: `t${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`, at, by: me.email.toLowerCase(), byName: me.name, kind: 'note', text: `Linked to the project ${project.name}`.slice(0, 500), reached: null };
   return { ...l, projectId: project.id, openRequest: null, touches: [...l.touches, touch].slice(-300) };
 }
+
+/* ── Starting a project from a lead ─────────────────────────────────────── */
+
+/**
+ * The leads a new project can start from: not lost, and not already a project.
+ * Most recently active first, so the enquiry being worked on today is on top.
+ */
+export function startableLeads(leads: Lead[]): Lead[] {
+  return leads
+    .filter((l) => !l.projectId && l.stage !== 'lost')
+    .sort((a, b) => (b.lastTouchAt || b.updatedAt || b.createdAt) - (a.lastTouchAt || a.updatedAt || a.createdAt));
+}
+
+/**
+ * The lead once its project is open: linked to it, and moved on to Proposal
+ * sent if it was earlier than that. It is won later, when the client says yes.
+ * One rule for the Ops Desk's "Open the project" and for New Project.
+ */
+export function leadOpenedAsProject(l: Lead, projectId: string): { lead: Lead; touch: { kind: 'stage'; text: string } } {
+  const early = ['new', 'talking', 'meeting', 'measured'].includes(l.stage);
+  return {
+    lead: { ...l, stage: early ? 'proposal' : l.stage, projectId, openRequest: null },
+    touch: { kind: 'stage', text: early ? 'Moved to Proposal sent' : 'The project is open for the proposal' },
+  };
+}
+
+/** A lead typed in while starting a project: who they are, how to reach them, and where. */
+export function quickLeadDraft(q: { name: string; phone: string; email: string; where: string; source: LeadSource }, now: number): LeadDraft {
+  const draft = blankDraft(now);
+  return {
+    ...draft,
+    people: [{ ...blankPerson(true), name: q.name.trim(), phone: q.phone.trim(), email: q.email.trim() }],
+    home: { ...draft.home, where: q.where.trim() },
+    source: q.source,
+    next: { kind: 'call', text: 'Prepare the proposal', due: dayKey(now) },
+  };
+}
