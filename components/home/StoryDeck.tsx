@@ -75,7 +75,7 @@ export default function StoryDeck({ feeds, counts, projects, role, roles, userNa
 
   const act = (a: StoryAction) => {
     if (a.kind === 'tab') onNavigate(a.tab);
-    else if (a.kind === 'sheet') openInDesignReview(a.projectId, a.drawingId);
+    else if (a.kind === 'sheet') openInDesignReview(a.projectId, a.drawingId, { tab: 'home', label: 'Home' });
     else { const p = projects.find((x) => String(x.id) === a.projectId); if (p) onOpenProject(p); }
   };
 

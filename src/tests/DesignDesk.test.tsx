@@ -8,7 +8,7 @@ import { render, screen, fireEvent, cleanup, act, within } from '@testing-librar
   dragging, search, and opening a sheet.
 */
 
-const h = vi.hoisted(() => ({ org: {} as any, studio: [] as any[], trackers: {} as Record<string, any[]>, versions: [] as any[], submit: null as any }));
+const h = vi.hoisted(() => ({ org: {} as any, studio: [] as any[], trackers: {} as Record<string, any[]>, versions: [] as any[], submit: null as any, open: null as any, back: null as any }));
 
 vi.mock('../../contexts/OrgContext', () => ({ useOrg: () => h.org }));
 vi.mock('../../lib/pdfRender', () => ({ thumbnailOf: vi.fn(async () => null), loadPdf: vi.fn(() => new Promise(() => undefined)), renderPage: vi.fn() }));
@@ -22,7 +22,8 @@ vi.mock('../../services/drawingReviewService', () => {
     watchMarks: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb([]); return () => undefined; },
     watchRounds: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb([]); return () => undefined; },
     watchEvents: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb([]); return () => undefined; },
-    takeOpenRequest: () => null,
+    takeOpenRequest: () => { const r = h.open; h.open = null; return r; },
+    returnFromDesk: (...a: any[]) => h.back(...a),
     submitSheet: (...a: any[]) => h.submit(...a),
     fileUrl: () => Promise.reject(new Error('no files in tests')),
     fileBlob: () => Promise.reject(new Error('no files in tests')),
@@ -70,6 +71,8 @@ beforeEach(() => {
   data();
   h.versions = [];
   h.submit = vi.fn(async () => ({}));
+  h.open = null;
+  h.back = vi.fn();
   window.scrollTo = vi.fn() as any;
   /* The sheet measures its box; jsdom has no layout to measure. */
   (globalThis as any).ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
@@ -170,5 +173,24 @@ describe('Design Desk', () => {
     expect(screen.getByRole('button', { name: /Exit · Esc/ })).toBeTruthy();
     fireEvent.keyDown(window, { key: 'f' });
     expect(screen.queryByRole('button', { name: /Exit · Esc/ })).toBeNull();
+  });
+
+  it('goes back to the project it was opened from, not the Desk homepage', () => {
+    asRiya();
+    h.open = { projectId: 'p1', drawingId: 'd', from: { tab: 'drawing-tracker', label: 'Drawings' } };
+    render(<DesignDeskTab projects={projects} activeProjectId="p1" />);
+    expect(screen.getByRole('heading', { name: 'Kids Room Elevation' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Design Desk/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Drawings$/ }));
+    expect(h.back).toHaveBeenCalledWith({ tab: 'drawing-tracker', label: 'Drawings' });
+  });
+
+  it('opened from the Desk itself, still comes back to the Desk', () => {
+    asRiya();
+    h.open = { projectId: 'p1', drawingId: 'd', from: null };
+    render(<DesignDeskTab projects={projects} activeProjectId="p1" />);
+    fireEvent.click(screen.getByRole('button', { name: /Design Desk/ }));
+    expect(screen.getByRole('tablist', { name: 'Design Desk views' })).toBeTruthy();
+    expect(h.back).not.toHaveBeenCalled();
   });
 });
