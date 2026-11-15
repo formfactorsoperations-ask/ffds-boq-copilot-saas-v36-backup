@@ -589,7 +589,14 @@ export function templatePhases(kickoffISO: string, steps: TemplateStep[] = []) {
   });
 }
 
-export interface ProgrammePreview {
+/**
+ * A programme as the proposal, the agreement and the Timeline all state it.
+ * Working days exclude Sundays and holidays; plain days are calendar days,
+ * counted the way the Gantt's Total Duration counts them.
+ */
+export interface ProgrammeSummary {
+  /** saved: the studio's saved schedule. timeline: generated phases. estimate: what Generate would produce. */
+  source: 'saved' | 'timeline' | 'estimate';
   startISO: string | null;
   designGateISO: string | null;
   finishISO: string | null;
@@ -597,8 +604,52 @@ export interface ProgrammePreview {
   designWorkDays: number;
   /** Working days after design, to handover. 0 for a design-only project. */
   siteWorkDays: number;
-  /** Calendar days, start to handover, counted the way the Gantt counts them. */
+  /** Calendar days, start to handover, both ends counted. */
   totalDays: number;
+  /** Calendar days of design, from the start to the end of the last design step. */
+  designDays: number;
+  /** Calendar days after design, to handover. */
+  siteDays: number;
+  /** The site tasks, as the proposal's stage cards read them (lib/programmeStages). */
+  sitePhases: { id: string; phaseName: string; startDay: number; durationDays: number }[];
+}
+
+export function summariseProgramme(
+  schedule: ProjectSchedule,
+  source: ProgrammeSummary['source'],
+  projectContext?: ProjectContext,
+  todayISO?: string,
+): ProgrammeSummary {
+  const result = computeSchedule(schedule, todayISO);
+  const cal = schedule.calendar || DEFAULT_CALENDAR;
+  const startDay = result.startISO ? toDayNum(result.startISO) : null;
+  const gate = result.tasks.find(isDesignGateTask);
+  const finishDay = result.tasks.length ? Math.max(...result.tasks.map(t => t.plannedEndDay)) : null;
+  const designOnly = engagementOf(projectContext) === 'design_only';
+  const designEnds = result.tasks.filter(t => t.kind === 'design').map(t => t.plannedEndDay);
+  const designEnd = designEnds.length ? Math.max(...designEnds) : null;
+  const totalDays = programmeSpanDays(result);
+  const designDays = startDay !== null && designEnd !== null ? designEnd - startDay + 1 : 0;
+  return {
+    source,
+    startISO: result.startISO,
+    designGateISO: gate ? toISO(gate.plannedEndDay) : null,
+    finishISO: finishDay !== null ? toISO(finishDay) : null,
+    designWorkDays: startDay !== null && designEnd !== null ? workingDaysBetween(cal, startDay, designEnd) : 0,
+    siteWorkDays: !designOnly && designEnd !== null && finishDay !== null
+      ? workingDaysBetween(cal, designEnd + 1, finishDay)
+      : 0,
+    totalDays,
+    designDays,
+    siteDays: designOnly ? 0 : Math.max(0, totalDays - designDays),
+    sitePhases: designOnly || startDay === null ? [] : result.tasks
+      .filter(t => t.kind === 'execution')
+      .sort((a, b) => a.plannedStartDay - b.plannedStartDay)
+      .map(t => ({ id: t.id, phaseName: t.title, startDay: t.plannedStartDay - startDay, durationDays: t.workDays })),
+  };
+}
+
+export interface ProgrammePreview extends ProgrammeSummary {
   sizing: SiteSizing;
 }
 
@@ -620,23 +671,124 @@ export function previewTemplateProgramme(
 ): ProgrammePreview {
   const designSteps = templatePhases(kickoffISO, steps);
   const schedule = buildScheduleFromProject(projectContext, boq, { designSteps });
-  const result = computeSchedule(schedule, todayISO);
-  const cal = schedule.calendar || DEFAULT_CALENDAR;
-  const startDay = result.startISO ? toDayNum(result.startISO) : null;
-  const gate = result.tasks.find(isDesignGateTask);
-  const finishDay = result.tasks.length ? Math.max(...result.tasks.map(t => t.plannedEndDay)) : null;
-  const designOnly = engagementOf(projectContext) === 'design_only';
-  const designEnds = result.tasks.filter(t => t.kind === 'design').map(t => t.plannedEndDay);
-  const designEnd = designEnds.length ? Math.max(...designEnds) : null;
   return {
-    startISO: result.startISO,
-    designGateISO: gate ? toISO(gate.plannedEndDay) : null,
-    finishISO: finishDay !== null ? toISO(finishDay) : null,
-    designWorkDays: startDay !== null && designEnd !== null ? workingDaysBetween(cal, startDay, designEnd) : 0,
-    siteWorkDays: !designOnly && designEnd !== null && finishDay !== null
-      ? workingDaysBetween(cal, designEnd + 1, finishDay)
-      : 0,
-    totalDays: programmeSpanDays(result),
+    ...summariseProgramme(schedule, 'estimate', projectContext, todayISO),
     sizing: estimateSiteWorkDays(projectContext, boq),
   };
+}
+
+/*
+  The project's programme, whichever stage the Timeline is at -- the one figure
+  the proposal and the Execution Agreement state.
+
+  The same order the Timeline itself uses: the studio's saved schedule first,
+  then the schedule derived from generated phases, and before anything has been
+  generated, exactly what "Generate" would produce. The proposal used to carry
+  its own guesses (14 design days, 45-90 by BHK) and the agreement a flat 60,
+  none of which matched the chart.
+*/
+export function resolveProjectProgramme(input: {
+  projectContext: ProjectContext | undefined;
+  boq: FullBoqItem[];
+  saved?: ProjectSchedule | null;
+  phases?: { stepNumber: number; title: string; startDate?: string; endDate?: string; durationDays?: number }[];
+  steps?: TemplateStep[];
+  kickoffISO?: string;
+  todayISO?: string;
+}): ProgrammeSummary {
+  const { projectContext, boq, saved, phases = [], steps = [], todayISO } = input;
+  const fromSaved = scheduleForEngagement(saved || null, projectContext);
+  if (fromSaved && fromSaved.tasks?.length) {
+    return summariseProgramme(fromSaved, 'saved', projectContext, todayISO);
+  }
+  if (phases.length) {
+    return summariseProgramme(
+      buildScheduleFromProject(projectContext, boq, { designSteps: phases }), 'timeline', projectContext, todayISO,
+    );
+  }
+  const kickoff = (input.kickoffISO || todayISO || toISO(Math.floor(Date.now() / 86400000))).slice(0, 10);
+  const designSteps = steps.length ? templatePhases(kickoff, steps) : undefined;
+  return summariseProgramme(
+    buildScheduleFromProject(projectContext, boq, { designSteps }), 'estimate', projectContext, todayISO,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The programme in the proposal's five phases
+// ---------------------------------------------------------------------------
+
+/* The proposal's phases, in order, and which site stages each one covers. */
+const PROPOSAL_PHASES: { phaseName: string; description: string; stages: string[] }[] = [
+  {
+    phaseName: 'Site Setup & Rough-ins',
+    description: 'Site mobilization, surface protection laying, demolition/civil alterations, and plumbing/electrical cabling rough-ins.',
+    stages: ['site-prelims', 'civil-demolition', 'plumb-concealed', 'elec-conduit'],
+  },
+  {
+    phaseName: 'Structure & Utilities',
+    description: 'Flooring, false ceiling framing and boarding, wiring, and plywood carcass assembly.',
+    stages: ['flooring-tiling', 'ceiling-framing', 'elec-wiring', 'ceiling-boarding', 'carp-carcass'],
+  },
+  {
+    phaseName: 'Finishes & Surfaces',
+    description: 'Wall putty, priming and first coats, laminates, shutters and hardware.',
+    stages: ['paint-first', 'carp-shutters'],
+  },
+  {
+    phaseName: 'Final Handover',
+    description: 'Electrical fixture fits, sanitary fittings, final paint coat, deep cleaning, snag list closure, and handover.',
+    stages: ['elec-final', 'plumb-fixtures', 'paint-final', 'other-works'],
+  },
+];
+
+/**
+ * The programme as the proposal's phase list (Design & Planning, then up to
+ * four site phases), in calendar days laid end to end: day 1 is the start, and
+ * the phases add up to `totalDays`, the Timeline's Total Duration.
+ *
+ * Every part of the proposal that quotes a duration -- the snapshot, the
+ * booklet, the schedule section -- reads this list, so they all state the
+ * Timeline's figure rather than guesses of their own. Stages the studio added
+ * by hand join the phase of the stage before them.
+ */
+export function programmeAsProposalPhases(p: ProgrammeSummary): {
+  phaseName: string; description: string; startDay: number; durationDays: number;
+}[] {
+  if (!p.totalDays) return [];
+  const design = {
+    phaseName: 'Design & Planning',
+    description: 'Comprehensive 3D visualizations, material selection, layout signing, and Good-for-Construction (GFC) drawings creation.',
+    startDay: 1,
+    durationDays: Math.max(1, Math.min(p.designDays || p.totalDays, p.totalDays)),
+  };
+  if (!p.sitePhases.length || design.durationDays >= p.totalDays) return [{ ...design, durationDays: p.totalDays }];
+
+  const phaseOf = (id: string): number | undefined => {
+    const stage = id.replace(/^exec-/, '');
+    const i = PROPOSAL_PHASES.findIndex(ph => ph.stages.includes(stage));
+    return i >= 0 ? i : undefined;
+  };
+  // First day (1-based) each phase begins on; a phase never starts before the one ahead of it.
+  const firstDay = new Map<number, number>();
+  let current = 0;
+  p.sitePhases.forEach(t => {
+    current = Math.max(current, phaseOf(t.id) ?? current);
+    const day = Math.max(design.durationDays + 1, t.startDay + 1);
+    if (!firstDay.has(current) || day < firstDay.get(current)!) firstDay.set(current, day);
+  });
+
+  const order = [...firstDay.keys()].sort((a, b) => a - b);
+  const starts = order.map(i => firstDay.get(i)!);
+  starts[0] = design.durationDays + 1; // site work follows design without a gap
+  for (let k = 1; k < starts.length; k++) starts[k] = Math.max(starts[k], starts[k - 1] + 1);
+
+  const site = order
+    .map((i, k) => ({
+      phaseName: PROPOSAL_PHASES[i].phaseName,
+      description: PROPOSAL_PHASES[i].description,
+      startDay: starts[k],
+      durationDays: (k + 1 < starts.length ? starts[k + 1] : p.totalDays + 1) - starts[k],
+    }))
+    .filter(ph => ph.durationDays > 0);
+  return [design, ...site];
 }

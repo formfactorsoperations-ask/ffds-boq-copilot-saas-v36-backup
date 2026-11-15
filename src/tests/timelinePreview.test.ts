@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildScheduleFromProject, estimateSiteWorkDays, previewTemplateProgramme, splitWorkDays, templatePhases,
+  resolveProjectProgramme, programmeAsProposalPhases,
 } from '../../lib/scheduleBuilder';
 import { computeSchedule, programmeSpanDays } from '../../lib/schedule';
 
@@ -83,5 +84,55 @@ describe('splitWorkDays', () => {
 
   it('keeps each stage at its minimum when the total is too small to share', () => {
     expect(splitWorkDays([1, 1, 1], 4)).toEqual([2, 2, 2]);
+  });
+});
+
+describe('One programme for the Timeline, proposal and agreement', () => {
+  const C = ctx(650, 9);
+
+  it('before generating, quotes exactly what Generate will produce', () => {
+    const resolved = resolveProjectProgramme({ projectContext: C, boq: BOQ_2BHK, steps: STEPS, kickoffISO: '2026-11-14', todayISO: TODAY });
+    const preview = previewTemplateProgramme(C, BOQ_2BHK, '2026-11-14', STEPS, TODAY);
+    expect(resolved.source).toBe('estimate');
+    expect(resolved.totalDays).toBe(preview.totalDays);
+    expect(resolved.siteWorkDays).toBe(preview.siteWorkDays);
+  });
+
+  it('after generating, reads the generated phases', () => {
+    const phases = templatePhases('2026-11-14', STEPS);
+    const resolved = resolveProjectProgramme({ projectContext: C, boq: BOQ_2BHK, phases, steps: STEPS, todayISO: TODAY });
+    const chart = computeSchedule(buildScheduleFromProject(C, BOQ_2BHK, { designSteps: phases }), TODAY);
+    expect(resolved.source).toBe('timeline');
+    expect(resolved.totalDays).toBe(programmeSpanDays(chart));
+  });
+
+  it('prefers the studio\'s saved schedule, edits and all', () => {
+    const base = buildScheduleFromProject(C, BOQ_2BHK, { designSteps: templatePhases('2026-11-14', STEPS) });
+    const edited = { ...base, tasks: base.tasks.map(t => (t.id === 'exec-carp-carcass' ? { ...t, workDays: t.workDays + 10 } : t)) };
+    const plain = resolveProjectProgramme({ projectContext: C, boq: BOQ_2BHK, phases: templatePhases('2026-11-14', STEPS), todayISO: TODAY });
+    const saved = resolveProjectProgramme({ projectContext: C, boq: BOQ_2BHK, saved: edited, phases: templatePhases('2026-11-14', STEPS), todayISO: TODAY });
+    expect(saved.source).toBe('saved');
+    expect(saved.siteWorkDays).toBe(plain.siteWorkDays + 10);
+  });
+
+  it('gives the proposal phases that add up to the Timeline total', () => {
+    const p = resolveProjectProgramme({ projectContext: C, boq: BOQ_2BHK, steps: STEPS, kickoffISO: '2026-11-14', todayISO: TODAY });
+    const phases = programmeAsProposalPhases(p);
+    expect(phases[0].phaseName).toBe('Design & Planning');
+    expect(phases[0].durationDays).toBe(p.designDays);
+    expect(phases.reduce((s, ph) => s + ph.durationDays, 0)).toBe(p.totalDays);
+    expect(phases.slice(1).reduce((s, ph) => s + ph.durationDays, 0)).toBe(p.siteDays);
+    phases.slice(1).forEach((ph, i) => expect(ph.startDay).toBe(phases[i].startDay + phases[i].durationDays));
+    expect(phases.map(ph => ph.phaseName)).toEqual([
+      'Design & Planning', 'Site Setup & Rough-ins', 'Structure & Utilities', 'Finishes & Surfaces', 'Final Handover',
+    ]);
+  });
+
+  it('gives a design-only project one design phase', () => {
+    const p = resolveProjectProgramme({ projectContext: { ...C, engagementType: 'design_only' }, boq: BOQ_2BHK, steps: STEPS, kickoffISO: '2026-11-14', todayISO: TODAY });
+    const phases = programmeAsProposalPhases(p);
+    expect(phases).toHaveLength(1);
+    expect(phases[0].durationDays).toBe(p.totalDays);
+    expect(p.siteWorkDays).toBe(0);
   });
 });

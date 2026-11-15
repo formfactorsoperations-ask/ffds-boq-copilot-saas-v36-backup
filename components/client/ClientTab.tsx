@@ -5,6 +5,8 @@ import { ProjectContext, FullBoqItem, ProposalTier, Item, AiComparisonResult, Ma
 import ClientExportView from './ClientExportView';
 import ProposalSectionEditor from './ProposalSectionEditor';
 import { useOrg } from '../../contexts/OrgContext';
+import { useProjectProgramme } from '../../hooks/useProjectProgramme';
+import { programmeAsProposalPhases } from '../../lib/scheduleBuilder';
 import { Download } from '@/lib/lucide-shim';
 import { UI_STYLES, UI_CONSTANTS } from '../../lib/UIConstants';
  
@@ -58,6 +60,9 @@ interface ClientTabProps {
   leadProfile?: LeadProfile;
   setProjectContext?: React.Dispatch<React.SetStateAction<ProjectContext>>;
   onExportHtml?: (fileName?: string, orientation?: PageOrientation) => void;
+  /** The project, and the BOQ its Timeline is built from: the proposal quotes the Timeline's programme. */
+  projectId?: string;
+  programmeBoq?: FullBoqItem[];
 }
 
 const ClientTab: React.FC<ClientTabProps> = (props) => {
@@ -293,6 +298,18 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
 
     return workingBoq;
   }, [validTiers, bankMap, projectContext?.approvedTierId, projectContext?.boqRevisions]);
+
+  /*
+    The Timeline's programme, as the proposal's phases. Every duration the
+    proposal states (snapshot, booklet, schedule) reads these, so it says what
+    the Timeline says. A shared client link has no project id here and keeps
+    the phases it was sent with.
+  */
+  const programme = useProjectProgramme(props.projectId, projectContext, props.programmeBoq);
+  const proposalPhases = useMemo(
+    () => (programme ? programmeAsProposalPhases(programme) as TimelinePhase[] : timelinePhases),
+    [programme, timelinePhases],
+  );
 
   const tasks = useMemo(() => {
     const activeTier = fullTiers.find(t => t.id === projectContext?.approvedTierId) || fullTiers[0];
@@ -676,7 +693,8 @@ const MODEL_SWITCHER = [
                 projectContext={viewContext} 
                 setProjectContext={setProjectContext}
                 comparisonData={comparisonData} 
-                timelinePhases={timelinePhases} 
+                timelinePhases={proposalPhases}
+                programme={programme}
                 paymentMilestones={paymentMilestones}
                 tasks={tasks}
                 currentRevisionBoq={currentRevisionBoq}

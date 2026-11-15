@@ -1,5 +1,6 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
+import type { ProgrammeSummary } from '../../lib/scheduleBuilder';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import ClientPayments from './ClientTotals';
@@ -45,6 +46,8 @@ interface ClientExportViewProps {
     onUpdatePaymentSchedule?: (milestones: PaymentMilestone[], config: { signupDate?: string, possessionDate?: string }) => void;
     setProjectContext?: React.Dispatch<React.SetStateAction<ProjectContext>>;
     proposalFormat?: 'classic' | 'booklet';
+    /** The Timeline's programme (useProjectProgramme): the booklet quotes its working days. */
+    programme?: ProgrammeSummary | null;
 }
 
 interface SectionVisibilityModalProps {
@@ -257,6 +260,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                 tiers={tiers}
                 projectContext={projectContext}
                 timelinePhases={timelinePhases}
+                programme={props.programme}
                 paymentMilestones={paymentMilestones}
                 level={level}
                 settings={settings}
@@ -548,6 +552,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                         tiers={tiers}
                         projectContext={projectContext}
                         timelinePhases={timelinePhases}
+                        programme={props.programme}
                         paymentMilestones={paymentMilestones}
                         level={level}
                         settings={settings}

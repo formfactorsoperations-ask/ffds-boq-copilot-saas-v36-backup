@@ -6,6 +6,7 @@ import ExecutionAgreementSheet from '../documents/ExecutionAgreementSheet';
 import { ProjectContext, DigitalSignatureDocket } from '../../types';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
+import { useProjectProgramme } from '../../hooks/useProjectProgramme';
 import { Download, Share2, Copy, ExternalLink, Tablet, KeyRound, Check, Pencil, GitCompare } from '@/lib/lucide-shim';
 import { calculateSellPrice } from '../../lib/utils';
 import { approvedOption, resolveAgreement, type AgreementOverrides } from '../../lib/executionAgreement';
@@ -55,6 +56,8 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
     const studioEmail = orgData.contactEmail || 'formfactors.operations@gmail.com';
     const repName = orgData.signatoryName || 'Principal Name';
     const projectId = propProjectId || (projectContext as any).projectId || (projectContext as any).id || (projectContext.name ? projectContext.name.replace(/[^a-zA-Z0-9_-]/g, '_') : 'Project');
+    // The Timeline's programme, so the agreement states the duration the chart shows.
+    const programme = useProjectProgramme(propProjectId || (projectContext as any).id, projectContext, fullBoq);
 
     /*
       Annexure F: the approved scope, priced and described as the client's
@@ -103,8 +106,15 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
         option,
         scopeLines,
         studioName,
-        defaultDuration: settings?.procurementLeadTimeWeeks ? settings.procurementLeadTimeWeeks * 7 + 45 : 60,
-    }), [projectContext, activeTier, option, scopeLines, studioName, settings?.procurementLeadTimeWeeks]);
+        /*
+          The site programme in working days, from the project's Timeline
+          (useProjectProgramme) -- the same days the chart and the proposal
+          state. It was a flat 60, or the lead time plus 45, whatever the chart
+          said. A duration typed into the agreement still wins.
+        */
+        defaultDuration: programme?.siteWorkDays
+            || (settings?.procurementLeadTimeWeeks ? settings.procurementLeadTimeWeeks * 7 + 45 : 60),
+    }), [projectContext, activeTier, option, scopeLines, studioName, settings?.procurementLeadTimeWeeks, programme?.siteWorkDays]);
 
     /* Edits are saved on the project as they are typed. A key set to undefined goes back to the live value. */
     const changeOverrides = (update: Partial<AgreementOverrides> | ((o: AgreementOverrides) => Partial<AgreementOverrides>)) => {

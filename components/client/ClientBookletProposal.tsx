@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import type { ProgrammeSummary } from '../../lib/scheduleBuilder';
 import { ProposalTier, ProjectContext, TimelinePhase, PaymentMilestone, FullBoqItem, ProposalLevel } from '../../types';
 import { formatCurrency, calculateSellPrice } from '../../lib/utils';
 import { detectAllScopes, findScopeContradictions } from '../../lib/scopeDetect';
@@ -525,6 +526,8 @@ interface ClientBookletProposalProps {
     isClientViewOnly?: boolean;
     /** Render only Annexure A, read-only — the Classic Digital proposal's terms page. */
     termsOnly?: boolean;
+    /** The Timeline's programme (useProjectProgramme). When present, the working days below are its. */
+    programme?: ProgrammeSummary | null;
 }
 
 export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
@@ -538,7 +541,8 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
     onEditSection,
     setProjectContext,
     isClientViewOnly = false,
-    termsOnly = false
+    termsOnly = false,
+    programme = null
 }) => {
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     const { currentRole } = useOrg();
@@ -576,7 +580,13 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
     });
 
     // --- ESTIMATED DURATION & TIMELINE ---
+    /*
+      With the Timeline's programme, the booklet states its working days: the
+      site programme after design, and design before it -- the same figures the
+      Timeline and the Execution Agreement give.
+    */
     const totalDays = useMemo(() => {
+        if (programme && programme.siteWorkDays > 0) return programme.siteWorkDays;
         if (!timelinePhases || timelinePhases.length === 0) {
             const config = (projectContext?.config || '').toLowerCase();
             if (config.includes('1-bhk') || config.includes('studio')) return 45;
@@ -587,13 +597,14 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
             return 48; // Standard booklet design says 48 working days
         }
         return Math.max(...timelinePhases.map(p => (p.startDay || 0) + p.durationDays));
-    }, [timelinePhases, projectContext]);
+    }, [timelinePhases, projectContext, programme]);
 
     const designDays = useMemo(() => {
+        if (programme && programme.designWorkDays > 0) return programme.designWorkDays;
         if (!timelinePhases || timelinePhases.length === 0) return 14;
         const designPhase = timelinePhases.find(p => p.phaseName === 'Design & Planning');
         return designPhase ? designPhase.durationDays : 14;
-    }, [timelinePhases]);
+    }, [timelinePhases, programme]);
 
     /*
       The programme, at the level a first cut should state it.
@@ -606,8 +617,11 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
       back at the front where it belongs.
     */
     const derivedPhases = useMemo(
-        () => groupPhasesIntoStages((timelinePhases || []) as any[], designDays),
-        [timelinePhases, designDays],
+        () => groupPhasesIntoStages(
+            (programme?.sitePhases.length ? programme.sitePhases : (timelinePhases || [])) as any[],
+            designDays,
+        ),
+        [timelinePhases, designDays, programme],
     );
 
     const executionDays = useMemo(() => {
