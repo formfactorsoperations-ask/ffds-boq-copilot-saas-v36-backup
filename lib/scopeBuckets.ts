@@ -226,6 +226,11 @@ export function bucketsInUse(rooms: Room[] | undefined): ScopeBucket[] {
  * like flooring — the mistake that priced 1,039 units of dust sheeting.
  */
 export function bucketForItem(item: Pick<Item, 'cat' | 'name'> | undefined): ScopeBucket {
+  /* A category that is itself a scope's name — an imported sheet's "Functional"
+     group — says where it goes. Read as an unknown trade, it landed in Others. */
+  const named = asScopeBucket(item?.cat);
+  if (named) return named;
+
   const cat = (item?.cat || '').toLowerCase();
   const name = (item?.name || '').toLowerCase();
 

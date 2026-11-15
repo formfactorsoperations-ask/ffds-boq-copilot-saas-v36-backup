@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CloseIcon, UploadIcon, CheckIcon, ArrowRightIcon, PlusIcon, FileSpreadsheetIcon, GridIcon, SparklesIcon } from './Icons';
 import { Item, ProposalTier } from '../types';
 import { id as generateId, formatCurrency } from '../lib/utils';
+import { isScopeBucket } from '../lib/scopeBuckets';
 
 interface ExcelImportModalProps {
     isOpen: boolean;
@@ -295,7 +296,9 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                 // Use higher precision to ensure the Sell Price is recalculated exactly close to imported Rate
                 marginOverride: parseFloat(marginOverride.toFixed(4)),
                 ...(baseRateOverride !== undefined && { baseRate: parseFloat(baseRateOverride.toFixed(2)) }),
-                roomId: p.room, 
+                roomId: p.room,
+                // The sheet named this scope; it stays there (lib/scopeMigration.ts).
+                ...(isScopeBucket(p.room) && { scopeChosen: true }),
                 rationale: rationale
             });
         });

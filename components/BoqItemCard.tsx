@@ -11,6 +11,7 @@ import { useOrg } from '../contexts/OrgContext';
 import { seesStudioFinance } from '../lib/roleAccess';
 import { SizePanel, sizeLabel } from './BoqSizeField';
 import NumberField from './NumberField';
+import { roomChoice } from '../lib/scopeMigration';
 
 interface BoqItemCardProps {
   item: FullBoqItem;
@@ -284,7 +285,7 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
                         <div className="relative inline-block">
                             <select 
                                 value={item.roomId || 'Unassigned'} 
-                                onChange={(e) => onUpdate(item.id, 'roomId', e.target.value === 'Unassigned' ? undefined : e.target.value)}
+                                onChange={(e) => onUpdate(item.id, roomChoice(e.target.value))}
                                 className="appearance-none bg-slate-100 hover:bg-slate-200 border border-transparent text-slate-600 focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] outline-none rounded-sm px-2.5 py-0.5 pr-6 text-[9px] font-bold uppercase tracking-wide cursor-pointer transition-colors max-w-[140px]"
                                 onClick={(e) => e.stopPropagation()}
                                 title="Assign to Room"
