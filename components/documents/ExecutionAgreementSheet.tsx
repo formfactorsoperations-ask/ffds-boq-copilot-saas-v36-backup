@@ -592,6 +592,19 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     </div>
                     <div className="ea-box soft">
                         <div className="ea-label">Estimated Duration</div>
+                        {agreement.programme ? (
+                            /* From the project's Timeline: site days, design before them, and the whole programme. */
+                            <>
+                                <div className="ea-value"><span className="ea-placeholder">{agreement.programme.siteWorkDays} Working Days on site</span></div>
+                                <p className="ea-small" style={{ margin: '4px 0 0' }}>
+                                    Design: {agreement.programme.designWorkDays} working days, before site start
+                                </p>
+                                <p className="ea-small" style={{ margin: '2px 0 0' }}>
+                                    Total: {agreement.programme.totalDays} days, start to handover
+                                </p>
+                                {editing && <StudioNote>From the project's Timeline. Change the programme there and this follows.</StudioNote>}
+                            </>
+                        ) : (
                         <div className="ea-value">
                             {editing ? (
                                 <div className="flex items-center gap-1.5">
@@ -602,6 +615,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                                 <span className="ea-placeholder">{agreement.estimatedDuration} Working Days</span>
                             )}
                         </div>
+                        )}
                     </div>
                     <div className="ea-box soft">
                         <div className="ea-label">Commencement Trigger</div>
@@ -1006,7 +1020,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 <div className="ea-clause"><div className="ea-no">5.3.4</div><div>{studioName} may restrict site access during high-risk activities, wet work, electrical work, carpentry cutting, polishing, painting, ceiling work, or active installation.</div></div>
 
                 <h3>5.4 Timeline</h3>
-                <div className="ea-clause"><div className="ea-no">5.4.1</div><div>The project duration is an estimated working-day schedule, not a fixed-date guarantee, unless specifically agreed in writing. The timeline starts only after commencement conditions are fulfilled.</div></div>
+                <div className="ea-clause"><div className="ea-no">5.4.1</div><div>The project duration is an estimated working-day schedule, not a fixed-date guarantee, unless specifically agreed in writing. The timeline starts only after commencement conditions are fulfilled.{agreement.programme ? ` The site programme is estimated at ${agreement.programme.siteWorkDays} working days, preceded by approximately ${agreement.programme.designWorkDays} working days of design, about ${agreement.programme.totalDays} days in all from project start to handover.` : ''}</div></div>
                 <div className="ea-clause"><div className="ea-no">5.4.2</div><div>Timeline excludes Sundays, public holidays, labour holidays, building/society restricted days, force majeure events, and days on which work cannot be performed due to reasons beyond {studioName}’s control.</div></div>
 
                 <h3>5.5 Timeline Exclusions and Extensions</h3>

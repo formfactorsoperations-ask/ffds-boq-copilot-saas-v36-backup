@@ -136,3 +136,16 @@ describe('One programme for the Timeline, proposal and agreement', () => {
     expect(p.siteWorkDays).toBe(0);
   });
 });
+
+describe('A saved schedule reads as the Timeline will draw it', () => {
+  it('takes newer design phase durations over the saved ones', () => {
+    const C = ctx(650, 9);
+    const old = templatePhases('2026-11-14', STEPS);
+    const saved = buildScheduleFromProject(C, BOQ_2BHK, { designSteps: old });
+    const longer = old.map(p => (p.stepNumber === 2 ? { ...p, durationDays: 24 } : p));
+    const stale = resolveProjectProgramme({ projectContext: C, boq: BOQ_2BHK, saved, todayISO: TODAY });
+    const synced = resolveProjectProgramme({ projectContext: C, boq: BOQ_2BHK, saved, phases: longer, todayISO: TODAY });
+    expect(synced.designWorkDays).toBe(stale.designWorkDays + 10);
+    expect(synced.siteWorkDays).toBe(stale.siteWorkDays);
+  });
+});

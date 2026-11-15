@@ -106,15 +106,20 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
         option,
         scopeLines,
         studioName,
+        defaultDuration: settings?.procurementLeadTimeWeeks ? settings.procurementLeadTimeWeeks * 7 + 45 : 60,
         /*
-          The site programme in working days, from the project's Timeline
-          (useProjectProgramme) -- the same days the chart and the proposal
-          state. It was a flat 60, or the lead time plus 45, whatever the chart
-          said. A duration typed into the agreement still wins.
+          The project's Timeline (useProjectProgramme): design and site working
+          days, and the Timeline's Total Duration. The agreement states these
+          rather than a figure of its own, so it reads what the chart reads.
         */
-        defaultDuration: programme?.siteWorkDays
-            || (settings?.procurementLeadTimeWeeks ? settings.procurementLeadTimeWeeks * 7 + 45 : 60),
-    }), [projectContext, activeTier, option, scopeLines, studioName, settings?.procurementLeadTimeWeeks, programme?.siteWorkDays]);
+        programme: programme ? {
+            designWorkDays: programme.designWorkDays,
+            siteWorkDays: programme.siteWorkDays,
+            totalDays: programme.totalDays,
+            finishISO: programme.finishISO,
+        } : null,
+    }), [projectContext, activeTier, option, scopeLines, studioName, settings?.procurementLeadTimeWeeks,
+        programme?.designWorkDays, programme?.siteWorkDays, programme?.totalDays, programme?.finishISO]);
 
     /* Edits are saved on the project as they are typed. A key set to undefined goes back to the live value. */
     const changeOverrides = (update: Partial<AgreementOverrides> | ((o: AgreementOverrides) => Partial<AgreementOverrides>)) => {

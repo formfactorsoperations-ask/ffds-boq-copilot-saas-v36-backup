@@ -281,3 +281,31 @@ describe('Annexure F prints the signed BOQ\'s own specifications', () => {
     expect(screen.queryByText(/Details missing from bank/)).toBeNull();
   });
 });
+
+describe('Execution Agreement duration comes from the Timeline', () => {
+  const programme = { designWorkDays: 21, siteWorkDays: 55, totalDays: 92, finishISO: '2027-02-15' };
+
+  it('uses the Timeline even over a duration typed in earlier', () => {
+    const typed = { ...ctx, executionAgreementOverrides: { estimatedDuration: '60' } };
+    expect(resolveAgreement(typed, { studioName: 'FFDS' }).estimatedDuration).toBe('60');
+    const a = resolveAgreement(typed, { studioName: 'FFDS', programme });
+    expect(a.estimatedDuration).toBe('55');
+    expect(a.programme).toEqual(programme);
+  });
+
+  it('states design, site and the total the Timeline shows', () => {
+    const a = resolveAgreement(ctx, { studioName: 'FFDS', programme });
+    render(<ExecutionAgreementSheet agreement={a} studioName="FFDS" />);
+    expect(screen.getByText('55 Working Days on site')).toBeTruthy();
+    expect(screen.getByText('Design: 21 working days, before site start')).toBeTruthy();
+    expect(screen.getByText('Total: 92 days, start to handover')).toBeTruthy();
+    expect(screen.getByText(/site programme is estimated at 55 working days, preceded by approximately 21 working days of design, about 92 days in all/)).toBeTruthy();
+  });
+
+  it('keeps the breakdown in the issued copy', () => {
+    const a = resolveAgreement(ctx, { studioName: 'FFDS', programme });
+    const frozen = JSON.parse(JSON.stringify(a));
+    render(<ExecutionAgreementSheet agreement={frozen} studioName="FFDS" />);
+    expect(screen.getByText('Total: 92 days, start to handover')).toBeTruthy();
+  });
+});

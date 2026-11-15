@@ -678,6 +678,30 @@ export function previewTemplateProgramme(
 }
 
 /*
+  A saved schedule with its design tasks brought up to date from the design
+  phases -- the same sync the Timeline runs when it opens (TimelineTab), so a
+  schedule saved before the design dates last moved reads as the chart will.
+*/
+export function withDesignPhases(
+  schedule: ProjectSchedule,
+  phases: { stepNumber: number; startDate?: string; durationDays?: number }[] = [],
+): ProjectSchedule {
+  if (!phases.length) return schedule;
+  let changed = false;
+  const tasks = schedule.tasks.map(t => {
+    if (t.kind !== 'design') return t;
+    const phase = phases.find(p => p.stepNumber === parseInt(t.id.replace('design-', ''), 10));
+    if (!phase) return t;
+    const workDays = Math.max(1, phase.durationDays || 5);
+    const notBeforeISO = phase.startDate?.slice(0, 10);
+    if (t.workDays === workDays && t.notBeforeISO === notBeforeISO) return t;
+    changed = true;
+    return { ...t, workDays, notBeforeISO };
+  });
+  return changed ? { ...schedule, tasks } : schedule;
+}
+
+/*
   The project's programme, whichever stage the Timeline is at -- the one figure
   the proposal and the Execution Agreement state.
 
@@ -699,7 +723,7 @@ export function resolveProjectProgramme(input: {
   const { projectContext, boq, saved, phases = [], steps = [], todayISO } = input;
   const fromSaved = scheduleForEngagement(saved || null, projectContext);
   if (fromSaved && fromSaved.tasks?.length) {
-    return summariseProgramme(fromSaved, 'saved', projectContext, todayISO);
+    return summariseProgramme(withDesignPhases(fromSaved, phases), 'saved', projectContext, todayISO);
   }
   if (phases.length) {
     return summariseProgramme(
