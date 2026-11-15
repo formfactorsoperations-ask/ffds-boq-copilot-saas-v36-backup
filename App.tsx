@@ -69,7 +69,7 @@ const OnboardingKitPage = lazyWithRetry(() => import("./components/client/Onboar
 const EmailDraftsTab = lazyWithRetry(() => import("./components/EmailDraftsTab"));
 const SiteOpsTab = lazyWithRetry(() => import("./components/SiteOpsTab"));
 const ClientTab = lazyWithRetry(() => import("./components/client/ClientTab"));
-const AnalyticsTab = lazyWithRetry(() => import("./components/AnalyticsTab"));
+const MoneyOffersTab = lazyWithRetry(() => import("./components/money/MoneyOffersTab"));
 const OperationsTab = lazyWithRetry(() => import("./components/OperationsTab"));
 const ProjectHistory = lazyWithRetry(() => import("./components/ProjectHistory"));
 const PaymentCalculatorTab = lazyWithRetry(() => import("./components/PaymentCalculatorTab"));
@@ -3800,17 +3800,16 @@ export default function App() {
                         />
                       )}
                       {activeTab === "analytics" && (
-                        <AnalyticsTab
-                          boq={
-                            activeProject ? executionBoq : fullBoqForActiveTier
-                          }
-                          setBoq={setBoqForActiveTier}
-                          bank={bank}
-                          activeTab={activeTab}
-                          aiStrategy={aiStrategy}
+                        /* Money & Offers replaced Health Check & Audit; the route id stays for saved links. */
+                        <MoneyOffersTab
                           tiers={tiersWithCalculatedSummaries}
+                          bank={bank}
                           projectContext={projectContext}
-                          currentUserRole={currentRole}
+                          setProjectContext={setProjectContext}
+                          activeTierId={activeTierId}
+                          projects={visibleProjects}
+                          projectId={activeInternalId || undefined}
+                          readOnly={!holdsFinanceRole(currentRoles?.length ? currentRoles : currentRole)}
                         />
                       )}
                       {(activeTab === "site-ops" ||
@@ -4537,17 +4536,16 @@ export default function App() {
                         />
                       )}
                       {activeTab === "analytics" && (
-                        <AnalyticsTab
-                          boq={
-                            activeProject ? executionBoq : fullBoqForActiveTier
-                          }
-                          setBoq={setBoqForActiveTier}
-                          bank={bank}
-                          activeTab={activeTab}
-                          aiStrategy={aiStrategy}
+                        /* Money & Offers replaced Health Check & Audit; the route id stays for saved links. */
+                        <MoneyOffersTab
                           tiers={tiersWithCalculatedSummaries}
+                          bank={bank}
                           projectContext={projectContext}
-                          currentUserRole={currentRole}
+                          setProjectContext={setProjectContext}
+                          activeTierId={activeTierId}
+                          projects={visibleProjects}
+                          projectId={activeInternalId || undefined}
+                          readOnly={!holdsFinanceRole(currentRoles?.length ? currentRoles : currentRole)}
                         />
                       )}
                       {(activeTab === "site-ops" ||

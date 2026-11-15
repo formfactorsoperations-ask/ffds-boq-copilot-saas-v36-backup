@@ -196,7 +196,7 @@ export function visibleToRole<T extends { id?: string; context?: any }>(
  */
 export const FINANCE_TABS = new Set([
   'ops',              // Pricing & Tiers
-  'analytics',        // Health Check & Audit
+  'analytics',        // Money & Offers (was Health Check & Audit)
   'payment-calc',     // Money / Payment Schedule
   'project-reports',  // project Reports
   'reports',          // studio Reports

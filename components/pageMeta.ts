@@ -56,7 +56,7 @@ const META: Record<string, PageMeta> = {
   // ---- Project: stage 2 ---------------------------------------------------
   'boq-editor':           { subtitle: 'Build and refine your scope room by room' },
   ops:                    { subtitle: 'Tier pricing, margins and what the client sees' },
-  analytics:             { subtitle: 'Margin health, outliers and scope audit' },
+  analytics:             { subtitle: 'What each option is made of, what you offer, and what the client pays' },
 
   // ---- Project: stage 3 ---------------------------------------------------
   client:                 { subtitle: 'The proposal as the client receives it' },
