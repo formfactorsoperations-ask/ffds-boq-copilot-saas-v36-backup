@@ -310,3 +310,43 @@ export const ALWAYS_ON_BAND: NavItem[] = [
     }
   }
 ];
+
+/**
+ * The screen after this one in the workflow, for the "Next" button at the end
+ * of a stage's screens.
+ *
+ * The rail is already in working order -- Brief & Site, then Pricing & Tiers,
+ * BOQ Editor, Health Check, then the proposal, the agreements and site -- but
+ * nothing on screen said so: after creating a project, the only way to learn
+ * what came next was to hover the menu. This walks the same order, across
+ * stages, skipping what this person cannot open (hidden for their role or the
+ * engagement), and stops at a stage that is still locked.
+ */
+export function nextScreen(
+  nav: NavStage[],
+  activeRoute: string,
+  opts: { isHidden?: (item: NavItem) => boolean; isStageLocked?: (stage: number) => boolean } = {},
+): { route: string; label: string; stage: number } | null {
+  const flat = nav.flatMap((s) => s.items.map((item) => ({ item, stage: s.stage })));
+  const at = flat.findIndex((x) => x.item.route === activeRoute);
+  if (at < 0) return null;
+  for (const { item, stage } of flat.slice(at + 1)) {
+    if (opts.isHidden?.(item)) continue;
+    if (item.route === activeRoute) continue; // a route listed twice (Money) is not "next"
+    if (opts.isStageLocked?.(stage)) return null;
+    return { route: item.route, label: item.label, stage };
+  }
+  return null;
+}
+
+/**
+ * Where a new project opens once the setup wizard has done its job: the
+ * options it just generated (Pricing & Tiers), or, for a manual start, the BOQ
+ * it is about to be built in. It used to stay on the Project Hub, which said
+ * nothing about either. Falls back along the rail when the engagement has no
+ * such screen (a design-only project has no pricing or BOQ: its proposal).
+ */
+export function landingAfterSetup(isHidden: (route: string) => boolean, kind: 'options' | 'manual'): string {
+  const order = kind === 'options' ? ['ops', 'boq-editor', 'client'] : ['boq-editor', 'ops', 'client'];
+  return order.find((r) => !isHidden(r)) || 'client';
+}
