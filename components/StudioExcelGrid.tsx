@@ -6,7 +6,7 @@ import { DeleteIcon, LinkIcon, PlusIcon, ChevronDownIcon } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isBillable } from '../lib/boqPricing';
 import { realRooms, SCOPE_BUCKETS } from '../lib/scopeBuckets';
-import { resolvedRoomId } from '../lib/scopeMigration';
+import { resolvedRoomId, roomChoice } from '../lib/scopeMigration';
 import { SizeCell, useSizeUnit } from './BoqSizeField';
 import NumberField from './NumberField';
 import { splitUnitCost } from '../lib/numberInput';
@@ -1194,7 +1194,7 @@ const StudioExcelGrid: React.FC<StudioExcelGridProps> = ({ items, rooms, onUpdat
                                      onChange={e => {
                                          const to = e.target.value;
                                          if (!to || !onBulkUpdate) return;
-                                         onBulkUpdate(Array.from(selectedIds).map(id => ({ itemId: id, updates: { roomId: to === 'Unassigned' ? undefined : to } })));
+                                         onBulkUpdate(Array.from(selectedIds).map(id => ({ itemId: id, updates: roomChoice(to) })));
                                          setSelectedIds(new Set());
                                      }}
                                      className="px-2 py-1.5 bg-sky-900 hover:bg-[#3D52A0] rounded-lg text-xs font-bold text-slate-200 outline-none cursor-pointer"

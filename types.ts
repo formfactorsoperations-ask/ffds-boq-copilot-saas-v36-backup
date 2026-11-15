@@ -1151,6 +1151,12 @@ export interface BoqItem {
     qty: number;
     marginOverride?: number;
     roomId?: string;
+    /**
+     * The scope in roomId (Civil, Functional, Others) was named by a person — picked
+     * in the editor, or written in an imported sheet. lib/scopeMigration.ts never
+     * re-classifies it. Missing on older lines: those are re-classified by category.
+     */
+    scopeChosen?: boolean;
     rationale?: string;
     optional?: boolean;
     asActuals?: boolean;

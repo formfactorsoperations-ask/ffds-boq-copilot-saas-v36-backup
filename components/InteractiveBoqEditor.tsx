@@ -4,7 +4,7 @@ import { calculateSellPrice, formatCurrency, generateId } from '../lib/utils';
 import { isAsActuals } from '../lib/boqPricing';
 import { ADDON_BUNDLES } from '../lib/standardPackages';
 import { SCOPE_BUCKETS, SCOPE_BUCKET_META, realRooms } from '../lib/scopeBuckets';
-import { resolvedRoomId } from '../lib/scopeMigration';
+import { resolvedRoomId, roomChoice } from '../lib/scopeMigration';
 import { 
   FolderIcon, 
   Trash2, 
@@ -955,8 +955,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                   <select
                     value={resolvedRoomId(activeSelectedItem as any, activeSelectedItem as any, roomNameSet) || 'Unassigned'}
                     onChange={e => {
-                      const value = e.target.value === 'Unassigned' ? undefined : e.target.value;
-                      onUpdate(activeSelectedItem.id, 'roomId', value);
+                      onUpdate(activeSelectedItem.id, roomChoice(e.target.value));
                     }}
                     className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] rounded-xl text-xs font-bold text-slate-800"
                   >

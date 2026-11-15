@@ -68,6 +68,24 @@ export interface ZohoRaiseResult {
   reused: boolean;
   gstLabel: string;
   placeOfSupply: string;
+  /** Set when an invoice the studio raised in Zoho itself was linked rather than drafted here. */
+  linked?: boolean;
+  /** The linked invoice's own date in Zoho, as an ISO timestamp. */
+  invoiceDate?: string;
+}
+
+/** One of a customer's invoices in Zoho, offered for linking to a milestone. */
+export interface ZohoInvoiceSummary {
+  id: string;
+  number: string;
+  /** draft, sent, viewed, overdue, partially_paid, paid… as Zoho has it. */
+  status: string;
+  total: number;
+  balance: number;
+  /** YYYY-MM-DD */
+  date: string;
+  customerId: string;
+  url: string;
 }
 
 /** An error from the add-in, with the reason the server gave when the studio can fix it. */

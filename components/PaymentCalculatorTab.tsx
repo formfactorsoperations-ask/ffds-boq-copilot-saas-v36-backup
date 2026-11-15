@@ -5261,7 +5261,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                     ...x,
                                     status: 'invoiced',
                                     invoiceNumber: result.invoiceNumber,
-                                    invoiceDate: new Date().toISOString(),
+                                    // A linked invoice keeps the date it has in Zoho; a new draft is dated today.
+                                    invoiceDate: result.invoiceDate || new Date().toISOString(),
                                     lockedTaxableBase: zohoRaise.lockedTaxableBase,
                                     zohoInvoiceId: result.invoiceId,
                                 } : x),

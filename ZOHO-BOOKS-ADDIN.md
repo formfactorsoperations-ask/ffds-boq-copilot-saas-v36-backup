@@ -17,6 +17,16 @@ per-studio: a studio that never connects it sees no change anywhere.
   scope, and no code path calls a send endpoint (tests assert both).
 - A milestone with nothing officially billable (the cash side) still uses the
   local flow.
+- **Already raised in Zoho?** If the studio made the invoice in Zoho by hand,
+  choose **Already in Zoho** in the same dialog. It lists that customer's Zoho
+  invoices (newest first, void ones left out). Picking one marks the milestone
+  `invoiced` with that invoice's number, `zohoInvoiceId` and its Zoho date.
+  Nothing is written to Zoho. The server refuses another customer's invoice, a
+  void one, an invoice already linked to another milestone, and a milestone that
+  already has a live Zoho invoice.
+- **Finding customers** searches Zoho by name (`contact_name_contains`), then
+  without a title ("Mrs.", "Dr."), then by the longest word, exact match first.
+  Zoho's `search_text` is not used: on `/contacts` it filters on GSTIN, not name.
 
 ## GST
 
@@ -51,9 +61,9 @@ code for a refresh token. No Zoho app has to be built or published.
 |---|---|
 | Rules (GST split, numbering, draft payload) | `lib/zohoBooks.ts` |
 | Zoho client and the raise flow | `functions/src/zohoBooksApi.ts` |
-| Callable `zohoBooks` (status, connect, settings, contacts, pushInvoice) | `functions/src/zohoBooks.ts` |
+| Callable `zohoBooks` (status, connect, settings, contacts, pushInvoice, listInvoices, linkInvoice) | `functions/src/zohoBooks.ts` |
 | Credentials | Firestore `zohoBooksConnections/{tenantId}`, server-only |
-| Milestone ↔ draft ledger (idempotency) | Firestore `zohoInvoiceLinks/{tenant}__{project}__{milestone}`, server-only |
+| Milestone ↔ invoice ledger (idempotency; `linked: true` for invoices raised in Zoho by hand) | Firestore `zohoInvoiceLinks/{tenant}__{project}__{milestone}`, server-only |
 | Settings card / raise dialog | `components/studio/ZohoBooksCard.tsx`, `components/ZohoRaiseInvoiceDialog.tsx` |
 
 Raising twice for the same milestone returns the existing draft rather than
