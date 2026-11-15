@@ -39,6 +39,7 @@ interface ExecutionAgreementSheetProps {
   studioEmail?: string;
   repName?: string;
   repTitle?: string;
+  /** Accepted for callers that still pass it; the agreement no longer prints the internal project ID. */
   projectId?: string;
   /** The studio page captures the PDF from this. */
   contentRef?: React.Ref<HTMLDivElement>;
@@ -178,7 +179,6 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
   studioEmail,
   repName,
   repTitle,
-  projectId,
   contentRef,
   signature,
   isEditMode = false,
@@ -551,7 +551,8 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     </div>
                 </div>
 
-                <div className="ea-grid-3">
+                {/* Project name and address. The internal project ID is not printed: it means nothing to the client. */}
+                <div className="ea-grid-2">
                     <div className="ea-box soft">
                         <div className="ea-label">Project Name</div>
                         {editing ? (
@@ -576,7 +577,6 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                             <div className="ea-value"><span className="ea-placeholder">{parties.projectAddress || '—'}</span></div>
                         )}
                     </div>
-                    <div className="ea-box soft"><div className="ea-label">Project ID</div><div className="ea-value"><span className="ea-placeholder">{projectId}</span></div></div>
                 </div>
 
                 <div className="ea-grid-3">
@@ -745,7 +745,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
 
             {/* Page 2 */}
             <section className="ea-page">
-                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Integrated Execution Agreement</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
+                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Integrated Execution Agreement</div></div><div className="ea-meta"><span className="ea-placeholder">{projectName}</span></div></header>
 
                 <h2 id="sec-1" data-section-ref="1">1. Preamble, Definitions and Contract Documents</h2>
                 <div className="ea-clause"><div className="ea-no">1.1</div><div>This Interior Execution Agreement is entered into between <strong><span className="ea-placeholder">{clientName}</span></strong> and <strong>{studioName}</strong> for the design-led interior execution works at the project site described in this Agreement.</div></div>
@@ -833,7 +833,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
 
             {/* Page 3 */}
             <section className="ea-page">
-                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Scope, BOQ and Exclusions</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
+                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Scope, BOQ and Exclusions</div></div><div className="ea-meta"><span className="ea-placeholder">{projectName}</span></div></header>
 
                 <h2 id="sec-2" data-section-ref="2">2. Scope of Work, BOQ, Exclusions and As-Actuals</h2>
                 <div className="ea-clause"><div className="ea-no">2.1</div><div>The scope of work shall be strictly limited to items expressly listed in the final approved BOQ and this Agreement. Any item not expressly mentioned as included shall be treated as excluded.</div></div>
@@ -880,7 +880,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
 
             {/* Page 4 */}
             <section className="ea-page">
-                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Design, Approvals and Change Requests</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
+                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Design, Approvals and Change Requests</div></div><div className="ea-meta"><span className="ea-placeholder">{projectName}</span></div></header>
 
                 <h2 id="sec-3" data-section-ref="3">3. Design Deliverables, Approvals, Revisions and Change Requests</h2>
 
@@ -933,7 +933,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
 
             {/* Page 5 */}
             <section className="ea-page">
-                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Payments and Commercial Protection</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
+                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Payments and Commercial Protection</div></div><div className="ea-meta"><span className="ea-placeholder">{projectName}</span></div></header>
 
                 <h2 id="sec-4" data-section-ref="4">4. Payments, Taxes, Pause Rights and Material Ownership</h2>
 
@@ -991,7 +991,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
 
             {/* Page 6 */}
             <section className="ea-page">
-                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Execution and Site Protocol</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
+                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Execution and Site Protocol</div></div><div className="ea-meta"><span className="ea-placeholder">{projectName}</span></div></header>
 
                 <h2 id="sec-5" data-section-ref="5">5. Execution, Site Protocol, Timeline and Client Responsibilities</h2>
 
@@ -1049,7 +1049,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
 
             {/* Page 7 */}
             <section className="ea-page">
-                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Materials, Site Conditions and Tolerances</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
+                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Materials, Site Conditions and Tolerances</div></div><div className="ea-meta"><span className="ea-placeholder">{projectName}</span></div></header>
 
                 <h2 id="sec-6" data-section-ref="6">6. Materials, Site Conditions, Tolerances and Substitutions</h2>
 
@@ -1093,7 +1093,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
 
             {/* Page 8 */}
             <section className="ea-page">
-                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Completion, Handover and Warranty</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
+                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Completion, Handover and Warranty</div></div><div className="ea-meta"><span className="ea-placeholder">{projectName}</span></div></header>
 
                 <h2 id="sec-7" data-section-ref="7">7. Completion, Handover, Snag Closure and Warranty</h2>
 
@@ -1147,7 +1147,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
 
             {/* Page 9 */}
             <section className="ea-page">
-                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">IP, Termination and Liability</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
+                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">IP, Termination and Liability</div></div><div className="ea-meta"><span className="ea-placeholder">{projectName}</span></div></header>
 
                 <h2 id="sec-8" data-section-ref="8">8. Intellectual Property, Confidentiality and Portfolio Use</h2>
                 <div className="ea-clause"><div className="ea-no">8.1</div><div>All design concepts, layouts, 3D views, drawings, BOQs, specifications, design documents, schedules, checklists, methods, templates, and documentation prepared by {studioName} remain the intellectual property of {studioName}.</div></div>
@@ -1185,7 +1185,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
 
             {/* Page 10 */}
             <section className="ea-page">
-                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Legal Terms and Acceptance</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
+                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Legal Terms and Acceptance</div></div><div className="ea-meta"><span className="ea-placeholder">{projectName}</span></div></header>
 
                 <h2>9.6 Governing Law, Dispute Resolution and Jurisdiction</h2>
                 <div className="ea-clause"><div className="ea-no">9.6.1</div><div>This Agreement shall be governed by the laws of India.</div></div>
@@ -1254,7 +1254,7 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
 
             {/* Page 11 */}
             <section className="ea-page">
-                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Annexures</div></div><div className="ea-meta">Project ID: <span className="ea-placeholder">{projectId}</span></div></header>
+                <header className="ea-header"><div><div className="ea-logo">{studioName}</div><div className="ea-tagline">Annexures</div></div><div className="ea-meta"><span className="ea-placeholder">{projectName}</span></div></header>
 
                 <div data-pdf-keep-next className="ea-annex-title">Annexure A: Payment Schedule</div>
                 {editing && schedule.length > 0 && (

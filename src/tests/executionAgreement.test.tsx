@@ -311,3 +311,13 @@ describe('Execution Agreement duration comes from the Timeline', () => {
     expect(screen.getByText('92 Days, start to handover')).toBeTruthy();
   });
 });
+
+describe('Execution Agreement does not print the internal project ID', () => {
+  it('shows no Project ID box or page-header ID; headers name the project instead', () => {
+    const a = resolveAgreement(ctx, { studioName: 'FFDS' });
+    render(<ExecutionAgreementSheet agreement={a} studioName="FFDS" projectId="mwgbg07n-1md0esg-3" />);
+    expect(document.body.textContent).not.toContain('mwgbg07n-1md0esg-3');
+    expect(document.body.textContent).not.toContain('Project ID');
+    expect(screen.getAllByText('Unique Vistas').length).toBeGreaterThan(1);
+  });
+});
