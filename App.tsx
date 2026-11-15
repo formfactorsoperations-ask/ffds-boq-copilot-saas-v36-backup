@@ -3683,6 +3683,7 @@ export default function App() {
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           activeTier={activeCalculatedTier}
+                          onOpenDocuments={() => setActiveTab("docs")}
                         />
                       )}
                       {activeTab === "execution-agreement" && (
@@ -4420,6 +4421,7 @@ export default function App() {
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           activeTier={activeCalculatedTier}
+                          onOpenDocuments={() => setActiveTab("docs")}
                         />
                       )}
                       {activeTab === "execution-agreement" && (

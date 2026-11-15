@@ -18,7 +18,8 @@
 
 import React from 'react';
 import { resolveFinancials } from '../../lib/paymentSchedule';
-import { ProjectContext, PaymentSchedule } from '../../types';
+import { ProjectContext, PaymentSchedule, PaymentAdvance } from '../../types';
+import { AdvancePaymentStatus, shortDate } from '../../lib/paymentScheduleStatus';
 
 export interface PaymentScheduleSheetProps {
   /** The real versioned schedule from projectContext.paymentSchedules. */
@@ -39,6 +40,15 @@ export interface PaymentScheduleSheetProps {
   showAmounts?: boolean;
   /** Renders the PDF-preview chrome around the sheet. */
   previewMode?: boolean;
+  /**
+   * Live payment status per stage. Given only by the studio page, which reads
+   * it from Money; a frozen client copy has no live status, so it shows none.
+   */
+  statusFor?: (adv: PaymentAdvance) => AdvancePaymentStatus | null;
+  /** Replaces the blank signature lines, e.g. with the client's real record. */
+  signature?: React.ReactNode;
+  /** A fee-only project has no execution value, whatever an old BOQ left behind. */
+  feeOnly?: boolean;
 }
 
 const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
@@ -47,7 +57,10 @@ const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
   org,
   activeTier,
   showAmounts = true,
-  previewMode = false
+  previewMode = false,
+  statusFor,
+  signature,
+  feeOnly = false
 }) => {
   /*
     GST per phase, from the project rather than from a literal.
@@ -88,7 +101,7 @@ const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
     latestSchedule?.snapshotEngagement?.designFee ||
     projectContext.financials?.approvedDesignValue ||
     activeTier?.summary?.designFee || 0;
-  const baseExecutionValue =
+  const baseExecutionValue = feeOnly ? 0 :
     latestSchedule?.snapshotEngagement?.executionValue ||
     projectContext.financials?.approvedExecutionValue ||
     activeTier?.summary?.totalSell || 0;
@@ -114,6 +127,25 @@ const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
   const designAmountTotal = designAdvances.reduce((s, a) => s + (a.amount || 0), 0);
   const executionPctTotal = allExecutionAdvances.reduce((s, a) => s + a.percentage, 0);
   const executionAmountTotal = allExecutionAdvances.reduce((s, a) => s + (a.amount || 0), 0);
+
+  /* Printed only when the studio has wording for it; see resolveProvisionalNote. */
+  const provisionalNote =
+    typeof latestSchedule?.provisionalNote === 'string' && latestSchedule.provisionalNote.trim()
+      ? latestSchedule.provisionalNote.trim()
+      : null;
+
+  const showStatus = !!statusFor;
+  const statusCell = (adv: PaymentAdvance) => {
+    const st = statusFor ? statusFor(adv) : null;
+    if (!st) return <td className="stc">&mdash;</td>;
+    const cls = st.state === 'cleared' ? 'ok' : st.state === 'invoiced' ? 'inv' : 'pen';
+    return (
+      <td className="stc">
+        <span className={`st ${cls}`}>{st.label}</span>
+        {st.date && <span className="sm block">{shortDate(st.date)}</span>}
+      </td>
+    );
+  };
 
   return (
             <div id="payment-schedule-pdf-render" className={`payment-schedule-template ${previewMode ? 'print-only' : ''}`}>
@@ -166,6 +198,12 @@ const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
                     .payment-schedule-template .highlight .lab{font-size:10px; letter-spacing:.12em; text-transform:uppercase; font-weight:800; color:#8a6b34; display:block; margin-bottom:5px;}
                     .payment-schedule-template .highlight p{margin:0; color:#5c4a2a; font-size:12.5px;}
                     .payment-schedule-template .note{font-size:11px; color:var(--muted); margin:8px 0 0; font-style:italic;}
+                    .payment-schedule-template td.stc{white-space:nowrap;}
+                    .payment-schedule-template td.stc .block{display:block; margin-top:3px;}
+                    .payment-schedule-template .st{display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:2px 8px; border-radius:999px;}
+                    .payment-schedule-template .st.ok{background:#e3f4ea; color:#047857;}
+                    .payment-schedule-template .st.inv{background:#fdf1dc; color:#b45309;}
+                    .payment-schedule-template .st.pen{background:#f1efea; color:var(--muted);}
                     .payment-schedule-template .sig{display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:32px;}
                     .payment-schedule-template .sig .line{border-top:1px solid var(--ink); padding-top:9px; margin-top:40px; font-size:12px; color:var(--muted);}
                     .payment-schedule-template .sig .line b{display:block; color:var(--ink); font-size:12.5px; margin-bottom:2px;}
@@ -216,7 +254,7 @@ const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
                         <div className="sec-group" id="sec-A" data-section-ref="A">
                             <h2 className="sec">A &middot; Design Phase <span className="pill d">% OF DESIGN FEE</span></h2>
                             <table>
-                                <thead><tr><th>STAGE</th><th>PAID WHEN</th><th className="r">%</th><th className="r">AMOUNT (EXCL. GST)</th><th className="r">+18% GST</th><th className="r">TOTAL (INCL. GST)</th></tr></thead>
+                                <thead><tr><th>STAGE</th><th>PAID WHEN</th><th className="r">%</th><th className="r">AMOUNT (EXCL. GST)</th><th className="r">+18% GST</th><th className="r">TOTAL (INCL. GST)</th>{showStatus && <th>STATUS</th>}</tr></thead>
                                 <tbody>
                                     {designAdvances.map((adv, i) => (
                                         <tr key={`d-${i}`}>
@@ -226,10 +264,11 @@ const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
                                             <td className="amt">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0)).toLocaleString('en-IN')}` : '--'}</td>
                                             <td className="amt text-slate-500">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * designGstMul).toLocaleString('en-IN')}` : '--'}</td>
                                             <td className="amt font-bold">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * (1 + designGstMul)).toLocaleString('en-IN')}` : '--'}</td>
+                                            {showStatus && statusCell(adv)}
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot><tr><td colSpan={2}>Design Fee total</td><td className="r">{designPctTotal}%</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal * designGstMul).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal * (1 + designGstMul)).toLocaleString('en-IN')}` : '--'}</td></tr></tfoot>
+                                <tfoot><tr><td colSpan={2}>Design Fee total</td><td className="r">{designPctTotal}%</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal * designGstMul).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseDesignFee ? '[set project values]' : isOwner ? `₹${Math.round(designAmountTotal * (1 + designGstMul)).toLocaleString('en-IN')}` : '--'}</td>{showStatus && <td></td>}</tr></tfoot>
                             </table>
                         </div>
                     )}
@@ -238,7 +277,7 @@ const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
                         <div className="sec-group" id="sec-B" data-section-ref="B">
                             <h2 className="sec">B &middot; Execution Phase <span className="pill e">% OF EXECUTION VALUE</span></h2>
                             <table>
-                                <thead><tr><th>STAGE</th><th>PAID WHEN</th><th className="r">%</th><th className="r">AMOUNT (EXCL. GST)</th><th className="r">+18% GST</th><th className="r">TOTAL (INCL. GST)</th></tr></thead>
+                                <thead><tr><th>STAGE</th><th>PAID WHEN</th><th className="r">%</th><th className="r">AMOUNT (EXCL. GST)</th><th className="r">+18% GST</th><th className="r">TOTAL (INCL. GST)</th>{showStatus && <th>STATUS</th>}</tr></thead>
                                 <tbody>
                                     {allExecutionAdvances.map((adv, i) => (
                                         <tr key={`e-${i}`}>
@@ -248,15 +287,22 @@ const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
                                             <td className="amt">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0)).toLocaleString('en-IN')}` : '--'}</td>
                                             <td className="amt text-slate-500">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * execGstMul).toLocaleString('en-IN')}` : '--'}</td>
                                             <td className="amt font-bold">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round((adv.amount || 0) * (1 + execGstMul)).toLocaleString('en-IN')}` : '--'}</td>
+                                            {showStatus && statusCell(adv)}
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot><tr><td colSpan={2}>Execution total</td><td className="r">{executionPctTotal}%</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * execGstMul).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * (1 + execGstMul)).toLocaleString('en-IN')}` : '--'}</td></tr></tfoot>
+                                <tfoot><tr><td colSpan={2}>Execution total</td><td className="r">{executionPctTotal}%</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * execGstMul).toLocaleString('en-IN')}` : '--'}</td><td className="r">{!baseExecutionValue ? '[set project values]' : isOwner ? `₹${Math.round(executionAmountTotal * (1 + execGstMul)).toLocaleString('en-IN')}` : '--'}</td>{showStatus && <td></td>}</tr></tfoot>
                             </table>
                             <p className="note">Percentages are fixed; amounts are calculated from the values above. Each payment is triggered by the completed milestone shown, not by a calendar date.</p>
                             <p className="note" style={{ marginTop: '6px', lineHeight: '1.5' }}>
                                 <strong>GST &amp; Statutory Applicability:</strong> Goods and Services Tax (GST) is a statutory levy governed by prevailing Government of India tax regulations and shall apply in accordance with the specific commercial and execution structure stipulated in the signed Execution Agreement. Milestone GST values indicated in this schedule reflect standard applicable statutory rates (18%) and are subject to final tax invoice terms, SAC/HSN classifications, direct procurement allowances, and executed agreement conditions.
                             </p>
+                            {provisionalNote && (
+                                <div className="highlight">
+                                    <span className="lab">Execution amounts are provisional</span>
+                                    <p>{provisionalNote}</p>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -267,10 +313,12 @@ const PaymentScheduleSheet: React.FC<PaymentScheduleSheetProps> = ({
                         </div>
                     )}
 
-                    <div className="sig">
-                        <div><div className="line"><b>Client Signature &amp; Date</b>{projectContext.clientName}</div></div>
-                        <div><div className="line"><b>For {studioName}</b>{signatoryName} &middot; {signatoryTitle}</div></div>
-                    </div>
+                    {signature || (
+                        <div className="sig">
+                            <div><div className="line"><b>Client Signature &amp; Date</b>{projectContext.clientName}</div></div>
+                            <div><div className="line"><b>For {studioName}</b>{signatoryName} &middot; {signatoryTitle}</div></div>
+                        </div>
+                    )}
 
                     <footer>{orgData.orgName || 'Form Factors Design Studio'} &middot; Minimal Design. Maximum Impact. &middot; {orgData.officeAddress || '[studio address]'} &middot; {orgData.contactEmail || 'formfactors.operations@gmail.com'}</footer>
                 </div>
