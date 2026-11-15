@@ -192,12 +192,25 @@ export async function fileUrl(path: string): Promise<string> {
   return url;
 }
 
+/**
+ * Where a sheet was opened from, so Design Desk's back button returns there
+ * rather than to the Design Desk homepage. `tab` is the app tab to go back to
+ * (a project tab such as 'drawing-tracker' keeps the open project); `label`
+ * names it on the button.
+ */
+export interface DeskOrigin { tab: string; label: string }
+
 /** Hands the studio tab a drawing to open, from anywhere in the app. */
-export function openInDesignReview(projectId: string, drawingId: string) {
-  try { sessionStorage.setItem('ffds_design_review_open', JSON.stringify({ projectId, drawingId })); } catch { /* private mode */ }
+export function openInDesignReview(projectId: string, drawingId: string, from?: DeskOrigin) {
+  try { sessionStorage.setItem('ffds_design_review_open', JSON.stringify({ projectId, drawingId, from: from || null })); } catch { /* private mode */ }
   window.dispatchEvent(new CustomEvent('change-tab', { detail: 'design-review' }));
 }
-export function takeOpenRequest(): { projectId: string; drawingId: string } | null {
+
+/** Leaves Design Desk for the screen a sheet was opened from. */
+export function returnFromDesk(from: DeskOrigin) {
+  window.dispatchEvent(new CustomEvent('change-tab', { detail: from.tab }));
+}
+export function takeOpenRequest(): { projectId: string; drawingId: string; from?: DeskOrigin | null } | null {
   try {
     const raw = sessionStorage.getItem('ffds_design_review_open');
     sessionStorage.removeItem('ffds_design_review_open');

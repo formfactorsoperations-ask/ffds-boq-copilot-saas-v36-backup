@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileUp, Inbox, LayoutGrid, Loader2, PenTool, Presentation, Send } from 'lucide-react';
+import { ChevronLeft, FileUp, Inbox, LayoutGrid, Loader2, PenTool, Presentation, Send } from 'lucide-react';
 import { LayoutGroup, motion } from 'framer-motion';
 import { useOrg } from '../../contexts/OrgContext';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
@@ -8,7 +8,7 @@ import { sendsApprovals } from '../../lib/designMeeting';
 import { useProjectTeam } from '../../services/projectTeam';
 import type { DesignMeeting } from '../../lib/designMeeting';
 import { attention, projectLook, pushRecent, reviewQueue, statsOf, suggestions as pickSuggestions, type Suggestion, type Viewer } from '../../lib/designDesk';
-import { watchStudioReviews, watchProjectDrawings, takeOpenRequest, submitSheet, type ReviewDrawing } from '../../services/drawingReviewService';
+import { watchStudioReviews, watchProjectDrawings, takeOpenRequest, returnFromDesk, submitSheet, type ReviewDrawing, type DeskOrigin } from '../../services/drawingReviewService';
 import SheetStudio, { type Me } from './SheetStudio';
 import ProjectBand, { type ProjectInfo } from './ProjectBand';
 import ForYou, { type DragKit } from './ForYou';
@@ -209,7 +209,21 @@ function Desk({ projects, activeProjectId }: Props) {
   }, [live?.state]);
 
   /* ------------------------------------------------------------ the sheet screen */
-  const [open, setOpen] = useState<{ projectId: string; drawingId: string } | null>(() => takeOpenRequest());
+  const [request] = useState(() => takeOpenRequest());
+  const [open, setOpen] = useState<{ projectId: string; drawingId: string } | null>(() =>
+    request ? { projectId: request.projectId, drawingId: request.drawingId } : null);
+  /*
+    Where the sheet was opened from (a project's Drawings, Home). The back button
+    returns there: it used to land on the Design Desk homepage, losing the
+    project the person came from. It lasts for this visit to the Desk.
+  */
+  const [origin, setOrigin] = useState<DeskOrigin | null>(() => request?.from || null);
+  const goBack = useCallback(() => {
+    if (!origin) return;
+    setOpen(null);
+    setOrigin(null);
+    returnFromDesk(origin);
+  }, [origin]);
   const openSheet = useCallback((d: { projectId: string; id: string }) => {
     setOpen({ projectId: d.projectId, drawingId: d.id });
     setRecent((r) => pushRecent(r, d.projectId));
@@ -329,10 +343,18 @@ function Desk({ projects, activeProjectId }: Props) {
           look={projectOf(open.projectId)} projectNeeds={attention(rows.filter((d) => d.projectId === open.projectId && d.id !== open.drawingId), viewer)}
           role={role} me={me} queue={queue}
           onClose={() => setOpen(null)}
+          onBack={origin ? goBack : undefined}
+          backLabel={origin?.label}
           onOpen={(n) => openSheet({ projectId: n.projectId, id: n.drawingId })}
         />
       ) : (
         <>
+          {/* Opened from somewhere else (a project's Drawings, Home): the way back, until it is used. */}
+          {origin && (
+            <button type="button" onClick={goBack} className="mb-3 inline-flex min-h-[38px] items-center gap-1 rounded-[10px] py-0 pl-2 pr-3 text-[13px] font-bold text-[#4F535C] hover:bg-[#EBEBE5] hover:text-[#17191E]">
+              <ChevronLeft size={16} strokeWidth={2.4} />Back to {origin.label}
+            </button>
+          )}
           {/* Named by the shell's title row, like Projects; this is the bar under it. */}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
             <LayoutGroup id="dd-views">

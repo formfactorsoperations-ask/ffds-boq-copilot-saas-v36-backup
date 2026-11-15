@@ -39,6 +39,9 @@ interface Props {
   me: Me;
   queue: { projectId: string; drawingId: string }[];
   onClose: () => void;
+  /** Where the sheet was opened from (a project's Drawings, Home): the back button goes there instead of the Desk. */
+  onBack?: () => void;
+  backLabel?: string;
   onOpen: (next: { projectId: string; drawingId: string }) => void;
 }
 
@@ -58,7 +61,7 @@ const read = <T,>(key: string, fallback: T): T => { try { const v = localStorage
 const write = (key: string, v: unknown) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* storage off */ } };
 const phraseOf = (text: string) => { const s = text.split(/[.\n]/)[0].trim(); return s.length >= 6 && s.length <= 60 ? s : null; };
 
-const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName, look, projectNeeds = 0, role, me, queue, onClose, onOpen }) => {
+const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName, look, projectNeeds = 0, role, me, queue, onClose, onBack, backLabel, onOpen }) => {
   const toast = useToast();
   const target = { orgId, projectId, drawingId };
   const [d, setD] = useState<ReviewDrawing | null | undefined>(undefined);
@@ -321,7 +324,7 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
   if (d === null) return (
     <div className="mx-auto max-w-md py-24 text-center">
       <p className="text-lg font-semibold text-[#17191E]">This drawing is not in the tracker any more.</p>
-      <button type="button" onClick={onClose} className="mt-4 rounded-xl bg-[#17191E] px-4 py-2 text-sm font-bold text-white">Back to Design Desk</button>
+      <button type="button" onClick={onBack || onClose} className="mt-4 rounded-xl bg-[#17191E] px-4 py-2 text-sm font-bold text-white">Back to {backLabel || 'Design Desk'}</button>
     </div>
   );
 
@@ -400,8 +403,8 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
   return (
     <div className="dd-rise">
       <div className="mb-3.5 flex flex-wrap items-center gap-x-3.5 gap-y-2.5">
-        <button type="button" onClick={onClose} className="inline-flex min-h-[38px] items-center gap-1 rounded-[10px] py-0 pl-2 pr-3 text-[13px] font-bold text-[#4F535C] hover:bg-[#EBEBE5] hover:text-[#17191E]">
-          <ChevronLeft size={16} strokeWidth={2.4} />Design Desk
+        <button type="button" onClick={onBack || onClose} className="inline-flex min-h-[38px] items-center gap-1 rounded-[10px] py-0 pl-2 pr-3 text-[13px] font-bold text-[#4F535C] hover:bg-[#EBEBE5] hover:text-[#17191E]">
+          <ChevronLeft size={16} strokeWidth={2.4} />{backLabel || 'Design Desk'}
         </button>
         <span className="inline-flex min-w-0 items-center gap-2 rounded-full border-[1.5px] py-[5px] pl-[5px] pr-3" style={{ background: look.soft, borderColor: look.color }}>
           <ProjectMark code={look.code} color={look.color} size={26} round />

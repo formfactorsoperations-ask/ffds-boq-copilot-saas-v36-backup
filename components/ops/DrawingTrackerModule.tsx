@@ -41,6 +41,9 @@ function AnimatedNumber({ value }: { value: number }) {
     );
 }
 
+/* Design Desk's back button returns here, to this project's Drawings, not to the Desk's homepage. */
+const FROM_DRAWINGS = { tab: 'drawing-tracker', label: 'Drawings' };
+
 export default function DrawingTrackerModule({ projectId, projectContext, fullBoq }: DrawingTrackerModuleProps) {
     const designGateActive = (projectContext as any)?.designGate?.gateActivated || (projectContext as any)?.lifecycle?.gates?.designGateActive?.done;
     
@@ -1684,7 +1687,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         {d.review?.state && (
                             <button
                                 type="button"
-                                onClick={e => { e.stopPropagation(); openInDesignReview(projectId, d.id); }}
+                                onClick={e => { e.stopPropagation(); openInDesignReview(projectId, d.id, FROM_DRAWINGS); }}
                                 title="Open in Design Desk"
                                 className="mt-0.5 block max-w-full truncate text-left text-[10.5px] font-semibold text-[#5B5BD6] hover:underline"
                             >
@@ -1735,7 +1738,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                             <button
                                 type="button"
                                 title={d.review?.state ? 'Open in Design Desk' : 'Upload the PDF in Design Desk'}
-                                onClick={e => { e.stopPropagation(); openInDesignReview(projectId, d.id); }}
+                                onClick={e => { e.stopPropagation(); openInDesignReview(projectId, d.id, FROM_DRAWINGS); }}
                                 className="p-1.5 text-[#5B5BD6] hover:bg-indigo-50 rounded-lg transition-colors"
                             >
                                 <PenTool className="w-3.5 h-3.5" />
