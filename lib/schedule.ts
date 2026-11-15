@@ -903,6 +903,17 @@ function runSchedulePass(
  *                  explicitly by tests, and by anything rendering a schedule as
  *                  it stood on some other date.
  */
+/**
+ * Calendar days from the programme's start to its handover, both ends counted.
+ * The Gantt's "Total Duration" and the Timeline's preview both read this, so
+ * the number promised before generating is the number shown after.
+ */
+export function programmeSpanDays(result: Pick<ScheduleResult, 'startISO' | 'tasks'>): number {
+  if (!result.startISO || !result.tasks.length) return 0;
+  const finishDay = Math.max(...result.tasks.map(t => t.plannedEndDay));
+  return finishDay - toDayNum(result.startISO) + 1;
+}
+
 export function computeSchedule(schedule: ProjectSchedule, todayISO?: string): ScheduleResult {
   const cal = schedule.calendar || DEFAULT_CALENDAR;
   const hol = holidaySet(cal);

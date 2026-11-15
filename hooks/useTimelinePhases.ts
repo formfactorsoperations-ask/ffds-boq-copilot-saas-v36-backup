@@ -11,6 +11,7 @@ import {
 import { db as firestoreDb } from "../services/firebaseClient";
 import { StudioSettings } from "./useStudioSettings";
 import { StepProgress } from "./useStepProgress";
+import { templatePhases } from "../lib/scheduleBuilder";
 import {
   DEFAULT_CALENDAR,
   toDayNum,
@@ -113,6 +114,8 @@ export function useTimelinePhases(projectId: string, studioId: string) {
   const buildTimelineFromTemplate = async (
     kickoffDate: string,
     processSteps: StudioSettings["designProcess"]["steps"],
+    /** The programme's handover, from previewTemplateProgramme. Falls back to the last step's end. */
+    completionISO?: string | null,
   ) => {
     if (!firestoreDb || !projectId || !studioId) {
       console.error("Missing db, projectId, or studioId", {
@@ -142,29 +145,10 @@ export function useTimelinePhases(projectId: string, studioId: string) {
       }
 
       const batch = writeBatch(firestoreDb);
-      const createdPhases: TimelinePhaseData[] = [];
-
-      let currentStartDayNum = toDayNum(kickoffDate.slice(0, 10));
-
-      steps.forEach((step) => {
-        const duration = step.defaultDuration || 14; // Default to 14 if not set
-        const startDay = nextWorkingDay(DEFAULT_CALENDAR, currentStartDayNum);
-        const endDay = workSpanEnd(DEFAULT_CALENDAR, startDay, duration);
-
-        const phaseData: TimelinePhaseData = {
-          stepNumber: step.stepNumber,
-          title: step.title,
-          startDate: toISO(startDay) + "T00:00:00.000Z",
-          endDate: toISO(endDay) + "T23:59:59.000Z",
-          durationDays: duration,
-        };
-
-        const docRef = doc(phasesRef, String(step.stepNumber));
-        batch.set(docRef, phaseData);
-        createdPhases.push(phaseData);
-
-        // Next start day number
-        currentStartDayNum = endDay + 1;
+      // The same calculation the empty Timeline previews (lib/scheduleBuilder).
+      const createdPhases: TimelinePhaseData[] = templatePhases(kickoffDate, steps);
+      createdPhases.forEach((phaseData) => {
+        batch.set(doc(phasesRef, String(phaseData.stepNumber)), phaseData);
       });
 
       // Update project kickoff and estimated completion date
@@ -178,7 +162,9 @@ export function useTimelinePhases(projectId: string, studioId: string) {
         projectRef,
         {
           kickoffDate,
-          estimatedCompletionDate: lastPhase.endDate,
+          estimatedCompletionDate: completionISO
+            ? completionISO.slice(0, 10) + "T23:59:59.000Z"
+            : lastPhase.endDate,
         },
         { merge: true },
       );

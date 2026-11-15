@@ -63,7 +63,7 @@ import ProjectMinutes from "./minutes/ProjectMinutes";
 import { db as firestoreDb } from "../services/firebaseClient";
 import { doc, setDoc, collection, query, onSnapshot } from "firebase/firestore";
 import ScheduleGantt from "./ScheduleGantt";
-import { buildScheduleFromProject, scheduleForEngagement, scheduleMatchesEngagement } from "../lib/scheduleBuilder";
+import { buildScheduleFromProject, scheduleForEngagement, scheduleMatchesEngagement, previewTemplateProgramme, estimateSiteWorkDays } from "../lib/scheduleBuilder";
 import { engagementDef, engagementOf } from "../lib/engagement";
 import { buildMarkers } from "../lib/scheduleMarkers";
 import { db } from "../services/dbService";
@@ -272,6 +272,22 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
     () => buildScheduleFromProject(projectContext, boq, { designSteps: phases as any }),
     [projectContext, boq, phases],
   );
+
+  /*
+    What "Generate" will produce, worked out by the same pipeline the chart runs
+    (previewTemplateProgramme). The empty state used to add up the template's
+    step durations and promise ~63 days; the chart then showed 128.
+  */
+  const templatePreview = React.useMemo(() => {
+    const steps = settings?.designProcess?.steps || [];
+    if (phases.length > 0 || !steps.length || !kickoffDate) return null;
+    try {
+      return previewTemplateProgramme(projectContext, boq, kickoffDate, steps);
+    } catch (e) {
+      console.warn("Could not preview the programme", e);
+      return null;
+    }
+  }, [phases.length, settings?.designProcess?.steps, kickoffDate, projectContext, boq]);
   const projectSchedule = React.useMemo(() => {
     // A design-only project has no site programme, even in a schedule saved before it became one.
     const base = scheduleForEngagement(scheduleOverride, projectContext) || derivedSchedule;
@@ -541,7 +557,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
     setGenerateError(null);
     try {
         const steps = settings?.designProcess?.steps || [];
-        await buildTimelineFromTemplate(kickoffDate, steps);
+        await buildTimelineFromTemplate(kickoffDate, steps, templatePreview?.finishISO);
         showSuccessWithNext('Execution schedule auto-built successfully from process template.');
     } catch (e: any) {
         setGenerateError(e.message || "Failed to generate timeline");
@@ -682,10 +698,8 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   // Initial State: Prompt generation
   if (phases.length === 0) {
     const templateSteps = settings?.designProcess?.steps || [];
-    const totalDefaultDays = templateSteps.reduce(
-      (acc, step) => acc + (step.defaultDuration || 14),
-      0,
-    );
+    const fmtDay = (iso: string | null) =>
+      iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
     return (
       <Card
@@ -708,15 +722,39 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
             <div className="border border-sky-100 rounded-2xl p-6 bg-white shadow-lg shadow-sky-50/30">
               <div className="flex items-center gap-1.5 mb-4 text-[#334486] font-bold uppercase tracking-widest text-[10px]">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>AI Recommended</span>
+                <span>Recommended</span>
               </div>
               <h3 className="text-base font-bold text-slate-800 mb-1">
                 Generate via Studio Template
               </h3>
               <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                Creates a sequential {templateSteps.length}-phase scheduled roadmap (~
-                {totalDefaultDays} days duration) aligned with your studio's contract settings.
+                Your {templateSteps.length}-step design process, then a site programme sized to
+                this home{templatePreview ? ` (${Math.round(templatePreview.sizing.areaSqFt)} sq ft, ${templatePreview.sizing.rooms} rooms)` : ''} and
+                the trades in its BOQ. Every bar can be edited afterwards.
               </p>
+
+              {templatePreview && (
+                <div className="mb-6 rounded-xl border border-slate-100 bg-slate-50 divide-y divide-slate-100 text-xs">
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="font-bold text-slate-600">Design</span>
+                    <span className="text-slate-500">
+                      {templatePreview.designWorkDays} working days · gate {fmtDay(templatePreview.designGateISO)}
+                    </span>
+                  </div>
+                  {templatePreview.siteWorkDays > 0 && (
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="font-bold text-slate-600">Site</span>
+                      <span className="text-slate-500">{templatePreview.siteWorkDays} working days</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="font-bold text-slate-800">Handover</span>
+                    <span className="font-bold text-slate-800">
+                      {fmtDay(templatePreview.finishISO)} · {templatePreview.totalDays} days
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="mb-6">
                 <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
@@ -746,7 +784,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                 ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      <span>Generate AI Timeline</span>
+                      <span>Generate Timeline</span>
                     </>
                 )}
               </button>
@@ -1654,26 +1692,8 @@ const OldTimelineBuilder: React.FC<any> = ({
         if (area > 1500) designDays = 21;
         if (area > 2500) designDays = 28;
 
-        let executionDays = 30; // base site execution days
-        
-        // Area factor: +1 day per 150 sq ft above 500 sq ft
-        if (area > 500) {
-            executionDays += Math.round((area - 500) / 150);
-        }
-
-        // Room count penalty: +2 days per room above 2 rooms
-        if (rooms > 2) {
-            executionDays += (rooms - 2) * 2;
-        }
-
-        // Category additions
-        if (scopeAnalysis.hasCivil) executionDays += 5;
-        if (scopeAnalysis.hasWoodwork) executionDays += 10;
-        if (scopeAnalysis.hasElectricalPlumbing) executionDays += 5;
-        if (scopeAnalysis.hasPainting) executionDays += 5;
-
-        // Cap execution to reasonable limits
-        executionDays = Math.min(120, Math.max(25, executionDays));
+        // One sizing rule for every way a timeline is made (lib/scheduleBuilder).
+        const executionDays = estimateSiteWorkDays(projectContext, boq).workDays;
 
         // Distribute across standard phases:
         const p1 = designDays;
