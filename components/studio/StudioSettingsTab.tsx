@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { renderPaymentReminderMessage } from '../../lib/whatsappUtils';
 import { connectGoogleCalendar, isGoogleCalendarConnected } from '../../services/googleCalendarService';
-import CommunicationTemplatesTab from '../ops/CommunicationTemplatesTab';
 import TermsAndPaymentTab from './TermsAndPaymentTab';
 
 interface StudioSettingsTabProps {
@@ -720,43 +719,8 @@ export default function StudioSettingsTab({
                         </AnimatePresence>
                     </div>
 
-                    {/* ACCORDION SECTION 5: 💬 CLIENT PORTAL & COMMUNICATION */}
-                    <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden transition-all duration-200">
-                        <button
-                            onClick={() => toggleSection('portal')}
-                            className="w-full px-6 py-5 flex items-center justify-between bg-gradient-to-r from-slate-50/80 to-white hover:bg-slate-100/60 transition-colors text-left"
-                        >
-                            <div className="flex items-center gap-4">
-                                <div className="w-11 h-11 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-700 shrink-0">
-                                    <MessageSquare className="w-5 h-5" />
-                                </div>
-                                <div>
-                                    <h3 className="text-base font-bold text-slate-900">Client Portal & WhatsApp Communication Hub</h3>
-                                    <p className="text-xs text-slate-500 mt-0.5">Visibility toggles, auto-linked email scripts, and weekly report template</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <span className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
-                                    Portal Active
-                                </span>
-                                {openSections.portal ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
-                            </div>
-                        </button>
-
-                        <AnimatePresence>
-                            {openSections.portal && (
-                                <motion.div
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: 'auto', opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="border-t border-slate-100 p-6 md:p-8 space-y-6"
-                                >
-                                    <CommunicationTemplatesTab settings={settings} updateSettings={updateSettings} onSaved={showSaved} />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
+                    {/* Section 5 (Client Portal & WhatsApp Communication Hub) held only the
+                        Client Comms email templates, retired with Client Comms. */}
 
                     {/* ACCORDION SECTION 6: ⚡ ADMIN, BACKUP & AUDIT LOG */}
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden transition-all duration-200">

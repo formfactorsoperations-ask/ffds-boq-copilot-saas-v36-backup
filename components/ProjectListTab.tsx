@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { unansweredMessages } from './ops/ClientMessagesPage';
 import { ENGAGEMENTS, EngagementType, engagementDef, engagementOf, isFeeOnly } from '../lib/engagement';
 import { db } from '../services/dbService';
 import { FullProjectData, ProjectStatus } from "../types";
@@ -1941,9 +1942,10 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                               Flags & Payment Health
                             </span>
                             <div className="flex items-center gap-2">
-                              {(project.context?.commsSummary?.pendingCount || 0) > 0 && (
+                              {/* Client portal messages nobody has dealt with (it counted Client Comms templates, now retired). */}
+                              {unansweredMessages(project.context) > 0 && (
                                 <span className="text-[9.5px] font-bold uppercase tracking-wider text-amber-700">
-                                  {project.context!.commsSummary!.pendingCount} comms
+                                  {unansweredMessages(project.context)} new msg
                                 </span>
                               )}
                               {showFinance && metrics.status !== 'lost' && (

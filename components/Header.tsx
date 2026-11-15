@@ -48,8 +48,6 @@ interface SidebarProps {
   logo?: string;
   onLogout?: () => void;
   className?: string;
-  pendingCommsCount?: number;
-  commsHealthScore?: number;
   autoCollapse?: boolean;
   isHidden?: boolean;
   isMobileOpen?: boolean;

@@ -156,7 +156,7 @@ export function requestChangesPatch(
         ...prev.documents,
         issues: prev.documents.issues.map((i: any) => (i.id === issueId ? { ...i, changesRequested: request } : i)),
       },
-      /* In the studio's client messages too, so Client Comms shows it as unanswered. */
+      /* In the studio's client messages too, so Messages shows it as unanswered. */
       clientMessages: [
         ...(prev?.clientMessages || []),
         {

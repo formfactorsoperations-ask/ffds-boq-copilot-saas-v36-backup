@@ -46,8 +46,8 @@ export type ClientAction =
     already routes into the decisions ledger.
   */
   | { type: 'querySelection'; selectionId: string; question: string }
-  /* A general note. Lands in the project's client messages, which Client Comms
-     shows. Before this it landed nowhere at all. */
+  /* A general note. Lands in the project's client messages, which the studio's
+     Messages screen shows. Before this it landed nowhere at all. */
   | { type: 'sendMessage'; text: string; aboutKind?: 'selection' | 'document' | 'general'; aboutId?: string | null; aboutLabel?: string | null }
   /* Confirming a design meeting's record: what was shown and what was agreed or
      asked to change, room by room. The name is typed here; the server records

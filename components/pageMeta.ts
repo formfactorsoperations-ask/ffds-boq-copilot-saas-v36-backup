@@ -86,7 +86,7 @@ const META: Record<string, PageMeta> = {
   docs:                   { subtitle: 'Drawings, contracts and shared files' },
   'client-portal':        { title: 'Client Portal', subtitle: 'What the client sees, and what they still owe you' },
   timeline:               { subtitle: 'Programme dates and dependencies' },
-  'comms-tracker':        { subtitle: 'Client conversations and follow-ups' },
+  'comms-tracker':        { title: 'Client Messages', subtitle: 'What your client has written from their portal' },
   'record-decision':      { subtitle: 'Decisions taken, and who signed off' },
   history:                { subtitle: 'Change timeline and data trail' },
   'mom-action-tracker':   { title: 'Meeting Actions', subtitle: 'Actions captured from meeting notes' },
