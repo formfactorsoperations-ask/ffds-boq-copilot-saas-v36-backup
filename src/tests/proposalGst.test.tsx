@@ -98,3 +98,18 @@ describe('the proposal shows it', () => {
     expect(executionGstLabel(gstTermsOf(lodha({ billablePercent: 100 })))).toBe('GST on Execution (18%)');
   });
 });
+
+describe('Luxe Booklet states the Timeline programme in calendar days', () => {
+  it('site days and design days add up to the Timeline total', () => {
+    const tier: any = { id: 'com', name: 'Comfort Upgrade', timestamp: 1, boq: [], fullBoq: [], summary: { totalSell: EXEC, designFee: DESIGN, totalRevenue: EXEC + DESIGN } };
+    const programme: any = {
+      source: 'saved', startISO: '2026-11-16', designGateISO: '2026-12-10', finishISO: '2027-02-15',
+      designWorkDays: 21, siteWorkDays: 53, totalDays: 92, designDays: 24, siteDays: 68, sitePhases: [],
+    };
+    render(<ClientBookletProposal tiers={[tier]} projectContext={lodha() as any} timelinePhases={[]} programme={programme} paymentMilestones={[]} level="LEVEL_1" settings={{ companyName: 'Test Studio' }} isClientViewOnly />);
+    expect(screen.getByText('68-day site programme')).toBeTruthy();
+    expect(document.body.textContent).toContain('68 calendar days, as on the project Timeline');
+    expect(document.body.textContent).not.toContain('53 working days');
+    cleanup();
+  });
+});

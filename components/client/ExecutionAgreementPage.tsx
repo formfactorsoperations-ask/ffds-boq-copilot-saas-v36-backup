@@ -108,18 +108,21 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
         studioName,
         defaultDuration: settings?.procurementLeadTimeWeeks ? settings.procurementLeadTimeWeeks * 7 + 45 : 60,
         /*
-          The project's Timeline (useProjectProgramme): design and site working
-          days, and the Timeline's Total Duration. The agreement states these
-          rather than a figure of its own, so it reads what the chart reads.
+          The project's Timeline (useProjectProgramme): design and site days
+          that add up to the Timeline's Total Duration. The agreement states
+          these rather than a figure of its own, so it reads what the chart reads.
         */
         programme: programme ? {
+            designDays: programme.designDays,
+            siteDays: programme.siteDays,
             designWorkDays: programme.designWorkDays,
             siteWorkDays: programme.siteWorkDays,
             totalDays: programme.totalDays,
             finishISO: programme.finishISO,
         } : null,
     }), [projectContext, activeTier, option, scopeLines, studioName, settings?.procurementLeadTimeWeeks,
-        programme?.designWorkDays, programme?.siteWorkDays, programme?.totalDays, programme?.finishISO]);
+        programme?.designDays, programme?.siteDays, programme?.designWorkDays, programme?.siteWorkDays,
+        programme?.totalDays, programme?.finishISO]);
 
     /* Edits are saved on the project as they are typed. A key set to undefined goes back to the live value. */
     const changeOverrides = (update: Partial<AgreementOverrides> | ((o: AgreementOverrides) => Partial<AgreementOverrides>)) => {

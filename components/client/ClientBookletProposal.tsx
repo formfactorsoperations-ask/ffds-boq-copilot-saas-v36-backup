@@ -581,12 +581,13 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
     // --- ESTIMATED DURATION & TIMELINE ---
     /*
-      With the Timeline's programme, the booklet states its working days: the
-      site programme after design, and design before it -- the same figures the
-      Timeline and the Execution Agreement give.
+      With the Timeline's programme, the booklet states its days: the site
+      programme after design, and design before it, in calendar days that add
+      up to the Timeline's Total Duration -- the figures the Execution
+      Agreement gives. Without it, the old working-day wording stands.
     */
     const totalDays = useMemo(() => {
-        if (programme && programme.siteWorkDays > 0) return programme.siteWorkDays;
+        if (programme && programme.siteDays > 0) return programme.siteDays;
         if (!timelinePhases || timelinePhases.length === 0) {
             const config = (projectContext?.config || '').toLowerCase();
             if (config.includes('1-bhk') || config.includes('studio')) return 45;
@@ -600,7 +601,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
     }, [timelinePhases, projectContext, programme]);
 
     const designDays = useMemo(() => {
-        if (programme && programme.designWorkDays > 0) return programme.designWorkDays;
+        if (programme && programme.designDays > 0) return programme.designDays;
         if (!timelinePhases || timelinePhases.length === 0) return 14;
         const designPhase = timelinePhases.find(p => p.phaseName === 'Design & Planning');
         return designPhase ? designPhase.durationDays : 14;
@@ -623,6 +624,10 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
         ),
         [timelinePhases, designDays, programme],
     );
+
+    /* The unit the figures above are in. */
+    const siteUnit = programme ? 'calendar days, as on the project Timeline' : 'working days, excluding Sundays and public holidays';
+    const dayWord = programme ? 'days' : 'working days';
 
     const executionDays = useMemo(() => {
         return totalDays - designDays > 0 ? totalDays - designDays : 34;
@@ -1699,7 +1704,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                 <div className={T.section}>
                     <h4 className={T.h4}><Ed k="32cbf8a9" ctl={edCtl}>8 · PROGRAMME AND START CONDITIONS</Ed></h4>
-                    <p><Ed k="annex.8-programme-intro" ctl={edCtl}>The site programme is {totalDays} working days, excluding Sundays and public holidays. Design and planning runs for approximately {designDays} working days before it and is not counted within it. The site programme is calculated from the date on which all four of the following are in place:</Ed></p>
+                    <p><Ed k="annex.8-programme-intro" ctl={edCtl}>The site programme is {totalDays} {siteUnit}. Design and planning runs for approximately {designDays} {dayWord} before it and is not counted within it. The site programme is calculated from the date on which all four of the following are in place:</Ed></p>
                     <EdList k="annex.8-programme-and-start" ctl={edCtl} as="ul" className="list-disc pl-6 text-slate-600 mt-2">
                         <li><Ed k="234b3c76" ctl={edCtl}>Design and material selection freeze, with the Schedule of Finishes approved in writing</Ed></li>
                         <li><Ed k="8ce93c71" ctl={edCtl}>Receipt of the required stage payment</Ed></li>
@@ -1996,7 +2001,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                             <span className="text-2xl font-black text-[#C5A880] shrink-0 font-mono">03</span>
                             <div>
                                 <h4 className="font-bold text-slate-900 text-base"><Ed k="51e28c99" ctl={edCtl}>Defined programme</Ed></h4>
-                                <p className="text-xs text-slate-500 mt-1">{totalDays} working days with start conditions clearly defined, ensuring any delay has a transparent, visible cause.</p>
+                                <p className="text-xs text-slate-500 mt-1">{totalDays} {dayWord} with start conditions clearly defined, ensuring any delay has a transparent, visible cause.</p>
                             </div>
                         </div>
                     </div>
@@ -2588,7 +2593,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                 <div className="bg-[#0F172A] text-white p-6 rounded-xl space-y-2">
                     <p className="text-xs text-slate-300">
                         <strong className="text-white block mb-1">PROGRAMME STARTS WHEN ALL FOUR ARE IN PLACE:</strong>
-                        Design and material freeze with SOF approved · Stage payment received · Site vacant and available · Society permissions confirmed. {totalDays} working days, excluding Sundays and public holidays. Custom or imported materials need 4-6 weeks and sit outside this baseline unless ordered at freeze.
+                        Design and material freeze with SOF approved · Stage payment received · Site vacant and available · Society permissions confirmed. {totalDays} {siteUnit}. Custom or imported materials need 4-6 weeks and sit outside this baseline unless ordered at freeze.
                     </p>
                 </div>
             </div>

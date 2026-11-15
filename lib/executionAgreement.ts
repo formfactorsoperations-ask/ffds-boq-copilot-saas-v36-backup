@@ -505,9 +505,13 @@ export interface ResolvedAgreement {
 }
 
 export interface AgreementProgramme {
+  /** Calendar days, as the Timeline counts them: design + site = total. */
+  designDays: number;
+  siteDays: number;
+  totalDays: number;
+  /** The same programme in working days (Sundays and holidays excluded), kept for the record. */
   designWorkDays: number;
   siteWorkDays: number;
-  totalDays: number;
   finishISO?: string | null;
 }
 

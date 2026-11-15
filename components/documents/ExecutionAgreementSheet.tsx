@@ -593,15 +593,17 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                     <div className="ea-box soft">
                         <div className="ea-label">Estimated Duration</div>
                         {agreement.programme ? (
-                            /* From the project's Timeline: site days, design before them, and the whole programme. */
+                            /*
+                              From the project's Timeline, in its units: calendar days, so
+                              design + site = the total the Timeline shows. Mixing working
+                              days with a calendar total read as 21 + 53 = 92.
+                            */
                             <>
-                                <div className="ea-value"><span className="ea-placeholder">{agreement.programme.siteWorkDays} Working Days on site</span></div>
+                                <div className="ea-value"><span className="ea-placeholder">{agreement.programme.totalDays} Days, start to handover</span></div>
                                 <p className="ea-small" style={{ margin: '4px 0 0' }}>
-                                    Design: {agreement.programme.designWorkDays} working days, before site start
+                                    Design {agreement.programme.designDays} days + Site {agreement.programme.siteDays} days
                                 </p>
-                                <p className="ea-small" style={{ margin: '2px 0 0' }}>
-                                    Total: {agreement.programme.totalDays} days, start to handover
-                                </p>
+                                <p className="ea-small" style={{ margin: '2px 0 0' }}>Calendar days, as on the project Timeline</p>
                                 {editing && <StudioNote>From the project's Timeline. Change the programme there and this follows.</StudioNote>}
                             </>
                         ) : (
@@ -1020,7 +1022,9 @@ const ExecutionAgreementSheet: React.FC<ExecutionAgreementSheetProps> = ({
                 <div className="ea-clause"><div className="ea-no">5.3.4</div><div>{studioName} may restrict site access during high-risk activities, wet work, electrical work, carpentry cutting, polishing, painting, ceiling work, or active installation.</div></div>
 
                 <h3>5.4 Timeline</h3>
-                <div className="ea-clause"><div className="ea-no">5.4.1</div><div>The project duration is an estimated working-day schedule, not a fixed-date guarantee, unless specifically agreed in writing. The timeline starts only after commencement conditions are fulfilled.{agreement.programme ? ` The site programme is estimated at ${agreement.programme.siteWorkDays} working days, preceded by approximately ${agreement.programme.designWorkDays} working days of design, about ${agreement.programme.totalDays} days in all from project start to handover.` : ''}</div></div>
+                <div className="ea-clause"><div className="ea-no">5.4.1</div><div>{agreement.programme
+                    ? `The project duration is an estimated schedule, not a fixed-date guarantee, unless specifically agreed in writing. It is estimated at ${agreement.programme.totalDays} calendar days from project start to handover: approximately ${agreement.programme.designDays} days of design followed by ${agreement.programme.siteDays} days of site work. Site work starts only after commencement conditions are fulfilled.`
+                    : 'The project duration is an estimated working-day schedule, not a fixed-date guarantee, unless specifically agreed in writing. The timeline starts only after commencement conditions are fulfilled.'}</div></div>
                 <div className="ea-clause"><div className="ea-no">5.4.2</div><div>Timeline excludes Sundays, public holidays, labour holidays, building/society restricted days, force majeure events, and days on which work cannot be performed due to reasons beyond {studioName}’s control.</div></div>
 
                 <h3>5.5 Timeline Exclusions and Extensions</h3>
