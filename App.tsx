@@ -86,7 +86,7 @@ const StudioSettingsShell = lazyWithRetry(() => import("./components/StudioSetti
 const SuperAdminDashboard = lazyWithRetry(() => import("./components/SuperAdminDashboard"));
 const ClientLoginScreen = lazyWithRetry(() => import("./components/ClientLoginScreen"));
 const AgreementSignoffPage = lazyWithRetry(() => import("./components/AgreementSignoffPage"));
-const CommunicationTracker = lazyWithRetry(() => import("./components/ops/CommunicationTrackerPage").then(module => ({ default: module.CommunicationTracker })));
+const ClientMessagesPage = lazyWithRetry(() => import("./components/ops/ClientMessagesPage"));
 const TermsDocketPage = lazyWithRetry(() => import("./components/client/TermsDocketPage"));
 const HandoverDocketPage = lazyWithRetry(() => import("./components/client/HandoverDocketPage"));
 const PaymentSchedulePage = lazyWithRetry(() => import("./components/client/PaymentSchedulePage"));
@@ -152,7 +152,6 @@ import { sendPortalAccessLink } from "./services/emailService";
 import { verifyApiKey } from "./services/geminiService";
 import { id as generateId, calculateSellPrice, calculateCostFromSell } from "./lib/utils";
 import { designFeeFor, isAsActuals } from "./lib/boqPricing";
-import { initCommunicationLog } from "./services/communicationTrackerService";
 import { INITIAL_TEMPLATES } from "./lib/standardPackages";
 import { INITIAL_BANK } from "./constants";
 import { SaveIcon, UploadIcon, NewFileIcon } from "./components/Icons";
@@ -1925,12 +1924,6 @@ export default function App() {
     setDecisionBrainOutput(null);
     setActiveTab("dashboard");
 
-    // Initialize communication tracker with studio defaults
-    if (orgData?.tenantId) {
-      initCommunicationLog(newId, orgData.tenantId).catch((err) =>
-        console.error("Found error initializing comm track:", err),
-      );
-    }
   };
 
   /**
@@ -1964,9 +1957,6 @@ export default function App() {
     } as FullProjectData;
     await db.saveProject(project);
     setProjectLibrary((prev) => [project, ...prev]);
-    if (orgData?.tenantId) {
-      initCommunicationLog(newId, orgData.tenantId).catch((err) => console.error("Could not start the communication log:", err));
-    }
     return newId;
   };
 
@@ -3117,8 +3107,6 @@ export default function App() {
               localStorage.removeItem("ffds_client_project_id");
               setAppMode("login");
             }}
-            pendingCommsCount={projectContext.commsSummary?.pendingCount || 0}
-            commsHealthScore={projectContext.commsSummary?.healthScore || 0}
             autoCollapse={false}
             isHidden={isProjectTab && hasProjectData}
             isMobileOpen={isMobileMenuOpen}
@@ -3740,17 +3728,15 @@ export default function App() {
                         />
                       )}
                       {activeTab === "comms-tracker" && (
-                        <CommunicationTracker
-                          projectId={activeInternalId!}
-                          studioId={orgData?.tenantId || "demo-tenant-01"}
+                        <ClientMessagesPage
                           projectContext={projectContext}
-                          teamMembers={[]}
+                          setProjectContext={setProjectContext}
                           currentUserName={
                             currentUserAuth?.displayName ||
                             currentUserAuth?.email ||
-                            "Unknown User"
+                            "Studio"
                           }
-                          currentUserId={currentUserAuth?.uid || "unknown"}
+                          readOnly={isLimitedRole(currentRole)}
                         />
                       )}
                       {activeTab === "client" && (
@@ -4475,17 +4461,15 @@ export default function App() {
                         />
                       )}
                       {activeTab === "comms-tracker" && (
-                        <CommunicationTracker
-                          projectId={activeInternalId!}
-                          studioId={orgData?.tenantId || "demo-tenant-01"}
+                        <ClientMessagesPage
                           projectContext={projectContext}
-                          teamMembers={[]}
+                          setProjectContext={setProjectContext}
                           currentUserName={
                             currentUserAuth?.displayName ||
                             currentUserAuth?.email ||
-                            "Unknown User"
+                            "Studio"
                           }
-                          currentUserId={currentUserAuth?.uid || "unknown"}
+                          readOnly={isLimitedRole(currentRole)}
                         />
                       )}
                       {activeTab === "client" && (

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { clientMessagesOf } from './ClientMessagesPage';
 import { ProjectContext, WeeklyReport, SiteUpdateRecord, ProjectDecisionRecord, SnagItem } from '../../types';
 import { 
   Activity, 
@@ -168,11 +169,14 @@ export default function WeeklyPulseDashboard({ projectContext, setProjectContext
     return counts;
   }, [pendingSnags]);
 
-  // Client Communication Metrics
-  const commsHealth = projectContext?.commsHealth ?? 85;
-  const commsSent = projectContext?.commsSentCount ?? 0;
-  const commsPending = projectContext?.commsPendingCount ?? 0;
-  const commsOverdue = projectContext?.commsOverdueCount ?? 0;
+  /*
+    Client messages, from the client's portal (components/ops/ClientMessagesPage).
+    This read the Client Comms tracker's counts and a "Comms Health" that fell
+    back to a made-up 85% -- both retired with Client Comms.
+  */
+  const messages = clientMessagesOf(projectContext);
+  const messagesOpen = messages.filter((m) => !m.readAt).length;
+  const messagesDone = messages.length - messagesOpen;
 
   // Integrated Project Feed Filtered by Selected Week
   const weeklyFeedItems = useMemo(() => {
@@ -333,10 +337,10 @@ export default function WeeklyPulseDashboard({ projectContext, setProjectContext
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-emerald-500" />
               <div className="space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Comms Health</span>
-                <span className="text-3xl font-light text-slate-900 tracking-tight block">{commsHealth}%</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Client Messages</span>
+                <span className="text-3xl font-light text-slate-900 tracking-tight block">{messagesOpen}</span>
                 <span className="text-[10px] text-slate-500 block">
-                  Target: 90% responsiveness
+                  Unanswered, of {messages.length} received
                 </span>
               </div>
             </div>
@@ -542,7 +546,7 @@ export default function WeeklyPulseDashboard({ projectContext, setProjectContext
             <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-6">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <h4 className="text-xs font-bold uppercase tracking-widest text-slate-900 flex items-center gap-1.5">
-                  <MessageSquare className="w-4 h-4 text-slate-900" /> Comms Activity
+                  <MessageSquare className="w-4 h-4 text-slate-900" /> Client Messages
                 </h4>
                 <span className="text-[10px] font-bold text-slate-400">Activity Log</span>
               </div>
@@ -551,16 +555,16 @@ export default function WeeklyPulseDashboard({ projectContext, setProjectContext
               <div className="bg-slate-50 border border-slate-200/60 p-3 rounded-xl">
                 <div className="grid grid-cols-3 gap-2.5 text-center">
                   <div>
-                    <span className="text-sm font-bold text-emerald-600 block">{commsSent}</span>
-                    <span className="text-[8px] font-bold text-slate-400 uppercase block">Sent</span>
+                    <span className="text-sm font-bold text-slate-700 block">{messages.length}</span>
+                    <span className="text-[8px] font-bold text-slate-400 uppercase block">Received</span>
                   </div>
                   <div>
-                    <span className="text-sm font-bold text-[#B5945B] block">{commsPending}</span>
-                    <span className="text-[8px] font-bold text-slate-400 uppercase block">Pending</span>
+                    <span className="text-sm font-bold text-[#B5945B] block">{messagesOpen}</span>
+                    <span className="text-[8px] font-bold text-slate-400 uppercase block">Unanswered</span>
                   </div>
                   <div>
-                    <span className="text-sm font-bold text-rose-500 block">{commsOverdue}</span>
-                    <span className="text-[8px] font-bold text-slate-400 uppercase block">Overdue</span>
+                    <span className="text-sm font-bold text-emerald-600 block">{messagesDone}</span>
+                    <span className="text-[8px] font-bold text-slate-400 uppercase block">Dealt with</span>
                   </div>
                 </div>
               </div>

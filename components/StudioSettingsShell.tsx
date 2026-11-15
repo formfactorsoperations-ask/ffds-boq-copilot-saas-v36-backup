@@ -2,7 +2,6 @@ import React, { useMemo, useEffect } from 'react';
 import StudioSettingsConsole from './studio/StudioSettingsConsole';
 import Tabs from './ui/Tabs';
 import StudioSetupWizard from './StudioSetupWizard';
-import CommunicationTemplatesTab from './ops/CommunicationTemplatesTab';
 import { useOrg } from '../contexts/OrgContext';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 
@@ -27,7 +26,8 @@ const StudioSettingsShell: React.FC<StudioSettingsShellProps> = ({
     const tenantId = orgData.tenantId || 'demo-tenant-01';
     const { settings, updateSettings } = useStudioSettings(tenantId);
 
-    const currentSubTab = ['setup-wizard', 'studio-settings', 'communication-templates', 'terms-and-payment'].includes(activeTab)
+    // 'communication-templates' was retired with Client Comms; an old link lands on Studio settings.
+    const currentSubTab = ['setup-wizard', 'studio-settings', 'terms-and-payment'].includes(activeTab)
         ? (activeTab === 'terms-and-payment' ? 'studio-settings' : activeTab)
         : 'studio-settings';
 
@@ -52,7 +52,6 @@ const StudioSettingsShell: React.FC<StudioSettingsShellProps> = ({
 
         if (['Admin', 'Ops Director', 'Super Admin'].includes(currentRole as string)) {
             tabs.push({ id: 'studio-settings', label: 'Studio Settings' });
-            tabs.push({ id: 'communication-templates', label: 'Email & Communication Templates' });
         }
 
         return tabs;
@@ -93,13 +92,6 @@ const StudioSettingsShell: React.FC<StudioSettingsShellProps> = ({
                         onImportProject={onImportProject}
                         onClearProject={onClearProject}
                         confirmReset={confirmReset}
-                    />
-                )}
-                {currentSubTab === 'communication-templates' && (
-                    <CommunicationTemplatesTab
-                        settings={settings}
-                        updateSettings={updateSettings}
-                        tabs={settingsTabs}
                     />
                 )}
             </div>

@@ -6,6 +6,9 @@ import { ProjectContext, CommunicationLogItem, TermsDocket, RevisionAction, Manu
 import { useOrg } from '../contexts/OrgContext';
 import { engagementOf, journeyStepsFor, phasesFor, gateStepIds, PhaseDef } from '../lib/engagement';
 
+/* Steps that Client Comms alone used to complete; they are ticked by hand now (constants/journeyConstants). */
+const RETIRED_COMMS_STEPS = new Set(['exec_start_notified']);
+
 export interface StepWithStatus extends JourneyStepDef {
   status: 'done' | 'active' | 'pending' | 'locked';
   completedAt: Date | null;
@@ -365,6 +368,15 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
             step.status = 'pending';
           }
         }
+      } else if (RETIRED_COMMS_STEPS.has(step.id) && evaluateAutoStep(step)) {
+        /*
+          A step that only Client Comms could complete, now ticked by hand. A
+          "sent" mark the studio recorded there before it was retired (or the
+          stage having moved on) still completes it, so nothing done comes undone.
+        */
+        step.status = 'done';
+        step.completedAt = null;
+        step.completedByName = step.completedByName || 'Recorded before Client Comms was retired';
       } else if (isPastPhase && step.statusSource === 'manual') {
         // In a past stage that has already been cleared, mark manual historical
         // milestones done. No date is invented — this is inferred from the

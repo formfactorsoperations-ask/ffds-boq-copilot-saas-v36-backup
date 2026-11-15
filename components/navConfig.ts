@@ -3,6 +3,7 @@ import { ProjectContext } from '../types';
 import { STAGE_LABELS } from '../constants/journeyConstants';
 import { calculateClientActionItems } from '../services/clientPortalEngine';
 import { resolveApprovals } from '../services/clientApprovalEngine';
+import { unansweredMessages } from './ops/ClientMessagesPage';
 
 /**
  * What the client currently owes, for the Project Hub badge.
@@ -240,28 +241,18 @@ export const ALWAYS_ON_BAND: NavItem[] = [
     route: "timeline",
     icon: Calendar
   },
-  { 
-    label: "Client Comms", 
+  {
+    /* What the client has written from their portal. Replaced Client Comms (its
+       generic email templates were retired); the route keeps its old id so
+       notifications and saved links still land here. */
+    label: "Messages",
     route: "comms-tracker",
     icon: MessageSquare,
     statusBadge: (ctx) => {
-      const pending = (ctx as any)?.commsSummary?.pendingCount || (ctx as any)?.commsPendingCount || 0;
-      const health = (ctx as any)?.commsSummary?.healthScore || (ctx as any)?.commsHealth || 0;
-      if (pending > 0) {
-        return `${pending} due`;
-      }
-      if (health === 100) {
-        return "✓";
-      }
-      return null;
+      const open = unansweredMessages(ctx);
+      return open > 0 ? `${open} new` : null;
     },
-    badgeTone: (ctx) => {
-      const pending = (ctx as any)?.commsSummary?.pendingCount || (ctx as any)?.commsPendingCount || 0;
-      const health = (ctx as any)?.commsSummary?.healthScore || (ctx as any)?.commsHealth || 0;
-      if (pending > 0) return 'alert';
-      if (health === 100) return 'ok';
-      return 'neutral';
-    }
+    badgeTone: (ctx) => (unansweredMessages(ctx) > 0 ? 'alert' : null)
   },
   { 
     label: "Money", 

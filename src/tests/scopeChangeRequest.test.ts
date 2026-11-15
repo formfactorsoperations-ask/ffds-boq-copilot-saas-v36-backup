@@ -85,7 +85,7 @@ describe('sending a scope revision back for changes', () => {
     expect(issue.snapshot).toBe(before.documents.issues[0].snapshot);
   });
 
-  it('tells the studio in Client Comms, as an unanswered message', () => {
+  it('tells the studio in Messages, as an unanswered message', () => {
     const next = requestChangesPatch('iss-sr2', ask(), meta, at)(project());
     expect(next.clientMessages).toHaveLength(1);
     expect(next.clientMessages[0]).toMatchObject({ aboutKind: 'document', aboutId: 'iss-sr2', readAt: null, sentBy: 'Mr Prasad Naik' });

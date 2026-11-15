@@ -2098,8 +2098,8 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
       through it was discarded, and they were told the opposite.
 
       It now goes through the same action path as everything else the client
-      does, and lands in the project's client messages, which Client Comms
-      shows. A refusal is surfaced by persistClientAction rather than swallowed.
+      does, and lands in the project's client messages, which the studio's
+      Messages screen shows. A refusal is surfaced by persistClientAction rather than swallowed.
     */
     const handleSendMessageToStudio = (e: React.FormEvent) => {
         e.preventDefault();

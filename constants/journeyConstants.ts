@@ -57,7 +57,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "space_planning_presented", n: 4, phase: 1, title: "Space Planning Presented",
     description: "2D layouts and structural changes presented to client.",
     illustration: "space_planning_presented", statusSource: "auto",
-    autoRule: 'communicationLog["space_planning_review"].status === "sent"', linkedFeature: "Communication → Space Plan", linkedTab: "comms-tracker", prerequisiteIds: ["brief_frozen"]
+    autoRule: 'design documents uploaded OR rooms set (a Client Comms "sent" mark recorded before it was retired still counts)', linkedFeature: "Drawings", linkedTab: "drawing-tracker", prerequisiteIds: ["brief_frozen"]
   },
   {
     id: "space_planning_approved", n: 5, phase: 1, title: "Space Planning Approved",
@@ -75,7 +75,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "visuals_3d_shared", n: 7, phase: 1, title: "3D Visuals Shared",
     description: "Renders shared with client for review.",
     illustration: "visuals_3d_shared", statusSource: "auto",
-    autoRule: 'communicationLog["3d_visuals_review"].status === "sent"', linkedFeature: "Communication → 3D Visuals", linkedTab: "comms-tracker", prerequisiteIds: ["visuals_3d_developed"]
+    autoRule: 'design approved (a Client Comms "sent" mark recorded before it was retired still counts)', linkedFeature: "Drawings", linkedTab: "drawing-tracker", prerequisiteIds: ["visuals_3d_developed"]
   },
   {
     id: "revisions_incorporated", n: 8, phase: 1, title: "Revisions Incorporated",
@@ -93,7 +93,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "boq_shared", n: 10, phase: 1, title: "BOQ Shared",
     description: "Final formal costing document shared with client.",
     illustration: "boq_shared", statusSource: "auto",
-    autoRule: 'communicationLog["design_approval_boq"].status === "sent" AND project.boqTotalValue > 0', linkedFeature: "Communication → BOQ", linkedTab: "comms-tracker", prerequisiteIds: ["design_approved"]
+    autoRule: 'BOQ frozen OR operative BOQ issued (a Client Comms "sent" mark recorded before it was retired still counts)', linkedFeature: "Client Proposal", linkedTab: "client", prerequisiteIds: ["design_approved"]
   },
 
   // PHASE 3 — CONTRACTING
@@ -136,7 +136,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "onboarding_kit_sent", n: 15, phase: 2, title: "Onboarding Kit Sent",
     description: "Welcome dossier, timelines, and next steps shared.",
     illustration: "onboarding_kit_sent", statusSource: "auto",
-    autoRule: 'communicationLog["onboarding_kit_sent"].status === "sent"', linkedFeature: "Communication → Onboarding", linkedTab: "comms-tracker", prerequisiteIds: ["agreement_signed"]
+    autoRule: 'onboarding kit sent (onboardingSentAt) (a Client Comms "sent" mark recorded before it was retired still counts)', linkedFeature: "Onboarding Kit", linkedTab: "onboarding", prerequisiteIds: ["agreement_signed"]
   },
   {
     id: "working_drawings_done", n: 16, phase: 2, title: "Working Drawings Done",
@@ -167,8 +167,10 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
   {
     id: "exec_start_notified", n: 20, phase: 3, title: "Execution Start Notified",
     description: "Client officially informed that site work has commenced.",
-    illustration: "exec_start_notified", statusSource: "auto",
-    autoRule: 'communicationLog["execution_start"].status === "sent"', linkedFeature: "Communication", linkedTab: "comms-tracker", prerequisiteIds: ["baseline_inspection_done"]
+    illustration: "exec_start_notified", statusSource: "manual",
+    /* Manual since Client Comms was retired: nothing else records telling the client site work has begun.
+       A "sent" mark recorded in Client Comms before then still counts. */
+    autoRule: 'marked done by the studio', linkedFeature: "Execution & Ops", linkedTab: "site-ops", prerequisiteIds: ["baseline_inspection_done"]
   },
 
   // PHASE 5 — EXECUTION
@@ -218,7 +220,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "site_update_shared", n: 28, phase: 4, title: "Site Update Shared",
     description: "Major milestone photos shared with client.",
     illustration: "site_update_shared", statusSource: "auto",
-    autoRule: 'communicationLog["painting_stage_start"].status === "sent"', linkedFeature: "Communication → Painting", linkedTab: "comms-tracker", prerequisiteIds: ["phase3_work_complete"]
+    autoRule: 'a site or project update posted (a Client Comms "sent" mark recorded before it was retired still counts)', linkedFeature: "Execution & Ops", linkedTab: "site-ops", prerequisiteIds: ["phase3_work_complete"]
   },
 
   // PHASE 6 — HANDOVER
@@ -244,7 +246,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "handover_dossier_sent", n: 32, phase: 5, title: "Handover Dossier Sent",
     description: "Project documentation, care guides, and contacts sent.",
     illustration: "handover_dossier_sent", statusSource: "auto",
-    autoRule: 'communicationLog["handover_warranty"].status === "sent"', linkedFeature: "Communication → Dossier", linkedTab: "comms-tracker", prerequisiteIds: ["handover_advance_received"]
+    autoRule: 'handover date set (a Client Comms "sent" mark recorded before it was retired still counts)', linkedFeature: "Handover Docket", linkedTab: "handover-docket", prerequisiteIds: ["handover_advance_received"]
   },
   {
     id: "keys_handed_over", n: 33, phase: 5, title: "Keys Handed Over",

@@ -415,7 +415,7 @@ export function ProjectWorkspace({
             }`}
           >
             <LayoutGrid className="w-4 h-4" />
-            {isDesigner ? 'Drawings' : isLimited ? 'Client Comms' : 'Hub'}
+            {isDesigner ? 'Drawings' : isLimited ? 'Messages' : 'Hub'}
           </button>
 
           <div className="phd-tile hidden md:grid" aria-hidden="true">
@@ -749,7 +749,7 @@ export function ProjectWorkspace({
             <div className="phd-pop shrink-0 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 shadow-2xs">
               <span className="flex items-center gap-1.5 text-[11.5px] leading-tight text-slate-600">
                 <Eye className="w-3.5 h-3.5 text-amber-600" />
-                <b className="text-slate-900">Read-only:</b> Client Comms, Timeline, Decisions, Drawings, Design Gate, Brief &amp; Site
+                <b className="text-slate-900">Read-only:</b> Messages, Timeline, Decisions, Drawings, Design Gate, Brief &amp; Site
               </span>
             </div>
           )}
