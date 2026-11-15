@@ -7,7 +7,7 @@
   breakdown billed the leftover ₹10,15,536.
 */
 import React, { useMemo, useState } from 'react';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 const headerVitals: { current: any[] } = { current: [] };
@@ -103,20 +103,27 @@ function Tiers({ initial, probe }: { initial: any[]; probe?: (t: any[]) => void 
     projectContext={ctx} setProjectContext={setCtx} bank={[]} setActiveTab={() => undefined} />;
 }
 
-/* The option names listed in the Options & Versions rail. */
-const railNames = () => Array.from(document.querySelectorAll('p[title="Double-click to rename"]')).map(p => p.textContent);
+/* Pricing & Tiers draws one column per option; a copy is a version inside its original's column (lib/optionChains). */
+const columns = () => screen.getAllByRole('article').map(a => a.getAttribute('aria-label'));
+const versions = (option: string) => within(screen.getByRole('group', { name: `Versions of ${option}` })).getAllByRole('button').length;
+const deleteFromMenu = (shown: string, what: RegExp) => {
+  fireEvent.click(screen.getByRole('button', { name: `More for ${shown}` }));
+  fireEvent.click(screen.getByRole('menuitem', { name: what }));
+};
 
 describe('deleting the option a copy was made from', () => {
   const com = option('com', 'Comfort Upgrade', 907236, 90724);
   const copy = option('copy', 'Comfort Upgrade - Optimized', 979383, 97938, { parentTierId: 'com' });
   const grandchild = option('gc', 'Comfort Upgrade - Optimized (Copy)', 979383, 97938, { parentTierId: 'copy' });
 
-  it('keeps the copy in the rail, as an option of its own, with the original\'s built-in specs', () => {
+  it('keeps the copy, as an option of its own, with the original\'s built-in specs', () => {
     let tiers: any[] = [];
     render(<Tiers initial={[com, copy, grandchild]} probe={t => { tiers = t; }} />);
-    expect(railNames()).toEqual(['Comfort Upgrade', 'Comfort Upgrade - Optimized', 'Comfort Upgrade - Optimized (Copy)']);
-    fireEvent.click(screen.getByTitle('Delete Option'));
-    expect(railNames()).toEqual(['Comfort Upgrade - Optimized', 'Comfort Upgrade - Optimized (Copy)']);
+    expect(columns()).toEqual(['Comfort Upgrade']);
+    expect(versions('Comfort Upgrade')).toBe(3);
+    deleteFromMenu('Comfort Upgrade', /Delete v1/);
+    expect(columns()).toEqual(['Comfort Upgrade - Optimized']);
+    expect(versions('Comfort Upgrade - Optimized')).toBe(2);
     const kept = tiers.find(t => t.id === 'copy');
     expect(kept).not.toHaveProperty('parentTierId');
     expect(kept.specsFrom).toBe('Comfort Upgrade');
@@ -127,13 +134,14 @@ describe('deleting the option a copy was made from', () => {
   it('re-attaches a copy of a copy to the deleted option\'s own parent', () => {
     let tiers: any[] = [];
     render(<Tiers initial={[copy, com, grandchild]} probe={t => { tiers = t; }} />);
-    fireEvent.click(screen.getByTitle('Delete Option'));
+    deleteFromMenu('Comfort Upgrade - Optimized', /Delete v2/);
     expect(tiers.find(t => t.id === 'gc').parentTierId).toBe('com');
-    expect(railNames()).toEqual(['Comfort Upgrade', 'Comfort Upgrade - Optimized (Copy)']);
+    expect(columns()).toEqual(['Comfort Upgrade']);
+    expect(versions('Comfort Upgrade')).toBe(2);
   });
 
   it('shows copies whose original was deleted before this fix', () => {
     render(<Tiers initial={[option('x', 'Orphan', 1, 0, { parentTierId: 'gone' }), com]} />);
-    expect(railNames()).toEqual(['Orphan', 'Comfort Upgrade']);
+    expect(columns()).toEqual(['Orphan', 'Comfort Upgrade']);
   });
 });

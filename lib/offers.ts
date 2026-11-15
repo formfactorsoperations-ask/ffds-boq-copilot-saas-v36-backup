@@ -105,11 +105,23 @@ export function offerDiscount(id: string, basis: OfferBasis, split: ScopeSplit):
  * An offer whose amount no longer matches the option it was priced on: the BOQ
  * changed since. Null when it is current, or when it was priced on another
  * option (then it is reported as such, not re-priced against this one).
+ *
+ * `sameOption` says whether two tiers are versions of one option
+ * (lib/optionChains). An offer priced on v1 then follows the option: on v2 it
+ * is always reported with v2's figure, so one Update moves it onto v2.
  */
-export function staleOffer(d: OfferDiscount, tierId: string, split: ScopeSplit): number | null {
-  if (!d.basis || d.basis.tierId !== tierId) return null;
+export function staleOffer(d: OfferDiscount, tierId: string, split: ScopeSplit, sameOption?: (a: string, b: string) => boolean): number | null {
+  if (!d.basis) return null;
   const now = offerValue(d.basis, split);
+  if (d.basis.tierId !== tierId) return sameOption?.(d.basis.tierId, tierId) ? now : null;
   return now !== Math.round(d.value) ? now : null;
+}
+
+/** The offer brought up to date on this version: its amount, its name, and the version it is priced on. */
+export function refreshedOffer(d: OfferDiscount, tierId: string, value: number): OfferDiscount {
+  if (!d.basis) return { ...d, value };
+  const basis = { ...d.basis, tierId } as OfferBasis;
+  return { ...d, value, basis, name: offerName(basis) };
 }
 
 /** Sum of the discounts on one side, as Money applies them (lib/paymentSchedule). */

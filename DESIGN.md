@@ -401,6 +401,27 @@ the brand, slate, and rose/amber/emerald for state. Light only: the owner chose 
   WhatsApp-style preview beside the editable text.
 - Everything stops under `prefers-reduced-motion`.
 
+### Pricing & Tiers motion (approved 15 Nov 2026)
+
+The owner approved Pricing & Tiers as one grid (layouts D and E, 15 Nov 2026) and asked for
+"some animations and cool icons too". It uses the People motion kit (`components/people/PeopleBits.tsx`)
+and the Ops Desk card motion (`cardV` in `components/opsDesk/DeskBits.tsx`), with the same fonts and colours.
+Only `components/pricing/` and the Pricing & Tiers screen (`components/TierManager.tsx`) use it.
+
+- Every section is a band (a Panel card) whose rows read across the option columns. Its header is an
+  `IconTile` that turns on hover: a branch (changes), a pie (where the money goes), compare arrows
+  (what separates them), a gift (offers), a calendar (milestones), a gauge (margin check).
+- Bands rise in with `cardV`, one after another; their rows rise with `listV` and `rowV`.
+- The selected column is tinted `bg-[#3D52A0]/5` all the way down, and its brand rule along the top
+  glides to the column you pick (`layoutId`).
+- Prices count up with `CountUp`; the exact figure is beside it for screen readers.
+- Bars grow from the left. When a column switches version (v1, v2...), its cells turn in again.
+- Approving an option draws a `DoneTick` and a short `Confetti` burst on its column; the Approve
+  button is `pp-press`.
+- Regenerate's icon turns half a circle on hover, and Add option's plus a quarter.
+- The ⋯ menu and the Tune margin dialog use `phd-pop` (and `phd-scrim` for the dialog).
+- Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel sizes.
+
 ### Notifications motion (approved 22 Oct 2026)
 
 The owner chose four of the fifteen notification patterns in the round-two

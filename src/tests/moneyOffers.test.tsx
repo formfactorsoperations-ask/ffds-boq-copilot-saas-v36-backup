@@ -156,6 +156,27 @@ describe('Money & Offers screen', () => {
     expect(saved()).toEqual([]);
   });
 
+  it('lists each option once, at its newest version, and moves an offer from v1 onto v2', () => {
+    const v2 = { ...tier('ess2', 'Essential', [...BOQ, line('l7', 'wardrobe', 2, 'Study')], 19000, 15000), parentTierId: 'ess', timestamp: 2 };
+    const onV1 = { id: 'o1', name: '5% off carpentry', type: 'fixed', target: 'execution', value: 600, basis: { kind: 'part-percent', part: 'carpentry', percent: 5, tierId: 'ess' } };
+    function Versions() {
+      const [ctx, setCtx] = useState<any>({ name: 'Harmony 704', financials: { executionGstEnabled: true, designGstEnabled: true, billablePercent: 100, discounts: [onV1] } });
+      return (
+        <>
+          <MoneyOffersTab tiers={[...TIERS, v2]} bank={BANK} projectContext={ctx} setProjectContext={setCtx} activeTierId="ess" />
+          <output data-testid="discounts">{JSON.stringify(ctx.financials.discounts)}</output>
+        </>
+      );
+    }
+    render(<Versions />);
+    const picker = screen.getByRole('tablist', { name: 'Option' });
+    expect(within(picker).getAllByRole('tab').map((t) => t.textContent)).toEqual([expect.stringMatching(/^Essential/), expect.stringMatching(/^Comfort/)]);
+    expect(within(picker).getByRole('tab', { selected: true }).textContent).toContain('19,000');
+    expect(screen.getByText(/Priced on v1\. On v2 it is ₹700\./)).toBeTruthy(); // 5% of 14,000 carpentry
+    fireEvent.click(screen.getByRole('button', { name: 'Update' }));
+    expect(saved()[0]).toMatchObject({ value: 700, basis: { tierId: 'ess2' } });
+  });
+
   it('is read-only for those who do not hold the money', () => {
     render(<Harness readOnly />);
     expect(screen.queryByRole('button', { name: 'Add an offer' })).toBeNull();

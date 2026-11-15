@@ -5,8 +5,9 @@ import { buildBankMap } from '../../lib/boqPricing';
 import { formatINR as formatCurrency, id as newId } from '../../lib/utils';
 import { computeSchedule, contractInForce, gstTermsOf } from '../../lib/paymentSchedule';
 import { otherBenchmarks, medianGm } from '../../lib/tierBenchmarks';
+import { optionChains, latestOf, chainOf, sameOption, versionNo } from '../../lib/optionChains';
 import {
-  SCOPE_PARTS, partLabel, scopeSplit, offerDiscount, offerValue, offerName, staleOffer, marginWith, dealFor,
+  SCOPE_PARTS, partLabel, scopeSplit, offerDiscount, offerValue, offerName, staleOffer, refreshedOffer, marginWith, dealFor,
   type ScopePart, type OfferBasis, type OfferDiscount,
 } from '../../lib/offers';
 
@@ -56,8 +57,19 @@ function PanelHead({ icon, title, blurb }: { icon: React.ReactNode; title: strin
 
 export default function MoneyOffersTab({ tiers, bank, projectContext, setProjectContext, activeTierId, projects = [], projectId, readOnly }: Props) {
   const ctx: any = projectContext || {};
-  const [tierId, setTierId] = useState<string>(() => ctx.approvedTierId || activeTierId || tiers[0]?.id || '');
-  const tier = tiers.find((t) => t.id === tierId) || tiers[0];
+  /* One entry per option: its newest version, the one the proposal carries (lib/optionChains). */
+  const chains = useMemo(() => optionChains(tiers), [tiers]);
+  const options = useMemo(() => chains.map(latestOf), [chains]);
+  const [tierId, setTierId] = useState<string>(() => {
+    const start = chainOf(chains, ctx.approvedTierId || activeTierId) || chains[0];
+    return start ? latestOf(start).id : '';
+  });
+  const tier = options.find((t) => t.id === tierId) || (chainOf(chains, tierId) && latestOf(chainOf(chains, tierId)!)) || options[0];
+  const same = (a: string, b: string) => sameOption(chains, a, b);
+  const versionName = (id: string) => {
+    const c = chainOf(chains, id);
+    return c ? `v${versionNo(c, id)}` : '';
+  };
 
   const bankMap = useMemo(() => buildBankMap(bank || [], ctx.adHocItems), [bank, ctx.adHocItems]);
   const split = useMemo(() => scopeSplit(tier, bankMap), [tier, bankMap]);
@@ -100,7 +112,7 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
   };
   const remove = (id: string) => save(discounts.filter((d) => d.id !== id));
   const refresh = (d: OfferDiscount, value: number) =>
-    save(discounts.map((x) => (x.id === d.id ? { ...x, value, name: x.basis ? offerName(x.basis) : x.name } : x)));
+    save(discounts.map((x) => (x.id === d.id ? refreshedOffer(x, tier.id, value) : x)));
 
   if (!tier) {
     return (
@@ -128,7 +140,7 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
       {/* Which option */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="inline-flex flex-wrap p-1 rounded-xl bg-slate-100 gap-1" role="tablist" aria-label="Option">
-          {tiers.map((t) => (
+          {options.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -195,8 +207,9 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
             {discounts.length > 0 && (
               <ul className="mt-5 divide-y divide-slate-100 rounded-xl border border-slate-200">
                 {discounts.map((d) => {
-                  const stale = staleOffer(d, tier.id, split);
-                  const elsewhere = d.basis && d.basis.tierId !== tier.id ? tiers.find((t) => t.id === d.basis!.tierId)?.name : null;
+                  const stale = staleOffer(d, tier.id, split, same);
+                  const earlier = !!d.basis && d.basis.tierId !== tier.id && same(d.basis.tierId, tier.id);
+                  const elsewhere = d.basis && d.basis.tierId !== tier.id && !earlier ? tiers.find((t) => t.id === d.basis!.tierId)?.name : null;
                   return (
                     <li key={d.id} className="px-4 py-3 flex items-start gap-3">
                       <div className="min-w-0 flex-1">
@@ -207,7 +220,9 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
                         </p>
                         {stale !== null && (
                           <p className="mt-1 text-[11px] text-amber-700 flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" /> The BOQ changed: on it today this is {formatCurrency(stale)}.
+                            <AlertTriangle className="w-3 h-3" /> {earlier
+                              ? <>Priced on {versionName(d.basis!.tierId)}. On {versionName(tier.id)} it is {formatCurrency(stale)}.</>
+                              : <>The BOQ changed: on it today this is {formatCurrency(stale)}.</>}
                             {!readOnly && <button type="button" onClick={() => refresh(d, stale)} className="ml-1 font-bold text-[#3D52A0] hover:text-[#334486]">Update</button>}
                           </p>
                         )}

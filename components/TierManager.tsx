@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { RefreshCw, Plus, LineChart, Building2 } from '@/lib/lucide-shim';
 import { showSuccessWithNext } from './SuccessWithNextToast';
 import { BoqItem, ProjectContext, ProposalTier, FullProjectData, Item } from '../types';
 import { calculateSellPrice, formatCurrency, id } from '../lib/utils';
@@ -10,11 +12,14 @@ import { buildBankMap, designFeeFor, isAsActuals } from '../lib/boqPricing';
 import { compareTiers, optionPrice } from '../lib/tierComparison';
 import { builtInSpecsName } from '../lib/comparison';
 import { otherBenchmarks, medianGm, closestInSize } from '../lib/tierBenchmarks';
-import OptionColumns from './pricing/OptionColumns';
+import PricingGrid, { type GridColumn } from './pricing/PricingGrid';
+import { Panel as DeskPanel } from './opsDesk/DeskBits';
+import { optionChains, chainOf, latestOf, shownVersion, previousVersion, versionNo } from '../lib/optionChains';
+import './projectHeader/projectHeader.css';
 import { contextWithApproved, tiersWithApproved, describeApproval, contextWithoutApproved, tiersWithoutApproved, previousBaseline } from '../lib/tierApproval';
 import { useOrg } from '../contexts/OrgContext';
 import { contextWithTierRenamed, contextWithTierCopied } from '../lib/specOverrides';
-import { CompareIcon, DeleteIcon, PencilIcon, CheckBadgeIcon, SparklesIcon, SaveIcon, CheckIcon, FileSpreadsheetIcon, ArrowRightIcon } from './Icons';
+import { SparklesIcon } from './Icons';
 
 interface TierManagerProps {
     tiers: ProposalTier[];
@@ -44,8 +49,6 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
     const approverName = currentUserAuth?.displayName || currentUserAuth?.email || currentRole || 'Studio';
     const [editingTierId, setEditingTierId] = useState<string | null>(null);
     const [editingTierName, setEditingTierName] = useState('');
-    /* Where the name is being edited: its card in the rail, or the Selected heading. */
-    const [editingSpot, setEditingSpot] = useState<'rail' | 'header'>('rail');
     const [revertOpen, setRevertOpen] = useState(false);
     const [marginShiftAmount, setMarginShiftAmount] = useState<number>(0);
 
@@ -120,17 +123,41 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
     };
 
     const activeTier = tiers.find(t => t.id === activeTierId) || tiers[0];
-    const parentTier = activeTier?.parentTierId ? tiers.find(t => t.id === activeTier?.parentTierId) : null;
 
-    /* What separates the options (lib/tierComparison.ts), priced line for
-       line as the tier summary is, so its totals reconcile with the sidebar. */
-    const [compareOpen, setCompareOpen] = useState(true);
-    const [showIdentical, setShowIdentical] = useState(false);
+    /*
+      One column per option, its versions inside it (lib/optionChains). A
+      column shows the selected version when it is one of its own, else the
+      version last picked in it, else the newest.
+    */
+    const chains = useMemo(() => optionChains(tiers), [tiers]);
+    const versionCount = tiers.length;
+    const [picked, setPicked] = useState<Record<string, string>>({});
+    const columns: GridColumn[] = useMemo(() => chains.map(chain => {
+        const tier = chain.versions.find(v => v.id === activeTier?.id) || shownVersion(chain, picked[chain.root.id]);
+        return { chain, tier, latest: tier.id === latestOf(chain).id, prev: previousVersion(chain, tier) };
+    }), [chains, activeTier?.id, picked]);
 
+    /* Once the client has signed, the options they did not choose fold to one line each. */
+    const [showNotChosen, setShowNotChosen] = useState(false);
+    const signedChain = scopeFlowOn && signedTierId ? chainOf(chains, signedTierId) : undefined;
+    const visibleColumns = signedChain && !showNotChosen ? columns.filter(c => c.chain === signedChain) : columns;
+    const notChosen = signedChain ? columns.filter(c => c.chain !== signedChain).map(c => c.tier) : [];
+
+    const handlePickVersion = (tierId: string) => {
+        const chain = chainOf(chains, tierId);
+        if (chain) setPicked(prev => ({ ...prev, [chain.root.id]: tierId }));
+        setActiveTierId(tierId);
+    };
+
+    /* What separates the options on screen (lib/tierComparison.ts), priced line
+       for line as the tier summary is, so its totals reconcile with the columns. */
     const comparison = useMemo(
-        () => compareTiers(tiers, buildBankMap(bank || [], projectContext?.adHocItems)),
-        [tiers, bank, projectContext?.adHocItems],
+        () => compareTiers(visibleColumns.map(c => c.tier), buildBankMap(bank || [], projectContext?.adHocItems)),
+        [visibleColumns, bank, projectContext?.adHocItems],
     );
+
+    /* Tune margin: the old Systematic Margin Adjuster, now opened from an option's ⋯ menu. */
+    const [tuneOpen, setTuneOpen] = useState(false);
 
     const displayValue = activeTier ? (activeTier.summary.totalRevenue || activeTier.summary.totalSell) : 0;
 
@@ -301,26 +328,58 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         setActiveTierId(newTier.id);
     };
     
-    const handleDuplicateTier = (tierId: string) => {
-        const tierToDuplicate = tiers.find(t => t.id === tierId);
-        if (!tierToDuplicate) return;
-        
-        // Deep copy items
-        const newBoq = JSON.parse(JSON.stringify(tierToDuplicate.boq || []));
-        
-        const newTier: ProposalTier = {
-            ...JSON.parse(JSON.stringify(tierToDuplicate)),
+    /* A deep copy of an option, as a new draft, carrying its material spec edits (lib/specOverrides.ts). */
+    const draftCopyOf = (src: ProposalTier, patch: Partial<ProposalTier>): ProposalTier => {
+        const copy: ProposalTier = {
+            ...JSON.parse(JSON.stringify(src)),
             id: id(),
-            name: `${tierToDuplicate.name} (Copy)`,
             timestamp: Date.now(),
-            boq: newBoq,
-            parentTierId: tierId, // Explicitly linking lineage
-            lifecycleTag: 'Draft'
+            lifecycleTag: 'Draft',
+            ...patch,
         };
-        setTiers(prev => [...prev, newTier]);
-        // The copy starts with the original's material spec edits (lib/specOverrides.ts).
-        setProjectContext(prev => contextWithTierCopied(prev, tierToDuplicate, newTier.id));
-        setActiveTierId(newTier.id);
+        delete (copy as any).approval;
+        return copy;
+    };
+
+    /*
+      The client asked for changes: the option's next version, in the same
+      column. The one it came from is kept as it was, so the studio can still
+      see what the client was shown.
+    */
+    const handleNewVersion = (tierId: string): string | undefined => {
+        const src = tiers.find(t => t.id === tierId);
+        if (!src) return undefined;
+        const copy = draftCopyOf(src, { parentTierId: src.id, name: src.name });
+        setTiers(prev => [...prev, copy]);
+        setProjectContext(prev => contextWithTierCopied(prev, src, copy.id));
+        setActiveTierId(copy.id);
+        const chain = chainOf(chains, src.id);
+        const n = chain ? chain.versions.length + 1 : 2;
+        showSuccessWithNext(`v${n} of ${src.name} is ready to edit. v${n - 1} is kept as it was.`);
+        return copy.id;
+    };
+
+    /* A separate package that starts from this one: a column of its own, with this option's built-in specs. */
+    const handleCopyAsOption = (tierId: string) => {
+        const src = tiers.find(t => t.id === tierId);
+        if (!src) return;
+        const keptSpecs = src.specsFrom || builtInSpecsName(src, tiers);
+        const copy = draftCopyOf(src, { name: `${src.name} (Copy)`, ...(keptSpecs ? { specsFrom: keptSpecs } : {}) });
+        delete (copy as any).parentTierId;
+        setTiers(prev => [...prev, copy]);
+        setProjectContext(prev => contextWithTierCopied(prev, src, copy.id));
+        setActiveTierId(copy.id);
+    };
+
+    /* A version that was really meant as another package: it moves to a column of its own. */
+    const handleOwnOption = (tierId: string) => {
+        setTiers(prev => prev.map(t => {
+            if (t.id !== tierId) return t;
+            const keptSpecs = builtInSpecsName(t, prev);
+            const { parentTierId, ...rest } = t;
+            return { ...rest, ...(keptSpecs && !t.specsFrom ? { specsFrom: keptSpecs } : {}) };
+        }));
+        setActiveTierId(tierId);
     };
 
     /*
@@ -346,15 +405,16 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             setProjectContext(prev => ({...prev, approvedTierId: undefined}));
         }
         if (activeTierId === tierId) {
+            // A deleted version hands over to the one it was made from, in the same column.
             const remainingTiers = tiers.filter(t => t.id !== tierId);
-            setActiveTierId(remainingTiers.length > 0 ? remainingTiers[0].id : null);
+            const back = deleted?.parentTierId && remainingTiers.find(t => t.id === deleted.parentTierId);
+            setActiveTierId(back ? back.id : remainingTiers.length > 0 ? remainingTiers[0].id : null);
         }
     };
     
-    const handleStartEditing = (tier: ProposalTier, spot: 'rail' | 'header' = 'rail') => {
+    const handleStartEditing = (tier: ProposalTier) => {
         setEditingTierId(tier.id);
         setEditingTierName(tier.name);
-        setEditingSpot(spot);
     }
     
     /* A blank name is not saved: the option keeps the one it had. Its
@@ -376,14 +436,17 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         if (e.key === 'Escape') setEditingTierId(null);
     }
 
-    const handleEditTier = (tierId: string) => {
-        const tier = tiers.find(t => t.id === tierId);
-        if (tier?.lifecycleTag === 'Current contract' || projectContext.approvedTierId === tierId) {
-             // Future: Implement auto-fork logic here, for now let them through with a warning (or let them view)
-             // Phase 1 just opens it
-        }
-        setActiveTierId(tierId);
-        setActiveTab('boq-editor');
+    /*
+      Edit BOQ opens the option's BOQ over this screen. An approved version is
+      frozen: editing it makes the next version first, and that is what opens.
+      The signed scope opens as it is; the editor keeps it read-only.
+    */
+    const handleEditBoq = (tierId: string) => {
+        const approvedDraft = projectContext.approvedTierId === tierId && tierId !== signedTierId;
+        const target = approvedDraft ? handleNewVersion(tierId) || tierId : tierId;
+        setActiveTierId(target);
+        if (onEditBoq) onEditBoq(target);
+        else setActiveTab('boq-editor');
     };
 
     /* Approve and Sync are one rule (lib/tierApproval.ts): the replaced
@@ -395,11 +458,12 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         setTiers(prev => tiersWithApproved(prev, tier.id, previousApprovedId, { at: now, by: approverName }));
     };
 
-    const handleSyncTier = () => {
-        if (!activeTier) return;
-        makeBaseline(activeTier);
-        setActiveTierId(activeTier.id);
-        showSuccessWithNext(`Synced ${activeTier.name} to Revision Studio and Payment Schedule as the approved baseline.`);
+    const handleSyncTier = (tierId: string) => {
+        const tier = tiers.find(t => t.id === tierId);
+        if (!tier) return;
+        makeBaseline(tier);
+        setActiveTierId(tier.id);
+        showSuccessWithNext(`Synced ${tier.name} to Revision Studio and Payment Schedule as the approved baseline.`);
     };
 
     const handleApproveTier = (tierId: string) => {
@@ -429,120 +493,6 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
     }
 
     React.useEffect(() => { setRevertOpen(false); }, [activeTierId]);
-
-    // Lineage nesting logic for sidebar
-    const renderTierTree = () => {
-        // Roots: no parent, or a parent that is no longer there (deleted before copies were re-attached).
-        const roots = tiers.filter(t => !t.parentTierId || !tiers.some(p => p.id === t.parentTierId));
-        
-        const renderNode = (tier: ProposalTier, depth = 0) => {
-            const children = tiers.filter(t => t.parentTierId === tier.id);
-            const isApproved = projectContext.approvedTierId === tier.id;
-            const isActive = activeTierId === tier.id;
-            const displayValue = tier.summary.totalRevenue || tier.summary.totalSell;
-            const formattedDate = new Date(tier.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-            
-            // Diff calculation for sidebar label
-            let diffLabel = null;
-            let nodeDiff = 0;
-            if (tier.parentTierId) {
-                const parent = tiers.find(t => t.id === tier.parentTierId);
-                if (parent) {
-                    nodeDiff = displayValue - (parent.summary.totalRevenue || parent.summary.totalSell);
-                    diffLabel = nodeDiff !== 0 ? `${nodeDiff > 0 ? '+' : '-'}${formatCurrency(Math.abs(nodeDiff))} vs ${parent.name}` : null;
-                }
-            }
-
-            return (
-                <div key={tier.id} className="flex flex-col gap-1 w-full">
-                    <div 
-                        onClick={() => setActiveTierId(tier.id)}
-                        className={`p-4 rounded-xl border transition-all cursor-pointer relative
-                            ${isActive 
-                                ? 'bg-[#f0f4ff] border-indigo-600 shadow-sm ring-1 ring-indigo-200/50' 
-                                : 'bg-white border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/60 shadow-2xs'
-                            }
-                        `}
-                        style={{ marginLeft: `${depth * 20}px` }}
-                    >
-                        {/* Parent connection lines */}
-                        {depth > 0 && (
-                            <div className="absolute -left-5 top-6 w-5 h-px bg-slate-200" />
-                        )}
-                        {depth > 0 && (
-                            <div className="absolute -left-5 -top-4 w-px h-10 bg-slate-200" />
-                        )}
-
-                        <div className="flex items-start justify-between gap-2">
-                            <div className="flex flex-col gap-1.5 w-full">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    {editingTierId === tier.id && editingSpot === 'rail' ? (
-                                        <div className="flex items-center gap-2 w-full">
-                                            <input 
-                                                type="text"
-                                                value={editingTierName}
-                                                onChange={(e) => setEditingTierName(e.target.value)}
-                                                onBlur={handleSaveEdit}
-                                                onKeyDown={handleNameKey}
-                                                onClick={(e) => e.stopPropagation()}
-                                                autoFocus
-                                                aria-label="Option name"
-                                                className="font-medium p-1 px-2 border border-slate-300 rounded bg-white text-slate-900 text-sm w-full outline-none"
-                                            />
-                                        </div>
-                                    ) : (
-                                        <p className="font-semibold text-slate-900 text-sm leading-tight" onDoubleClick={() => handleStartEditing(tier)} title="Double-click to rename">
-                                            {tier.name}
-                                        </p>
-                                    )}
-                                    
-                                    {/* Badges */}
-                                    {isApproved && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-600 text-white tracking-wide">Current</span>}
-                                    {!isApproved && tier.lifecycleTag && (
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wide ${
-                                            tier.lifecycleTag === 'Approved while booking' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80' :
-                                            tier.lifecycleTag === 'Revised after design' ? 'bg-blue-50 text-blue-800 border border-blue-200/80' :
-                                            tier.lifecycleTag === 'Draft' ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-slate-600'
-                                        }`}>
-                                            {tier.lifecycleTag}
-                                        </span>
-                                    )}
-                                </div>
-                                <p className="text-[12px] text-slate-500 font-medium leading-tight">
-                                    {formatCurrency(displayValue)} • {(tier.summary.blendedGm ?? 0).toFixed(1)}% GM • {tier.summary.itemCount ?? tier.boq?.length ?? 0} items • {formattedDate}
-                                </p>
-                                {diffLabel && (
-                                    <p className={`text-[11px] font-semibold mt-0.5 ${nodeDiff > 0 ? 'text-amber-600' : nodeDiff < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                        {diffLabel}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-
-                        {isActive && (
-                            <div className="flex items-center gap-2 mt-3.5 pt-3 border-t border-indigo-100/80 flex-wrap">
-                                <button onClick={(e) => { e.stopPropagation(); handleDuplicateTier(tier.id); }} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs">Duplicate</button>
-                                <button onClick={(e) => { e.stopPropagation(); handleEditTier(tier.id); }} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs">Edit BOQ</button>
-                                <button onClick={(e) => { e.stopPropagation(); handleStartEditing(tier, 'rail'); }} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs">Rename</button>
-                                {onImportClick && <button onClick={(e) => { e.stopPropagation(); onImportClick(); }} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs">Import</button>}
-                                <div className="flex-1" />
-                                {tier.id !== signedTierId && <button onClick={(e) => { e.stopPropagation(); handleDeleteTier(tier.id); }} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors rounded-lg" title="Delete Option"><DeleteIcon className="w-4 h-4" /></button>}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Render children recursively */}
-                    {children.length > 0 && (
-                        <div className="flex flex-col gap-1 mt-1">
-                            {children.map(c => renderNode(c, depth + 1))}
-                        </div>
-                    )}
-                </div>
-            )
-        }
-
-        return roots.map(root => renderNode(root, 0));
-    }
 
     const contractTimeline = useMemo(() => {
         const points: {
@@ -594,7 +544,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             const bookingTier =
                 tiers.find(t => t.lifecycleTag === 'Approved while booking' || t.lifecycleTag === 'Current contract')
                 || (projectContext.approvedTierId ? tiers.find(t => t.id === projectContext.approvedTierId) : null)
-                || (activeTier?.parentTierId ? tiers.find(t => t.id === activeTier.parentTierId) : null)
+                // A version's parent is not a booking: the version it was made from was never approved by being copied.
                 || null;
 
             if (bookingTier) {
@@ -639,625 +589,172 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
 
     if (!activeTier) return <div>Loading...</div>;
 
-    const parentValue = parentTier ? (parentTier.summary.totalRevenue || parentTier.summary.totalSell) : 0;
-    const diffValue = parentTier ? displayValue - parentValue : 0;
-    const diffGm = parentTier ? (activeTier.summary.blendedGm ?? 0) - (parentTier.summary.blendedGm ?? 0) : 0;
-    const diffItems = parentTier ? (activeTier.summary.itemCount ?? activeTier.boq?.length ?? 0) - (parentTier.summary.itemCount ?? parentTier.boq?.length ?? 0) : 0;
-    const isApproved = projectContext.approvedTierId === activeTier.id;
-    const isAnnexureOrRevision = activeTier.name.toLowerCase().includes('annexure') || 
-        activeTier.name.toLowerCase().includes('revision') || 
-        activeTier.lifecycleTag === 'Revised after design' || 
-        activeTier.lifecycleTag === 'Current contract (revised)' || 
-        activeTier.lifecycleTag?.toLowerCase().includes('revision') ||
-        activeTier.lifecycleTag?.toLowerCase().includes('annexure');
-
     return (
-        <div className="w-full max-w-[1400px] mx-auto flex flex-col gap-8 font-sans pb-12">
-            {/* Every option side by side, with Edit BOQ and Offers on each (components/pricing/OptionColumns). */}
-            <OptionColumns
-                tiers={tiers}
+        <div className="w-full max-w-[1400px] mx-auto flex flex-col gap-4 font-sans pb-12">
+            {/* What there is, and the two things that act on every option. */}
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{chains.length} {chains.length === 1 ? 'option' : 'options'}{versionCount > chains.length ? ` · ${versionCount} versions` : ''}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Every section lines up under the options. A client's change is a new version in the same column.</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={() => setRegenOpen(true)} title="Rebuild all options from the current brief, rooms and civil scope"
+                        className="group inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">
+                        <RefreshCw className="w-4 h-4 text-slate-400 transition-transform duration-500 group-hover:rotate-180" /> Regenerate
+                    </button>
+                    <button type="button" onClick={handleAddTier}
+                        className="group inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">
+                        <Plus className="w-4 h-4 text-slate-400 transition-transform duration-300 group-hover:rotate-90" /> Add option
+                    </button>
+                </div>
+            </div>
+
+            <PricingGrid
+                columns={visibleColumns}
+                notChosen={notChosen}
+                showNotChosen={showNotChosen}
+                onToggleNotChosen={() => setShowNotChosen(v => !v)}
+                allTiers={tiers}
                 bank={bank || []}
                 projectContext={projectContext}
-                activeTierId={activeTierId}
-                setActiveTierId={setActiveTierId}
+                activeTierId={activeTier.id}
                 specLabel={comparison.specLabel}
-                onEditBoq={onEditBoq}
-                onOffers={(id) => { setActiveTierId(id); setActiveTab('analytics'); }}
+                comparison={comparison}
+                studioMedianGm={studioMedianGm}
+                benchmarksCount={benchmarks.length}
+                signedTierId={signedTierId}
+                scopeFlowOn={scopeFlowOn}
+                revertOpen={revertOpen}
+                revertToName={revertTo?.name || null}
+                describeApproval={describeApproval}
+                canDelete={(tid) => tid !== signedTierId}
+                renaming={{ id: editingTierId, value: editingTierName, onChange: setEditingTierName, onSave: handleSaveEdit, onKey: handleNameKey }}
+                actions={{
+                    select: (tid) => setActiveTierId(tid),
+                    pickVersion: handlePickVersion,
+                    editBoq: handleEditBoq,
+                    newVersion: (tid) => { handleNewVersion(tid); },
+                    copyAsOption: handleCopyAsOption,
+                    ownOption: handleOwnOption,
+                    startRename: (tid) => { const t = tiers.find(x => x.id === tid); if (t) handleStartEditing(t); },
+                    importBoq: onImportClick,
+                    remove: handleDeleteTier,
+                    approve: handleApproveTier,
+                    askRevert: () => setRevertOpen(true),
+                    keepApproval: () => setRevertOpen(false),
+                    revert: handleRevertApproval,
+                    sync: handleSyncTier,
+                    tuneMargin: (tid) => { setActiveTierId(tid); setMarginShiftAmount(0); setTuneOpen(true); },
+                    startRevision: () => setActiveTab('revision-studio'),
+                    offers: (tid) => { setActiveTierId(tid); setActiveTab('analytics'); },
+                    saveDiscounts: (next) => setProjectContext(prev => ({ ...prev, financials: { ...(prev.financials as any), discounts: next } })),
+                }}
             />
-        <div className="w-full flex flex-col md:flex-row gap-8 items-start">
 
-            {/* LEFT SIDEBAR: Lineage Tree */}
-            <div className="w-full md:w-[320px] shrink-0 flex flex-col gap-5">
-                    <div className="flex items-center justify-between px-2 pb-1 border-b border-slate-200">
-                        <h3 className="font-bold text-slate-400 text-xs tracking-widest uppercase">Options & Versions</h3>
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={() => setRegenOpen(true)}
-                                title="Rebuild all options from the current brief, rooms and civil scope"
-                                className="text-slate-500 text-xs font-bold hover:text-slate-800 transition-colors"
-                            >
-                                Regenerate
-                            </button>
-                            <button onClick={handleAddTier} className="text-indigo-600 text-xs font-bold hover:text-indigo-700 transition-colors">+ Add</button>
-                        </div>
-                    </div>
-                
-                <div className="flex flex-col gap-1">
-                    {tiers.length === 0 ? (
-                        <div className="p-6 text-center border border-dashed border-slate-300 rounded-xl bg-white">
-                            <p className="text-sm text-slate-500">No tiers created yet.</p>
-                            <button onClick={handleAddTier} className="mt-3 px-4 py-1.5 bg-indigo-600 text-white font-medium rounded-lg text-sm hover:bg-indigo-700">Add Option</button>
-                        </div>
-                    ) : (
-                        renderTierTree()
-                    )}
-                </div>
-
-                {/* CONTRACT VALUE OVER TIME */}
-                {contractTimeline.length === 0 && tiers.length > 0 && (
-                    <div className="bg-white rounded-xl border border-dashed border-slate-200 p-4 md:p-5 shadow-xs">
-                        <h4 className="text-[11px] font-bold tracking-widest uppercase text-slate-400">
-                            Contract Value Over Time
-                        </h4>
-                        <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                            Nothing approved yet. Approve an option to set the booking value — this then tracks
-                            every revision against it.
-                        </p>
-                    </div>
-                )}
-
-                {contractTimeline.length > 0 && (
-                    <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 flex flex-col gap-4 shadow-xs">
-                        <h4 className="text-[11px] font-bold tracking-widest uppercase text-slate-400">
-                            Contract Value Over Time
-                        </h4>
-                        
-                        <div className="relative flex flex-col gap-4 pl-1">
-                            {/* Vertical connecting line */}
-                            {contractTimeline.length > 1 && (
-                                <div className="absolute left-[5px] top-2.5 bottom-3.5 w-0.5 bg-slate-200" />
-                            )}
-
+            <div className="grid gap-4 md:grid-cols-2">
+                {/* The contract's value from booking to today. */}
+                <DeskPanel icon={LineChart} title="Contract value over time" blurb={contractTimeline.length === 0 ? 'Nothing approved yet. Approve an option to set the booking value; every revision is then tracked against it.' : 'From the booking value to today, revision by revision.'}>
+                    {contractTimeline.length > 0 && (
+                        <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
                             {contractTimeline.map((point, idx) => (
-                                <div key={point.id || idx} className="relative flex items-start gap-3">
-                                    {/* Status Dot */}
-                                    <div className="mt-1 relative z-10 shrink-0">
-                                        <div className={`w-2.5 h-2.5 rounded-full ${idx === 0 ? 'bg-emerald-500 ring-4 ring-emerald-50' : 'bg-blue-600 ring-4 ring-blue-50'}`} />
-                                    </div>
-
-                                    <div className="flex flex-col gap-0.5">
-                                        <span className="font-semibold text-xs text-slate-900 leading-tight">
-                                            {point.stage}
-                                        </span>
-                                        <span className="text-base font-semibold text-slate-900 tracking-tight">
-                                            {formatCurrency(point.amount)}
-                                        </span>
-                                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium flex-wrap">
-                                            <span>{point.date}</span>
-                                            <span>•</span>
-                                            <span>{point.gm.toFixed(1)}% GM</span>
-                                            {point.delta !== undefined && point.delta !== 0 && (
-                                                <>
-                                                    <span>•</span>
-                                                    <span className={`font-semibold ${point.delta > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                                        {point.delta > 0 ? `+${formatCurrency(point.delta)}` : `-${formatCurrency(Math.abs(point.delta))}`}
-                                                    </span>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Summary Footer */}
-                        {contractTimeline.length > 1 && (
-                            <div className="border-t border-slate-100 pt-3 text-xs text-slate-500 font-medium flex items-center justify-between">
-                                <span>Booking → today:</span>
-                                <span className={`font-semibold ${totalContractDelta > 0 ? 'text-amber-600' : totalContractDelta < 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
-                                    {totalContractDelta > 0 ? `+${formatCurrency(totalContractDelta)}` : totalContractDelta < 0 ? `-${formatCurrency(Math.abs(totalContractDelta))}` : '₹0'}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {/* RIGHT SIDE: Central Console */}
-            <div className="flex-1 flex flex-col gap-8 w-full">
-                
-                {/* 1. Selected Tier Header */}
-                <div className="bg-white rounded-xl border border-slate-200 p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden">
-                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-                        <div className="flex flex-col gap-2">
-                            <h4 className="text-xs font-bold tracking-widest uppercase text-slate-400">Selected</h4>
-                            <div className="flex items-center gap-3">
-                                {editingTierId === activeTier.id && editingSpot === 'header' ? (
-                                    <input
-                                        type="text"
-                                        value={editingTierName}
-                                        onChange={(e) => setEditingTierName(e.target.value)}
-                                        onBlur={handleSaveEdit}
-                                        onKeyDown={handleNameKey}
-                                        autoFocus
-                                        aria-label="Option name"
-                                        className="text-3xl font-bold text-slate-900 tracking-tight px-2 py-0.5 -ml-2 border border-slate-300 rounded-lg bg-white outline-none focus:border-indigo-400 w-full min-w-0"
-                                    />
-                                ) : (
-                                    <>
-                                        <h2 className="text-3xl font-bold text-slate-900 tracking-tight" onDoubleClick={() => handleStartEditing(activeTier, 'header')}>{activeTier.name}</h2>
-                                        <button onClick={() => handleStartEditing(activeTier, 'header')} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors shrink-0" title="Rename option" aria-label="Rename option">
-                                            <PencilIcon className="w-4 h-4" />
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                {isApproved && (
-                                    <span className="bg-emerald-50 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                                        {activeTier.name.toLowerCase().includes('annexure') ? 'Approved Annexure' :
-                                         activeTier.name.toLowerCase().includes('revision') ? 'Approved Revision' : 'Approved Contract'}
+                                <li key={point.id || idx} className="px-4 py-2.5 flex items-center justify-between gap-3 hud-row-in" style={{ animationDelay: `${idx * 30}ms` }}>
+                                    <span className="min-w-0">
+                                        <span className="block text-xs font-semibold text-slate-800">{point.stage}</span>
+                                        <span className="block text-[11px] text-slate-500">{point.date} · {point.gm.toFixed(1)}% GM</span>
                                     </span>
-                                )}
-                                {activeTier.lifecycleTag === 'Superseded' && <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full font-bold">Superseded</span>}
-                                {activeTier.id === signedTierId && <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] px-2 py-0.5 rounded-full font-bold">In force · signed · read-only</span>}
-                                {!scopeFlowOn && <button 
-                                    onClick={handleSyncTier} 
-                                    className="ml-auto px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 border border-slate-200 shadow-sm"
-                                    title="Push pricing & BOQ changes to Payment Schedule and Revision Studio"
-                                >
-                                    <span>Sync to Payments & Revisions</span>
-                                    <ArrowRightIcon className="w-3 h-3" />
-                                </button>}
-                            </div>
-                            <p className="text-[13px] text-slate-500 mt-1">
-                                {activeTier.summary.itemCount ?? activeTier.boq?.length ?? 0} items • cost {formatCurrency(activeTier.summary.totalCost || 0)}{(activeTier.summary.designFee || 0) > 0 && <> • work {formatCurrency(activeTier.summary.totalSell || 0)} + design fee {formatCurrency(activeTier.summary.designFee || 0)}</>} • created {new Date(activeTier.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </p>
-                        </div>
-                        <div className="flex flex-col md:items-end text-left md:text-right">
-                            <h1 className="text-[40px] font-bold text-indigo-600 tracking-tight leading-none">{formatCurrency(displayValue)}</h1>
-                            <p className="text-sm text-slate-500 mt-2">
-                                <span className="font-semibold text-amber-700">{(activeTier.summary.blendedGm ?? 0).toFixed(1)}% blended GM</span>
-                                {studioMedianGm !== null && <><span className="text-slate-300 mx-1">·</span><span title={`Median of ${benchmarks.length} other priced ${benchmarks.length === 1 ? 'project' : 'projects'}`}>studio median {studioMedianGm.toFixed(1)}%</span></>}
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Immutability / Status Banner */}
-                    {activeTier.id === signedTierId ? (
-                        <div className="bg-indigo-50/60 border border-indigo-200 rounded-lg p-4 flex flex-col md:flex-row justify-between md:items-center gap-3 mt-2">
-                            <div className="flex flex-col gap-1">
-                                <div className="text-indigo-900 text-sm font-bold">The signed scope — read-only</div>
-                                <p className="text-indigo-800/80 text-[13px]">Sync and approval are not offered here: the signature does that. To change this version, start a Scope Revision — the client signs the change, and the payment schedule follows.</p>
-                            </div>
-                            <button onClick={() => setActiveTab('revision-studio')} className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-indigo-700 transition-colors shrink-0">Start a revision</button>
-                        </div>
-                    ) : scopeFlowOn && signedTierId && !isApproved ? (
-                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mt-2 text-slate-600 text-sm">
-                            An option. The signed scope is another version, and it changes only through a Scope Revision the client signs — so this one cannot be approved over it.
-                        </div>
-                    ) : isApproved ? (
-                        <div className="bg-emerald-50/50 border border-emerald-200 rounded-lg p-4 flex flex-col md:flex-row justify-between md:items-center gap-3 mt-2">
-                            <div className="flex flex-col gap-1.5">
-                                <div className="flex items-center gap-2 text-emerald-800 text-sm font-bold">
-                                    <CheckIcon className="w-4 h-4" /> {isAnnexureOrRevision ? 'Approved after revision' : 'Frozen at approval'}
-                                </div>
-                                <p className="text-emerald-700/80 text-[13px]">
-                                    {formatCurrency(displayValue)} at {(activeTier.summary.blendedGm ?? 0).toFixed(1)}%, {describeApproval(activeTier)}. {isAnnexureOrRevision ? 'BOQ updated after revision — editing opens a new version.' : 'BOQ locked — editing opens a new version.'}
-                                </p>
-                                {revertOpen && (
-                                    <p className="text-slate-700 text-[13px] mt-1" data-testid="revert-approval-confirm">
-                                        {activeTier.name} goes back to a draft. {revertTo
-                                            ? <><b className="text-slate-900">{revertTo.name}</b> becomes the approved baseline again, at the value it was booked at.</>
-                                            : <>Nothing will be approved until you approve an option again.</>}
-                                    </p>
-                                )}
-                            </div>
-                            {revertOpen ? (
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <button onClick={() => setRevertOpen(false)} className="px-4 py-2 bg-white text-slate-700 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">Keep approval</button>
-                                    <button onClick={handleRevertApproval} className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-indigo-700 transition-colors">Revert to draft</button>
-                                </div>
-                            ) : (
-                                <button onClick={() => setRevertOpen(true)} className="px-4 py-2 bg-white text-slate-700 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors shrink-0">Revert approval</button>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col md:flex-row justify-between md:items-center gap-3 mt-2">
-                             <div className="text-slate-600 text-sm">This is a draft version. Approve it to freeze the scope and base value.</div>
-                             <button onClick={() => handleApproveTier(activeTier.id)} className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-indigo-700 transition-colors">Approve Option</button>
-                        </div>
-                    )}
-                </div>
-
-                {/* 2. What Changed From Previous Version */}
-                <div className="flex flex-col gap-3 mt-2">
-                    <h4 className="text-[11px] font-bold tracking-widest uppercase text-slate-400 pl-1">What Changed From The Previous Version</h4>
-                    <div className="bg-white rounded-xl border border-slate-200 p-6">
-                        {parentTier ? (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="flex flex-col gap-1 border-r border-slate-100 pr-6">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Value</span>
-                                    <h3 className="text-2xl font-semibold tracking-tight text-slate-900">
-                                        {diffValue > 0 ? '+' : ''}{formatCurrency(diffValue)}
-                                    </h3>
-                                    <span className="text-[11px] text-slate-500 font-medium">vs {parentTier.name}</span>
-                                </div>
-                                <div className="flex flex-col gap-1 border-r border-slate-100 pr-6">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Margin</span>
-                                    <h3 className="text-2xl font-semibold tracking-tight text-slate-900">
-                                        {diffGm > 0 ? '+' : ''}{diffGm.toFixed(1)} pts
-                                    </h3>
-                                    <span className="text-[11px] text-slate-500 font-medium">vs parent</span>
-                                </div>
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Items</span>
-                                    <h3 className="text-2xl font-semibold tracking-tight text-slate-900">
-                                        {diffItems > 0 ? '+' : ''}{diffItems}
-                                    </h3>
-                                    <span className="text-[11px] text-slate-500 font-medium">lines changed</span>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="flex items-center py-2 text-slate-400 text-[13px]">
-                                This is a root option — nothing to compare against.
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* What separates the options */}
-                {tiers.length > 1 && comparison.all.length > 0 && (
-                    <div className="flex flex-col gap-3 mt-2">
-                        <div className="flex items-center justify-between gap-3 flex-wrap pl-1">
-                            <div className="flex items-center gap-2">
-                                <div className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-[9px] font-bold text-slate-400">=</div>
-                                <h4 className="text-[11px] font-bold tracking-widest uppercase text-slate-400">
-                                    What separates the options
-                                </h4>
-                            </div>
-                            <button
-                                onClick={() => setCompareOpen(v => !v)}
-                                className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 hover:text-indigo-700"
-                            >
-                                {compareOpen ? 'Hide' : 'Show'}
-                            </button>
-                        </div>
-
-                        {compareOpen && (
-                            <div className="flex flex-col gap-3">
-
-                                {/* Coverage: which trades, and how much of each option they are. */}
-                                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                                    <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/70">
-                                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">What each option covers</span>
-                                    </div>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-xs border-collapse">
-                                            <tbody>
-                                                {comparison.coverage.map((c, i) => (
-                                                    <tr key={c.cat} className={i % 2 ? 'bg-slate-50/40' : ''}>
-                                                        <td className="px-4 py-2.5 font-bold text-slate-700 align-middle whitespace-nowrap min-w-[130px]">
-                                                            {c.cat}
-                                                        </td>
-                                                        {tiers.map(t => {
-                                                            const cell: any = c.cells[t.id];
-                                                            return (
-                                                                <td key={t.id} className={`px-4 py-2.5 align-middle min-w-[150px] ${t.id === activeTierId ? 'bg-indigo-50/40' : ''}`}>
-                                                                    {!cell || cell.lines === 0 ? (
-                                                                        <span className="text-slate-300 text-[11px]">not covered</span>
-                                                                    ) : (
-                                                                        <>
-                                                                            <div className="flex items-baseline justify-between gap-2">
-                                                                                <span className="font-semibold text-slate-900 tabular-nums">{formatCurrency(Math.round(cell.value))}</span>
-                                                                                <span className="text-[10px] text-slate-400 tabular-nums">{cell.lines} {cell.lines === 1 ? 'line' : 'lines'}</span>
-                                                                            </div>
-                                                                            {/* Share of this option's own total, so a
-                                                                                short bar reads as "a small part of
-                                                                                this option", not "less than its
-                                                                                neighbour". */}
-                                                                            <div className="h-1 rounded-full bg-slate-100 mt-1.5 overflow-hidden">
-                                                                                <div className="h-full rounded-full bg-indigo-400" style={{ width: `${Math.max(2, cell.share * 100)}%` }} />
-                                                                            </div>
-                                                                        </>
-                                                                    )}
-                                                                </td>
-                                                            );
-                                                        })}
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                            <tfoot>
-                                                <tr className="border-t border-slate-200">
-                                                    <td className="px-4 py-2 font-bold text-slate-500 whitespace-nowrap">Work</td>
-                                                    {tiers.map(t => (
-                                                        <td key={t.id} className={`px-4 py-2 font-semibold text-slate-700 tabular-nums ${t.id === activeTierId ? 'bg-indigo-50/40' : ''}`}>{formatCurrency(Math.round(comparison.totals[t.id] || 0))}</td>
-                                                    ))}
-                                                </tr>
-                                                {tiers.some(t => optionPrice(t).designFee > 0) && (
-                                                    <tr>
-                                                        <td className="px-4 py-2 font-bold text-slate-500 whitespace-nowrap">Design fee</td>
-                                                        {tiers.map(t => (
-                                                            <td key={t.id} className={`px-4 py-2 font-semibold text-slate-700 tabular-nums ${t.id === activeTierId ? 'bg-indigo-50/40' : ''}`}>{formatCurrency(Math.round(optionPrice(t).designFee))}</td>
-                                                        ))}
-                                                    </tr>
-                                                )}
-                                                <tr className="border-t border-slate-200 bg-slate-50/70">
-                                                    <td className="px-4 py-2.5 font-bold text-slate-800 whitespace-nowrap">Total</td>
-                                                    {tiers.map(t => (
-                                                        <td key={t.id} data-testid={`coverage-total-${t.id}`} className={`px-4 py-2.5 font-black text-slate-900 tabular-nums ${t.id === activeTierId ? 'bg-indigo-50/40' : ''}`}>{formatCurrency(Math.round(optionPrice(t).total))}</td>
-                                                    ))}
-                                                </tr>
-                                            </tfoot>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                {/* Included in some options and not others. */}
-                                {comparison.only.length > 0 && (
-                                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                                        <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/70">
-                                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                                                Only in some options
+                                    <span className="text-right">
+                                        <span className="block text-sm font-black text-slate-800 tabular-nums">{formatCurrency(point.amount)}</span>
+                                        {point.delta !== undefined && point.delta !== 0 && (
+                                            <span className={`block text-[11px] font-semibold tabular-nums ${point.delta > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                                {point.delta > 0 ? `+${formatCurrency(point.delta)}` : `-${formatCurrency(Math.abs(point.delta))}`}
                                             </span>
-                                            <span className="text-[11px] text-slate-400 ml-2">{comparison.only.length} items</span>
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-xs border-collapse">
-                                                <tbody>
-                                                    {comparison.only.map((r, i) => (
-                                                        <tr key={r.bankId} className={i % 2 ? 'bg-slate-50/40' : ''}>
-                                                            <td className="px-4 py-2.5 align-middle min-w-[220px]">
-                                                                <div className="font-semibold text-slate-800 leading-tight">{r.name}</div>
-                                                                <div className="text-[10px] text-slate-400 mt-0.5">{r.cat}</div>
-                                                            </td>
-                                                            {tiers.map(t => {
-                                                                const cell = r.cells[t.id];
-                                                                return (
-                                                                    <td key={t.id} className={`px-4 py-2.5 text-right align-middle tabular-nums min-w-[130px] ${t.id === activeTierId ? 'bg-indigo-50/40' : ''}`}>
-                                                                        {!cell ? (
-                                                                            <span className="text-[11px] text-slate-300 font-medium">not included</span>
-                                                                        ) : (
-                                                                            <>
-                                                                                <div className="font-semibold text-emerald-700">{formatCurrency(Math.round(cell.value))}</div>
-                                                                                <div className="text-[10px] text-slate-400">{Number(cell.qty.toFixed(2))} {r.unit}</div>
-                                                                            </>
-                                                                        )}
-                                                                    </td>
-                                                                );
-                                                            })}
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Same item, different amount of it. */}
-                                {comparison.extent.length > 0 && (
-                                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                                        <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/70">
-                                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">More of it</span>
-                                            <span className="text-[11px] text-slate-400 ml-2">same item, different extent</span>
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-xs border-collapse">
-                                                <tbody>
-                                                    {comparison.extent.map((r, i) => (
-                                                        <tr key={r.bankId} className={i % 2 ? 'bg-slate-50/40' : ''}>
-                                                            <td className="px-4 py-2.5 align-middle min-w-[220px]">
-                                                                <div className="font-semibold text-slate-800 leading-tight">{r.name}</div>
-                                                                <div className="text-[10px] text-slate-400 mt-0.5">{r.cat}</div>
-                                                            </td>
-                                                            {tiers.map(t => {
-                                                                const cell = r.cells[t.id];
-                                                                return (
-                                                                    <td key={t.id} className={`px-4 py-2.5 text-right align-middle tabular-nums min-w-[130px] ${t.id === activeTierId ? 'bg-indigo-50/40' : ''}`}>
-                                                                        {!cell ? <span className="text-slate-300">—</span> : (
-                                                                            <>
-                                                                                <div className="font-semibold text-slate-900">{Number(cell.qty.toFixed(2))} <span className="text-[10px] font-medium text-slate-400">{r.unit}</span></div>
-                                                                                <div className="text-[10px] text-slate-400">{formatCurrency(Math.round(cell.value))}</div>
-                                                                            </>
-                                                                        )}
-                                                                    </td>
-                                                                );
-                                                            })}
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Same item, same amount, different grade. */}
-                                {comparison.spec.length > 0 && (
-                                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                                        <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between gap-3 flex-wrap">
-                                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Built to a different specification</span>
-                                            <span className="text-[11px] text-slate-400">{comparison.spec.length} items · same scope, different grade</span>
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-xs border-collapse">
-                                                <tbody>
-                                                    {comparison.spec.slice(0, showIdentical ? comparison.spec.length : 6).map((r, i) => (
-                                                        <tr key={r.bankId} className={i % 2 ? 'bg-slate-50/40' : ''}>
-                                                            <td className="px-4 py-2.5 align-middle min-w-[220px]">
-                                                                <div className="font-semibold text-slate-800 leading-tight">{r.name}</div>
-                                                                <div className="text-[10px] text-slate-400 mt-0.5">
-                                                                    {r.cat} · {Number((r.cells[tiers[0].id]?.qty || 0).toFixed(2))} {r.unit} in every option
-                                                                </div>
-                                                            </td>
-                                                            {tiers.map(t => {
-                                                                const cell = r.cells[t.id];
-                                                                return (
-                                                                    <td key={t.id} className={`px-4 py-2.5 text-right align-middle tabular-nums min-w-[130px] ${t.id === activeTierId ? 'bg-indigo-50/40' : ''}`}>
-                                                                        {!cell ? <span className="text-slate-300">—</span> : (
-                                                                            <>
-                                                                                <div className="font-semibold text-slate-900">{formatCurrency(Math.round(cell.value))}</div>
-                                                                                <div className="text-[10px] text-slate-400">₹{Math.round(cell.rate).toLocaleString('en-IN')}/{r.unit}</div>
-                                                                            </>
-                                                                        )}
-                                                                    </td>
-                                                                );
-                                                            })}
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                        {comparison.spec.length > 6 && (
-                                            <button
-                                                onClick={() => setShowIdentical(v => !v)}
-                                                className="w-full px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-indigo-600 hover:bg-slate-50 border-t border-slate-100"
-                                            >
-                                                {showIdentical ? 'Show fewer' : `Show all ${comparison.spec.length}`}
-                                            </button>
                                         )}
-                                    </div>
-                                )}
-
-                                {/* Everything the options agree on, as a sentence. */}
-                                {comparison.same.length > 0 && (
-                                    <div className="rounded-xl border border-dashed border-slate-200 px-4 py-3 text-[11px] text-slate-500 leading-relaxed">
-                                        <b className="text-slate-700">{comparison.same.length} items are identical in every option</b>
-                                        {' '}— same scope, same quantity, same rate. They are not what the client is choosing between.
-                                    </div>
-                                )}
-
-                                {comparison.only.length === 0 && comparison.extent.length === 0 && comparison.spec.length === 0 && (
-                                    <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-4 py-3 text-[11px] text-amber-900 leading-relaxed">
-                                        <b>These options are the same bill of quantities.</b> They differ only in margin,
-                                        so there is nothing here a client could choose between. Vary the specification,
-                                        the extent, or what each option includes.
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* 3. Margin & Benchmark */}
-                <div className="flex flex-col gap-3 mt-2">
-                    <div className="flex items-center gap-2 pl-1">
-                        <div className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-[9px] font-bold text-slate-400">1</div>
-                        <h4 className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Margin & Benchmark</h4>
-                    </div>
-                    <div className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-6">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="flex flex-col gap-1 pr-6 border-r border-slate-100">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Blended GM</span>
-                                <h3 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">{(activeTier.summary.blendedGm ?? 0).toFixed(1)}%</h3>
-                                <span className="text-[11px] font-medium text-slate-500 mt-1">
-                                    {studioMedianGm === null
-                                        ? 'No other priced projects to compare yet'
-                                        : <>{(activeTier.summary.blendedGm ?? 0) >= studioMedianGm ? "▲" : "▼"} {Math.abs((activeTier.summary.blendedGm ?? 0) - studioMedianGm).toFixed(1)} pts vs studio median</>}
-                                </span>
-                            </div>
-                            <div className="flex flex-col gap-1 pr-6 border-r border-slate-100">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Per Sq Ft</span>
-                                <h3 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">{(projectContext.area || 0) > 0 ? formatCurrency(displayValue / projectContext.area!) : '—'}</h3>
-                                <span className="text-[11px] font-medium text-slate-500 mt-1">{(projectContext.area || 0) > 0 ? 'revenue basis' : 'set the project area to see this'}</span>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Above Floor By</span>
-                                <h3 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">{( (activeTier.summary.blendedGm ?? 0) - 20 ).toFixed(1)} pts</h3>
-                                <span className="text-[11px] font-medium text-slate-500 mt-1">floor 20%</span>
-                            </div>
-                        </div>
-
-                        {/* Interactive Margin Assumptions Simulator (Phase 3) */}
-                        <div className="border-t border-slate-100 pt-5 flex flex-col gap-4">
-                            <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Systematic Margin Adjuster</span>
-                                {marginShiftAmount !== 0 && (
-                                    <button 
-                                        onClick={() => setMarginShiftAmount(0)}
-                                        className="text-xs text-indigo-600 font-bold hover:text-indigo-700 transition-all"
-                                    >
-                                        Reset Shift
-                                    </button>
-                                )}
-                            </div>
-                            
-                            <div className="flex items-center gap-4">
-                                <input 
-                                    type="range" 
-                                    min="-10" max="10" step="0.5" 
-                                    value={marginShiftAmount} 
-                                    onChange={(e) => setMarginShiftAmount(parseFloat(e.target.value))}
-                                    className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                                />
-                                <span className={`text-base font-bold w-20 text-right ${marginShiftAmount > 0 ? 'text-indigo-600' : marginShiftAmount < 0 ? 'text-red-500' : 'text-slate-900'}`}>
-                                    {marginShiftAmount > 0 ? `+${marginShiftAmount.toFixed(1)}` : marginShiftAmount.toFixed(1)}%
-                                </span>
-                            </div>
-
-                            {marginShiftAmount !== 0 && (
-                                <div className="bg-indigo-50/50 border border-indigo-100 rounded-lg p-4 flex flex-col gap-3 animate-in fade-in duration-300">
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Simulated Sell</span>
-                                            <span className="text-sm font-semibold text-slate-900 mt-0.5">{formatCurrency(simulatedSellValue)}</span>
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Simulated Design Fee</span>
-                                            <span className="text-sm font-semibold text-slate-900 mt-0.5">{formatCurrency(simulatedDesignFee)}</span>
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Simulated Total</span>
-                                            <span className="text-sm font-semibold text-indigo-600 mt-0.5 font-bold">{formatCurrency(simulatedTotalRevenue)}</span>
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Simulated GM</span>
-                                            <span className="text-sm font-semibold text-slate-900 mt-0.5 font-bold">{simulatedBlendedGm.toFixed(1)}%</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex justify-end pt-1 border-t border-indigo-100/50">
-                                        <button 
-                                            onClick={handleApplyMarginShift}
-                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1 shadow-sm"
-                                        >
-                                            <SaveIcon className="w-3.5 h-3.5" /> Apply systematically to all items
-                                        </button>
-                                    </div>
-                                </div>
+                                    </span>
+                                </li>
+                            ))}
+                            {contractTimeline.length > 1 && (
+                                <li className="px-4 py-2.5 flex items-center justify-between text-xs text-slate-500">
+                                    <span>Booking → today</span>
+                                    <span className={`font-bold tabular-nums ${totalContractDelta > 0 ? 'text-amber-700' : totalContractDelta < 0 ? 'text-emerald-700' : 'text-slate-700'}`}>
+                                        {totalContractDelta > 0 ? `+${formatCurrency(totalContractDelta)}` : totalContractDelta < 0 ? `-${formatCurrency(Math.abs(totalContractDelta))}` : '₹0'}
+                                    </span>
+                                </li>
                             )}
-                        </div>
-                        
-                        <div className="flex flex-col gap-3 border-t border-slate-100 pt-5">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Comparable Past Projects</span>
-                            <div className="flex flex-col gap-0">
-                                {comparableProjects.length === 0 && (
-                                    <p className="text-xs text-slate-500 py-2">No other priced projects yet. This fills in as the studio quotes more.</p>
-                                )}
-                                {comparableProjects.map((p, idx) => {
-                                    const diffPct = (activeTier.summary.blendedGm ?? 0) - p.gm;
-                                    return (
-                                        <div key={p.id || idx} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-b-0">
-                                            <div className="flex flex-col gap-0.5">
-                                                <span className="text-sm font-semibold text-slate-800">{p.name}</span>
-                                                <span className="text-xs text-slate-400">{formatCurrency(p.value)} • {p.itemsCount} items</span>
-                                            </div>
-                                            <div className="flex flex-col items-end gap-0.5">
-                                                <span className="text-sm font-bold text-slate-900">{p.gm.toFixed(1)}%</span>
-                                                <span className={`text-xs font-medium ${diffPct > 0 ? 'text-indigo-600' : diffPct < 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                                                    {diffPct > 0 ? `+${diffPct.toFixed(1)}` : diffPct.toFixed(1)} pts vs this
-                                                </span>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                            {comparableProjects.length > 0 && <span className="text-[11px] text-slate-400">Your projects closest in size.</span>}
-                        </div>
-                    </div>
-                </div>
+                        </ul>
+                    )}
+                </DeskPanel>
 
-
+                {/* The studio's own projects, closest in size. */}
+                <DeskPanel icon={Building2} title="Comparable past projects" blurb="The studio's own priced projects, closest in size to this one.">
+                    {comparableProjects.length === 0 ? (
+                        <p className="text-xs text-slate-500">No other priced projects yet. This fills in as the studio quotes more.</p>
+                    ) : (
+                        <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                            {comparableProjects.map((p, idx) => {
+                                const raw = (activeTier.summary.blendedGm ?? 0) - p.gm;
+                                const diffPct = Math.abs(raw) < 0.05 ? 0 : raw;
+                                return (
+                                    <li key={p.id || idx} className="px-4 py-2.5 flex items-center justify-between gap-3 hud-row-in" style={{ animationDelay: `${idx * 30}ms` }}>
+                                        <span className="min-w-0">
+                                            <span className="block text-sm font-semibold text-slate-800">{p.name}</span>
+                                            <span className="block text-[11px] text-slate-500">{formatCurrency(p.value)} · {p.itemsCount} items</span>
+                                        </span>
+                                        <span className="text-right">
+                                            <span className="block text-sm font-black text-slate-800 tabular-nums">{p.gm.toFixed(1)}%</span>
+                                            <span className={`block text-[11px] font-semibold tabular-nums ${diffPct > 0 ? 'text-[#3D52A0]' : diffPct < 0 ? 'text-rose-700' : 'text-slate-400'}`}>
+                                                {diffPct > 0 ? `+${diffPct.toFixed(1)}` : diffPct.toFixed(1)} pts vs {activeTier.name}
+                                            </span>
+                                        </span>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                </DeskPanel>
             </div>
 
+            {/* Tune margin: the old Systematic Margin Adjuster, for the option it was opened on. */}
+            {tuneOpen && createPortal(
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 no-print" role="dialog" aria-label={`Tune margin: ${activeTier.name}`}>
+                    <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={() => setTuneOpen(false)} />
+                    <div className="phd-pop relative w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
+                        <div className="px-6 pt-5 pb-4">
+                            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">Tune margin</p>
+                            <h2 className="font-bold text-slate-800">{activeTier.name}</h2>
+                            <p className="text-xs text-slate-500 mt-0.5">Moves every line's margin by the same number of points, within 0% and 80%.</p>
+                        </div>
+                        <div className="px-6 pb-5 space-y-4">
+                            <div className="flex items-center gap-4">
+                                <input type="range" min="-10" max="10" step="0.5" value={marginShiftAmount} aria-label="Margin shift in points"
+                                    onChange={(e) => setMarginShiftAmount(parseFloat(e.target.value))}
+                                    className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#3D52A0]" />
+                                <span className={`text-base font-black w-20 text-right tabular-nums ${marginShiftAmount > 0 ? 'text-[#3D52A0]' : marginShiftAmount < 0 ? 'text-rose-700' : 'text-slate-800'}`}>
+                                    {marginShiftAmount > 0 ? `+${marginShiftAmount.toFixed(1)}` : marginShiftAmount.toFixed(1)} pts
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                {[
+                                    ['Work', formatCurrency(simulatedSellValue)],
+                                    ['Design fee', formatCurrency(simulatedDesignFee)],
+                                    ['Total', formatCurrency(simulatedTotalRevenue)],
+                                    ['Blended GM', `${simulatedBlendedGm.toFixed(1)}%`],
+                                ].map(([k, v]) => (
+                                    <div key={k} className="rounded-xl border border-slate-200 px-3 py-2">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{k}</p>
+                                        <p className="text-sm font-black text-slate-800 tabular-nums">{v}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+                            <button type="button" onClick={() => setTuneOpen(false)} className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">Cancel</button>
+                            <button type="button" disabled={marginShiftAmount === 0} onClick={() => { handleApplyMarginShift(); setTuneOpen(false); }}
+                                className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50">Apply to every line</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body,
+            )}
             {/*
                 Regenerate.
 
@@ -1347,7 +844,6 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                     </div>
                 </div>
             )}
-        </div>
         </div>
     );
 };
