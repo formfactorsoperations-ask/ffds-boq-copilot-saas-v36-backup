@@ -139,18 +139,15 @@ export function resolveProvisionalNote(
 /**
  * The version number the client already holds, 0 when they hold none.
  *
- * A schedule can reach the client three ways: marked sent on the page, frozen
- * into a document issue from the Documents board, or locked into the
- * engagement on the older flow. Whichever is highest is what they have.
+ * Only a release counts: a version frozen into a document issue from the
+ * Documents board, or locked into the engagement on the older flow. A
+ * schedule merely marked "sent" on the Payment Schedule page never reached the
+ * client, so it does not count.
  */
 export function heldScheduleVersion(
-  schedules: PaymentSchedule[] | undefined,
   issued: { scheduleVersion?: number | null; lockedVersion?: number | null }
 ): number {
-  const sent = (schedules || [])
-    .filter(s => s.status !== 'draft')
-    .reduce((m, s) => Math.max(m, s.version || 0), 0);
-  return Math.max(sent, issued.scheduleVersion || 0, issued.lockedVersion || 0);
+  return Math.max(issued.scheduleVersion || 0, issued.lockedVersion || 0);
 }
 
 /**

@@ -9,7 +9,6 @@ import { resolveDocumentState, getCurrentIssue } from '../../services/documentIs
 import ExecutionStamp from '../documents/ExecutionStamp';
 import PaymentScheduleSheet from '../documents/PaymentScheduleSheet';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
-import { releaseDocument } from '../../services/documentReleaseEngine';
 import {
     advancePaymentStatus,
     designInProgress,
@@ -23,9 +22,11 @@ interface PaymentSchedulePageProps {
     projectContext: ProjectContext;
     setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
     activeTier?: any;
+    /** Opens the Documents board, the one place a document is sent from. */
+    onOpenDocuments?: () => void;
 }
 
-export default function PaymentSchedulePage({ projectContext, setProjectContext, activeTier: optionTier }: PaymentSchedulePageProps) {
+export default function PaymentSchedulePage({ projectContext, setProjectContext, activeTier: optionTier, onOpenDocuments }: PaymentSchedulePageProps) {
     /*
       A fee-only project (design only) schedules the design fee and nothing
       else: no execution value, whatever an old BOQ left on the option, and no
@@ -46,7 +47,7 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
     const designGstMul = (psFin.designGstEnabled !== false ? psRate : 0) / 100;
     const execGstMul = (psFin.executionGstEnabled !== false ? psRate : 0) / 100;
 
-    const { orgData, currentRole, currentUserAuth } = useOrg();
+    const { orgData, currentRole } = useOrg();
     const [previewMode, setPreviewMode] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
     const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
@@ -90,15 +91,15 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
       regenerated, revised or re-issued from anywhere. A lock protects what the
       client holds; it does not stop the studio drafting the next version.
 
-      So the page now asks which version went out (marked sent here, frozen into
-      an issue from the Documents board, or locked into the engagement on the
-      older flow), and treats only a draft numbered above it as open.
+      So the page now asks which version the client actually has (released from
+      the Documents board, or locked into the engagement on the older flow),
+      and treats only a draft numbered above it as open.
     */
     const issuedScheduleVersion = canonicalSent
         ? ((canonicalIssue as any)?.snapshot?.schedule?.version ?? canonicalIssue?.version ?? 0)
         : 0;
     const lockedHasSchedule = isLocked && !!(lockedSnapshot?.paymentStructure || lockedSnapshot?.advances);
-    const heldVersion = heldScheduleVersion(schedules, {
+    const heldVersion = heldScheduleVersion({
         scheduleVersion: issuedScheduleVersion,
         lockedVersion: lockedHasSchedule ? (engagement?.paymentScheduleVersion || 1) : 0
     });
@@ -144,47 +145,15 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
         };
     }
 
-    /** The draft as sent: earlier versions are marked as replaced by it. */
-    const markDraftSent = (prevSchedules: PaymentSchedule[] | undefined, draftId: string | undefined) =>
-        (prevSchedules || []).map(d => {
-            if (d.id === draftId) return { ...d, status: 'sent' as const, provisionalNote: resolveProvisionalNote(d, projectContext) };
-            if (d.status !== 'draft' && !d.supersededBy) return { ...d, supersededBy: draftId || null };
-            return d;
-        });
-
-    const handleSend = () => {
-        if (!latestSchedule) return;
-        setProjectContext(prev => ({
-            ...prev,
-            paymentSchedules: markDraftSent(prev.paymentSchedules, latestSchedule.id)
-        }));
-    };
-
     /*
-      Re-issue: the client already has a version in their portal.
+      Nothing on this page sends anything to the client.
 
-      The same release the Documents board does (`releaseDocument`), so the
-      new version is frozen, numbered above the last and staged. The client
-      keeps reading the version they have until it is published from the
-      Client Portal controls.
+      A schedule reaches the client only when it is released from the
+      Documents board, which freezes a copy and stages it for the portal. The
+      old "Mark as Sent" here changed a label and nothing else, so the page
+      read "Sent" about a schedule the client had never been given. This page
+      drafts; Documents sends.
     */
-    const handleReissue = () => {
-        if (!openDraft) return;
-        const issuedBy = currentUserAuth?.displayName || currentRole || 'Studio';
-        setProjectContext(prev => {
-            const withIssue = releaseDocument('payment_schedule', prev, undefined, {
-                issuedBy,
-                via: ['portal'],
-                note: openDraft.revisionNote || undefined,
-                org: {
-                    orgName: orgData?.orgName,
-                    officeAddress: (orgData as any)?.officeAddress,
-                    contactEmail: (orgData as any)?.contactEmail
-                }
-            })(prev);
-            return { ...withIssue, paymentSchedules: markDraftSent(withIssue.paymentSchedules, openDraft.id) };
-        });
-    };
 
     /** Saves the note under the execution table on the open draft. */
     const setDraftNote = (note: string | null | undefined) => {
@@ -485,12 +454,14 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
     const statusFor = (adv: any) => advancePaymentStatus(adv, milestones);
 
     const chip = isOpenDraft
-        ? { cls: 'bg-amber-100 text-amber-700', label: heldVersion > 0 ? `Draft · client has v${heldVersion}` : 'Draft version' }
+        ? { cls: 'bg-amber-100 text-amber-700', label: heldVersion > 0 ? `Draft · client has v${heldVersion}` : 'Draft · not sent' }
         : staged ? { cls: 'bg-amber-100 text-amber-700', label: 'Staged · publish from Client Portal' }
         : canonicalDone ? { cls: 'bg-emerald-100 text-emerald-700', label: 'Acknowledged by client' }
         : canonicalState === 'queried' && hasIssue ? { cls: 'bg-amber-100 text-amber-700', label: 'Question open' }
         : canonicalSent ? { cls: 'bg-[#3D52A0]/10 text-[#3D52A0]', label: 'Sent to client' }
-        : { cls: 'bg-emerald-100 text-emerald-700', label: 'Sent & current' };
+        /* Not released from Documents, so the client does not have it,
+           whatever an older "Mark as Sent" recorded. */
+        : { cls: 'bg-amber-100 text-amber-700', label: 'Not sent to client' };
 
     const secondaryBtn = 'px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed';
     const primaryBtn = 'px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] transition flex items-center gap-2 shadow-sm disabled:opacity-50';
@@ -546,20 +517,23 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
                             <button onClick={handleRegenerate} disabled={isGenerating} className={secondaryBtn} title="Rebuild this draft from the current fees, BOQ and milestones">
                                 <RefreshCw className="w-4 h-4" /> {isGenerating ? 'Regenerating…' : 'Regenerate'}
                             </button>
-                            {clientHasPortalCopy ? (
-                                <button onClick={handleReissue} className={primaryBtn} title="Freeze this version for the client. It reaches them once published from Client Portal.">
-                                    <Send className="w-4 h-4" /> Re-issue to client as {latestSchedule.versionLabel}
-                                </button>
-                            ) : (
-                                <button onClick={handleSend} className={primaryBtn}>
-                                    <Send className="w-4 h-4" /> Mark as Sent
+                            {onOpenDocuments && (
+                                <button onClick={onOpenDocuments} className={primaryBtn} title="Documents is where a schedule is sent to the client">
+                                    <Send className="w-4 h-4" /> Send from Documents
                                 </button>
                             )}
                         </>
                     ) : !selectedScheduleId && (
-                        <button onClick={handleRegenerate} disabled={isGenerating} className={primaryBtn} title="Start a new version from the current fees, BOQ and milestones. The client keeps the version they have until you send this one.">
-                            <PencilLine className="w-4 h-4" /> {isGenerating ? 'Preparing…' : `Revise as v${nextScheduleVersion(schedules, heldVersion)}.0`}
-                        </button>
+                        <>
+                            {!clientHasPortalCopy && onOpenDocuments && (
+                                <button onClick={onOpenDocuments} className={secondaryBtn} title="Documents is where a schedule is sent to the client">
+                                    <Send className="w-4 h-4" /> Send from Documents
+                                </button>
+                            )}
+                            <button onClick={handleRegenerate} disabled={isGenerating} className={primaryBtn} title="Start a new version from the current fees, BOQ and milestones. The client keeps the version they have until you send this one from Documents.">
+                                <PencilLine className="w-4 h-4" /> {isGenerating ? 'Preparing…' : `Revise as v${nextScheduleVersion(schedules, heldVersion)}.0`}
+                            </button>
+                        </>
                     )}
                 </div>
             </div>

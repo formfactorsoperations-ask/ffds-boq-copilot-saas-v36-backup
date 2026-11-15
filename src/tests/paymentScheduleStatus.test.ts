@@ -93,11 +93,16 @@ describe('numbering a revision', () => {
   });
 
   it('a revision goes above the version the client holds', () => {
-    expect(nextScheduleVersion([s(1, 'sent')], heldScheduleVersion([s(1, 'sent')], {}))).toBe(2);
-    // v1 released from the Documents board but never marked sent on the page.
-    const held = heldScheduleVersion([s(1, 'draft')], { scheduleVersion: 1 });
+    // v1 released from the Documents board.
+    const held = heldScheduleVersion({ scheduleVersion: 1 });
     expect(held).toBe(1);
     expect(nextScheduleVersion([s(1, 'draft')], held)).toBe(2);
+  });
+
+  it('only a release counts as held: a version merely marked sent on the page does not', () => {
+    expect(heldScheduleVersion({})).toBe(0);
+    // Still numbered above it, so two schedules never share a number.
+    expect(nextScheduleVersion([s(1, 'sent')], 0)).toBe(2);
   });
 
   it('an open revision keeps its own number when regenerated', () => {
@@ -105,7 +110,7 @@ describe('numbering a revision', () => {
   });
 
   it('counts a version locked into the engagement on the older flow', () => {
-    expect(heldScheduleVersion([], { lockedVersion: 3 })).toBe(3);
+    expect(heldScheduleVersion({ lockedVersion: 3 })).toBe(3);
     expect(nextScheduleVersion([], 3)).toBe(4);
   });
 });
