@@ -1,5 +1,5 @@
 import { BoqItem, Item, Room } from '../types';
-import { ScopeBucket, asScopeBucket, bucketForItem, realRooms } from './scopeBuckets';
+import { ScopeBucket, asScopeBucket, bucketForItem, isScopeBucket, realRooms } from './scopeBuckets';
 
 // ============================================================================
 // scopeMigration — putting every BOQ line somewhere it belongs.
@@ -63,7 +63,13 @@ export function reassignmentFor(
       debris removal belongs in Others whatever it was filed under, and the old
       AI prompt filed plenty of it wrongly.
     */
-    if (canonical === target) return canonical === current ? null
+    /*
+      Unless a person put it there. Moving carpentry into Functional on purpose,
+      or an Excel sheet that files a line under Functional, is the same kind of
+      decision as a room: the studio's call, not a filing mistake. Re-classifying
+      it snapped the line straight back to Others and offered to "fix" it.
+    */
+    if (canonical === target || line.scopeChosen) return canonical === current ? null
       : { itemId: line.id, from: current, to: canonical, reason: 'Scope name normalised' };
     return {
       itemId: line.id, from: current, to: target,
@@ -129,4 +135,15 @@ export function resolvedRoomId(
 ): string {
   const move = reassignmentFor(line, bankItem, roomNames);
   return move ? move.to : (line.roomId || '').trim();
+}
+
+/**
+ * The update for a person moving a line to a room or a scope.
+ *
+ * A scope picked by hand is marked as chosen so it stays where it was put; a
+ * room clears the mark, since a room is never re-classified anyway.
+ */
+export function roomChoice(value: string | undefined): Pick<BoqItem, 'roomId' | 'scopeChosen'> {
+  const roomId = !value || value === 'Unassigned' ? undefined : value;
+  return { roomId, scopeChosen: isScopeBucket(roomId) };
 }
