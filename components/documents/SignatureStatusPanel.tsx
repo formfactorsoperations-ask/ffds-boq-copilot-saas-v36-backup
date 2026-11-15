@@ -6,7 +6,7 @@
  * outside the client portal.
  *
  * Before this, four different pages (Terms Docket, Execution Agreement,
- * Handover Docket, and the Level 3 contract view) each carried their own
+ * Handover Docket, and the since-retired Level 3 contract view) each carried their own
  * signing widget: their own status banner, their own "send email link" flow,
  * their own manual-override wiring, and in Execution Agreement's case, its own
  * in-person signing pad. Four implementations of the same idea, none of them

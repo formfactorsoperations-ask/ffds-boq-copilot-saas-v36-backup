@@ -18,7 +18,6 @@ import ClientSnapshot from './ClientSnapshot';
 import ClientOptions from './ClientOptions';
 import ClientRoomwise from './ClientRoomwise';
 import ClientMaterialSpecs from './ClientMaterialSpecs';
-import ClientLevel3Contract from './ClientLevel3Contract';
 import ClientMaterials from './ClientMaterials';
 import ClientBookletProposal from './ClientBookletProposal';
 import { useOrg } from '../../contexts/OrgContext';
@@ -185,9 +184,8 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
     };
 
     const isL2 = level === 'LEVEL_2';
-    const isL3 = level === 'LEVEL_3'; 
-    
-    // L3 is the contract: the approved tier.
+
+    // The approved option (the first one until an option is approved).
     const approvedTier = tiers.find(t => t.id === projectContext.approvedTierId) || tiers[0];
     // L2 is written for the option the studio picked, approved or not (lib/proposalOption.ts).
     const l2 = proposalOption(tiers, projectContext);
@@ -254,7 +252,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
         }
     };
 
-    if (proposalFormat === 'booklet' && !isL3) {
+    if (proposalFormat === 'booklet') {
         return (
             <ClientBookletProposal
                 tiers={tiers}
@@ -286,7 +284,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
 
 
             {/* L1: CONCEPT VIEW */}
-            {!isL2 && !isL3 && (
+            {!isL2 && (
                 <>
                     {visibleSections.cover && (
                         <SectionWrapper id="cover" onEdit={onEditSection}>
@@ -523,86 +521,29 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                 </>
             )}
 
-            {/* L3: CONTRACT VIEW */}
-            {isL3 && (
-                <div className="bg-slate-100 py-8">
-                    <ClientLevel3Contract 
-                        projectId={projectContext.id}
-                        setProjectContext={props.setProjectContext}
-                        tier={approvedTier} 
-                        projectContext={projectContext} 
-                        fullBoq={approvedTier?.fullBoq || []} 
-                        timelinePhases={timelinePhases} 
-                        paymentMilestones={paymentMilestones} 
-                        settings={settings}
-                    />
-                </div>
-            )}
-
             {/*
-              The terms page. Levels 1 to 2 print the Luxe Booklet's Annexure A —
+              The terms page. Every level prints the Luxe Booklet's Annexure A —
               its Commercial Terms & Conditions, with the studio's edits to them —
-              so the two formats never hand the client different terms. Level 3 is
-              the contract, which carries its own.
+              so the two formats never hand the client different terms.
+
+              Level 3 (an older execution contract inside the proposal) was
+              retired: the Integrated Execution Agreement at stage 4 is the one
+              contract the studio uses.
             */}
-            {!isL3 && (
-                <div id="terms" className="page-break-before rounded-3xl border border-slate-200 bg-white p-8 md:p-12 print-only-block hidden print:block">
-                    <ClientBookletProposal
-                        termsOnly
-                        tiers={tiers}
-                        projectContext={projectContext}
-                        timelinePhases={timelinePhases}
-                        programme={props.programme}
-                        paymentMilestones={paymentMilestones}
-                        level={level}
-                        settings={settings}
-                        paymentStructure={paymentStructure}
-                        isClientViewOnly
-                    />
-                </div>
-            )}
-
-            {isL3 && (
             <div id="terms" className="page-break-before rounded-3xl border border-slate-200 bg-white p-8 md:p-12 print-only-block hidden print:block">
-                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Annexure A</div>
-                <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 border-b-2 border-[#334486] pb-4">Standard Terms & Conditions</h2>
-                
-                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-12 text-xs text-slate-600 leading-relaxed">
-                    <div className="space-y-6">
-                        <div>
-                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">1. Validity of Proposal</h4>
-                            <p>This proposal is valid for {settings?.clientPortalConfig?.validityDays || 15} days from the date of issue. Prices are subject to change based on market fluctuations in raw material costs beyond this period.</p>
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">2. Scope of Work</h4>
-                            <p>The scope is limited to the items explicitly mentioned in the "Room-wise Breakdown". Any additional work requested during execution will be billed separately as "Extra Items" at prevailing rates.</p>
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">3. Payment Terms</h4>
-                            <p>Work will proceed only upon receipt of payments as per the agreed milestone schedule. Delays in payment may lead to site stoppage and revision of the handover date.</p>
-                        </div>
-                    </div>
-                    <div className="space-y-6">
-                        <div>
-                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">4. Design Approvals</h4>
-                            <p>All designs, material selections, and drawings must be signed off by the client before production begins. Changes requested after sign-off may incur additional costs and time.</p>
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">5. Site Access & Utilities</h4>
-                            <p>The client must ensure continuous access to the site, along with provision for electricity and water required for execution. Any society/government permissions are the client's responsibility unless mentioned otherwise.</p>
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-slate-900 uppercase tracking-wide mb-2">6. Warranty</h4>
-                            <p>{orgData?.orgName || 'The Studio'} provides a 5-year limited warranty on modular carpentry and a 1-year service warranty on general contracting work. Manufacturer warranties apply for hardware and appliances.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="mt-12 p-6 bg-slate-50 rounded-2xl border border-slate-200 text-[10px] text-slate-500 italic">
-                    Note: This document is a digital proposal generated by {settings.companyName}. Upon acceptance, a formal legal contract will be executed on stamp paper incorporating these terms.
-                </div>
+                <ClientBookletProposal
+                    termsOnly
+                    tiers={tiers}
+                    projectContext={projectContext}
+                    timelinePhases={timelinePhases}
+                    programme={props.programme}
+                    paymentMilestones={paymentMilestones}
+                    level={level}
+                    settings={settings}
+                    paymentStructure={paymentStructure}
+                    isClientViewOnly
+                />
             </div>
-            )}
 
             {/* Footer */}
             <div className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-slate-400 py-12 text-center print:hidden">

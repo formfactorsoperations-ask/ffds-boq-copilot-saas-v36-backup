@@ -88,12 +88,20 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
   }, [bank, projectContext?.adHocItems]);
 
   /*
-    A design-only proposal is one document: Level 1, classic. Levels 1.5 to 3
+    A design-only proposal is one document: Level 1, classic. Levels 1.5 and 2
     and the Luxe Booklet are built on a priced BOQ and a turnkey execution
     contract, which a design-only project does not have.
   */
   const feeOnlyProposal = isFeeOnly(engagementOf(projectContext));
-  const proposalLevel = feeOnlyProposal ? 'LEVEL_1' : (projectContext?.activeProposalLevel || 'LEVEL_1');
+  /*
+    Level 3 (an execution contract inside the proposal) was retired in favour of
+    the Integrated Execution Agreement at stage 4. A project last left on it
+    opens on Level 2, the priced plan it was built from.
+  */
+  const storedLevel = projectContext?.activeProposalLevel;
+  const proposalLevel: ProposalLevel = feeOnlyProposal
+    ? 'LEVEL_1'
+    : storedLevel === 'LEVEL_3' ? 'LEVEL_2' : (storedLevel || 'LEVEL_1');
   /*
     The proposal follows the project's engagement (Project setup), so the
     proposal, Money and the agreement describe the same job. It used to be a
@@ -434,12 +442,10 @@ const MODEL_SWITCHER = [
         if (activeMode === 'TURNKEY') {
             if (proposalLevel === 'LEVEL_1') return `Turnkey_Proposal_L1_Design_Overview_${safeProjectName}`;
             if (proposalLevel === 'LEVEL_2') return `Turnkey_Proposal_L2_Design_Cost_Plan_${safeProjectName}`;
-            if (proposalLevel === 'LEVEL_3') return `Turnkey_Proposal_L3_Final_Scope_Execution_${safeProjectName}`;
         } else if (activeMode === 'DESIGN_ONLY') {
             if (proposalLevel === 'LEVEL_1') return `Design_PMC_L1_Design_Overview_${safeProjectName}`;
             // Fallbacks for Design Only levels not explicitly named in prompt
             if (proposalLevel === 'LEVEL_2') return `Design_PMC_L2_Planning_${safeProjectName}`;
-            if (proposalLevel === 'LEVEL_3') return `Design_PMC_L3_Agreement_${safeProjectName}`;
         }
         
         return `${activeMode}_${proposalLevel}_${safeProjectName}`;
@@ -625,12 +631,6 @@ const MODEL_SWITCHER = [
                         >
                             Level 2: Planning
                         </button>
-                        <button 
-                            onClick={() => setProposalLevel('LEVEL_3')}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${proposalLevel === 'LEVEL_3' ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
-                        >
-                            Level 3: Execution
-                        </button>
                         </>)}
                      </div>
 
@@ -664,7 +664,7 @@ const MODEL_SWITCHER = [
                                      <span>Show Scope Pricing & Total</span>
                                  </label>
                              )}
-                             {proposalLevel !== 'LEVEL_3' && !feeOnlyProposal && (
+                             {!feeOnlyProposal && (
                                  <div className="flex bg-white rounded-lg p-1 border border-slate-300 shadow-sm gap-1 self-stretch md:self-auto">
                                  <button
                                  onClick={() => setProposalFormat('classic')}

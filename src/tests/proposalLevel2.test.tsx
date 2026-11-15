@@ -286,3 +286,18 @@ describe('Level 2 scope: the line under each item', () => {
     expect(screen.getByText('As Actuals')).toBeTruthy();
   });
 });
+
+describe('Level 3 is retired', () => {
+  it('offers Levels 1, 1.5 and 2 only', () => {
+    render(<Harness ctx={{ activeProposalLevel: 'LEVEL_1' }} />);
+    expect(screen.getByText('Level 1: Concept')).toBeTruthy();
+    expect(screen.getByText('Level 2: Planning')).toBeTruthy();
+    expect(screen.queryByText('Level 3: Execution')).toBeNull();
+  });
+
+  it('opens a project saved on Level 3 as Level 2, without the old contract', () => {
+    render(<Harness ctx={{ activeProposalLevel: 'LEVEL_3' }} />);
+    expect(optionPicker()).toBeTruthy(); // the Level 2 option picker is showing
+    expect(document.body.textContent).not.toMatch(/Level 3/);
+  });
+});

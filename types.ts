@@ -120,6 +120,7 @@ export type ProposalType = 'TURNKEY' | 'DESIGN_ONLY';
 
 export type ProjectStatus = 'lead' | 'draft' | 'proposal_sent' | 'negotiation' | 'won' | 'execution' | 'work_paused' | 'completed' | 'lost';
 
+/** LEVEL_3 (the old execution contract inside the proposal) is retired; it stays here only so saved projects still load, and opens as LEVEL_2. */
 export type ProposalLevel = 'LEVEL_1' | 'LEVEL_1_5' | 'LEVEL_2' | 'LEVEL_3';
 
 export interface Room {
