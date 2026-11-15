@@ -6,7 +6,7 @@ import { ProjectSchedule, ScheduleGate, ScheduleHold, ProjectContext } from '../
 import WavyText from './ui/WavyText';
 import { StepDeliverableChecklist } from './studio/StepDeliverableChecklist';
 import {
-  computeSchedule, varianceReport, daysLostByReason, ineffectiveHolds, holdImpact,
+  computeSchedule, programmeSpanDays, varianceReport, daysLostByReason, ineffectiveHolds, holdImpact,
   freezeBaseline, setTaskProgress, reorderTaskInLane, toDayNum, toISO, isWorkingDay, weekdayOf, GATE_LABEL,
   workingDaysBetween, DEFAULT_CALENDAR, isHandoverTask, isDesignGateTask, gateHeldChain, releaseBeforeGate,
   planStartAt, nextWorkingDay, type StartPlan,
@@ -346,12 +346,8 @@ export default function ScheduleGantt({
     return toISO(Math.max(...result.tasks.map(t => t.plannedEndDay)));
   }, [result.tasks]);
 
-  const totalProjectDays = useMemo(() => {
-    if (!result.startISO || !plannedFinishISO) return 0;
-    const start = new Date(result.startISO).getTime();
-    const finish = new Date(plannedFinishISO).getTime();
-    return Math.ceil((finish - start) / (1000 * 60 * 60 * 24)) + 1;
-  }, [result.startISO, plannedFinishISO]);
+  // Shared with the Timeline's pre-generation preview, so the two always agree.
+  const totalProjectDays = useMemo(() => programmeSpanDays(result), [result]);
 
   const byDay = useMemo(() => markersByDay(schedule.markers || []), [schedule.markers]);
   const variance = useMemo(() => varianceReport(result), [result]);

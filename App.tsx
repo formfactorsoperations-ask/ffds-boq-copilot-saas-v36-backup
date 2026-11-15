@@ -3761,6 +3761,8 @@ export default function App() {
                           timelinePhases={timelinePhases}
                           setTimelinePhases={setTimelinePhases}
                           projectContext={projectContext}
+                          projectId={activeInternalId || (projectContext as any).id || ''}
+                          programmeBoq={activeProject ? executionBoq : fullBoqForActiveTier}
                           decisionBrainOutput={decisionBrainOutput}
                           leadProfile={leadProfile}
                           setProjectContext={setProjectContext}
@@ -4494,6 +4496,8 @@ export default function App() {
                           timelinePhases={timelinePhases}
                           setTimelinePhases={setTimelinePhases}
                           projectContext={projectContext}
+                          projectId={activeInternalId || (projectContext as any).id || ''}
+                          programmeBoq={activeProject ? executionBoq : fullBoqForActiveTier}
                           decisionBrainOutput={decisionBrainOutput}
                           leadProfile={leadProfile}
                           setProjectContext={setProjectContext}

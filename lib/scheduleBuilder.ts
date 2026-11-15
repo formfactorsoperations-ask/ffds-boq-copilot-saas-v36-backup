@@ -1,7 +1,10 @@
 import {
   ProjectSchedule, ScheduleTask, ProjectContext, FullBoqItem, WorkCalendar,
 } from '../types';
-import { DEFAULT_CALENDAR, toISO, toDayNum, laneOrder, isDesignGateTask, isHandoverTask } from './schedule';
+import {
+  DEFAULT_CALENDAR, toISO, toDayNum, laneOrder, isDesignGateTask, isHandoverTask,
+  nextWorkingDay, workSpanEnd, workingDaysBetween, computeSchedule, programmeSpanDays,
+} from './schedule';
 import { engagementOf } from './engagement';
 
 // ============================================================================
@@ -34,14 +37,91 @@ const tradeOf = (cat: string): string => {
   return hit ? hit.trade : 'Other works';
 };
 
-/**
- * Working days for a trade, scaled by its share of the BOQ value.
- *
- * A rough first pass on purpose: the studio corrects these, and a wrong
- * duration that is visible and editable beats an invisible assumption.
- */
-const durationFor = (share: number, totalWorkDays: number): number =>
-  Math.max(3, Math.round(share * totalWorkDays));
+/*
+  Working days split across stages so they add up to the total asked for.
+  Each stage's weight is its trade's share of the BOQ value times its share of
+  that trade -- a rough first pass on purpose: a wrong duration that is visible
+  and editable beats an invisible assumption.
+
+  Each stage used to be rounded on its own and then floored at 2 days (and its
+  trade at 3), so a 75-day site programme came out at 85 or more: every stage
+  rounded up a little and nothing took it back. Largest remainders hand out
+  the leftover days instead, so the stages sum to `total` whenever there are
+  enough days for every stage to get its minimum.
+*/
+export function splitWorkDays(weights: number[], total: number, min = 2): number[] {
+  if (!weights.length) return [];
+  const sum = weights.reduce((a, b) => a + Math.max(0, b), 0);
+  const raw = weights.map(w => (sum > 0 ? Math.max(0, w) / sum : 1 / weights.length) * total);
+  const days = raw.map(r => Math.max(min, Math.floor(r)));
+  let left = total - days.reduce((a, b) => a + b, 0);
+  const byRemainder = raw
+    .map((r, i) => ({ i, rem: r - Math.floor(r) }))
+    .sort((a, b) => b.rem - a.rem || a.i - b.i);
+  for (let k = 0; left > 0; k++, left--) days[byRemainder[k % days.length].i]++;
+  // The minimums overshot: take the excess back from the longest stages.
+  while (left < 0) {
+    let longest = -1;
+    days.forEach((d, i) => { if (d > min && (longest < 0 || d > days[longest])) longest = i; });
+    if (longest < 0) break;
+    days[longest]--;
+    left++;
+  }
+  return days;
+}
+
+/** What sized the site programme, so the Timeline can say why it is as long as it is. */
+export interface SiteSizing {
+  workDays: number;
+  areaSqFt: number;
+  rooms: number;
+  scopes: { civil: boolean; carpentry: boolean; services: boolean; painting: boolean };
+}
+
+/*
+  How many working days the site takes, from the size of the home and what is
+  being built.
+
+  This replaces a flat 75 days for every project, which gave a 650 sq ft
+  repaint the same programme as a 3,000 sq ft villa. The shape is the one the
+  old "smart" builder in the Timeline already used -- a base, more for area and
+  rooms, more for each kind of work in the BOQ -- so there is one rule, here,
+  for every way a timeline gets made. It is a starting point: the studio edits
+  the bars.
+*/
+export function estimateSiteWorkDays(
+  projectContext: Partial<ProjectContext> | undefined,
+  boq: FullBoqItem[] = [],
+): SiteSizing {
+  const ctx: any = projectContext || {};
+  const roomsList: any[] = Array.isArray(ctx.rooms) ? ctx.rooms : [];
+  const measured = roomsList.reduce((sum, r) => sum + (Number(r?.size) || 0), 0);
+  const areaSqFt = Number(ctx.area) > 0 ? Number(ctx.area) : measured > 0 ? measured : 1000;
+
+  const live = boq.filter(i => ((i as any).qty ?? (i as any).quantity ?? 1) > 0);
+  const boqRooms = new Set(live.map(i => (i as any).room || (i as any).roomName).filter(Boolean));
+  const rooms = roomsList.length || boqRooms.size || 3;
+
+  const trades = new Set(live.map(i => tradeOf((i as any).cat || (i as any).category || '')));
+  // No BOQ yet: plan for a full turnkey job rather than an empty one.
+  const all = live.length === 0;
+  const scopes = {
+    civil: all || trades.has('Civil & Demolition'),
+    carpentry: all || trades.has('Carpentry'),
+    services: all || trades.has('Plumbing') || trades.has('Electrical'),
+    painting: all || trades.has('Painting & Finishing'),
+  };
+
+  let days = 25;
+  days += Math.max(0, Math.round((areaSqFt - 500) / 100));
+  days += Math.max(0, rooms - 4);
+  if (scopes.civil) days += 5;
+  if (scopes.carpentry) days += 10;
+  if (scopes.services) days += 5;
+  if (scopes.painting) days += 3;
+
+  return { workDays: Math.min(120, Math.max(25, days)), areaSqFt, rooms, scopes };
+}
 
 /*
   The canonical build sequence, at module scope so it has two readers.
@@ -104,7 +184,8 @@ export function buildScheduleFromProject(
   });
 
   const totalValue = [...byTrade.values()].reduce((a, b) => a + b, 0);
-  const totalWorkDays = opts.executionWorkDays ?? 75;   // ~15 weeks, mid of the studio's own range
+  // Sized from the home and its scope (estimateSiteWorkDays), unless the caller says otherwise.
+  const totalWorkDays = opts.executionWorkDays ?? estimateSiteWorkDays(projectContext, boq).workDays;
 
   const ordered = TRADE_ORDER
     .map(t => t.trade)
@@ -218,11 +299,16 @@ export function buildScheduleFromProject(
     a BOQ, including a design-only project moved to turnkey.
   */
   const tradeCount = new Set(activeTemplates.map(t => t.trade)).size;
-  activeTemplates.forEach(template => {
-    const tradeValue = byTrade.get(template.trade) || 0;
-    const share = totalValue > 0 ? tradeValue / totalValue : 1 / Math.max(1, tradeCount);
-    const totalTradeDuration = durationFor(share, totalWorkDays);
-    const stageDuration = Math.max(2, Math.round(template.share * totalTradeDuration));
+  const stageDays = splitWorkDays(
+    activeTemplates.map(template => {
+      const tradeValue = byTrade.get(template.trade) || 0;
+      const share = totalValue > 0 ? tradeValue / totalValue : 1 / Math.max(1, tradeCount);
+      return share * template.share;
+    }),
+    totalWorkDays,
+  );
+  activeTemplates.forEach((template, index) => {
+    const stageDuration = stageDays[index];
 
     const id = `exec-${template.id}`;
     const directDeps = findActivePredecessors(template.id);
@@ -473,4 +559,260 @@ export function sequenceWarnings(tasks: ScheduleTask[]): SequenceWarning[] {
 export function newSequenceWarnings(before: ScheduleTask[], after: ScheduleTask[]): SequenceWarning[] {
   const known = new Set(sequenceWarnings(before).map(w => `${w.taskId}>${w.afterId}`));
   return sequenceWarnings(after).filter(w => !known.has(`${w.taskId}>${w.afterId}`));
+}
+
+// ---------------------------------------------------------------------------
+// Generating from the studio's process template
+// ---------------------------------------------------------------------------
+
+export interface TemplateStep { stepNumber: number; title: string; defaultDuration?: number }
+
+/**
+ * The phases "Generate via Studio Template" writes: each process step, back to
+ * back from the kickoff, on working days. Pure, so the preview on the empty
+ * Timeline and the generator itself are the same calculation.
+ */
+export function templatePhases(kickoffISO: string, steps: TemplateStep[] = []) {
+  let from = toDayNum(kickoffISO.slice(0, 10));
+  return steps.map(step => {
+    const durationDays = step.defaultDuration || 14;
+    const startDay = nextWorkingDay(DEFAULT_CALENDAR, from);
+    const endDay = workSpanEnd(DEFAULT_CALENDAR, startDay, durationDays);
+    from = endDay + 1;
+    return {
+      stepNumber: step.stepNumber,
+      title: step.title,
+      startDate: toISO(startDay) + 'T00:00:00.000Z',
+      endDate: toISO(endDay) + 'T23:59:59.000Z',
+      durationDays,
+    };
+  });
+}
+
+/**
+ * A programme as the proposal, the agreement and the Timeline all state it.
+ * Working days exclude Sundays and holidays; plain days are calendar days,
+ * counted the way the Gantt's Total Duration counts them.
+ */
+export interface ProgrammeSummary {
+  /** saved: the studio's saved schedule. timeline: generated phases. estimate: what Generate would produce. */
+  source: 'saved' | 'timeline' | 'estimate';
+  startISO: string | null;
+  designGateISO: string | null;
+  finishISO: string | null;
+  /** Working days from the first design step to the end of the last one. */
+  designWorkDays: number;
+  /** Working days after design, to handover. 0 for a design-only project. */
+  siteWorkDays: number;
+  /** Calendar days, start to handover, both ends counted. */
+  totalDays: number;
+  /** Calendar days of design, from the start to the end of the last design step. */
+  designDays: number;
+  /** Calendar days after design, to handover. */
+  siteDays: number;
+  /** The site tasks, as the proposal's stage cards read them (lib/programmeStages). */
+  sitePhases: { id: string; phaseName: string; startDay: number; durationDays: number }[];
+}
+
+export function summariseProgramme(
+  schedule: ProjectSchedule,
+  source: ProgrammeSummary['source'],
+  projectContext?: ProjectContext,
+  todayISO?: string,
+): ProgrammeSummary {
+  const result = computeSchedule(schedule, todayISO);
+  const cal = schedule.calendar || DEFAULT_CALENDAR;
+  const startDay = result.startISO ? toDayNum(result.startISO) : null;
+  const gate = result.tasks.find(isDesignGateTask);
+  const finishDay = result.tasks.length ? Math.max(...result.tasks.map(t => t.plannedEndDay)) : null;
+  const designOnly = engagementOf(projectContext) === 'design_only';
+  const designEnds = result.tasks.filter(t => t.kind === 'design').map(t => t.plannedEndDay);
+  const designEnd = designEnds.length ? Math.max(...designEnds) : null;
+  const totalDays = programmeSpanDays(result);
+  const designDays = startDay !== null && designEnd !== null ? designEnd - startDay + 1 : 0;
+  return {
+    source,
+    startISO: result.startISO,
+    designGateISO: gate ? toISO(gate.plannedEndDay) : null,
+    finishISO: finishDay !== null ? toISO(finishDay) : null,
+    designWorkDays: startDay !== null && designEnd !== null ? workingDaysBetween(cal, startDay, designEnd) : 0,
+    siteWorkDays: !designOnly && designEnd !== null && finishDay !== null
+      ? workingDaysBetween(cal, designEnd + 1, finishDay)
+      : 0,
+    totalDays,
+    designDays,
+    siteDays: designOnly ? 0 : Math.max(0, totalDays - designDays),
+    sitePhases: designOnly || startDay === null ? [] : result.tasks
+      .filter(t => t.kind === 'execution')
+      .sort((a, b) => a.plannedStartDay - b.plannedStartDay)
+      .map(t => ({ id: t.id, phaseName: t.title, startDay: t.plannedStartDay - startDay, durationDays: t.workDays })),
+  };
+}
+
+export interface ProgrammePreview extends ProgrammeSummary {
+  sizing: SiteSizing;
+}
+
+/*
+  What the Timeline will show once it is generated, before it is.
+
+  The empty Timeline promised "~63 days" by adding up the process template's
+  step durations, three of which are site steps the builder replaces with the
+  BOQ's trades. The chart then showed 128. This runs the real pipeline --
+  template phases, buildScheduleFromProject, computeSchedule -- so the promise
+  and the chart cannot disagree.
+*/
+export function previewTemplateProgramme(
+  projectContext: ProjectContext | undefined,
+  boq: FullBoqItem[],
+  kickoffISO: string,
+  steps: TemplateStep[],
+  todayISO?: string,
+): ProgrammePreview {
+  const designSteps = templatePhases(kickoffISO, steps);
+  const schedule = buildScheduleFromProject(projectContext, boq, { designSteps });
+  return {
+    ...summariseProgramme(schedule, 'estimate', projectContext, todayISO),
+    sizing: estimateSiteWorkDays(projectContext, boq),
+  };
+}
+
+/*
+  A saved schedule with its design tasks brought up to date from the design
+  phases -- the same sync the Timeline runs when it opens (TimelineTab), so a
+  schedule saved before the design dates last moved reads as the chart will.
+*/
+export function withDesignPhases(
+  schedule: ProjectSchedule,
+  phases: { stepNumber: number; startDate?: string; durationDays?: number }[] = [],
+): ProjectSchedule {
+  if (!phases.length) return schedule;
+  let changed = false;
+  const tasks = schedule.tasks.map(t => {
+    if (t.kind !== 'design') return t;
+    const phase = phases.find(p => p.stepNumber === parseInt(t.id.replace('design-', ''), 10));
+    if (!phase) return t;
+    const workDays = Math.max(1, phase.durationDays || 5);
+    const notBeforeISO = phase.startDate?.slice(0, 10);
+    if (t.workDays === workDays && t.notBeforeISO === notBeforeISO) return t;
+    changed = true;
+    return { ...t, workDays, notBeforeISO };
+  });
+  return changed ? { ...schedule, tasks } : schedule;
+}
+
+/*
+  The project's programme, whichever stage the Timeline is at -- the one figure
+  the proposal and the Execution Agreement state.
+
+  The same order the Timeline itself uses: the studio's saved schedule first,
+  then the schedule derived from generated phases, and before anything has been
+  generated, exactly what "Generate" would produce. The proposal used to carry
+  its own guesses (14 design days, 45-90 by BHK) and the agreement a flat 60,
+  none of which matched the chart.
+*/
+export function resolveProjectProgramme(input: {
+  projectContext: ProjectContext | undefined;
+  boq: FullBoqItem[];
+  saved?: ProjectSchedule | null;
+  phases?: { stepNumber: number; title: string; startDate?: string; endDate?: string; durationDays?: number }[];
+  steps?: TemplateStep[];
+  kickoffISO?: string;
+  todayISO?: string;
+}): ProgrammeSummary {
+  const { projectContext, boq, saved, phases = [], steps = [], todayISO } = input;
+  const fromSaved = scheduleForEngagement(saved || null, projectContext);
+  if (fromSaved && fromSaved.tasks?.length) {
+    return summariseProgramme(withDesignPhases(fromSaved, phases), 'saved', projectContext, todayISO);
+  }
+  if (phases.length) {
+    return summariseProgramme(
+      buildScheduleFromProject(projectContext, boq, { designSteps: phases }), 'timeline', projectContext, todayISO,
+    );
+  }
+  const kickoff = (input.kickoffISO || todayISO || toISO(Math.floor(Date.now() / 86400000))).slice(0, 10);
+  const designSteps = steps.length ? templatePhases(kickoff, steps) : undefined;
+  return summariseProgramme(
+    buildScheduleFromProject(projectContext, boq, { designSteps }), 'estimate', projectContext, todayISO,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The programme in the proposal's five phases
+// ---------------------------------------------------------------------------
+
+/* The proposal's phases, in order, and which site stages each one covers. */
+const PROPOSAL_PHASES: { phaseName: string; description: string; stages: string[] }[] = [
+  {
+    phaseName: 'Site Setup & Rough-ins',
+    description: 'Site mobilization, surface protection laying, demolition/civil alterations, and plumbing/electrical cabling rough-ins.',
+    stages: ['site-prelims', 'civil-demolition', 'plumb-concealed', 'elec-conduit'],
+  },
+  {
+    phaseName: 'Structure & Utilities',
+    description: 'Flooring, false ceiling framing and boarding, wiring, and plywood carcass assembly.',
+    stages: ['flooring-tiling', 'ceiling-framing', 'elec-wiring', 'ceiling-boarding', 'carp-carcass'],
+  },
+  {
+    phaseName: 'Finishes & Surfaces',
+    description: 'Wall putty, priming and first coats, laminates, shutters and hardware.',
+    stages: ['paint-first', 'carp-shutters'],
+  },
+  {
+    phaseName: 'Final Handover',
+    description: 'Electrical fixture fits, sanitary fittings, final paint coat, deep cleaning, snag list closure, and handover.',
+    stages: ['elec-final', 'plumb-fixtures', 'paint-final', 'other-works'],
+  },
+];
+
+/**
+ * The programme as the proposal's phase list (Design & Planning, then up to
+ * four site phases), in calendar days laid end to end: day 1 is the start, and
+ * the phases add up to `totalDays`, the Timeline's Total Duration.
+ *
+ * Every part of the proposal that quotes a duration -- the snapshot, the
+ * booklet, the schedule section -- reads this list, so they all state the
+ * Timeline's figure rather than guesses of their own. Stages the studio added
+ * by hand join the phase of the stage before them.
+ */
+export function programmeAsProposalPhases(p: ProgrammeSummary): {
+  phaseName: string; description: string; startDay: number; durationDays: number;
+}[] {
+  if (!p.totalDays) return [];
+  const design = {
+    phaseName: 'Design & Planning',
+    description: 'Comprehensive 3D visualizations, material selection, layout signing, and Good-for-Construction (GFC) drawings creation.',
+    startDay: 1,
+    durationDays: Math.max(1, Math.min(p.designDays || p.totalDays, p.totalDays)),
+  };
+  if (!p.sitePhases.length || design.durationDays >= p.totalDays) return [{ ...design, durationDays: p.totalDays }];
+
+  const phaseOf = (id: string): number | undefined => {
+    const stage = id.replace(/^exec-/, '');
+    const i = PROPOSAL_PHASES.findIndex(ph => ph.stages.includes(stage));
+    return i >= 0 ? i : undefined;
+  };
+  // First day (1-based) each phase begins on; a phase never starts before the one ahead of it.
+  const firstDay = new Map<number, number>();
+  let current = 0;
+  p.sitePhases.forEach(t => {
+    current = Math.max(current, phaseOf(t.id) ?? current);
+    const day = Math.max(design.durationDays + 1, t.startDay + 1);
+    if (!firstDay.has(current) || day < firstDay.get(current)!) firstDay.set(current, day);
+  });
+
+  const order = [...firstDay.keys()].sort((a, b) => a - b);
+  const starts = order.map(i => firstDay.get(i)!);
+  starts[0] = design.durationDays + 1; // site work follows design without a gap
+  for (let k = 1; k < starts.length; k++) starts[k] = Math.max(starts[k], starts[k - 1] + 1);
+
+  const site = order
+    .map((i, k) => ({
+      phaseName: PROPOSAL_PHASES[i].phaseName,
+      description: PROPOSAL_PHASES[i].description,
+      startDay: starts[k],
+      durationDays: (k + 1 < starts.length ? starts[k + 1] : p.totalDays + 1) - starts[k],
+    }))
+    .filter(ph => ph.durationDays > 0);
+  return [design, ...site];
 }

@@ -281,3 +281,43 @@ describe('Annexure F prints the signed BOQ\'s own specifications', () => {
     expect(screen.queryByText(/Details missing from bank/)).toBeNull();
   });
 });
+
+describe('Execution Agreement duration comes from the Timeline', () => {
+  // The screenshot project: 92 days on the Timeline, 21 + 53 of them working days.
+  const programme = { designDays: 24, siteDays: 68, totalDays: 92, designWorkDays: 21, siteWorkDays: 53, finishISO: '2027-02-15' };
+
+  it('uses the Timeline even over a duration typed in earlier', () => {
+    const typed = { ...ctx, executionAgreementOverrides: { estimatedDuration: '60' } };
+    expect(resolveAgreement(typed, { studioName: 'FFDS' }).estimatedDuration).toBe('60');
+    const a = resolveAgreement(typed, { studioName: 'FFDS', programme });
+    expect(a.estimatedDuration).toBe('53');
+    expect(a.programme).toEqual(programme);
+  });
+
+  it('states design + site = the total the Timeline shows, in one unit', () => {
+    const a = resolveAgreement(ctx, { studioName: 'FFDS', programme });
+    render(<ExecutionAgreementSheet agreement={a} studioName="FFDS" />);
+    expect(screen.getByText('92 Days, start to handover')).toBeTruthy();
+    expect(screen.getByText('Design 24 days + Site 68 days')).toBeTruthy();
+    expect(screen.getByText('Calendar days, as on the project Timeline')).toBeTruthy();
+    expect(screen.getByText(/estimated at 92 calendar days from project start to handover: approximately 24 days of design followed by 68 days of site work/)).toBeTruthy();
+    expect(programme.designDays + programme.siteDays).toBe(programme.totalDays);
+  });
+
+  it('keeps the breakdown in the issued copy', () => {
+    const a = resolveAgreement(ctx, { studioName: 'FFDS', programme });
+    const frozen = JSON.parse(JSON.stringify(a));
+    render(<ExecutionAgreementSheet agreement={frozen} studioName="FFDS" />);
+    expect(screen.getByText('92 Days, start to handover')).toBeTruthy();
+  });
+});
+
+describe('Execution Agreement does not print the internal project ID', () => {
+  it('shows no Project ID box or page-header ID; headers name the project instead', () => {
+    const a = resolveAgreement(ctx, { studioName: 'FFDS' });
+    render(<ExecutionAgreementSheet agreement={a} studioName="FFDS" projectId="mwgbg07n-1md0esg-3" />);
+    expect(document.body.textContent).not.toContain('mwgbg07n-1md0esg-3');
+    expect(document.body.textContent).not.toContain('Project ID');
+    expect(screen.getAllByText('Unique Vistas').length).toBeGreaterThan(1);
+  });
+});

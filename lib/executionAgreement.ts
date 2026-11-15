@@ -494,8 +494,25 @@ export interface ResolvedAgreement {
   boqTotal: number;
   agreementDate: string;
   estimatedDuration: string;
+  /**
+   * The programme the duration comes from: design and site working days, and
+   * calendar days from start to handover (the Timeline's Total Duration).
+   * Frozen into the issued copy with the rest of the agreement.
+   */
+  programme?: AgreementProgramme | null;
   commencementTrigger: string;
   placeOfSigning: string;
+}
+
+export interface AgreementProgramme {
+  /** Calendar days, as the Timeline counts them: design + site = total. */
+  designDays: number;
+  siteDays: number;
+  totalDays: number;
+  /** The same programme in working days (Sundays and holidays excluded), kept for the record. */
+  designWorkDays: number;
+  siteWorkDays: number;
+  finishISO?: string | null;
 }
 
 export const todayAgreementDate = () =>
@@ -512,15 +529,26 @@ export function resolveAgreement(
     defaultDuration?: number;
     /** The approved option (approvedOption), whose figures the agreement states. */
     option?: ApprovedOption | null;
+    /** The project's Timeline (useProjectProgramme). When given, the duration is its, not a typed one. */
+    programme?: AgreementProgramme | null;
   },
 ): ResolvedAgreement {
   const o = agreementOverrides(ctx);
   const parties = agreementParties(ctx, o);
   const { money, schedule } = agreementMoney(ctx, opts.tierSummary, o, opts.option);
   const boq = agreementBoqLines(opts.scopeLines || [], ctx, o);
-  const duration = o.estimatedDuration !== undefined && o.estimatedDuration !== ''
-    ? o.estimatedDuration
-    : (opts.defaultDuration ?? 60);
+  /*
+    The Timeline decides the duration. A number typed into the agreement used
+    to win over it for good, so the agreement and the chart drifted apart the
+    first time either changed. Without a programme (no studio session) the
+    typed or default figure still stands.
+  */
+  const programme = opts.programme && opts.programme.siteWorkDays > 0 ? opts.programme : null;
+  const duration = programme
+    ? programme.siteWorkDays
+    : o.estimatedDuration !== undefined && o.estimatedDuration !== ''
+      ? o.estimatedDuration
+      : (opts.defaultDuration ?? 60);
   return {
     parties,
     money,
@@ -533,6 +561,7 @@ export function resolveAgreement(
     boqTotal: R(boq.filter((l) => !l.asActuals).reduce((s, l) => s + l.amount, 0)),
     agreementDate: text(o.agreementDate) || todayAgreementDate(),
     estimatedDuration: String(duration),
+    programme,
     commencementTrigger: typeof o.commencementTrigger === 'string' ? o.commencementTrigger : 'Site Handover + Advance Clearance',
     placeOfSigning: typeof o.placeOfSigning === 'string' ? o.placeOfSigning : (parties.location || 'Thane'),
   };
