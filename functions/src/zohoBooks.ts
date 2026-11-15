@@ -12,6 +12,7 @@ import {
   ZohoError,
   ZohoSettings,
   exchangeGrantCode,
+  linkExistingInvoice,
   raiseDraftInvoice,
   revokeRefreshToken,
 } from "./zohoBooksApi";
@@ -29,6 +30,7 @@ import { isValidGstin, isZohoRegion, normaliseGstin, resolveState, validateNumbe
  *   saveSettings        numbering, HSN codes, item names, payment terms
  *   disconnect          forget the credentials and revoke the token
  *   searchContacts / getContact / createContact
+ *   listInvoices / linkInvoice   tie an invoice raised by hand in Zoho to a milestone
  *   pushInvoice         create ONE DRAFT invoice; never sends it
  *
  * Where the credentials live: `zohoBooksConnections/{tenantId}`, a top-level
@@ -316,6 +318,44 @@ export const zohoBooks = onCall(OPTS, async (request) => {
           },
         });
         logger.info("[zohoBooks] draft invoice", { tenantId, projectId, milestoneId, number: result.invoiceNumber, reused: result.reused });
+        return result;
+      }
+
+      case "listInvoices": {
+        requireRole(RAISERS, "look up Zoho invoices");
+        const conn = await requireConnected();
+        const api = apiFor(tenantId, conn);
+        const invoices = await api.customerInvoices(idPart(data.contactId, "customer"));
+        return { invoices: invoices.map((i) => ({ ...i, url: api.invoiceUrl(i.id) })) };
+      }
+
+      case "linkInvoice": {
+        requireRole(RAISERS, "link Zoho invoices");
+        const conn = await requireConnected();
+        const projectId = idPart(data.projectId, "project");
+        const milestoneId = idPart(data.milestoneId, "milestone");
+        const linkRef = (key: string) => db().doc(`zohoInvoiceLinks/${key}`);
+        const result = await linkExistingInvoice({
+          contactId: idPart(data.contactId, "customer"),
+          invoiceId: idPart(data.invoiceId, "invoice"),
+          expectedTotal: money(data.expectedTotal ?? 0, "Expected total"),
+        }, {
+          api: apiFor(tenantId, conn),
+          linkKey: `${tenantId}__${projectId}__${milestoneId}`,
+          links: {
+            get: async (key) => {
+              const s = await linkRef(key).get();
+              return s.exists ? (s.data() as LinkRecord) : null;
+            },
+            set: async (key, rec) => { await linkRef(key).set({ ...rec, tenantId, projectId, milestoneId, by: staff.email }); },
+            keyForInvoice: async (invoiceId, notKey) => {
+              const snap = await db().collection("zohoInvoiceLinks")
+                .where("tenantId", "==", tenantId).where("invoiceId", "==", invoiceId).limit(5).get();
+              return snap.docs.map((d) => d.id).find((id) => id !== notKey) || null;
+            },
+          },
+        });
+        logger.info("[zohoBooks] linked invoice", { tenantId, projectId, milestoneId, number: result.invoiceNumber, reused: result.reused });
         return result;
       }
 
