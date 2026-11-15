@@ -162,6 +162,11 @@ export async function revokeRefreshToken(fetchImpl: FetchFn, region: ZohoRegion,
   } catch { /* disconnecting must not hinge on Zoho answering */ }
 }
 
+/** "Mrs. Nivedita Jamnis" -> "Nivedita Jamnis". */
+export function stripTitle(name: string): string {
+  return name.trim().replace(/^(mr|mrs|ms|miss|dr|shri|smt|prof)\.?\s+/i, "").trim();
+}
+
 export class ZohoBooksApi {
   constructor(
     private conn: ZohoConnection,
@@ -218,13 +223,36 @@ export class ZohoBooksApi {
     return (json.organizations || []).map((o: any) => ({ id: String(o.organization_id), name: String(o.name || o.organization_id) }));
   }
 
+  /**
+   * Customers whose name contains what was typed, best match first.
+   *
+   * Zoho's `search_text` is not a name search on /contacts (it filters on
+   * GSTIN), so it handed back the first page of every customer A to Z and a new
+   * customer further down the alphabet could never be found. This searches the
+   * name itself, then without a title ("Mrs. ", "Dr. "), then by the longest
+   * word, so "Mrs. Nivedita Jamnis" still finds "Nivedita Jamnis" and the
+   * other way round.
+   */
   async searchContacts(query: string): Promise<{ id: string; name: string; company: string }[]> {
-    const json = await this.request("GET", "/contacts", {
-      query: { contact_type: "customer", search_text: query.slice(0, 100), per_page: 15, sort_column: "contact_name" },
-    });
-    return (json.contacts || []).map((c: any) => ({
-      id: String(c.contact_id), name: String(c.contact_name || ""), company: String(c.company_name || ""),
-    }));
+    const q = query.trim().replace(/\s+/g, " ").slice(0, 100);
+    if (!q) return [];
+    const bare = stripTitle(q);
+    const longest = bare.split(" ").filter((w) => w.length >= 3).sort((a, b) => b.length - a.length)[0] || "";
+    const tries = [...new Set([q, bare, longest].filter(Boolean))];
+    for (const t of tries) {
+      const json = await this.request("GET", "/contacts", {
+        query: { contact_type: "customer", contact_name_contains: t, per_page: 50, sort_column: "contact_name" },
+      });
+      const hits = (json.contacts || []).map((c: any) => ({
+        id: String(c.contact_id), name: String(c.contact_name || ""), company: String(c.company_name || ""),
+      }));
+      if (hits.length) {
+        const key = stripTitle(q).toLowerCase();
+        const rank = (n: string) => (stripTitle(n).toLowerCase() === key ? 0 : 1);
+        return hits.sort((a: { name: string }, b: { name: string }) => rank(a.name) - rank(b.name));
+      }
+    }
+    return [];
   }
 
   async getContact(id: string): Promise<{ id: string; name: string; gstin: string; placeOfContact: string; gstTreatment: string }> {

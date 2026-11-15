@@ -276,3 +276,48 @@ describe('tokens', () => {
     expect(saved.at(-1)?.accessToken).toMatch(/^AT-/);
   });
 });
+
+describe('finding a Zoho customer', () => {
+  // Zoho's /contacts ignores search_text as a name filter and hands back the
+  // whole list A to Z; contact_name_contains is what actually filters by name.
+  const people = ['ABC test client', 'Abha Sharma', 'Gauhar Siddiqui', 'Mr. Amit Naik', 'Mrs. Nivedita Jamnis', 'Nivedita Rao']
+    .map((n, i) => ({ contact_id: 'K' + i, contact_name: n, company_name: '' }));
+  const zoho = () => {
+    const calls: Record<string, string>[] = [];
+    const fetchImpl = async (url: string) => {
+      const u = new URL(url);
+      if (u.hostname.startsWith('accounts.')) return { ok: true, status: 200, json: async () => ({ access_token: 'a', expires_in: 3600 }) };
+      const q = Object.fromEntries(u.searchParams.entries());
+      calls.push(q);
+      const needle = (q.contact_name_contains || '').toLowerCase();
+      const contacts = people.filter((p) => p.contact_name.toLowerCase().includes(needle)).slice(0, Number(q.per_page) || 200);
+      return { ok: true, status: 200, json: async () => ({ code: 0, contacts }) };
+    };
+    return { calls, api: new ZohoBooksApi(conn(), store, fetchImpl, () => NOW.getTime()) };
+  };
+
+  it('finds a customer by name, wherever they sit in the alphabet', async () => {
+    const { api, calls } = zoho();
+    const hits = await api.searchContacts('Mrs. Nivedita Jamnis');
+    expect(hits.map((h) => h.name)).toEqual(['Mrs. Nivedita Jamnis']);
+    expect(calls[0].contact_name_contains).toBe('Mrs. Nivedita Jamnis');
+    expect(calls[0].search_text).toBeUndefined();
+  });
+
+  it('matches with or without a title like "Mrs."', async () => {
+    const { api } = zoho();
+    expect((await api.searchContacts('Nivedita Jamnis'))[0].name).toBe('Mrs. Nivedita Jamnis');
+    expect((await api.searchContacts('Ms. Nivedita Jamnis'))[0].name).toBe('Mrs. Nivedita Jamnis');
+  });
+
+  it('falls back to the longest word, exact match first', async () => {
+    const { api } = zoho();
+    const hits = await api.searchContacts('Nivedita J.');
+    expect(hits.map((h) => h.name)).toEqual(['Mrs. Nivedita Jamnis', 'Nivedita Rao']);
+  });
+
+  it('returns nothing rather than the whole list when no one matches', async () => {
+    const { api } = zoho();
+    expect(await api.searchContacts('Zzyzx Quill')).toEqual([]);
+  });
+});
