@@ -627,14 +627,14 @@ export default function ScopeWorkspace({
           />
 
           {/* The scope in force, or recording it */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs p-5 sm:p-6 sw-tilt">
+          {/* A Panel (DESIGN.md "Screen kit"): card title, one line, no eyebrow over a display heading. */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in">
             {!baseTier && (
-              <div className="flex items-start gap-4">
+              <div className="flex items-start gap-3">
                 <Ic3 icon={ShieldCheck} tint="slate" />
-                <div className="flex-1">
-                  <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">Signed scope</div>
-                  <h2 className="text-[22px] font-bold tracking-tight text-slate-900 mt-0.5">No approved version yet</h2>
-                  <p className="text-[13px] text-slate-600 mt-1 max-w-2xl">Build the BOQ in the BOQ Editor and approve a version in Versions. Once approved, it is recorded here as the Detailed BOQ — the scope the client agreed — and from then on it changes only through a signed Scope Revision.</p>
+                <div className="flex-1 min-w-0">
+                  <h2 className="font-bold text-slate-800">No signed scope yet</h2>
+                  <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">Approve a version of the BOQ first. It is then recorded here as the Detailed BOQ, the scope the client agreed, and from then on it changes only through a signed scope revision.</p>
                 </div>
               </div>
             )}
@@ -645,9 +645,8 @@ export default function ScopeWorkspace({
                   <Ic3 icon={FileText} />
                   <div className="flex-1 min-w-0 space-y-3">
                     <div>
-                      <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">Signed scope · step 1</div>
-                      <h2 className="text-[22px] font-bold tracking-tight text-slate-900 mt-0.5">Record {baseTier.name} as Detailed BOQ v1</h2>
-                      <p className="text-[13px] text-slate-600 mt-1 max-w-2xl">
+                      <h2 className="font-bold text-slate-800 flex flex-wrap items-center gap-2">Record {baseTier.name} as Detailed BOQ v1 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#3D52A0]/10 text-[#3D52A0]">Step 1</span></h2>
+                      <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">
                         {inr2(baseTotal)}. Its rates are frozen onto the lines first, so a later rate-bank edit can never move it; the check below refuses if freezing would change the price. After this the version is read-only.
                       </p>
                     </div>
@@ -698,11 +697,10 @@ export default function ScopeWorkspace({
                 <div className="flex items-start gap-4 flex-1 min-w-0">
                   <Ic3 icon={Lock} tint={v1Approved ? 'indigo' : 'gold'} />
                   <div className="min-w-0">
-                    <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#3D52A0]">Scope in force</div>
-                    <h2 className="text-[20px] font-bold tracking-tight text-slate-900 mt-0.5">
+                    <h2 className="font-bold text-slate-800">
                       Detailed BOQ v{vOf(v1)} {v1Approved ? 'is the agreed scope, so it is read-only' : 'is waiting for the client’s signature'}
                     </h2>
-                    <p className="text-[12.5px] text-slate-600 mt-1">
+                    <p className="text-xs text-slate-500 mt-0.5">
                       {v1.recordedApproval ? `Approved ${day(v1.recordedApproval.approvedAt)}` : v1.signedVia ? 'Approved with its scope revision' : stateOf(v1)} · {v1.reference} · <b className="text-slate-800">{inr2(v1.snapshot?.total)}</b>
                       {isFrozen(baseTier.boq, bankMap) ? ' · rates frozen' : ' · some rates still follow the bank'}.
                       {v1Approved && ' To change it, start a revision: the client approves the change (or you record that they agreed) before anything moves, and the payment schedule follows.'}

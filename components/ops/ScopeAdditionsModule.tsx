@@ -30,6 +30,7 @@ import { ScopeAdditionClassification } from '../../services/geminiService';
 import { calculateProjectFinancials } from '../../lib/financialsUtils';
 import { normaliseAddition, summariseScopeAdditions } from '../../lib/scopeAdditions';
 import ScopeAdditionsHeader from './ScopeAdditionsHeader';
+import { Panel as KitPanel, Button as KitButton } from '../ui/kit';
 import { jsPDF } from 'jspdf';
 import ScopeAdditionInvoiceDoc from '../client/ScopeAdditionInvoiceDoc';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
@@ -791,59 +792,27 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
 
     const isScopeAdditionsEnabled = projectContext.lifecycle?.gates?.designGateActive?.done || projectContext.scopeAdditionsEnabled;
     if (!isScopeAdditionsEnabled) {
+        /* A card in the kit's style, not a centred hero (DESIGN.md "Screen kit"). */
         return (
-            <div className="flex flex-col items-center justify-center p-10 max-w-2xl mx-auto my-12 text-center bg-white border border-slate-200 rounded-2xl shadow-sm">
-                <div className="w-16 h-16 bg-amber-50 border border-amber-100 rounded-full flex items-center justify-center text-amber-500 mb-6 shadow-inner">
-                    <Lock className="w-8 h-8" />
-                </div>
-                <h2 className="text-2xl font-bold text-slate-800 mb-3">Scope Additions Locked</h2>
-                <p className="text-slate-600 text-sm max-w-md mb-8 leading-relaxed">
-                    This module is designed to handle supplementary client requests and post-agreement changes. It is locked until the initial project design and budget are frozen.
-                </p>
-
-                {/* Integration Info Box */}
-                <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 text-left mb-8">
-                    <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50">
-                        <span className="text-[10px] font-bold tracking-wider text-[#3D52A0] uppercase block mb-1">Method 1 (Standard Operations)</span>
-                        <h4 className="font-bold text-slate-800 text-xs mb-1.5">Activate Design Complete Gate</h4>
-                        <p className="text-slate-500 text-[11px] leading-relaxed">
-                            Under <strong>Design & Proposals</strong> &gt; <strong>Design Complete</strong>, tick all items on the design closeout checklist and choose "Activate Design Gate". This automatically freezes the BOQ, shifts the project stage to Execution, and activates this module.
-                        </p>
+            <KitPanel
+                icon={Lock}
+                title="Scope additions open once the BOQ is frozen"
+                blurb="This is where the client's requests after the agreement are priced and invoiced. It stays closed until the design and budget are frozen."
+            >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-slate-200 p-4">
+                        <p className="text-sm font-semibold text-slate-800">The usual way: activate the Design Gate</p>
+                        <p className="text-xs text-slate-500 mt-1">In Agreement &amp; Design → Design Gate, clear the checklist and activate the gate. That freezes the BOQ, moves the project to Execution and opens this screen.</p>
                     </div>
-
-                    <div className="p-4 rounded-xl border border-sky-200 bg-sky-50/35">
-                        <span className="text-[10px] font-bold tracking-wider text-[#334486] uppercase block mb-1">Method 2 (Ops Sandbox Bypass)</span>
-                        <h4 className="font-bold text-slate-900 text-xs mb-1.5">Instant Execution Override</h4>
-                        <p className="text-sky-800/80 text-[11px] leading-relaxed">
-                            For administrators, sandbox users, and operations managers, click the toggle below to bypass the checklist gate, freeze the current BOQ snapshot in the cloud, and unlock the workspace immediately.
-                        </p>
+                    <div className="rounded-xl border border-slate-200 p-4">
+                        <p className="text-sm font-semibold text-slate-800">For admins: unlock it now</p>
+                        <p className="text-xs text-slate-500 mt-1">Skips the checklist, freezes the current BOQ and moves the project to Execution straight away.</p>
+                        <KitButton variant="primary" size="sm" className="mt-3" onClick={handleBypassUnlock} disabled={isUnlocking}>
+                            {isUnlocking ? 'Unlocking…' : 'Unlock now'}
+                        </KitButton>
                     </div>
                 </div>
-
-                {/* Bypass Trigger Button */}
-                <div className="w-full pt-4 border-t border-slate-100 flex flex-col items-center justify-center">
-                    <button
-                        onClick={handleBypassUnlock}
-                        disabled={isUnlocking}
-                        className="bg-[#3D52A0] hover:bg-[#334486] font-bold text-xs text-white px-6 py-3 rounded-xl transition duration-150 flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-98 disabled:opacity-50"
-                    >
-                        {isUnlocking ? (
-                            <>
-                                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                Unlocking Workspace...
-                            </>
-                        ) : (
-                            <>
-                                <Sparkles className="w-4 h-4 text-amber-200 animate-pulse" />
-                                Bypass Lock & Enable Module Now
-                            </>
-                        )}
-                    </button>
-                    <p className="text-[10px] text-slate-400 mt-2.5">
-                        * Clicking bypass will automatically transition this project to the 'Execution' stage and freeze the draft BOQ.
-                    </p>
-                </div>
-            </div>
+            </KitPanel>
         );
     }
 
@@ -857,7 +826,7 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
        screen a third of the page sat empty either side while the money was
        squeezed into a ribbon down the middle. */
     return (
-        <div className="w-full px-4 pb-10 space-y-6">
+        <div className="w-full pb-10 space-y-4">
 
             {/* Off-screen while it renders. Positioned rather than hidden,
                 because html2canvas cannot measure display:none. */}
