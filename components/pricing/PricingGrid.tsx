@@ -539,7 +539,7 @@ export default function PricingGrid(props: Props) {
                               className="w-full px-2 py-1 rounded-lg border border-slate-300 text-sm font-bold outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
                             />
                           ) : (
-                            <h3 className="font-bold text-slate-800 truncate" title="Double-click to rename" onDoubleClick={() => actions.startRename(t.id)}>{t.name}</h3>
+                            <h3 className="font-bold text-slate-800 line-clamp-2 break-words" title="Double-click to rename" onDoubleClick={() => actions.startRename(t.id)}>{t.name}</h3>
                           )}
                           {specLabel[t.id] && <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{specLabel[t.id]}</p>}
                         </div>

@@ -45,9 +45,9 @@ export const ProcurementGateWidget = ({
             }`}>
               <ShoppingBag className="w-4 h-4" />
             </div>
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest font-mono">Procurement & PO Gate</h3>
+            <h3 className="font-bold text-slate-800">Procurement & PO Gate</h3>
           </div>
-          <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+          <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
             e1Cleared 
               ? 'bg-emerald-50 border-emerald-150 text-emerald-700' 
               : 'bg-[#FAF9F5] border-[#ebdcb9]/45 text-[#B5945B]'
@@ -92,18 +92,18 @@ export const ProcurementGateWidget = ({
         {/* PO Compliance Metric Block */}
         <div className="grid grid-cols-2 gap-3 pt-1">
           <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block">Blocked POs</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Blocked POs</span>
             <span className={`text-base font-extrabold block mt-0.5 ${blockedCount > 0 ? 'text-amber-600' : 'text-slate-700'}`}>
               {blockedCount}
             </span>
-            <span className="text-[8px] text-slate-500 block mt-1 font-medium">Needs E1 Clearance</span>
+            <span className="text-[10px] text-slate-500 block mt-1 font-medium">Needs E1 Clearance</span>
           </div>
           <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block">Authorized POs</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Authorized POs</span>
             <span className="text-base font-extrabold text-slate-900 block mt-0.5">
               {releasedCount + orderedCount}
             </span>
-            <span className="text-[8px] text-slate-500 block mt-1 font-medium">Ready or Placed</span>
+            <span className="text-[10px] text-slate-500 block mt-1 font-medium">Ready or Placed</span>
           </div>
         </div>
       </div>

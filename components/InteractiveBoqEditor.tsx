@@ -508,7 +508,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
       <div className="flex-grow flex flex-col lg:flex-row gap-5 overflow-hidden min-h-0">
         
         {/* LEFT COLUMN: Premium Design Item Cards Deck (60% width) */}
-        <div className="w-full lg:w-[58%] bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col h-full overflow-hidden">
+        <div className="w-full lg:flex-1 lg:min-w-0 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col h-full overflow-hidden">
           
           {/* Header & Internal Filters */}
           <div className="p-3.5 border-b border-slate-100 bg-slate-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
@@ -618,12 +618,12 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                         )}
                         
                         {/* Compact Rate Tag */}
-                        <div className="text-[10px] text-slate-400 mt-1 font-medium flex items-center gap-1.5">
-                          <span>Unit Rate:</span>
-                          <strong className="tabular-nums text-slate-700">{formatCurrency(sellPrice)} / {item.unit}</strong>
+                        <div className="text-[10px] text-slate-400 mt-1 font-medium flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                          <span className="whitespace-nowrap">Unit rate:</span>
+                          <strong className="tabular-nums text-slate-700 whitespace-nowrap">{formatCurrency(sellPrice)} / {item.unit}</strong>
                           {finance && (<>
                           <span className="text-slate-200">|</span>
-                          <span className="text-slate-400 flex items-center gap-1.5 flex-wrap">
+                          <span className="text-slate-400 flex items-center gap-1.5 whitespace-nowrap">
                             Margin: <strong className="text-slate-700">{item.margin}%</strong>
                             <MarginDeviationIndicator margin={item.margin} />
                           </span>
@@ -720,7 +720,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
         </div>
 
         {/* RIGHT COLUMN: Contextual Inspector & Action Studio (42% width) */}
-        <div className="w-full lg:w-[42%] bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col h-full overflow-hidden">
+        <div className="w-full lg:w-[400px] xl:w-[460px] lg:shrink-0 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col h-full overflow-hidden">
           
           {/* INSPECTOR STATE A: Selected Item Specification Editor */}
           {activeSelectedItem ? (
