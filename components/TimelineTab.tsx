@@ -802,7 +802,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
       {/* 1. Header Toolbar */}
       <div className="bg-slate-50 border-b border-slate-200 p-4 md:px-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 -mt-6 -mx-6 mb-6 rounded-t-2xl">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-[#3D52A0]/10 text-[#3D52A0] rounded-xl border border-sky-200/50">
+          <div className="p-2 bg-[#3D52A0]/10 text-[#3D52A0] rounded-xl border border-[#3D52A0]/10">
             <Calendar className="w-5 h-5" />
           </div>
           <div>
@@ -966,7 +966,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
               */}
               {delayedCount > 0 && (
                 <div className="border-t border-red-100 px-4 py-2.5">
-                  <p className="text-[11.5px] text-red-900/80 leading-relaxed">
+                  <p className="text-xs text-red-900/80 leading-relaxed">
                     <span className="font-bold">Dated before today, not marked complete:</span>{' '}
                     {phases.filter(p => p.isDelayed).map(p => p.title).join(', ')}
                   </p>
@@ -1001,7 +1001,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                           ['Public holidays', `${compression.holidaysCount}d`],
                         ].map(([label, value]) => (
                           <div key={label} className="rounded-xl bg-white/70 border border-slate-200/70 px-3 py-2">
-                            <div className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400">{label}</div>
+                            <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">{label}</div>
                             <div className="text-sm font-extrabold text-slate-900 tabular-nums mt-0.5">{value}</div>
                           </div>
                         ))}
@@ -1062,7 +1062,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                         navigator.clipboard.writeText(aiDelayData.clientUpdate);
                         showSuccessWithNext('Draft copied to clipboard!');
                       }}
-                      className="text-[9px] font-bold uppercase tracking-wider text-[#3D52A0] hover:underline cursor-pointer"
+                      className="text-[10px] font-bold uppercase tracking-wider text-[#3D52A0] hover:underline cursor-pointer"
                     >
                       Copy Draft
                     </button>
@@ -1178,7 +1178,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
             >
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
                 <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                   <span className="text-green-500">💬</span> Quick Client Update
+                   <span className="text-emerald-500">💬</span> Quick Client Update
                 </h3>
                 <button onClick={() => setShowWhatsAppModal(false)} className="text-slate-400 hover:text-slate-600">
                   ✕
@@ -1198,7 +1198,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                   href={`https://wa.me/?text=${generateWhatsAppMessage()}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 shadow-sm flex items-center gap-2"
+                  className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 shadow-sm flex items-center gap-2"
                   onClick={() => setShowWhatsAppModal(false)}
                 >
                   Open WhatsApp
@@ -1276,21 +1276,21 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
               <div className="p-6 space-y-4">
                 <div className="flex items-center gap-3">
                   <div className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-slate-400">From</div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-slate-400">From</div>
                     <div className="text-[13px] font-bold text-slate-700 tabular-nums mt-0.5">
                       {new Date(pendingStartShift.fromISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </div>
                   </div>
                   <span className="text-slate-300 font-bold">&rarr;</span>
                   <div className="flex-1 rounded-xl border border-[#ADBBDA] bg-[#EEF0F8] px-3 py-2.5">
-                    <div className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#3E4F87]">To</div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#3E4F87]">To</div>
                     <div className="text-[13px] font-bold text-[#2E3552] tabular-nums mt-0.5">
                       {new Date(pendingStartShift.toISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </div>
                   </div>
                 </div>
 
-                <p className="text-[12.5px] text-slate-600 font-medium leading-relaxed">
+                <p className="text-xs text-slate-600 font-medium leading-relaxed">
                   <b className="text-slate-900">{pendingStartShift.phaseCount} phase{pendingStartShift.phaseCount === 1 ? '' : 's'}</b>{' '}
                   shift <b className="text-slate-900">{Math.abs(pendingStartShift.workingDays)} working day{Math.abs(pendingStartShift.workingDays) === 1 ? '' : 's'}</b>{' '}
                   {pendingStartShift.workingDays < 0 ? 'earlier' : 'later'}, along with every task that depends on them.
@@ -1304,10 +1304,10 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                         <p className="text-[12px] font-bold text-amber-900 leading-relaxed">
                           {pendingStartShift.landingInPast.length} phase{pendingStartShift.landingInPast.length === 1 ? '' : 's'} will end before today, still marked open.
                         </p>
-                        <p className="text-[11.5px] text-amber-800/90 mt-1 leading-relaxed">
+                        <p className="text-xs text-amber-800/90 mt-1 leading-relaxed">
                           {pendingStartShift.landingInPast.join(', ')}
                         </p>
-                        <p className="text-[11.5px] text-amber-800/80 mt-1.5 leading-relaxed">
+                        <p className="text-xs text-amber-800/80 mt-1.5 leading-relaxed">
                           A date in the past reads as work already done, and the client&rsquo;s
                           programme reads these dates. Close them off after the move so the
                           calendar and the record say the same thing.
@@ -1422,7 +1422,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                     <Sparkles className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest font-mono">AI Handover Risk Diagnostic</h3>
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest tabular-nums">AI Handover Risk Diagnostic</h3>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Sundays, Holidays & Progress Cross-Reference</p>
                   </div>
                 </div>
@@ -1456,7 +1456,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                     <div className="bg-white border border-slate-200/60 p-5 rounded-xl space-y-4">
                       <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Handover Risk Level</span>
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Handover Risk Level</span>
                           <div className="flex items-center gap-2 mt-1">
                             {aiRiskResult.riskLevel === "high" ? (
                               <span className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-black uppercase bg-red-50 border border-red-200 text-red-700 rounded-full">
@@ -1475,7 +1475,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                         </div>
 
                         <div className="text-right">
-                          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Predicted Handover</span>
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Predicted Handover</span>
                           <p className="text-base font-extrabold text-slate-900 mt-1">
                             {new Date(aiRiskResult.predictedHandoverDate).toLocaleDateString("en-IN", {
                               day: "numeric",
@@ -1488,7 +1488,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
 
                       <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
                         <div>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Target Handover</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target Handover</span>
                           <p className="text-xs font-semibold text-slate-700 mt-1">
                             {projectContext?.targetHandoverDate
                               ? new Date(projectContext.targetHandoverDate).toLocaleDateString("en-IN", {
@@ -1500,7 +1500,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                           </p>
                         </div>
                         <div>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Predicted Delay</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Predicted Delay</span>
                           <p className={`text-xs font-bold mt-1 ${aiRiskResult.predictedDelayDays > 0 ? "text-red-600" : "text-emerald-600"}`}>
                             {aiRiskResult.predictedDelayDays > 0
                               ? `${aiRiskResult.predictedDelayDays} Working Days`
@@ -1512,7 +1512,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
 
                     {/* Delay Narrative */}
                     <div className="bg-slate-50 border border-slate-200/50 p-4 rounded-xl leading-relaxed">
-                      <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-wider font-mono mb-2">Executive Analysis</h4>
+                      <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-wider tabular-nums mb-2">Executive Analysis</h4>
                       <p className="text-xs text-slate-600 font-medium whitespace-pre-line leading-relaxed">
                         {aiRiskResult.delayReason}
                       </p>
@@ -1520,7 +1520,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
 
                     {/* Alerts List */}
                     <div className="space-y-3">
-                      <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-wider font-mono">
+                      <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-wider tabular-nums">
                         Identified Risk Alerts ({aiRiskResult.alerts?.length || 0})
                       </h4>
                       <div className="space-y-3 divide-y divide-slate-100">
@@ -1530,7 +1530,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                               <div className="flex items-center justify-between">
                                 <span className="text-xs font-bold text-slate-800">{alertItem.title}</span>
                                 <span
-                                  className={`text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded font-mono ${
+                                  className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded tabular-nums ${
                                     alertItem.severity === "high"
                                       ? "bg-red-50 text-red-700 border border-red-100"
                                       : alertItem.severity === "medium"
@@ -1541,14 +1541,14 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                                   {alertItem.severity}
                                 </span>
                               </div>
-                              <span className="text-[9px] text-[#B5945B] font-bold uppercase tracking-wider">
+                              <span className="text-[10px] text-[#B5945B] font-bold uppercase tracking-wider">
                                 Affected: {alertItem.phase}
                               </span>
                               <p className="text-xs text-slate-500 font-medium leading-relaxed font-sans">
                                 {alertItem.description}
                               </p>
                               <div className="bg-emerald-50/20 border border-emerald-100/50 p-2.5 rounded-lg mt-1 text-[11px] leading-relaxed">
-                                <span className="text-[9px] font-black text-emerald-800 uppercase tracking-widest font-mono block mb-0.5">
+                                <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest tabular-nums block mb-0.5">
                                   🔧 Operational Mitigation Step
                                 </span>
                                 <span className="text-emerald-950 font-medium">{alertItem.mitigation}</span>
@@ -1570,14 +1570,14 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
               <div className="bg-white border-t border-slate-200 p-6 flex justify-end gap-3">
                 <button
                   onClick={() => setAiRiskModalOpen(false)}
-                  className="px-5 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-800 uppercase tracking-wider font-mono bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100/50"
+                  className="px-5 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-800 uppercase tracking-wider tabular-nums bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100/50"
                 >
                   Cancel
                 </button>
                 {aiRiskResult && !aiRiskLoading && (
                   <button
                     onClick={handleSaveRiskAlerts}
-                    className="px-5 py-2.5 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#334486] border border-[#B5945B]/30 rounded-xl text-xs font-bold uppercase tracking-wider font-mono flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition-all"
+                    className="px-5 py-2.5 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white hover:bg-[#334486] border border-[#B5945B]/30 rounded-xl text-xs font-bold uppercase tracking-wider tabular-nums flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition-all"
                   >
                     💾 Save & Surface to Dashboard
                   </button>
@@ -1804,7 +1804,7 @@ const OldTimelineBuilder: React.FC<any> = ({
                  <button 
                     onClick={handleScaleTimeline} 
                     disabled={!targetDays} 
-                    className="px-4 py-2 bg-[#3D52A0] text-white rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-sky-400 transition-colors shadow-sm"
+                    className="px-4 py-2 bg-[#3D52A0] text-white rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-[#3D52A0]/60 transition-colors shadow-sm"
                   >
                     Apply
                   </button>
@@ -1818,7 +1818,7 @@ const OldTimelineBuilder: React.FC<any> = ({
         <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 mb-8">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div className="flex items-center gap-2.5">
-              <Sparkles className="w-5 h-5 text-[#3D52A0] fill-sky-100 animate-pulse" />
+              <Sparkles className="w-5 h-5 text-[#3D52A0] fill-[#3D52A0]/10 animate-pulse" />
               <div>
                 <h4 className="font-extrabold text-slate-900 text-sm">AI Smart Schedule Calculator</h4>
                 <p className="text-xs text-slate-500">Computes realistic design + execution timelines based on active BOQ scope, room count, and areas.</p>
@@ -1838,32 +1838,32 @@ const OldTimelineBuilder: React.FC<any> = ({
           {/* Show analyzed scope specs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mt-4 border-t border-slate-200/60 pt-4 text-[11px]">
             <div className="bg-white border border-slate-200 rounded-lg p-2 flex flex-col justify-between shadow-sm">
-              <span className="text-slate-500 font-bold block uppercase text-[8px] tracking-wider">Active Items</span>
-              <strong className="text-xs font-mono font-extrabold text-slate-900 mt-1">{scopeAnalysis.itemCount} Specs</strong>
+              <span className="text-slate-500 font-bold block uppercase text-[10px] tracking-wider">Active Items</span>
+              <strong className="text-xs tabular-nums font-extrabold text-slate-900 mt-1">{scopeAnalysis.itemCount} Specs</strong>
             </div>
             <div className="bg-white border border-slate-200 rounded-lg p-2 flex flex-col justify-between shadow-sm">
-              <span className="text-slate-500 font-bold block uppercase text-[8px] tracking-wider">Total Rooms</span>
-              <strong className="text-xs font-mono font-extrabold text-slate-900 mt-1">{scopeAnalysis.roomCount} Rooms</strong>
+              <span className="text-slate-500 font-bold block uppercase text-[10px] tracking-wider">Total Rooms</span>
+              <strong className="text-xs tabular-nums font-extrabold text-slate-900 mt-1">{scopeAnalysis.roomCount} Rooms</strong>
             </div>
             <div className="bg-white border border-slate-200 rounded-lg p-2 flex flex-col justify-between shadow-sm">
-              <span className="text-slate-500 font-bold block uppercase text-[8px] tracking-wider">Total Size</span>
-              <strong className="text-xs font-mono font-extrabold text-slate-900 mt-1">{scopeAnalysis.totalArea} sq ft</strong>
+              <span className="text-slate-500 font-bold block uppercase text-[10px] tracking-wider">Total Size</span>
+              <strong className="text-xs tabular-nums font-extrabold text-slate-900 mt-1">{scopeAnalysis.totalArea} sq ft</strong>
             </div>
             <div className={`rounded-lg p-2 border flex items-center justify-between shadow-sm ${scopeAnalysis.hasCivil ? 'bg-amber-50/50 border-amber-200 text-amber-800 font-semibold' : 'bg-slate-100 border-slate-200 text-slate-400 font-normal'}`}>
               <span className="text-[10px]">🔨 Civil</span>
-              <span className="font-mono text-[9px]">{scopeAnalysis.hasCivil ? 'Yes (+5d)' : 'No'}</span>
+              <span className="tabular-nums text-[10px]">{scopeAnalysis.hasCivil ? 'Yes (+5d)' : 'No'}</span>
             </div>
             <div className={`rounded-lg p-2 border flex items-center justify-between shadow-sm ${scopeAnalysis.hasWoodwork ? 'bg-amber-50/50 border-amber-200 text-amber-800 font-semibold' : 'bg-slate-100 border-slate-200 text-slate-400 font-normal'}`}>
               <span className="text-[10px]">🪚 Wood</span>
-              <span className="font-mono text-[9px]">{scopeAnalysis.hasWoodwork ? 'Yes (+10d)' : 'No'}</span>
+              <span className="tabular-nums text-[10px]">{scopeAnalysis.hasWoodwork ? 'Yes (+10d)' : 'No'}</span>
             </div>
             <div className={`rounded-lg p-2 border flex items-center justify-between shadow-sm ${scopeAnalysis.hasElectricalPlumbing ? 'bg-amber-50/50 border-amber-200 text-amber-800 font-semibold' : 'bg-slate-100 border-slate-200 text-slate-400 font-normal'}`}>
               <span className="text-[10px]">⚡ Utilities</span>
-              <span className="font-mono text-[9px]">{scopeAnalysis.hasElectricalPlumbing ? 'Yes (+5d)' : 'No'}</span>
+              <span className="tabular-nums text-[10px]">{scopeAnalysis.hasElectricalPlumbing ? 'Yes (+5d)' : 'No'}</span>
             </div>
             <div className={`rounded-lg p-2 border flex items-center justify-between shadow-sm ${scopeAnalysis.hasPainting ? 'bg-amber-50/50 border-amber-200 text-amber-800 font-semibold' : 'bg-slate-100 border-slate-200 text-slate-400 font-normal'}`}>
               <span className="text-[10px]">🎨 Painting</span>
-              <span className="font-mono text-[9px]">{scopeAnalysis.hasPainting ? 'Yes (+5d)' : 'No'}</span>
+              <span className="tabular-nums text-[10px]">{scopeAnalysis.hasPainting ? 'Yes (+5d)' : 'No'}</span>
             </div>
           </div>
 
@@ -1885,7 +1885,7 @@ const OldTimelineBuilder: React.FC<any> = ({
             <button 
               onClick={handleGenerateAI}
               disabled={isGenerating || !boq}
-              className="px-4 py-2.5 bg-purple-50 text-purple-700 rounded-xl text-sm font-bold hover:bg-purple-100 disabled:opacity-50 flex items-center gap-2 transition-colors border border-purple-100"
+              className="px-4 py-2.5 bg-[#3D52A0]/5 text-[#334486] rounded-xl text-sm font-bold hover:bg-[#3D52A0]/10 disabled:opacity-50 flex items-center gap-2 transition-colors border border-[#3D52A0]/10"
             >
               <Sparkles className="w-4 h-4" />
               {isGenerating ? "Generating..." : "Auto-Generate via AI"}
