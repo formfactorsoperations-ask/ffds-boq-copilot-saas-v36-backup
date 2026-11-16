@@ -463,6 +463,31 @@ own Lucide icon, and each moves on hover in its own way (a bounce, a swing, a sp
 draw themselves). A white highlight slides to the screen you are on. Counts pop in. Everything stops
 under `prefers-reduced-motion`. Same font and brand colour.
 
+### Projects as glass folders (approved 16 Nov 2026)
+
+The owner chose this for the Projects screen (plan item 10): every project is a glass folder on one
+desk, and every action is one click. Built from `components/ui/glass-folder-cards.tsx` (the owner's
+component) in `components/projects/ProjectFolder.tsx`, styled in `components/projects/projectFolders.css`;
+the logic is `lib/projectFolders.ts`.
+
+- **Stages and colours.** Six stages, each with its own colour, used for the back panel behind the folder's
+  front glass (frosted, glossy glass in a light tint of that colour; no patterned art, owner's call), its flag, a soft
+  glow under it, the current step on its five-step bar and the swatch on its tab: New lead `#0284c7`,
+  Proposal sent `#3D52A0`, Won `#B8923A`, On site `#c2410c`, Handed over `#047857`, Lost `#64748b`.
+  These stage colours are approved for this screen only; everywhere else the colour rules above hold.
+- **The page.** The shell's title row carries search, Assign designer and New project. Under it, the stage
+  tabs stand on the desk like cabinet dividers; the desk's edge holds the Needs-you chips, one Filters
+  menu (Actual / Dummy, engagement) and the Desk / Shelves switch. No amounts on this screen.
+- **A folder.** The stage flag on its tab waves (a lost project's hangs grey and still); its Actual /
+  Dummy / Untagged tag and any blocking or due flag sit on its shoulder; the project's next step
+  (`services/nextActionEngine`) is a button on the glass, red when blocking and gold when due.
+- **One click for everything.** The glass opens the project; hovering fans out the files (each opens its
+  screen); the next-step button does the step; ··· holds Open, the files again (for touch screens),
+  Change stage, Clone as template, Select and Delete.
+- **Sizes.** Three across from 1240px of desk, two from 640px, one below; each folder up to 460px wide.
+- **Motion.** The folder's own lean, fan and assembly; the flag's wave and ripple; folders rise in,
+  staggered 55ms. All of it stops under reduced motion.
+
 ### Summary-first sections (approved 16 Nov 2026)
 
 Execution & Site used to nest tabs five levels deep. The owner chose option C of plan item 9:

@@ -36,11 +36,16 @@ import ProjectStatusTransitionModal from "./ProjectStatusTransitionModal";
 import LiquidGlassFlipCard from "./ui/LiquidGlassFlipCard";
 import MarginReveal from "./projects/MarginReveal";
 import { Dot } from "./ui/HudBits";
+import ProjectFolder from "./projects/ProjectFolder";
+import { FOLDER_STAGES, STAGE, stageOf, kindOf, folderFiles, folderNext, type FolderStage } from "../lib/projectFolders";
+import { usePageHeader } from "../contexts/PageHeaderContext";
+import { LayoutGrid, Rows3, Search as SearchIcon, X as XIcon, Check as CheckIcon } from "lucide-react";
 
 interface ProjectListTabProps {
   projects: FullProjectData[];
   activeProjectId: string | null;
-  onOpenProject: (project: FullProjectData) => void;
+  /** Opens the project, at a screen of it when a route is given (a folder's file or next step). */
+  onOpenProject: (project: FullProjectData, route?: string) => void;
   onCreateNew: () => void;
   onDeleteProject: (id: string) => void;
   onDuplicateProject: (project: FullProjectData) => void;
@@ -231,16 +236,6 @@ const valueOf = (p: FullProjectData): number => getSingleProjectValue(p);
 /** Nothing is owed on a project that is finished, lost or filed away. */
 const DORMANT = ['completed', 'lost', 'archived'];
 
-/** One phase pill, one predicate. Kept together so the two cannot drift. */
-const PHASES: { key: string; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'draft', label: 'Pipeline' },
-  { key: 'proposal_sent', label: 'Proposals' },
-  { key: 'won', label: 'Execution' },
-  { key: 'completed', label: 'Completed' },
-  { key: 'lost', label: 'Lost' },
-];
-
 const getProjectMetrics = (project: any) => {
     return {
         status: project.context?.status || 'draft',
@@ -402,16 +397,9 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   const matchesKind = (proj: FullProjectData, kind: typeof kindFilter) =>
     kind === 'all' || classifyProject(proj) === (kind === 'dummy' ? 'test' : kind);
 
-  const matchesPhase = (proj: FullProjectData, phase: string) => {
-    if (phase === 'all') return true;
-    const st = proj.context?.status || 'draft';
-    if (phase === 'draft') return st === 'draft' || st === 'lead';
-    if (phase === 'proposal_sent')
-      return st === 'proposal_sent' || st === 'negotiation';
-    if (phase === 'won')
-      return st === 'won' || st === 'execution' || st === 'work_paused';
-    return st === phase;
-  };
+  /* The phase tabs are the folder stages (lib/projectFolders stageOf), so a tab and its folders always agree. */
+  const matchesPhase = (proj: FullProjectData, phase: string) =>
+    phase === 'all' || stageOf(proj.context?.status) === phase;
 
   const matchesSearch = (proj: FullProjectData) => {
     if (!searchQuery) return true;
@@ -420,9 +408,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
        and searching for one used to return nothing at all. */
     /* The pill's own word too, not just the raw status: the Execution pill
        counts seven, so typing "execution" had better not return four. */
-    const bucket = PHASES.find(
-      (ph) => ph.key !== 'all' && matchesPhase(proj, ph.key),
-    );
+    const bucket = STAGE[stageOf(st)];
     return [
       /* The label on the card, not just the stored name -- otherwise typing
          the very detail the row shows you returns nothing. */
@@ -588,6 +574,60 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
       unsigned,
     };
   }, [filteredProjects, intel]);
+
+  /*
+    The desk (DESIGN.md "Projects as glass folders"). Folders are large -- three
+    across on a desktop, two from 640px, one on a phone -- so the width follows
+    the desk itself rather than the window.
+  */
+  const deskRef = React.useRef<HTMLDivElement | null>(null);
+  const [deskW, setDeskW] = useState(1200);
+  useEffect(() => {
+    const el = deskRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => setDeskW(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [activeTab]);
+  const folderCols = deskW >= 1240 ? 3 : deskW >= 640 ? 2 : 1;
+  const folderW = Math.max(260, Math.min(460, Math.floor((deskW - 24 - (folderCols - 1) * 24) / folderCols)));
+  const [deskView, setDeskView] = useState<'desk' | 'shelves'>('desk');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  /* Search, Assign designer and New project sit in the title row, beside the page name. */
+  usePageHeader({
+    actions: (
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 h-10 w-full sm:w-72 px-3 rounded-xl border border-slate-300 bg-white text-slate-400 focus-within:border-[#3D52A0] focus-within:ring-2 focus-within:ring-[#3D52A0]/30">
+          <SearchIcon className="w-4 h-4 shrink-0" />
+          <input
+            ref={searchRef}
+            type="text"
+            aria-label="Search projects"
+            placeholder="Search a project, client or place"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 min-w-0 bg-transparent outline-none text-sm text-slate-800 placeholder:text-slate-400"
+          />
+          {searchQuery ? (
+            <button type="button" aria-label="Clear search" onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-700"><XIcon className="w-3.5 h-3.5" /></button>
+          ) : (
+            <kbd className="text-[10px] font-bold text-slate-400 border border-slate-200 rounded px-1.5">/</kbd>
+          )}
+        </label>
+        {seesStudioFinance(currentRole) && (
+          <button type="button" onClick={() => setAssignOpen(true)} className="h-10 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 flex items-center gap-2">
+            <Users className="w-4 h-4" /> Assign designer
+          </button>
+        )}
+        {!isLimitedRole(currentRole) && (
+          <button type="button" onClick={onCreateNew} className="h-10 px-4 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] flex items-center gap-2 shadow-sm">
+            <PlusIcon className="w-4 h-4" /> New project
+          </button>
+        )}
+      </div>
+    ),
+  }, [searchQuery, currentRole, onCreateNew]);
 
   /* "/" jumps to search, Escape clears it -- the two keys every list in this
      app should answer to. Ignored while you are already typing somewhere. */
@@ -861,126 +901,8 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
 
       {activeTab === "projects" && (
         <div className="space-y-4 px-4">
-          {/* TOP ACTION BAR: what is wrong, and the way straight to it.
+          {assignOpen && <AssignProjectsModal onClose={() => setAssignOpen(false)} />}
 
-              This replaces the "Today's focus" accordion, which opened closed
-              and so hid its own contents by default. Each project's top action
-              now rides on that project's own card; what is left worth saying
-              at page level is the count, which fits on one line. */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="flex-1 min-w-0">
-              {alarm.total === 0 ? (
-                <div className="bg-white rounded-[1.25rem] border border-slate-200 cd-panel px-4 py-2.5 flex items-center gap-3 min-h-[50px]">
-                  <span className="w-6 h-6 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <CheckCircle className="w-3.5 h-3.5" />
-                  </span>
-                  <p className="text-xs font-semibold text-slate-700">
-                    Nothing is waiting on you.
-                  </p>
-                </div>
-              ) : (
-                <div className="bg-white rounded-[1.25rem] border border-slate-200 cd-panel px-4 py-2 flex items-center gap-2 flex-wrap min-h-[50px]">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 shrink-0 mr-1">
-                    Needs you
-                  </span>
-                  {(
-                    [
-                      {
-                        key: 'blocker',
-                        n: alarm.blocker,
-                        word: alarm.blocker === 1 ? 'blocker' : 'blockers',
-                        off: 'bg-rose-50 text-rose-700 border-rose-200',
-                        on: 'bg-rose-600 text-white border-rose-600',
-                      },
-                      {
-                        key: 'due',
-                        n: alarm.due,
-                        word: 'due now',
-                        off: 'bg-amber-50 text-amber-800 border-amber-200',
-                        on: 'bg-amber-600 text-white border-amber-600',
-                      },
-                      {
-                        key: 'unsigned',
-                        n: alarm.unsigned,
-                        word:
-                          alarm.unsigned === 1
-                            ? 'contract unsigned'
-                            : 'contracts unsigned',
-                        off: 'bg-slate-50 text-slate-700 border-slate-200',
-                        on: 'bg-[#3D52A0] text-white border-[#3D52A0]',
-                      },
-                      {
-                        key: 'risk',
-                        n: alarm.risk,
-                        word: 'at risk',
-                        off: 'bg-slate-50 text-slate-700 border-slate-200',
-                        on: 'bg-[#3D52A0] text-white border-[#3D52A0]',
-                      },
-                    ] as const
-                  )
-                    .filter((chip) => chip.n > 0)
-                    .map((chip) => {
-                      const live = alertFilter === chip.key;
-                      return (
-                        <button
-                          key={chip.key}
-                          type="button"
-                          aria-pressed={live}
-                          onClick={() =>
-                            setAlertFilter(live ? null : (chip.key as any))
-                          }
-                          title={
-                            live
-                              ? 'Showing only these — click to clear'
-                              : 'Show only these projects'
-                          }
-                          className={`px-2.5 py-1 rounded-full border text-[11px] font-bold transition-all cursor-pointer ${
-                            live ? chip.on : `${chip.off} hover:border-slate-400`
-                          }`}
-                        >
-                          <span className="tabular-nums">{chip.n}</span> {chip.word}
-                        </button>
-                      );
-                    })}
-                  {alertFilter && (
-                    <button
-                      type="button"
-                      onClick={() => setAlertFilter(null)}
-                      className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-700 transition-colors cursor-pointer px-1"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-            {/* A3: hand one Designer several projects at once. */}
-            {seesStudioFinance(currentRole) && (
-              <motion.button
-                whileHover={{ scale: 1.02, y: -1 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setAssignOpen(true)}
-                className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-[1.25rem] transition-colors shadow-sm flex items-center justify-center gap-2 text-xs font-bold shrink-0 cursor-pointer h-[50px]"
-              >
-                <Users className="w-4 h-4" /> Assign Designer
-              </motion.button>
-            )}
-            {assignOpen && <AssignProjectsModal onClose={() => setAssignOpen(false)} />}
-            {/* A Designer works on the projects they are given; they do not start them. */}
-            {!isLimitedRole(currentRole) && (
-            <motion.button
-              whileHover={{ scale: 1.02, y: -1 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={onCreateNew}
-              className="px-5 py-2.5 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-[1.25rem] transition-colors shadow-sm flex items-center justify-center gap-2 text-xs font-bold shrink-0 cursor-pointer h-[50px]"
-            >
-              <PlusIcon className="w-4 h-4" /> New Project
-            </motion.button>
-            )}
-          </div>
-
-          {/* A Designer's list is only what they are assigned, so an empty one
-              says how to get a project rather than showing a row of zeros. */}
           {/* While the library is still arriving, say so, rather than an empty
               screen that reads as "you have no projects". */}
           {loading && projects.length === 0 && (
@@ -990,1209 +912,222 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
             </div>
           )}
 
+          {/* A Designer's list is only what they are assigned, so an empty one
+              says how to get a project rather than showing a row of zeros. */}
           {!loading && isLimitedRole(currentRole) && projects.length === 0 && (
             <div className="mb-4 rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-6 text-center">
               <p className="text-sm font-bold text-slate-800">No projects are assigned to you yet.</p>
-              <p className="text-[13px] text-slate-500 mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 Ask your studio to add you to a project: they tick your name in Studio settings → Team, or on the project's team.
               </p>
             </div>
           )}
 
-          {/* 2. SUPER CLEAN TOOLBAR */}
-          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-transparent pt-1 pb-3 border-b border-slate-200/50 mb-4 w-full">
-            <div className="flex flex-wrap gap-4 items-center">
-              {/* Kind Filter (Actual vs Dummy) */}
-              <div className="flex items-center gap-1.5 p-1 bg-slate-200/60 rounded-full border border-slate-200">
-                {(
-                  [
-                    { key: 'all', label: 'All Projects', dot: null },
-                    { key: 'actual', label: 'Actual', dot: '#ADBBDA' },
-                    { key: 'dummy', label: 'Dummy', dot: '#FDE68A' },
-                    /* Only worth a chip while something is unclassified. */
-                    ...(projects.some((proj) => classifyProject(proj) === 'untagged')
-                      ? ([{ key: 'untagged', label: 'Untagged', dot: '#FCA5A5' }] as const)
-                      : []),
-                  ] as const
-                ).map((kind) => {
-                  const live = kindFilter === kind.key;
-                  const n = projects.filter(
-                    (proj) =>
-                      matchesKind(proj, kind.key) &&
-                      matchesPhase(proj, statusFilter) &&
-                      matchesSearch(proj) &&
-                      matchesAlert(proj),
-                  ).length;
-                  return (
+          {/*
+            Projects as glass folders (plan item 10; DESIGN.md "Projects as glass
+            folders"). The phase pills became cabinet dividers on one desk; the
+            Needs-you bar, the Actual/Dummy and Engagement filters and the view
+            switch run along the desk's edge; the four figures are gone (owner's
+            call: no amounts on this screen). Each project is a folder coloured
+            by its stage, with a waving stage flag, its Actual/Dummy tag, its
+            next step as a button on the glass, and its screens as files.
+          */}
+          <div>
+            <nav className="pf-dividers" aria-label="Stage">
+              {([{ id: 'all', label: 'All', color: '#3D52A0' }, ...FOLDER_STAGES] as { id: string; label: string; color: string }[]).map((st) => {
+                const live = statusFilter === st.id;
+                const n = projects.filter(
+                  (proj) => matchesKind(proj, kindFilter) && matchesPhase(proj, st.id) && matchesEngagement(proj) && matchesSearch(proj) && matchesAlert(proj),
+                ).length;
+                return (
+                  <button
+                    key={st.id}
+                    type="button"
+                    aria-pressed={live}
+                    onClick={() => setStatusFilter(st.id)}
+                    className={`pf-div${live ? ' on' : ''}`}
+                    style={{ ['--fc' as any]: st.color }}
+                  >
+                    {st.id !== 'all' && <i className="pf-sw" />}
+                    {st.label}
+                    <b>{n}</b>
+                  </button>
+                );
+              })}
+            </nav>
+
+            <section className="pf-desk">
+              <div className="pf-edge">
+                <div className="pf-needs">
+                  {alarm.total === 0 ? (
+                    <span className="!normal-case !tracking-normal !text-xs !font-semibold !text-slate-600 flex items-center gap-2">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Nothing is waiting on you.
+                    </span>
+                  ) : (
+                    <>
+                      <span>Needs you</span>
+                      {(
+                        [
+                          { key: 'blocker', n: alarm.blocker, word: alarm.blocker === 1 ? 'blocker' : 'blockers', tone: 'red' },
+                          { key: 'due', n: alarm.due, word: 'due now', tone: 'gold' },
+                          { key: 'unsigned', n: alarm.unsigned, word: alarm.unsigned === 1 ? 'contract unsigned' : 'contracts unsigned', tone: '' },
+                          { key: 'risk', n: alarm.risk, word: 'at risk', tone: '' },
+                        ] as const
+                      )
+                        .filter((chip) => chip.n > 0)
+                        .map((chip) => {
+                          const live = alertFilter === chip.key;
+                          return (
+                            <button
+                              key={chip.key}
+                              type="button"
+                              aria-pressed={live}
+                              onClick={() => setAlertFilter(live ? null : (chip.key as any))}
+                              title={live ? 'Showing only these. Click to clear' : 'Show only these projects'}
+                              className={`pf-chip ${chip.tone}${live ? ' on' : ''}`}
+                            >
+                              <span className="tabular-nums">{chip.n}</span> {chip.word}
+                            </button>
+                          );
+                        })}
+                    </>
+                  )}
+                </div>
+                <div className="pf-right">
+                  <div className="pf-pop">
                     <button
-                      key={kind.key}
                       type="button"
-                      onClick={() => setKindFilter(kind.key)}
-                      className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
-                        live
-                          ? kind.key === 'dummy'
-                            ? 'bg-amber-500 text-white shadow-xs'
-                            : kind.key === 'untagged'
-                              ? 'bg-rose-500 text-white shadow-xs'
-                              : kind.key === 'actual'
-                                ? 'bg-[#3D52A0] text-white shadow-xs'
-                                : 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
+                      className={`pf-tool${filtersOpen || kindFilter !== 'all' || engagementFilter !== 'all' ? ' on' : ''}`}
+                      aria-expanded={filtersOpen}
+                      onClick={() => setFiltersOpen((o) => !o)}
                     >
-                      {kind.dot && (
-                        <span
-                          className="w-1.5 h-1.5 rounded-full"
-                          style={{ background: kind.dot }}
-                        />
-                      )}
-                      {kind.label}
-                      <span
-                        className={`tabular-nums text-[10px] ${live ? 'text-white/70' : 'text-slate-400'} ${live && kind.key === 'all' ? '!text-slate-400' : ''}`}
-                      >
-                        {n}
-                      </span>
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                      Filters{(kindFilter !== 'all' ? 1 : 0) + (engagementFilter !== 'all' ? 1 : 0) > 0 ? ` · ${(kindFilter !== 'all' ? 1 : 0) + (engagementFilter !== 'all' ? 1 : 0)}` : ''}
                     </button>
-                  );
-                })}
+                    {filtersOpen && (
+                      <div className="pf-menu" role="menu">
+                        <small>Show</small>
+                        {(
+                          [
+                            { key: 'all', label: 'All projects' },
+                            { key: 'actual', label: 'Actual' },
+                            { key: 'dummy', label: 'Dummy' },
+                            ...(projects.some((proj) => classifyProject(proj) === 'untagged') ? ([{ key: 'untagged', label: 'Untagged' }] as const) : []),
+                          ] as const
+                        ).map((k) => (
+                          <button key={k.key} type="button" role="menuitem" onClick={() => { setKindFilter(k.key); setFiltersOpen(false); }}>
+                            {k.label}
+                            <span className="flex items-center gap-2">
+                              {projects.filter((proj) => matchesKind(proj, k.key)).length}
+                              {kindFilter === k.key && <CheckIcon className="w-3.5 h-3.5 text-[#3D52A0]" />}
+                            </span>
+                          </button>
+                        ))}
+                        {engagementsInUse.length > 1 && (
+                          <>
+                            <small>Engagement</small>
+                            {([{ id: 'all', short: 'All' }, ...engagementsInUse] as { id: 'all' | EngagementType; short: string }[]).map((e) => (
+                              <button key={e.id} type="button" role="menuitem" onClick={() => { setEngagementFilter(e.id); setFiltersOpen(false); }}>
+                                {e.short}
+                                <span className="flex items-center gap-2">
+                                  {projects.filter((proj) => matchesEngagement(proj, e.id)).length}
+                                  {engagementFilter === e.id && <CheckIcon className="w-3.5 h-3.5 text-[#3D52A0]" />}
+                                </span>
+                              </button>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="pf-seg" role="group" aria-label="Layout">
+                    <button type="button" className={deskView === 'desk' ? 'on' : ''} aria-pressed={deskView === 'desk'} aria-label="Desk" title="Desk" onClick={() => setDeskView('desk')}><LayoutGrid className="w-4 h-4" /></button>
+                    <button type="button" className={deskView === 'shelves' ? 'on' : ''} aria-pressed={deskView === 'shelves'} aria-label="Shelves by stage" title="Shelves by stage" onClick={() => setDeskView('shelves')}><Rows3 className="w-4 h-4" /></button>
+                  </div>
+                </div>
               </div>
 
-              {/* Status/Phase Filter — each pill states its own size, so you
-                  never click into an empty phase to find out it is empty. */}
-              <div className="flex flex-wrap gap-1.5 items-center">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">
-                  Phase:
-                </span>
-                {PHASES.map((phase) => {
-                  const live = statusFilter === phase.key;
-                  const n = projects.filter(
-                    (proj) =>
-                      matchesKind(proj, kindFilter) &&
-                      matchesPhase(proj, phase.key) &&
-                      matchesSearch(proj) &&
-                      matchesAlert(proj),
-                  ).length;
-                  return (
-                    <button
-                      key={phase.key}
-                      onClick={() => setStatusFilter(phase.key)}
-                      className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
-                        live
-                          ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs'
-                          : n === 0
-                            ? 'bg-slate-100 text-slate-300 hover:bg-slate-200'
-                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                      }`}
-                    >
-                      {phase.label}
-                      <span
-                        className={`tabular-nums text-[10px] ${live ? 'text-white/70' : 'text-slate-400'}`}
-                      >
-                        {n}
-                      </span>
+              {selectedForDelete.size > 0 && (
+                <div className="mx-4 mt-3 rounded-2xl border border-[#3D52A0]/25 bg-[#3D52A0]/5 px-4 py-3 flex items-center justify-between gap-4 flex-wrap relative z-[6]">
+                  <p className="text-sm font-bold text-[#334486]">
+                    {selectedForDelete.size} project{selectedForDelete.size === 1 ? '' : 's'} selected
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setSelectedForDelete(new Set())} className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-white transition-colors cursor-pointer">Clear</button>
+                    <button onClick={() => setDeleteTargets([...selectedForDelete])} className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 transition-colors shadow-sm cursor-pointer">
+                      Delete {selectedForDelete.size}
                     </button>
-                  );
-                })}
-              </div>
-
-              {/* Engagement filter: shown once the studio has design-only (or PMC) projects as well as turnkey ones. */}
-              {engagementsInUse.length > 1 && (
-                <div className="flex flex-wrap gap-1.5 items-center">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">
-                    Engagement:
-                  </span>
-                  {([{ id: 'all', short: 'All' }, ...engagementsInUse] as { id: "all" | EngagementType; short: string }[]).map((e) => {
-                    const live = engagementFilter === e.id;
-                    const n = projects.filter(
-                      (proj) =>
-                        matchesKind(proj, kindFilter) &&
-                        matchesPhase(proj, statusFilter) &&
-                        matchesEngagement(proj, e.id) &&
-                        matchesSearch(proj) &&
-                        matchesAlert(proj),
-                    ).length;
-                    return (
-                      <button
-                        key={e.id}
-                        onClick={() => setEngagementFilter(e.id)}
-                        className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
-                          live
-                            ? 'bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white shadow-xs'
-                            : n === 0
-                              ? 'bg-slate-100 text-slate-300 hover:bg-slate-200'
-                              : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                        }`}
-                      >
-                        {e.short}
-                        <span className={`tabular-nums text-[10px] ${live ? 'text-white/70' : 'text-slate-400'}`}>{n}</span>
-                      </button>
-                    );
-                  })}
+                  </div>
                 </div>
               )}
-            </div>
 
-            <div className="flex flex-wrap gap-3 md:gap-4 w-full xl:w-auto pb-2 xl:pb-0">
-              {/* The Sort dropdown and the Focus: At Risk toggle used to live
-                  here. Neither was ever read by the list — `sortBy` and
-                  `focusMode` changed their own appearance and nothing else.
-                  The alert bar above now does the focusing, honestly. */}
-              <div className="relative flex-grow min-w-[200px] md:w-64 shrink-0">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                  </svg>
-                </span>
-                <input
-                  ref={searchRef}
-                  type="text"
-                  placeholder="Search name, client or phase…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-10 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold uppercase tracking-wider text-slate-700 outline-none focus:border-slate-400 transition-all placeholder:text-slate-400 placeholder:normal-case placeholder:tracking-normal"
-                />
-                {!searchQuery && (
-                  <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 border border-slate-200 rounded px-1.5 py-[1px] pointer-events-none">
-                    /
-                  </kbd>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* What is on screen right now, in four numbers. Every figure here
-              follows the filters above it — a count that ignored them would
-              contradict the cards it sits on top of. */}
-          <div className={`grid grid-cols-2 gap-3 mb-4 ${showFinance ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
-            {showFinance && (
-            <div className="bg-white rounded-2xl border border-slate-200 cd-panel px-4 py-3">
-              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">
-                Book on screen
-              </p>
-              <p className="text-[22px] leading-none font-bold text-slate-900 tabular-nums mt-1.5">
-                {formatClientValue(deck.book)}
-              </p>
-              <p className="text-[10px] text-slate-500 font-medium mt-1.5">
-                {formatClientValue(deck.booked)} booked ·{' '}
-                {formatClientValue(deck.pipeline)} in the pipeline
-              </p>
-            </div>
-            )}
-
-            <div className="bg-white rounded-2xl border border-slate-200 cd-panel px-4 py-3">
-              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">
-                On site
-              </p>
-              <p className="text-[22px] leading-none font-bold text-slate-900 tabular-nums mt-1.5">
-                {deck.onSite}
-              </p>
-              <p className="text-[10px] text-slate-500 font-medium mt-1.5">
-                of {filteredProjects.length}{' '}
-                {filteredProjects.length === 1 ? 'project' : 'projects'} shown
-              </p>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-slate-200 cd-panel px-4 py-3">
-              {/* Not "Needs you" -- the alert bar directly above already
-                  carries that label, and two different counts under one word,
-                  one above the other, is a screen arguing with itself. */}
-              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">
-                Blocked or due
-              </p>
-              <p
-                className={`text-[22px] leading-none font-bold tabular-nums mt-1.5 ${
-                  deck.needsYou > 0 ? 'text-amber-700' : 'text-slate-400'
-                }`}
-              >
-                {deck.needsYou}
-              </p>
-              <p className="text-[10px] text-slate-500 font-medium mt-1.5">
-                {deck.needsYou === 0
-                  ? 'Nothing outstanding'
-                  : 'Suggestions are not counted'}
-              </p>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-slate-200 cd-panel px-4 py-3">
-              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">
-                Contracts
-              </p>
-              <p
-                className={`text-[22px] leading-none font-bold tabular-nums mt-1.5 ${
-                  deck.unsigned > 0 ? 'text-rose-700' : 'text-emerald-700'
-                }`}
-              >
-                {deck.unsigned > 0 ? deck.unsigned : '✓'}
-              </p>
-              <p className="text-[10px] text-slate-500 font-medium mt-1.5">
-                {deck.unsigned > 0
-                  ? deck.unsigned === 1
-                    ? 'awaiting signature'
-                    : 'awaiting signature'
-                  : 'All signed and clear'}
-              </p>
-            </div>
-          </div>
-
-          {/* 3. PROJECT GRID */}
-          {viewMode === "grid" && (
-            /*
-              Equal heights, deliberately.
-
-              These cards were briefly allowed to keep their own height, because
-              the slack the grid gave them was landing as a void above the money
-              with nothing true to put in it. The band above now has a Recent
-              slot that is always present and grows, so the slack falls inside a
-              labelled section instead. With somewhere honest for it to go, a
-              uniform row reads as one system rather than as eight cards padded
-              out -- so stretch is back on.
-            */
-            <>
-            {selectedForDelete.size > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-4 rounded-2xl border border-[#3D52A0]/25 bg-[#3D52A0]/5 px-4 py-3 flex items-center justify-between gap-4 flex-wrap"
-              >
-                <p className="text-sm font-bold text-[#334486]">
-                  {selectedForDelete.size} project{selectedForDelete.size === 1 ? '' : 's'} selected
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setSelectedForDelete(new Set())}
-                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-white transition-colors cursor-pointer"
-                  >
-                    Clear
-                  </button>
-                  <button
-                    onClick={() => setDeleteTargets([...selectedForDelete])}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 transition-colors shadow-sm cursor-pointer"
-                  >
-                    Delete {selectedForDelete.size}
-                  </button>
-                </div>
-              </motion.div>
-            )}
-            <div className="relative">
-              {/* Ambient refractive light field & subtle architectural blueprint grid behind crystal glass cards */}
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -inset-4 -z-10 overflow-hidden rounded-[2rem]"
-              >
-                <div
-                  className="absolute inset-0 opacity-45"
-                  style={{
-                    backgroundImage:
-                      'radial-gradient(rgba(99, 102, 241, 0.22) 1px, transparent 1px), radial-gradient(rgba(14, 165, 233, 0.16) 1px, transparent 1px)',
-                    backgroundSize: '24px 24px',
-                    backgroundPosition: '0 0, 12px 12px',
-                  }}
-                />
-                <div className="absolute -top-16 left-[8%] h-72 w-72 rounded-full bg-indigo-200/45 blur-3xl" />
-                <div className="absolute top-1/3 right-[6%] h-80 w-80 rounded-full bg-sky-200/40 blur-3xl" />
-                <div className="absolute bottom-8 left-[32%] h-72 w-96 rounded-full bg-violet-100/45 blur-3xl" />
-              </div>
-
-              <div ref={cardGridRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
-                <AnimatePresence>
-                {shownProjects.map((project, index) => {
-                  const metrics = getProjectMetrics(project);
-                  const isActive = activeProjectId === project.id;
-                  
-                  const statusStyle =
-                    STATUS_CONFIG[metrics.status] || STATUS_CONFIG["draft"];
-
-                  /* Returns the conditions, not the markup.
-
-                     It used to render its own block and return null when there
-                     was nothing to say, which is half of why the middle of the
-                     card moved around: one card had this section, the next did
-                     not, and everything below it shifted. The band renders the
-                     chips now, in a row that is always present. */
-                  const getConditions = () => {
-                    const conditions = [];
-
-                    if (metrics.status !== "lost" && metrics.status !== "completed") {
-                      // 1. Flight Risk (Pre-sales)
-                      if ((metrics.status === 'lead' || metrics.status === 'proposal_sent') && project.decisionBrainOutput?.flags?.high_flight_risk) {
-                        conditions.push({
-                          dot: "bg-rose-500 animate-pulse",
-                          text: "High Flight Risk",
-                          bg: "bg-rose-50 border-rose-200 text-rose-700"
-                        });
-                      }
-
-                      // 2. Critical Sign-offs Pending
-                      const signoffs = [
-                        { name: 'Contract', data: project.context?.contractSignoff },
-                        { name: 'Design Agreement', data: project.context?.designAgreementSignoff },
-                        { name: 'Handover', data: project.context?.handoverSignoff },
-                      ];
-                      
-                      signoffs.forEach(s => {
-                        if (s.data?.status === 'sent') {
-                          conditions.push({
-                            dot: "bg-amber-500 animate-pulse",
-                            text: `${s.name} Pending Sign-off`,
-                            bg: "bg-amber-50 border-amber-200 text-amber-700"
-                          });
-                        }
-                      });
-
-                      // 3. Execution Blockers
-                      const unresolvedBlockers = project.activeProject?.executionData?.blockers?.filter(b => !b.resolved) || [];
-                      const criticalBlocker = unresolvedBlockers.find(b => b.impactLevel === 'critical' || b.severity === 'high');
-                      
-                      if (criticalBlocker) {
-                        conditions.push({
-                          dot: "bg-rose-500 animate-pulse",
-                          text: `Critical Blocker: ${criticalBlocker.description.substring(0, 25)}${criticalBlocker.description.length > 25 ? '...' : ''}`,
-                        });
-                      } else if (unresolvedBlockers.length > 0) {
-                         conditions.push({
-                          dot: "bg-amber-500",
-                          text: `${unresolvedBlockers.length} Active Blocker${unresolvedBlockers.length > 1 ? 's' : ''}`,
-                        });
-                      }
-
-                      // 4. Pending Change Requests
-                      const pendingCRs = project.materials?.filter(m => m.itemType === 'change_request' && m.status === 'pending_approval')?.length || 0;
-                      if (pendingCRs > 0) {
-                        conditions.push({
-                          dot: "bg-[#3D52A0]",
-                          text: `${pendingCRs} Change Request${pendingCRs > 1 ? 's' : ''} Pending`,
-                        });
-                      }                      // 5. Payment Pending
-                      const pendingPayments = project.context?.paymentMilestones?.filter((m) => {
-                          const st = m.status?.toLowerCase();
-                          return st === "invoiced" || st === "advance_requested";
-                      });
-
-                      if (pendingPayments && pendingPayments.length > 0) {
-                        conditions.push({
-                          dot: "bg-amber-500 animate-pulse",
-                          text: pendingPayments.length === 1 ? 'Payment Pending' : `${pendingPayments.length} Payments Pending`,
-                          isAlert: true
-                        });
-                      }
-
-                      // 6. Pending Decisions
-                      const pendingDecisions =
-                        project.activeProject?.executionData?.decisions?.filter(
-                          (d) => !d.resolved,
-                        )?.length || 0;
-                      if (pendingDecisions > 0) {
-                        conditions.push({
-                          dot: "bg-amber-500",
-                          text: `${pendingDecisions} pending decision${pendingDecisions > 1 ? "s" : ""}`,
-                        });
-                      }
-
-                      // 7. SOF Items Pending
-                      const pendingSofItems =
-                        project.activeProject?.executionData?.sofItems?.filter(
-                          (s) => s.status === "pending",
-                        )?.length || 0;
-                      if (pendingSofItems > 0) {
-                        conditions.push({
-                          dot: "bg-[#3D52A0]",
-                          text: `${pendingSofItems} SOF item${pendingSofItems > 1 ? "s" : ""} pending`,
-                        });
-                      }
-                    }
-
-                    return conditions;
-                  };
-
-                  const conditions = getConditions();
-                  // The studio's next move (agreements, invoices, sign-offs) is not
-                  // a Designer's; their work on a project is in the Drawing Tracker.
-                  const nextMove =
-                    DORMANT.includes(metrics.status) || isLimitedRole(currentRole)
-                      ? null
-                      : intel.get(project.id)?.action || null;
-
-                  const progressValue = (() => {
-                    if (metrics.status === 'completed') return 100;
-                    if (metrics.status === 'execution' || metrics.status === 'work_paused') {
-                      return 60 + Math.floor(((project.context?.journeySummary?.pct || 0) / 100) * 40);
-                    }
-                    if (metrics.status === 'won') return 40;
-                    if (metrics.status === 'negotiation') return 30;
-                    if (metrics.status === 'proposal_sent') return 20;
-                    if (metrics.status === 'draft') return 10;
-                    return 0;
-                  })();
-
-                  const renderFinancialSummary = () => (
-                    <div className="w-full" data-lgf-interactive="true">
-                      {project.tiers && project.tiers.length > 0 ? (
-                        <>
-                          {project.tiers
-                            .filter((t) => t.id === project.context?.approvedTierId)
-                            .map((tier) => {
-                              const total = valueOf(project);
-                              return (
-                                <div key={tier.id} className="flex justify-between items-end">
-                                  <div>
-                                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.1em] mb-0.5">
-                                      Approved
-                                    </p>
-                                    <p className="text-lg font-bold text-slate-900 leading-none tabular-nums">
-                                      {formatClientValue(total)}
-                                    </p>
-                                  </div>
-                                  {showFinance && !isFeeOnly(engagementOf(project.context)) && (
-                                    <MarginReveal
-                                      variant="glass"
-                                      value={Number(
-                                        tier.summary.blendedGm?.toFixed(0) ||
-                                          tier.summary.totalGm?.toFixed(0) ||
-                                          0,
-                                      )}
-                                    />
-                                  )}
-                                </div>
-                              );
-                            })}
-                          {!project.context?.approvedTierId && (
-                            <div className="flex justify-between items-end">
-                              <div>
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.1em] mb-0.5">
-                                  Pipeline
-                                </p>
-                                {valueOf(project) > 0 ? (
-                                  <p className="text-lg font-bold text-slate-900 leading-none tabular-nums">
-                                    {formatClientValue(valueOf(project))}
-                                  </p>
-                                ) : (
-                                  <p className="text-sm font-semibold text-slate-400 leading-none h-[18px] flex items-end">
-                                    Not priced yet
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="flex justify-between items-end">
-                          <div>
-                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.1em] mb-0.5">
-                              Est. Value
-                            </p>
-                            {valueOf(project) > 0 ? (
-                              <p className="text-lg font-bold text-slate-800 leading-none tabular-nums">
-                                {formatClientValue(valueOf(project))}
-                              </p>
-                            ) : (
-                              <p className="text-sm font-semibold text-slate-400 leading-none h-[18px] flex items-end">
-                                Not priced yet
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-
-                  const activeOrApprovedTier =
-                    project.tiers?.find((t) => t.id === project.context?.approvedTierId) ||
-                    project.tiers?.find((t) => t.id === project.activeTierId) ||
-                    project.tiers?.[0];
-                  const boqLineCount =
-                    (activeOrApprovedTier as any)?.fullBoq?.length ||
-                    (activeOrApprovedTier as any)?.boq?.length ||
-                    0;
-                  const roomCount = project.context?.rooms?.length || 0;
-                  const roomNames = (project.context?.rooms || [])
-                    .map((r) => r.name?.trim())
-                    .filter(Boolean) as string[];
-
-                  const primaryConfigLabel =
-                    project.context?.config?.trim() ||
-                    engagementDef(engagementOf(project.context)).label;
-                  const areaLabel = project.context?.area
-                    ? `${Number(project.context.area).toLocaleString('en-IN', { maximumFractionDigits: 0 })} sft`
-                    : null;
-                  const locationLabel = project.context?.location?.trim() || 'Location TBD';
-                  const themeLabel = project.context?.theme?.trim() || null;
-
-                  // Radial gauge fill (0..1) for scope density (rooms + BOQ lines)
-                  const scopeDensityPct = Math.min(
-                    100,
-                    Math.max(12, Math.round((roomCount * 4 + boqLineCount * 1.2))),
-                  );
-                  const gaugeRadius = 15;
-                  const gaugeCircumference = 2 * Math.PI * gaugeRadius;
-                  const gaugeStrokeOffset =
-                    gaugeCircumference * (1 - scopeDensityPct / 100);
-
-                  // Lifecycle 5-node visual stepper mapping
-                  const lifecycleStages = [
-                    { key: 'draft', label: 'Lead', icon: FileText, threshold: 10 },
-                    { key: 'proposal', label: 'Quote', icon: Send, threshold: 25 },
-                    { key: 'won', label: 'Won', icon: Trophy, threshold: 40 },
-                    { key: 'execution', label: 'Site', icon: Hammer, threshold: 70 },
-                    { key: 'completed', label: 'Done', icon: CheckCircle2, threshold: 100 },
-                  ];
-                  const activeStageIdx =
-                    metrics.status === 'completed'
-                      ? 4
-                      : metrics.status === 'execution' || metrics.status === 'work_paused'
-                        ? 3
-                        : metrics.status === 'won'
-                          ? 2
-                          : metrics.status === 'proposal_sent' || metrics.status === 'negotiation'
-                            ? 1
-                            : 0;
-
-                  const frontFace = (
-                    <div className="flex flex-col h-full w-full select-none text-slate-900">
-                      {/* Front Top: Status, Classification, Progress & Dossier Header */}
-                      <div className="shrink-0">
-                        <div className="pb-3 border-b border-white/60">
-                          <div className="flex justify-between items-start pr-11 gap-2">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <button
-                                type="button"
-                                data-lgf-interactive="true"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setStatusModalProject(project);
-                                }}
-                                className="group/status flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full whitespace-nowrap bg-gradient-to-br from-white/85 via-white/65 to-white/45 backdrop-blur-md text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-800 border border-white/95 shadow-[inset_0_1.5px_1px_rgba(255,255,255,1),0_4px_10px_-2px_rgba(15,23,42,0.08)] transition-all hover:scale-105 hover:from-white/95 hover:to-white/70 cursor-pointer"
-                                title="Click to change project status & manage downstream impacts"
-                              >
-                                <ProjectStatusIllustration status={metrics.status} size={22} />
-                                <span>{statusStyle.label}</span>
-                                <ChevronDown className="w-2.5 h-2.5 opacity-60 group-hover/status:opacity-100 transition-opacity" />
-                              </button>
-
-                              {/* Waving Pinned-Note Classification Tag */}
-                              {(() => {
-                                const kind = classifyProject(project);
-                                const isDummy = kind === 'test';
-                                const untagged = kind === 'untagged';
-                                return (
-                                  /* The same wave as before, written as one transform so
-                                     framer-motion hands it to the browser's compositor.
-                                     As separate rotate and y it ran in JavaScript every
-                                     frame on every card, over a blurred backdrop, forever:
-                                     the screen held the main thread ~45% busy while idle. */
-                                  <motion.div
-                                    animate={reduceMotion ? undefined : {
-                                      transform: [
-                                        'translateY(0px) rotate(-2deg)',
-                                        'translateY(-1px) rotate(4deg)',
-                                        'translateY(0px) rotate(-3deg)',
-                                        'translateY(-1px) rotate(2deg)',
-                                        'translateY(0px) rotate(-2deg)',
-                                      ],
-                                    }}
-                                    transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut" }}
-                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-md border transition-colors shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.95)] ${
-                                      untagged
-                                        ? 'bg-rose-50/75 text-rose-700 border-rose-200/80'
-                                        : isDummy
-                                          ? 'bg-amber-50/75 text-amber-800 border-amber-200/80'
-                                          : 'bg-sky-50/75 text-sky-800 border-sky-200/85'
-                                    }`}
-                                    title={
-                                      untagged
-                                        ? 'Not classified yet — open the project and tag it Actual or Dummy'
-                                        : `Project is marked as ${isDummy ? 'Dummy / Demo' : 'Actual Site'}`
-                                    }
-                                  >
-                                    <Pin className={`w-2.5 h-2.5 ${untagged ? 'text-rose-500' : isDummy ? 'text-amber-500' : 'text-sky-600'}`} />
-                                    <span className="capitalize">{untagged ? 'Untagged' : isDummy ? 'Dummy' : 'Actual'}</span>
-                                  </motion.div>
-                                );
-                              })()}
-
-                              {isFeeOnly(engagementOf(project.context)) && (
-                                <span
-                                  className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/70 border border-white/90 text-slate-600 shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.95)]"
-                                  title={engagementDef(engagementOf(project.context)).blurb}
-                                >
-                                  {engagementDef(engagementOf(project.context)).label}
-                                </span>
-                              )}
-
-                              {metrics.riskScore > 0 && (
-                                <span className="flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.15em] bg-rose-50/80 text-rose-700 border border-rose-200/85 shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.9)]">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                                  At Risk
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Status Progress Bar */}
-                          <div className="flex items-center justify-between gap-3 mt-2.5">
-                            <div className="flex gap-[2px] flex-1">
-                              {[...Array(10)].map((_, i) => {
-                                const barColor =
-                                  metrics.status === 'completed'
-                                    ? 'bg-emerald-500'
-                                    : metrics.status === 'execution'
-                                      ? 'bg-[#3D52A0]'
-                                      : metrics.status === 'work_paused'
-                                        ? 'bg-rose-500'
-                                        : metrics.status === 'won'
-                                          ? 'bg-emerald-500'
-                                          : metrics.status === 'negotiation'
-                                            ? 'bg-amber-500'
-                                            : metrics.status === 'proposal_sent'
-                                              ? 'bg-sky-500'
-                                              : 'bg-slate-400';
-
-                                const isFilled = (i + 1) * 10 <= progressValue + 5;
-
-                                return (
-                                  <div
-                                    key={i}
-                                    className={`h-1.5 flex-1 rounded-[1px] transition-colors duration-300 ${
-                                      isFilled ? barColor : 'bg-slate-900/10'
-                                    }`}
-                                  />
-                                );
-                              })}
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-600 tracking-wider tabular-nums min-w-[28px] text-right">
-                              {progressValue}%
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Project Name & Client Dossier */}
-                        <div className="pt-3 pb-2">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.12em]">
-                              Project Dossier
-                            </p>
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <div className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 bg-[#3D52A0] shadow-xs">
-                                {(project.context?.clientName || "U").charAt(0).toUpperCase()}
-                              </div>
-                              <p className="text-[10.5px] text-slate-700 font-semibold truncate max-w-[150px]">
-                                {project.context?.clientName || "Unknown Client"}
-                              </p>
-                            </div>
-                          </div>
-
-                          <h3
-                            className="text-[1.28rem] font-semibold tracking-tight text-slate-900 leading-snug line-clamp-2"
-                            title={displayName(project)}
-                          >
-                            {displayName(project)}
-                          </h3>
-                        </div>
-                      </div>
-
-                      {/* Front Middle: Static Spatial Bento + Lifecycle Stepper + Darker-Shaded Room Text Band */}
-                      <div className="flex-1 flex flex-col justify-between py-3 border-y border-white/60 gap-3">
-                        {/* 1. 2-Column Visual Bento: Property Footprint & BOQ Scope */}
-                        <div className="grid grid-cols-2 gap-2.5">
-                          {/* Left Tile: Property Footprint & Location */}
-                          <div className="rounded-2xl bg-gradient-to-br from-white/82 via-white/58 to-white/35 backdrop-blur-md border border-white/95 p-3 shadow-[inset_0_1.5px_1px_rgba(255,255,255,1),0_6px_14px_-6px_rgba(15,23,42,0.08)] flex flex-col justify-between gap-2">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-xl bg-indigo-500/12 border border-indigo-200/70 flex items-center justify-center shrink-0 text-[#3D52A0] shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.9)]">
-                                <Home className="w-4 h-4" strokeWidth={2.2} />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-[13.5px] font-extrabold text-slate-900 leading-tight truncate">
-                                  {primaryConfigLabel}
-                                </p>
-                                <p className="text-[11px] font-bold text-[#3D52A0] tabular-nums leading-tight truncate mt-0.5">
-                                  {areaLabel || 'Area TBD'}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-slate-200/50 text-[10.5px] font-semibold text-slate-600">
-                              <span className="inline-flex items-center gap-1 min-w-0 truncate" title={locationLabel}>
-                                <MapPin className="w-3 h-3 text-sky-600 shrink-0" strokeWidth={2.3} />
-                                <span className="truncate">{locationLabel}</span>
-                              </span>
-                              {themeLabel && (
-                                <span
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-white/80 border border-white/90 text-[9.5px] font-bold capitalize text-slate-700 shrink-0"
-                                  title={`Theme: ${themeLabel}`}
-                                >
-                                  <Palette className="w-2.5 h-2.5 text-indigo-500 shrink-0" />
-                                  <span className="truncate max-w-[56px]">{themeLabel}</span>
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Right Tile: Radial Scope & BOQ Density */}
-                          <div className="rounded-2xl bg-gradient-to-br from-white/82 via-white/58 to-white/35 backdrop-blur-md border border-white/95 p-3 shadow-[inset_0_1.5px_1px_rgba(255,255,255,1),0_6px_14px_-6px_rgba(15,23,42,0.08)] flex flex-col justify-between gap-2">
-                            <div className="flex items-center gap-2.5">
-                              <div className="relative w-9 h-9 shrink-0 flex items-center justify-center">
-                                <svg className="w-9 h-9 -rotate-90" viewBox="0 0 38 38">
-                                  <circle
-                                    cx="19"
-                                    cy="19"
-                                    r={gaugeRadius}
-                                    fill="none"
-                                    stroke="rgba(148,163,184,0.22)"
-                                    strokeWidth="3.2"
-                                  />
-                                  <circle
-                                    cx="19"
-                                    cy="19"
-                                    r={gaugeRadius}
-                                    fill="none"
-                                    stroke="#3D52A0"
-                                    strokeWidth="3.2"
-                                    strokeLinecap="round"
-                                    strokeDasharray={gaugeCircumference}
-                                    strokeDashoffset={gaugeStrokeOffset}
-                                  />
-                                </svg>
-                                <Layers className="w-3.5 h-3.5 text-[#3D52A0] absolute" strokeWidth={2.3} />
-                              </div>
-
-                              <div className="min-w-0">
-                                <p className="text-[13.5px] font-extrabold text-slate-900 tabular-nums leading-tight truncate">
-                                  {roomCount} {roomCount === 1 ? 'Room' : 'Rooms'}
-                                </p>
-                                <p className="text-[11px] font-bold text-[#3D52A0] tabular-nums leading-tight truncate mt-0.5">
-                                  {boqLineCount > 0 ? `${boqLineCount} BOQ Lines` : 'BOQ Pending'}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-200/50">
-                              <span className="text-[10px] font-bold text-slate-500 truncate">
-                                {boqLineCount > 0 ? 'Priced Scope' : 'Takeoff Queue'}
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-600 tabular-nums shrink-0">
-                                {scopeDensityPct}%
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 2. Static 5-Stage Lifecycle Stepper Track */}
-                        <div className="rounded-2xl bg-gradient-to-br from-white/78 via-white/50 to-white/28 backdrop-blur-md border border-white/95 px-3.5 py-2.5 shadow-[inset_0_1.5px_1px_rgba(255,255,255,1),0_4px_12px_-4px_rgba(15,23,42,0.05)]">
-                          <div className="relative flex items-center justify-between">
-                            <div className="absolute left-3 right-3 top-[13px] h-[2px] bg-slate-200/80 rounded-full" />
-                            <div
-                              style={{
-                                width: `${Math.min(100, Math.max(0, (activeStageIdx / (lifecycleStages.length - 1)) * 88))}%`,
-                              }}
-                              className="absolute left-3 top-[13px] h-[2px] bg-gradient-to-r from-[#3D52A0] via-sky-500 to-emerald-500 rounded-full"
-                            />
-
-                            {lifecycleStages.map((st, idx) => {
-                              const StageIcon = st.icon;
-                              const isDone = idx < activeStageIdx;
-                              const isCurrent = idx === activeStageIdx;
-                              return (
-                                <div key={st.key} className="relative z-10 flex flex-col items-center gap-1">
-                                  <div
-                                    className={`w-7 h-7 rounded-full flex items-center justify-center border ${
-                                      isCurrent
-                                        ? 'bg-[#3D52A0] text-white border-white shadow-[0_2px_8px_rgba(61,82,160,0.4)] scale-105'
-                                        : isDone
-                                          ? 'bg-emerald-500 text-white border-white shadow-xs'
-                                          : 'bg-white/90 text-slate-400 border-slate-200/90'
-                                    }`}
-                                  >
-                                    <StageIcon className="w-3.5 h-3.5" strokeWidth={2.3} />
-                                  </div>
-                                  <span
-                                    className={`text-[8.5px] font-extrabold uppercase tracking-wider leading-none ${
-                                      isCurrent
-                                        ? 'text-[#3D52A0]'
-                                        : isDone
-                                          ? 'text-slate-700'
-                                          : 'text-slate-400'
-                                    }`}
-                                  >
-                                    {st.label}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* 3. Calm Darker-Shaded Recessed Surface with Static Room Scope Text */}
-                        <div className="rounded-2xl bg-slate-900/[0.06] border border-slate-900/[0.08] shadow-[inset_0_2px_4px_rgba(15,23,42,0.06)] px-3.5 py-3 flex flex-col justify-center gap-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                              Mapped Spaces
-                            </span>
-                            {roomNames.length > 4 && (
-                              <span
-                                className="text-[9.5px] font-bold text-[#3D52A0] tabular-nums"
-                                title={roomNames.slice(4).join(' · ')}
-                              >
-                                +{roomNames.length - 4} more
-                              </span>
-                            )}
-                          </div>
-                          <p
-                            className="text-[12px] font-semibold text-slate-700 leading-relaxed line-clamp-2"
-                            title={roomNames.join(' · ')}
-                          >
-                            {roomNames.length > 0
-                              ? roomNames.slice(0, 4).join('  ·  ')
-                              : 'Spatial rooms not mapped yet'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Front Bottom: Primary Open CTA + Flip Hint */}
-                      <div className="mt-auto pt-2.5 shrink-0 flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          data-lgf-interactive="true"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenProject(project);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#3D52A0] hover:bg-[#314388] text-white text-[10px] font-bold uppercase tracking-[0.14em] shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.4),0_8px_18px_-6px_rgba(61,82,160,0.5)] transition-colors cursor-pointer"
-                        >
-                          <span>Open Project</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-
-                        <span className="text-[9.5px] font-bold uppercase tracking-widest text-slate-500">
-                          {conditions.length > 0
-                            ? `${conditions.length} ${conditions.length === 1 ? 'flag' : 'flags'} · Flip →`
-                            : 'Flip for commercials & ops →'}
-                        </span>
-                      </div>
-                    </div>
-                  );
-
-                  const backFace = (
-                    <div className="flex flex-col h-full w-full justify-between select-none text-slate-900">
-                      <div>
-                        {/* Back Header: Team Assignment & Last Modified */}
-                        <div className="pb-2.5 border-b border-white/60 pr-11 flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#3D52A0] truncate">
-                              {displayName(project)}
-                            </p>
-                            <p className="text-[10px] font-semibold text-slate-500 tabular-nums mt-0.5">
-                              Modified {timeAgo(project.lastModified)}
-                              {project.context?.bookedOn ? ` · Booked ${project.context.bookedOn}` : ''}
-                            </p>
-                          </div>
-                          <div className="shrink-0" data-lgf-interactive="true">
-                            <ProjectTeamButton project={project} size="sm" align="right" />
-                          </div>
-                        </div>
-
-                        {/* Commercials, Margin & Governance (Exclusive to Back) */}
-                        <div className="py-2.5 border-b border-white/60 flex flex-col gap-2">
-                          <div className="bg-gradient-to-br from-white/78 via-white/52 to-white/32 backdrop-blur-md border border-white/90 shadow-[inset_0_1.5px_1px_rgba(255,255,255,1),0_4px_12px_-4px_rgba(15,23,42,0.06)] rounded-xl px-3 py-2">
-                            {renderFinancialSummary()}
-                          </div>
-                          <div className="grid grid-cols-3 gap-1.5">
-                            <div className="bg-gradient-to-br from-white/75 to-white/38 border border-white/90 shadow-[inset_0_1px_0.5px_rgba(255,255,255,1)] rounded-lg px-2 py-1">
-                              <p className="text-[8px] font-bold uppercase tracking-wider text-slate-500">
-                                Rooms
-                              </p>
-                              <p className="text-[11px] font-bold text-slate-800 tabular-nums">
-                                {roomCount > 0 ? `${roomCount} spaces` : 'Unmapped'}
-                              </p>
-                            </div>
-                            <div className="bg-gradient-to-br from-white/75 to-white/38 border border-white/90 shadow-[inset_0_1px_0.5px_rgba(255,255,255,1)] rounded-lg px-2 py-1">
-                              <p className="text-[8px] font-bold uppercase tracking-wider text-slate-500">
-                                BOQ Scope
-                              </p>
-                              <p className="text-[11px] font-bold text-slate-800 tabular-nums">
-                                {boqLineCount > 0 ? `${boqLineCount} lines` : 'No lines'}
-                              </p>
-                            </div>
-                            <div className="bg-gradient-to-br from-white/75 to-white/38 border border-white/90 shadow-[inset_0_1px_0.5px_rgba(255,255,255,1)] rounded-lg px-2 py-1">
-                              <p className="text-[8px] font-bold uppercase tracking-wider text-slate-500">
-                                Governance
-                              </p>
-                              <p className="text-[11px] font-bold text-slate-800 truncate">
-                                {project.context?.boqFrozen
-                                  ? 'BOQ Frozen'
-                                  : project.context?.portalAccess?.token
-                                    ? 'Portal Live'
-                                    : 'Editable'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Operational Signals, Payment Health & Flags (Exclusive to Back) */}
-                        <div className="py-2.5 border-b border-white/60 flex flex-col gap-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                              <Flag className="w-2.5 h-2.5 shrink-0 text-[#3D52A0]" strokeWidth={2.6} />
-                              Flags & Payment Health
-                            </span>
-                            <div className="flex items-center gap-2">
-                              {/* Client portal messages nobody has dealt with (it counted Client Comms templates, now retired). */}
-                              {unansweredMessages(project.context) > 0 && (
-                                <span className="text-[9.5px] font-bold uppercase tracking-wider text-amber-700">
-                                  {unansweredMessages(project.context)} new msg
-                                </span>
-                              )}
-                              {showFinance && metrics.status !== 'lost' && (
-                                <div className="scale-90 origin-right" data-lgf-interactive="true">
-                                  <ProjectPaymentBadge projectId={project.id} milestones={project.context?.paymentMilestones || []} size="sm" />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {conditions.length === 0 ? (
-                            <p className="text-[11px] font-medium text-slate-500">
-                              No active blockers, pending sign-offs or overdue flags.
-                            </p>
-                          ) : (
-                            <div className="flex flex-wrap gap-1.5">
-                              {conditions.slice(0, 3).map((c: any, idx: number) => (
-                                <span
-                                  key={idx}
-                                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[9.5px] font-bold uppercase tracking-wider border shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.9)] ${
-                                    c.isAlert
-                                      ? 'bg-rose-50/80 border-rose-200/85 text-rose-700'
-                                      : 'bg-white/75 border-white/90 text-slate-700'
-                                  }`}
-                                >
-                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} />
-                                  <span className="truncate max-w-[200px]">{c.text}</span>
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Document Meter (Exclusive to Back) */}
-                        <div className="py-2 border-b border-white/60" data-lgf-interactive="true">
-                          <DocumentMeter projectContext={project.context} />
-                        </div>
-
-                        {/* Immediate Next Move (Moved to Back in place of Recent Activity) */}
-                        <div className="pt-2.5 flex flex-col gap-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                              <Zap className="w-2.5 h-2.5 shrink-0 text-[#3D52A0]" strokeWidth={2.6} />
-                              Immediate Next Move
-                            </span>
-                            {nextMove?.priority && (
-                              <span
-                                className={`text-[8.5px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${
-                                  nextMove.priority === 'blocker'
-                                    ? 'bg-rose-50/90 text-rose-700 border-rose-200'
-                                    : nextMove.priority === 'due'
-                                      ? 'bg-amber-50/90 text-amber-800 border-amber-200'
-                                      : 'bg-indigo-50/90 text-[#3D52A0] border-indigo-200'
-                                }`}
-                              >
-                                {nextMove.priority}
-                              </span>
-                            )}
-                          </div>
-                          {nextMove ? (
-                            (() => {
-                              const urgent =
-                                nextMove.priority === 'blocker' || nextMove.priority === 'due';
-                              const skin =
-                                nextMove.priority === 'blocker'
-                                  ? 'bg-gradient-to-br from-rose-50/90 to-rose-100/55 text-rose-800 border-rose-200/90 shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.95)]'
-                                  : nextMove.priority === 'due'
-                                    ? 'bg-gradient-to-br from-amber-50/90 to-amber-100/55 text-amber-900 border-amber-200/90 shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.95)]'
-                                    : 'bg-gradient-to-br from-white/85 to-white/50 text-slate-800 border-white/95 shadow-[inset_0_1.5px_1px_rgba(255,255,255,1)]';
-                              return (
-                                <motion.div
-                                  title={nextMove.why}
-                                  animate={
-                                    urgent && !reduceMotion
-                                      /* One transform, so it runs on the compositor; see the tag above. */
-                                      ? { transform: ['rotate(-0.4deg)', 'rotate(0.4deg)', 'rotate(-0.3deg)', 'rotate(0.3deg)', 'rotate(-0.4deg)'] }
-                                      : undefined
-                                  }
-                                  transition={{ repeat: Infinity, duration: 5, ease: 'easeInOut' }}
-                                  className={`w-full flex items-start gap-2 px-3 py-2 rounded-xl border backdrop-blur-md text-[11.5px] font-semibold leading-snug origin-left ${skin}`}
-                                >
-                                  {nextMove.blockedBy && (
-                                    <Lock className="w-3 h-3 shrink-0 mt-[2px]" strokeWidth={2.4} />
-                                  )}
-                                  <span className="min-w-0 line-clamp-2">
-                                    {nextMove.title}
-                                    {nextMove.blockedBy && (
-                                      <span className="font-medium opacity-75">
-                                        {' '}· waiting on {nextMove.blockedBy}
-                                      </span>
-                                    )}
-                                  </span>
-                                </motion.div>
-                              );
-                            })()
-                          ) : (
-                            <div className="px-3 py-2 rounded-xl bg-gradient-to-br from-white/75 to-white/40 border border-white/90 text-[11px] font-medium text-slate-500 shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.95)]">
-                              {isDesignerRole(currentRole) ? 'Open project to view drawings' : 'Nothing blocking or waiting'}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Back Footer: Management Toolbar (Status, Clone, Select, Delete) */}
-                      <div
-                        className="mt-3 pt-2.5 border-t border-white/60 flex items-center justify-between gap-2"
-                        data-lgf-interactive="true"
-                      >
-                        <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                          Manage Card
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setStatusModalProject(project);
-                            }}
-                            className="px-2.5 py-1.5 flex items-center gap-1 bg-gradient-to-br from-white/85 to-white/55 border border-white/95 text-slate-700 hover:from-white hover:to-white/80 rounded-lg text-[10.5px] font-bold transition-colors shadow-[inset_0_1px_0.5px_rgba(255,255,255,1),0_2px_6px_-2px_rgba(15,23,42,0.06)] cursor-pointer"
-                            title="Change Status & Phase"
-                          >
-                            <SlidersHorizontal className="w-3 h-3 text-[#3D52A0]" />
-                            <span>Status</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDuplicateProject(project);
-                            }}
-                            className="px-2.5 py-1.5 flex items-center gap-1 bg-gradient-to-br from-white/85 to-white/55 border border-white/95 text-slate-700 hover:from-white hover:to-white/80 rounded-lg text-[10.5px] font-bold transition-colors shadow-[inset_0_1px_0.5px_rgba(255,255,255,1),0_2px_6px_-2px_rgba(15,23,42,0.06)] cursor-pointer"
-                            title="Clone as template — copies rooms and priced scope, not the client, payments or sign-offs"
-                          >
-                            <svg
-                              width="11"
-                              height="11"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                            </svg>
-                            <span>Clone</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleSelected(project.id);
-                            }}
-                            className={`w-7 h-7 flex items-center justify-center border rounded-lg transition-colors shadow-[inset_0_1px_0.5px_rgba(255,255,255,1)] cursor-pointer ${
-                              selectedForDelete.has(project.id)
-                                ? 'bg-[#3D52A0] border-[#3D52A0] text-white'
-                                : 'bg-gradient-to-br from-white/85 to-white/55 border-white/95 text-slate-500 hover:text-slate-800 hover:from-white'
-                            }`}
-                            title={selectedForDelete.has(project.id) ? 'Selected' : 'Select'}
-                            aria-pressed={selectedForDelete.has(project.id)}
-                          >
-                            <svg
-                              width="12"
-                              height="12"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="3"
-                            >
-                              <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteTargets([project.id]);
-                            }}
-                            className="w-7 h-7 flex items-center justify-center bg-gradient-to-br from-white/85 to-white/55 border border-white/95 text-slate-500 hover:text-rose-600 hover:from-rose-50 hover:to-rose-100/70 hover:border-rose-200 rounded-lg transition-colors shadow-[inset_0_1px_0.5px_rgba(255,255,255,1)] cursor-pointer"
-                            title="Delete"
-                          >
-                            <svg
-                              width="12"
-                              height="12"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <polyline points="3 6 5 6 21 6"></polyline>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-
-                  return (
-                    <motion.div
-                      key={project.id}
-                      initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      /* The ripple stops at the first screenful. Uncapped, the fortieth
-                         card waited two seconds to begin appearing. */
-                      transition={{ duration: 0.4, delay: Math.min(index, FIRST_CARDS - 1) * 0.05, ease: [0.16, 1, 0.3, 1] }}
+              <div ref={deskRef} className="pf-surface">
+                {filteredProjects.length === 0 && projects.length > 0 && (
+                  <div className="pf-empty">
+                    No project matches.{' '}
+                    <button
+                      type="button"
+                      className="font-bold text-[#3D52A0]"
+                      onClick={() => { setSearchQuery(''); setAlertFilter(null); setKindFilter('all'); setEngagementFilter('all'); setStatusFilter('all'); }}
                     >
-                      <LiquidGlassFlipCard
-                        ariaLabel={displayName(project)}
-                        trigger="click"
-                        drag={true}
-                        axis="horizontal"
-                        surface="light"
-                        material="clear"
-                        tint={isActive ? "#E0E7FF" : "#FFFFFF"}
-                        textColor="#0F172A"
-                        radius="24px"
-                        padding="20px"
-                        liquidity={45}
-                        tilt={60}
-                        flipButton={true}
-                        shadow="prism"
-                        focusColor="#3D52A0"
-                        optics={{
-                          blur: 14,
-                          depth: 28,
-                          refraction: 85,
-                          dispersion: 55,
-                          light: 92,
-                        }}
-                        style={{
-                          boxShadow: isActive ? "0 0 0 2px #3D52A0" : undefined,
-                          borderRadius: "24px",
-                        }}
-                        frontLayer={frontFace}
-                        backLayer={backFace}
+                      Clear the filters
+                    </button>
+                  </div>
+                )}
+                {(() => {
+                  const folder = (project: FullProjectData, index: number, width: number) => {
+                    const c: any = project.context || {};
+                    const meta = [c.config || c.bhk, Number(c.area) > 0 ? `${Math.round(Number(c.area)).toLocaleString('en-IN')} sft` : null, c.location || c.city].filter(Boolean).join(' · ');
+                    return (
+                      <ProjectFolder
+                        key={project.id}
+                        id={project.id}
+                        name={displayName(project)}
+                        meta={meta || 'Scope to set'}
+                        client={c.clientName || 'No client yet'}
+                        stage={stageOf(c.status)}
+                        kind={kindOf(project)}
+                        files={folderFiles(project)}
+                        next={folderNext(intel.get(project.id)?.action)}
+                        width={width}
+                        index={index}
+                        active={activeProjectId === project.id}
+                        selected={selectedForDelete.has(project.id)}
+                        onOpen={(route) => onOpenProject(project, route)}
+                        onChangeStage={() => setStatusModalProject(project)}
+                        onDuplicate={() => onDuplicateProject(project)}
+                        onToggleSelect={() => toggleSelected(project.id)}
+                        onDelete={() => setDeleteTargets([project.id])}
                       />
-                    </motion.div>
+                    );
+                  };
+                  if (deskView === 'shelves') {
+                    return (
+                      <div className="pf-shelves">
+                        {FOLDER_STAGES.map((st) => {
+                          const row = shownProjects.filter((proj) => stageOf(proj.context?.status) === st.id);
+                          if (!row.length) return null;
+                          return (
+                            <div key={st.id} className="pf-shelf" style={{ ['--fc' as any]: st.color }}>
+                              <h2><i className="pf-sw" />{st.label}<b>{row.length}</b></h2>
+                              <div className="pf-row">{row.map((proj, i) => folder(proj, i, Math.min(380, folderW)))}</div>
+                              <div className="pf-plank" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div ref={cardGridRef} className="pf-grid" style={{ gridTemplateColumns: `repeat(${folderCols}, ${folderW}px)` }}>
+                      {shownProjects.map((project, index) => folder(project, index, folderW))}
+                    </div>
                   );
-                })}
-                </AnimatePresence>
+                })()}
               </div>
-            </div>
-            </>
-          )}
+            </section>
+          </div>
 
-          {/* --- COMPARISON VIEW --- */}
           {viewMode === "compare" && (
             <Card
               title="Strategic Decision Matrix"
