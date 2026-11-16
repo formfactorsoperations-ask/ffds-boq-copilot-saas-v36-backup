@@ -21,6 +21,7 @@ import { watchMeetings, reconcileApprovals, listApprovals } from '../../services
 import { sendsApprovals, type ApprovalItem } from '../../lib/designMeeting';
 import { canRunMeeting, canPresentAssigned, projectNameOf } from '../../lib/drawingReview';
 import DrawingApprovals from '../opsDesk/DrawingApprovals';
+import { SummaryStrip, type Stat } from '../ui/kit';
 import { FileCheck2 } from 'lucide-react';
 import { classifyRevisionCause, RevisionClassification } from '../../services/geminiService';
 import { useOrg } from '../../contexts/OrgContext';
@@ -973,26 +974,6 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
     const risk = useMemo(() => summariseRisk(drawings), [drawings]);
 
     /*
-      The rail leans a degree or two toward the pointer. Written straight to
-      CSS custom properties rather than through state, so moving the mouse
-      does not re-render a list of nineteen drawings sixty times a second.
-    */
-    const railRef = useRef<HTMLElement | null>(null);
-    const onRailPointer = (e: React.PointerEvent<HTMLElement>) => {
-        const el = railRef.current;
-        if (!el) return;
-        const r = el.getBoundingClientRect();
-        el.style.setProperty('--tx', String(((e.clientX - r.left) / r.width - 0.5) * 2));
-        el.style.setProperty('--ty', String(((e.clientY - r.top) / r.height - 0.5) * 2));
-    };
-    const resetRailTilt = () => {
-        const el = railRef.current;
-        if (!el) return;
-        el.style.setProperty('--tx', '0');
-        el.style.setProperty('--ty', '0');
-    };
-
-    /*
       A filter that leads nowhere is noise. Counting first lets the row hide
       the states this project has nothing in, and say how much is in the rest.
     */
@@ -1032,6 +1013,70 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         gfcIssued: drawings.filter(d => d.gfc?.status === 'issued').length,
         issues: issues.length
     };
+
+    /*
+      The four readouts above the register. One figure and one line each;
+      a tile that filters takes you straight to the drawings behind it.
+    */
+    const summaryStats: Stat[] = (() => {
+        const pct = Math.round(stats.total ? (stats.approved / stats.total) * 100 : 0);
+        const oneLine = (text: string) => <span className="block truncate" title={text}>{text}</span>;
+
+        const gateSub = issues.length > 0
+            ? `${issues.length} ${issues.length === 1 ? 'gap blocks' : 'gaps block'} the gate`
+            : `${stats.approved} of ${stats.total} approved and signed off`;
+
+        const worst = turnaround.worst;
+        const clientSub = turnaround.withClient === 0
+            ? 'Nothing waiting on the client'
+            : turnaround.stale > 0
+                ? `${turnaround.stale} past ${turnaround.staleAfterDays} days, worth a nudge`
+                : worst
+                    ? `Longest: ${worst.name}, ${worst.days === 0 ? 'issued today' : `${worst.days} ${plural(worst.days, 'day')}`}`
+                    : turnaround.meanResponseDays !== null
+                        ? `Answers in ${turnaround.meanResponseDays.toFixed(1)} days on average`
+                        : 'Awaiting feedback';
+
+        const reworkSub = econ.total === 0
+            ? `Rounds 1–${econ.freeRoundLimit} included in the fee`
+            : `${Math.round(econ.ourShare * 100)}% ours to absorb${econ.unbilled > 0 ? ` · ${econ.unbilled} unbilled` : ''}`;
+
+        const next = risk.queue[0];
+        const datesSub = risk.queue.length === 0
+            ? (risk.noDate === stats.total && stats.total > 0 ? 'No target dates set yet' : 'Nothing overdue or due this week')
+            : next && next.risk.daysToTarget !== null
+                ? `${next.name}, ${next.risk.daysToTarget < 0 ? `${Math.abs(next.risk.daysToTarget)}d late` : `due in ${next.risk.daysToTarget}d`}`
+                : `${risk.dueSoon} due this week`;
+
+        return [
+            {
+                label: 'Design gate',
+                value: `${pct}%`,
+                sub: oneLine(gateSub),
+                tone: issues.length > 0 ? 'bad' : stats.total > 0 && stats.approved === stats.total ? 'good' : 'slate',
+                onClick: issues.length > 0 ? () => setFilter('Missing') : undefined,
+            },
+            {
+                label: 'With the client',
+                value: turnaround.withClient,
+                sub: oneLine(clientSub),
+                tone: turnaround.stale > 0 ? 'warn' : 'slate',
+                onClick: turnaround.withClient > 0 ? () => setFilter('Client Review') : undefined,
+            },
+            {
+                label: 'Rework',
+                value: econ.total,
+                sub: oneLine(reworkSub),
+                tone: econ.total === 0 ? 'slate' : econ.ourShare > 0.3 ? 'bad' : econ.unbilled > 0 ? 'warn' : 'good',
+            },
+            {
+                label: 'Overdue',
+                value: risk.overdue,
+                sub: oneLine(datesSub),
+                tone: risk.overdue > 0 ? 'bad' : risk.dueSoon > 0 ? 'warn' : 'slate',
+            },
+        ];
+    })();
 
     // Filter drawings
     const filteredDrawings = drawings.filter(d => {
@@ -1577,7 +1622,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
       columns; without it the aligned figures look like a coincidence.
     */
     const columnHeader = (
-        <div className="hidden lg:grid grid-cols-[1fr_74px_116px_154px_86px_112px] gap-x-3 px-4 py-2 bg-[#F1F7F5] border-b border-[#DCEBE6]">
+        <div className="hidden @3xl:grid grid-cols-[1fr_64px_140px_136px_64px_112px] gap-x-3 px-4 py-2 bg-[#F1F7F5] border-b border-[#DCEBE6]">
             {['Drawing', 'Rounds', 'Status', 'Whose move', 'Target', ''].map((h, i) => (
                 <span key={i} className="text-[10px] font-black uppercase tracking-wider text-[#2E7D6B]">{h}</span>
             ))}
@@ -1618,7 +1663,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
             >
                 {isIssue && <span className="absolute left-0 inset-y-0 w-[3px] bg-rose-400" />}
 
-                <div className="grid grid-cols-[1fr_auto] lg:grid-cols-[1fr_74px_116px_154px_86px_112px] items-center gap-x-3 px-4 py-2.5">
+                <div className="grid grid-cols-[1fr_auto] @3xl:grid-cols-[1fr_64px_140px_136px_64px_112px] items-center gap-x-3 px-4 py-2.5">
 
                     {/* what it is */}
                     <button
@@ -1651,10 +1696,12 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 );
                             })()}
                         </span>
+                        {/* Too narrow for the columns: the status still shows, under the name. */}
+                        <span className="@3xl:hidden mt-1.5 block">{renderStatusBadge(status, d)}</span>
                     </button>
 
                     {/* rounds */}
-                    <div className="hidden lg:flex items-center gap-1">
+                    <div className="hidden @3xl:flex items-center gap-1">
                         {[1, 2].map(r => {
                             const rData = d.rounds.find(rd => rd.roundNumber === r);
                             let state = 'future';
@@ -1682,7 +1729,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                     </div>
 
                     {/* status, and where the sheet is in Design Review */}
-                    <div className="hidden lg:block min-w-0">
+                    <div className="hidden @3xl:block min-w-0 whitespace-nowrap">
                         {renderStatusBadge(status, d)}
                         {d.review?.state && (
                             <button
@@ -1697,7 +1744,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                     </div>
 
                     {/* whose move */}
-                    <div className="hidden lg:block min-w-0">
+                    <div className="hidden @3xl:block min-w-0">
                         {(() => {
                             const t = turnaroundOf(d);
                             if (t.state === 'approved' || t.state === 'not_started') {
@@ -1722,7 +1769,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                     </div>
 
                     {/* target */}
-                    <div className="hidden lg:block">
+                    <div className="hidden @3xl:block">
                         {d.targetDate ? (
                             <span className={`text-[11px] font-semibold tabular-nums ${isOverdue ? 'text-rose-700' : 'text-slate-500'}`}>
                                 {d.targetDate.slice(5)}{isOverdue && ' !'}
@@ -1926,10 +1973,10 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                             transition={{ duration: 0.2, ease: "easeInOut" }}
                             className="overflow-hidden border-t border-slate-200/80 bg-slate-50/50"
                         >
-                            <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+                            <div className="p-6 grid grid-cols-1 @3xl:grid-cols-12 gap-6">
                                 
                                 {/* Left Column: Timeline & GFC issuance */}
-                                <div className="lg:col-span-5 space-y-5">
+                                <div className="@3xl:col-span-5 space-y-5">
                                     <div className="flex items-center justify-between">
                                         <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Round Progression Timeline</h4>
                                         {isOwner && (
@@ -2002,7 +2049,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 </div>
 
                                 {/* Right Column: Revisions, GFC, Notes & Comments */}
-                                <div className="lg:col-span-7 space-y-5">
+                                <div className="@3xl:col-span-7 space-y-5">
                                     {/* GFC Block status */}
                                     {d.gfc && renderGfcBlock(d)}
 
@@ -2165,13 +2212,18 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
               first drawing — gate status, a GFC prompt, five KPI cards, a gap
               warning, scope chips, then the toolbar — which pushed the actual
               work a full screen down and said several things twice. The
-              readouts move into the rail on the right, where they are visible
-              the whole time you work rather than scrolled past once.
+              readouts now sit in one summary strip under the title.
+
+              They used to live in a 340px rail on the right, but with the project
+              sidebar open that left the register about 70px for a drawing's name,
+              so every name was cut to "Demoliti…". Above the work, the register
+              gets the full width and the figures are still the first thing you see.
             */}
-            <div className="grid lg:grid-cols-[1fr_340px] gap-5 items-start">
+            <div>
 
                 {/* ── the work ─────────────────────────────────────────── */}
-                <div className="min-w-0 space-y-4">
+                {/* A container, so the register's columns follow its own width, not the window's. */}
+                <div className="@container min-w-0 space-y-4">
 
                     <div className="dt-board border rounded-2xl px-5 py-4 dt-frame" style={{ borderColor: 'var(--pine-line)' }}>
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2193,6 +2245,30 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                     {risk.overdue > 0 && <> · <b className="text-rose-700">{risk.overdue} overdue</b></>}
                                 </p>
                             </div>
+                            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                            {readyForGfcCount > 0 && isOwner && (
+                                <button
+                                    type="button"
+                                    onClick={handleBatchIssueGfc}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg transition-colors cursor-pointer"
+                                >
+                                    <ShieldCheck className="w-3.5 h-3.5" />
+                                    Issue {readyForGfcCount} approved {plural(readyForGfcCount, 'GFC')}
+                                </button>
+                            )}
+                            <button type="button" onClick={handleExportCSV} title="Download the register as a CSV"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-[#1F4D45] bg-white border border-[#DCEBE6] hover:border-[#9EC9BC] hover:bg-[#F1F7F5] rounded-lg transition-colors cursor-pointer">
+                                <Download className="w-3.5 h-3.5" /> CSV
+                            </button>
+                            <button type="button" onClick={handleCopyWhatsAppDigest} title="Copy a WhatsApp digest"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-[#1F4D45] bg-white border border-[#DCEBE6] hover:border-[#9EC9BC] hover:bg-[#F1F7F5] rounded-lg transition-colors cursor-pointer">
+                                <Share2 className="w-3.5 h-3.5" /> Digest
+                            </button>
+                            <button type="button" onClick={() => setShowPrintModal(true)} title="Print the sign-off matrix"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-[#1F4D45] bg-white border border-[#DCEBE6] hover:border-[#9EC9BC] hover:bg-[#F1F7F5] rounded-lg transition-colors cursor-pointer">
+                                <Printer className="w-3.5 h-3.5" /> Matrix
+                            </button>
+                            <span className="hidden sm:block w-px h-5 bg-[#DCEBE6] mx-1" aria-hidden />
                             {signedInDesigner ? (
                                 <span className="shrink-0 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg bg-[#DCEBE6] text-[#1F4D45]">
                                     Designer view
@@ -2211,8 +2287,11 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 </button>
                             </div>
                             )}
+                            </div>
                         </div>
                     </div>
+
+                    <SummaryStrip stats={summaryStats} />
 
             {mayApprove && (
                 <div className="bg-white border border-slate-200 rounded-2xl">
@@ -2459,193 +2538,6 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
                 </div>
 
-                {/* ── the readouts ─────────────────────────────────────── */}
-                <aside
-                    ref={railRef}
-                    onPointerMove={onRailPointer}
-                    onPointerLeave={resetRailTilt}
-                    className="dt-rail dt-tilt relative overflow-hidden rounded-2xl p-6 space-y-5 dt-frame"
-                    style={{ animationDelay: '.08s' }}
-                >
-                    <div className="dt-scanline" />
-
-                    {/*
-                      Actions first.
-
-                      They were at the foot of this panel, which put them below
-                      the fold; moving them into the toolbar only buried them
-                      among the filters. At the top of the rail they are the
-                      first thing the eye lands on, and they are labelled rather
-                      than left as three unexplained icons.
-                    */}
-                    <section className="dt-rise space-y-2">
-                        {readyForGfcCount > 0 && isOwner && (
-                            <button
-                                type="button"
-                                onClick={handleBatchIssueGfc}
-                                className="w-full px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                            >
-                                <ShieldCheck className="w-4 h-4" />
-                                Issue {readyForGfcCount} approved {plural(readyForGfcCount, 'GFC')}
-                            </button>
-                        )}
-                        <div className="grid grid-cols-3 gap-1.5">
-                            <button type="button" onClick={handleExportCSV}
-                                className="inline-flex items-center justify-center gap-1.5 px-2 py-2 text-[11px] font-semibold text-[#1F4D45] bg-white border border-[#DCEBE6] hover:border-[#9EC9BC] hover:bg-[#F1F7F5] rounded-lg transition-colors cursor-pointer">
-                                <Download className="w-3.5 h-3.5" /> CSV
-                            </button>
-                            <button type="button" onClick={handleCopyWhatsAppDigest}
-                                className="inline-flex items-center justify-center gap-1.5 px-2 py-2 text-[11px] font-semibold text-[#1F4D45] bg-white border border-[#DCEBE6] hover:border-[#9EC9BC] hover:bg-[#F1F7F5] rounded-lg transition-colors cursor-pointer">
-                                <Share2 className="w-3.5 h-3.5" /> Digest
-                            </button>
-                            <button type="button" onClick={() => setShowPrintModal(true)}
-                                className="inline-flex items-center justify-center gap-1.5 px-2 py-2 text-[11px] font-semibold text-[#1F4D45] bg-white border border-[#DCEBE6] hover:border-[#9EC9BC] hover:bg-[#F1F7F5] rounded-lg transition-colors cursor-pointer">
-                                <Printer className="w-3.5 h-3.5" /> Matrix
-                            </button>
-                        </div>
-                    </section>
-
-                    {/* Gate */}
-                    <section className="dt-rise border-t border-[#E1EEE9] pt-5" style={{ animationDelay: '.5s' }}>
-                        <div className="flex items-baseline justify-between gap-2">
-                            <h3 className="text-[11px] font-semibold tracking-wide text-[#2E7D6B]">Design gate</h3>
-                            <span className="text-[10px] font-bold text-[#5C7F76] tabular-nums">{stats.approved}/{stats.total}</span>
-                        </div>
-                        <div className="mt-2.5 flex items-center gap-3">
-                            <svg width="58" height="58" viewBox="0 0 58 58" className="shrink-0 -rotate-90">
-                                <circle cx="29" cy="29" r="24" fill="none" stroke="#E4EFEB" strokeWidth="5" />
-                                <circle
-                                    cx="29" cy="29" r="24" fill="none" stroke="#2E7D6B" strokeWidth="5" strokeLinecap="round"
-                                    className="dt-arc"
-                                    style={{
-                                        ['--dash' as any]: '151',
-                                        ['--target' as any]: String(151 - 151 * (stats.total ? stats.approved / stats.total : 0)),
-                                        strokeDasharray: 151,
-                                        strokeDashoffset: 151 - 151 * (stats.total ? stats.approved / stats.total : 0),
-                                        animationDelay: '.6s',
-                                    }}
-                                />
-                            </svg>
-                            <div className="min-w-0">
-                                <div className="text-[26px] font-bold leading-none tabular-nums">
-                                    {Math.round(stats.total ? (stats.approved / stats.total) * 100 : 0)}%
-                                </div>
-                                <p className="text-[11px] text-[#5C7F76] leading-snug mt-1">
-                                    {issues.length > 0
-                                        ? <><b className="text-rose-700">{issues.length}</b> {issues.length === 1 ? 'gap blocks' : 'gaps block'} the gate</>
-                                        : stats.approved === stats.total && stats.total > 0
-                                            ? 'Every drawing approved'
-                                            : 'approved and signed off'}
-                                </p>
-                            </div>
-                        </div>
-                        {issues.length > 0 && (
-                            <p className="mt-2.5 text-[11px] text-rose-700 leading-snug">
-                                {issues.slice(0, 2).map(g => g.name).join(', ')}
-                                {issues.length > 2 && ` +${issues.length - 2} more`}
-                            </p>
-                        )}
-                    </section>
-
-                    {/* Client turnaround */}
-                    <section className="dt-rise border-t border-[#E1EEE9] pt-5" style={{ animationDelay: '.62s' }}>
-                        <h3 className="text-[11px] font-semibold tracking-wide text-[#2E7D6B]">With the client</h3>
-                        {turnaround.withClient === 0 ? (
-                            <p className="text-[11px] text-[#5C7F76] mt-2 leading-snug">
-                                Nothing is sitting with the client right now.
-                            </p>
-                        ) : (
-                            <>
-                                <div className="mt-2 flex items-baseline gap-2">
-                                    <span className="text-[22px] font-bold tabular-nums">{turnaround.withClient}</span>
-                                    <span className="text-[11px] text-[#5C7F76]">
-                                        {plural(turnaround.withClient, 'drawing')} awaiting feedback
-                                    </span>
-                                </div>
-                                {turnaround.worst && (
-                                    <p className={`text-[11px] mt-1.5 leading-snug ${turnaround.stale > 0 ? 'text-amber-700' : 'text-[#5C7F76]'}`}>
-                                        Longest: <b>{turnaround.worst.name}</b>,{' '}
-                                        {turnaround.worst.days === 0
-                                            ? 'issued today'
-                                            : `${turnaround.worst.days} ${plural(turnaround.worst.days, 'day')}`}
-                                    </p>
-                                )}
-                                {turnaround.withClientUndated > 0 && (
-                                    <p className="text-[11px] text-[#5C7F76] mt-1.5 leading-snug">
-                                        <b>{turnaround.withClientUndated}</b> of these {plural(turnaround.withClientUndated, 'has', 'have')} no
-                                        issue date recorded, so the clock cannot be read.
-                                    </p>
-                                )}
-                                {turnaround.stale > 0 && (
-                                    <p className="text-[11px] text-amber-700 mt-1 leading-snug">
-                                        <b>{turnaround.stale}</b> past {turnaround.staleAfterDays} days — worth a nudge.
-                                    </p>
-                                )}
-                            </>
-                        )}
-                        {turnaround.meanResponseDays !== null && (
-                            <p className="text-[11px] text-[#5C7F76] mt-2 leading-snug border-t border-[#E1EEE9] pt-2.5">
-                                This client answers in <b className="text-[#12332E]">{turnaround.meanResponseDays.toFixed(1)} days</b> on average.
-                            </p>
-                        )}
-                    </section>
-
-                    {/* Revision economics */}
-                    <section className="dt-rise border-t border-[#E1EEE9] pt-5" style={{ animationDelay: '.74s' }}>
-                        <h3 className="text-[11px] font-semibold tracking-wide text-[#2E7D6B]">Rework</h3>
-                        {econ.total === 0 ? (
-                            <p className="text-[11px] text-[#5C7F76] mt-2 leading-snug">
-                                No revisions logged yet. Rounds 1–{econ.freeRoundLimit} are included in the fee.
-                            </p>
-                        ) : (
-                            <>
-                                <div className="mt-2 flex h-2 rounded-full overflow-hidden bg-[#E4EFEB]">
-                                    {econ.client > 0 && <div style={{ width: `${(econ.client / econ.total) * 100}%`, background: '#3F9B84' }} title={`${econ.client} client-requested`} />}
-                                    {econ.ours > 0 && <div style={{ width: `${(econ.ours / econ.total) * 100}%`, background: '#E0857D' }} title={`${econ.ours} our miss`} />}
-                                    {econ.site > 0 && <div style={{ width: `${(econ.site / econ.total) * 100}%`, background: '#D9A441' }} title={`${econ.site} site condition`} />}
-                                </div>
-                                <p className="text-[11px] text-[#5C7F76] mt-2 leading-snug">
-                                    {([
-                                        [econ.client, 'client'],
-                                        [econ.ours, 'ours'],
-                                        [econ.site, 'site'],
-                                    ] as [number, string][]).filter(([n]) => n > 0).map(([n, l]) => `${n} ${l}`).join(' · ')}
-                                </p>
-                                <p className={`text-[11px] mt-1.5 leading-snug ${econ.ourShare > 0.3 ? 'text-rose-700' : 'text-[#5C7F76]'}`}>
-                                    <b className="text-[#12332E]">{Math.round(econ.ourShare * 100)}%</b> ours to absorb
-                                    {econ.unbilled > 0 && <>, <b className="text-amber-700">{econ.unbilled}</b> unbilled</>}
-                                </p>
-                            </>
-                        )}
-                    </section>
-
-                    {/* Dates */}
-                    <section className="dt-rise border-t border-[#E1EEE9] pt-5" style={{ animationDelay: '.86s' }}>
-                        <h3 className="text-[11px] font-semibold tracking-wide text-[#2E7D6B]">Dates</h3>
-                        {risk.queue.length === 0 ? (
-                            <p className="text-[11px] text-[#5C7F76] mt-2 leading-snug">
-                                {risk.noDate === stats.total && stats.total > 0
-                                    ? 'No target dates set on any drawing yet.'
-                                    : 'Nothing overdue or due this week.'}
-                            </p>
-                        ) : (
-                            <ul className="mt-2 space-y-1.5">
-                                {risk.queue.slice(0, 4).map(item => (
-                                    <li key={item.id} className="flex items-center gap-2">
-                                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.risk.state === 'overdue' ? 'bg-rose-500' : 'bg-amber-500'}`} />
-                                        <span className="text-[11px] flex-1 min-w-0 truncate text-slate-700">{item.name}</span>
-                                        <span className={`text-[10px] font-black tabular-nums shrink-0 ${item.risk.state === 'overdue' ? 'text-rose-700' : 'text-amber-700'}`}>
-                                            {item.risk.daysToTarget !== null && item.risk.daysToTarget < 0
-                                                ? `${Math.abs(item.risk.daysToTarget)}d late`
-                                                : `${item.risk.daysToTarget}d`}
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-
-                    </section>
-                </aside>
             </div>
 
 
