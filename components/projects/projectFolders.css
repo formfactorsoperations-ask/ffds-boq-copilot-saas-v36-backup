@@ -68,6 +68,11 @@
 .pf-fold { position: relative; }
 .pf-fold .gf-root { z-index: 1; }
 .pf-fold .gf-hit { cursor: pointer; }
+/* The project name in full: almost the width of the glass, and onto a second line when it needs one.
+   (The component allows one line of 200 units; the next step sits top-right, so the name has room.) */
+.pf-fold .gf-label { max-width: 296px; }
+.pf-fold .gf-title { white-space: normal; overflow: hidden; text-overflow: clip; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-height: 1.2; overflow-wrap: anywhere; }
+.pf-fold .gf-meta { white-space: normal; }
 /* a soft pool of the stage colour under the folder */
 .pf-fold::before { content: ""; position: absolute; left: 12%; right: 12%; bottom: -4px; height: 34px; border-radius: 50%; background: var(--fc); opacity: .32; filter: blur(20px); z-index: 0; transition: opacity .3s; }
 .pf-item:hover .pf-fold::before { opacity: .5; }

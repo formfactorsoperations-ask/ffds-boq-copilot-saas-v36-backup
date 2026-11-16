@@ -1077,7 +1077,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                 {(() => {
                   const folder = (project: FullProjectData, index: number, width: number) => {
                     const c: any = project.context || {};
-                    const meta = [c.config || c.bhk, Number(c.area) > 0 ? `${Number(c.area).toLocaleString('en-IN')} sft` : null, c.location || c.city].filter(Boolean).join(' · ');
+                    const meta = [c.config || c.bhk, Number(c.area) > 0 ? `${Math.round(Number(c.area)).toLocaleString('en-IN')} sft` : null, c.location || c.city].filter(Boolean).join(' · ');
                     return (
                       <ProjectFolder
                         key={project.id}
