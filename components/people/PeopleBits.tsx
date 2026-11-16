@@ -3,6 +3,7 @@ import { motion, useMotionValue, useReducedMotion, useSpring, useTransform, type
 import { TreePalm, Thermometer, Coffee, Gift, House, Building2, HardHat, Sparkles } from '@/lib/lucide-shim';
 import type { LeaveType, Mode } from '../../lib/peopleDesk';
 import './peopleStyles';
+import { PanelHead } from '../ui/kit';
 
 /*
   Small pieces shared by the People screens (DESIGN.md → "People motion"):
@@ -120,15 +121,9 @@ export const IconTile: React.FC<{ icon: React.ComponentType<any>; tone?: RingTon
 /** The People card (DESIGN.md "Panel"): an icon tile, a title and a blurb, with anything beside them. */
 export const Panel: React.FC<{ icon: React.ComponentType<any>; title: string; blurb: string; children: React.ReactNode; aside?: React.ReactNode }> = ({ icon: Icon, title, blurb, children, aside }) => (
   <section className="group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in">
-    <div className="flex flex-wrap items-start gap-3 mb-5">
-      <IconTile icon={Icon} />
-      <div className="min-w-0 grow basis-52">
-        <h2 className="font-bold text-slate-800">{title}</h2>
-        <p className="text-xs text-slate-500 mt-0.5">{blurb}</p>
-      </div>
-      {aside}
-    </div>
-    {children}
+    {/* The kit's header (components/ui/kit), with People's lifting IconTile. */}
+    <PanelHead chip={<IconTile icon={Icon} />} title={title} blurb={blurb} aside={aside} />
+    <div className="mt-5">{children}</div>
   </section>
 );
 /** Nothing to show yet, with an icon that floats. */

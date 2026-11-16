@@ -1,6 +1,7 @@
 import React from 'react';
 import { Info } from '@/lib/lucide-shim';
 import { CountUp, Dot } from '../../ui/HudBits';
+import { Panel as KitPanel } from '../../ui/kit';
 import { inr, pctText, type Delta, type Tone } from '../../../lib/ownerReports';
 
 /*
@@ -69,25 +70,17 @@ export const Panel: React.FC<{
   className?: string;
   children: React.ReactNode;
 }> = ({ icon, title, blurb, aside, foot, delay = 0, lift = true, className = '', children }) => (
-  <section
-    className={`rp-frame ${lift ? 'rp-panel' : ''} bg-white rounded-2xl border border-slate-200 shadow-sm hud-panel-in flex flex-col overflow-hidden ${className}`}
-    style={{ animationDelay: `${delay}ms` }}
-  >
-    <div className="p-6 flex-1 min-w-0">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-start gap-3 min-w-0">
-          <IconChip icon={icon} />
-          <div className="min-w-0">
-            <h3 className="font-bold text-slate-800">{title}</h3>
-            {blurb && <p className="text-xs text-slate-500 mt-0.5">{blurb}</p>}
-          </div>
-        </div>
-        {aside}
-      </div>
-      <div className="mt-5">{children}</div>
-    </div>
-    {foot && <Foot>{foot}</Foot>}
-  </section>
+  /* The kit's Panel (components/ui/kit) with the reports' hover lift. */
+  <KitPanel as="h3" icon={icon} title={title} blurb={blurb} aside={aside} delay={delay}
+    className={`rp-frame ${lift ? 'rp-panel' : ''} overflow-hidden ${className}`}
+    foot={foot ? (
+      <span className="flex items-start gap-1.5 leading-relaxed">
+        <Info className="w-3 h-3 shrink-0 text-slate-400 mt-[3px]" strokeWidth={2.4} />
+        <span>{foot}</span>
+      </span>
+    ) : undefined}>
+    {children}
+  </KitPanel>
 );
 
 /** A thin bar on the shared track. */

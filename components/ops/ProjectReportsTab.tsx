@@ -12,6 +12,7 @@ import { buildProjectPnl, marginAssumption } from '../../lib/projectPnl';
 import { buildProjectRisk, RISK_TONE } from '../../lib/projectRisk';
 import { Gauge, MarginWaterfall, CostSpine, RoomMarginChart, CollectionBar } from './ReportCharts';
 import DocumentMeter from './DocumentMeter';
+import { Panel as KitPanel } from '../ui/kit';
 import { buildDocumentCompleteness } from '../../lib/documentCompleteness';
 import { engagementOf, isFeeOnly } from '../../lib/engagement';
 
@@ -47,22 +48,14 @@ interface Props {
 
 /* Same shell as the Project P&L card: 24px radius, gold hairline, milky-white
    header. The two are read side by side, so they should look like one family. */
+/* The kit's Panel (components/ui/kit). This screen had a card of its own: a gold rule, an upper-case title, a cream header. */
 const Panel: React.FC<{ title: string; sub?: string; icon?: React.ReactNode; children: React.ReactNode; right?: React.ReactNode }> =
 ({ title, sub, icon, children, right }) => (
-  <div className="bg-white rounded-[24px] border border-slate-200/60 shadow-sm overflow-hidden relative">
-    <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#B5945B]/30" />
-    <div className="px-5 py-4 border-b border-slate-100 bg-[#FAF9F6]/40 flex items-center justify-between gap-3 flex-wrap">
-      <div className="flex items-center gap-2.5">
-        {icon && <div className="w-8 h-8 rounded-lg bg-white border border-[#B5945B]/25 flex items-center justify-center text-[#3D52A0]">{icon}</div>}
-        <div>
-          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-widest">{title}</h3>
-          {sub && <p className="text-[10px] text-slate-400 mt-0.5">{sub}</p>}
-        </div>
-      </div>
-      {right}
-    </div>
-    <div className="p-5">{children}</div>
-  </div>
+  <KitPanel
+    chip={icon ? <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] flex items-center justify-center shrink-0">{icon}</span> : undefined}
+    title={title} blurb={sub} aside={right} className="h-full">
+    {children}
+  </KitPanel>
 );
 
 const Stat: React.FC<{ label: string; value: React.ReactNode; foot?: React.ReactNode; tone?: string }> =
