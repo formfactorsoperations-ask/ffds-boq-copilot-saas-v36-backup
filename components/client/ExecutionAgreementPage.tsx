@@ -6,6 +6,7 @@ import ExecutionAgreementSheet from '../documents/ExecutionAgreementSheet';
 import { ProjectContext, DigitalSignatureDocket } from '../../types';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
+import { studioDisplayName } from '../../lib/studioName';
 import { useProjectProgramme } from '../../hooks/useProjectProgramme';
 import { Download, Share2, Copy, ExternalLink, Tablet, KeyRound, Check, Pencil, GitCompare } from '@/lib/lucide-shim';
 import { calculateSellPrice } from '../../lib/utils';
@@ -287,7 +288,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
 const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: string, projectId: string, setProjectContext: any, projectContext: ProjectContext, grandTotal: number, tenantId?: string }> = ({ clientName, location, projectId, setProjectContext, projectContext, grandTotal, tenantId }) => {
     const { orgData } = useOrg();
     const { settings } = useStudioSettings(tenantId || '');
-    const studioName = settings?.companyName || orgData?.name || 'Form Factors Design Studio';
+    const studioName = studioDisplayName(settings, orgData);
     const [isSending, setIsSending] = useState(false);
     const [showSendConfirm, setShowSendConfirm] = useState(false);
     const [showMarkManual, setShowMarkManual] = useState(false);

@@ -3243,7 +3243,8 @@ export default function App() {
                     }
                   }}
                 >
-                <div className={`flex-grow h-full overflow-y-auto ${activeTab === "client" || activeTab === "client-boq-pack" ? "" : "pt-3 pb-8 px-4 lg:px-6"}`}>
+                {/* No scroll box or padding of its own: ProjectWorkspace gives every project screen one scroll area and one gutter. */}
+                <div className="min-w-0">
                   {/*
                     The tab swap. This was AnimatePresence mode="wait", which mounts the new
                     tab only once the old one has finished fading out; when that exit

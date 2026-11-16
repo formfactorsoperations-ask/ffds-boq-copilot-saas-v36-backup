@@ -4,6 +4,7 @@ import ExecutionStamp from '../documents/ExecutionStamp';
 import { buildSignoffPatch } from '../../services/clientApprovalEngine';
 import { ProjectContext, TermsDocket, TermsSettings, DigitalSignatureDocket } from '../../types';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
+import { studioDisplayName } from '../../lib/studioName';
 import { FileText, Send, CheckCircle2, Download, AlertTriangle, Eye, Check, Edit3, Plus, Trash2, Save, X, Columns, ShieldCheck } from '@/lib/lucide-shim';
 import { id as generateId } from '../../lib/utils';
 import { useOrg } from '../../contexts/OrgContext';
@@ -668,7 +669,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                         }}
                         documentTitle="Terms & Conditions Governance Docket"
                         projectName={projectContext.name}
-                        studioName={settings?.companyName || orgData?.name || 'The Studio'}
+                        studioName={studioDisplayName(settings, orgData)}
                         canReset={true}
                         onReset={() => {
                             setProjectContext(prev => ({
