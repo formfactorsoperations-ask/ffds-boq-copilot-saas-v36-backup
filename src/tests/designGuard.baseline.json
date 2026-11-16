@@ -114,9 +114,6 @@
   "components/LeadBrainTab.tsx": {
     "offPalette": 1
   },
-  "components/LockedState.tsx": {
-    "offPalette": 1
-  },
   "components/LoginScreen.tsx": {
     "halfPx": 9,
     "offPalette": 1
@@ -190,9 +187,8 @@
     "mono": 1
   },
   "components/ProjectListTab.tsx": {
-    "halfPx": 14,
-    "tinyPx": 19,
-    "offPalette": 30
+    "tinyPx": 1,
+    "offPalette": 15
   },
   "components/ProjectSetupWizard.tsx": {
     "tinyPx": 1,
@@ -289,7 +285,7 @@
   "components/TimelineTab.tsx": {
     "halfPx": 4,
     "tinyPx": 18,
-    "offPalette": 13,
+    "offPalette": 10,
     "mono": 14
   },
   "components/VendorsManager.tsx": {

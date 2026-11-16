@@ -2,6 +2,7 @@ import { apiFetch } from '../services/apiFetch';
 import { showSuccessWithNext } from './SuccessWithNextToast';
 import React, { useState, useEffect, useRef } from "react";
 import LockedState from './LockedState';
+import { EmptyState, Panel, Button, Chip, LABEL, INPUT } from './ui/kit';
 import {
   FullBoqItem,
   TimelinePhase as OldTimelinePhase,
@@ -701,106 +702,75 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
     const fmtDay = (iso: string | null) =>
       iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
+    /*
+      Nothing scheduled yet: the screen kit's EmptyState, then the template
+      generator as an ordinary card (DESIGN.md "Screen kit", standardisation
+      PR 7). It used to be a centred hero with a 24px title and an amber icon.
+    */
     return (
-      <Card
-        title="Execution Schedule"
-        titleIcon={<Clock className="w-5 h-5 text-slate-800" />}
-      >
-        <div className="flex flex-col items-center justify-center p-12 text-center max-w-2xl mx-auto">
-          <div className="w-16 h-16 bg-amber-50/50 rounded-full flex items-center justify-center mb-6 border border-amber-100">
-            <Calendar className="w-8 h-8 text-amber-600" />
-          </div>
-          <h2 className="text-2xl font-extrabold text-slate-800 mb-2">
-            No Execution Schedule Found
-          </h2>
-          <p className="text-slate-500 mb-8 text-sm">
-            Generate a comprehensive on-site timeline based on your studio's
-            standardized design and execution stages.
-          </p>
+      <div className="w-full space-y-4">
+        <EmptyState
+          className="bg-white"
+          icon={Calendar}
+          title="No programme yet"
+          text="The timeline runs from design to handover. Make it from the studio's template below, or build it by hand."
+          action={<Button size="sm" onClick={() => setManualMode(true)}>Build it by hand</Button>}
+        />
 
-          <div className="grid grid-cols-1 gap-6 w-full max-w-md text-left">
-            <div className="border border-sky-100 rounded-2xl p-6 bg-white shadow-lg shadow-sky-50/30">
-              <div className="flex items-center gap-1.5 mb-4 text-[#334486] font-bold uppercase tracking-widest text-[10px]">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Recommended</span>
+        <Panel
+          icon={Sparkles}
+          title="Make it from the studio template"
+          badge={<Chip tone="brand">Recommended</Chip>}
+          blurb={<>Your {templateSteps.length}-step design process, then a site programme sized to
+            this home{templatePreview ? ` (${Math.round(templatePreview.sizing.areaSqFt)} sq ft, ${templatePreview.sizing.rooms} rooms)` : ''} and
+            the trades in its BOQ. Every bar can be edited afterwards.</>}
+          className="max-w-2xl"
+        >
+          {templatePreview && (
+            <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 divide-y divide-slate-100 text-xs">
+              <div className="flex items-center justify-between px-3 py-2">
+                <span className="font-semibold text-slate-600">Design</span>
+                <span className="text-slate-500 tabular-nums">
+                  {templatePreview.designWorkDays} working days · gate {fmtDay(templatePreview.designGateISO)}
+                </span>
               </div>
-              <h3 className="text-base font-bold text-slate-800 mb-1">
-                Generate via Studio Template
-              </h3>
-              <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-                Your {templateSteps.length}-step design process, then a site programme sized to
-                this home{templatePreview ? ` (${Math.round(templatePreview.sizing.areaSqFt)} sq ft, ${templatePreview.sizing.rooms} rooms)` : ''} and
-                the trades in its BOQ. Every bar can be edited afterwards.
-              </p>
-
-              {templatePreview && (
-                <div className="mb-6 rounded-xl border border-slate-100 bg-slate-50 divide-y divide-slate-100 text-xs">
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <span className="font-bold text-slate-600">Design</span>
-                    <span className="text-slate-500">
-                      {templatePreview.designWorkDays} working days · gate {fmtDay(templatePreview.designGateISO)}
-                    </span>
-                  </div>
-                  {templatePreview.siteWorkDays > 0 && (
-                    <div className="flex items-center justify-between px-3 py-2">
-                      <span className="font-bold text-slate-600">Site</span>
-                      <span className="text-slate-500">{templatePreview.siteWorkDays} working days</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <span className="font-bold text-slate-800">Handover</span>
-                    <span className="font-bold text-slate-800">
-                      {fmtDay(templatePreview.finishISO)} · {templatePreview.totalDays} days
-                    </span>
-                  </div>
+              {templatePreview.siteWorkDays > 0 && (
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="font-semibold text-slate-600">Site</span>
+                  <span className="text-slate-500 tabular-nums">{templatePreview.siteWorkDays} working days</span>
                 </div>
               )}
-
-              <div className="mb-6">
-                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
-                  Target Kickoff Date
-                </label>
-                <input
-                  type="date"
-                  className="w-full border border-slate-200 rounded-xl p-3 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-[#3D52A0] outline-none transition-all font-medium"
-                  value={kickoffDate}
-                  onChange={(e) => setKickoffDate(e.target.value)}
-                />
+              <div className="flex items-center justify-between px-3 py-2">
+                <span className="font-bold text-slate-800">Handover</span>
+                <span className="font-bold text-slate-800 tabular-nums">
+                  {fmtDay(templatePreview.finishISO)} · {templatePreview.totalDays} days
+                </span>
               </div>
-
-              {generateError && (
-                  <div className="mb-4 w-full bg-red-50 text-red-600 border border-red-200 p-3 rounded-xl text-xs font-semibold">
-                      {generateError}
-                  </div>
-              )}
-
-              <button
-                onClick={handleGenerateTimeline}
-                disabled={generating}
-                className={`w-full text-white font-bold py-3.5 px-4 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 text-sm ${generating ? 'bg-sky-400 cursor-not-allowed' : 'bg-[#3D52A0] hover:bg-[#334486] cursor-pointer active:scale-[0.99]'}`}
-              >
-                {generating ? (
-                    <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Structuring calendar...</>
-                ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Generate Timeline</span>
-                    </>
-                )}
-              </button>
             </div>
+          )}
 
-            <div className="text-center">
-              <button
-                onClick={() => setManualMode(true)}
-                className="text-xs font-semibold text-slate-400 hover:text-[#3D52A0] transition-colors underline underline-offset-4"
-              >
-                Or construct schedule manually
-              </button>
-            </div>
+          <label htmlFor="timeline-kickoff" className={`${LABEL} block`}>Target kickoff date</label>
+          <input
+            id="timeline-kickoff"
+            type="date"
+            className={`${INPUT} mt-1 max-w-xs`}
+            value={kickoffDate}
+            onChange={(e) => setKickoffDate(e.target.value)}
+          />
+
+          {generateError && (
+            <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+              {generateError}
+            </p>
+          )}
+
+          <div className="mt-5">
+            <Button variant="primary" icon={generating ? undefined : Sparkles} onClick={handleGenerateTimeline} disabled={generating}>
+              {generating ? 'Structuring the calendar…' : 'Generate timeline'}
+            </Button>
           </div>
-        </div>
-      </Card>
+        </Panel>
+      </div>
     );
   }
 

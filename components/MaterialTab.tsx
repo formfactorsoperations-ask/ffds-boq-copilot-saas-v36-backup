@@ -25,6 +25,7 @@ import {
 } from '../services/emailService';
 import { EmailPreviewModal } from './EmailPreviewModal';
 import { publicAppOrigin } from '../lib/publicUrl';
+import { EmptyState, Button } from './ui/kit';
 
 const formatINR = (value: number | undefined | null) => {
     if (value == null) return '';
@@ -1713,21 +1714,13 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                     )}
             </div>
             {selections.length === 0 && mainTab === 'selections' ? (
-                <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center mt-6">
-                    <div className="w-16 h-16 bg-[#FCFBF9] border border-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <CameraIcon className="w-8 h-8 text-slate-400" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">Start your first selection</h3>
-                    <p className="text-slate-500 max-w-sm mx-auto mb-8 text-xs">
-                        Tap the + button to capture materials, samples, or finishes at the shop and sync them to your digital catalog.
-                    </p>
-                    <button 
-                        onClick={handleNewItem}
-                        className="bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 text-white px-8 py-3.5 rounded-xl text-xs font-bold hover:bg-[#334486] transition-all shadow-sm"
-                    >
-                        Add first selection
-                    </button>
-                </div>
+                <EmptyState
+                    className="bg-white mt-6"
+                    icon={Palette}
+                    title="Start your first selection"
+                    text="Add a material, sample or finish, from the studio or at the shop, and it joins this project's schedule of finishes."
+                    action={<Button variant="primary" size="sm" icon={PlusIcon} onClick={handleNewItem}>Add first selection</Button>}
+                />
             ) : (
                 <div className="space-y-6">
                     {/*

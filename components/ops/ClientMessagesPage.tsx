@@ -2,6 +2,7 @@ import React from 'react';
 import { MessageSquare, Check } from '@/lib/lucide-shim';
 import { ProjectContext } from '../../types';
 import { Dot } from '../ui/HudBits';
+import { EmptyState } from '../ui/kit';
 
 /*
   Client Messages: what the client has sent the studio from their portal.
@@ -95,10 +96,12 @@ export default function ClientMessagesPage({ projectContext, setProjectContext, 
         </div>
 
         {messages.length === 0 ? (
-          <div className="mt-5 rounded-xl border border-slate-200 px-4 py-6 text-center">
-            <p className="text-sm font-semibold text-slate-700">No messages yet</p>
-            <p className="text-xs text-slate-500 mt-1">When your client writes to the studio from their portal, it lands here.</p>
-          </div>
+          <EmptyState
+            className="mt-5"
+            icon={MessageSquare}
+            title="No messages yet"
+            text="When your client writes to the studio from their portal, it lands here."
+          />
         ) : (
           <ul className="mt-5 divide-y divide-slate-100 rounded-xl border border-slate-200">
             {messages.map((m, i) => (
