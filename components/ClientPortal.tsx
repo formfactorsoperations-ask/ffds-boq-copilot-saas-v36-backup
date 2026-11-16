@@ -939,7 +939,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
     if (!moneyKnown) {
         console.warn(
             'Portal: this projection carries no money figures. Release the project from '
-            + 'SOF & Selections to send them.',
+            + 'Selections & Orders to send them.',
         );
     }
 

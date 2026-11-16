@@ -13,9 +13,11 @@ interface Props {
   boq: FullBoqItem[];
   projectId: string;
   currentRole?: string;
+  /** Under Selections & orders: tell the purchase-order list beside it to reload after a Raise PO. */
+  onOrdersChanged?: () => void;
 }
 
-export default function ProcurementTab({ projectContext, setProjectContext, boq, projectId }: Props) {
+export default function ProcurementTab({ projectContext, setProjectContext, boq, projectId, onOrdersChanged }: Props) {
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -119,6 +121,7 @@ export default function ProcurementTab({ projectContext, setProjectContext, boq,
             setRaisePoRoomId('');
             setRaisePoCategory('');
             load(); // Reload purchase orders list
+            onOrdersChanged?.();
           }}
         />
       )}

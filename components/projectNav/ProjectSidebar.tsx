@@ -5,6 +5,7 @@ import {
   GitBranch, ScrollText, Package, Signature, CalendarCheck, ShieldCheck, Hammer, SwatchBook, SquarePlus, Key,
   Compass, DraftingCompass, ChartColumn, FolderOpen, MonitorSmartphone, CalendarRange, MessageCircle, Wallet, Scale,
   History, LayoutGrid, Search, Sparkles, Lock, ChevronLeft, ChevronDown, ChevronsUpDown, Circle, Building2, Eye,
+  ClipboardCheck, NotebookPen,
 } from '@/lib/lucide-shim';
 import NotifyBell, { type ProjectAlerts } from '../notify/NotifyBell';
 import './projectSidebar.css';
@@ -57,7 +58,7 @@ const STAGE_ICON: Record<number, React.ComponentType<any>> = { 1: MessagesSquare
 const ROUTE_ICON: Record<string, React.ComponentType<any>> = {
   leadiq: MapPin, ops: Layers, 'boq-editor': Table, analytics: BadgePercent, client: Presentation, 'revision-studio': GitBranch,
   'terms-docket': ScrollText, onboarding: Package, 'execution-agreement': Signature, 'payment-calc': CalendarCheck,
-  'design-gate': ShieldCheck, 'site-ops': Hammer, materials: SwatchBook, 'scope-additions': SquarePlus, 'handover-docket': Key,
+  'design-gate': ShieldCheck, 'site-ops': Hammer, 'site-quality': ClipboardCheck, 'site-meetings': NotebookPen, materials: SwatchBook, 'scope-additions': SquarePlus, 'handover-docket': Key,
   'project-journey': Compass, 'drawing-tracker': DraftingCompass, 'project-reports': ChartColumn, docs: FolderOpen,
   'client-portal': MonitorSmartphone, timeline: CalendarRange, 'comms-tracker': MessageCircle, 'record-decision': Scale,
   history: History, dashboard: LayoutGrid,
@@ -67,7 +68,7 @@ const HUB_ICON: Record<string, React.ComponentType<any>> = { 'payment-calc': Wal
 const MOVE: Record<string, string> = {
   leadiq: 'bounce', ops: 'bounce', 'boq-editor': 'nudge', analytics: 'spin', client: 'nudge', 'revision-studio': 'wiggle',
   'terms-docket': 'nudge', onboarding: 'bounce', 'execution-agreement': 'swing', 'payment-calc': 'wiggle', 'design-gate': 'tilt',
-  'site-ops': 'swing', materials: 'wiggle', 'scope-additions': 'spin', 'handover-docket': 'swing', 'project-journey': 'spin',
+  'site-ops': 'swing', 'site-quality': 'tilt', 'site-meetings': 'nudge', materials: 'wiggle', 'scope-additions': 'spin', 'handover-docket': 'swing', 'project-journey': 'spin',
   'drawing-tracker': 'swing', 'project-reports': 'bounce', docs: 'nudge', 'client-portal': 'nudge', timeline: 'nudge',
   'comms-tracker': 'wiggle', 'record-decision': 'tilt', history: 'rewind', dashboard: 'nudge',
 };

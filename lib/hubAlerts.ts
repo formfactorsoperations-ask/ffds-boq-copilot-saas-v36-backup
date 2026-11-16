@@ -161,7 +161,7 @@ export function buildHubAlerts(args: { context: any; view: any | null }): HubAle
       title: `Your client asked about ${m.itemName || 'a finish'}`,
       detail: `“${String(m.changeReason).slice(0, 90)}” — still unanswered.`,
       when: ago(m.changeRequestedAt),
-      goTo: 'materials', cta: 'Reply on SOF & Selections',
+      goTo: 'materials', cta: 'Reply on Selections & Orders',
     });
   });
 

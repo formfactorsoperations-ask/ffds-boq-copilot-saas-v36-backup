@@ -39,12 +39,17 @@ interface WeeklyPulseManagerProps {
   projectContext: ProjectContext;
   setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
   activeProject?: any;
+  /** Fix the view (Meetings & reports shows the two as separate sections) and hide the switch. */
+  mode?: 'reports' | 'dashboard';
+  /** Inside a section that already names it: drop the title. */
+  embedded?: boolean;
 }
 
-export default function WeeklyPulseManager({ projectContext, setProjectContext, activeProject }: WeeklyPulseManagerProps) {
+export default function WeeklyPulseManager({ projectContext, setProjectContext, activeProject, mode, embedded = false }: WeeklyPulseManagerProps) {
   const [reports, setReports] = useState<WeeklyReport[]>([]);
   const [selectedReport, setSelectedReport] = useState<WeeklyReport | null>(null);
-  const [subView, setSubView] = useState<'reports' | 'dashboard'>('reports');
+  const [chosenView, setSubView] = useState<'reports' | 'dashboard'>(mode || 'reports');
+  const subView = mode || chosenView;
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [editingReport, setEditingReport] = useState<Partial<WeeklyReport> | null>(null);
@@ -389,9 +394,10 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
 
   return (
     <div className="space-y-6">
-      {/* HEADER SECTION */}
-      {!isEditing && (
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-5">
+      {/* HEADER SECTION (nothing to show in an embedded history section) */}
+      {!isEditing && !(embedded && subView === 'dashboard') && (
+        <div className={`flex flex-col sm:flex-row items-start sm:items-center gap-4 ${embedded ? 'justify-end' : 'justify-between border-b border-slate-100 pb-5'}`}>
+          {!embedded && (
           <div>
             <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <Activity className="w-5 h-5 text-[#3D52A0]" />
@@ -401,9 +407,11 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
               Compile and send clean weekly progress reports with room photo updates to the client.
             </p>
           </div>
+          )}
           
           <div className="flex items-center gap-2.5 w-full sm:w-auto">
             {/* View Switcher: Reports & Issue vs Analytics Dashboard */}
+            {!mode && (
             <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-inner flex items-center shrink-0">
               <button
                 onClick={() => setSubView('reports')}
@@ -424,6 +432,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
                 <BarChart3 className="w-3.5 h-3.5" /> Journey & Analytics
               </button>
             </div>
+            )}
 
             {subView === 'reports' && (
               <button

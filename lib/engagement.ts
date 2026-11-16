@@ -137,13 +137,15 @@ export function canChangeEngagement(ctx: any, to: EngagementType): EngagementCha
   - ops (Pricing & Tiers), boq-editor, analytics (margin health),
     revision-studio (BOQ revisions), client-boq-pack: there is no BOQ to sell.
   - execution-agreement: the Terms Docket is the design agreement.
-  - site-ops, scope-additions, snaglist, checklist: there is no site to run.
+  - site-ops, site-quality, scope-additions, snaglist, checklist: there is no
+    site to run. Meetings & reports (site-meetings) stays: minutes and weekly
+    reports are kept on design work too.
 */
 const HIDDEN_ROUTES: Record<EngagementType, string[]> = {
   turnkey: [],
   design_only: [
     'ops', 'boq-editor', 'analytics', 'revision-studio', 'client-boq-pack',
-    'execution-agreement', 'site-ops', 'scope-additions', 'snaglist', 'checklist',
+    'execution-agreement', 'site-ops', 'site-quality', 'scope-additions', 'snaglist', 'checklist',
   ],
   // Provisional, for when PMC opens: the BOQ stays as a tender estimate and the
   // site screens stay; there is no margin and no execution agreement.

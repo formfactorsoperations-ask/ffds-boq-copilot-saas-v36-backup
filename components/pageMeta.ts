@@ -72,8 +72,10 @@ const META: Record<string, PageMeta> = {
   'design-gate':          { subtitle: 'Checks that must clear before execution' },
 
   // ---- Project: stage 5 ---------------------------------------------------
-  'site-ops':             { subtitle: 'Site progress, trade packages and meeting notes' },
-  materials:              { subtitle: 'Material selections, cost variations and purchase orders' },
+  'site-ops':             { subtitle: 'Trade packages, site readiness and key dates' },
+  'site-quality':         { subtitle: 'Snags, the pre-handover checklist and the electrical points' },
+  'site-meetings':        { subtitle: 'Minutes, actions and the weekly reports to the client' },
+  materials:              { subtitle: 'Finishes, cost variations, purchase orders and budgets by trade' },
   'scope-additions':      { subtitle: 'Work added after the contract was signed' },
   snaglist:               { title: 'Snag List', subtitle: 'Open defects and rectification status' },
   checklist:              { title: 'Quality Checklist', subtitle: 'Site quality checks by area' },

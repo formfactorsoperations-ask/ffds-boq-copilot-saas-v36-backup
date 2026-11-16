@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, lazy, Suspense, useCallback } from "react";
+import { SITE_MOVED_ROUTES } from "./lib/siteRoutes";
 import SuccessWithNextToast from './components/SuccessWithNextToast';
 import { motion } from "framer-motion";
 import { Menu, X } from '@/lib/lucide-shim';
@@ -68,6 +69,7 @@ const DesignCompleteGate = lazyWithRetry(() => import("./components/ops/DesignCo
 const OnboardingKitPage = lazyWithRetry(() => import("./components/client/OnboardingKitPage"));
 const EmailDraftsTab = lazyWithRetry(() => import("./components/EmailDraftsTab"));
 const SiteOpsTab = lazyWithRetry(() => import("./components/SiteOpsTab"));
+const RendersSection = lazyWithRetry(() => import("./components/site/RendersSection"));
 const ClientTab = lazyWithRetry(() => import("./components/client/ClientTab"));
 const MoneyOffersTab = lazyWithRetry(() => import("./components/money/MoneyOffersTab"));
 const OperationsTab = lazyWithRetry(() => import("./components/OperationsTab"));
@@ -194,6 +196,21 @@ export default function App() {
   // Global State
   const { orgData, currentUserAuth, currentRole, currentRoles, setCurrentRole, teamMembers } = useOrg();
   const [activeTab, setActiveTab] = useState("home");
+  /*
+    Old links into Execution & Ops land on the screen that now holds the tool:
+    the Documents rows and the hub's "Open actions" use these ids. The section
+    to open rides along in `siteFocus` (plan item 9).
+  */
+  const [siteFocus, setSiteFocus] = useState<string | null>(null);
+  useEffect(() => {
+    const moved = SITE_MOVED_ROUTES[activeTab];
+    if (moved) {
+      setSiteFocus(moved.focus);
+      setActiveTab(moved.route);
+    } else if (activeTab !== "site-meetings" && siteFocus) {
+      setSiteFocus(null);
+    }
+  }, [activeTab, siteFocus]);
   /* Hide figures for a shared screen: the whole app redraws when it is flipped, so every finance check reads it afresh. */
   const figuresHidden = useFiguresHidden();
   useHideFiguresShortcut(holdsFinanceRole(currentRoles));
@@ -2806,6 +2823,8 @@ export default function App() {
     "client",
     "analytics",
     "site-ops",
+    "site-quality",
+    "site-meetings",
     "ops",
     "snaglist",
   ];
@@ -3591,13 +3610,24 @@ export default function App() {
                         />
                       )}
                       {activeTab === "drawing-tracker" && (
-                        <DrawingTrackerModule
-                          projectId={activeInternalId!}
-                          projectContext={projectContext}
-                          fullBoq={
-                            activeProject ? executionBoq : fullBoqForActiveTier
-                          }
-                        />
+                        <>
+                          <DrawingTrackerModule
+                            projectId={activeInternalId!}
+                            projectContext={projectContext}
+                            fullBoq={
+                              activeProject ? executionBoq : fullBoqForActiveTier
+                            }
+                          />
+                          {/* Renders and reference files, moved here from Execution & Ops (plan item 9).
+                              Only for the roles that could open Execution & Ops: a Designer or
+                              Client Relations opens Drawings, but never had the renders vault. */}
+                          {!isLimitedRole(currentRole) && (
+                            <RendersSection
+                              projectContext={projectContext}
+                              setProjectContext={setProjectContext}
+                            />
+                          )}
+                        </>
                       )}
                       {/* IN_BLOCK_1_SCOPE_ADDITIONS */}
                       {activeTab === "scope-additions" && (
@@ -3649,6 +3679,7 @@ export default function App() {
                           bank={bank}
                           projectId={activeInternalId!}
                           decisionLedger={decisionLedger}
+                          boq={activeProject ? executionBoq : fullBoqForActiveTier}
                         />
                       )}
 
@@ -3821,11 +3852,11 @@ export default function App() {
                         />
                       )}
                       {(activeTab === "site-ops" ||
-                        activeTab === "update-client-feed" ||
-                        activeTab === "record-decision" ||
-                        activeTab === "mom-action-tracker") && (
+                        activeTab === "site-quality" ||
+                        activeTab === "site-meetings" ||
+                        activeTab === "record-decision") && (
                         <SiteOpsTab
-                          key={activeTab}
+                          key={`${activeTab}:${siteFocus || ""}`}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           decisionBrainOutput={decisionBrainOutput}
@@ -3837,23 +3868,13 @@ export default function App() {
                           activeProject={activeProject}
                           onProjectUpdate={setActiveProject}
                           onNavigateToTab={setActiveTab}
-                          /*
-                            `update-client-feed` is the document id for "Weekly
-                            Pulse Reports" (lib/documentActions.ts), so the
-                            Documents row of that name routes here. It used to
-                            open the Daily Site Feed instead -- a different tool
-                            with a different name -- which is now removed, so it
-                            opens the manager it is actually named after.
-                          */
-                          initialModule={
-                            activeTab === "update-client-feed"
-                              ? "weekly-reports"
-                              : activeTab === "record-decision"
-                                ? "decision-tracker"
-                                : activeTab === "mom-action-tracker"
-                                  ? "action-tracker"
-                                  : "execution"
+                          view={
+                            activeTab === "site-quality" ? "quality"
+                              : activeTab === "site-meetings" ? "meetings"
+                              : activeTab === "record-decision" ? "decisions"
+                              : "control"
                           }
+                          focus={activeTab === "site-meetings" ? siteFocus : null}
                           onAddCalculatedItem={(
                             name,
                             cat,
@@ -4303,13 +4324,24 @@ export default function App() {
                         />
                       )}
                       {activeTab === "drawing-tracker" && (
-                        <DrawingTrackerModule
-                          projectId={activeInternalId!}
-                          projectContext={projectContext}
-                          fullBoq={
-                            activeProject ? executionBoq : fullBoqForActiveTier
-                          }
-                        />
+                        <>
+                          <DrawingTrackerModule
+                            projectId={activeInternalId!}
+                            projectContext={projectContext}
+                            fullBoq={
+                              activeProject ? executionBoq : fullBoqForActiveTier
+                            }
+                          />
+                          {/* Renders and reference files, moved here from Execution & Ops (plan item 9).
+                              Only for the roles that could open Execution & Ops: a Designer or
+                              Client Relations opens Drawings, but never had the renders vault. */}
+                          {!isLimitedRole(currentRole) && (
+                            <RendersSection
+                              projectContext={projectContext}
+                              setProjectContext={setProjectContext}
+                            />
+                          )}
+                        </>
                       )}
                       {activeTab === "scope-additions" && (
                         <ScopeAdditionsModule
@@ -4360,6 +4392,7 @@ export default function App() {
                           bank={bank}
                           projectId={activeInternalId!}
                           decisionLedger={decisionLedger}
+                          boq={activeProject ? executionBoq : fullBoqForActiveTier}
                         />
                       )}
 
@@ -4532,11 +4565,11 @@ export default function App() {
                         />
                       )}
                       {(activeTab === "site-ops" ||
-                        activeTab === "update-client-feed" ||
-                        activeTab === "record-decision" ||
-                        activeTab === "mom-action-tracker") && (
+                        activeTab === "site-quality" ||
+                        activeTab === "site-meetings" ||
+                        activeTab === "record-decision") && (
                         <SiteOpsTab
-                          key={activeTab}
+                          key={`${activeTab}:${siteFocus || ""}`}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           decisionBrainOutput={decisionBrainOutput}
@@ -4548,23 +4581,13 @@ export default function App() {
                           activeProject={activeProject}
                           onProjectUpdate={setActiveProject}
                           onNavigateToTab={setActiveTab}
-                          /*
-                            `update-client-feed` is the document id for "Weekly
-                            Pulse Reports" (lib/documentActions.ts), so the
-                            Documents row of that name routes here. It used to
-                            open the Daily Site Feed instead -- a different tool
-                            with a different name -- which is now removed, so it
-                            opens the manager it is actually named after.
-                          */
-                          initialModule={
-                            activeTab === "update-client-feed"
-                              ? "weekly-reports"
-                              : activeTab === "record-decision"
-                                ? "decision-tracker"
-                                : activeTab === "mom-action-tracker"
-                                  ? "action-tracker"
-                                  : "execution"
+                          view={
+                            activeTab === "site-quality" ? "quality"
+                              : activeTab === "site-meetings" ? "meetings"
+                              : activeTab === "record-decision" ? "decisions"
+                              : "control"
                           }
+                          focus={activeTab === "site-meetings" ? siteFocus : null}
                           onAddCalculatedItem={(
                             name,
                             cat,

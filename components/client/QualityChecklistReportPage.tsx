@@ -5,20 +5,13 @@ import { useOrg } from '../../contexts/OrgContext';
 import { Download, Printer, ArrowLeft, ClipboardCheck, Check, Bolt } from '@/lib/lucide-shim';
 import { StudioDocumentShell } from '../ops/documents/StudioDocumentShell';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
+/* The six checks every room gets, shared with the Quality & snags section line. */
+import { STANDARD_CHECKS } from '../../lib/siteSections';
 
 interface QualityChecklistReportPageProps {
     projectContext: ProjectContext;
     onBack?: () => void;
 }
-
-const STANDARD_CHECKS = [
-    { id: 'paint', label: 'Final Paint Touch-ups (Skirting, Grooves & Cornice)', category: 'Finishes & Paint' },
-    { id: 'hardware', label: 'Cabinet Shutters Aligned & Hardware Tightened', category: 'Woodwork & Hardware' },
-    { id: 'clean', label: 'Deep Cleaning (Inside Cabinets, Drawers & Floors)', category: 'Cleaning & Handover' },
-    { id: 'electrical', label: 'All Switchboards Clean, Straight & Plate Covers Snapped', category: 'Electrical & Fixtures' },
-    { id: 'plumbing', label: 'Angle Cocks, Faucets & Drain Lines Leak-tested', category: 'Plumbing & Sanitary' },
-    { id: 'debris', label: 'Site Debris Cleared & Surface Protection Removed', category: 'Cleaning & Handover' },
-];
 
 export default function QualityChecklistReportPage({ projectContext, onBack }: QualityChecklistReportPageProps) {
     const { orgData } = useOrg();

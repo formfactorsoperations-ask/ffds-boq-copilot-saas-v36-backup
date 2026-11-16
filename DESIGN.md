@@ -431,6 +431,21 @@ own Lucide icon, and each moves on hover in its own way (a bounce, a swing, a sp
 draw themselves). A white highlight slides to the screen you are on. Counts pop in. Everything stops
 under `prefers-reduced-motion`. Same font and brand colour.
 
+### Summary-first sections (approved 16 Nov 2026)
+
+Execution & Site used to nest tabs five levels deep. The owner chose option C of plan item 9:
+a screen stacks its tools as sections instead of tabs, and reads top to bottom.
+
+- Use `components/site/SectionStack.tsx`. Each section is a `Panel` card whose header is a button:
+  the brand-tint icon chip, a `font-bold text-slate-800` title, and one `text-xs text-slate-500`
+  line with a `Dot` saying where that tool stands ("3 open · 1 high"). A chevron turns when open.
+- One section is open at a time. The screen opens the first that is bad, else the first that needs a
+  look (`firstToOpen` in `lib/siteSections.ts`), once, so a ticked row never snaps the page shut.
+  An old link may ask for a section instead (`focus`).
+- The tool renders unchanged inside, with `embedded` to drop its own title.
+- Motion: cards `hud-panel-in` staggered 30ms, the open body `hud-swap`. Nothing else.
+- Used on Quality & Snags, Meetings & Reports, Selections & Orders and the renders under Drawings.
+
 ### Pricing & Tiers motion (approved 15 Nov 2026)
 
 The owner approved Pricing & Tiers as one grid (layouts D and E, 15 Nov 2026) and asked for

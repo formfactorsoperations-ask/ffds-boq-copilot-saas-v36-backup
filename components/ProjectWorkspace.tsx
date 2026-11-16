@@ -51,7 +51,7 @@ const ENGAGEMENT_PAGE_TITLES: Partial<Record<string, Record<string, { title: str
   design_only: {
     'design-gate': { title: 'GFC Release', subtitle: 'Checks that must clear before the GFC set goes to the client' },
     'handover-docket': { title: 'Design Closeout', subtitle: 'Final drawing set issued and the client’s sign-off' },
-    materials: { title: 'SOF & Selections', subtitle: 'Finishes and fittings chosen with the client' },
+    materials: { title: 'Selections & Orders', subtitle: 'Finishes and fittings chosen with the client' },
   },
 };
 

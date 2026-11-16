@@ -142,7 +142,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "working_drawings_done", n: 16, phase: 2, title: "Working Drawings Done",
     description: "Good-for-construction (GFC) drawings ready for site.",
     illustration: "working_drawings_done", statusSource: "manual",
-    autoRule: null, linkedFeature: "Site Ops", linkedTab: "site-ops", prerequisiteIds: ["agreement_signed"]
+    autoRule: null, linkedFeature: "Drawings", linkedTab: "drawing-tracker", prerequisiteIds: ["agreement_signed"]
   },
 
   // PHASE 4 — PRE-EXECUTION
@@ -170,7 +170,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     illustration: "exec_start_notified", statusSource: "manual",
     /* Manual since Client Comms was retired: nothing else records telling the client site work has begun.
        A "sent" mark recorded in Client Comms before then still counts. */
-    autoRule: 'marked done by the studio', linkedFeature: "Execution & Ops", linkedTab: "site-ops", prerequisiteIds: ["baseline_inspection_done"]
+    autoRule: 'marked done by the studio', linkedFeature: "Site Control Room", linkedTab: "site-ops", prerequisiteIds: ["baseline_inspection_done"]
   },
 
   // PHASE 5 — EXECUTION
@@ -220,7 +220,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "site_update_shared", n: 28, phase: 4, title: "Site Update Shared",
     description: "Major milestone photos shared with client.",
     illustration: "site_update_shared", statusSource: "auto",
-    autoRule: 'a site or project update posted (a Client Comms "sent" mark recorded before it was retired still counts)', linkedFeature: "Execution & Ops", linkedTab: "site-ops", prerequisiteIds: ["phase3_work_complete"]
+    autoRule: 'a site or project update posted (a Client Comms "sent" mark recorded before it was retired still counts)', linkedFeature: "Meetings & Reports", linkedTab: "site-meetings", prerequisiteIds: ["phase3_work_complete"]
   },
 
   // PHASE 6 — HANDOVER
@@ -228,13 +228,13 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "prehandover_walkthrough", n: 29, phase: 5, title: "Pre-handover Walkthrough",
     description: "Internal check for defects before client invite.",
     illustration: "prehandover_walkthrough", statusSource: "manual",
-    autoRule: null, linkedFeature: "Site Ops", linkedTab: "site-ops", prerequisiteIds: ["site_update_shared"]
+    autoRule: null, linkedFeature: "Quality & Snags", linkedTab: "site-quality", prerequisiteIds: ["site_update_shared"]
   },
   {
     id: "snag_list_shared", n: 30, phase: 5, title: "Snag List Shared",
     description: "Recorded snags compiled and sent to teams.",
     illustration: "snag_list_shared", statusSource: "manual",
-    autoRule: null, linkedFeature: "Site Ops", linkedTab: "site-ops", prerequisiteIds: ["prehandover_walkthrough"]
+    autoRule: null, linkedFeature: "Quality & Snags", linkedTab: "site-quality", prerequisiteIds: ["prehandover_walkthrough"]
   },
   {
     id: "handover_advance_received", n: 31, phase: 5, title: "Handover Advance Received",

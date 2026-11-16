@@ -285,7 +285,7 @@ describe('step 3: phones, catch-up and the client portal', () => {
 });
 
 describe('one bell inside a project', () => {
-  const alert = { id: 'a1', kind: 'client', label: 'From the client', title: 'Your client asked about Laminate', detail: '“E2E test selection” — still unanswered.', when: '14 days ago', goTo: 'materials', cta: 'Reply on SOF & Selections', severity: 1 } as any;
+  const alert = { id: 'a1', kind: 'client', label: 'From the client', title: 'Your client asked about Laminate', detail: '“E2E test selection” — still unanswered.', when: '14 days ago', goTo: 'materials', cta: 'Reply on Selections & Orders', severity: 1 } as any;
 
   it('counts what the project is waiting on with your notes, and lists it first', async () => {
     const onGo = vi.fn(), onDismiss = vi.fn();
@@ -299,7 +299,7 @@ describe('one bell inside a project', () => {
     expect(text.indexOf('Your client asked about Laminate')).toBeLessThan(text.indexOf('Mr Prasad Naik sent you a message'));
     fireEvent.click(within(panel).getByRole('button', { name: 'Dismiss' }));
     expect(onDismiss).toHaveBeenCalledWith('a1');
-    fireEvent.click(within(panel).getByRole('button', { name: 'Reply on SOF & Selections' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reply on Selections & Orders' }));
     expect(onGo).toHaveBeenCalledWith('materials');
   });
 

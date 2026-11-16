@@ -2,6 +2,8 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { ProjectContext, FullBoqItem } from '../../types';
 import { generateId } from '../../lib/utils';
 import Card from '../shared/Card';
+/* The six checks every room gets, shared with the Quality & snags section line. */
+import { STANDARD_CHECKS } from '../../lib/siteSections';
 import { 
   CheckCircle, 
   Bolt, 
@@ -25,16 +27,12 @@ interface PreHandoverChecklistProps {
     setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
     boq: FullBoqItem[];
     onNavigateToTab?: (tab: string) => void;
+    /** Fix the view (Quality & snags shows the two as separate sections) and hide the switch. */
+    mode?: 'checklist' | 'electrical-plan';
+    /** Inside a section that already names it: drop the title. */
+    embedded?: boolean;
 }
 
-const STANDARD_CHECKS = [
-    { id: 'paint', label: 'Final Paint Touch-ups (Skirting, Grooves & Cornice)', category: 'Finishes & Paint' },
-    { id: 'hardware', label: 'Cabinet Shutters Aligned & Hardware Tightened', category: 'Woodwork & Hardware' },
-    { id: 'clean', label: 'Deep Cleaning (Inside Cabinets, Drawers & Floors)', category: 'Cleaning & Handover' },
-    { id: 'electrical', label: 'All Switchboards Clean, Straight & Plate Covers Snapped', category: 'Electrical & Fixtures' },
-    { id: 'plumbing', label: 'Angle Cocks, Faucets & Drain Lines Leak-tested', category: 'Plumbing & Sanitary' },
-    { id: 'debris', label: 'Site Debris Cleared & Surface Protection Removed', category: 'Cleaning & Handover' },
-];
 
 const STANDARD_ELECTRICAL_ITEMS = [
     "Panel Light", "COB", "Spot Set of 3", "Cove Light", "Fan", "Hanging Light",
@@ -44,10 +42,11 @@ const STANDARD_ELECTRICAL_ITEMS = [
     "AC Point", "Geyser Point", "Exhaust Point"
 ];
 
-const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectContext, setProjectContext, boq, onNavigateToTab }) => {
+const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectContext, setProjectContext, boq, onNavigateToTab, mode, embedded = false }) => {
     
     // Switch between checklist & electrical table views
-    const [viewMode, setViewMode] = useState<'checklist' | 'electrical-plan'>('checklist');
+    const [chosenView, setViewMode] = useState<'checklist' | 'electrical-plan'>(mode || 'checklist');
+    const viewMode = mode || chosenView;
     const [activeRoomId, setActiveRoomId] = useState<string>('');
     const [newCustomCheck, setNewCustomCheck] = useState<string>('');
     const [showPrintWarning, setShowPrintWarning] = useState(false);
@@ -505,6 +504,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
             {/* Top Overview Ribbon */}
             <div className="bg-[#FAF9F6] border border-[#EBEAE5] p-6 rounded-[24px] shadow-sm print:hidden">
                 <div className="flex flex-col lg:flex-row items-stretch justify-between gap-6">
+                    {!embedded && (
                     <div className="flex items-start gap-4">
                         <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-[#334486] shadow-sm shrink-0">
                             <FileCheck2 className="w-6 h-6 stroke-[2]" />
@@ -520,6 +520,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                             </p>
                         </div>
                     </div>
+                    )}
 
                     <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 border-t lg:border-t-0 lg:border-l border-slate-200/80 pt-4 lg:pt-0 lg:pl-6">
                         {/* Circle Progress Meter */}
@@ -549,6 +550,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
 
                         {/* Switch Buttons & Print */}
                         <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+                            {!mode && (
                             <div className="bg-slate-100 p-1 rounded-xl flex border border-slate-200/60 shadow-inner w-full sm:w-auto">
                                 <button 
                                     onClick={() => setViewMode('checklist')}
@@ -563,6 +565,7 @@ const PreHandoverChecklist: React.FC<PreHandoverChecklistProps> = ({ projectCont
                                     Points Plan
                                 </button>
                             </div>
+                            )}
 
                             {onNavigateToTab && (
                                 <button
