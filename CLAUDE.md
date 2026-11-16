@@ -10,9 +10,10 @@ new work must look like part of the existing app, not a new design.
 - Use only the existing motion classes (`hud-panel-in`, `hud-swap`, `hud-row-in`, `hud-rail-active`,
   `phd-scrim`, `phd-pop`, `CountUp`).
   People (`components/people/`), the Ops Desk (`components/opsDesk/`), Pricing & Tiers
-  (`components/pricing/`, `components/TierManager.tsx`) and the project sidebar (`components/projectNav/`)
+  (`components/pricing/`, `components/TierManager.tsx`), the project sidebar (`components/projectNav/`)
+  and the Projects screen's glass folders (`components/projects/`, `components/ui/glass-folder-cards.tsx`)
   also use the richer motion the owner approved: see "People motion", "Ops Desk motion", "Ops Desk 2.1",
-  "Pricing & Tiers motion" and "Project sidebar" in DESIGN.md.
+  "Pricing & Tiers motion", "Project sidebar" and "Projects as glass folders" in DESIGN.md.
   Same fonts and colours.
 - Do not use half-pixel font sizes, new accent colours or new fonts.
 - Before shipping a screen, compare a screenshot of it with Studio settings.

@@ -70,9 +70,8 @@ describe('Projects screen speed', () => {
           onCreateNew={() => {}} onDeleteProject={() => {}} onDuplicateProject={() => {}} />,
       );
     });
-    const cards = () => new Set(
-      Array.from(view!.container.querySelectorAll('[aria-label^="Project "]')).map((e) => e.getAttribute('aria-label')),
-    ).size;
+    /* Each project is a glass folder now (plan item 10). */
+    const cards = () => view!.container.querySelectorAll('[data-testid^="project-folder-"]').length;
     expect(cards()).toBe(12);
     for (let k = 0; k < 10 && cards() < projects.length; k++) {
       await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
