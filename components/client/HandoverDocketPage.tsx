@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { buildSignoffPatch } from '../../services/clientApprovalEngine';
-import { sendAgreementSignoffRequest } from '../../services/emailService';
 import { ProjectContext, DigitalSignatureDocket } from '../../types';
-import { Download, Printer, CheckCircle2, Calendar, ShieldCheck } from '@/lib/lucide-shim';
+import { Download, Printer } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
 import { studioDisplayName } from '../../lib/studioName';
@@ -11,6 +10,8 @@ import DigitalSignatureDocketView from '../common/DigitalSignatureDocket';
 import ManualAcceptanceOverrideModal from '../ops/ManualAcceptanceOverrideModal';
 import { publicAppOrigin } from '../../lib/publicUrl';
 import { engagementOf } from '../../lib/engagement';
+import { handoverDisplayDate, drawingsIssuedOf } from '../../lib/handoverDocket';
+import HandoverDocketSheet from '../documents/HandoverDocketSheet';
 
 interface HandoverDocketPageProps {
     projectContext: ProjectContext;
@@ -33,15 +34,13 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
       the final drawing set and the design engagement closes. There was no site
       handed over and the studio gives no workmanship warranty, so neither
       appears. The signature runs through the same handover sign-off.
+
+      The document itself is HandoverDocketSheet, the same component the client
+      portal draws from the released snapshot, so the two copies cannot drift.
     */
     const designOnly = engagementOf(projectContext) === 'design_only';
-    const docTitle = designOnly ? 'Design Closeout' : 'Handover Docket';
     const fileStem = designOnly ? 'Design_Closeout' : 'Handover_Docket';
-    const drawingsIssued = Object.values((projectContext as any).drawingTracker || {}).length;
-    const [handoverDate, setHandoverDate] = useState<string>(new Date().toISOString().split('T')[0]);
-    const [isSending, setIsSending] = useState(false);
-    const [showSendConfirm, setShowSendConfirm] = useState(false);
-    const [localError, setLocalError] = useState<string | null>(null);
+    const drawingsIssued = drawingsIssuedOf(projectContext);
     const [copied, setCopied] = useState(false);
     const [showOverrideModal, setShowOverrideModal] = useState(false);
     
@@ -54,7 +53,12 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
         }
         return `${appDomain}/?agreementSignoff=${token}`;
     };
-    const displayDate = new Date(handoverDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+    /*
+      The project's handover date, as the client's copy prints it. The page used
+      to have a date picker of its own that was never saved, so a PDF downloaded
+      here could carry a different date from the copy released to the client.
+    */
+    const displayDate = handoverDisplayDate(projectContext.handoverDate);
 
     const handleDownloadPdf = () => {
         const el = document.getElementById('handover-docket-render');
@@ -100,78 +104,6 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
         navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
-    };
-
-    const sendEmailSignoff = async () => {
-        setLocalError(null);
-        if (!projectContext.clientEmail || !projectContext.clientEmail.trim()) {
-            setLocalError("Client email is required to send the document. Please enter a valid email address in the Studio settings.");
-            return;
-        }
-
-        setIsSending(true);
-        try {
-            await new Promise(r => setTimeout(r, 100));
-            const element = document.getElementById('handover-docket-root');
-            let pdfBase64;
-            if (element) {
-                try {
-                    const html2pdfModule = await import('html2pdf.js');
-                    const html2pdfObj = ((html2pdfModule as any).default || html2pdfModule) as any;
-                    
-                    if (typeof html2pdfObj !== 'function') throw new Error("html2pdf library loaded incorrectly");
-                    
-                    const opt = {
-                        margin: [15, 0, 15, 0],
-                        filename: `${fileStem}_${projectName.replace(/\s+/g, '_')}.pdf`,
-                        image: { type: 'jpeg' as const, quality: 1 },
-                        html2canvas: {
-                            scale: 2,
-                            useCORS: true,
-                            logging: false,
-                            onclone: (clonedDoc: Document) => prepareClonedDocForPdf(clonedDoc, 'handover-docket-root')
-                        },
-                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
-                    };
-                    pdfBase64 = await html2pdfObj().set(opt).from(element).outputPdf('datauristring');
-                } catch (pdfErr) {
-                    console.error("PDF generation failed, falling back without attachment", pdfErr);
-                }
-            }
-
-            const result = await sendAgreementSignoffRequest(projectId || '', projectContext, 0, pdfBase64, orgData?.tenantId || 'demo-tenant-01', 'handover');
-            
-            const tokenToUse = result.token || `HANDOVER_AGREEMENT_${projectId}_${Date.now()}`;
-            // Success
-            setProjectContext(prev => ({
-                ...prev,
-                handoverSignoff: {
-                    status: 'sent',
-                    token: tokenToUse,
-                    sentAt: new Date().toISOString()
-                }
-            }));
-            
-            setShowSendConfirm(false);
-            if (result.error) {
-                setLocalError(`Email dispatch note: ${result.error}. Digital sign-off URL generated below.`);
-            }
-        } catch (error: any) {
-            console.error("Failed to send:", error);
-            const fallbackToken = `HANDOVER_AGREEMENT_${projectId}_${Date.now()}`;
-            setProjectContext(prev => ({
-                ...prev,
-                handoverSignoff: {
-                    status: 'sent',
-                    token: fallbackToken,
-                    sentAt: new Date().toISOString()
-                }
-            }));
-            setShowSendConfirm(false);
-            setLocalError(`Notice: ${error.message || 'Email dispatch skipped in sandbox mode'}. Digital signature URL generated successfully.`);
-        } finally {
-            setIsSending(false);
-        }
     };
 
     const handlePrint = () => {
@@ -287,12 +219,6 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                 />
             )}
 
-            {localError && (
-                <div className="p-4 bg-red-50 text-red-700 border-b border-red-200 text-sm">
-                    {localError}
-                </div>
-            )}
-
             <style dangerouslySetInnerHTML={{__html: `
                 @media print {
                     @page { margin: 15mm; }
@@ -310,18 +236,9 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                         {designOnly ? 'Design Closeout' : 'Handover Docket & Warranty'}
                     </h2>
                     <p className="text-xs text-slate-500 mt-1">{designOnly ? 'The client’s sign-off on the final drawing set, closing the design engagement.' : 'Formal completion certificate, warranty terms, and care guidelines.'}</p>
+                    {!projectContext.handoverDate && <p className="text-xs text-slate-500 mt-1">Dated today until the handover is marked in Site Control Room or on the project card.</p>}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 mr-2 bg-slate-50 px-3 py-1.5 rounded border border-slate-200">
-                        <Calendar className="w-4 h-4 text-slate-400" />
-                        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Date:</label>
-                        <input 
-                            type="date" 
-                            value={handoverDate}
-                            onChange={(e) => setHandoverDate(e.target.value)}
-                            className="text-sm border-none bg-transparent focus:ring-0 p-0 text-slate-800 font-medium cursor-pointer"
-                        />
-                    </div>
                     <button
                         onClick={handlePrint}
                         className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors"
@@ -340,217 +257,23 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center pb-24 print:p-0 print:pb-0 print:bg-white">
-                <div id="handover-docket-render" className="w-full max-w-[850px] bg-white print:shadow-none print:max-w-none text-slate-900 docket-font box-border shadow-md print:shadow-none" style={{ minHeight: '297mm' }}>
-                    <div className="p-8 md:p-12 print:p-0">
-                        
-                        {/* Custom Header */}
-                        <div className="flex justify-between items-start border-b-2 border-slate-900 pb-6 mb-10">
-                            <div className="flex-1">
-                                {orgData?.orgLogo ? (
-                                    <img src={orgData.orgLogo} alt={studioName} className="max-h-16 object-contain" />
-                                ) : (
-                                    <div className="space-y-1">
-                                        <h2 className="text-slate-900 text-xl font-black uppercase tracking-widest m-0">{studioName}</h2>
-                                        <p className="text-slate-500 text-[10px] tracking-widest uppercase m-0">Architecture & Interior Design</p>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="text-right">
-                                <p className="text-[10px] font-bold tracking-[0.2em] text-[#C6A96C] uppercase mb-1">Formal Document</p>
-                                <p className="text-lg font-black text-slate-900 uppercase tracking-widest m-0">{docTitle}</p>
-                            </div>
-                        </div>
-
-                        {/* Certificate Banner Layout */}
-                        <div className="text-center py-6 mb-10">
-                            <h1 className="text-3xl md:text-4xl font-black uppercase tracking-[0.2em] text-slate-900 mb-4">{designOnly ? 'Design Completion' : 'Certificate of Completion'}</h1>
-                            <div className="inline-block border border-slate-200 bg-slate-50 px-6 py-2">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mr-2">Project:</span>
-                                <span className="text-[12px] font-black text-slate-900 uppercase tracking-wider">{projectName}</span>
-                            </div>
-                        </div>
-
-                        {/* Project Meta */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12 p-6 bg-slate-50 rounded-sm border border-slate-100">
-                            <div>
-                                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1.5">Client</div>
-                                <div className="font-semibold text-slate-900 text-[13px]">{clientName}</div>
-                            </div>
-                            <div>
-                                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1.5">Project</div>
-                                <div className="font-semibold text-slate-900 text-[13px]">{projectName}</div>
-                            </div>
-                            <div>
-                                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1.5">Project Ref</div>
-                                <div className="font-semibold text-slate-900 text-[13px]">{projectId}</div>
-                            </div>
-                            <div>
-                                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1.5">{designOnly ? 'Date of Closeout' : 'Date of Handover'}</div>
-                                <div className="font-semibold text-slate-900 text-[13px]">{displayDate}</div>
-                            </div>
-                        </div>
-
-                        {/* Practical Completion Statement */}
-                        <div className="mb-10">
-                            <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-[0.15em] mb-4 flex items-center gap-3">
-                                <span className="w-6 h-[2px] bg-[#C6A96C]"></span>
-                                {designOnly ? '1. Design Completion' : '1. Practical Completion'}
-                            </h4>
-                            <p className="text-[13px] leading-relaxed text-slate-700 pl-9">
-                                {designOnly
-                                    ? `This document closes the design engagement for the project referenced above. By signing it, the client acknowledges receipt of the final Good for Construction drawing set and the agreed design deliverables. Execution of the works is carried out by contractors engaged and paid by the client, who remain responsible for their workmanship.`
-                                    : `This document serves as the formal handover and closure of the interior execution phase for the project referenced above. By signing this document, all parties acknowledge that the works have been executed as per the agreed design intent and scope, and the site is handed over in a satisfactory, ready-to-use condition.`}
-                            </p>
-                        </div>
-
-                        {/* Closure Checklist */}
-                        <div className="mb-12">
-                            <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-[0.15em] mb-4 flex items-center gap-3">
-                                <span className="w-6 h-[2px] bg-[#C6A96C]"></span>
-                                2. Closure Checklist
-                            </h4>
-                            {designOnly ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-9">
-                                {[
-                                    ['Final Drawing Set', `The GFC set issued${drawingsIssued ? ` (${drawingsIssued} drawings)` : ''}.`],
-                                    ['Selections', 'Finishes and fittings schedule shared with the client.'],
-                                    ['Design Fee Settled', '100% of the design fee cleared.'],
-                                    ['Site Queries', 'Contractor queries on the drawings answered.'],
-                                ].map(([title, text]) => (
-                                    <div key={title} className="flex items-start gap-3 p-4 border border-slate-200 rounded-sm bg-white">
-                                        <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                                        <div>
-                                            <div className="text-[11px] font-bold text-slate-900 uppercase tracking-wide mb-1">{title}</div>
-                                            <div className="text-[11px] text-slate-500 leading-snug">{text}</div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-9">
-                                <div className="flex items-start gap-3 p-4 border border-slate-200 rounded-sm bg-white">
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                                    <div>
-                                        <div className="text-[11px] font-bold text-slate-900 uppercase tracking-wide mb-1">Final Financial Settlement</div>
-                                        <div className="text-[11px] text-slate-500 leading-snug">100% of execution fees and additionals cleared.</div>
-                                    </div>
-                                </div>
-                                <div className="flex items-start gap-3 p-4 border border-slate-200 rounded-sm bg-white">
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                                    <div>
-                                        <div className="text-[11px] font-bold text-slate-900 uppercase tracking-wide mb-1">Defect Rectification</div>
-                                        <div className="text-[11px] text-slate-500 leading-snug">All snag list items and defects resolved.</div>
-                                    </div>
-                                </div>
-                                <div className="flex items-start gap-3 p-4 border border-slate-200 rounded-sm bg-white">
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                                    <div>
-                                        <div className="text-[11px] font-bold text-slate-900 uppercase tracking-wide mb-1">Site Clearance</div>
-                                        <div className="text-[11px] text-slate-500 leading-snug">Deep cleaning completed; tools and debris removed.</div>
-                                    </div>
-                                </div>
-                                <div className="flex items-start gap-3 p-4 border border-slate-200 rounded-sm bg-white">
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                                    <div>
-                                        <div className="text-[11px] font-bold text-slate-900 uppercase tracking-wide mb-1">Access Handover</div>
-                                        <div className="text-[11px] text-slate-500 leading-snug">All site keys and access cards returned to client.</div>
-                                    </div>
-                                </div>
-                            </div>
-                            )}
-                        </div>
-
-                        {/* Warranty and care: turnkey only. A design-only studio built nothing to warrant. */}
-                        {!designOnly && (<>
-                        {/* Section: Warranty Certificate */}
-                        <div className="break-inside-avoid mb-10 pt-4 border-t border-slate-200">
-                            <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-[0.15em] mb-6 flex items-center gap-3">
-                                <span className="w-6 h-[2px] bg-[#C6A96C]"></span>
-                                3. Warranty Certificate
-                            </h4>
-                            
-                            <div className="bg-slate-900 text-white p-8 rounded-sm">
-                                <div className="flex justify-between items-start mb-8 border-b border-slate-700 pb-6">
-                                    <div>
-                                        <div className="text-[9px] font-bold tracking-[0.2em] text-slate-400 uppercase mb-2">Valid From Handover Date</div>
-                                        <div className="text-2xl md:text-3xl font-black tracking-widest uppercase">Active Warranty</div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-[9px] font-bold tracking-[0.2em] text-slate-400 uppercase mb-2">Duration</div>
-                                        <div className="text-2xl md:text-3xl font-black tracking-widest text-[#C6A96C] uppercase">{defaultWarrantyPeriod} Months</div>
-                                    </div>
-                                </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-[12px]">
-                                    <div>
-                                        <strong className="block text-[#C6A96C] mb-2 uppercase tracking-[0.15em] text-[10px]">Coverage</strong>
-                                        <p className="text-slate-300 leading-relaxed">This warranty covers workmanship defects in executed carpentry, installation, finishing, and agreed trade works under normal residential usage conditions.</p>
-                                    </div>
-                                    <div>
-                                        <strong className="block text-[#C6A96C] mb-2 uppercase tracking-[0.15em] text-[10px]">Exclusions</strong>
-                                        <p className="text-slate-300 leading-relaxed">Excludes misuse, negligence, overloading, impact damage, scratches, stains, burns, water damage, pest/termite damage, and unauthorised third-party modifications.</p>
-                                    </div>
-                                    <div className="md:col-span-2 pt-4 border-t border-slate-700">
-                                        <strong className="block text-[#C6A96C] mb-2 uppercase tracking-[0.15em] text-[10px]">Third-Party Products & Appliances</strong>
-                                        <p className="text-slate-300 leading-relaxed">Items such as lights, appliances, hardware, fittings, and sanitaryware are covered directly by their respective manufacturer warranties. Client-supplied materials are entirely excluded from the {studioName} workmanship warranty.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Section: Care & Maintenance Guidelines */}
-                        <div className="break-inside-avoid mb-12">
-                            <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-[0.15em] mb-6 flex items-center gap-3">
-                                <span className="w-6 h-[2px] bg-[#C6A96C]"></span>
-                                4. Care & Maintenance
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 pl-9">
-                                <div>
-                                    <strong className="block text-slate-900 mb-1 text-[11px] uppercase tracking-wide">Woodwork & Laminates</strong>
-                                    <p className="text-[11px] text-slate-600 leading-relaxed">Wipe with a soft, slightly damp microfibre cloth. Avoid excessive water, harsh chemicals, or abrasive scrubbers. Ensure spills are dried immediately to prevent edge-banding damage.</p>
-                                </div>
-                                <div>
-                                    <strong className="block text-slate-900 mb-1 text-[11px] uppercase tracking-wide">Hardware & Hinges</strong>
-                                    <p className="text-[11px] text-slate-600 leading-relaxed">Soft-close channels and hinges should be kept free of dust. Do not forcefully push soft-close drawers or cabinets closed, as this damages the hydraulic mechanism over time.</p>
-                                </div>
-                                <div>
-                                    <strong className="block text-slate-900 mb-1 text-[11px] uppercase tracking-wide">Stone & Countertops</strong>
-                                    <p className="text-[11px] text-slate-600 leading-relaxed">Clean with pH-neutral cleaners. Avoid acidic solutions (like lemon or vinegar) on marble. Always use trivets for hot pans to prevent thermal shock or resin burning on quartz.</p>
-                                </div>
-                                <div>
-                                    <strong className="block text-slate-900 mb-1 text-[11px] uppercase tracking-wide">Post-Handover Support</strong>
-                                    <p className="text-[11px] text-slate-600 leading-relaxed">For any warranty claims or maintenance requests, please email our operations desk with photographs of the issue. Claims are processed within 3-5 working days.</p>
-                                </div>
-                            </div>
-                        </div>
-                        </>)}
-
-                        {/* Section D: Sign-off */}
-                        <div className="break-inside-avoid pt-10">
-                            <div className="grid grid-cols-2 gap-16 md:gap-32 pl-9">
-                                <div>
-                                    <div className="h-px bg-slate-300 mb-4"></div>
-                                    <div className="text-[11px] font-bold text-slate-900 uppercase tracking-[0.15em]">Client Sign-off</div>
-                                    <div className="text-[12px] font-semibold text-slate-700 mt-2">{clientName}</div>
-                                    <div className="text-[10px] text-slate-400 mt-8 italic">Date &amp; Signature</div>
-                                </div>
-                                <div>
-                                    <div className="h-px bg-slate-300 mb-4"></div>
-                                    <div className="text-[11px] font-bold text-slate-900 uppercase tracking-[0.15em]">Authorised Signatory</div>
-                                    <div className="text-[12px] font-semibold text-slate-700 mt-2">For {studioName}</div>
-                                    <div className="text-[10px] text-slate-400 mt-8 italic">Date &amp; Signature</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        {/* Custom Footer */}
-                        <div className="mt-16 pt-6 border-t border-slate-200 text-center text-slate-400 text-[9px] uppercase tracking-widest break-inside-avoid">
-                            <p className="mb-1">{studioName}</p>
-                            <p>{orgData?.contactEmail ? `E: ${orgData.contactEmail}` : ''} {orgData?.contactPhone ? ` | T: ${orgData.contactPhone}` : ''}</p>
-                        </div>
-
-                    </div>
-                </div>
+                <HandoverDocketSheet
+                    projectContext={projectContext}
+                    studioName={studioName}
+                    clientName={clientName}
+                    projectName={projectName}
+                    projectId={projectId}
+                    displayDate={displayDate}
+                    defaultWarrantyPeriod={defaultWarrantyPeriod}
+                    org={{
+                        orgLogo: orgData?.orgLogo,
+                        contactEmail: orgData?.contactEmail,
+                        contactPhone: orgData?.contactPhone,
+                        officeAddress: orgData?.officeAddress
+                    }}
+                    designOnly={designOnly}
+                    drawingsIssued={drawingsIssued}
+                />
             </div>
         </div>
     );

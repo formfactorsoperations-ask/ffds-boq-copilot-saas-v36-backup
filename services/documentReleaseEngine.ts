@@ -38,6 +38,8 @@ import { specWithLists, listOf } from '../lib/specText';
 import { lockedTierId } from '../lib/scopeFlow';
 import { approvedOption, resolveAgreement } from '../lib/executionAgreement';
 import { resolveProvisionalNote } from '../lib/paymentScheduleStatus';
+import { engagementOf } from '../lib/engagement';
+import { handoverDisplayDate, drawingsIssuedOf } from '../lib/handoverDocket';
 
 // ---------------------------------------------------------------------------
 // CATALOGUE
@@ -571,10 +573,16 @@ export function buildSnapshot(
         })),
         warrantyPeriods: warranty,
         defaultWarrantyPeriod: warranty[0]?.months || 12,
-        displayDate: context.handoverDate
-          ? new Date(context.handoverDate).toLocaleDateString('en-IN')
-          : new Date().toLocaleDateString('en-IN'),
+        displayDate: handoverDisplayDate(context.handoverDate),
         handoverDate: context.handoverDate || null,
+        /*
+          A design-only project gets the Design Closeout: no site, no warranty,
+          no care guide. Frozen here so the client's copy reads the same as the
+          studio's page, and so a later change of engagement cannot rewrite a
+          document already released.
+        */
+        engagementType: engagementOf(context),
+        drawingsIssued: drawingsIssuedOf(context),
         org: {
           orgName: opts?.orgName || null,
           orgLogo: (opts as any)?.orgLogo || null,

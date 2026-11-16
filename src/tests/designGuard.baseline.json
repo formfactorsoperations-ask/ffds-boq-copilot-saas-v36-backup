@@ -190,9 +190,8 @@
     "mono": 1
   },
   "components/ProjectListTab.tsx": {
-    "halfPx": 14,
-    "tinyPx": 19,
-    "offPalette": 30
+    "tinyPx": 1,
+    "offPalette": 15
   },
   "components/ProjectSetupWizard.tsx": {
     "tinyPx": 1,
@@ -416,7 +415,6 @@
     "mono": 2
   },
   "components/client/HandoverDocketPage.tsx": {
-    "tinyPx": 7,
     "mono": 1
   },
   "components/client/OnboardingKitPage.tsx": {
