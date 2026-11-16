@@ -403,9 +403,6 @@
     "offPalette": 2,
     "mono": 3
   },
-  "components/client/HandoverDocketPage.tsx": {
-    "tinyPx": 7
-  },
   "components/client/OnboardingKitPage.tsx": {
     "tinyPx": 6,
     "offPalette": 4,

@@ -8,6 +8,12 @@
  * renders THIS component from a frozen snapshot — it never rebuilds a document
  * of its own. Markup, styles and figures are identical on both sides; only the
  * data source differs (live draft in the studio, frozen snapshot in the portal).
+ *
+ * On a design-only project this is the Design Closeout: the client signs off
+ * the final drawing set and the design engagement closes. There was no site
+ * handed over and the studio gives no workmanship warranty, so neither
+ * appears. The portal used to lack this branch, so a design-only client was
+ * sent a Certificate of Completion with a warranty and care guide.
  */
 
 import React from 'react';
@@ -23,10 +29,15 @@ export interface HandoverDocketSheetProps {
   displayDate: string;
   defaultWarrantyPeriod?: string | number;
   org: { orgLogo?: string; contactEmail?: string; contactPhone?: string; officeAddress?: string };
+  /** Design-only engagement: the Design Closeout, with no warranty or care sections. */
+  designOnly?: boolean;
+  /** Drawings in the final set, for the Design Closeout's checklist. */
+  drawingsIssued?: number;
 }
 
 const HandoverDocketSheet: React.FC<HandoverDocketSheetProps> = ({
-  projectContext, studioName, clientName, projectName, projectId, displayDate, defaultWarrantyPeriod, org
+  projectContext, studioName, clientName, projectName, projectId, displayDate, defaultWarrantyPeriod, org,
+  designOnly = false, drawingsIssued = 0
 }) => {
   const orgData = org || {};
   const orgLogo = orgData.orgLogo;
@@ -51,13 +62,13 @@ const HandoverDocketSheet: React.FC<HandoverDocketSheetProps> = ({
                 </div>
                 <div className="text-right">
                     <p className="text-[10px] font-bold tracking-[0.2em] text-[#C6A96C] uppercase mb-1">Formal Document</p>
-                    <p className="text-lg font-black text-slate-900 uppercase tracking-widest m-0">Handover Docket</p>
+                    <p className="text-lg font-black text-slate-900 uppercase tracking-widest m-0">{designOnly ? 'Design Closeout' : 'Handover Docket'}</p>
                 </div>
             </div>
 
             {/* Certificate Banner Layout */}
             <div className="text-center py-6 mb-10">
-                <h1 className="text-3xl md:text-4xl font-black uppercase tracking-[0.2em] text-slate-900 mb-4">Certificate of Completion</h1>
+                <h1 className="text-3xl md:text-4xl font-black uppercase tracking-[0.2em] text-slate-900 mb-4">{designOnly ? 'Design Completion' : 'Certificate of Completion'}</h1>
                 <div className="inline-block border border-slate-200 bg-slate-50 px-6 py-2">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mr-2">Project:</span>
                     <span className="text-[12px] font-black text-slate-900 uppercase tracking-wider">{projectName}</span>
@@ -79,7 +90,7 @@ const HandoverDocketSheet: React.FC<HandoverDocketSheetProps> = ({
                     <div className="font-semibold text-slate-900 text-[13px]">{projectId}</div>
                 </div>
                 <div>
-                    <div className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1.5">Date of Handover</div>
+                    <div className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1.5">{designOnly ? 'Date of Closeout' : 'Date of Handover'}</div>
                     <div className="font-semibold text-slate-900 text-[13px]">{displayDate}</div>
                 </div>
             </div>
@@ -88,10 +99,12 @@ const HandoverDocketSheet: React.FC<HandoverDocketSheetProps> = ({
             <div className="mb-10">
                 <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-[0.15em] mb-4 flex items-center gap-3" id="sec-1" data-section-ref="1">
                     <span className="w-6 h-[2px] bg-[#C6A96C]"></span>
-                    1. Practical Completion
+                    {designOnly ? '1. Design Completion' : '1. Practical Completion'}
                 </h4>
                 <p className="text-[13px] leading-relaxed text-slate-700 pl-9">
-                    This document serves as the formal handover and closure of the interior execution phase for the project referenced above. By signing this document, all parties acknowledge that the works have been executed as per the agreed design intent and scope, and the site is handed over in a satisfactory, ready-to-use condition.
+                    {designOnly
+                        ? `This document closes the design engagement for the project referenced above. By signing it, the client acknowledges receipt of the final Good for Construction drawing set and the agreed design deliverables. Execution of the works is carried out by contractors engaged and paid by the client, who remain responsible for their workmanship.`
+                        : `This document serves as the formal handover and closure of the interior execution phase for the project referenced above. By signing this document, all parties acknowledge that the works have been executed as per the agreed design intent and scope, and the site is handed over in a satisfactory, ready-to-use condition.`}
                 </p>
             </div>
 
@@ -101,6 +114,24 @@ const HandoverDocketSheet: React.FC<HandoverDocketSheetProps> = ({
                     <span className="w-6 h-[2px] bg-[#C6A96C]"></span>
                     2. Closure Checklist
                 </h4>
+                {designOnly ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-9">
+                    {[
+                        ['Final Drawing Set', `The GFC set issued${drawingsIssued ? ` (${drawingsIssued} drawings)` : ''}.`],
+                        ['Selections', 'Finishes and fittings schedule shared with the client.'],
+                        ['Design Fee Settled', '100% of the design fee cleared.'],
+                        ['Site Queries', 'Contractor queries on the drawings answered.'],
+                    ].map(([title, text]) => (
+                        <div key={title} className="flex items-start gap-3 p-4 border border-slate-200 rounded-sm bg-white">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                            <div>
+                                <div className="text-[11px] font-bold text-slate-900 uppercase tracking-wide mb-1">{title}</div>
+                                <div className="text-[11px] text-slate-500 leading-snug">{text}</div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-9">
                     <div className="flex items-start gap-3 p-4 border border-slate-200 rounded-sm bg-white">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
@@ -131,8 +162,11 @@ const HandoverDocketSheet: React.FC<HandoverDocketSheetProps> = ({
                         </div>
                     </div>
                 </div>
+                )}
             </div>
 
+            {/* Warranty and care: turnkey only. A design-only studio built nothing to warrant. */}
+            {!designOnly && (<>
             {/* Section: Warranty Certificate */}
             <div className="break-inside-avoid mb-10 pt-4 border-t border-slate-200">
                 <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-[0.15em] mb-6 flex items-center gap-3" id="sec-3" data-section-ref="3">
@@ -194,6 +228,7 @@ const HandoverDocketSheet: React.FC<HandoverDocketSheetProps> = ({
                     </div>
                 </div>
             </div>
+            </>)}
 
             {/* Section D: Sign-off */}
             <div className="break-inside-avoid pt-10">

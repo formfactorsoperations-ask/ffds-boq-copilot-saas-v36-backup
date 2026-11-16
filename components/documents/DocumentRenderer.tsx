@@ -26,6 +26,7 @@ import ScopeRevisionSheet from './ScopeRevisionSheet';
 import ExecutionStamp from './ExecutionStamp';
 import { MessageCircleQuestion, MessagesSquare, Check } from 'lucide-react';
 import { documentMode, SignatureMode } from '../../services/documentReleaseEngine';
+import { engagementOf } from '../../lib/engagement';
 
 export interface DocumentRendererProps {
   /** The frozen issue. Never a live context object. */
@@ -463,6 +464,10 @@ const DocumentRenderer: React.FC<DocumentRendererProps> = ({
             contactPhone: org.contactPhone,
             officeAddress: org.officeAddress
           }}
+          /* Frozen at release. A docket released before this was frozen has no
+             engagementType and stays the turnkey docket it was issued as. */
+          designOnly={engagementOf(snap) === 'design_only'}
+          drawingsIssued={snap.drawingsIssued || 0}
         />
       );
     }

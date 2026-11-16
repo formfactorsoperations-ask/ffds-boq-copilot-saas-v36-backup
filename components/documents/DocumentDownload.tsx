@@ -113,7 +113,7 @@ export function useDocumentDownload(args: {
 
   const download = useCallback((target: DownloadTarget) => {
     if (job) return;
-    const title = documentTitle(target.kind);
+    const title = documentTitle(target.kind, context, target.issue);
     const project = context.name || 'Project';
     if (target.issue) {
       const certificate = certificateFor(target.issue, context, target.agreementRecord);
