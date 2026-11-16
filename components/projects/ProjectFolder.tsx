@@ -10,7 +10,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, ArrowUpRight, MoreHorizontal } from 'lucide-react';
 import GlassFolder from '../ui/glass-folder-cards';
-import { STAGE, KIND_LABEL, type FolderStage, type KindTag, type RoutedFile, type FolderNext } from '../../lib/projectFolders';
+import { STAGE, toneOf, KIND_LABEL, type FolderStage, type KindTag, type RoutedFile, type FolderNext } from '../../lib/projectFolders';
 
 const STEPS = ['Lead', 'Quote', 'Won', 'Site', 'Done'];
 /* The folder is drawn at 340 wide with 54 of headroom above it (glass-folder-cards). */
@@ -101,7 +101,7 @@ export default function ProjectFolder(p: ProjectFolderProps) {
           meta={p.meta}
           art="none"
           seed={(p.id.split('').reduce((a, ch) => a + ch.charCodeAt(0), 0) % 97) + 1}
-          tone="light"
+          tone={toneOf(p.stage)}
           files={p.files}
           width={p.width}
           appearDelay={Math.min(p.index, 8) * 70}

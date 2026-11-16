@@ -56,6 +56,10 @@ export function stageOf(status?: string | null): FolderStage {
   }
 }
 
+/** Dark glass where the stage art is dark, so the name stays readable. */
+export const toneOf = (stage: FolderStage): 'light' | 'dark' =>
+  stage === 'proposal' || stage === 'won' ? 'dark' : 'light';
+
 export type KindTag = 'actual' | 'dummy' | 'untagged';
 
 /** The Actual / Dummy tag, from the project's own tag (lib/projectClassification). */

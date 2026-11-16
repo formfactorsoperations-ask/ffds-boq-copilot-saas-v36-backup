@@ -9,7 +9,7 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within, act } from '@testing-library/react';
-import { stageOf, kindOf, folderFiles, folderNext, FOLDER_STAGES } from '../../lib/projectFolders';
+import { stageOf, kindOf, folderFiles, folderNext, FOLDER_STAGES, toneOf } from '../../lib/projectFolders';
 import ProjectFolder from '../../components/projects/ProjectFolder';
 
 vi.mock('../../services/firebaseClient', () => ({ db: {}, auth: null, storage: null, functions: null, isFirebaseConfigured: () => true }));
@@ -40,6 +40,7 @@ describe('stages', () => {
     expect(stageOf('lost')).toBe('lost');
     expect(FOLDER_STAGES.map((s) => s.label)).toEqual(['New lead', 'Proposal sent', 'Won', 'On site', 'Handed over', 'Lost']);
     expect(new Set(FOLDER_STAGES.map((s) => s.color)).size).toBe(6);
+    expect(toneOf('won')).toBe('dark');
   });
 
   it('tags a project Actual, Dummy or Untagged from its own tag', () => {
