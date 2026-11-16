@@ -3,6 +3,7 @@ import { ClientLifecycleSummary, ClientActionItem, decisionNature } from '../../
 import { getCurrentIssue, resolveDocumentState } from '../../services/documentIssueEngine';
 import { isVisibleToClient } from '../../lib/clientVisibility';
 import { formatINR } from '../../lib/utils';
+import { isDesignCloseout, DESIGN_CLOSEOUT } from '../../lib/handoverDocket';
 import { Programme, stageAtDate } from './programme';
 
 /**
@@ -273,7 +274,9 @@ export function buildSpine({
     push(STAGE_OF_DOCUMENT[kind], {
       id: `doc-${kind}`,
       kind: 'doc',
-      title: DOCUMENT_LABEL[kind] || kind,
+      title: kind === 'handover_docket' && isDesignCloseout(context, issue as any)
+        ? DESIGN_CLOSEOUT.timelineLabel
+        : DOCUMENT_LABEL[kind] || kind,
       // The version leads when there is more than one, because "v2 issued —
       // your signature is on v1" is the whole story for a reissued document.
       subtitle: [

@@ -33,6 +33,7 @@ import {
 } from './clientApprovalEngine';
 import { getQueries } from './documentQueryEngine';
 import { agreementKindFor } from './documentIssueEngine';
+import { isDesignCloseout, DESIGN_CLOSEOUT } from '../lib/handoverDocket';
 
 export type { AgreementStatus, AgreementKind, ApprovalSnapshot } from './clientApprovalEngine';
 
@@ -649,8 +650,11 @@ const AGREEMENT_CONSEQUENCE: Record<AgreementKind, string> = {
   handover: 'Activates your warranty cover and closes the project formally.'
 };
 
-function agreementActions(approvals: ApprovalSnapshot): ClientActionItem[] {
+function agreementActions(approvals: ApprovalSnapshot, context: ProjectContext): ClientActionItem[] {
   const items: ClientActionItem[] = [];
+  /* A Design Closeout activates no warranty: it closes the design engagement. */
+  const consequenceOf = (kind: AgreementKind) =>
+    kind === 'handover' && isDesignCloseout(context) ? DESIGN_CLOSEOUT.consequence : AGREEMENT_CONSEQUENCE[kind];
 
   approvals.all.forEach(agreement => {
     // Signed — nothing to do.
@@ -684,7 +688,7 @@ function agreementActions(approvals: ApprovalSnapshot): ClientActionItem[] {
         : agreement.isOverdue
           ? 'Overdue — with the studio'
           : 'Being drafted',
-      consequence: AGREEMENT_CONSEQUENCE[agreement.kind],
+      consequence: consequenceOf(agreement.kind),
       waitingOn: isClientTurn ? undefined : 'Studio to release the document'
     });
   });
@@ -925,7 +929,7 @@ export function calculateClientActionItems(
   );
 
   const allActions: ClientActionItem[] = [
-    ...agreementActions(lifecycle.approvals).filter(
+    ...agreementActions(lifecycle.approvals, safeContext).filter(
       a => !queriedKinds.has(a.actionPayload?.kind)
     ),
     ...queryActions(safeContext),

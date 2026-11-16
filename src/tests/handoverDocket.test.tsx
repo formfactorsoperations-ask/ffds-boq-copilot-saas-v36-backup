@@ -34,7 +34,12 @@ vi.mock('../../hooks/useStudioSettings', () => ({
 import { releaseDocument } from '../../services/documentReleaseEngine';
 import DocumentRenderer from '../../components/documents/DocumentRenderer';
 import HandoverDocketPage from '../../components/client/HandoverDocketPage';
-import { handoverDisplayDate, drawingsIssuedOf } from '../../lib/handoverDocket';
+import { handoverDisplayDate, drawingsIssuedOf, isDesignCloseout, DESIGN_CLOSEOUT } from '../../lib/handoverDocket';
+import { documentTitle } from '../../services/documentReleaseEngine';
+import { resolveApprovals } from '../../services/clientApprovalEngine';
+import { calculateClientActionItems } from '../../services/clientPortalEngine';
+import ClientDocumentVault from '../../components/client/ClientDocumentVault';
+import DocumentReadingRoom from '../../components/client/DocumentReadingRoom';
 
 const TODAY = new Date('2026-11-16T06:00:00Z');
 const HANDED_OVER = Date.UTC(2026, 9, 3, 6); // 3 October 2026
@@ -169,4 +174,79 @@ test('drawingsIssuedOf counts the drawing tracker', () => {
   expect(drawingsIssuedOf({ drawingTracker: [{}, {}, {}] })).toBe(3);
   expect(drawingsIssuedOf({})).toBe(0);
   expect(drawingsIssuedOf(null)).toBe(0);
+});
+
+/*
+  The portal names the document too: the vault row, the reading room, the
+  agreement card, the action item, the sign-off note and the PDF. On a
+  design-only project every one of them said "Handover & Acceptance Docket"
+  and promised a snag walk-through and warranty cover.
+*/
+describe('what the portal calls a design-only docket', () => {
+  const design = () => project({ engagementType: 'design_only', handoverDate: undefined });
+  const released = (ctx: any) =>
+    releaseDocument('handover_docket', ctx, undefined, { issuedBy: 'studio', org: ORG, reference: 'HD-1' })(ctx);
+
+  test('documentTitle: Design Closeout for design-only, unchanged otherwise', () => {
+    expect(documentTitle('handover_docket')).toBe('Handover & Acceptance Docket');
+    expect(documentTitle('handover_docket', project())).toBe('Handover & Acceptance Docket');
+    expect(documentTitle('handover_docket', design())).toBe('Design Closeout');
+    expect(documentTitle('terms_docket', design())).toBe('Terms of Engagement Docket');
+  });
+
+  test('a released docket is named by its own snapshot, so the name matches what the client reads', () => {
+    const ctx = released(design());
+    expect(isDesignCloseout(ctx)).toBe(true);
+    // Released before the engagement was frozen: turnkey content, turnkey name.
+    const old = JSON.parse(JSON.stringify(ctx));
+    delete old.documents.issues[0].snapshot.engagementType;
+    expect(isDesignCloseout(old)).toBe(false);
+    expect(documentTitle('handover_docket', old)).toBe('Handover & Acceptance Docket');
+  });
+
+  test('the agreement card and its action item say what a Design Closeout is', () => {
+    const card = resolveApprovals(released(design()), 6).handover;
+    expect(card.title).toBe('Design Closeout');
+    expect(card.purpose).toBe(DESIGN_CLOSEOUT.purpose);
+    expect(card.purpose).not.toMatch(/warranty|snag/i);
+
+    const waiting = resolveApprovals(design(), 6).handover;
+    expect(waiting.blockedReason).toBe(DESIGN_CLOSEOUT.drafting);
+
+    const action = calculateClientActionItems(released(design()), {} as any).allActions.find(a => a.id === 'action-agreement-handover')!;
+    expect(action.title).toBe('Sign Design Closeout');
+    expect(action.consequence).toBe(DESIGN_CLOSEOUT.consequence);
+  });
+
+  test('turnkey wording is unchanged', () => {
+    const card = resolveApprovals(released(project({ handoverDate: undefined })), 6).handover;
+    expect(card.title).toBe('Handover & Acceptance Docket');
+    expect(card.purpose).toBe('Records snag closure, key handover, warranty activation and final project acceptance.');
+    expect(resolveApprovals(project({ handoverDate: undefined }), 6).handover.blockedReason)
+      .toBe('Your studio is compiling the snag closure report and warranty dossier.');
+    const action = calculateClientActionItems(released(project({ handoverDate: undefined })), {} as any).allActions
+      .find(a => a.id === 'action-agreement-handover')!;
+    expect(action.consequence).toBe('Activates your warranty cover and closes the project formally.');
+  });
+
+  test('the document vault lists it as the Design Closeout', () => {
+    const vault = (ctx: any) => render(
+      <ClientDocumentVault projectData={{ id: 'p1', context: ctx } as any} studioName="Form Factors" onOpenDocument={vi.fn()} />
+    ).container.textContent!;
+    const designText = vault(released(design()));
+    expect(designText).toContain('Design Closeout');
+    expect(designText).not.toContain('Handover Docket');
+    cleanup();
+    expect(vault(released(project({ handoverDate: undefined })))).toContain('Handover Docket');
+  });
+});
+
+test('the reading room heads a design-only docket "Design Closeout"', () => {
+  const room = (ctx: any) => render(
+    <DocumentReadingRoom kind="handover_docket" projectData={{ id: 'p1', context: ctx } as any} onClose={vi.fn()} />
+  ).container.textContent!;
+  const ctx = (extra: any) => releaseDocument('handover_docket', project(extra), undefined, { issuedBy: 'studio', org: ORG, reference: 'HD-1' })(project(extra));
+  expect(room(ctx({ engagementType: 'design_only' }))).not.toContain('Handover & Acceptance Docket');
+  cleanup();
+  expect(room(ctx({}))).toContain('Handover & Acceptance Docket');
 });

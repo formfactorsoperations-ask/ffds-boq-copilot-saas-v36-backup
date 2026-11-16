@@ -33,6 +33,7 @@ import SignatureCertificate, { signoffFromIssue } from './SignatureCertificate';
 import { ExcelDownloadButton } from './ScopeApprovalCard';
 import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
 import { useDocumentDownload, certificateFor } from '../documents/DocumentDownload';
+import { isDesignCloseout, DESIGN_CLOSEOUT } from '../../lib/handoverDocket';
 import {
   FileText,
   FileCheck,
@@ -123,7 +124,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
 
       return {
         id: doc.id,
-        name: doc.name,
+        name: kind === 'handover_docket' && isDesignCloseout(context, issue) ? DESIGN_CLOSEOUT.title : doc.name,
         group: doc.group,
         kind,
         issue,
@@ -266,7 +267,7 @@ const ClientDocumentVault: React.FC<ClientDocumentVaultProps> = ({
                                   })}
                                 </>
                               ) : (
-                                RELEASE_CONDITION[row.kind || ''] ||
+                                (row.kind === 'handover_docket' && isDesignCloseout(context) ? DESIGN_CLOSEOUT.notReleased : RELEASE_CONDITION[row.kind || '']) ||
                                 'Your studio will release this when it is ready.'
                               )}
                             </p>

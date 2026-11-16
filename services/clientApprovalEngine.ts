@@ -22,6 +22,7 @@
  */
 
 import { ProjectContext, SignoffRecord, DigitalSignatureDocket, TermsDocket } from '../types';
+import { isDesignCloseout, DESIGN_CLOSEOUT } from '../lib/handoverDocket';
 
 // ---------------------------------------------------------------------------
 // MODEL
@@ -407,10 +408,14 @@ function resolveHandover(context: ProjectContext, currentStage: number): Agreeme
      handover DATE is a fact about the job rather than a tick, so it stays. */
   const signed = !isDisputed && (record?.status === 'signed' || !!context.handoverDate || issue.signed);
   const released = record?.status === 'sent' || issue.released;
+  /* A design-only project's docket is the Design Closeout: no snag walk-through,
+     no warranty. See lib/handoverDocket. */
+  const designCloseout = isDesignCloseout(context);
 
   let state: AgreementState = 'not_started';
-  let blockedReason: string | null =
-    'Issued after the joint snag walk-through, once all finishing works are signed off on site.';
+  let blockedReason: string | null = designCloseout
+    ? DESIGN_CLOSEOUT.notReleased
+    : 'Issued after the joint snag walk-through, once all finishing works are signed off on site.';
 
   if (signed) {
     state = 'signed';
@@ -420,13 +425,17 @@ function resolveHandover(context: ProjectContext, currentStage: number): Agreeme
     blockedReason = null;
   } else if (currentStage >= 6) {
     state = 'drafting';
-    blockedReason = 'Your studio is compiling the snag closure report and warranty dossier.';
+    blockedReason = designCloseout
+      ? DESIGN_CLOSEOUT.drafting
+      : 'Your studio is compiling the snag closure report and warranty dossier.';
   }
 
   return {
     kind: 'handover',
-    title: 'Handover & Acceptance Docket',
-    purpose: 'Records snag closure, key handover, warranty activation and final project acceptance.',
+    title: designCloseout ? DESIGN_CLOSEOUT.title : 'Handover & Acceptance Docket',
+    purpose: designCloseout
+      ? DESIGN_CLOSEOUT.purpose
+      : 'Records snag closure, key handover, warranty activation and final project acceptance.',
     state,
     needsClientAction: state === 'awaiting_client',
     isOverdue: false, // handover is never "late" from the client's side

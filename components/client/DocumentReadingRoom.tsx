@@ -25,6 +25,7 @@ import DocumentRenderer from '../documents/DocumentRenderer';
 import { resolveTokens } from '../documents/DocumentBlocks';
 import DigitalSignaturePad from '../common/DigitalSignaturePad';
 import { documentMode } from '../../services/documentReleaseEngine';
+import { isDesignCloseout, DESIGN_CLOSEOUT } from '../../lib/handoverDocket';
 import {
   getCurrentIssue,
   getIssueHistory,
@@ -578,7 +579,10 @@ const DocumentReadingRoom: React.FC<DocumentReadingRoomProps> = ({
     window.print();
   };
 
-  const title = DOC_TITLES[kind] || 'Document';
+  // A design-only project's handover docket is the Design Closeout (lib/handoverDocket).
+  const title = kind === 'handover_docket' && isDesignCloseout(context, issue)
+    ? DESIGN_CLOSEOUT.title
+    : DOC_TITLES[kind] || 'Document';
 
   // ── Not released ─────────────────────────────────────────────────────────
   if (!issue) {

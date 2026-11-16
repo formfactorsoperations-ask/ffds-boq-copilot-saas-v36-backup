@@ -157,6 +157,7 @@ import { useStudioSettings } from '../hooks/useStudioSettings';
 import ScheduleGantt from './ScheduleGantt';
 import { buildScheduleFromProject, scheduleForEngagement } from '../lib/scheduleBuilder';
 import { engagementOf, isFeeOnly } from '../lib/engagement';
+import { isDesignCloseout, DESIGN_CLOSEOUT } from '../lib/handoverDocket';
 import { db as storageDb } from '../services/dbService';
 import { ProjectSchedule } from '../types';
 import { publicAppOrigin } from '../lib/publicUrl';
@@ -2056,7 +2057,9 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         const confirmations: Record<typeof type, string> = {
             terms: 'Terms of Engagement Docket signed and sealed. Your studio has been notified.',
             contract: 'Master Execution Agreement signed. Scope and BOQ are now locked.',
-            handover: 'Handover & Acceptance Docket signed. Your warranty cover is now active.'
+            handover: isDesignCloseout(context)
+                ? DESIGN_CLOSEOUT.signed
+                : 'Handover & Acceptance Docket signed. Your warranty cover is now active.'
         };
         setSignSuccessMessage(confirmations[type]);
 

@@ -39,7 +39,7 @@ import { lockedTierId } from '../lib/scopeFlow';
 import { approvedOption, resolveAgreement } from '../lib/executionAgreement';
 import { resolveProvisionalNote } from '../lib/paymentScheduleStatus';
 import { engagementOf } from '../lib/engagement';
-import { handoverDisplayDate, drawingsIssuedOf } from '../lib/handoverDocket';
+import { handoverDisplayDate, drawingsIssuedOf, isDesignCloseout, DESIGN_CLOSEOUT } from '../lib/handoverDocket';
 
 // ---------------------------------------------------------------------------
 // CATALOGUE
@@ -157,8 +157,18 @@ export const RELEASABLE_DOCUMENTS: ReleasableDocument[] = [
 export const documentMode = (kind: ClientDocumentKind): SignatureMode =>
   RELEASABLE_DOCUMENTS.find(d => d.kind === kind)?.mode || 'review';
 
-export const documentTitle = (kind: ClientDocumentKind): string =>
-  RELEASABLE_DOCUMENTS.find(d => d.kind === kind)?.title || 'Document';
+/**
+ * The document's name. Pass the project (and the issue, where one is open) so
+ * a design-only project's handover docket is called the Design Closeout.
+ */
+export const documentTitle = (
+  kind: ClientDocumentKind,
+  context?: ProjectContext | null,
+  issue?: { snapshot?: unknown } | null
+): string =>
+  kind === 'handover_docket' && context && isDesignCloseout(context, issue)
+    ? DESIGN_CLOSEOUT.title
+    : RELEASABLE_DOCUMENTS.find(d => d.kind === kind)?.title || 'Document';
 
 // ---------------------------------------------------------------------------
 // READINESS
