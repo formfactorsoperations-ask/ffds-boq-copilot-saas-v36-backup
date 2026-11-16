@@ -130,7 +130,9 @@ export const NAV_CONFIG: NavStage[] = [
           return null;
         }
       },
-      { label: "Payment Schedule", route: "payment-calc", money: true },
+      /* Payment Schedule lives in the Project Hub as Money: money runs across
+         every stage, and listing the one screen in two places made the sidebar
+         close this stage and lose its highlight when it was opened from here. */
       { 
         label: "Design Gate", 
         route: "design-gate",

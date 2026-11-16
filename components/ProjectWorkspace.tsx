@@ -3,7 +3,7 @@ import { ProjectContextTier } from './ProjectContextTier';
 import { ProjectContext, ProjectStatus, FullProjectData } from '../types';
 import { STAGE_LABELS, PHASES } from '../constants/journeyConstants';
 import { Lock, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, X, Compass, Activity, Check, Info, Settings, Edit3, AlertTriangle, LayoutGrid, Handshake, Palette, Layers, FileText, Truck, Hammer, Key, Sparkles, SlidersHorizontal, Eye, Pencil } from '@/lib/lucide-shim';
-import { NAV_CONFIG, ALWAYS_ON_BAND, nextScreen } from './navConfig';
+import { NAV_CONFIG, ALWAYS_ON_BAND } from './navConfig';
 import { getPageMeta } from './pageMeta';
 import { engagementOf, navItemsFor, stageLabel, routeLabel, isRouteHidden, engagementDef } from '../lib/engagement';
 import { useProjectJourney } from '../hooks/useProjectJourney';
@@ -123,15 +123,7 @@ export function ProjectWorkspace({
   onStatusChange?: (status: ProjectStatus, note?: string) => Promise<void> | void;
 }) {
   const { orgData, currentUserAuth } = useOrg();
-  const [isFloatingWidgetOpen, setIsFloatingWidgetOpen] = useState(false);
-  const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
-  const [isRailCollapsed, setIsRailCollapsed] = useState(false);
-  const [isOpsBannerCollapsed, setIsOpsBannerCollapsed] = useState(true);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
-
-  useEffect(() => {
-    setIsOpsBannerCollapsed(true);
-  }, [activeTab]);
 
   const lifecycle = projectContext.lifecycle || { stage: 1, subState: 'pending', gates: {} };
   const currentStage = lifecycle.stage;
@@ -169,7 +161,6 @@ export function ProjectWorkspace({
   };
   
   const journey = useProjectJourney(projectId, projectContext);
-  const { steps = [], markStepDone, markStepPending } = journey;
 
   const activeTabStage = NAV.find(s => s.items.some(item => item.route === activeTab))?.stage || currentStage;
   const [selectedStage, setSelectedStage] = useState<number>(activeTabStage);
@@ -180,95 +171,6 @@ export function ProjectWorkspace({
       setSelectedStage(found.stage);
     }
   }, [activeTab]);
-
-  const activeStageConfig = NAV.find(c => c.stage === selectedStage) || NAV.find(c => c.stage === currentStage);
-
-  // Local state for expanded stage. By default, the currentStage is expanded.
-  const [activeExpandedStage, setActiveExpandedStage] = useState<Record<string, number>>({});
-
-  const getExpanded = (stage: number) => {
-    const expanded = activeExpandedStage[projectId];
-    if (expanded !== undefined) {
-      return expanded === stage;
-    }
-    return stage === currentStage; // Default: only current stage expanded
-  };
-
-  const toggleExpanded = (stage: number) => {
-    setActiveExpandedStage(prev => {
-      const currentExpanded = prev[projectId] !== undefined ? prev[projectId] : currentStage;
-      return {
-        ...prev,
-        [projectId]: currentExpanded === stage ? 0 : stage
-      };
-    });
-  };
-
-  // Active Phase and Stage Calculations for Floating Widget
-  const phases = (journey as any).phases || PHASES;
-  const activePhaseIndex = Math.max(0, Math.min(phases.length - 1, currentStage - 1));
-  const activePhaseDef = phases[activePhaseIndex];
-  const activePhaseProgress = journey.phaseProgress?.[activePhaseIndex] || { pct: 0, done: 0, total: 0 };
-  const isPhaseComplete = activePhaseProgress.pct === 100;
-  const phaseSteps = journey.stepsByPhase?.[activePhaseIndex] || [];
-
-  /*
-    Whether the project has enough on it for the journey to mean anything.
-
-    This condition used to sit in the panel's render guard, so on a project
-    with no area and no rooms the panel simply did not exist — while the chip
-    that opens it stayed visible and clickable in the header. A control that
-    is always shown and sometimes does nothing is worse than no control: it
-    teaches people the button is broken. The panel now always opens and
-    answers for itself when there is nothing to report.
-  */
-  const needsSetup = !(projectContext.area > 0) || (projectContext.rooms || []).length === 0;
-  /* Only offer the jump when it actually goes somewhere. Some steps name the
-     screen you are already on — brief_frozen points at 'dashboard' — and a
-     "Take me there" that lands you where you stand reads as a broken button. */
-  const rawNextTab = (journey.nextStep as any)?.linkedTab as string | undefined;
-  const nextStepTab = rawNextTab && rawNextTab !== activeTab ? rawNextTab : undefined;
-
-  // Custom messages based on active phase
-  let transitionMessage = "Every step is signed off. You can now advance the project to the next lifecycle stage.";
-  if (activePhaseIndex === 0) transitionMessage = "Acquisition complete. Ready to advance the project to Design.";
-  else if (activePhaseIndex === 1) transitionMessage = "Every step is signed off. Move the project into Contracting.";
-  else if (activePhaseIndex === 2) transitionMessage = "Contracting complete. Ready to start Pre-Execution setup.";
-  else if (activePhaseIndex === 3) transitionMessage = engagement === 'design_only' ? "The GFC set is out. Move on to locking selections." : "Pre-Execution setup complete. Ready to mobilize on-site execution.";
-  else if (activePhaseIndex === 4) transitionMessage = engagement === 'design_only' ? "Selections are locked. Ready for the design closeout." : "Execution complete. Ready to begin handover closeout.";
-
-  // Function to handle advancing the lifecycle
-  const handleAdvanceLifecycle = async (newStage: number) => {
-    if (!projectId || !orgData?.id) return;
-    try {
-      const { advance } = await import('../services/lifecycleService');
-      const currentLifecycle = projectContext.lifecycle;
-      if (currentLifecycle) {
-        if (newStage === 2 && !currentLifecycle.gates?.proposalAccepted?.done) {
-          await advance(orgData.id, projectId, { type: 'GATE_ACTIVATE', gate: 'proposalAccepted' });
-        }
-        if (newStage === 4 && !currentLifecycle.gates?.contractSigned?.done) {
-          await advance(orgData.id, projectId, { type: 'GATE_ACTIVATE', gate: 'contractSigned' });
-        }
-        if (newStage === 5 && !currentLifecycle.gates?.designGateActive?.done) {
-          await advance(orgData.id, projectId, { type: 'GATE_ACTIVATE', gate: 'designGateActive' });
-        }
-        if (newStage === 6 && !currentLifecycle.gates?.handoverComplete?.done) {
-          await advance(orgData.id, projectId, { type: 'GATE_ACTIVATE', gate: 'handoverComplete' });
-        }
-      }
-
-      const updatedLifecycle = await advance(orgData.id, projectId, { type: 'ADVANCE', toStage: newStage as any });
-      if (setProjectContext) {
-        setProjectContext((prev: any) => ({
-          ...prev,
-          lifecycle: updatedLifecycle
-        }));
-      }
-    } catch (err) {
-      console.error("Failed to advance lifecycle:", err);
-    }
-  };
 
   // Helper to get lock text
   const getLockNote = (stage: number) => {
@@ -295,126 +197,10 @@ export function ProjectWorkspace({
     (!seesStudioFinance(currentRole) && !!item?.money) ||
     (isLimited && !limitedMayOpen(currentRole, item?.route));
 
-  /*
-    "Up next": the screen after this one in the workflow (navConfig nextScreen),
-    never one this person cannot open nor a locked stage. Shown as a card at the
-    bottom-right rather than a button in the tab row, where a filled pill read as
-    another selected tab. Dismissed per screen, for this visit.
-  */
-  const next = nextScreen(NAV, activeTab, { isHidden: hiddenForRole, isStageLocked });
-  const [upNextDismissed, setUpNextDismissed] = useState<Record<string, true>>({});
-  const upNext = next && !upNextDismissed[activeTab] && NAV.some(s => s.items.some(i => i.route === activeTab))
-    ? { ...next, blurb: getPageMeta(next.route)?.subtitle || '' }
-    : null;
 
   /* Notes on this project, by the screen they open: a red number where someone is waiting on you, a dot for something new (lib/notify). */
   const inbox = useInbox();
   const noted = inbox?.forProject(projectId) || {};
-  const notedIn = (routes: string[]) => routes.reduce((t, r) => ({ needs: t.needs + (noted[r]?.needs || 0), unread: t.unread + (noted[r]?.unread || 0) }), { needs: 0, unread: 0 });
-
-  const renderNavItem = (item: any, isLockedStage: boolean, isHub: boolean = false) => {
-    if (hiddenForRole(item)) return null;
-    
-    let badgeText = item.statusBadge ? item.statusBadge(projectContext) : null;
-    let tone = item.badgeTone ? item.badgeTone(projectContext) : 'neutral';
-    
-    if (!seesStudioFinance(currentRole) && badgeText) {
-      // Money tabs are hidden outright; this only catches a stray ₹. A "%" is
-      // usually progress ("35%" on Ops Matrix), which everyone may see.
-      badgeText = badgeText.replace(/₹/g, '');
-    }
-
-    const isActive = activeTab === item.route;
-
-    // Check if there are journey steps associated with this route
-    const associatedSteps = (steps || []).filter(s => s.linkedTab === item.route);
-    const allDone = associatedSteps.length > 0 && associatedSteps.every(s => s.status === 'done');
-    const hasActive = associatedSteps.some(s => s.status === 'active');
-
-    // Tone styling for badge
-    let badgeStyle = "bg-slate-50 text-slate-500 border border-slate-200/60";
-    if (tone === 'ok') badgeStyle = "bg-emerald-50 text-emerald-700 border border-emerald-200/60";
-    else if (tone === 'alert') badgeStyle = "bg-rose-50 text-rose-700 border border-rose-200/60";
-    else if (tone === 'warn') badgeStyle = "bg-amber-50 text-amber-700 border border-amber-200/60";
-
-    const IconComponent = item.icon;
-
-    return (
-      <div key={item.route} className="flex flex-col w-full">
-        <button
-          onClick={() => {
-            // We route even if locked, per spec: "clicking one opens its module's LockedState"
-            setActiveTab(item.route);
-          }}
-          className={`w-full text-left px-2.5 py-1 rounded-xl text-[13px] transition-all duration-200 flex items-center justify-between group outline-none ${
-            isActive 
-              ? 'bg-[#3D52A0]/[0.06] text-slate-900 font-bold border border-[#3D52A0]/15 shadow-sm' 
-              : isLockedStage 
-                ? 'text-slate-400 hover:bg-slate-50/50' 
-                : 'text-slate-600 hover:bg-slate-50/40 hover:text-slate-900'
-          }`}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            {isHub && IconComponent ? (
-              <IconComponent className={`w-3.5 h-3.5 shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'text-[#3D52A0]' : 'text-slate-400 group-hover:text-slate-600'}`} />
-            ) : (
-              associatedSteps.length > 0 && (
-                allDone ? (
-                  <span className="text-emerald-500 shrink-0 text-xs font-bold leading-none" title="Task Done">✓</span>
-                ) : hasActive ? (
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#3D52A0] shrink-0 animate-pulse" title="Pulsing Active" />
-                ) : (
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" title="Idle" />
-                )
-              )
-            )}
-            <span className="truncate">{item.label}</span>
-          </div>
-          {badgeText && (
-            <span className={`text-[9px] px-1 py-0.5 rounded-lg font-extrabold shrink-0 ${badgeStyle}`}>
-              {badgeText}
-            </span>
-          )}
-        </button>
-
-        {/* 3px Progress Bar under Ops Matrix if in Hub */}
-        {isHub && item.label === "Ops Matrix" && (projectContext?.journeySummary?.pct !== undefined || journey.overall.pct !== undefined) && (
-          <div className="px-2.5 mt-0.5 mb-1">
-            <div className="w-full bg-slate-100 h-[3px] rounded-full overflow-hidden border border-slate-200/10">
-              <div 
-                className={`h-full transition-all duration-500 ${(projectContext?.journeySummary?.pct ?? journey.overall.pct) === 100 ? 'bg-emerald-500' : 'bg-[#3D52A0]'}`}
-                style={{ width: `${projectContext?.journeySummary?.pct ?? journey.overall.pct}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const getStageCounts = (stageConfig: typeof NAV[0]) => {
-    // Filter out items hidden by role rules (Designer cannot see money: true)
-    const visibleItems = stageConfig.items.filter(item => !(hiddenForRole(item)));
-    let doneCount = 0;
-    let totalCount = 0;
-    
-    visibleItems.forEach(item => {
-      const associatedSteps = (steps || []).filter(s => s.linkedTab === item.route);
-      if (associatedSteps.length > 0) {
-        totalCount++;
-        const allDone = associatedSteps.every(s => s.status === 'done');
-        if (allDone) {
-          doneCount++;
-        }
-      }
-    });
-    
-    return { done: doneCount, total: totalCount };
-  };
-
-  const renderOpsBanner = () => {
-    return null;
-  };
 
   /* What the project sidebar shows (components/projectNav/ProjectSidebar). */
   const [mobileNav, setMobileNav] = useState(false);
@@ -439,9 +225,17 @@ export function ProjectWorkspace({
     : BAND.some(i => i.route === activeTab) ? 'Project Hub'
     : (NAV.find(s => s.items.some(i => i.route === activeTab))?.label || 'Project');
 
-  /* The screen's name, for screens with no sub-tab to highlight (the Hub, the Project Hub's screens). */
-  const screenTitle = (!isWizard && ENGAGEMENT_PAGE_TITLES[engagement]?.[activeTab]?.title)
-    || getPageMeta(isWizard ? 'project-setup' : activeTab)?.title || '';
+  /*
+    The page bar names the screen with the same words as the sidebar row that
+    opened it, so the two cannot drift apart ("Versions & Revision Studio" used
+    to open a page titled "Revisions", "Messages" one titled "Client Messages").
+    pageMeta only names screens the sidebar does not list.
+  */
+  const homeLabel = isDesigner ? 'Drawings' : isLimited ? 'Messages' : 'Hub';
+  const sidebarLabel = activeTab === (isLimited ? limitedHome : 'dashboard') ? homeLabel
+    : (BAND.find(i => i.route === activeTab)?.label || NAV.flatMap(s => s.items).find(i => i.route === activeTab)?.label);
+  const screenTitle = isWizard ? (getPageMeta('project-setup')?.title || '')
+    : (ENGAGEMENT_PAGE_TITLES[engagement]?.[activeTab]?.title || sidebarLabel || getPageMeta(activeTab)?.title || '');
 
   return (
     <div className="flex h-full bg-slate-50">
@@ -454,7 +248,7 @@ export function ProjectWorkspace({
           else if (route === 'dashboard' || BAND.some(i => i.route === route)) setSelectedStage(0);
           setActiveTab(route);
         }}
-        home={{ route: isLimited ? limitedHome : 'dashboard', label: isDesigner ? 'Drawings' : isLimited ? 'Messages' : 'Hub' }}
+        home={{ route: isLimited ? limitedHome : 'dashboard', label: homeLabel }}
         stages={sidebarStages}
         selectedStage={activeTab === 'dashboard' || BAND.some(i => i.route === activeTab) ? null : selectedStage}
         hub={sidebarHub}
@@ -468,7 +262,7 @@ export function ProjectWorkspace({
         progress={{
           pct: Math.round(projectContext.journeySummary?.pct ?? journey.overall.pct ?? 0),
           next: isLimited ? undefined : (journey.nextStep?.title || 'Up next'),
-          onClick: isLimited ? undefined : () => setIsFloatingWidgetOpen(v => !v),
+          onClick: isLimited ? undefined : () => setActiveTab('project-journey'),
         }}
         projectTools={<><ProjectContextTier projectContext={projectContext} /><ProjectTeamButton project={{ id: projectId, context: projectContext }} size="sm" align="left" /></>}
         studioHome={{ label: 'Studio home', onClick: () => onLeaveProject?.(isLimited ? 'projects' : 'home') }}
@@ -515,277 +309,13 @@ export function ProjectWorkspace({
         </div>
 
 
-      {/* Workspace Body */}
+      {/*
+        The one scroll area and the one gutter for every project screen. App.tsx
+        used to wrap each screen in a second padded scroll box inside this one,
+        which gave pages two scrollbars and a double margin.
+      */}
       <div className="flex flex-1 overflow-hidden min-w-0">
-        {/* Left Rail removed in favor of 2-tier top header bar */}
-        <aside className="hidden">
-          {isRailCollapsed ? (
-            /* COLLAPSED PROJECT RAIL */
-            <div className="flex flex-col h-full items-center py-4 flex-1 justify-between select-none">
-              {/* Top fixed Dashboard Button */}
-              <div className="flex flex-col items-center gap-4 w-full">
-                <button
-                  onClick={() => { setSelectedStage(0); setActiveTab('dashboard'); }}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center relative transition-all duration-200 group outline-none ${
-                    activeTab === 'dashboard' 
-                      ? 'bg-[#3D52A0]/[0.06] text-slate-900 border border-[#3D52A0]/15 shadow-sm' 
-                      : 'text-slate-500 hover:bg-slate-100/40 hover:text-slate-900'
-                  }`}
-                >
-                  <LayoutGrid className={`w-5 h-5 shrink-0 ${activeTab === 'dashboard' ? 'text-[#3D52A0]' : 'text-slate-400'}`} />
-                  
-                  {/* Tooltip */}
-                  <div className="absolute left-14 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none bg-slate-900 text-white text-xs font-semibold px-2.5 py-1.5 rounded shadow-md z-50 whitespace-nowrap font-['Plus_Jakarta_Sans']">
-                    Dashboard
-                  </div>
-                </button>
-                
-                <div className="w-8 border-b border-slate-200/40" />
-                
-                {/* Project Hub Center Icons */}
-                <div className="flex flex-col items-center gap-2.5 w-full">
-                  {BAND.map(item => {
-                    if (hiddenForRole(item)) return null;
-                    const Icon = item.icon;
-                    const isActive = activeTab === item.route;
-                    let badgeText = item.statusBadge ? item.statusBadge(projectContext) : null;
-                    if (!seesStudioFinance(currentRole) && badgeText) {
-                      badgeText = badgeText.replace(/₹/g, '');
-                    }
-                    
-                    return (
-                      <button
-                        key={item.route}
-                        onClick={() => setActiveTab(item.route)}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center relative transition-all duration-200 group outline-none ${
-                          isActive 
-                            ? 'bg-[#3D52A0]/[0.06] text-slate-900 border border-[#3D52A0]/15 shadow-sm' 
-                            : 'text-slate-500 hover:bg-slate-100/40 hover:text-slate-900'
-                        }`}
-                      >
-                        {Icon && <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#3D52A0]' : 'text-slate-400 group-hover:text-slate-600'}`} />}
-                        {badgeText && (
-                          <span className="absolute -top-1 -right-1 bg-[#3D52A0] text-white text-[8px] font-extrabold px-1 py-0.5 rounded-full scale-90 leading-none shadow-sm border border-white">
-                            {badgeText}
-                          </span>
-                        )}
-                        
-                        {/* Tooltip */}
-                        <div className="absolute left-14 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none bg-slate-900 text-white text-xs font-semibold px-2.5 py-1.5 rounded shadow-md z-50 whitespace-nowrap font-['Plus_Jakarta_Sans']">
-                          {item.label}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Workflow Vertical stage stepper nodes */}
-              <div className="flex flex-col items-center gap-3 w-full pb-4">
-                <div className="w-8 border-t border-slate-200/40 my-1" />
-                <div className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">
-                  Stages
-                </div>
-                {[1, 2, 3, 4, 5, 6].map((stage) => {
-                  const isCompleted = stage < currentStage;
-                  const isActive = stage === currentStage;
-                  const isLocked = isStageLocked(stage);
-                  const stageConfig = NAV.find(c => c.stage === stage);
-                  const label = stageConfig ? stageConfig.label : `Stage ${stage}`;
-
-                  return (
-                    <button
-                      key={stage}
-                      onClick={() => {
-                        if (!isLocked && stageConfig && stageConfig.items.length > 0) {
-                          setActiveTab(stageConfig.items[0].route);
-                        }
-                      }}
-                      disabled={isLocked}
-                      className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all relative group ${
-                        isCompleted 
-                          ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm' 
-                          : isActive 
-                            ? 'border-[#3D52A0] bg-white text-[#3D52A0] shadow-sm' 
-                            : isLocked
-                              ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
-                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                      }`}
-                    >
-                      {isCompleted ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : stage}
-                      
-                      {/* Tooltip with list of sub-items inside */}
-                      <div className="absolute left-12 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none bg-slate-900 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow-lg z-50 flex flex-col gap-1.5 min-w-[160px] font-['Plus_Jakarta_Sans']">
-                        <div className="font-bold border-b border-white/10 pb-1 text-sky-400 flex justify-between items-center gap-2">
-                          <span>{label}</span>
-                          <span className="text-[9px] text-white/50">{isLocked ? 'Locked' : isCompleted ? 'Completed' : 'Active'}</span>
-                        </div>
-                        {stageConfig && stageConfig.items.map(subItem => {
-                          if (hiddenForRole(subItem)) return null;
-                          const isSubActive = activeTab === subItem.route;
-                          return (
-                            <div 
-                              key={subItem.route} 
-                              className={`text-[10px] pl-1 font-medium flex items-center gap-1.5 ${isSubActive ? 'text-sky-400 font-bold' : 'text-slate-300'}`}
-                            >
-                              <div className={`w-1 h-1 rounded-full ${isSubActive ? 'bg-[#3D52A0]' : 'bg-slate-500'}`} />
-                              <span>{subItem.label}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            /* FULL EXPANDED PROJECT RAIL */
-            <>
-              {/* Top fixed Dashboard Button & Project Hub (Permanently anchored & beautifully integrated) */}
-              <div className="p-2.5 pb-2 shrink-0 border-b border-[#3D52A0]/10 flex flex-col gap-2 bg-white/40">
-                {/* Dashboard */}
-                <button
-                  onClick={() => { setSelectedStage(0); setActiveTab('dashboard'); }}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[13px] font-semibold transition-colors flex items-center gap-2 ${
-                    activeTab === 'dashboard' 
-                      ? 'bg-[#3D52A0]/[0.06] text-slate-900 font-bold border border-[#3D52A0]/15 shadow-sm' 
-                      : 'text-slate-700 hover:bg-slate-100/40 hover:text-slate-900'
-                  }`}
-                >
-                  <LayoutGrid className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'dashboard' ? 'text-[#3D52A0]' : 'text-slate-400'}`} />
-                  <span>Dashboard</span>
-                </button>
-
-                {/* PROJECT HUB - Always On Card */}
-                <div className="bg-sky-50/20 border border-[#3D52A0]/10 rounded-2xl p-2 shadow-sm relative overflow-hidden">
-                  <div className="flex items-center justify-between mb-1.5 px-0.5">
-                    <span className="text-[10px] font-extrabold text-slate-900/60 uppercase tracking-widest font-mono">Project Hub</span>
-                    <span className="text-[8px] font-extrabold text-[#3D52A0] uppercase tracking-widest font-mono">Always on</span>
-                  </div>
-                  <div className="space-y-0.5">
-                    {BAND.map(item => renderNavItem(item, false, true))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Scrollable Stage Accordion area */}
-              <div className="flex-grow overflow-y-auto custom-scrollbar p-2.5 pt-1.5 space-y-3">
-                {/* WORKFLOW Timeline */}
-                <div>
-                  <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 px-0.5 font-mono">
-                    Workflow
-                  </div>
-                  {/* Stage Accordion with Segmented Connected Timeline */}
-                  <div className="relative space-y-1 pl-1.5">
-                    {NAV.map((stageConfig) => {
-                      const isCompleted = stageConfig.stage < currentStage;
-                      const isActive = stageConfig.stage === currentStage;
-                      const isLocked = isStageLocked(stageConfig.stage);
-                      const expanded = getExpanded(stageConfig.stage);
-
-                      const { done, total } = getStageCounts(stageConfig);
-                      const isStageComplete = total > 0 && done === total;
-
-                      return (
-                        <div key={stageConfig.stage} className="relative flex flex-col pl-6 pb-1.5">
-                          {/* Vertical Connecting Line segment tinted per state */}
-                          {stageConfig.stage < 6 && (
-                            <div className={`absolute left-[13px] top-[14px] bottom-[-16px] w-[2px] z-0 transition-colors duration-300 ${
-                              isCompleted 
-                                ? 'bg-emerald-500' 
-                                : isActive 
-                                  ? 'bg-[#3D52A0]' 
-                                  : 'bg-slate-200'
-                            }`} />
-                          )}
-
-                          {/* Stage icon node position left-0 */}
-                          <div className="absolute left-0 top-1 z-10">
-                            {isCompleted ? (
-                              <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm">
-                                <Check className="w-4 h-4 stroke-[3]" />
-                              </div>
-                            ) : isActive ? (
-                              <div className="w-7 h-7 rounded-full border-2 border-[#3D52A0] bg-white text-[#3D52A0] font-bold text-xs flex items-center justify-center shadow-sm">
-                                {stageConfig.stage}
-                              </div>
-                            ) : (
-                              <div className="w-7 h-7 rounded-full border border-slate-200 bg-slate-50 text-slate-400 flex items-center justify-center text-xs font-bold">
-                                {isLocked ? <Lock className="w-3 h-3" /> : stageConfig.stage}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Stage accordion header */}
-                          <button 
-                            onClick={() => toggleExpanded(stageConfig.stage)}
-                            className="w-full flex items-center justify-between px-2 py-0.5 text-[13px] text-slate-800 hover:bg-slate-100/40 rounded-xl group transition-all"
-                          >
-                            <div className="flex items-center gap-1 min-w-0">
-                              <span className={`font-semibold truncate text-left ${isActive ? 'text-slate-900 font-bold font-["Plus_Jakarta_Sans"]' : isLocked ? 'text-slate-400' : 'text-slate-700'}`}>
-                                {stageConfig.label}
-                              </span>
-                              
-                              {/* Live stage count badge turning emerald when complete */}
-                              {total > 0 && (
-                                <span className={`text-[9px] px-1 py-0.5 rounded-full font-extrabold shrink-0 ml-1 ${
-                                  isStageComplete 
-                                    ? 'bg-emerald-100 text-emerald-700' 
-                                    : 'bg-slate-100 text-slate-500'
-                                }`}>
-                                  {done}/{total}
-                                </span>
-                              )}
-                            </div>
-                            
-                            <div className="text-slate-400 hover:text-slate-600">
-                              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" />}
-                            </div>
-                          </button>
-                          
-                          {/* Items block */}
-                          {expanded && (
-                            <div className="pl-2.5 border-l border-slate-200/40 mt-0.5 mb-1 space-y-0.5">
-                              {isLocked && (
-                                <div className="px-2 py-1 text-xs text-slate-500 bg-slate-50 border border-slate-200/50 rounded-xl mb-1 leading-relaxed font-['Plus_Jakarta_Sans']">
-                                  {stageConfig.stage === 5 ? (
-                                    <>
-                                      Unlocks when the Design Complete Gate is activated →{" "}
-                                      <button 
-                                        onClick={() => setActiveTab("design-gate")}
-                                        className="text-[#3D52A0] font-bold hover:underline inline-block"
-                                      >
-                                        Go to Design Gate
-                                      </button>
-                                    </>
-                                  ) : stageConfig.stage === 6 ? (
-                                    <>
-                                      Unlocks when execution and handover checklists are cleared.
-                                    </>
-                                  ) : (
-                                    <>
-                                      Unlocks when the client accepts the proposal or signs the Terms Docket.
-                                    </>
-                                  )}
-                                </div>
-                              )}
-                              {stageConfig.items.map(item => renderNavItem(item, isLocked))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </aside>
-
-      {/* Main Workspace Body — Expanded to 100% Horizontal Viewport Width! */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-5 min-w-0 pb-20 w-full">
-        {renderOpsBanner()}
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-5 min-w-0 pb-10 w-full">
         {/* The dashboard route shows the setup wizard until the project has tiers,
             so the title has to follow the screen rather than the route. */}
         <PageTitleBlock
@@ -827,375 +357,6 @@ export function ProjectWorkspace({
       </div>
       </div>
 
-      {/* FLOATING PROCESS WIDGET */}
-      {!isWizard && activeTab !== 'project-journey' && journey && journey.overall && (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 pointer-events-none">
-          {/* Up next: the following screen in the workflow, until the process panel is open. */}
-          {!isFloatingWidgetOpen && upNext && (
-            <div
-              key={activeTab}
-              role="complementary"
-              aria-label="Up next"
-              className="pointer-events-auto hidden sm:block w-72 bg-white rounded-2xl border border-slate-200 shadow-lg p-4 hud-panel-in"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Up next</p>
-                  <p className="mt-1 font-bold text-slate-800 truncate">{upNext.label}</p>
-                  {upNext.blurb && <p className="mt-0.5 text-xs text-slate-500">{upNext.blurb}</p>}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setUpNextDismissed(d => ({ ...d, [activeTab]: true }))}
-                  className="shrink-0 p-1 -m-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                  aria-label="Hide up next"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab(upNext.route)}
-                  className="inline-flex items-center gap-1 text-sm font-bold text-[#3D52A0] hover:text-[#334486]"
-                >
-                  Continue
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-          {isFloatingWidgetOpen && (
-            <div className="w-[380px] max-h-[90vh] bg-white rounded-[24px] shadow-2xl border border-slate-200/80 p-5 text-left flex flex-col pointer-events-auto relative animate-fade-in-up overflow-hidden">
-              {/* Close button */}
-              <button
-                onClick={() => setIsFloatingWidgetOpen(false)}
-                className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer z-10"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              {/* Phase Eyebrow */}
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 font-mono">
-                Phase {activePhaseIndex + 1} • {activePhaseDef?.name.toUpperCase() || 'PRE-SALES'}
-              </div>
-
-              {/* Phase title & overall progress */}
-              <h3 className="text-sm font-bold text-slate-900 font-['Plus_Jakarta_Sans'] mb-2 flex justify-between items-center pr-6">
-                <span>{activePhaseProgress.done} of {activePhaseProgress.total} steps</span>
-                <span className="text-[11px] bg-sky-50 text-[#3D52A0] px-2.5 py-0.5 rounded-full font-bold">{journey.overall.pct}% overall</span>
-              </h3>
-
-              {/* Phase Progress Bar */}
-              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-4 border border-slate-200/20">
-                <div
-                  className="bg-[#3D52A0] h-full transition-all duration-500 rounded-full"
-                  style={{ width: `${activePhaseProgress.pct}%` }}
-                ></div>
-              </div>
-
-              {/* Either the reason nothing is tracked yet, or how to drive it. */}
-              {needsSetup ? (
-                <div className="p-3 bg-sky-50/70 border border-sky-100 rounded-xl mb-3">
-                  <div className="flex items-start gap-2">
-                    <Compass className="w-4 h-4 text-[#3D52A0] shrink-0 mt-0.5" />
-                    <div className="min-w-0">
-                      <p className="text-[11.5px] font-bold text-slate-900 leading-snug mb-1">
-                        Set the brief before the journey can track anything
-                      </p>
-                      <p className="text-[10.5px] text-slate-600 leading-normal">
-                        This project has{' '}
-                        <strong className="text-slate-900">
-                          {projectContext.area > 0 ? `${projectContext.area} sqft` : 'no carpet area'}
-                        </strong>{' '}
-                        and{' '}
-                        <strong className="text-slate-900">
-                          {(projectContext.rooms || []).length} room{(projectContext.rooms || []).length === 1 ? '' : 's'}
-                        </strong>{' '}
-                        on record. Steps, progress and gates are all derived from those two, so they stay
-                        empty until the brief is captured.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => { setSelectedStage(1); setActiveTab('leadiq'); setIsFloatingWidgetOpen(false); }}
-                    className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg
-                               bg-[#3D52A0] hover:bg-[#334486] text-white text-[11.5px] font-bold
-                               transition-colors cursor-pointer"
-                  >
-                    Capture brief &amp; site
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <div className="p-2.5 bg-amber-50/80 border border-amber-100 rounded-xl flex items-start gap-2 mb-3">
-                  <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-amber-800 leading-normal font-medium">
-                    <strong>How this works:</strong> tick any checkbox below to sign a step off or undo it.
-                    A manual tick is treated as an override — it bypasses prerequisite locks, and the
-                    journey re-derives everything downstream from it.
-                  </p>
-                </div>
-              )}
-
-              {/* Inner state box */}
-              <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 flex items-start gap-3 mb-3">
-                {isPhaseComplete ? (
-                  <>
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900 leading-snug mb-0.5">
-                        {activePhaseDef?.name || 'Phase'} phase complete
-                      </h4>
-                      <p className="text-[11px] text-slate-500 leading-normal">
-                        {transitionMessage}
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <Compass className="w-5 h-5 text-[#3D52A0] shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900 leading-snug mb-0.5">
-                        Next: {journey.nextStep?.title || 'Complete steps'}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 leading-normal line-clamp-2">
-                        {journey.nextStep?.description || 'Work on the remaining steps to qualify for the next stage.'}
-                      </p>
-                      {/* The step names the screen it belongs to, so the panel
-                          can hand you straight to it rather than describing it. */}
-                      {nextStepTab && (
-                        <button
-                          onClick={() => { setActiveTab(nextStepTab); setIsFloatingWidgetOpen(false); }}
-                          className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#3D52A0]
-                                     hover:text-[#334486] hover:gap-1.5 transition-all cursor-pointer"
-                        >
-                          Take me there
-                          <ChevronRight className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Compact Collapsible Steps Checklist */}
-              {phaseSteps.length > 0 && (
-                <div className="mb-4 border border-slate-200/60 rounded-xl overflow-hidden bg-slate-50/30 flex flex-col min-h-0">
-                  <button
-                    onClick={() => setIsChecklistExpanded(!isChecklistExpanded)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-slate-600 bg-slate-50 hover:bg-slate-100/80 transition-colors border-b border-slate-200/50 cursor-pointer select-none"
-                  >
-                    <span className="flex items-center gap-1.5 font-['Plus_Jakarta_Sans'] text-slate-900 font-bold">
-                      <Activity className="w-3.5 h-3.5 text-[#3D52A0]" />
-                      Operational Checklist
-                    </span>
-                    <span className="text-[10px] text-[#3D52A0] bg-sky-50 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
-                      {activePhaseProgress.done}/{activePhaseProgress.total} 
-                      {isChecklistExpanded ? (
-                        <ChevronUp className="w-3 h-3" />
-                      ) : (
-                        <ChevronDown className="w-3 h-3" />
-                      )}
-                    </span>
-                  </button>
-                  {isChecklistExpanded && (
-                    <div className="max-h-[220px] overflow-y-auto divide-y divide-slate-100 p-1 bg-white custom-scrollbar">
-                      {phaseSteps.map((step) => {
-                        const isStepDone = step.status === 'done';
-                        const isStepActive = step.status === 'active';
-                        const isStepLocked = step.status === 'locked';
-
-                        // Check if it's manually done vs automatically done
-                        const isManuallyOverridden = isStepDone && step.completedByName && step.completedByName !== 'System Auto-close' && step.isAutoDerived;
-
-                        return (
-                          <div
-                            key={step.id}
-                            className={`flex flex-col p-2.5 text-xs rounded-xl transition-all mb-1 last:mb-0 ${
-                              isStepActive 
-                                ? 'bg-sky-50/40 border border-sky-100/50 shadow-sm' 
-                                : isStepDone 
-                                ? 'bg-slate-50/20' 
-                                : 'hover:bg-slate-50/50'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                                <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    try {
-                                      if (isStepDone) {
-                                        await markStepPending(step.id);
-                                      } else {
-                                        await markStepDone(step.id);
-                                      }
-                                    } catch (err) {
-                                      console.error("Failed to toggle step completion:", err);
-                                    }
-                                  }}
-                                  className={`mt-0.5 shrink-0 w-5 h-5 rounded-md flex items-center justify-center border transition-all cursor-pointer group/chk ${
-                                    isStepDone
-                                      ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm shadow-emerald-100'
-                                      : isStepLocked
-                                      ? 'border-slate-200 text-slate-400 bg-slate-50 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600'
-                                      : isStepActive
-                                      ? 'border-[#3D52A0] text-[#3D52A0] bg-sky-50 hover:bg-sky-100 hover:border-[#3D52A0]'
-                                      : 'border-slate-300 hover:border-[#3D52A0] hover:bg-slate-50'
-                                  }`}
-                                  title={
-                                    isStepDone 
-                                      ? 'Click to Undo Sign Off' 
-                                      : isStepLocked 
-                                      ? 'Locked by prerequisites. Click to override and force sign-off.' 
-                                      : 'Click to Sign Off'
-                                  }
-                                >
-                                  {isStepDone ? (
-                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
-                                  ) : isStepLocked ? (
-                                    <Lock className="w-2.5 h-2.5 text-slate-400 group-hover/chk:text-amber-600" />
-                                  ) : (
-                                    <div className="w-1.5 h-1.5 rounded-full bg-[#3D52A0] group-hover/chk:scale-125 transition-transform" />
-                                  )}
-                                </button>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <p
-                                      className={`font-semibold leading-snug text-slate-900 ${
-                                        isStepDone ? 'text-slate-400 line-through' : ''
-                                      }`}
-                                    >
-                                      {step.title}
-                                    </p>
-                                    
-                                    {/* Indicators/Badges */}
-                                    {step.isAutoDerived ? (
-                                      <span className="text-[8px] font-bold uppercase tracking-wider text-[#3D52A0] bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100/50 inline-flex items-center gap-0.5">
-                                        <Settings className="w-2 h-2" /> Auto
-                                      </span>
-                                    ) : (
-                                      <span className="text-[8px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100/40 inline-flex items-center gap-0.5">
-                                        <Edit3 className="w-2 h-2" /> Manual
-                                      </span>
-                                    )}
-
-                                    {isManuallyOverridden && (
-                                      <span className="text-[8px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 inline-flex items-center gap-0.5">
-                                        Override ✓
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {/* Step Description or Hint */}
-                                  {step.description && !isStepDone && (
-                                    <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
-                                      {step.description}
-                                    </p>
-                                  )}
-
-                                  {/* Logged Completion Sign-Off Info */}
-                                  {isStepDone && (step.completedByName || step.completedAt) && (
-                                    <p className="text-[9px] text-slate-400 mt-0.5 font-medium">
-                                      ✓ Signed off {step.completedByName ? `by ${step.completedByName}` : ''} 
-                                      {step.completedAt ? ` on ${new Date(step.completedAt).toLocaleDateString()}` : ''}
-                                    </p>
-                                  )}
-
-                                  {/* Locked message / bypass hint */}
-                                  {isStepLocked && (
-                                    <div className="mt-1 text-[9px] text-amber-600 font-semibold bg-amber-50/40 p-1.5 rounded border border-amber-100/30 flex items-center gap-1">
-                                      <Lock className="w-2.5 h-2.5 text-amber-500 shrink-0" />
-                                      <span>Prerequisites locked. Click box to override and force complete.</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {step.linkedTab && !isStepLocked && (
-                                <button
-                                  onClick={() => {
-                                    setActiveTab(step.linkedTab!);
-                                    setIsFloatingWidgetOpen(false);
-                                  }}
-                                  className="text-[10px] font-bold text-[#3D52A0] hover:text-[#334486] hover:bg-sky-50 px-1.5 py-1 rounded shrink-0 transition-colors"
-                                  title={`Go to ${step.linkedFeature || 'Feature'}`}
-                                >
-                                  Go →
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Action buttons */}
-              <div className="space-y-2 shrink-0">
-                {isPhaseComplete && currentStage < 7 ? (
-                  <button
-                    onClick={async () => {
-                      await handleAdvanceLifecycle(currentStage + 1);
-                    }}
-                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1.5 cursor-pointer text-center animate-pulse"
-                  >
-                    <span>Advance Project to Stage {currentStage + 1} →</span>
-                  </button>
-                ) : (
-                  <>
-                    {/* Direct Sign-Off Button for the nextStep */}
-                    {journey.nextStep && (
-                      <button
-                        onClick={async () => {
-                          try {
-                            await markStepDone(journey.nextStep!.id);
-                          } catch (err) {
-                            console.error("Failed to sign off current step:", err);
-                          }
-                        }}
-                        className="w-full py-2.5 px-4 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1.5 cursor-pointer text-center"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Sign Off "{journey.nextStep.title}"</span>
-                      </button>
-                    )}
-
-                    {/* Open Feature button if nextStep is linked */}
-                    {journey.nextStep?.linkedTab && (
-                      <button
-                        onClick={() => {
-                          setActiveTab(journey.nextStep!.linkedTab!);
-                          setIsFloatingWidgetOpen(false);
-                        }}
-                        className="w-full py-2.5 px-4 bg-sky-50 hover:bg-sky-100 text-[#334486] border border-sky-100/60 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center"
-                      >
-                        <span>Open {journey.nextStep.linkedFeature || 'Feature'} →</span>
-                      </button>
-                    )}
-                  </>
-                )}
-
-                <button
-                  onClick={() => {
-                    setActiveTab('project-journey');
-                    setIsFloatingWidgetOpen(false);
-                  }}
-                  className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Compass className="w-3.5 h-3.5 text-slate-400" />
-                  <span>View full journey map</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          
-        </div>
-      )}
 
       {/* In-Workspace Status Transition Modal */}
       {isStatusModalOpen && (

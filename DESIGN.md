@@ -426,6 +426,16 @@ Over the page there is one slim bar: where you are (stage / screen), the page's 
 what has just changed, and the hide-figures eye. A page's own view switchers and actions keep a slim
 row at the top of the page (`PageTitleBlock compact`). The studio's top tabs keep their title row.
 
+One frame (owner, 16 Nov 2026, after the audit of every project screen):
+- The workspace gives every project screen one scroll area and one gutter (`ProjectWorkspace`). A
+  screen never adds its own scroll box or page padding around itself.
+- The page bar names a screen with the words of the sidebar row that opens it; `pageMeta` only names
+  screens the sidebar does not list. The Hub is "Hub".
+- A screen is listed once. Money (the payment schedule) lives in the Project Hub, not in a stage.
+- Nothing floats over a screen's content. The next step is the sidebar's Next card, which opens the
+  Ops Matrix; the floating "Up next" card and process panel are gone.
+- Documents take the studio's name from `studioDisplayName` (`lib/studioName.ts`).
+
 Motion and icons (the owner asked to go beyond the console kit here): every stage and screen has its
 own Lucide icon, and each moves on hover in its own way (a bounce, a swing, a spin, a rewind; some
 draw themselves). A white highlight slides to the screen you are on. Counts pop in. Everything stops

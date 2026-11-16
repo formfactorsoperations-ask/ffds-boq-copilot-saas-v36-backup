@@ -139,7 +139,7 @@ export default function ClientMessagesPage({ projectContext, setProjectContext, 
         )}
 
         <p className="mt-4 text-[11px] text-slate-500">
-          Questions about a specific finish arrive on that selection in SOF &amp; Selections, not here.
+          Questions about a specific finish arrive on that selection in Selections &amp; Orders, not here.
         </p>
       </section>
     </div>
