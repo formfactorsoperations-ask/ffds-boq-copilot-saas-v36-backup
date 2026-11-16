@@ -3604,10 +3604,6 @@ export default function App() {
                           setActiveTab={setActiveTab}
                           aiStrategy={aiStrategy}
                           projectId={activeInternalId || undefined}
-                          tiers={tiers}
-                          setTiers={setTiers}
-                          activeTierId={activeTierId}
-                          bank={bank}
                         />
                       )}
                       {activeTab === "drawing-tracker" && (
@@ -4318,10 +4314,6 @@ export default function App() {
                           setActiveTab={setActiveTab}
                           aiStrategy={aiStrategy}
                           projectId={activeInternalId || undefined}
-                          tiers={tiers}
-                          setTiers={setTiers}
-                          activeTierId={activeTierId}
-                          bank={bank}
                         />
                       )}
                       {activeTab === "drawing-tracker" && (
