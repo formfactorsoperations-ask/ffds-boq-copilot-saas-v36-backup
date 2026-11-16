@@ -91,9 +91,6 @@
     "tinyPx": 9,
     "offPalette": 2
   },
-  "components/ExecutionWorkspace.tsx": {
-    "offPalette": 20
-  },
   "components/HandoverReadinessWidget.tsx": {
     "tinyPx": 1,
     "offPalette": 2,

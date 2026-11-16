@@ -35,7 +35,7 @@ import {
   ChevronRight
 } from '@/lib/lucide-shim';
 import { motion, AnimatePresence } from "framer-motion";
-import WavyText from "./ui/WavyText";
+import { Button, Chip, StateDot, Segmented, SummaryStrip, EmptyState, INPUT, LABEL } from "./ui/kit";
 import { useOrg } from "../contexts/OrgContext";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../services/firebaseClient";
@@ -743,176 +743,107 @@ const ExecutionWorkspace = ({
     return b.gatekeepers.sof && b.gatekeepers.gfc && b.gatekeepers.payment && b.gatekeepers.site;
   }
 
+  /* Status choices for the one filter row; N/A only once something is N/A. */
+  const statusTabs: Array<{ id: typeof statusFilter; label: string; count: number }> = [
+    { id: 'all', label: 'All', count: bundlesToRender.length },
+    { id: 'active', label: 'On site', count: activeCount },
+    { id: 'ready', label: 'Ready', count: readyCount },
+    { id: 'blocked', label: 'Gated', count: blockedCount },
+    { id: 'completed', label: 'Done', count: completedCount },
+    ...(naCount > 0 ? [{ id: 'na' as const, label: 'N/A', count: naCount }] : []),
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* 1. TOP EXECUTIVE COMMAND BAR */}
-      <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-2xs p-6 sm:p-7 space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-50 border border-sky-200/60 text-[#3D52A0] rounded-full text-xs font-bold uppercase tracking-wider">
-                <HardHat className="w-3.5 h-3.5" />
-                Site Control Room
-              </span>
-              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
-                isProjectComplete
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : blockedCount > 0
-                  ? 'bg-amber-50 text-amber-800 border border-amber-200/60'
-                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
-              }`}>
-                {isProjectComplete ? 'Project Handed Over' : blockedCount > 0 ? `${blockedCount} Pending Checks` : 'All Packages Ready'}
-              </span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              Trade Packages & Site Readiness
-            </h2>
-            <div className="mt-0.5">
-              <WavyText
-                text="Track trade packages, gatekeeper checks, and site execution status."
-                className="text-xs sm:text-sm font-medium text-slate-500 max-w-xl leading-relaxed"
-              />
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            <button
-              onClick={handleSmartAutoUnblock}
-              title="Auto-evaluate real GFC drawings and SOF selections to unblock ready packages"
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
-            >
-              <Zap className="w-3.5 h-3.5 text-emerald-600" />
-              Smart Auto-Unblock
-            </button>
-
-            <button
-              onClick={handleRunAiRiskScan}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              AI Risk Scan
-            </button>
-
-            <button
-              onClick={handleResyncWithBoq}
-              title="Re-sync package scopes with latest BOQ"
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-              Re-sync BOQ
-            </button>
-
-            <button
-              onClick={handleAddBundle}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[#3D52A0] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Add Package
-            </button>
-          </div>
+    <div className="space-y-4">
+      {/*
+        The page bar already names the screen (DESIGN.md "Screen kit"). The
+        title card, its eyebrow and the pending-checks chip are gone; filters,
+        search and the four actions share one row, with one primary button.
+      */}
+      <div className="flex flex-wrap items-center gap-2">
+        {isProjectComplete && <Chip tone="good">Handed over</Chip>}
+        <Segmented label="Package status" size="sm" value={statusFilter} options={statusTabs} onChange={setStatusFilter} />
+        {allTrades.length > 1 && (
+          <label className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+            Trade
+            <select value={selectedTrade} onChange={(e) => setSelectedTrade(e.target.value)} className={`${INPUT} !w-40 !py-1.5`}>
+              <option value="all">All trades</option>
+              {allTrades.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
+            </select>
+          </label>
+        )}
+        <div className="relative w-56 shrink-0">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden />
+          <input
+            type="search"
+            aria-label="Search packages or BOQ items"
+            placeholder="Search packages or BOQ items"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={`${INPUT} !py-1.5 pl-9`}
+          />
         </div>
-
-        {/* Auto Unblock Notification Banner */}
-        <AnimatePresence>
-          {autoUnblockBanner && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between text-xs text-emerald-800 font-semibold"
-            >
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{autoUnblockBanner}</span>
-              </div>
-              <button onClick={() => setAutoUnblockBanner(null)} className="text-emerald-600 hover:text-emerald-900 p-1">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* High-Level Pulse Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Packages</div>
-            <div className="text-xl font-black text-slate-900 mt-1">{totalCount}</div>
-            <div className="text-[10px] text-slate-400 font-medium mt-0.5">
-              {totalDeliverablesCount} BOQ items{naCount > 0 ? ` · ${naCount} N/A` : ''}
-            </div>
-          </div>
-
-          <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Active Execution</div>
-            <div className="text-xl font-black text-emerald-700 mt-1">{activeCount}</div>
-            <div className="text-[10px] text-emerald-600 font-medium mt-0.5">On-site in progress</div>
-          </div>
-
-          <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Ready to Start</div>
-            <div className="text-xl font-black text-amber-700 mt-1">{readyCount}</div>
-            <div className="text-[10px] text-amber-600 font-medium mt-0.5">All 4 gates cleared</div>
-          </div>
-
-          <div className="bg-rose-50/50 border border-rose-100 rounded-2xl p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-rose-700">Gated / Blocked</div>
-            <div className="text-xl font-black text-rose-700 mt-1">{blockedCount}</div>
-            <div className="text-[10px] text-rose-600 font-medium mt-0.5">{gfcBlocked} GFC · {sofBlocked} SOF</div>
-          </div>
-
-          <div className="bg-sky-50/50 border border-sky-100 rounded-2xl p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[#3D52A0]">Completed</div>
-            <div className="text-xl font-black text-[#3D52A0] mt-1">{completedCount}</div>
-            <div className="text-[10px] text-[#3D52A0]/70 font-medium mt-0.5">Signed off packages</div>
-          </div>
-
-          <div className="bg-[#3D52A0] text-white rounded-2xl p-3.5 shadow-xs">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-sky-100">Total Deliverables QA</div>
-            <div className="text-xl font-black text-white mt-1">{overallItemProgress}%</div>
-            <div className="text-[10px] text-sky-100 font-medium mt-0.5">
-              {!isDesigner && totalScopeValue > 0 ? formatINR(totalScopeValue) : 'Itemized QA'}
-            </div>
-          </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button variant="quiet" size="sm" icon={Sparkles} onClick={handleRunAiRiskScan}>Risk scan</Button>
+          <Button size="sm" icon={RefreshCw} onClick={handleResyncWithBoq} title="Re-sync package scopes with the latest BOQ">Re-sync BOQ</Button>
+          <Button size="sm" icon={Zap} onClick={handleSmartAutoUnblock} title="Check drawings and selections, and clear the gates they satisfy">Check gates</Button>
+          <Button variant="primary" size="sm" icon={Plus} onClick={handleAddBundle}>Add package</Button>
         </div>
+      </div>
 
-        {/* 2. DECLUTTERED VIEW SELECTOR TABS */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          <button
-            type="button"
-            onClick={() => setControlsOpen((o) => !o)}
-            aria-expanded={controlsOpen}
-            data-testid="site-dates-strip"
-            className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 rounded-xl border text-left text-xs transition-colors ${
-              controlsOpen ? "border-[#3D52A0] bg-[#3D52A0]/10" : "border-slate-200 bg-white hover:bg-slate-50"
-            }`}
+      {/* Auto Unblock Notification Banner */}
+      <AnimatePresence>
+        {autoUnblockBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-3 text-xs text-slate-700"
           >
-            <span className="flex items-center gap-1.5 font-bold text-slate-700">
-              <Sliders className="w-4 h-4 text-[#3D52A0]" />
-              Site dates
+            <span className="flex items-center gap-2">
+              <StateDot tone="good" />
+              {autoUnblockBanner}
             </span>
-            <span className="text-slate-500">Handover <b className="text-slate-800">{shortDate(projectContext?.targetHandoverDate) || "not set"}</b></span>
-            <span className="text-slate-500">SOF freeze <b className="text-slate-800">{shortDate(projectContext?.sofFreezeDate) || "not set"}</b></span>
-            <span className="text-slate-500">Lead time <b className="text-slate-800">{projectContext?.procurementLeadTimeWeeks || 4} wks</b></span>
-            <span className="font-bold text-[#3D52A0]">{controlsOpen ? "Done" : "Edit"}</span>
-          </button>
+            <button onClick={() => setAutoUnblockBanner(null)} aria-label="Dismiss" className="text-slate-400 hover:text-slate-700 p-1">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-          {/* Quick Gating Summary Pill */}
-          <div className="hidden sm:flex items-center gap-3 text-xs text-slate-500 font-semibold">
-            <span className="flex items-center gap-1">
-              <span className={`w-2 h-2 rounded-full ${gfcBlocked > 0 ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-              GFC: {gfcBlocked === 0 ? 'All Issued' : `${gfcBlocked} Pending`}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className={`w-2 h-2 rounded-full ${sofBlocked > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-              SOF: {sofBlocked === 0 ? 'All Locked' : `${sofBlocked} Pending`}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className={`w-2 h-2 rounded-full ${paymentBlocked > 0 ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-              Comm: {paymentBlocked === 0 ? 'Cleared' : 'Pending'}
-            </span>
-          </div>
-        </div>
+      <SummaryStrip
+        stats={[
+          { label: 'Packages', value: totalCount, sub: `${totalDeliverablesCount} BOQ items${naCount > 0 ? ` · ${naCount} N/A` : ''}` },
+          { label: 'On site', value: activeCount, sub: 'In progress on site', tone: activeCount > 0 ? 'good' : 'slate', onClick: () => setStatusFilter('active') },
+          { label: 'Ready to start', value: readyCount, sub: 'All four gates clear', tone: readyCount > 0 ? 'good' : 'slate', onClick: () => setStatusFilter('ready') },
+          { label: 'Gated', value: blockedCount, sub: `${gfcBlocked} GFC · ${sofBlocked} SOF`, tone: blockedCount > 0 ? 'bad' : 'good', onClick: () => setStatusFilter('blocked') },
+          { label: 'Deliverables QA', value: `${overallItemProgress}%`, sub: !isDesigner && totalScopeValue > 0 ? formatINR(totalScopeValue) : 'Itemised checks done' },
+        ]}
+      />
+
+      {/* Site dates on one line, opening in place; the gates waiting across all packages on the right. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-1 text-xs text-slate-500">
+        <button
+          type="button"
+          onClick={() => setControlsOpen((o) => !o)}
+          aria-expanded={controlsOpen}
+          data-testid="site-dates-strip"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-left rounded-lg hover:text-slate-700"
+        >
+          <span className="flex items-center gap-1.5 font-semibold text-slate-700">
+            <Sliders className="w-3.5 h-3.5 text-slate-400" aria-hidden />
+            Site dates
+          </span>
+          <span>Handover <b className="text-slate-800">{shortDate(projectContext?.targetHandoverDate) || "not set"}</b></span>
+          <span>SOF freeze <b className="text-slate-800">{shortDate(projectContext?.sofFreezeDate) || "not set"}</b></span>
+          <span>Lead time <b className="text-slate-800">{projectContext?.procurementLeadTimeWeeks || 4} wks</b></span>
+          <span className="font-bold text-[#3D52A0]">{controlsOpen ? "Done" : "Edit"}</span>
+        </button>
+        <span className="flex flex-wrap items-center gap-4">
+          <span className="flex items-center gap-1.5"><StateDot tone={gfcBlocked > 0 ? 'bad' : 'good'} />GFC {gfcBlocked === 0 ? 'all issued' : `${gfcBlocked} pending`}</span>
+          <span className="flex items-center gap-1.5"><StateDot tone={sofBlocked > 0 ? 'warn' : 'good'} />SOF {sofBlocked === 0 ? 'all locked' : `${sofBlocked} pending`}</span>
+          <span className="flex items-center gap-1.5"><StateDot tone={paymentBlocked > 0 ? 'bad' : 'good'} />Commercial {paymentBlocked === 0 ? 'cleared' : 'pending'}</span>
+        </span>
       </div>
 
       {/* VIEW 3: SITE CONTROLS & DATES */}
@@ -1033,146 +964,16 @@ const ExecutionWorkspace = ({
       {/* VIEW 1: PACKAGES & BOQ DELIVERABLES */}
       {(
         <div className="space-y-4">
-          {/* Search, Filter & Trade Toolbar */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            {/* Search Input */}
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search packages, trades, or BOQ deliverables..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3D52A0] focus:bg-white transition-all"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Filter Pills */}
-            <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
-              <button
-                onClick={() => setStatusFilter("all")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  statusFilter === "all"
-                    ? "bg-[#3D52A0] text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                All ({bundlesToRender.length})
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("active")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  statusFilter === "active"
-                    ? "bg-emerald-600 text-white"
-                    : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-                }`}
-              >
-                Active ({activeCount})
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("ready")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  statusFilter === "ready"
-                    ? "bg-amber-600 text-white"
-                    : "bg-amber-50 text-amber-800 hover:bg-amber-100"
-                }`}
-              >
-                Ready ({readyCount})
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("blocked")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  statusFilter === "blocked"
-                    ? "bg-rose-600 text-white"
-                    : "bg-rose-50 text-rose-800 hover:bg-rose-100"
-                }`}
-              >
-                Blocked ({blockedCount})
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("completed")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  statusFilter === "completed"
-                    ? "bg-slate-800 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                Completed ({completedCount})
-              </button>
-
-              {/* Only offered once something is actually N/A — an always-on
-                  chip reading (0) is just noise on a healthy project. */}
-              {naCount > 0 && (
-                <button
-                  onClick={() => setStatusFilter("na")}
-                  title="Packages with no BOQ items linked to them"
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    statusFilter === "na"
-                      ? "bg-slate-500 text-white"
-                      : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                  }`}
-                >
-                  N/A ({naCount})
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Trade Filter Chips */}
-          {allTrades.length > 1 && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-              <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] shrink-0">Filter Trade:</span>
-              <button
-                onClick={() => setSelectedTrade("all")}
-                className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors ${
-                  selectedTrade === "all" ? "bg-slate-900 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                All Trades
-              </button>
-              {allTrades.map(trade => (
-                <button
-                  key={trade}
-                  onClick={() => setSelectedTrade(trade)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors ${
-                    selectedTrade === trade ? "bg-[#3D52A0] text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {trade}
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* Packages List */}
           {filteredBundles.length === 0 ? (
-            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-3">
-              <HardHat className="w-12 h-12 text-slate-300 mx-auto" />
-              <h3 className="text-base font-bold text-slate-800">No execution packages match your filter</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Try adjusting your search keywords or status filters, or click "Re-sync BOQ" to generate packages from proposal items.
-              </p>
-              <button
-                onClick={() => { setSearchQuery(""); setStatusFilter("all"); setSelectedTrade("all"); }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
-              >
-                Reset Filters
-              </button>
-            </div>
+            <EmptyState
+              icon={HardHat}
+              title="No package matches"
+              text="Clear the filters, or re-sync with the BOQ to make packages from its items."
+              action={<Button size="sm" onClick={() => { setSearchQuery(""); setStatusFilter("all"); setSelectedTrade("all"); }}>Reset filters</Button>}
+            />
           ) : (
-            <div className="space-y-4">
+            <section aria-label="Trade packages" className="bg-white rounded-2xl border border-slate-200 shadow-sm hud-panel-in overflow-hidden divide-y divide-slate-100">
               {filteredBundles.map((bundle) => {
                 const isExpanded = expandedBundleIds.has(bundle.id);
                 const items = bundleItemsMap[bundle.id] || [];
@@ -1191,9 +992,9 @@ const ExecutionWorkspace = ({
 
                 if (editingBundleId === bundle.id) {
                   return (
-                    <div key={bundle.id} className="bg-white rounded-2xl border border-sky-200 ring-4 ring-sky-50 shadow-sm p-6">
+                    <div key={bundle.id} className="p-6 bg-slate-50">
                       <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-base font-bold text-slate-900">Edit Execution Package</h3>
+                        <h3 className="font-bold text-slate-800">Edit package</h3>
                         <button
                           onClick={() => setEditingBundleId(null)}
                           className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
@@ -1203,7 +1004,7 @@ const ExecutionWorkspace = ({
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
-                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Package Code</label>
+                          <label className={`${LABEL} block mb-1.5`}>Package code</label>
                           <input
                             type="text"
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#3D52A0]"
@@ -1212,7 +1013,7 @@ const ExecutionWorkspace = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Package Name</label>
+                          <label className={`${LABEL} block mb-1.5`}>Package name</label>
                           <input
                             type="text"
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#3D52A0]"
@@ -1223,7 +1024,7 @@ const ExecutionWorkspace = ({
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <div>
-                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Ops Act Today</label>
+                          <label className={`${LABEL} block mb-1.5`}>Do today</label>
                           <textarea
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-[#3D52A0] h-20 resize-none"
                             value={editForm.actToday || ""}
@@ -1231,7 +1032,7 @@ const ExecutionWorkspace = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Breaks Tomorrow</label>
+                          <label className={`${LABEL} block mb-1.5`}>Breaks tomorrow if not done</label>
                           <textarea
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-[#3D52A0] h-20 resize-none"
                             value={editForm.breaksTomorrow || ""}
@@ -1240,238 +1041,126 @@ const ExecutionWorkspace = ({
                         </div>
                       </div>
                       <div className="flex justify-between items-center pt-4 border-t border-slate-100">
-                        <button
-                          onClick={() => handleDeleteBundle(bundle.id)}
-                          className="flex items-center gap-1.5 px-4 py-2 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold uppercase"
-                        >
-                          <Trash2 className="w-4 h-4" /> Delete Package
-                        </button>
-                        <button
-                          onClick={() => handleSaveBundle(bundle.id)}
-                          className="flex items-center gap-1.5 px-6 py-2 bg-[#3D52A0] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase shadow-sm"
-                        >
-                          <Save className="w-4 h-4" /> Save Package
-                        </button>
+                        <Button variant="danger" icon={Trash2} onClick={() => handleDeleteBundle(bundle.id)}>Delete package</Button>
+                        <Button variant="primary" icon={Save} onClick={() => handleSaveBundle(bundle.id)}>Save package</Button>
                       </div>
                     </div>
                   );
                 }
 
+                const statusLabel = notApplicable
+                  ? 'No linked scope'
+                  : bundle.status === 'active' ? 'Active on site' : bundle.status === 'completed' ? 'Completed' : bundle.status === 'blocked' ? 'Gated' : 'Ready to start';
+                const statusTone = notApplicable ? 'slate' : bundle.status === 'active' || bundle.status === 'completed' ? 'good' : bundle.status === 'blocked' ? 'bad' : 'warn';
+
                 return (
-                  <div
-                    key={bundle.id}
-                    className={`bg-white rounded-2xl border transition-all shadow-xs overflow-hidden group ${
-                      bundle.status === "completed"
-                        ? "border-emerald-200 bg-emerald-50/20"
-                        : bundle.isOverridden
-                        ? "border-amber-300 ring-2 ring-amber-100"
-                        : bundle.status === "active"
-                        ? "border-emerald-300 ring-2 ring-emerald-100"
-                        : bundle.status === "blocked"
-                        ? "border-rose-200"
-                        : "border-slate-200"
-                    }`}
-                  >
-                    {/* Header Row */}
-                    <div className="p-5 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5">
-                      <div className="flex-1 min-w-0 space-y-2.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-wider rounded-md border border-slate-200">
-                            {bundle.code}
-                          </span>
-                          <h3 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2 truncate">
-                            {bundle.name}
+                  <div key={bundle.id} className={`group hud-row-in ${bundle.isOverridden ? 'bg-amber-50/40' : ''}`}>
+                    {/*
+                      One row per package: name and status, its four gates and
+                      QA, then the one action it needs. It used to be a card of
+                      its own about 140px tall; eight now fit on a laptop screen.
+                    */}
+                    <div className="px-5 py-3 flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4">
+                      <div className="flex items-start gap-3 min-w-0 lg:flex-[1_1_240px] lg:min-w-[220px]">
+                        <span className="mt-0.5 px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-bold rounded-md shrink-0 tabular-nums">
+                          {bundle.code}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <h3 className="text-sm font-semibold text-slate-800 truncate">{bundle.name}</h3>
                             <button
                               onClick={() => { setEditingBundleId(bundle.id); setEditForm(bundle); }}
-                              className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-[#3D52A0] rounded transition-opacity"
-                              title="Edit Package"
+                              className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 text-slate-400 hover:text-[#3D52A0] rounded transition-opacity"
+                              title="Edit package"
+                              aria-label={`Edit ${bundle.name}`}
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
-                          </h3>
-
-                          {/* A filled pill per card turned status into the loudest
-                              thing on the page. The colour now lives in a 6px dot,
-                              which still scans down a column but stops shouting. */}
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 whitespace-nowrap">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                              notApplicable
-                                ? "bg-slate-300"
-                                : bundle.status === "active"
-                                ? "bg-emerald-500"
-                                : bundle.status === "completed"
-                                ? "bg-sky-500"
-                                : bundle.status === "blocked"
-                                ? "bg-rose-400"
-                                : "bg-amber-400"
-                            }`} />
-                            {notApplicable
-                              ? 'No linked scope'
-                              : bundle.status === 'active' ? 'Active on-site' : bundle.status === 'completed' ? 'Completed' : bundle.status === 'blocked' ? 'Gated' : 'Ready to start'}
-                          </span>
-
-                          {bundle.isOverridden && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600">
-                              <Unlock className="w-3 h-3" /> At-risk override
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Gates are meaningless with no scope behind them. */}
-                        {!notApplicable && (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <GateBadge
-                            label="SOF Freeze"
-                            active={bundle.gatekeepers.sof}
-                            onClick={() => handleToggleGate(bundle.id, "sof")}
-                            icon={<FileCheck2 className="w-3.5 h-3.5" />}
-                          />
-                          <GateBadge
-                            label="GFC Issued"
-                            active={bundle.gatekeepers.gfc}
-                            onClick={() => handleToggleGate(bundle.id, "gfc")}
-                            icon={<FileCheck2 className="w-3.5 h-3.5" />}
-                          />
-                          <GateBadge
-                            label="Commercial"
-                            active={bundle.gatekeepers.payment}
-                            onClick={() => handleToggleGate(bundle.id, "payment")}
-                            icon={<Wallet className="w-3.5 h-3.5" />}
-                          />
-                          <GateBadge
-                            label="Site Ready"
-                            active={bundle.gatekeepers.site}
-                            onClick={() => handleToggleGate(bundle.id, "site")}
-                            icon={<HardHat className="w-3.5 h-3.5" />}
-                          />
-                        </div>
-                        )}
-
-                        {/* Linked Deliverables & Progress summary strip */}
-                        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
-                          <span className="flex items-center gap-1.5 font-bold text-slate-700">
-                            <PackageCheck className="w-3.5 h-3.5 text-[#3D52A0]" />
-                            {items.length} BOQ Deliverables
-                          </span>
-
-                          {!isDesigner && bundle.totalValue > 0 && (
-                            <span className="font-bold text-slate-900">
-                              Package Value: {formatINR(bundle.totalValue)}
-                            </span>
-                          )}
-
-                          {/* 0% would read as "nothing done yet" rather than
-                              "nothing to do". */}
-                          {notApplicable ? (
-                            <span className="text-[11px] font-semibold text-slate-400">
-                              No deliverables to track
-                            </span>
-                          ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-semibold text-slate-500">Deliverables QA:</span>
-                            <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full transition-all duration-500 ${
-                                  itemProgress === 100 ? 'bg-emerald-500' : itemProgress > 50 ? 'bg-[#3D52A0]' : 'bg-amber-400'
-                                }`}
-                                style={{ width: `${itemProgress}%` }}
-                              />
-                            </div>
-                            <span className="text-xs font-bold text-slate-800">{itemProgress}%</span>
                           </div>
-                          )}
-
-                          <button
-                            onClick={() => toggleBundleExpand(bundle.id)}
-                            className="text-xs font-bold text-[#3D52A0] hover:underline flex items-center gap-1 cursor-pointer"
-                          >
-                            {isExpanded ? 'Hide Deliverables' : `View ${items.length} Items`}
-                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                          </button>
+                          <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+                            <span className="inline-flex items-center gap-1.5"><StateDot tone={statusTone} />{statusLabel}</span>
+                            <span>· {items.length} BOQ item{items.length === 1 ? '' : 's'}</span>
+                            {!isDesigner && bundle.totalValue > 0 && <span>· {formatINR(bundle.totalValue)}</span>}
+                            {bundle.isOverridden && (
+                              <span className="inline-flex items-center gap-1 font-semibold text-amber-700">
+                                <Unlock className="w-3 h-3" /> At-risk override
+                              </span>
+                            )}
+                          </p>
                         </div>
                       </div>
 
-                      {/* Package Actions */}
-                      <div className="flex flex-col sm:flex-row lg:flex-col items-start lg:items-end gap-2 shrink-0 w-full lg:w-auto">
+                      {/* Gates are meaningless with no scope behind them. */}
+                      {!notApplicable ? (
+                        <div className="flex flex-wrap items-center gap-x-1 gap-y-1 lg:flex-[1_1_240px] lg:min-w-[200px] lg:max-w-[380px]">
+                          <GateBadge label="SOF freeze" active={bundle.gatekeepers.sof} onClick={() => handleToggleGate(bundle.id, "sof")} icon={<FileCheck2 className="w-3.5 h-3.5" />} />
+                          <GateBadge label="GFC issued" active={bundle.gatekeepers.gfc} onClick={() => handleToggleGate(bundle.id, "gfc")} icon={<FileCheck2 className="w-3.5 h-3.5" />} />
+                          <GateBadge label="Commercial" active={bundle.gatekeepers.payment} onClick={() => handleToggleGate(bundle.id, "payment")} icon={<Wallet className="w-3.5 h-3.5" />} />
+                          <GateBadge label="Site ready" active={bundle.gatekeepers.site} onClick={() => handleToggleGate(bundle.id, "site")} icon={<HardHat className="w-3.5 h-3.5" />} />
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 lg:flex-[1_1_240px] lg:min-w-[200px] lg:max-w-[380px]">Link BOQ items to this package, or delete it.</span>
+                      )}
+
+                      {/* 0% would read as "nothing done yet" rather than "nothing to do". */}
+                      <div className="flex items-center gap-2 lg:w-28 shrink-0" title="Deliverables QA">
                         {notApplicable ? (
-                          /* No scope means nothing to start, complete or force
-                             through a gate. Offering "Proceed At Risk" here
-                             invites an override of a risk that does not exist —
-                             link items or delete the package instead. */
-                          <span className="text-[11px] font-semibold text-slate-400 text-right max-w-[190px] leading-snug">
-                            Link BOQ items to this package, or delete it.
-                          </span>
-                        ) : bundle.status === "completed" ? (
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="flex items-center gap-1.5 px-4 py-2 bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider rounded-xl">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                              Execution completed
-                            </span>
-                            {!isProjectComplete && (
-                              <button
-                                onClick={() => {
-                                  const next = bundlesToRender.map(b => b.id === bundle.id ? { ...b, status: b.isOverridden ? 'active' : (allClear ? 'pending' : 'blocked') } : b);
-                                  updateBundles(next);
-                                }}
-                                className="text-[10px] text-slate-400 hover:text-slate-700 uppercase font-bold"
-                              >
-                                Reopen Package
-                              </button>
-                            )}
-                          </div>
-                        ) : bundle.isOverridden ? (
-                          <div className="flex flex-col gap-2 w-full sm:w-auto">
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleRemoveOverride(bundle.id)}
-                                className="text-[11px] font-bold text-amber-800 hover:text-amber-900 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors flex items-center gap-1"
-                              >
-                                <Lock className="w-3 h-3" /> Re-engage Gates
-                              </button>
-                              <button
-                                onClick={() => {
-                                  const next = bundlesToRender.map(b => b.id === bundle.id ? { ...b, status: 'completed' as const } : b);
-                                  updateBundles(next);
-                                }}
-                                className="text-[11px] font-bold text-emerald-800 hover:text-emerald-900 px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors flex items-center gap-1"
-                              >
-                                <CheckCircle2 className="w-3 h-3" /> Complete
-                              </button>
+                          <span className="text-[11px] text-slate-400">Nothing to track</span>
+                        ) : (
+                          <>
+                            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden" aria-hidden>
+                              <div
+                                className={`h-full transition-all duration-500 ${itemProgress === 100 ? 'bg-emerald-500' : 'bg-[#3D52A0]'}`}
+                                style={{ width: `${itemProgress}%` }}
+                              />
                             </div>
-                          </div>
-                        ) : !allClear ? (
-                          <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-                            <button
-                              onClick={() => setOverrideModalBundleId(bundle.id)}
-                              className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-rose-600 rounded-lg border border-slate-200 hover:border-rose-200 hover:bg-rose-50/50 transition-colors cursor-pointer"
-                            >
-                              <ShieldAlert className="w-3.5 h-3.5" />
-                              Proceed at risk
-                            </button>
-                          </div>
-                        ) : bundle.status === "active" ? (
-                          <button
-                            onClick={() => {
+                            <span className="text-xs font-bold text-slate-700 tabular-nums w-9 text-right">{itemProgress}%</span>
+                          </>
+                        )}
+                      </div>
+
+                      {/* The one thing this package needs next. */}
+                      <div className="flex items-center gap-2 shrink-0 lg:justify-end">
+                        {notApplicable ? null : bundle.status === "completed" ? (
+                          <>
+                            <Chip tone="good">Completed</Chip>
+                            {!isProjectComplete && (
+                              <Button variant="quiet" size="sm" onClick={() => {
+                                const next = bundlesToRender.map(b => b.id === bundle.id ? { ...b, status: b.isOverridden ? 'active' : (allClear ? 'pending' : 'blocked') } : b);
+                                updateBundles(next);
+                              }}>Reopen</Button>
+                            )}
+                          </>
+                        ) : bundle.isOverridden ? (
+                          <>
+                            <Button size="sm" icon={Lock} onClick={() => handleRemoveOverride(bundle.id)}>Re-engage gates</Button>
+                            <Button variant="primary" size="sm" icon={CheckCircle2} onClick={() => {
                               const next = bundlesToRender.map(b => b.id === bundle.id ? { ...b, status: 'completed' as const } : b);
                               updateBundles(next);
-                            }}
-                            className="flex items-center justify-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold rounded-lg transition-colors cursor-pointer"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Mark completed
-                          </button>
+                            }}>Complete</Button>
+                          </>
+                        ) : !allClear ? (
+                          <Button size="sm" icon={ShieldAlert} onClick={() => setOverrideModalBundleId(bundle.id)} title="Start before every gate clears, with a reason on record">Proceed at risk</Button>
+                        ) : bundle.status === "active" ? (
+                          <Button variant="primary" size="sm" icon={CheckCircle2} onClick={() => {
+                            const next = bundlesToRender.map(b => b.id === bundle.id ? { ...b, status: 'completed' as const } : b);
+                            updateBundles(next);
+                          }}>Mark completed</Button>
                         ) : (
-                          <button
-                            onClick={() => {
-                              const next = bundlesToRender.map(b => b.id === bundle.id ? { ...b, status: 'active' as const } : b);
-                              updateBundles(next);
-                            }}
-                            className="flex items-center justify-center gap-1.5 px-4 py-1.5 bg-[#3D52A0] hover:bg-[#0052A3] text-white text-[11px] font-semibold rounded-lg transition-colors cursor-pointer"
-                          >
-                            <PlayCircle className="w-3.5 h-3.5" />
-                            Start execution
-                          </button>
+                          <Button variant="primary" size="sm" icon={PlayCircle} onClick={() => {
+                            const next = bundlesToRender.map(b => b.id === bundle.id ? { ...b, status: 'active' as const } : b);
+                            updateBundles(next);
+                          }}>Start execution</Button>
                         )}
+                        <button
+                          onClick={() => toggleBundleExpand(bundle.id)}
+                          aria-expanded={isExpanded}
+                          aria-label={isExpanded ? `Hide the items in ${bundle.name}` : `Show the ${items.length} items in ${bundle.name}`}
+                          title={isExpanded ? 'Hide items' : `Show ${items.length} items`}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                        >
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
                       </div>
                     </div>
 
@@ -1482,13 +1171,13 @@ const ExecutionWorkspace = ({
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: "auto" }}
                           exit={{ opacity: 0, height: 0 }}
-                          className="border-t border-slate-100 bg-slate-50/70 p-5 space-y-4"
+                          className="border-t border-slate-100 bg-slate-50 px-5 py-4 space-y-4"
                         >
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/60 pb-3">
                             <div>
-                              <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                                <PackageCheck className="w-4 h-4 text-[#3D52A0]" />
-                                Linked BOQ Deliverables ({items.length})
+                              <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+                                <PackageCheck className="w-4 h-4 text-slate-400" aria-hidden />
+                                Linked BOQ items ({items.length})
                               </h4>
                               <p className="text-[11px] text-slate-500">
                                 Set a status per item, or tick several and apply one status to all of them.
@@ -1504,51 +1193,16 @@ const ExecutionWorkspace = ({
                                 <span className="text-[11px] font-black text-[#334486] tabular-nums">
                                   {selectedCount} selected
                                 </span>
-                                <button
-                                  onClick={() => handleApplyToSelection(bundle.id, 'pending')}
-                                  className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                                >
-                                  Pending
-                                </button>
-                                <button
-                                  onClick={() => handleApplyToSelection(bundle.id, 'in_progress')}
-                                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                                >
-                                  In Progress
-                                </button>
-                                <button
-                                  onClick={() => handleApplyToSelection(bundle.id, 'completed')}
-                                  className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                                >
-                                  Done
-                                </button>
-                                <button
-                                  onClick={() => setSelectedItemIds(prev => ({ ...prev, [bundle.id]: new Set() }))}
-                                  className="px-2 py-1 text-slate-500 hover:text-slate-800 text-[11px] font-bold transition-colors cursor-pointer"
-                                >
-                                  Clear
-                                </button>
+                                <Button size="sm" onClick={() => handleApplyToSelection(bundle.id, 'pending')}>Pending</Button>
+                                <Button size="sm" onClick={() => handleApplyToSelection(bundle.id, 'in_progress')}>In progress</Button>
+                                <Button size="sm" onClick={() => handleApplyToSelection(bundle.id, 'completed')}>Done</Button>
+                                <Button variant="quiet" size="sm" onClick={() => setSelectedItemIds(prev => ({ ...prev, [bundle.id]: new Set() }))}>Clear</Button>
                               </div>
                             ) : (
                               <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => handleToggleSelectAll(bundle.id, orderedItemIds)}
-                                  className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                                >
-                                  Select All
-                                </button>
-                                <button
-                                  onClick={() => handleBulkUpdateBundleItems(bundle.id, 'in_progress')}
-                                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                                >
-                                  Mark All In-Progress
-                                </button>
-                                <button
-                                  onClick={() => handleBulkUpdateBundleItems(bundle.id, 'completed')}
-                                  className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                                >
-                                  Mark All Done
-                                </button>
+                                <Button size="sm" onClick={() => handleToggleSelectAll(bundle.id, orderedItemIds)}>Select all</Button>
+                                <Button size="sm" onClick={() => handleBulkUpdateBundleItems(bundle.id, 'in_progress')}>Mark all in progress</Button>
+                                <Button size="sm" onClick={() => handleBulkUpdateBundleItems(bundle.id, 'completed')}>Mark all done</Button>
                               </div>
                             )}
                           </div>
@@ -1651,7 +1305,7 @@ const ExecutionWorkspace = ({
                   </div>
                 );
               })}
-            </div>
+            </section>
           )}
         </div>
       )}
@@ -1692,13 +1346,13 @@ const ExecutionWorkspace = ({
               className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col"
             >
               {/* Modal Header */}
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-purple-50/50">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 text-purple-700 rounded-2xl flex items-center justify-center">
+                  <div className="w-9 h-9 bg-[#3D52A0]/10 text-[#3D52A0] rounded-xl flex items-center justify-center">
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900">AI Execution Gating & Sequencing Risk Scan</h3>
+                    <h3 className="font-bold text-slate-800">Risk scan</h3>
                     <p className="text-xs text-slate-500">Autonomous multi-trade gating analysis powered by Gemini</p>
                   </div>
                 </div>
@@ -1714,7 +1368,7 @@ const ExecutionWorkspace = ({
               <div className="p-6 overflow-y-auto space-y-6">
                 {isAiAnalyzing ? (
                   <div className="py-12 text-center space-y-3">
-                    <div className="w-10 h-10 border-3 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                    <div className="w-10 h-10 border-[3px] border-[#3D52A0] border-t-transparent rounded-full animate-spin mx-auto" />
                     <p className="text-sm font-bold text-slate-700">Analyzing drawing clearances, SOF locks & trade sequences...</p>
                   </div>
                 ) : aiRiskReport ? (
@@ -1725,7 +1379,7 @@ const ExecutionWorkspace = ({
                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Site Execution Health Score</span>
                         <p className="text-xs text-slate-600 mt-1 max-w-md">{aiRiskReport.summary}</p>
                       </div>
-                      <div className="text-3xl font-black text-purple-700 px-4 py-2 bg-purple-100/60 rounded-2xl">
+                      <div className="text-3xl font-black text-[#3D52A0] px-4 py-2 bg-[#3D52A0]/10 rounded-2xl">
                         {aiRiskReport.healthScore}%
                       </div>
                     </div>
