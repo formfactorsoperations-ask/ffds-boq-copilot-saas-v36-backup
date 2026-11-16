@@ -7,7 +7,7 @@
   step on the glass, which is the project's own top action from
   services/nextActionEngine.
 */
-import type { ArtRecipe, FolderFile } from '../components/ui/glass-folder-cards';
+import type { FolderFile } from '../components/ui/glass-folder-cards';
 import type { NextAction } from '../services/nextActionEngine';
 import { classifyProject } from './projectClassification';
 
@@ -16,27 +16,19 @@ export type FolderStage = 'lead' | 'proposal' | 'won' | 'execution' | 'completed
 export interface StageDef {
   id: FolderStage;
   label: string;
-  /** The stage colour: the flag, the glow under the folder, the swatch on its tab. */
+  /** The stage colour: the plain panel behind the folder's glass, the flag, the glow under it, the swatch on its tab. */
   color: string;
-  /** The art behind the folder's glass, painted in the stage's colours. */
-  art: ArtRecipe;
   /** Step on the five-step bar (Lead, Quote, Won, Site, Done); -1 when lost. */
   step: number;
 }
 
 export const FOLDER_STAGES: StageDef[] = [
-  { id: 'lead', label: 'New lead', color: '#0284c7', step: 0,
-    art: { style: 'streak', colors: ['#f0f9ff', '#bae6fd', '#38bdf8', '#e0f2fe', '#7dd3fc', '#ffffff'], scale: 0.7, warp: 1.6, angle: 0.3, gloss: 0.3 } },
-  { id: 'proposal', label: 'Proposal sent', color: '#3D52A0', step: 1,
-    art: { style: 'marble', colors: ['#0f1330', '#26346a', '#3D52A0', '#7091E6', '#c7d2fe', '#eef2ff'], scale: 0.7, warp: 3.2, angle: 0.6, gloss: 0.5, veins: 0.4 } },
-  { id: 'won', label: 'Won', color: '#B8923A', step: 2,
-    art: { style: 'marble', colors: ['#1a1408', '#5c4410', '#B8923A', '#e3c378', '#fbf2d6', '#2a2216'], scale: 0.68, warp: 3.4, angle: 2.0, gloss: 0.6, veins: 0.5 } },
-  { id: 'execution', label: 'On site', color: '#c2410c', step: 3,
-    art: { style: 'streak', colors: ['#fff7ed', '#fdba74', '#ea580c', '#7c2d12', '#fed7aa', '#fffaf5'], scale: 0.7, warp: 1.4, angle: -0.6, gloss: 0.25 } },
-  { id: 'completed', label: 'Handed over', color: '#047857', step: 4,
-    art: { style: 'marble', colors: ['#07110c', '#173024', '#3f7a5c', '#141812', '#8fbf9f', '#dcefe3', '#f6fbf7'], scale: 0.72, warp: 3.0, angle: 1.2, gloss: 0.45, veins: 0.4 } },
-  { id: 'lost', label: 'Lost', color: '#64748b', step: -1,
-    art: { style: 'streak', colors: ['#e9eaee', '#c9ccd4', '#9aa0ad', '#dfe1e6', '#f4f5f7'], scale: 0.7, warp: 1.2, angle: 0.1, gloss: 0.1 } },
+  { id: 'lead', label: 'New lead', color: '#0284c7', step: 0 },
+  { id: 'proposal', label: 'Proposal sent', color: '#3D52A0', step: 1 },
+  { id: 'won', label: 'Won', color: '#B8923A', step: 2 },
+  { id: 'execution', label: 'On site', color: '#c2410c', step: 3 },
+  { id: 'completed', label: 'Handed over', color: '#047857', step: 4 },
+  { id: 'lost', label: 'Lost', color: '#64748b', step: -1 },
 ];
 
 export const STAGE: Record<FolderStage, StageDef> = Object.fromEntries(

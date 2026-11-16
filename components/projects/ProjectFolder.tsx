@@ -99,7 +99,7 @@ export default function ProjectFolder(p: ProjectFolderProps) {
         <GlassFolder
           label={p.name}
           meta={p.meta}
-          art={stage.art}
+          art="none"
           seed={(p.id.split('').reduce((a, ch) => a + ch.charCodeAt(0), 0) % 97) + 1}
           tone={toneOf(p.stage)}
           files={p.files}

@@ -438,7 +438,8 @@ desk, and every action is one click. Built from `components/ui/glass-folder-card
 component) in `components/projects/ProjectFolder.tsx`, styled in `components/projects/projectFolders.css`;
 the logic is `lib/projectFolders.ts`.
 
-- **Stages and colours.** Six stages, each with its own colour, used for the folder's art, its flag, a soft
+- **Stages and colours.** Six stages, each with its own colour, used for the plain panel behind the folder's
+  glass (no patterned art, owner's call), its flag, a soft
   glow under it, the current step on its five-step bar and the swatch on its tab: New lead `#0284c7`,
   Proposal sent `#3D52A0`, Won `#B8923A`, On site `#c2410c`, Handed over `#047857`, Lost `#64748b`.
   These stage colours are approved for this screen only; everywhere else the colour rules above hold.
