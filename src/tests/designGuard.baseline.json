@@ -169,10 +169,6 @@
     "tinyPx": 1,
     "offPalette": 15
   },
-  "components/ProjectSetupWizard.tsx": {
-    "tinyPx": 1,
-    "offPalette": 30
-  },
   "components/ProjectStatusTransitionModal.tsx": {
     "tinyPx": 2,
     "offPalette": 24

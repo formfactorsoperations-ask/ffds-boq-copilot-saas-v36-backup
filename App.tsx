@@ -3499,7 +3499,7 @@ export default function App() {
                       {/* Dashboard or Wizard - BLOCK 1 */}
                       {activeTab === "dashboard" &&
                         (tiers.length === 0 || showWizardOverride ? (
-                          <div className="flex justify-center items-center h-full">
+                          <div className="w-full">
                             <ProjectSetupWizard
                               setTiers={setTiers}
                               bank={bank}
@@ -4202,7 +4202,7 @@ export default function App() {
                       {/* Dashboard or Wizard - BLOCK 2 */}
                       {activeTab === "dashboard" &&
                         (tiers.length === 0 || showWizardOverride ? (
-                          <div className="flex justify-center items-center h-full">
+                          <div className="w-full">
                             <ProjectSetupWizard
                               setTiers={setTiers}
                               bank={bank}

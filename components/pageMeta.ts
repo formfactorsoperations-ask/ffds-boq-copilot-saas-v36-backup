@@ -94,6 +94,7 @@ const META: Record<string, PageMeta> = {
   'mom-action-tracker':   { title: 'Meeting Actions', subtitle: 'Actions captured from meeting notes' },
   'update-client-feed':   { title: 'Client Update', subtitle: 'Post an update to the client feed' },
   dashboard:              { title: 'Hub', subtitle: 'The project at a glance' },
+  'project-setup':        { title: 'Project setup', subtitle: 'How the project starts, its brief, and its first options' },
 };
 
 /** Returns the meta for a route, with the title resolved from the nav where possible. */
