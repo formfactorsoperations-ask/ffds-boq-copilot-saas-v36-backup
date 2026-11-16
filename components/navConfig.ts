@@ -149,8 +149,18 @@ export const NAV_CONFIG: NavStage[] = [
     stage: 5,
     label: STAGE_LABELS[5],
     items: [
-      { label: "Execution & Ops", route: "site-ops" },
-      { label: "SOF & Selections", route: "materials" },
+      /*
+        Execution & Ops was one screen with five tabs, sub-tabs and switches
+        under those: five levels from the stage to the electrical plan. Each
+        part is now its own screen here, and a screen stacks its tools as
+        summary-first sections (components/site/SectionStack, plan item 9).
+        3D renders moved to the hub's Drawings; Procurement joined the
+        purchase orders under Selections & orders.
+      */
+      { label: "Site Control Room", route: "site-ops" },
+      { label: "Quality & Snags", route: "site-quality" },
+      { label: "Meetings & Reports", route: "site-meetings" },
+      { label: "Selections & Orders", route: "materials" },
       { label: "Scope Additions", route: "scope-additions" }
     ]
   },

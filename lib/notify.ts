@@ -151,7 +151,7 @@ export function clientActionDraft(action: any, p: { actor: string; projectId: st
     case 'querySelection':
       return { ...base, kind: 'client.finish', level: 'needs', title: `${who} asked about a finish`, line: quote(action.question), route: 'materials', action: 'Reply', to: { project: ['design', 'ops'] } };
     case 'confirmSelection':
-      return { ...base, area: 'design', kind: 'client.finishConfirmed', level: 'update', title: `${who} confirmed a finish`, line: 'On SOF & Selections', route: 'materials', action: null, to: { project: ['design'], roles: ['Design Head'] } };
+      return { ...base, area: 'design', kind: 'client.finishConfirmed', level: 'update', title: `${who} confirmed a finish`, line: 'On Selections & Orders', route: 'materials', action: null, to: { project: ['design'], roles: ['Design Head'] } };
     case 'confirmMeeting':
       return { ...base, area: 'design', kind: 'client.meetingConfirmed', level: 'update', title: `${who} confirmed the design meeting record`, line: `Confirmed as ${clip(action.name, 60)}`, route: 'design-review', action: null, to: { project: ['design', 'ops'], roles: ['Design Head'] } };
     default:

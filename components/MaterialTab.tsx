@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import MinutesInbox from './minutes/MinutesInbox';
-import ConsoleHeader from './ui/ConsoleHeader';
-import Tabs from './ui/Tabs';
+import SectionStack from './site/SectionStack';
+import ProcurementTab from './ProcurementTab';
+import { Palette, Scale, Truck } from 'lucide-react';
+import { firstToOpen, type SectionLine } from '../lib/siteSections';
 import { assess, summarise, BUCKET_LABEL, ORDER_BLOCKING, Bucket } from '../lib/sofReadiness';
-import { ProjectContext, ProposalTier, Item, MaterialSelection, MaterialSelectionStatus, PurchaseOrder, Vendor } from '../types';
+import { ProjectContext, ProposalTier, Item, MaterialSelection, MaterialSelectionStatus, PurchaseOrder, Vendor, FullBoqItem } from '../types';
 import Card from './shared/Card';
 import { PlusIcon, CheckIcon, ClockIcon, AlertCircleIcon, TrashIcon, PhotoIcon, EnvelopeIcon, XCircleIcon, SparklesIcon } from './Icons';
 import { generateId } from '../lib/utils';
@@ -82,9 +84,11 @@ interface MaterialTabProps {
      * comes back the same way.
      */
     decisionLedger?: (DecisionData & { id: string })[];
+    /** The execution BOQ, for the budgets by trade under Purchase orders. */
+    boq?: FullBoqItem[];
 }
 
-const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectContext, activeTier, bank, projectId, decisionLedger = [] }) => {
+const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectContext, activeTier, bank, projectId, decisionLedger = [], boq = [] }) => {
     const { orgData } = useOrg();
     const { settings: studioSettings } = useStudioSettings(orgData.tenantId || 'demo-tenant-01');
     const [selections, setSelections] = useState<MaterialSelection[]>(projectContext.materialSelections || []);
@@ -135,6 +139,8 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
     
     // Tab state for Selections vs Change Requests vs Orders
     const [mainTab, setMainTab] = useState<'selections' | 'change_requests' | 'orders'>('selections');
+    /* Which section is open; null when all are closed, undefined until the screen picks one. */
+    const [openSection, setOpenSection] = useState<string | null | undefined>(undefined);
     const [crStatusFilter, setCrStatusFilter] = useState<'All' | 'Pending Sign-off' | 'Approved' | 'Absorbed' | 'Rejected'>('All');
     const [showRaiseChange, setShowRaiseChange] = useState(false);
     const [poStageFilter, setPoStageFilter] = useState<POStage | null>(null);
@@ -143,7 +149,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
     const [selectedSelectionIds, setSelectedSelectionIds] = useState<string[]>([]);
     const [projectPOs, setProjectPOs] = useState<PurchaseOrder[]>([]);
     const [showRaisePO, setShowRaisePO] = useState(false);
-    const [loadingPOs, setLoadingPOs] = useState(false);
+    const [loadingPOs, setLoadingPOs] = useState(!!projectId);
     const [poTargetSelections, setPoTargetSelections] = useState<MaterialSelection[]>([]);
 
     // Email notification state variables
@@ -1505,97 +1511,59 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
         );
     };
 
-    return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-            <datalist id="room-list">
-                {allRoomNames.map(room => <option key={room} value={room} />)}
-            </datalist>
+    /* One line per section, from the same rules the old header used for its state. */
+    const sofLine: SectionLine =
+        normalSelections.length === 0 ? { summary: 'Nothing selected yet', tone: 'warn' }
+        : { summary: [
+            `${normalSelections.length} ${normalSelections.length === 1 ? 'finish' : 'finishes'}`,
+            sofSummary.atRisk > 0 ? `${sofSummary.atRisk} at risk of missing the date` : '',
+            sofSummary.blocked > 0 ? `${sofSummary.blocked} blocked from ordering` : '',
+            sofSummary.awaiting > 0 ? `${sofSummary.awaiting} with the client` : '',
+            sofSummary.ready > 0 ? `${sofSummary.ready} ready to order` : '',
+            sofSummary.atRisk + sofSummary.blocked + sofSummary.awaiting + sofSummary.ready === 0 ? 'all confirmed' : '',
+          ].filter(Boolean).join(' · '),
+          tone: sofSummary.atRisk > 0 || sofSummary.blocked > 0 ? 'bad' : sofSummary.awaiting > 0 || sofSummary.ready > 0 ? 'warn' : 'ok' };
+    const crLine: SectionLine =
+        crSummary.total === 0 ? { summary: 'None raised · the contract is unchanged', tone: 'none' }
+        : crSummary.pending > 0 ? { summary: `${crSummary.pending} awaiting the client's sign-off · ${crSummary.total} raised`, tone: 'warn' }
+        : { summary: `All ${crSummary.total} settled`, tone: 'ok' };
+    const poLine: SectionLine =
+        poSummary.total === 0 ? { summary: 'Nothing ordered yet · budgets by trade from the BOQ', tone: 'none' }
+        : poSummary.overdue > 0 ? { summary: `${poSummary.overdue} overdue on site · ${poSummary.total} raised`, tone: 'bad' }
+        : poSummary.awaiting > 0 ? { summary: `${poSummary.awaiting} awaiting delivery · ${poSummary.total} raised`, tone: 'warn' }
+        : { summary: `All ${poSummary.total} received`, tone: 'ok' };
 
-            {/* Selections from approved minutes, waiting to be added (lib/minutes outboxOf). */}
-            <MinutesInbox projectId={projectId} kind="selections" title="selections" action="Add to Materials"
-                onAdd={(items) => setSelections(prev => [...prev, ...items.map(({ ref, item }) => ({
-                    ...getDefaultNewSelectionFields(),
-                    id: generateId(),
-                    roomId: item.room || '',
-                    itemName: item.item || item.text,
-                    category: 'From minutes',
-                    finishCode: item.item ? item.text : '',
-                    status: (item.choice === 'approved' ? 'locked' : item.choice === 'client_to_pick' ? 'sent_for_approval' : 'to_select') as any,
-                    leadTimeDays: 7,
-                    photos: [],
-                    notes: `From the minutes ${ref}`,
-                } as MaterialSelection))])} />
+    /*
+      Open the section that needs someone, once: after the orders have loaded,
+      so an overdue delivery is not missed for want of a first fetch.
+    */
+    useEffect(() => {
+        if (openSection !== undefined || loadingPOs) return;
+        const first = firstToOpen([
+            { id: 'selections', tone: sofLine.tone },
+            { id: 'change_requests', tone: crLine.tone },
+            { id: 'orders', tone: poLine.tone },
+        ]);
+        setOpenSection(first);
+        if (first) setMainTab(first as any);
+    }, [openSection, loadingPOs, sofLine.tone, crLine.tone, poLine.tone]);
 
-            {/*
-              The schedule of finishes decides when procurement can start, so the
-              header reports exactly that: how many finishes are settled against
-              how many the scope needs. The action row moves inside it, because a
-              row of six buttons floating above a page is chrome, not a heading.
-            */}
-            <ConsoleHeader
-                title={
-                    mainTab === 'change_requests' ? 'Cost variations'
-                    : mainTab === 'orders' ? 'Purchase orders'
-                    : 'Schedule of finishes'
-                }
-                /*
-                  Who owns which number.
+    /* A jump to another tab (a variation raised, a PO sent) opens that section. */
+    useEffect(() => {
+        if (openSection !== undefined && openSection !== mainTab) setOpenSection(mainTab);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mainTab]);
 
-                  Every figure on this screen now has exactly one home: the tab
-                  badge counts the records, this pill names the condition in
-                  words, the panel holds the money, and the filter row below
-                  holds the per-state counts. The pill used to lead with a
-                  figure the panel repeated a few hundred pixels later, which is
-                  what made the screen feel like it was saying everything twice.
-                */
-                state={
-                    mainTab === 'change_requests'
-                        ? (crSummary.total === 0 ? 'Contract unchanged'
-                            : crSummary.pending > 0 ? 'Awaiting client sign-off'
-                            : 'All settled')
-                    : mainTab === 'orders'
-                        ? (poSummary.total === 0 ? 'Nothing ordered yet'
-                            : poSummary.overdue > 0 ? 'Overdue on site'
-                            : poSummary.awaiting > 0 ? 'Awaiting delivery'
-                            : 'All received')
-                    : normalSelections.length === 0 ? 'Nothing selected yet'
-                    : sofSummary.atRisk > 0 ? 'At risk of missing the date'
-                    : sofSummary.blocked > 0 ? 'Blocked from ordering'
-                    : sofSummary.awaiting > 0 ? 'With the client'
-                    : sofSummary.ready > 0 ? 'Ready to order'
-                    : 'All confirmed'
-                }
-                tone={
-                    mainTab === 'change_requests'
-                        ? (crSummary.pending > 0 ? 'warn' : crSummary.total === 0 ? 'ok' : 'ok')
-                    : mainTab === 'orders'
-                        ? (poSummary.overdue > 0 ? 'bad' : poSummary.awaiting > 0 ? 'warn' : 'ok')
-                    : normalSelections.length === 0 ? 'warn'
-                    : sofSummary.atRisk > 0 || sofSummary.blocked > 0 ? 'bad'
-                    : sofSummary.awaiting > 0 || sofSummary.ready > 0 ? 'warn'
-                    : 'ok'
-                }
-                blurb={
-                    mainTab === 'change_requests'
+    /* The open section's body: what the header said for its tab, then the tab's own content. */
+    const sectionBody = (
+        <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 pb-5 border-b border-slate-100">
+                <p className="text-xs text-slate-500 max-w-xl leading-relaxed">{mainTab === 'change_requests'
                         ? 'Variations raised after the BOQ was frozen, and what each one does to the contract.'
                     : mainTab === 'orders'
                         ? 'Purchase orders raised against these selections, and what has landed on site.'
-                    : 'Every material, finish and fitting this project is built from — and who still has to decide.'
-                }
-                tabs={
-                    <Tabs
-                        ariaLabel="Schedule of finishes sections"
-                        value={mainTab}
-                        onChange={(id) => setMainTab(id as any)}
-                        items={[
-                            { id: 'selections', label: 'Selections', count: normalSelections.length },
-                            { id: 'change_requests', label: 'Cost variations', count: changeRequests.length, tone: 'attention' },
-                            { id: 'orders', label: 'Purchase orders', count: projectPOs.length },
-                        ]}
-                    />
-                }
-                panel={
-                    /*
+                    : 'Every material, finish and fitting this project is built from — and who still has to decide.'}</p>
+                {/*
                       One summary, and it answers for whichever tab is open.
 
                       A percentage says how far along the schedule is. It does not
@@ -1648,7 +1616,7 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                             </div>
                             {poSummary.total === 0 ? (
                                 <p className="text-xs text-slate-500 mt-3 leading-snug">
-                                    Nothing ordered yet. Tick items on the selections tab and raise a PO against them.
+                                    Nothing ordered yet. Tick items in the schedule of finishes and raise a PO against them, or raise one from a budget below.
                                 </p>
                             ) : (
                                 <>
@@ -1742,81 +1710,9 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                             </div>
                         )}
                     </div>
-                    )
-                }
-            />
-
-            <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                accept="image/*" 
-                capture="environment"
-                onChange={(e) => {
-                    if (draftSelection) {
-                        handleDraftImageUpload(e);
-                    } else if (uploadingId) {
-                        handleImageUpload(uploadingId, e);
-                    }
-                }} 
-            />
-
-            {/* AI Import Modal */}
-            {showImportModal && (
-                <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-sky-50/50">
-                            <div>
-                                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                                    <SparklesIcon className="w-6 h-6 text-[#3D52A0]" />
-                                    Import from Message
-                                </h3>
-                                <p className="text-sm text-slate-500 mt-1">Paste a WhatsApp message or email from the team. AI will extract the items.</p>
-                            </div>
-                            <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1 shadow-sm border border-slate-200">
-                                <XCircleIcon className="w-6 h-6" />
-                            </button>
-                        </div>
-                        <div className="p-6">
-                            <textarea 
-                                value={importText}
-                                onChange={(e) => setImportText(e.target.value)}
-                                placeholder="e.g. 'Hey, I'm at Royal Touche. For the Master Bedroom Wardrobe, let's go with 8765-SF. Also for the Living Room TV Unit, veneer model X looks good.'"
-                                className="w-full h-48 p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#3D52A0] focus:border-[#3D52A0] outline-none resize-none text-slate-700"
-                            />
-                        </div>
-                        <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                            <button 
-                                onClick={() => setShowImportModal(false)}
-                                className="px-5 py-2.5 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                onClick={handleImportText}
-                                disabled={isExtracting || !importText.trim()}
-                                className={`px-5 py-2.5 rounded-xl font-bold text-white flex items-center gap-2 transition-all shadow-sm ${
-                                    isExtracting || !importText.trim() ? 'bg-sky-400 cursor-not-allowed' : 'bg-[#3D52A0] hover:bg-[#334486]'
-                                }`}
-                            >
-                                {isExtracting ? (
-                                    <>
-                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        Extracting...
-                                    </>
-                                ) : (
-                                    <>
-                                        <SparklesIcon className="w-5 h-5" />
-                                        Extract & Add Items
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {selections.length === 0 ? (
+                    )}
+            </div>
+            {selections.length === 0 && mainTab === 'selections' ? (
                 <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center mt-6">
                     <div className="w-16 h-16 bg-[#FCFBF9] border border-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
                         <CameraIcon className="w-8 h-8 text-slate-400" />
@@ -2661,6 +2557,138 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
                     )}
                 </div>
             )}
+            {mainTab === 'orders' && projectId && (
+                <div className="space-y-3 pt-5 border-t border-slate-100">
+                    <div>
+                        <h3 className="font-bold text-slate-800">Budgets by trade</h3>
+                        <p className="text-xs text-slate-500 mt-0.5">What the BOQ allows for each room and trade, what is committed against it, and a Raise PO for each.</p>
+                    </div>
+                    <ProcurementTab
+                        projectContext={projectContext}
+                        setProjectContext={setProjectContext}
+                        boq={boq}
+                        projectId={projectId}
+                        onOrdersChanged={loadPOs}
+                    />
+                </div>
+            )}
+        </div>
+    );
+
+    return (
+        <div className="space-y-6 animate-in fade-in duration-500">
+            <datalist id="room-list">
+                {allRoomNames.map(room => <option key={room} value={room} />)}
+            </datalist>
+
+            {/* Selections from approved minutes, waiting to be added (lib/minutes outboxOf). */}
+            <MinutesInbox projectId={projectId} kind="selections" title="selections" action="Add to Materials"
+                onAdd={(items) => setSelections(prev => [...prev, ...items.map(({ ref, item }) => ({
+                    ...getDefaultNewSelectionFields(),
+                    id: generateId(),
+                    roomId: item.room || '',
+                    itemName: item.item || item.text,
+                    category: 'From minutes',
+                    finishCode: item.item ? item.text : '',
+                    status: (item.choice === 'approved' ? 'locked' : item.choice === 'client_to_pick' ? 'sent_for_approval' : 'to_select') as any,
+                    leadTimeDays: 7,
+                    photos: [],
+                    notes: `From the minutes ${ref}`,
+                } as MaterialSelection))])} />
+
+            {/*
+              The schedule of finishes decides when procurement can start, so the
+              header reports exactly that: how many finishes are settled against
+              how many the scope needs. The action row moves inside it, because a
+              row of six buttons floating above a page is chrome, not a heading.
+            */}
+
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept="image/*" 
+                capture="environment"
+                onChange={(e) => {
+                    if (draftSelection) {
+                        handleDraftImageUpload(e);
+                    } else if (uploadingId) {
+                        handleImageUpload(uploadingId, e);
+                    }
+                }} 
+            />
+
+            {/* AI Import Modal */}
+            {showImportModal && (
+                <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-sky-50/50">
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                    <SparklesIcon className="w-6 h-6 text-[#3D52A0]" />
+                                    Import from Message
+                                </h3>
+                                <p className="text-sm text-slate-500 mt-1">Paste a WhatsApp message or email from the team. AI will extract the items.</p>
+                            </div>
+                            <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1 shadow-sm border border-slate-200">
+                                <XCircleIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <textarea 
+                                value={importText}
+                                onChange={(e) => setImportText(e.target.value)}
+                                placeholder="e.g. 'Hey, I'm at Royal Touche. For the Master Bedroom Wardrobe, let's go with 8765-SF. Also for the Living Room TV Unit, veneer model X looks good.'"
+                                className="w-full h-48 p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#3D52A0] focus:border-[#3D52A0] outline-none resize-none text-slate-700"
+                            />
+                        </div>
+                        <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                            <button 
+                                onClick={() => setShowImportModal(false)}
+                                className="px-5 py-2.5 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={handleImportText}
+                                disabled={isExtracting || !importText.trim()}
+                                className={`px-5 py-2.5 rounded-xl font-bold text-white flex items-center gap-2 transition-all shadow-sm ${
+                                    isExtracting || !importText.trim() ? 'bg-sky-400 cursor-not-allowed' : 'bg-[#3D52A0] hover:bg-[#334486]'
+                                }`}
+                            >
+                                {isExtracting ? (
+                                    <>
+                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        Extracting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <SparklesIcon className="w-5 h-5" />
+                                        Extract & Add Items
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/*
+              Selections & orders (plan item 9). The three tabs are stacked
+              sections now: each closed one is a line saying where it stands,
+              and one is open at a time. Procurement's budgets by trade joined
+              the purchase orders, which it read from the same list.
+            */}
+            <SectionStack
+                label="Selections & orders"
+                open={openSection ?? null}
+                onOpen={(id) => { setOpenSection(id); if (id) setMainTab(id as any); }}
+                sections={[
+                    { id: 'selections', title: 'Schedule of finishes', icon: Palette, line: sofLine, render: () => sectionBody },
+                    { id: 'change_requests', title: 'Cost variations', icon: Scale, line: crLine, render: () => sectionBody },
+                    { id: 'orders', title: 'Purchase orders and budgets', icon: Truck, line: poLine, render: () => sectionBody },
+                ]}
+            />
 
             {/* Draft Docket Panel */}
             {showDocketPanel && (

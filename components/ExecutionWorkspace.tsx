@@ -150,6 +150,13 @@ export const generateBundlesFromBoq = (boq: any[]): ExecutionBundle[] => {
   });
 };
 
+/* "2026-03-23" -> "23 Mar 2026" for the site dates strip; nothing for an empty or bad date. */
+const shortDate = (iso?: string | null) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+};
+
 const ExecutionWorkspace = ({
   projectContext,
   setProjectContext,
@@ -164,7 +171,12 @@ const ExecutionWorkspace = ({
   const isDesigner = currentRole === "Designer";
 
   // Navigation sub-views to declutter the page
-  const [activeSubView, setActiveSubView] = useState<"packages" | "controls">("packages");
+  /*
+    Site dates & controls used to be a second tab beside the packages. It is a
+    form you fill once and glance at after, so it is now a one-line strip above
+    the packages that opens in place (plan item 9).
+  */
+  const [controlsOpen, setControlsOpen] = useState(false);
   
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -866,31 +878,24 @@ const ExecutionWorkspace = ({
 
         {/* 2. DECLUTTERED VIEW SELECTOR TABS */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80">
-            <button
-              onClick={() => setActiveSubView("packages")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeSubView === "packages"
-                  ? "bg-white text-[#3D52A0] shadow-xs border border-slate-200/60"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <PackageCheck className="w-4 h-4" />
-              Packages & BOQ Deliverables ({filteredBundles.length})
-            </button>
-
-            <button
-              onClick={() => setActiveSubView("controls")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeSubView === "controls"
-                  ? "bg-white text-[#3D52A0] shadow-xs border border-slate-200/60"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <Sliders className="w-4 h-4" />
-              Site Dates & Controls
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setControlsOpen((o) => !o)}
+            aria-expanded={controlsOpen}
+            data-testid="site-dates-strip"
+            className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 rounded-xl border text-left text-xs transition-colors ${
+              controlsOpen ? "border-[#3D52A0] bg-[#3D52A0]/10" : "border-slate-200 bg-white hover:bg-slate-50"
+            }`}
+          >
+            <span className="flex items-center gap-1.5 font-bold text-slate-700">
+              <Sliders className="w-4 h-4 text-[#3D52A0]" />
+              Site dates
+            </span>
+            <span className="text-slate-500">Handover <b className="text-slate-800">{shortDate(projectContext?.targetHandoverDate) || "not set"}</b></span>
+            <span className="text-slate-500">SOF freeze <b className="text-slate-800">{shortDate(projectContext?.sofFreezeDate) || "not set"}</b></span>
+            <span className="text-slate-500">Lead time <b className="text-slate-800">{projectContext?.procurementLeadTimeWeeks || 4} wks</b></span>
+            <span className="font-bold text-[#3D52A0]">{controlsOpen ? "Done" : "Edit"}</span>
+          </button>
 
           {/* Quick Gating Summary Pill */}
           <div className="hidden sm:flex items-center gap-3 text-xs text-slate-500 font-semibold">
@@ -910,8 +915,123 @@ const ExecutionWorkspace = ({
         </div>
       </div>
 
+      {/* VIEW 3: SITE CONTROLS & DATES */}
+      {controlsOpen && (
+        <div className="space-y-6 hud-panel-in">
+          <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-sm space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-lg tracking-tight flex items-center gap-2">
+                  <Sliders className="w-5 h-5 text-[#3D52A0]" />
+                  Site Controls & Key Milestones
+                </h3>
+                <p className="text-slate-500 text-xs mt-0.5">
+                  Set the target handover date, the SOF freeze deadline, procurement lead time and the site readiness checkpoints.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Target Handover Date</label>
+                <input
+                  type="date"
+                  value={projectContext?.targetHandoverDate || ''}
+                  onChange={e => handleContextChange('targetHandoverDate', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#3D52A0] outline-none transition-all shadow-2xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">SOF Freeze Deadline</label>
+                <input
+                  type="date"
+                  value={projectContext?.sofFreezeDate || ''}
+                  onChange={e => handleContextChange('sofFreezeDate', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#3D52A0] outline-none transition-all shadow-2xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Procurement Lead Time</label>
+                <div className="relative flex items-center">
+                  <input
+                    type="number"
+                    value={projectContext?.procurementLeadTimeWeeks || 4}
+                    onChange={e => handleContextChange('procurementLeadTimeWeeks', Number(e.target.value) || 0)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#3D52A0] outline-none transition-all pr-12 shadow-2xs"
+                  />
+                  <span className="absolute right-4 text-slate-400 text-xs font-bold">Wks</span>
+                </div>
+              </div>
+
+              {/*
+                "Assigned Site Supervisor" is gone until the team feature is real.
+
+                It wrote `assignedSupervisors`, which App.tsx reads to decide
+                which projects a Site Supervisor sees in SupervisorMobileApp --
+                a screen that renders only when the signed-in user matches a
+                team member whose role is "Site Supervisor". The studio has no
+                team members at all, so nobody can reach that app, and the one
+                project carrying an assignment points at a team-member id that
+                does not exist.
+
+                A dropdown whose only option is "Unassigned" assigns people to
+                an app that cannot be opened. The field and its readers are
+                untouched: add team members and this control comes back.
+              */}
+            </div>
+
+            {/* Lifecycle Checkpoints */}
+            <div className="pt-4 border-t border-slate-150 space-y-3">
+              <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Site Readiness Checkpoints</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleContextChange('briefFrozenAt', projectContext?.briefFrozenAt ? null : Date.now())}
+                  className={`py-3 px-4 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-2 shadow-2xs cursor-pointer ${
+                    projectContext?.briefFrozenAt
+                      ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Check className={`w-4 h-4 ${projectContext?.briefFrozenAt ? 'text-white' : 'text-slate-400'}`} />
+                  <span>{projectContext?.briefFrozenAt ? 'Brief Locked' : 'Lock Design Brief'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleContextChange('designApprovedAt', projectContext?.designApprovedAt ? null : Date.now())}
+                  className={`py-3 px-4 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-2 shadow-2xs cursor-pointer ${
+                    projectContext?.designApprovedAt
+                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Check className={`w-4 h-4 ${projectContext?.designApprovedAt ? 'text-white' : 'text-slate-400'}`} />
+                  <span>{projectContext?.designApprovedAt ? 'Design Cleared' : 'Approve Render GFC'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleContextChange('handoverDate', projectContext?.handoverDate ? null : Date.now())}
+                  className={`py-3 px-4 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-2 shadow-2xs cursor-pointer ${
+                    projectContext?.handoverDate
+                      ? 'bg-[#3D52A0] border-[#3D52A0] text-white shadow-sm'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Check className={`w-4 h-4 ${projectContext?.handoverDate ? 'text-white' : 'text-slate-400'}`} />
+                  <span>{projectContext?.handoverDate ? 'Handed Over' : 'Mark Handover'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* VIEW 1: PACKAGES & BOQ DELIVERABLES */}
-      {activeSubView === "packages" && (
+      {(
         <div className="space-y-4">
           {/* Search, Filter & Trade Toolbar */}
           <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -1553,121 +1673,6 @@ const ExecutionWorkspace = ({
         Usage was one or two rooms per real project and item tracking never used
         at all -- somebody opening it once, not a workflow.
       */}
-
-      {/* VIEW 3: SITE CONTROLS & DATES */}
-      {activeSubView === "controls" && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-sm space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-lg tracking-tight flex items-center gap-2">
-                  <Sliders className="w-5 h-5 text-[#3D52A0]" />
-                  Site Controls & Key Milestones
-                </h3>
-                <p className="text-slate-500 text-xs mt-0.5">
-                  Set the target handover date, the SOF freeze deadline, procurement lead time and the site readiness checkpoints.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Target Handover Date</label>
-                <input
-                  type="date"
-                  value={projectContext?.targetHandoverDate || ''}
-                  onChange={e => handleContextChange('targetHandoverDate', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#3D52A0] outline-none transition-all shadow-2xs"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">SOF Freeze Deadline</label>
-                <input
-                  type="date"
-                  value={projectContext?.sofFreezeDate || ''}
-                  onChange={e => handleContextChange('sofFreezeDate', e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#3D52A0] outline-none transition-all shadow-2xs"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Procurement Lead Time</label>
-                <div className="relative flex items-center">
-                  <input
-                    type="number"
-                    value={projectContext?.procurementLeadTimeWeeks || 4}
-                    onChange={e => handleContextChange('procurementLeadTimeWeeks', Number(e.target.value) || 0)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:border-[#3D52A0] outline-none transition-all pr-12 shadow-2xs"
-                  />
-                  <span className="absolute right-4 text-slate-400 text-xs font-bold">Wks</span>
-                </div>
-              </div>
-
-              {/*
-                "Assigned Site Supervisor" is gone until the team feature is real.
-
-                It wrote `assignedSupervisors`, which App.tsx reads to decide
-                which projects a Site Supervisor sees in SupervisorMobileApp --
-                a screen that renders only when the signed-in user matches a
-                team member whose role is "Site Supervisor". The studio has no
-                team members at all, so nobody can reach that app, and the one
-                project carrying an assignment points at a team-member id that
-                does not exist.
-
-                A dropdown whose only option is "Unassigned" assigns people to
-                an app that cannot be opened. The field and its readers are
-                untouched: add team members and this control comes back.
-              */}
-            </div>
-
-            {/* Lifecycle Checkpoints */}
-            <div className="pt-4 border-t border-slate-150 space-y-3">
-              <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Site Readiness Checkpoints</label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleContextChange('briefFrozenAt', projectContext?.briefFrozenAt ? null : Date.now())}
-                  className={`py-3 px-4 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-2 shadow-2xs cursor-pointer ${
-                    projectContext?.briefFrozenAt
-                      ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <Check className={`w-4 h-4 ${projectContext?.briefFrozenAt ? 'text-white' : 'text-slate-400'}`} />
-                  <span>{projectContext?.briefFrozenAt ? 'Brief Locked' : 'Lock Design Brief'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleContextChange('designApprovedAt', projectContext?.designApprovedAt ? null : Date.now())}
-                  className={`py-3 px-4 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-2 shadow-2xs cursor-pointer ${
-                    projectContext?.designApprovedAt
-                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <Check className={`w-4 h-4 ${projectContext?.designApprovedAt ? 'text-white' : 'text-slate-400'}`} />
-                  <span>{projectContext?.designApprovedAt ? 'Design Cleared' : 'Approve Render GFC'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleContextChange('handoverDate', projectContext?.handoverDate ? null : Date.now())}
-                  className={`py-3 px-4 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-2 shadow-2xs cursor-pointer ${
-                    projectContext?.handoverDate
-                      ? 'bg-[#3D52A0] border-[#3D52A0] text-white shadow-sm'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <Check className={`w-4 h-4 ${projectContext?.handoverDate ? 'text-white' : 'text-slate-400'}`} />
-                  <span>{projectContext?.handoverDate ? 'Handed Over' : 'Mark Handover'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* AI RISK SCAN REPORT MODAL */}
       <AnimatePresence>

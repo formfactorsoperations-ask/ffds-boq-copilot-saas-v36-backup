@@ -1,30 +1,37 @@
-import React, { useState } from "react";
-import Tabs from './ui/Tabs';
+/*
+  Execution & Site: the site control room, quality & snags, and meetings & reports.
+
+  These used to be one screen with five tabs, two of which had their own
+  sub-tabs, and three tools with a switch inside that: five levels from the
+  stage to the electrical plan, and eight rows of tabs for a new user to learn
+  (plan item 9). Each is now its own line in the project sidebar, and a screen
+  stacks its tools as summary-first sections (components/site/SectionStack),
+  opening the one that needs someone.
+
+  Where the other two tabs went:
+  - 3D Renders & Drawings sits under Project Hub > Drawings, with the drawings.
+  - Procurement sits under Selections & orders, beside the purchase orders it
+    read from the same list.
+*/
+import React, { useEffect, useMemo, useState } from "react";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { ClipboardList, FileCheck2, Zap, ListChecks, FileText, BarChart3 } from "lucide-react";
 import { ProjectContext, FullBoqItem } from "../types";
 import WeeklyPulseManager from "./ops/WeeklyPulseManager";
 import DecisionTracker from "./ops/DecisionTracker";
-import DesignDocumentsManager from "./ops/DesignDocumentsManager";
 import PreHandoverChecklist from "./ops/PreHandoverChecklist";
 import ExecutionWorkspace from "./ExecutionWorkspace";
 import { MomActionTracker } from "./ops/MomActionTracker";
-import ProcurementTab from "./ProcurementTab";
 import SnagListManager from "./ops/SnagListManager";
-import {
-  LayoutDashboard,
-  Camera,
-  Users,
-  ShieldCheck,
-  FolderOpen,
-  FileCheck2,
-  IndianRupee,
-  ClipboardList,
-  MessageSquare,
-  Sparkles,
-  Activity,
-  Image,
-  FileText
-} from "lucide-react";
+import SectionStack, { type StackSection } from "./site/SectionStack";
 import { useOrg } from "../contexts/OrgContext";
+import { db } from "../services/firebaseClient";
+import { trackedActions } from "../lib/minutes";
+import {
+  snagLine, checklistLine, electricalLine, minutesLine, weeklyLine, firstToOpen, type SectionLine,
+} from "../lib/siteSections";
+
+export type SiteView = "control" | "quality" | "meetings" | "decisions";
 
 interface SiteOpsTabProps {
   projectContext: ProjectContext;
@@ -36,29 +43,38 @@ interface SiteOpsTabProps {
   decisionLedger?: any[];
   activeProject?: any;
   onProjectUpdate?: (updatedProject: any) => void;
-  onAddCalculatedItem?: (
-    name: string,
-    category: string,
-    qty: number,
-    unit: string,
-    roomId: string,
-  ) => void;
-  initialModule?:
-    | "execution"
-    | "decision-tracker"
-    | "action-tracker"
-    | "weekly-reports"
-    | "design-docs"
-    | "tiling"
-    | "electrical"
-    | "carpentry"
-    | "checklist"
-    | "vault"
-    | "setup"
-    | "workspace"
-    | "procurement"
-    | "snags";
+  onAddCalculatedItem?: (name: string, category: string, qty: number, unit: string, roomId: string) => void;
+  /** Which screen: the route decides (site-ops, site-quality, site-meetings, record-decision). */
+  view?: SiteView;
+  /** A section to open instead of the one that needs someone, e.g. from an old link. */
+  focus?: string | null;
   onNavigateToTab?: (tab: string) => void;
+}
+
+/* Minutes counts for the closed section line; the tracker keeps its own listener on the same query. */
+function useMinutesLine(projectId: string, studioId: string | undefined, enabled: boolean): SectionLine {
+  const [moms, setMoms] = useState<any[] | null>(null);
+  useEffect(() => {
+    if (!enabled || !projectId || !studioId) return;
+    try {
+      const q = query(collection(db, `organizations/${studioId}/projects/${projectId}/moms`), orderBy("createdAt", "desc"));
+      return onSnapshot(q, (snap) => setMoms(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setMoms([]));
+    } catch {
+      setMoms([]);
+      return undefined;
+    }
+  }, [projectId, studioId, enabled]);
+  return useMemo(() => {
+    if (moms === null) return { summary: "Loading the minutes…", tone: "none" };
+    const tracked = trackedActions(moms);
+    const open = tracked.filter((a) => !a.done);
+    return minutesLine({
+      meetings: moms.length,
+      open: open.length,
+      overdue: open.filter((a) => a.overdue).length,
+      toConfirm: moms.filter((m) => m.status === "shared" || m.status === "correction_requested").length,
+    });
+  }, [moms]);
 }
 
 const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
@@ -70,310 +86,117 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
   decisionLedger,
   activeProject,
   onProjectUpdate,
-  onAddCalculatedItem,
-  initialModule = "workspace",
+  view = "control",
+  focus = null,
   onNavigateToTab,
 }) => {
   const { orgData } = useOrg();
+  const studioId = orgData?.tenantId || "demo-tenant-01";
+  const projectName =
+    projectContext?.name || (projectContext as any)?.projectName || projectContext?.clientName || "Project";
+  const minutes = useMinutesLine(projectId, studioId, view === "meetings");
 
-  // Simplified and consolidated 5 execution modules
-  const [activeModule, setActiveModule] = useState<
-    | "workspace"
-    | "vault"
-    | "logs"
-    | "quality"
-    | "procurement"
-  >(() => {
-    if (
-      initialModule === "design-docs" ||
-      initialModule === "vault"
-    ) {
-      return "vault";
+  const sections: StackSection[] = useMemo(() => {
+    if (view === "quality") {
+      return [
+        {
+          id: "snags", title: "Snag list", icon: ClipboardList, line: snagLine(projectContext),
+          render: () => <SnagListManager projectContext={projectContext} setProjectContext={setProjectContext} embedded />,
+        },
+        {
+          id: "checklist", title: "Pre-handover checklist", icon: FileCheck2, line: checklistLine(projectContext),
+          render: () => (
+            <PreHandoverChecklist projectContext={projectContext} setProjectContext={setProjectContext} boq={boq}
+              onNavigateToTab={onNavigateToTab} mode="checklist" embedded />
+          ),
+        },
+        {
+          id: "electrical", title: "Electrical points check", icon: Zap, line: electricalLine(projectContext),
+          render: () => (
+            <PreHandoverChecklist projectContext={projectContext} setProjectContext={setProjectContext} boq={boq}
+              onNavigateToTab={onNavigateToTab} mode="electrical-plan" embedded />
+          ),
+        },
+      ];
     }
-    if (initialModule === "checklist" || initialModule === "snags") {
-      return "quality";
+    if (view === "meetings") {
+      return [
+        {
+          id: "minutes", title: "Minutes and actions", icon: ListChecks, line: minutes,
+          render: () => (
+            <MomActionTracker projectId={projectId} projectContext={projectContext} studioId={studioId}
+              projectContextName={projectName} embedded />
+          ),
+        },
+        {
+          id: "weekly", title: "Weekly reports", icon: FileText, line: weeklyLine(projectContext),
+          render: () => (
+            <WeeklyPulseManager projectContext={projectContext} setProjectContext={setProjectContext}
+              activeProject={activeProject} mode="reports" embedded />
+          ),
+        },
+        {
+          id: "journey", title: "Journey book and report trends", icon: BarChart3,
+          line: { summary: "Every week's progress in one place, to share at handover", tone: "none" },
+          render: () => (
+            <WeeklyPulseManager projectContext={projectContext} setProjectContext={setProjectContext}
+              activeProject={activeProject} mode="dashboard" embedded />
+          ),
+        },
+      ];
     }
-    if (
-      initialModule === "tiling" ||
-      initialModule === "electrical" ||
-      initialModule === "carpentry" ||
-      initialModule === "workspace"
-    ) {
-      return "workspace";
-    }
-    if (
-      initialModule === "decision-tracker" ||
-      initialModule === "action-tracker" ||
-      initialModule === "weekly-reports"
-    ) {
-      return "logs";
-    }
-
-    return "workspace";
-  });
-
-  // Sub-modules inside Logs & Communications
-/*
-  The Daily Site Feed is gone.
-
-  `ClientUpdatesManager` wrote `siteUpdates`, which the portal still renders in
-  its live feed -- so the five updates already published to Hiranandani's client
-  stay exactly where they are. What is removed is every way to post a NEW one:
-  the studio decided the write/publish/release round trip cost more than the
-  journal was worth, at seven updates across three projects in the app's life.
-
-  `siteUpdates` itself, its projection and the portal's rendering are all
-  untouched. Restoring the tool means re-adding an entry point, not rebuilding
-  a feature.
-*/
+    return [];
+  }, [view, projectContext, setProjectContext, boq, onNavigateToTab, minutes, projectId, studioId, projectName, activeProject]);
 
   /*
-    No "decision-tracker" member any more.
-
-    `initialModule === "decision-tracker"` takes the `isDirectModuleView`
-    early return above, so this state was only ever set to a value the tabbed
-    view could no longer render once the sub-tab was removed.
+    The section to open: the one asked for, else the first that needs someone.
+    Chosen once per screen, so ticking the last snag does not snap the page shut
+    under the cursor; `undefined` means "not chosen yet".
   */
-  const [logsSubMode, setLogsSubMode] = useState<"weekly-reports" | "action-tracker">(() => {
-    if (initialModule === "action-tracker") return "action-tracker";
-    return "weekly-reports";
-  });
+  const [open, setOpen] = useState<string | null | undefined>(focus ?? undefined);
+  const waiting = view === "meetings" && minutes.summary === "Loading the minutes…";
+  useEffect(() => {
+    if (open !== undefined || waiting || sections.length === 0) return;
+    setOpen(firstToOpen(sections.map((s) => ({ id: s.id, tone: s.line.tone }))));
+  }, [open, waiting, sections]);
 
-  // Sub-modules inside Quality & Checklists
-  const [qualitySubMode, setQualitySubMode] = useState<"checklists" | "snags">(() => {
-    if (initialModule === "checklist") return "checklists";
-    return "snags"; // Default to Snags as it's a critical new feature
-  });
-
-  const isDirectModuleView =
-    initialModule === "decision-tracker" ||
-    initialModule === "action-tracker" ||
-    initialModule === "weekly-reports";
-
-  if (isDirectModuleView) {
+  if (view === "decisions") {
     return (
       <div className="w-full animate-in fade-in duration-300">
-        {initialModule === "decision-tracker" && (
-          <DecisionTracker
-            projectContext={projectContext}
-            setProjectContext={setProjectContext}
-            projectId={projectId}
-            decisionLedger={decisionLedger || []}
-          />
-        )}
-        {initialModule === "action-tracker" && (
-          <MomActionTracker
-            projectId={projectId}
-            projectContext={projectContext}
-            studioId={orgData?.tenantId || "demo-tenant-01"}
-            projectContextName={
-              projectContext?.name ||
-              (projectContext as any)?.projectName ||
-              projectContext?.clientName ||
-              "Project"
-            }
-          />
-        )}
-        {initialModule === "weekly-reports" && (
-          <WeeklyPulseManager
-            projectContext={projectContext}
-            setProjectContext={setProjectContext}
-            activeProject={activeProject}
-          />
-        )}
+        <DecisionTracker projectContext={projectContext} setProjectContext={setProjectContext}
+          projectId={projectId} decisionLedger={decisionLedger || []} />
       </div>
     );
   }
 
-  return (
-    <div className="space-y-6 w-full animate-in fade-in duration-300">
-      {/*
-        Icons keep their meaning; the five different icon tints did not -- amber,
-        sky, emerald and rose on four adjacent tabs read as four unrelated
-        sections rather than one control.
-      */}
-      <Tabs
-        ariaLabel="Execution sections"
-        value={activeModule}
-        onChange={(id) => setActiveModule(id as any)}
-        className="w-full print:hidden"
-        items={[
-          { id: 'workspace', label: 'Site Control Room', icon: LayoutDashboard },
-          { id: 'vault', label: '3D Renders & Drawings', icon: Image },
-          { id: 'logs', label: 'MOMs & Weekly Reports', icon: MessageSquare },
-          { id: 'quality', label: 'Quality & Snag List', icon: ClipboardList },
-          { id: 'procurement', label: 'Procurement', icon: IndianRupee },
-        ]}
+  if (view === "quality" || view === "meetings") {
+    return (
+      <SectionStack
+        label={view === "quality" ? "Quality & snags" : "Meetings & reports"}
+        sections={sections}
+        open={open ?? null}
+        onOpen={setOpen}
       />
+    );
+  }
 
-      {/* Active Workspace Viewport */}
-      <div className="animate-in fade-in duration-400">
-        {/* 1. Site Workspace Control Room */}
-        {activeModule === "workspace" && (
-          <ExecutionWorkspace
-            projectContext={projectContext}
-            setProjectContext={setProjectContext}
-            projectId={projectId}
-            executionData={activeProject?.executionData}
-            decisionBrainOutput={decisionBrainOutput}
-            boq={boq}
-            onNavigateDrawings={() => {
-              setActiveModule("vault");
-            }}
-            onUpdateExecutionData={(newData) => {
-              if (onProjectUpdate) {
-                onProjectUpdate({
-                  ...(activeProject || { id: projectId, lastModified: Date.now() }),
-                  executionData: newData,
-                });
-              }
-            }}
-          />
-        )}
-
-        {/* 2. 3D Renders & Design Drawings */}
-        {activeModule === "vault" && (
-          <div className="w-full">
-            <DesignDocumentsManager
-              projectContext={projectContext}
-              setProjectContext={setProjectContext}
-            />
-          </div>
-        )}
-
-        {/* 3. Consolidated Logs & Communications */}
-        {activeModule === "logs" && (
-          <div className="space-y-6">
-            {/* Sub Mode Selector */}
-            <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-wrap items-center justify-start w-full gap-1.5 print:hidden">
-              <button
-                onClick={() => setLogsSubMode("weekly-reports")}
-                className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-                  logsSubMode === "weekly-reports"
-                    ? "bg-white text-slate-900 shadow-sm font-black border border-slate-200/60"
-                    : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
-                }`}
-              >
-                <FileText className="w-4 h-4 text-sky-600" />
-                Weekly Pulse Reports
-              </button>
-              
-              <button
-                onClick={() => setLogsSubMode("action-tracker")}
-                className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-                  logsSubMode === "action-tracker"
-                    ? "bg-white text-slate-900 shadow-sm font-black border border-slate-200/60"
-                    : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
-                }`}
-              >
-                <Users className="w-4 h-4 text-emerald-500" />
-                MOMs & Action Tracker
-              </button>
-
-              {/*
-                "Decisions & Sign-offs" used to sit here as a fourth tab.
-
-                It rendered the same DecisionTracker the Project Hub's Decisions
-                tile already opened -- one screen behind two doors, four levels
-                apart. Worse, this door is inside Execution & Site, which is
-                stage-gated: on a project still in design the stage is locked,
-                and the only decision on record was logged during design.
-
-                The hub tile is now the single way in. It is reachable at any
-                stage and carries the badge counting queried and waiting
-                decisions, which this tab never did.
-              */}
-            </div>
-
-            {/* Render selected Log module */}
-            <div className="space-y-6">
-
-              {logsSubMode === "weekly-reports" && (
-                <WeeklyPulseManager
-                  projectContext={projectContext}
-                  setProjectContext={setProjectContext}
-                  activeProject={activeProject}
-                />
-              )}
-
-              {logsSubMode === "action-tracker" && (
-                <MomActionTracker
-                  projectId={projectId}
-                  studioId={orgData?.tenantId || "demo-tenant-01"}
-                  projectContextName={
-                    projectContext?.name ||
-                    (projectContext as any)?.projectName ||
-                    projectContext?.clientName ||
-                    "Project"
-                  }
-                />
-              )}
-
-              {/* DecisionTracker now renders from App on the `record-decision`
-                  route, rather than through this tab's sub-mode. */}
-            </div>
-          </div>
-        )}
-
-        {/* 4. Quality & Snag List Management */}
-        {activeModule === "quality" && (
-          <div className="space-y-6">
-            {/* Sub Mode Selector */}
-            <div className="bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80 shadow-inner flex items-center justify-start max-w-md gap-1 print:hidden">
-              <button
-                onClick={() => setQualitySubMode("snags")}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
-                  qualitySubMode === "snags"
-                    ? "bg-white text-slate-900 shadow-sm font-black"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                <ClipboardList className="w-4 h-4 text-amber-500" />
-                Snag List Manager
-              </button>
-
-              <button
-                onClick={() => setQualitySubMode("checklists")}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
-                  qualitySubMode === "checklists"
-                    ? "bg-white text-slate-900 shadow-sm font-black"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                <FileCheck2 className="w-4 h-4 text-emerald-500" />
-                Quality Checklists
-              </button>
-            </div>
-
-            {/* Render selected Quality module */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
-              {qualitySubMode === "snags" ? (
-                <SnagListManager
-                  projectContext={projectContext}
-                  setProjectContext={setProjectContext}
-                />
-              ) : (
-                <PreHandoverChecklist
-                  projectContext={projectContext}
-                  setProjectContext={setProjectContext}
-                  boq={boq}
-                  onNavigateToTab={onNavigateToTab}
-                />
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 5. Procurement */}
-        {activeModule === "procurement" && (
-          <ProcurementTab
-            projectContext={projectContext}
-            setProjectContext={setProjectContext}
-            boq={boq}
-            projectId={projectId}
-          />
-        )}
-      </div>
+  return (
+    <div className="w-full animate-in fade-in duration-300">
+      <ExecutionWorkspace
+        projectContext={projectContext}
+        setProjectContext={setProjectContext}
+        projectId={projectId}
+        executionData={activeProject?.executionData}
+        decisionBrainOutput={decisionBrainOutput}
+        boq={boq}
+        onNavigateDrawings={() => onNavigateToTab?.("drawing-tracker")}
+        onUpdateExecutionData={(newData) => {
+          onProjectUpdate?.({
+            ...(activeProject || { id: projectId, lastModified: Date.now() }),
+            executionData: newData,
+          });
+        }}
+      />
     </div>
   );
 };

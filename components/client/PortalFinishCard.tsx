@@ -208,7 +208,7 @@ const PortalFinishCard: React.FC<Props> = ({ selection: m, onConfirm, onAsk, rea
           {!(m as any).studioReply && (
             <p className="mt-1.5 text-[11.5px] text-slate-500">
               {staffWords
-                ? 'Waiting on the studio to reply. Answer it on SOF & Selections.'
+                ? 'Waiting on the studio to reply. Answer it on Selections & Orders.'
                 : 'Your studio has this and will come back to you.'}
             </p>
           )}

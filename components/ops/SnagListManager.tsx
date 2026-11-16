@@ -61,9 +61,11 @@ const DEFAULT_TILES = [
 interface SnagListManagerProps {
   projectContext: ProjectContext;
   setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
+  /** Inside a Quality & snags section, which already names it: drop the title. */
+  embedded?: boolean;
 }
 
-export default function SnagListManager({ projectContext, setProjectContext }: SnagListManagerProps) {
+export default function SnagListManager({ projectContext, setProjectContext, embedded = false }: SnagListManagerProps) {
   // Local state for UI controls
   const [showAddForm, setShowAddForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -424,6 +426,7 @@ export default function SnagListManager({ projectContext, setProjectContext }: S
   return (
     <div className="space-y-6">
       {/* Section Header */}
+      {!embedded && (
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
         <div>
           <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
@@ -435,6 +438,7 @@ export default function SnagListManager({ projectContext, setProjectContext }: S
           </p>
         </div>
       </div>
+      )}
 
       {/* Overview Dashboard Banner */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">

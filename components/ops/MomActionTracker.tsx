@@ -79,6 +79,8 @@ interface MomActionTrackerProps {
   /** The project, for the client's contacts and the stage new minutes start in. */
   projectContext?: any;
   onOpenMom?: (momId: string) => void;
+  /** Inside the Meetings & reports section, which already names it: drop the title and the outer card. */
+  embedded?: boolean;
 }
 
 export function MomActionTracker({
@@ -87,6 +89,7 @@ export function MomActionTracker({
   projectContextName,
   projectContext,
   onOpenMom,
+  embedded = false,
 }: MomActionTrackerProps) {
   const { orgData } = useOrg();
   const newFlow = opsSettingsOf(orgData).newMinutes;
@@ -258,8 +261,9 @@ export function MomActionTracker({
   const segBtn = (on: boolean) => `px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${on ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative min-h-[550px] flex flex-col hud-panel-in">
-      <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className={embedded ? "relative flex flex-col -m-5" : "bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative min-h-[550px] flex flex-col hud-panel-in"}>
+      <div className={`p-5 sm:p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center gap-4 ${embedded ? "justify-end" : "justify-between"}`}>
+        {!embedded && (
         <div className="flex items-start gap-3 min-w-0">
           <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><ListChecks className="w-4 h-4" /></span>
           <div className="min-w-0">
@@ -269,6 +273,7 @@ export function MomActionTracker({
             </p>
           </div>
         </div>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <div className="inline-flex p-1 rounded-xl bg-slate-100" role="tablist" aria-label="Show">
             <button type="button" role="tab" aria-selected={viewMode === "actions"} className={segBtn(viewMode === "actions")} onClick={() => setViewMode("actions")}>Actions</button>

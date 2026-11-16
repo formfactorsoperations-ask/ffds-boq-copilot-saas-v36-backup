@@ -37,9 +37,11 @@ interface ExtendedDesignDocument extends DesignDocument {
 interface DesignDocumentsManagerProps {
     projectContext: ProjectContext;
     setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
+    /** Inside the Drawings section, which already names it: drop the title. */
+    embedded?: boolean;
 }
 
-export default function DesignDocumentsManager({ projectContext, setProjectContext }: DesignDocumentsManagerProps) {
+export default function DesignDocumentsManager({ projectContext, setProjectContext, embedded = false }: DesignDocumentsManagerProps) {
     const [isAdding, setIsAdding] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
@@ -243,7 +245,8 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
 
             {/* Metrics Dashboard & High-Density Action Bar */}
             <div className="bg-white/90 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-4">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className={`flex flex-col lg:flex-row lg:items-center gap-4 ${embedded ? 'justify-end' : 'justify-between'}`}>
+                    {!embedded && (
                     <div>
                         <div className="flex items-center gap-2">
                             <span className="text-[10px] uppercase font-bold tracking-wider text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200/60">
@@ -257,6 +260,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                             Centralized repository for high-resolution 3D perspectives, GFC working sheets, and 2D layouts. All published files automatically reflect on the Client Portal.
                         </p>
                     </div>
+                    )}
 
                     <button 
                         onClick={() => setIsAdding(!isAdding)}
