@@ -6,15 +6,13 @@ import { showSuccessWithNext } from './SuccessWithNextToast';
 import { Item, ProjectContext, ProposalTier, AIStrategy, MaterialSuggestion, TimelinePhase, LeadProfile, DecisionBrainOutput, Room } from '../types';
 import { generateStandardPackages, TemplateData, resolveActiveTemplate, ensureRoomsExistForTemplate, detectRoomType, roomFamily } from '../lib/standardPackages';
 import { ensureScopeRooms, uniqueRoomNames, polishRoomNames } from '../lib/scopeBuckets';
-import { SparklesIcon, PencilIcon, ArrowRightIcon, UploadIcon, ListIcon } from './Icons';
-import { FFDSLogo } from './FFDSLogo';
 import ProjectContextCard from './ProjectContextCard';
 import { analyzeFloorPlan, isAiAvailable, generateProjectTimeline, generateMaterialMoodBoard, generateTieredBoqPackages, estimateRoomSizes } from '../services/geminiService';
 import { id as generateId } from '../lib/utils';
-import { motion } from 'framer-motion';
 import { AI_STRATEGIES } from '../constants';
 import { FullBoqItem, BoqItem } from '../types'; // Import necessary types
-import Card from './shared/Card'; // Import Card component
+import { Panel, Button, Chip, Segmented, IconChip, LABEL, INPUT } from './ui/kit';
+import { Rocket, Sparkles, Pencil, Upload, Layers, List, ArrowRight } from '@/lib/lucide-shim';
 import { INITIAL_BANK } from '../constants';
 
 interface ProjectSetupWizardProps {
@@ -39,21 +37,6 @@ type SetupMethod = 'manual' | 'floorplan';
 
 import { useOrg } from '../contexts/OrgContext';
 import { engagementOf, isFeeOnly } from '../lib/engagement';
-
-const container = {
-    hidden: { opacity: 0 },
-    show: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.1
-        }
-    }
-};
-
-const item = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100 } }
-};
 
 const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
   const { orgData } = useOrg();
@@ -421,282 +404,196 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       }
   };
 
-  const MotionDiv = motion.div as any;
-  const MotionButton = motion.button as any;
+
+  /*
+    The wizard in the console's own look (DESIGN.md "Screen kit",
+    standardisation PR 10). It used to be a world of its own: the studio logo
+    and "Create New Project" at display size, centred step titles with their
+    own progress bars, upper-case blue buttons and a purple AI card. Now one
+    slim row says which step this is, and each step is made of the kit's
+    cards, switches and buttons. Every handler is the one it was.
+  */
+  const STEPS = [
+    { n: 0, label: 'How to start' },
+    { n: 1, label: 'Project details' },
+    { n: 3, label: 'Options' },
+  ];
+  const stepIndex = STEPS.findIndex((st) => st.n === step);
+  const CHOICE = 'relative text-left bg-white rounded-2xl border border-slate-200 shadow-sm p-5 transition-all hover:border-[#3D52A0]/40 hover:shadow-md disabled:opacity-50 disabled:pointer-events-none';
 
   return (
-    <div className="space-y-10 max-w-5xl mx-auto">
-      
-      {/* STEP 0: METHOD SELECTION - THE "LAUNCHER" */}
+    <div className="w-full max-w-5xl space-y-4 pb-20">
+      {/* One row: where the setup is, and a way out when the brief is being modified. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <ol className="flex flex-wrap items-center gap-2" aria-label="Setup steps">
+          {STEPS.map((st, i) => (
+            <li key={st.n} className="flex items-center gap-2" aria-current={i === stepIndex ? 'step' : undefined}>
+              {i > 0 && <span className="w-4 h-px bg-slate-300" aria-hidden />}
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${i === stepIndex ? 'bg-[#3D52A0] text-white' : i < stepIndex ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-slate-100 text-slate-500'}`}>
+                <span className="tabular-nums">{i + 1}</span> {st.label}
+              </span>
+            </li>
+          ))}
+        </ol>
+        {onCancel && (
+          <div className="ml-auto"><Button size="sm" variant="quiet" onClick={onCancel}>Cancel</Button></div>
+        )}
+      </div>
+
+      {/* STEP 0: how to start */}
       {step === 0 && (
-          <div className="flex flex-col items-center justify-center min-h-[80vh]">
-              <MotionDiv 
-                initial={{ opacity: 0, y: -20 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                transition={{ duration: 0.6 }}
-                className="text-center mb-16"
-              >
-                  <FFDSLogo className="mb-6 scale-125" />
-                  {onCancel && (
-                      <button 
-                          onClick={onCancel}
-                          className="absolute top-8 right-8 px-4 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-full text-sm font-bold transition-colors"
-                      >
-                          Cancel
-                      </button>
-                  )}
-                  <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight mb-4">
-                      {onCancel ? 'Modify Project Brief' : 'Create New Project'}
-                  </h1>
-                  <p className="text-lg text-slate-500 max-w-xl mx-auto">
-                      Build data-driven interior proposals in minutes. Choose how you want to input the project details.
-                  </p>
-              </MotionDiv>
-
-              <MotionDiv 
-                variants={container}
-                initial="hidden"
-                animate="show"
-                className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl px-4"
-              >
-                  {/* AI Option */}
-                  <MotionButton 
-                    variants={item}
-                    whileHover={{ scale: 1.02, y: -5 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => { setSetupMethod('floorplan'); setStep(1); }} 
-                    className="relative bg-white border-2 border-sky-100 rounded-3xl p-8 text-left shadow-xl shadow-sky-500/10 hover:shadow-2xl hover:border-[#3D52A0]/50 transition-all group overflow-hidden"
-                  >
-                      <div className="absolute top-0 right-0 p-3">
-                          <span className="bg-[#3D52A0] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-md">Recommended</span>
-                      </div>
-                      <div className="w-14 h-14 bg-sky-50 rounded-2xl flex items-center justify-center mb-6 text-[#3D52A0] group-hover:scale-110 transition-transform">
-                          <SparklesIcon className="w-7 h-7" />
-                      </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-[#334486] transition-colors">AI Floor Plan Analysis</h3>
-                      <p className="text-sm text-slate-500 leading-relaxed">
-                          Upload a floor plan image. Our AI will automatically detect rooms, calculate areas, and prepare your BOQ structure.
-                      </p>
-                  </MotionButton>
-
-                  {/* Manual Option */}
-                  <MotionButton 
-                    variants={item}
-                    whileHover={{ scale: 1.02, y: -5 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => { setSetupMethod('manual'); setStep(1); }} 
-                    className="bg-white border-2 border-slate-100 rounded-3xl p-8 text-left shadow-lg hover:shadow-xl hover:border-slate-300 transition-all group"
-                  >
-                      <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mb-6 text-slate-600 group-hover:scale-110 transition-transform">
-                          <PencilIcon className="w-7 h-7" />
-                      </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-slate-700 transition-colors">Manual Entry</h3>
-                      <p className="text-sm text-slate-500 leading-relaxed">
-                          Start with a blank canvas. Manually define rooms and dimensions. Best for simple renovations or specific scope.
-                      </p>
-                  </MotionButton>
-              </MotionDiv>
-
-
+        <Panel
+          icon={Rocket}
+          title={onCancel ? 'Modify the project brief' : 'Set up the project'}
+          blurb="Choose how to put in the project's details. Either way, the next step is the brief and the rooms."
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button type="button" onClick={() => { setSetupMethod('floorplan'); setStep(1); }} className={`${CHOICE} hud-row-in`}>
+              <span className="absolute top-4 right-4"><Chip tone="brand">Recommended</Chip></span>
+              <IconChip icon={Sparkles} />
+              <h3 className="mt-4 font-bold text-slate-800">Read a floor plan</h3>
+              <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+                Upload a floor plan image. The AI finds the rooms, works out their areas and prepares the BOQ's structure.
+              </p>
+            </button>
+            <button type="button" onClick={() => { setSetupMethod('manual'); setStep(1); }} className={`${CHOICE} hud-row-in`} style={{ animationDelay: '40ms' }}>
+              <IconChip icon={Pencil} />
+              <h3 className="mt-4 font-bold text-slate-800">Enter it by hand</h3>
+              <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+                Start from a blank brief and set the rooms and sizes yourself. Best for a simple renovation or a narrow scope.
+              </p>
+            </button>
           </div>
+        </Panel>
       )}
 
-      {/* STEP 1: PROJECT CONTEXT */}
+      {/* STEP 1: project details */}
       {step === 1 && (
-        <MotionDiv initial={{opacity:0, x: 20}} animate={{opacity:1, x: 0}} className="space-y-8 pt-10">
-            {/* Header / Progress */}
-            <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-slate-900">Project Context</h2>
-                <div className="flex justify-center gap-2 mt-4">
-                    <div className="h-1.5 w-12 bg-blue-600 rounded-full"></div>
-                    <div className="h-1.5 w-4 bg-slate-200 rounded-full"></div>
+        <div className="space-y-4">
+          {setupMethod === 'floorplan' && (
+            <Panel icon={Upload} title="Upload the floor plan" blurb="The area and an image of the plan. Analyse it to fill in the rooms below.">
+              <div className="flex flex-col md:flex-row gap-4 md:items-end">
+                <div className="flex-1 w-full">
+                  <label htmlFor="wiz-area" className={`${LABEL} block`}>Project area (sq ft)</label>
+                  <input id="wiz-area" type="number" value={projectContext.area || ''} onChange={e => setProjectContext(p => ({ ...p, area: Number(e.target.value) }))} className={`${INPUT} mt-1`} placeholder="e.g. 1200" />
                 </div>
-            </div>
+                <div className="flex-1 w-full">
+                  <label htmlFor="wiz-plan" className={`${LABEL} block`}>Floor plan image</label>
+                  <input id="wiz-plan" type="file" onChange={handleFileChange} accept="image/*" className={`${INPUT} mt-1 py-1.5`} />
+                </div>
+                <Button variant="primary" icon={Sparkles} onClick={handleAnalyzeFloorplan} disabled={isLoading || !isAiAvailable()}>
+                  {isLoading ? loadingMessage : 'Analyse the plan'}
+                </Button>
+              </div>
+              {(planBase64 || projectContext.floorplanImage || projectContext.floorplanImageUrl) && (
+                <img
+                  src={planBase64 || projectContext.floorplanImage
+                    ? `data:image/jpeg;base64,${planBase64 || projectContext.floorplanImage}`
+                    : projectContext.floorplanImageUrl}
+                  alt="floor plan preview"
+                  className="mt-5 max-h-64 rounded-xl border border-slate-200"
+                />
+              )}
+              {planUploadError && (
+                <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  {planUploadError}
+                </p>
+              )}
+            </Panel>
+          )}
 
-            {setupMethod === 'floorplan' && (
-                <Card title="Upload Floor Plan" titleIcon={<UploadIcon className="w-4 h-4"/>}>
-                    <div className="flex flex-col md:flex-row gap-6 items-end">
-                        <div className="flex-1 w-full">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Project Area (sq ft)</label>
-                            <input type="number" value={projectContext.area || ''} onChange={e => setProjectContext(p => ({ ...p, area: Number(e.target.value) }))} className="w-full p-3 bg-white/50 border border-slate-200 rounded-xl mt-2 text-lg font-bold outline-none focus:ring-2 focus:ring-blue-200" placeholder="e.g. 1200" />
-                        </div>
-                        <div className="flex-1 w-full">
-                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Floor Plan Image</label>
-                             <input type="file" onChange={handleFileChange} accept="image/*" className="w-full p-2 border border-slate-200 rounded-xl mt-2 bg-white/50" />
-                        </div>
-                         <button onClick={handleAnalyzeFloorplan} disabled={isLoading || !isAiAvailable()} className="px-6 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition-all disabled:bg-slate-400">
-                            {isLoading ? loadingMessage : 'Analyze Plan'}
-                         </button>
-                    </div>
-                     {(planBase64 || projectContext.floorplanImage || projectContext.floorplanImageUrl) && (
-                       <img
-                         src={planBase64 || projectContext.floorplanImage
-                           ? `data:image/jpeg;base64,${planBase64 || projectContext.floorplanImage}`
-                           : projectContext.floorplanImageUrl}
-                         alt="floor plan preview"
-                         className="mt-6 max-h-64 rounded-xl shadow-md border border-white/50 mx-auto"
-                       />
-                     )}
-                     {planUploadError && (
-                       <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                         {planUploadError}
-                       </p>
-                     )}
-                </Card>
+          <ProjectContextCard projectContext={projectContext} setProjectContext={setProjectContext} aiStrategy={'balanced'} hideExecutionControls={true} />
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+            <Button onClick={() => setStep(0)}>Back</Button>
+            {/* A fee-only project has no BOQ options to generate: it opens straight onto the project. */}
+            {isFeeOnly(engagementOf(projectContext)) ? (
+              <Button variant="primary" icon={ArrowRight} onClick={handleStartManual} disabled={!isContextComplete}>
+                Create the project
+              </Button>
+            ) : (
+              <Button variant="primary" icon={ArrowRight} onClick={() => setStep(3)} disabled={!isContextComplete}>
+                Next: generate the options
+              </Button>
             )}
-             
-             <ProjectContextCard projectContext={projectContext} setProjectContext={setProjectContext} aiStrategy={'balanced'} hideExecutionControls={true} />
-             
-             <div className="flex justify-center gap-4 pt-4">
-                <button onClick={() => setStep(0)} className="px-8 py-4 bg-white text-slate-600 font-bold rounded-2xl hover:bg-slate-50 transition-all shadow-sm border border-slate-200">Back</button>
-                {/* A fee-only project has no BOQ options to generate: it opens straight onto the project. */}
-                {isFeeOnly(engagementOf(projectContext)) ? (
-                  <button
-                      onClick={handleStartManual}
-                      disabled={!isContextComplete}
-                      className="px-10 py-4 btn-primary text-white font-bold rounded-2xl shadow-xl transition-all flex items-center gap-2"
-                  >
-                      Create the project <ArrowRightIcon className="w-5 h-5" />
-                  </button>
-                ) : (
-                <button 
-                    onClick={() => setStep(3)} // SKIPPED STEP 2
-                    disabled={!isContextComplete} 
-                    className="px-10 py-4 btn-primary text-white font-bold rounded-2xl shadow-xl transition-all flex items-center gap-2"
-                >
-                    Next: Generate Options <ArrowRightIcon className="w-5 h-5" />
-                </button>
-                )}
-             </div>
-        </MotionDiv>
+          </div>
+        </div>
       )}
 
-      {/* STEP 3: GENERATION (LOGICALLY STEP 2 NOW) */}
+      {/* STEP 3 (the second step the user sees): the first options */}
       {step === 3 && (
-          <MotionDiv initial={{opacity:0, scale: 0.95}} animate={{opacity:1, scale: 1}} className="max-w-4xl mx-auto space-y-8 pt-10">
-              
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-slate-900">Generation Strategy</h2>
-                <div className="flex justify-center gap-2 mt-4">
-                    <div className="h-1.5 w-4 bg-emerald-500 rounded-full"></div>
-                    <div className="h-1.5 w-12 bg-blue-600 rounded-full"></div>
+        <div className="space-y-4">
+          <Panel icon={Layers} title="Generate the options" blurb="Choose how the proposal's options are built. Every line can be edited afterwards in the BOQ Editor.">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <p className={LABEL}>Proposal</p>
+                <div className="mt-1.5">
+                  <Segmented
+                    label="Proposal mode"
+                    size="sm"
+                    value={proposalMode}
+                    options={[{ id: 'single', label: 'Single option' }, { id: 'tiered', label: 'Tiered options' }]}
+                    onChange={(m) => {
+                      setProposalMode(m);
+                      setProjectContext(p => ({ ...p, proposalMode: m }));
+                    }}
+                  />
                 </div>
               </div>
+              <div>
+                <label htmlFor="wiz-theme" className={`${LABEL} block`}>Design theme</label>
+                <select id="wiz-theme" value={theme} onChange={e => setTheme(e.target.value)} className={`${INPUT} mt-1.5 bg-white cursor-pointer`}>
+                  {['modern', 'minimalist', 'classic', 'industrial', 'bohemian', 'luxury'].map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                </select>
+              </div>
+              <div>
+                <p className={LABEL}>AI persona, for AI options</p>
+                <div className="mt-1.5">
+                  <Segmented
+                    label="AI persona"
+                    size="sm"
+                    value={selectedStrategy}
+                    options={AI_STRATEGIES.map(s => ({ id: s.id, label: s.name }))}
+                    onChange={(id) => setSelectedStrategy(id as AIStrategy)}
+                  />
+                </div>
+              </div>
+            </div>
 
-              <Card title="Generation Engine">
-                   <div className="p-2">
-                       <p className="text-slate-600 mb-8">Select how you want to build the proposal options.</p>
-                       
-                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                            <div className="space-y-2">
-                                <label className="font-bold text-slate-700">Proposal Mode</label>
-                                <div className="grid grid-cols-2 gap-2 h-[58px]">
-                                    {(['single', 'tiered'] as const).map(m => (
-                                        <button
-                                            key={m}
-                                            type="button"
-                                            onClick={() => {
-                                                setProposalMode(m);
-                                                setProjectContext(p => ({ ...p, proposalMode: m }));
-                                            }}
-                                            className={`px-3 rounded-xl border text-center transition-all font-bold text-[10px] flex items-center justify-center uppercase tracking-wider leading-tight
-                                                ${proposalMode === m 
-                                                    ? 'bg-blue-50 border-blue-500 text-blue-800 ring-1 ring-blue-200 shadow-sm' 
-                                                    : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                                                }
-                                            `}
-                                        >
-                                            {m === 'single' ? 'Single Option' : 'Tiered Options'}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button type="button" onClick={handleGenerateTemplates} disabled={isLoading} className={`${CHOICE} hud-row-in`}>
+                <span className="absolute top-4 right-4"><Chip tone="brand">Fastest · recommended</Chip></span>
+                <IconChip icon={List} />
+                <h3 className="mt-4 font-bold text-slate-800">Use the standard templates</h3>
+                <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+                  Makes {proposalMode === 'single' ? 'one option (Comfort Upgrade)' : 'three tiers (Essential, Comfort, Harmony)'} straight away from the studio's standard specifications for {projectContext.config}.
+                </p>
+              </button>
+              <button type="button" onClick={handleGenerateAI} disabled={isLoading || !isAiAvailable()} className={`${CHOICE} hud-row-in`} style={{ animationDelay: '40ms' }}>
+                <span className="absolute top-4 right-4"><Chip tone="slate">Flexible · tailored</Chip></span>
+                <IconChip icon={Sparkles} />
+                <h3 className="mt-4 font-bold text-slate-800">Ask AI to build them</h3>
+                <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+                  Gemini reads this room list and the client's brief and builds {proposalMode === 'single' ? 'one custom option' : 'three custom packages'} from scratch.
+                </p>
+              </button>
+            </div>
 
-                            <div className="space-y-2">
-                                <label className="font-bold text-slate-700">Design Theme</label>
-                                <select value={theme} onChange={e => setTheme(e.target.value)} className="w-full p-4 border border-slate-200 rounded-xl bg-slate-50 font-medium text-sm outline-none focus:ring-2 focus:ring-blue-200 cursor-pointer h-[58px]">
-                                    {['modern', 'minimalist', 'classic', 'industrial', 'bohemian', 'luxury'].map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-                                </select>
-                            </div>
-                            
-                            <div className="space-y-2">
-                                <label className="font-bold text-slate-700">AI Persona (for Custom Gen)</label>
-                                <div className="grid grid-cols-3 gap-1 h-[58px]">
-                                    {AI_STRATEGIES.map(s => (
-                                        <button
-                                            key={s.id}
-                                            type="button"
-                                            onClick={() => setSelectedStrategy(s.id as AIStrategy)}
-                                            className={`rounded-xl border text-center transition-all flex flex-col items-center justify-center p-1
-                                                ${selectedStrategy === s.id 
-                                                    ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-200 text-blue-800' 
-                                                    : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                                                }
-                                            `}
-                                        >
-                                            <span className="text-base mb-0.5">{s.icon}</span>
-                                            <span className="text-[8px] font-bold uppercase tracking-wider leading-none">{s.name}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                       </div>
+            {isLoading && (
+              <p className="mt-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+                <span className="w-4 h-4 border-2 border-[#3D52A0] border-t-transparent rounded-full animate-spin" aria-hidden />
+                {loadingMessage}
+              </p>
+            )}
+          </Panel>
 
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            
-                            <button 
-                                onClick={handleGenerateTemplates} 
-                                disabled={isLoading} 
-                                className="relative group p-6 bg-white border-2 border-slate-200 rounded-3xl text-left hover:border-blue-500 hover:shadow-xl transition-all disabled:opacity-50"
-                            >
-                                <div className="absolute top-4 right-4 text-blue-600 bg-blue-50 p-2 rounded-lg">
-                                    <ListIcon className="w-6 h-6" />
-                                </div>
-                                <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-700">Use Standard Templates</h3>
-                                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                                    Instantly generates {proposalMode === 'single' ? '1 option (Comfort Upgrade)' : '3 tiers (Essential, Comfort, Harmony)'} using standard firm specifications for {projectContext.config}.
-                                </p>
-                                <div className="mt-4 text-xs font-bold text-blue-600 bg-blue-50 inline-block px-2 py-1 rounded">Fastest • Recommended</div>
-                            </button>
-
-                            <button 
-                                onClick={handleGenerateAI} 
-                                disabled={isLoading || !isAiAvailable()} 
-                                className="relative group p-6 bg-white border-2 border-slate-200 rounded-3xl text-left hover:border-purple-500 hover:shadow-xl transition-all disabled:opacity-50"
-                            >
-                                <div className="absolute top-4 right-4 text-purple-600 bg-purple-50 p-2 rounded-lg">
-                                    <SparklesIcon className="w-6 h-6" />
-                                </div>
-                                <h3 className="text-lg font-bold text-slate-800 group-hover:text-purple-700">Ask AI to Create</h3>
-                                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                                    Gemini will analyze your exact room list and client brief to build {proposalMode === 'single' ? 'a unique custom option' : '3 unique custom packages'} from scratch.
-                                </p>
-                                <div className="mt-4 text-xs font-bold text-purple-600 bg-purple-50 inline-block px-2 py-1 rounded">Flexible • Tailored</div>
-                            </button>
-
-                        </div>
-
-                        {isLoading && (
-                            <div className="mt-8 text-center animate-in fade-in zoom-in">
-                                <div className="inline-flex items-center gap-3 bg-white px-6 py-3 rounded-full shadow-lg border border-slate-100">
-                                    <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                                    <span className="font-bold text-slate-700">{loadingMessage}</span>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="mt-8 border-t border-slate-100 pt-6">
-                             <button 
-                                onClick={handleStartManual} 
-                                disabled={isLoading} 
-                                className="w-full py-4 bg-slate-50 text-slate-500 border border-slate-200 font-bold rounded-2xl hover:bg-white hover:text-slate-800 hover:border-slate-300 transition-all flex items-center justify-center gap-2"
-                            >
-                               Skip Generation & Start Manual BOQ <ArrowRightIcon className="w-4 h-4"/>
-                            </button>
-                        </div>
-                   </div>
-              </Card>
-          </MotionDiv>
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+            <Button onClick={() => setStep(1)} disabled={isLoading}>Back</Button>
+            <Button variant="quiet" icon={ArrowRight} onClick={handleStartManual} disabled={isLoading}>
+              Skip, and start a manual BOQ
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
