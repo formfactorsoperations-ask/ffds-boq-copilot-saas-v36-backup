@@ -487,9 +487,9 @@
     "mono": 3
   },
   "components/client/TermsDocketPage.tsx": {
-    "tinyPx": 12,
-    "offPalette": 18,
-    "mono": 6
+    "tinyPx": 11,
+    "offPalette": 6,
+    "mono": 3
   },
   "components/common/DigitalSignatureDocket.tsx": {
     "tinyPx": 1,
