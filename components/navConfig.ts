@@ -90,7 +90,9 @@ export const NAV_CONFIG: NavStage[] = [
          hands off to the editor. The rail used to list the dead end first. */
       { label: "Pricing & Tiers", route: "ops", money: true },
       { label: "BOQ Editor", route: "boq-editor" },
-      { label: "Health Check & Audit", route: "analytics", money: true }
+      /* Was Health Check & Audit (retired: nothing on it was actionable). The id
+         stays "analytics" so saved tabs, role lists and links keep working. */
+      { label: "Money & Offers", route: "analytics", money: true }
     ]
   },
   {
@@ -316,7 +318,7 @@ export const ALWAYS_ON_BAND: NavItem[] = [
  * of a stage's screens.
  *
  * The rail is already in working order -- Brief & Site, then Pricing & Tiers,
- * BOQ Editor, Health Check, then the proposal, the agreements and site -- but
+ * BOQ Editor, Money & Offers, then the proposal, the agreements and site -- but
  * nothing on screen said so: after creating a project, the only way to learn
  * what came next was to hover the menu. This walks the same order, across
  * stages, skipping what this person cannot open (hidden for their role or the

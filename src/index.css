@@ -4,6 +4,7 @@
 @import "./print.css";
 @import "../components/projectHeader/projectHeader.css";
 @import "../components/projectHome/projectHome.css";
+@import "../components/projectNav/projectSidebar.css";
 
 /* Tailwind v4 reads its theme from CSS, not tailwind.config.js -- there is no
    @config directive here, so the fontFamily block in that file was never being

@@ -69,7 +69,7 @@ const OnboardingKitPage = lazyWithRetry(() => import("./components/client/Onboar
 const EmailDraftsTab = lazyWithRetry(() => import("./components/EmailDraftsTab"));
 const SiteOpsTab = lazyWithRetry(() => import("./components/SiteOpsTab"));
 const ClientTab = lazyWithRetry(() => import("./components/client/ClientTab"));
-const AnalyticsTab = lazyWithRetry(() => import("./components/AnalyticsTab"));
+const MoneyOffersTab = lazyWithRetry(() => import("./components/money/MoneyOffersTab"));
 const OperationsTab = lazyWithRetry(() => import("./components/OperationsTab"));
 const ProjectHistory = lazyWithRetry(() => import("./components/ProjectHistory"));
 const PaymentCalculatorTab = lazyWithRetry(() => import("./components/PaymentCalculatorTab"));
@@ -103,6 +103,7 @@ const PeoplePage = lazyWithRetry(() => import("./components/people/PeoplePage"))
 /* Whole tabs, loaded when first opened rather than with the app (each renders inside the tab's Suspense). */
 const DesignDeskTab = lazyWithRetry(() => import("./components/drawingReview/DesignDeskTab"));
 const StartProjectModal = lazyWithRetry(() => import("./components/projects/StartProjectModal"));
+const BoqSlideOver = lazyWithRetry(() => import("./components/pricing/BoqSlideOver"));
 const DataPrivacyPage = lazyWithRetry(() => import("./components/studio/DataPrivacyPage"));
 const SupportDeskPage = lazyWithRetry(() => import("./components/studio/SupportDeskPage"));
 const TermsOfUsePage = lazyWithRetry(() => import("./components/studio/TermsOfUsePage"));
@@ -199,6 +200,9 @@ export default function App() {
   const [showWizardOverride, setShowWizardOverride] = useState(false);
   /* The New Project window (components/projects/StartProjectModal). */
   const [startingProject, setStartingProject] = useState(false);
+  /* Pricing & Tiers' "Edit BOQ": the option's BOQ over the comparison (components/pricing/BoqSlideOver). */
+  const [boqDrawerOpen, setBoqDrawerOpen] = useState(false);
+  useEffect(() => { if (activeTab !== "ops") setBoqDrawerOpen(false); }, [activeTab]);
   useEffect(() => {
     const handleTabChange = (e: any) => {
         if (e.detail) {
@@ -2809,6 +2813,44 @@ export default function App() {
   const showFloatingBar =
     hasProjectData && PROJECT_WORKFLOW_ROUTES.includes(activeTab);
 
+  /* The BOQ Editor, on its own tab and in Pricing & Tiers' slide-over (components/pricing/BoqSlideOver). */
+  const renderBoqEditor = () => (
+                        <StudioDashboard
+                          onStartRevision={() => setActiveTab("revision-studio")}
+                          projectContext={projectContext}
+                          setProjectContext={setProjectContext}
+                          tiers={tiersWithCalculatedSummaries}
+                          setTiers={setTiers}
+                          activeTierId={activeTierId}
+                          bank={bank}
+                          aiStrategy={aiStrategy}
+                          onViewInBank={handleViewInBank}
+                          onSaveProject={handleSaveNow}
+                          projectId={activeInternalId || ""}
+                          projectArchitecture={projectArchitecture}
+                          onUpgradeArchitecture={async () => {
+                                  if (activeInternalId) {
+                                      const fullProject: FullProjectData = {
+                                          id: activeInternalId,
+                                          architecture: projectArchitecture,
+                                          lastModified: Date.now(),
+                                          context: projectContext,
+                                          tiers: tiersWithCalculatedSummaries,
+                                          activeTierId,
+                                          activeProject,
+                                          materials: materialSuggestions,
+                                          timeline: timelinePhases,
+                                          leadProfile,
+                                          decisionBrainOutput,
+                                      };
+                                      await db.upgradeLegacyProject(fullProject);
+                                      setProjectArchitecture('canonical');
+                                      alert("Project architecture upgraded successfully! Backend rules and triggers will now run.");
+                                  }
+                              }}
+                        />
+  );
+
   if (appMode === "loading" || !isDataLoaded) {
     return (
       <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#f8fafc] select-none overflow-hidden relative">
@@ -3531,42 +3573,7 @@ export default function App() {
                       )}
 
                       {/* IN_BLOCK_1_STUDIO_DASHBOARD */}
-                      {activeTab === "boq-editor" && (
-                        <StudioDashboard
-                          onStartRevision={() => setActiveTab("revision-studio")}
-                          projectContext={projectContext}
-                          setProjectContext={setProjectContext}
-                          tiers={tiersWithCalculatedSummaries}
-                          setTiers={setTiers}
-                          activeTierId={activeTierId}
-                          bank={bank}
-                          aiStrategy={aiStrategy}
-                          onViewInBank={handleViewInBank}
-                          onSaveProject={handleSaveNow}
-                          projectId={activeInternalId || ""}
-                          projectArchitecture={projectArchitecture}
-                          onUpgradeArchitecture={async () => {
-                                  if (activeInternalId) {
-                                      const fullProject: FullProjectData = {
-                                          id: activeInternalId,
-                                          architecture: projectArchitecture,
-                                          lastModified: Date.now(),
-                                          context: projectContext,
-                                          tiers: tiersWithCalculatedSummaries,
-                                          activeTierId,
-                                          activeProject,
-                                          materials: materialSuggestions,
-                                          timeline: timelinePhases,
-                                          leadProfile,
-                                          decisionBrainOutput,
-                                      };
-                                      await db.upgradeLegacyProject(fullProject);
-                                      setProjectArchitecture('canonical');
-                                      alert("Project architecture upgraded successfully! Backend rules and triggers will now run.");
-                                  }
-                              }}
-                        />
-                      )}
+                      {activeTab === "boq-editor" && renderBoqEditor()}
                       {activeTab === "leadiq" && (
                         <LeadBrainTab
                           projectContext={projectContext}
@@ -3801,17 +3808,16 @@ export default function App() {
                         />
                       )}
                       {activeTab === "analytics" && (
-                        <AnalyticsTab
-                          boq={
-                            activeProject ? executionBoq : fullBoqForActiveTier
-                          }
-                          setBoq={setBoqForActiveTier}
-                          bank={bank}
-                          activeTab={activeTab}
-                          aiStrategy={aiStrategy}
+                        /* Money & Offers replaced Health Check & Audit; the route id stays for saved links. */
+                        <MoneyOffersTab
                           tiers={tiersWithCalculatedSummaries}
+                          bank={bank}
                           projectContext={projectContext}
-                          currentUserRole={currentRole}
+                          setProjectContext={setProjectContext}
+                          activeTierId={activeTierId}
+                          projects={visibleProjects}
+                          projectId={activeInternalId || undefined}
+                          readOnly={!holdsFinanceRole(currentRoles?.length ? currentRoles : currentRole)}
                         />
                       )}
                       {(activeTab === "site-ops" ||
@@ -3901,7 +3907,16 @@ export default function App() {
                           projects={visibleProjects}
                           projectId={activeInternalId || undefined}
                           templates={templates}
+                          onEditBoq={(tierId) => { setActiveTierId(tierId); setBoqDrawerOpen(true); }}
                         />
+                      )}
+                      {activeTab === "ops" && boqDrawerOpen && (
+                        <BoqSlideOver
+                          title={tiers.find((t) => t.id === activeTierId)?.name || "Option"}
+                          onClose={() => setBoqDrawerOpen(false)}
+                        >
+                          {renderBoqEditor()}
+                        </BoqSlideOver>
                       )}
                       {activeTab === "history" && (
                         <ProjectHistory
@@ -4270,42 +4285,7 @@ export default function App() {
                         />
                       )}
 
-                      {activeTab === "boq-editor" && (
-                        <StudioDashboard
-                          onStartRevision={() => setActiveTab("revision-studio")}
-                          projectContext={projectContext}
-                          setProjectContext={setProjectContext}
-                          tiers={tiersWithCalculatedSummaries}
-                          setTiers={setTiers}
-                          activeTierId={activeTierId}
-                          bank={bank}
-                          aiStrategy={aiStrategy}
-                          onViewInBank={handleViewInBank}
-                          onSaveProject={handleSaveNow}
-                          projectId={activeInternalId || ""}
-                          projectArchitecture={projectArchitecture}
-                          onUpgradeArchitecture={async () => {
-                                  if (activeInternalId) {
-                                      const fullProject: FullProjectData = {
-                                          id: activeInternalId,
-                                          architecture: projectArchitecture,
-                                          lastModified: Date.now(),
-                                          context: projectContext,
-                                          tiers: tiersWithCalculatedSummaries,
-                                          activeTierId,
-                                          activeProject,
-                                          materials: materialSuggestions,
-                                          timeline: timelinePhases,
-                                          leadProfile,
-                                          decisionBrainOutput,
-                                      };
-                                      await db.upgradeLegacyProject(fullProject);
-                                      setProjectArchitecture('canonical');
-                                      alert("Project architecture upgraded successfully! Backend rules and triggers will now run.");
-                                  }
-                              }}
-                        />
-                      )}
+                      {activeTab === "boq-editor" && renderBoqEditor()}
                       {activeTab === "leadiq" && (
                         <LeadBrainTab
                           projectContext={projectContext}
@@ -4539,17 +4519,16 @@ export default function App() {
                         />
                       )}
                       {activeTab === "analytics" && (
-                        <AnalyticsTab
-                          boq={
-                            activeProject ? executionBoq : fullBoqForActiveTier
-                          }
-                          setBoq={setBoqForActiveTier}
-                          bank={bank}
-                          activeTab={activeTab}
-                          aiStrategy={aiStrategy}
+                        /* Money & Offers replaced Health Check & Audit; the route id stays for saved links. */
+                        <MoneyOffersTab
                           tiers={tiersWithCalculatedSummaries}
+                          bank={bank}
                           projectContext={projectContext}
-                          currentUserRole={currentRole}
+                          setProjectContext={setProjectContext}
+                          activeTierId={activeTierId}
+                          projects={visibleProjects}
+                          projectId={activeInternalId || undefined}
+                          readOnly={!holdsFinanceRole(currentRoles?.length ? currentRoles : currentRole)}
                         />
                       )}
                       {(activeTab === "site-ops" ||
@@ -4639,7 +4618,16 @@ export default function App() {
                           projects={visibleProjects}
                           projectId={activeInternalId || undefined}
                           templates={templates}
+                          onEditBoq={(tierId) => { setActiveTierId(tierId); setBoqDrawerOpen(true); }}
                         />
+                      )}
+                      {activeTab === "ops" && boqDrawerOpen && (
+                        <BoqSlideOver
+                          title={tiers.find((t) => t.id === activeTierId)?.name || "Option"}
+                          onClose={() => setBoqDrawerOpen(false)}
+                        >
+                          {renderBoqEditor()}
+                        </BoqSlideOver>
                       )}
                     </>
                   ) : (

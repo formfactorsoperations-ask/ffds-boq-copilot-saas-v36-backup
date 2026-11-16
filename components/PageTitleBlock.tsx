@@ -8,6 +8,12 @@ import FlipText from './ui/flip-text';
 
 interface Props {
   route: string;
+  /**
+   * Inside a project the shell's merged row already names the screen and shows
+   * its figures (ProjectWorkspace HeaderFigures), so only the page's own views
+   * and actions are left to show here, and nothing at all when it has none.
+   */
+  compact?: boolean;
   /** The page's name when the project calls the screen something else (a design-only project's GFC Release). */
   title?: string;
   subtitle?: string;
@@ -26,7 +32,7 @@ interface Props {
  * the block survives all four themes. Never add `font-[...]` — it defeats the
  * font switcher in Studio Settings.
  */
-const PageTitleBlock: React.FC<Props> = ({ route, title, subtitle }) => {
+const PageTitleBlock: React.FC<Props> = ({ route, title, subtitle, compact }) => {
   const base = getPageMeta(route);
   const meta = base && (title || subtitle) ? { ...base, title: title || base.title, subtitle: subtitle ?? base.subtitle } : base;
   const { badge, vitals, views, actions, hidden } = usePageHeaderSlots();
@@ -35,6 +41,17 @@ const PageTitleBlock: React.FC<Props> = ({ route, title, subtitle }) => {
 
   const hasTail = Boolean(views || actions);
   const hasVitals = Boolean(vitals && vitals.length);
+
+  if (compact) {
+    if (!hasTail) return null;
+    return (
+      <div className="flex items-center justify-end gap-2 flex-wrap mb-3 print:hidden">
+        <LiveStamp match={(n) => n.route === route || AREA_TAB[n.area] === route} />
+        {views}
+        {actions}
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-x-4 gap-y-2 flex-wrap pb-3 mb-4 border-b border-slate-200 print:hidden">

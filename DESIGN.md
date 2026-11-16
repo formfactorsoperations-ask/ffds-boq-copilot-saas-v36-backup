@@ -401,6 +401,64 @@ the brand, slate, and rose/amber/emerald for state. Light only: the owner chose 
   WhatsApp-style preview beside the editable text.
 - Everything stops under `prefers-reduced-motion`.
 
+### Project sidebar (approved 16 Nov 2026)
+
+Inside a project there is no header of rows any more. The owner tried the options as clickable
+prototypes and chose the quiet sidebar, with animated Lucide icons and collapse on click
+(`components/projectNav/ProjectSidebar.tsx`, styles in `projectSidebar.css`). From the top:
+
+- **Studio home** and the **bell**, always on screen (never inside a menu).
+- **The project**: its tile with a progress ring, name, client · place · area, and its status (click to
+  change it); Details and the team; the next step ("Next · 35% · Agreement Signed").
+- **Jump to…** (Ctrl/Cmd K): every screen of the project by name.
+- **Hub**, then **Journey**: the six stages on a line that fills to where the project is; the stage
+  it is at has a pulsing ring and NOW; locked stages show a lock and shake when clicked; the
+  selected stage opens to show its screens. Then the **Project Hub**, with its counts.
+- **The person** at the bottom: one row; its menu holds the studio's screens.
+
+It collapses to a 76px icon rail on a click of the round edge button or Ctrl/Cmd B. Collapsed,
+every icon names itself on hover, a stage pops out its screens, and counts become dots. Its edge
+can be dragged to any width from 200 to 400px; narrower than 150px snaps it to icons; a double
+click resets it. Open or icons, width and folded sections are remembered on the device. On a phone
+it is a drawer opened from the page bar.
+
+Over the page there is one slim bar: where you are (stage / screen), the page's badge and figures,
+what has just changed, and the hide-figures eye. A page's own view switchers and actions keep a slim
+row at the top of the page (`PageTitleBlock compact`). The studio's top tabs keep their title row.
+
+Motion and icons (the owner asked to go beyond the console kit here): every stage and screen has its
+own Lucide icon, and each moves on hover in its own way (a bounce, a swing, a spin, a rewind; some
+draw themselves). A white highlight slides to the screen you are on. Counts pop in. Everything stops
+under `prefers-reduced-motion`. Same font and brand colour.
+
+### Pricing & Tiers motion (approved 15 Nov 2026)
+
+The owner approved Pricing & Tiers as one grid (layouts D and E, 15 Nov 2026) and asked for
+"some animations and cool icons too"; on 16 Nov they asked for less scrolling and livelier motion.
+It uses the People motion kit (`components/people/PeopleBits.tsx`) and the Ops Desk card motion
+(`cardV`, `deskSectionV` in `components/opsDesk/DeskBits.tsx`), with the same fonts and colours.
+Only `components/pricing/` and the Pricing & Tiers screen (`components/TierManager.tsx`) use it.
+
+- One card per option, side by side. Under them, ONE view at a time from a switcher (Where the money
+  goes, What's different, Offers & payments, Margin, Versions & contract), not a page of stacked sections.
+- Each option carries an `IconTile` medal by its place in price: a sprout (lowest), a gem, a crown
+  (highest). Its margin is a `Ring` that fills from empty, amber below the studio median or the 20% floor.
+- Its price plate (price, ring, parts bar) tilts to the pointer (`Tilt`). The name, versions, Approve
+  and the buttons around it do not tilt, so a click always lands where it is aimed.
+- What an option is made of is one bar in four shades of the brand (Carpentry, Functional, Civil,
+  Others), filling in one after another, with an icon per part: a hammer, a bolt, a brick wall, a box.
+- Rows in the views carry trade icons (a chef's hat for the kitchen, a paint roller, a ceiling lamp,
+  drops for plumbing, a truck for site services...). A part opens to its trades; the chevron turns.
+- The view switcher's white pill glides to the chosen view (`layoutId`); its icon tips on hover. A
+  view turns up into place (`deskSectionV`) and its rows rise (`listV`, `rowV`).
+- The selected card gets the brand border and a rule along its top that glides to the card you pick.
+  The version pill glides between v1, v2... the same way.
+- Figures count up with `CountUp`; the exact price is beside it for screen readers. Bars grow from the left.
+- Approving an option draws a `DoneTick` and a `Confetti` burst on its card; Approve is `pp-press`.
+- Regenerate's icon turns half a circle on hover, and Add option's plus a quarter.
+- The ⋯ menu and the Tune margin dialog use `phd-pop` (and `phd-scrim` for the dialog).
+- Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel sizes.
+
 ### Notifications motion (approved 22 Oct 2026)
 
 The owner chose four of the fifteen notification patterns in the round-two

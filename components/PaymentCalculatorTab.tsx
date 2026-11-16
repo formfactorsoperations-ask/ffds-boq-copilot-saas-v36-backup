@@ -271,11 +271,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const [localCashLimit, setCashLimit] = useState<number>(financials.taxLimitYearly);
     
     // Discounts
-    const [localDiscounts, setDiscounts] = useState<ProjectDiscount[]>(financials.discounts || []);
-    const [newDiscount, setNewDiscount] = useState<Partial<ProjectDiscount>>({
-        name: '', value: 0, type: 'percentage', target: 'execution'
-    });
-    const [showDiscountForm, setShowDiscountForm] = useState(false);
+    /* Offers and discounts are edited in Money & Offers (components/money/MoneyOffersTab); Money reads them. */
 
     // Historical Snapshot & Tier Versioning
     const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
@@ -395,7 +391,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             : localDesignGstEnabled;
 
     const initiationFee = isReadOnlyMode ? 0 : localInitiationFee;
-    const discounts = isReadOnlyMode ? [] : localDiscounts;
+    const discounts = (isReadOnlyMode ? [] : (financials.discounts || [])) as ProjectDiscount[];
 
     // Computed vitals for header bar
     const displayDesign = selectedHistoricalEntry
@@ -861,7 +857,6 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         setExecutionGstEnabled(defaultFinancials.executionGstEnabled);
         setDesignGstEnabled(defaultFinancials.designGstEnabled);
         setCashLimit(defaultFinancials.taxLimitYearly);
-        setDiscounts([]);
 
         setProjectContext(prev => ({ 
             ...prev, 
@@ -1060,25 +1055,6 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         const { index, action, lockedTaxableBase } = confirmingException;
         executeInvoiceAction(index, action, lockedTaxableBase);
         setConfirmingException(null);
-    };
-
-    // --- DISCOUNT HANDLERS ---
-    const handleAddDiscount = () => {
-        if (!newDiscount.name || !newDiscount.value) return;
-        const discount: ProjectDiscount = {
-            id: generateId(),
-            name: newDiscount.name,
-            value: Number(newDiscount.value),
-            type: newDiscount.type || 'percentage',
-            target: newDiscount.target || 'execution'
-        };
-        setDiscounts([...discounts, discount]);
-        setNewDiscount({ name: '', value: 0, type: 'percentage', target: 'execution' });
-        setShowDiscountForm(false);
-    };
-
-    const handleRemoveDiscount = (id: string) => {
-        setDiscounts(discounts.filter(d => d.id !== id));
     };
 
     // --- SUB-STAGE HANDLERS ---
@@ -4098,86 +4074,25 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                     <div>
                                         <div className="flex justify-between items-center mb-3">
                                             <h4 className="text-xs font-black text-[#8E96B8] uppercase tracking-wider">Discounts & Deductions</h4>
-                                            <button 
-                                                onClick={() => setShowDiscountForm(!showDiscountForm)} 
+                                            <button
+                                                type="button"
+                                                onClick={() => window.dispatchEvent(new CustomEvent('change-tab', { detail: 'analytics' }))}
                                                 className="text-[#3D52A0] hover:text-[#334486] text-xs font-bold flex items-center gap-1"
                                             >
-                                                <PlusIcon className="w-3 h-3" /> Add Discount
+                                                Change in Money &amp; Offers ›
                                             </button>
                                         </div>
 
-                                        {showDiscountForm && (
-                                            <div className="mb-4 p-4 bg-[#F6F7FB] rounded-2xl border border-[#E2E5F0] shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2">
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <input 
-                                                        placeholder="e.g. Goodwill Discount" 
-                                                        value={newDiscount.name} 
-                                                        onChange={e => setNewDiscount({...newDiscount, name: e.target.value})}
-                                                        className="text-xs p-2 border border-[#E2E5F0] rounded-xl bg-white outline-none focus:border-[#8E96B8] font-medium"
-                                                    />
-                                                    <div className="flex">
-                                                        <input 
-                                                            type="number" 
-                                                            placeholder="Value" 
-                                                            value={newDiscount.value || ''} 
-                                                            onChange={e => setNewDiscount({...newDiscount, value: Number(e.target.value)})}
-                                                            className="w-full text-xs p-2 border border-[#E2E5F0] rounded-l-xl bg-white outline-none focus:border-[#8E96B8] tabular-nums"
-                                                        />
-                                                        <select 
-                                                            value={newDiscount.type}
-                                                            onChange={e => setNewDiscount({...newDiscount, type: e.target.value as any})}
-                                                            className="text-xs p-2 border-y border-r border-[#E2E5F0] rounded-r-xl bg-[#EDEFF7] text-[#3A416B] outline-none"
-                                                        >
-                                                            <option value="percentage">%</option>
-                                                            <option value="fixed">₹</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                                <div className="flex justify-between items-center gap-3">
-                                                    <select 
-                                                        value={newDiscount.target}
-                                                        onChange={e => setNewDiscount({...newDiscount, target: e.target.value as any})}
-                                                        className="text-xs p-2 border border-[#E2E5F0] rounded-xl bg-white text-[#3A416B] outline-none w-1/2"
-                                                    >
-                                                        <option value="execution">Apply On Execution</option>
-                                                        <option value="design">Apply On Design Fee</option>
-                                                    </select>
-                                                    <div className="flex gap-2">
-                                                        <button 
-                                                            onClick={() => setShowDiscountForm(false)}
-                                                            className="text-xs font-bold px-3 py-2 rounded-xl text-[#5A628A] hover:bg-[#EDEFF7]"
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                        <button 
-                                                            onClick={handleAddDiscount}
-                                                            className="text-xs font-bold bg-[#3D52A0] text-white px-4 py-2 rounded-xl hover:bg-[#334486] shadow-sm"
-                                                        >
-                                                            Apply
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
                                         <div className="space-y-2">
                                             {discounts.map(discount => (
-                                                <div key={discount.id} className="flex justify-between items-center text-xs p-3 bg-red-50/60 rounded-xl border border-red-100 group">
+                                                <div key={discount.id} className="flex justify-between items-center text-xs p-3 bg-red-50/60 rounded-xl border border-red-100">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-red-800 font-bold">{discount.name}</span>
                                                         <span className="text-[9px] text-red-600 bg-red-100/60 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">{discount.target}</span>
                                                     </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="font-extrabold text-red-700 tabular-nums">
-                                                            -{discount.type === 'percentage' ? `${discount.value}%` : formatCurrency(discount.value)}
-                                                        </span>
-                                                        <button 
-                                                            onClick={() => handleRemoveDiscount(discount.id)} 
-                                                            className="text-red-400 hover:text-red-700 transition-colors"
-                                                        >
-                                                            <DeleteIcon className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </div>
+                                                    <span className="font-extrabold text-red-700 tabular-nums">
+                                                        -{discount.type === 'percentage' ? `${discount.value}%` : formatCurrency(discount.value)}
+                                                    </span>
                                                 </div>
                                             ))}
                                             {discounts.length === 0 && (

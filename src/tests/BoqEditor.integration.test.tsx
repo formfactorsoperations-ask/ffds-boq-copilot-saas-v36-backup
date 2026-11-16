@@ -284,8 +284,8 @@ describe('Pricing & Tiers: one price per option', () => {
 
   it('an empty option says 0 items and 0% GM, not invented figures', () => {
     render(<PricingHarness />);
-    fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
-    expect(screen.getByText(/0\.0% GM • 0 items/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Add option' }));
+    expect(screen.getByText(/^0 items · 0\.0% GM$/)).toBeTruthy();
   });
 });
 
@@ -313,9 +313,15 @@ const otherProject = (id: string, name: string, area: number, gm: number) => ({
   tiers: [{ id: 't', name: 'T', timestamp: 1, boq: [], summary: { totalRevenue: 900000, totalSell: 820000, blendedGm: gm, itemCount: 14 } }],
 });
 
+/* Rename, Sync, Copy and Delete sit under each option's ⋯ menu on the grid (components/pricing/PricingGrid). */
+const openMore = (name: string) => fireEvent.click(screen.getByRole('button', { name: `More for ${name}` }));
+const renameFromMenu = (name: string) => { openMore(name); fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' })); };
+const openView = (name: string) => fireEvent.click(screen.getByRole('tab', { name: new RegExp(`^${name}`) }));
+
 describe('Pricing & Tiers: only real benchmarks', () => {
   it('with no other projects it says so, and invents none', () => {
     render(<TierHarness projects={[]} />);
+    openView('Margin');
     expect(screen.queryByText(/median/i)).toBeNull();
     expect(screen.queryByText(/Majiwada|Hiranandani/)).toBeNull();
     expect(screen.getByText('No other priced projects to compare yet')).toBeTruthy();
@@ -329,11 +335,12 @@ describe('Pricing & Tiers: only real benchmarks', () => {
       otherProject('p2', 'Thane 1BHK', 480, 24),
       otherProject('p3', 'Powai 3BHK', 1400, 30),
     ]} />);
-    expect(screen.getByText('studio median 24.0%')).toBeTruthy();
+    openView('Margin');
+    expect(within(screen.getByRole('region', { name: 'Margin' })).getByText('Studio median 24.0%')).toBeTruthy();
     expect(screen.getByText('Thane 1BHK')).toBeTruthy();
     expect(screen.getByText('Andheri 2BHK')).toBeTruthy();
     expect(screen.queryByText('Powai 3BHK')).toBeNull();
-    expect(screen.getByText(/pts vs studio median/)).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Margin' })).getAllByText(/^[▲▼] \d+\.\d pts$/).length).toBe(2);
   });
 });
 
@@ -341,7 +348,7 @@ describe('Pricing & Tiers: approving and syncing', () => {
   it('Approve records who approved it and when', () => {
     let state: any;
     render(<TierHarness probe={s => { state = s; }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve option' }));
     const ess = state.tiers.find((t: any) => t.id === 'ess');
     expect(ess.approval.by).toBe('Priya Shah');
     expect(screen.getByText(/approved by Priya Shah on/)).toBeTruthy();
@@ -351,11 +358,12 @@ describe('Pricing & Tiers: approving and syncing', () => {
   it('Sync to a different option keeps a snapshot of the booked contract', () => {
     let state: any;
     render(<TierHarness probe={s => { state = s; }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve option' }));
     const booked = state.ctx.financials.approvedExecutionValue;
     // Move to the other option and sync it.
     fireEvent.click(screen.getAllByText('Comfort Upgrade')[0]);
-    fireEvent.click(screen.getByRole('button', { name: /Sync to Payments & Revisions/ }));
+    openMore('Comfort Upgrade');
+    fireEvent.click(screen.getByRole('menuitem', { name: /Sync to Payments & Revisions/ }));
     expect(state.ctx.approvedTierId).toBe('com');
     expect(state.ctx.financials.paymentSnapshots).toEqual([
       expect.objectContaining({ tierId: 'ess', approvedExecutionValue: booked }),
@@ -368,7 +376,7 @@ describe('Pricing & Tiers: an approval can be reverted', () => {
   it('with nothing approved before, the option is a draft again and nothing is approved', () => {
     let state: any;
     render(<TierHarness probe={s => { state = s; }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve option' }));
     fireEvent.click(screen.getByRole('button', { name: 'Revert approval' }));
     expect(screen.getByTestId('revert-approval-confirm').textContent).toMatch(/Nothing will be approved/);
     fireEvent.click(screen.getByRole('button', { name: 'Revert to draft' }));
@@ -376,16 +384,16 @@ describe('Pricing & Tiers: an approval can be reverted', () => {
     const ess = state.tiers.find((t: any) => t.id === 'ess');
     expect(ess.lifecycleTag).toBe('Draft');
     expect(ess.approval).toBeUndefined();
-    expect(screen.getByRole('button', { name: 'Approve Option' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Approve option' })).toBeTruthy();
   });
 
   it('after a re-approval, the contract it replaced is the baseline again', () => {
     let state: any;
     render(<TierHarness probe={s => { state = s; }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve option' }));
     const booked = state.ctx.financials.approvedExecutionValue;
     fireEvent.click(screen.getAllByText('Comfort Upgrade')[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve option' }));
     fireEvent.click(screen.getByRole('button', { name: 'Revert approval' }));
     expect(screen.getByTestId('revert-approval-confirm').textContent).toMatch(/Essential Elegance becomes the approved baseline again/);
     fireEvent.click(screen.getByRole('button', { name: 'Revert to draft' }));
@@ -399,7 +407,7 @@ describe('Pricing & Tiers: an approval can be reverted', () => {
   it('Keep approval leaves it approved', () => {
     let state: any;
     render(<TierHarness probe={s => { state = s; }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve option' }));
     fireEvent.click(screen.getByRole('button', { name: 'Revert approval' }));
     fireEvent.click(screen.getByRole('button', { name: 'Keep approval' }));
     expect(state.ctx.approvedTierId).toBe('ess');
@@ -408,21 +416,21 @@ describe('Pricing & Tiers: an approval can be reverted', () => {
 });
 
 describe('Pricing & Tiers: renaming an option', () => {
-  it('the Rename button on the card renames it', () => {
+  it('Rename in the option\'s menu renames it', () => {
     let state: any;
     render(<TierHarness probe={s => { state = s; }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    renameFromMenu('Essential Elegance');
     const input = screen.getByRole('textbox', { name: 'Option name' });
     fireEvent.change(input, { target: { value: '  Essential Plus  ' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(state.tiers.find((t: any) => t.id === 'ess').name).toBe('Essential Plus');
   });
 
-  it('the pencil by the heading renames it, and an approved option can be renamed', () => {
+  it('double-clicking the name renames it, and an approved option can be renamed', () => {
     let state: any;
     render(<TierHarness probe={s => { state = s; }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Option' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Rename option' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve option' }));
+    fireEvent.doubleClick(screen.getAllByTitle('Double-click to rename')[0]);
     const input = screen.getByRole('textbox', { name: 'Option name' });
     fireEvent.change(input, { target: { value: 'Comfort Final' } });
     fireEvent.blur(input);
@@ -435,7 +443,7 @@ describe('Pricing & Tiers: renaming an option', () => {
     // An edit saved under the option's name, as edits were before they were kept by id.
     const overrides = { 'Hardware System': { 'Essential Elegance': 'Hettich soft-close', 'Comfort Upgrade': 'Ebco' } };
     render(<TierHarness probe={s => { state = s; }} ctx={{ proposalContent: { materials: { overrides } }, proposalContentByMode: { TURNKEY: { materials: { overrides } } } }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    renameFromMenu('Essential Elegance');
     const input = screen.getByRole('textbox', { name: 'Option name' });
     fireEvent.change(input, { target: { value: 'Essential Plus' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -445,35 +453,48 @@ describe('Pricing & Tiers: renaming an option', () => {
       expect(content.materials.overrides['Hardware System']).toEqual({ ess: 'Hettich soft-close', 'Comfort Upgrade': 'Ebco' });
     }
     // A second rename keeps the first name as the one it was created with.
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    renameFromMenu('Essential Plus');
     const again = screen.getByRole('textbox', { name: 'Option name' });
     fireEvent.change(again, { target: { value: 'Essential Max' } });
     fireEvent.keyDown(again, { key: 'Enter' });
     expect(state.tiers.find((t: any) => t.id === 'ess').originalName).toBe('Essential Elegance');
   });
 
-  it('Duplicate gives the copy the original\'s material spec edits, as its own', () => {
+  it('New version gives the version the original\'s material spec edits, as its own', () => {
     let state: any;
     const overrides = { 'Hardware System': { ess: 'Hettich soft-close' }, 'Paint Finish': { 'Essential Elegance': 'Royale Shyne' } };
     render(<TierHarness probe={s => { state = s; }} ctx={{ proposalContent: { materials: { overrides } }, proposalContentByMode: { TURNKEY: { materials: { overrides } } } }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
-    const copy = state.tiers.find((t: any) => t.name === 'Essential Elegance (Copy)');
-    expect(copy.parentTierId).toBe('ess');
+    fireEvent.click(screen.getAllByRole('button', { name: /New version/ })[0]);
+    const copy = state.tiers.find((t: any) => t.parentTierId === 'ess');
+    expect(copy.name).toBe('Essential Elegance');
     for (const content of [state.ctx.proposalContent, state.ctx.proposalContentByMode.TURNKEY]) {
       expect(content.materials.overrides['Hardware System']).toEqual({ ess: 'Hettich soft-close', [copy.id]: 'Hettich soft-close' });
       expect(content.materials.overrides['Paint Finish']).toEqual({ 'Essential Elegance': 'Royale Shyne', [copy.id]: 'Royale Shyne' });
     }
   });
 
+  it('Copy as a new option keeps the spec edits and the built-in specs, in a column of its own', () => {
+    let state: any;
+    const overrides = { 'Hardware System': { ess: 'Hettich soft-close' } };
+    render(<TierHarness probe={s => { state = s; }} ctx={{ proposalContent: { materials: { overrides } } }} />);
+    openMore('Essential Elegance');
+    fireEvent.click(screen.getByRole('menuitem', { name: /Copy as a new option/ }));
+    const copy = state.tiers.find((t: any) => t.name === 'Essential Elegance (Copy)');
+    expect(copy.parentTierId).toBeUndefined();
+    expect(copy.specsFrom).toBe('Essential Elegance');
+    expect(state.ctx.proposalContent.materials.overrides['Hardware System']).toEqual({ ess: 'Hettich soft-close', [copy.id]: 'Hettich soft-close' });
+    expect(screen.getAllByRole('article')).toHaveLength(3);
+  });
+
   it('a blank name, or Escape, keeps the old name', () => {
     let state: any;
     render(<TierHarness probe={s => { state = s; }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    renameFromMenu('Essential Elegance');
     let input = screen.getByRole('textbox', { name: 'Option name' });
     fireEvent.change(input, { target: { value: '   ' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(state.tiers.find((t: any) => t.id === 'ess').name).toBe('Essential Elegance');
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    renameFromMenu('Essential Elegance');
     input = screen.getByRole('textbox', { name: 'Option name' });
     fireEvent.change(input, { target: { value: 'Something else' } });
     fireEvent.keyDown(input, { key: 'Escape' });
