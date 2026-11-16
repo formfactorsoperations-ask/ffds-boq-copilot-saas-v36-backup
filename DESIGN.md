@@ -401,20 +401,35 @@ the brand, slate, and rose/amber/emerald for state. Light only: the owner chose 
   WhatsApp-style preview beside the editable text.
 - Everything stops under `prefers-reduced-motion`.
 
-### Project header: three rows (approved 16 Nov 2026)
+### Project sidebar (approved 16 Nov 2026)
 
-Inside a project the header was five rows (project bar, stages, sub-tabs, the Project Hub strip, and
-the page's title row) and took a third of the screen. The owner chose to merge them into three:
+Inside a project there is no header of rows any more. The owner tried the options as clickable
+prototypes and chose the quiet sidebar, with animated Lucide icons and collapse on click
+(`components/projectNav/ProjectSidebar.tsx`, styles in `projectSidebar.css`). From the top:
 
-1. The project bar, unchanged.
-2. The stages, unchanged.
-3. One row: the stage's sub-tabs on the left (or the screen's name where no sub-tab names it, as on
-   the Hub's screens), the page's badge and figures from `usePageHeader` beside them, and the Project
-   Hub on the right as icons with their counts (names on hover), then the eye and the bell.
+- **Studio home** and the **bell**, always on screen (never inside a menu).
+- **The project**: its tile with a progress ring, name, client · place · area, and its status (click to
+  change it); Details and the team; the next step ("Next · 35% · Agreement Signed").
+- **Jump to…** (Ctrl/Cmd K): every screen of the project by name.
+- **Hub**, then **Journey**: the six stages on a line that fills to where the project is; the stage
+  it is at has a pulsing ring and NOW; locked stages show a lock and shake when clicked; the
+  selected stage opens to show its screens. Then the **Project Hub**, with its counts.
+- **The person** at the bottom: one row; its menu holds the studio's screens.
 
-There is no title row under it: the highlighted sub-tab names the screen. A page's `views` and
-`actions` still show, in a slim row of their own at the top of the page (`PageTitleBlock compact`),
-and only when the page has some. The studio's top tabs keep their title row (above).
+It collapses to a 76px icon rail on a click of the round edge button or Ctrl/Cmd B. Collapsed,
+every icon names itself on hover, a stage pops out its screens, and counts become dots. Its edge
+can be dragged to any width from 200 to 400px; narrower than 150px snaps it to icons; a double
+click resets it. Open or icons, width and folded sections are remembered on the device. On a phone
+it is a drawer opened from the page bar.
+
+Over the page there is one slim bar: where you are (stage / screen), the page's badge and figures,
+what has just changed, and the hide-figures eye. A page's own view switchers and actions keep a slim
+row at the top of the page (`PageTitleBlock compact`). The studio's top tabs keep their title row.
+
+Motion and icons (the owner asked to go beyond the console kit here): every stage and screen has its
+own Lucide icon, and each moves on hover in its own way (a bounce, a swing, a spin, a rewind; some
+draw themselves). A white highlight slides to the screen you are on. Counts pop in. Everything stops
+under `prefers-reduced-motion`. Same font and brand colour.
 
 ### Pricing & Tiers motion (approved 15 Nov 2026)
 

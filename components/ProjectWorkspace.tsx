@@ -15,8 +15,9 @@ import ProjectTeamButton from './projectHeader/ProjectTeamButton';
 import StudioMenuButton from './projectHeader/StudioMenuButton';
 import './projectHeader/projectHeader.css';
 import PageTitleBlock from './PageTitleBlock';
+import ProjectSidebar, { type SidebarStage, type SidebarHubItem } from './projectNav/ProjectSidebar';
 import { usePageHeaderSlots } from '../contexts/PageHeaderContext';
-import { LogOut, Home, Building2, Users, BarChart3, Library, CreditCard } from '@/lib/lucide-shim';
+import { LogOut, Home, Building2, Users, BarChart3, Library, CreditCard, Menu } from '@/lib/lucide-shim';
 import ProjectStatusTransitionModal from './ProjectStatusTransitionModal';
 import { FloatingDock, FloatingDockItem } from './ui/floating-dock';
 import { useHubAlerts } from './ops/useHubAlerts';
@@ -59,6 +60,9 @@ const ENGAGEMENT_PAGE_TITLES: Partial<Record<string, Record<string, { title: str
   in the merged sub-tab row. They used to sit in a title row of their own under
   four header rows; the owner found the header taking a third of the screen.
 */
+/* "New Project · 14 Nov (2)" → "NP": the project's tile in the sidebar. */
+const initialsOf = (name: string) => (name.match(/[A-Za-z]+/g) || ['P']).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+
 const HeaderFigures: React.FC = () => {
   const { badge, vitals } = usePageHeaderSlots();
   if (!badge && !(vitals && vitals.length)) return null;
@@ -412,377 +416,104 @@ export function ProjectWorkspace({
     return null;
   };
 
+  /* What the project sidebar shows (components/projectNav/ProjectSidebar). */
+  const [mobileNav, setMobileNav] = useState(false);
+  useEffect(() => { setMobileNav(false); }, [activeTab]);
+  const workspaceStatus = WORKSPACE_STATUS_MAP[(projectContext.status && WORKSPACE_STATUS_MAP[projectContext.status]) ? projectContext.status : 'draft'];
+  const sidebarStages: SidebarStage[] = NAV.map(s => {
+    const screens = s.items.filter(i => !hiddenForRole(i)).map(i => ({ route: i.route, label: i.label, readOnly: !!accessBadge(i.route) }));
+    const locked = isStageLocked(s.stage);
+    return {
+      stage: s.stage, label: s.label, screens, locked,
+      lockNote: locked ? getLockNote(s.stage).text : undefined,
+      state: (s.stage < currentStage ? 'done' : s.stage === currentStage ? 'now' : 'todo') as SidebarStage['state'],
+    };
+  }).filter(s => !(isLimited && s.screens.length === 0));
+  const sidebarHub: SidebarHubItem[] = BAND.filter(item => !hiddenForRole(item)).map(item => {
+    let badge = item.statusBadge ? item.statusBadge(projectContext) : null;
+    if (!seesStudioFinance(currentRole) && badge) badge = badge.replace(/₹/g, '');
+    const readOnly = !!accessBadge(item.route);
+    return { route: item.route, label: item.label, badge, tone: readOnly ? 'warn' : (item.badgeTone ? item.badgeTone(projectContext) : null), readOnly };
+  });
+  const crumbParent = activeTab === 'dashboard' ? 'Project'
+    : BAND.some(i => i.route === activeTab) ? 'Project Hub'
+    : (NAV.find(s => s.items.some(i => i.route === activeTab))?.label || 'Project');
+
   /* The screen's name, for screens with no sub-tab to highlight (the Hub, the Project Hub's screens). */
   const screenTitle = (!isWizard && ENGAGEMENT_PAGE_TITLES[engagement]?.[activeTab]?.title)
     || getPageMeta(isWizard ? 'project-setup' : activeTab)?.title || '';
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
-      {/* Workspace Header .phead */}
-      {/* Workspace Sub-Header: Tier 2 Project Bar */}
-      <header className="bg-white border-b border-slate-200/80 shrink-0 shadow-2xs relative z-50">
-        {/* Same energy rail as the studio bar, so the two headers read as one
-            system rather than two unrelated surfaces. */}
-        <span aria-hidden="true" className="hud-rail absolute bottom-0 left-0 right-0 h-px z-10" />
-        {/*
-          Row 1 -- H1 from the header mockups: one bar that never wraps.
-
-          It used to be two clusters that wrapped onto three lines whenever the
-          Details panel opened, with four shortcut icons, a progress button and
-          the Designer picker all competing. Now the project's facts live in the
-          Details drawer, who works on it is the row of faces, the progress is
-          a ring with its next step, and the studio's own screens fold into one
-          menu.
-        */}
-        <div className="phd-enter flex items-center gap-2.5 sm:gap-3 px-4 lg:px-6 py-2.5 border-b border-slate-100 min-w-0">
-          <button
-            onClick={() => onLeaveProject?.()}
-            className="flex items-center gap-1 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer shrink-0"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            <span className="text-[13.5px] font-bold hidden sm:inline">Back</span>
+    <div className="flex h-full bg-slate-50">
+      {/* The project sidebar (components/projectNav/ProjectSidebar): it replaced the five header rows. */}
+      <ProjectSidebar
+        projectId={projectId}
+        activeTab={activeTab}
+        onGo={(route, stage) => {
+          if (stage) setSelectedStage(stage);
+          else if (route === 'dashboard' || BAND.some(i => i.route === route)) setSelectedStage(0);
+          setActiveTab(route);
+        }}
+        home={{ route: isLimited ? limitedHome : 'dashboard', label: isDesigner ? 'Drawings' : isLimited ? 'Messages' : 'Hub' }}
+        stages={sidebarStages}
+        selectedStage={activeTab === 'dashboard' || BAND.some(i => i.route === activeTab) ? null : selectedStage}
+        hub={sidebarHub}
+        counts={(route) => ({ needs: noted[route]?.needs || 0, unread: noted[route]?.unread || 0 })}
+        project={{
+          name: projectContext.name || 'Untitled Project',
+          sub: [projectContext.clientName || 'No client yet', projectContext.location, projectContext.area ? `${projectContext.area} sq ft` : ''].filter(Boolean).join(' · '),
+          initials: initialsOf(projectContext.name || 'Project'),
+        }}
+        status={{ label: workspaceStatus.label, disabled: isLimited, onClick: () => { if (!isLimited) setIsStatusModalOpen(true); } }}
+        progress={{
+          pct: Math.round(projectContext.journeySummary?.pct ?? journey.overall.pct ?? 0),
+          next: isLimited ? undefined : (journey.nextStep?.title || 'Up next'),
+          onClick: isLimited ? undefined : () => setIsFloatingWidgetOpen(v => !v),
+        }}
+        projectTools={<><ProjectContextTier projectContext={projectContext} /><ProjectTeamButton project={{ id: projectId, context: projectContext }} size="sm" align="left" /></>}
+        studioHome={{ label: 'Studio home', onClick: () => onLeaveProject?.(isLimited ? 'projects' : 'home') }}
+        bellProject={!isLimited ? {
+          name: [projectContext?.name || 'This project', projectContext?.clientName].filter(Boolean).join(' · '),
+          alerts: hubAlerts.alerts, onGo: setActiveTab, onDismiss: hubAlerts.dismiss,
+        } : undefined}
+        user={{ name: currentUserAuth?.displayName || (currentUserAuth?.email ? String(currentUserAuth.email).split('@')[0] : 'Signed in'), role: String(currentRole) }}
+        menu={[
+          { label: 'Projects', icon: Building2, onClick: () => onLeaveProject?.('projects') },
+          ...(!isLimited ? [{ label: 'Clients', icon: Users, onClick: () => onLeaveProject?.('clients') }] : []),
+          ...(seesStudioFinance(currentRole) ? [{ label: 'Reports', icon: BarChart3, onClick: () => onLeaveProject?.('reports') }] : []),
+        ]}
+        mobileOpen={mobileNav}
+        onMobileClose={() => setMobileNav(false)}
+      />
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* The page bar: where you are, the page's figures, and what has just changed. */}
+        <div className="h-14 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-3 min-w-0 relative z-30">
+          <button type="button" onClick={() => setMobileNav(true)} aria-label="Open the project menu" className="md:hidden w-9 h-9 grid place-items-center rounded-xl text-slate-600 hover:bg-slate-100">
+            <Menu className="w-5 h-5" />
           </button>
-
-          <button
-            onClick={() => {
-              setSelectedStage(0);
-              // A Designer has no project home; their base is the drawings.
-              setActiveTab(isLimited ? limitedHome : 'dashboard');
-            }}
-            className={`phd-lift flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12.5px] font-bold shrink-0 ${
-              selectedStage === 0 || BAND.some(i => i.route === activeTab) || activeTab === 'dashboard' || (isLimited && activeTab === limitedHome)
-                ? 'bg-[#3D52A0] text-white shadow-md shadow-[#3D52A0]/25'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <LayoutGrid className="w-4 h-4" />
-            {isDesigner ? 'Drawings' : isLimited ? 'Messages' : 'Hub'}
-          </button>
-
-          <div className="phd-tile hidden md:grid" aria-hidden="true">
-            <Building2 className="w-[18px] h-[18px] relative z-[1]" />
-          </div>
-
-          <div className="min-w-[80px] flex-1 sm:flex-initial leading-tight">
-            <h1 className="text-[15px] sm:text-[16.5px] font-extrabold text-slate-900 tracking-tight truncate">
-              {projectContext.name || 'Untitled Project'}
-            </h1>
-            <p className="text-[11.5px] text-slate-500 truncate">
-              {projectContext.clientName || 'No client yet'}
-              {projectContext.location ? ` · ${projectContext.location}` : ''}
-              {projectContext.area ? ` · ${projectContext.area} sq ft` : ''}
-            </p>
-          </div>
-
-          {(() => {
-            const rawStatus = projectContext.status;
-            const statusKey = (rawStatus && WORKSPACE_STATUS_MAP[rawStatus]) ? rawStatus : 'draft';
-            const statusStyle = WORKSPACE_STATUS_MAP[statusKey];
-            return (
-              <button
-                type="button"
-                // Changing a project's status is the studio's decision.
-                disabled={isLimited}
-                onClick={() => { if (!isLimited) setIsStatusModalOpen(true); }}
-                className={`group/statusBtn hidden sm:flex items-center gap-1.5 pl-2.5 pr-2 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-[0.1em] border shrink-0 transition-transform ${isLimited ? 'cursor-default' : 'hover:scale-105 cursor-pointer'} ${statusStyle.bg} ${statusStyle.color} ${statusStyle.border}`}
-                title={isLimited ? statusStyle.label : 'Change project lifecycle status & review downstream impact'}
-              >
-                <span className="phd-dot" />
-                <span>{statusStyle.label}</span>
-                {!isLimited && <ChevronDown className="w-2.5 h-2.5 opacity-60 group-hover/statusBtn:opacity-100 transition-opacity" />}
-              </button>
-            );
-          })()}
-
-          <ProjectContextTier projectContext={projectContext} />
-
-          <div className="hidden sm:block flex-1" />
-
-          <ProjectTeamButton project={{ id: projectId, context: projectContext }} />
-
-          {/* The project's next step and progress: the studio's to run. */}
-          {!isLimited && (
-            <button
-              onClick={() => setIsFloatingWidgetOpen(!isFloatingWidgetOpen)}
-              className="phd-lift hidden md:flex items-center gap-2.5 pl-1 pr-2.5 py-1 rounded-2xl border border-transparent hover:border-slate-200 hover:bg-slate-50 cursor-pointer shrink-0"
-              title="Project progress and the next step"
-            >
-              <ProgressRing pct={Math.round(projectContext.journeySummary?.pct ?? journey.overall.pct ?? 0)} />
-              <span className="text-left leading-tight max-w-[180px] hidden lg:block">
-                <span className="block text-[9.5px] font-extrabold uppercase tracking-[0.12em] text-slate-400">Next</span>
-                <span className="block text-[12.5px] font-bold text-slate-800 truncate">{journey.nextStep?.title || 'Up next'}</span>
-              </span>
-              <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isFloatingWidgetOpen ? 'rotate-90' : ''}`} />
-            </button>
-          )}
-
-          {/* The studio's own screens, folded into one menu. */}
-          <StudioMenuButton
-            items={[
-              { tab: 'home', label: 'Home', icon: Home, show: !isLimited },
-              { tab: 'projects', label: 'Projects', icon: Building2, show: true },
-              { tab: 'clients', label: 'Clients', icon: Users, show: !isLimited },
-              { tab: 'reports', label: 'Reports', icon: BarChart3, show: seesStudioFinance(currentRole) },
-            ].filter(i => i.show).map(({ show, ...i }) => i)}
-            onGo={(tab) => onLeaveProject?.(tab)}
-          />
-
-          {/* Who is signed in: name and role. */}
-          <div className="hidden lg:flex items-center gap-2 pl-3 border-l border-slate-200 shrink-0" title={currentUserAuth?.email || ''}>
-            <span className="text-[12px] font-extrabold text-slate-800 truncate max-w-[120px]">
-              {currentUserAuth?.displayName || (currentUserAuth?.email ? String(currentUserAuth.email).split('@')[0] : 'Signed in')}
-            </span>
-            <span className="text-[9.5px] font-extrabold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full bg-[#E8ECFB] text-[#3D52A0] whitespace-nowrap">
-              {currentRole}
-            </span>
-          </div>
-        </div>
-
-        {/* Row 2: Stages Row */}
-        <div className="bg-white border-b border-slate-200 px-4 lg:px-6 flex items-center flex-wrap w-full z-40 relative">
-
-
-          {/* Stages */}
-          <div className="flex items-center flex-1 py-2 min-w-0 flex-wrap xl:flex-nowrap gap-1.5 sm:gap-2 xl:gap-0">
-            {[1, 2, 3, 4, 5, 6].map((stg) => {
-              const isCompleted = stg < currentStage;
-              const isActive = stg === currentStage;
-              const isLocked = isStageLocked(stg);
-              const stageConfig = NAV.find(c => c.stage === stg);
-              const label = stageLabel(engagement, stg, STAGE_LABELS[stg] || `Stage ${stg}`);
-              const isSelectedStage = selectedStage === stg && !BAND.some(i => i.route === activeTab) && activeTab !== 'dashboard';
-              // The screens this person may open in the stage. A stage with none
-              // is left out for a Designer rather than offered as a dead end.
-              const openableItems = (stageConfig?.items || []).filter(item => !hiddenForRole(item));
-              if (isLimited && openableItems.length === 0) return null;
-
-              return (
-                <div key={stg} className="flex items-center shrink-0">
-                  <div className="relative group flex items-center">
-                    <button
-                      onClick={() => {
-                        if (openableItems.length > 0) {
-                          setSelectedStage(stg);
-                          setActiveTab(openableItems[0].route);
-                        }
-                      }}
-                      className={`relative flex items-center gap-1 sm:gap-1.5 transition-all duration-300 cursor-pointer shrink-0 py-1.5 px-2.5 sm:px-3 rounded-lg z-0 ${
-                        isSelectedStage
-                          ? 'text-white font-bold'
-                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 tracking-normal hover:tracking-[0.01em]'
-                      }`}
-                    >
-                      {isSelectedStage && (
-                          <div
-                              className="hud-reticle absolute inset-0 bg-gradient-to-b from-[#4C65B5] to-[#334486] rounded-lg -z-10 transition-all duration-300"
-                          />
-                      )}
-                      <span className={`relative w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-colors duration-300 ${
-                        isSelectedStage ? 'bg-white/20 text-white shadow-sm border border-white/30' :
-                        isCompleted ? 'bg-slate-100 text-slate-700' :
-                        isActive ? 'bg-slate-200 text-[#0F172A] border border-slate-300' :
-                        'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                      }`}>
-                        {isActive && (
-                          <span className="absolute inset-0 rounded-full ring-2 ring-slate-400 animate-ping opacity-75"></span>
-                        )}
-                        <span className="relative z-10">{stg}</span>
-                      </span>
-                      <span className="whitespace-nowrap text-[11px] xl:text-[13px] font-medium tracking-tight">
-                        {label}
-                      </span>
-                      {isLocked && <Lock className="w-3 h-3 text-slate-300 ml-0.5" />}
-                      <ChevronDown className="hidden md:block w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
-                      
-                      {isActive && (
-                        <span className="text-[8px] text-[#C5A85C] font-black uppercase tracking-widest ml-0.5 mt-0.5">
-                          NOW
-                        </span>
-                      )}
-                      {(() => { const c = notedIn(openableItems.map(i => i.route)); return <Count needs={c.needs} unread={c.unread} className="-top-1 -right-1 z-10" />; })()}
-                    </button>
-
-                    {/* Hover Dropdown */}
-                    {stageConfig && stageConfig.items.length > 0 && (
-                      <div className={`hidden md:block absolute top-full ${
-  stg >= 5 ? 'right-0' : stg === 1 ? 'left-0' : 'left-1/2 -translate-x-1/2'
-} mt-0 pt-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform translate-y-2 group-hover:translate-y-0 z-[100] min-w-[220px] pointer-events-none group-hover:pointer-events-auto`}>
-                        <div className="bg-white rounded-xl shadow-xl border border-slate-200/80 p-1.5 flex flex-col">
-                          <div className="px-3 py-2 border-b border-slate-100 mb-1 flex justify-between items-center">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
-                            <span className="text-[10px] font-medium text-slate-400">{openableItems.length} screens</span>
-                          </div>
-                          {stageConfig.items.map(item => {
-                            if (hiddenForRole(item)) return null;
-                            const isActiveItem = activeTab === item.route;
-                            return (
-                              <button
-                                key={item.route}
-                                onClick={() => {
-                                  setSelectedStage(stg);
-                                  setActiveTab(item.route);
-                                }}
-                                className={`text-left px-3 py-2 text-[13px] font-medium rounded-lg transition-colors flex justify-between items-center group/item ${
-                                  isActiveItem
-                                    ? 'bg-sky-50 text-[#334486]'
-                                    : 'text-slate-600 hover:bg-slate-50 hover:text-[#3D52A0]'
-                                }`}
-                              >
-                                <span className="flex items-center gap-1.5">
-                                  {item.label}
-                                  {accessBadge(item.route) && <Eye className="w-3.5 h-3.5 text-amber-600" aria-label="Read-only" />}
-                                  <span className="relative w-4 h-4"><Count needs={noted[item.route]?.needs || 0} unread={noted[item.route]?.unread || 0} className="-top-0.5 left-0" /></span>
-                                </span>
-                                {isActiveItem && <div className="w-1.5 h-1.5 rounded-full bg-[#3D52A0] shrink-0" />}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  {stg < 6 && <div className="hidden xl:block w-2 sm:w-4 lg:w-8 h-px bg-slate-200 shrink-0 mx-1 sm:mx-2" />}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/*
-          Row 3: the stage's screens, the page's figures, and the Project Hub,
-          in one row. They were two rows, with a third under them for the page's
-          name (already the highlighted sub-tab) and its figures; the owner
-          found the header taking a third of the screen. The hub keeps its
-          icons and counts; their names show on hover.
-        */}
-        <div className="bg-slate-50/60 border-b border-slate-200 px-4 lg:px-6 py-1.5 flex items-center gap-x-3 gap-y-2 flex-wrap min-h-[48px]">
-          <div className="flex items-center gap-2 flex-wrap min-w-0">
-            {(activeTab !== 'dashboard' && !BAND.some(i => i.route === activeTab) && selectedStage > 0 && activeStageConfig && activeStageConfig.items.length > 0) ? (
-              <>
-            {activeStageConfig.items.map(item => {
-              if (hiddenForRole(item)) return null;
-              const isActive = activeTab === item.route;
-              let badgeText = item.statusBadge ? item.statusBadge(projectContext) : null;
-              if (!seesStudioFinance(currentRole) && badgeText) {
-                badgeText = badgeText.replace(/₹/g, '');
-              }
-              return (
-                <button
-                  key={item.route}
-                  onClick={() => setActiveTab(item.route)}
-                  className={`relative px-3.5 py-1.5 rounded-full text-xs sm:text-[13px] font-semibold transition-all duration-200 flex items-center gap-1.5 cursor-pointer border ${
-                    isActive
-                      ? 'hud-reticle bg-gradient-to-b from-[#4C65B5] to-[#334486] text-white border-transparent'
-                      : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800 border-slate-200'
-                  }`}
-                  title={item.label}
-                >
-                  {isActive && <div className="w-1.5 h-1.5 rounded-full bg-cyan-300 shrink-0" />}
-                  <span className="tracking-tight">{item.label}</span>
-                  <Count needs={noted[item.route]?.needs || 0} unread={noted[item.route]?.unread || 0} className="-top-1.5 -right-1.5 z-10" />
-                  {accessBadge(item.route) && (
-                    <span
-                      title="Read-only for you"
-                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[9.5px] font-bold rounded-full ${
-                        isActive ? 'bg-white/25 text-white' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}
-                    >
-                      <Eye className="w-3 h-3" /> view
-                    </span>
-                  )}
-                  {badgeText && (
-                    <span className={`px-1.5 py-0.5 text-[9px] font-mono font-bold rounded-full ${
-                      isActive ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-500 border border-slate-200'
-                    }`}>
-                      {badgeText}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-              </>
-            ) : (
-              <h2 className="text-sm font-bold text-slate-800 whitespace-nowrap">{screenTitle}</h2>
-            )}
+          <div className="min-w-0 flex items-center gap-2">
+            <span className="hidden sm:inline text-[13px] text-slate-500 whitespace-nowrap">{crumbParent}</span>
+            <span className="hidden sm:inline text-slate-300">/</span>
+            <h1 className="text-base font-extrabold text-slate-800 tracking-tight truncate">{screenTitle}</h1>
           </div>
           <HeaderFigures />
-          <div className="ml-auto shrink-0 flex items-center gap-2 flex-wrap">
-            <FloatingDock
-              tooltipPosition="bottom"
-              alwaysShowLabels={false}
-              items={BAND.filter((item) => !(hiddenForRole(item))).map((item) => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.route || (item.route === 'dashboard' && activeTab === 'dashboard');
-                let badgeText = item.statusBadge ? item.statusBadge(projectContext) : null;
-                if (!seesStudioFinance(currentRole) && badgeText) {
-                  badgeText = badgeText.replace(/₹/g, '');
-                }
-                // R1: a Designer's read-only tabs say so on the tab itself.
-                const readOnly = !!accessBadge(item.route);
-                const badgeTone = readOnly ? 'warn' : (item.badgeTone ? item.badgeTone(projectContext) : null);
-                return {
-                  title: item.label,
-                  icon: Icon ? <Icon className="w-full h-full" /> : null,
-                  onClick: () => setActiveTab(item.route),
-                  badge: readOnly ? <Eye className="w-2.5 h-2.5" aria-label="Read-only" /> : badgeText,
-                  badgeTone: badgeTone,
-                  isActive,
-                };
-              })}
-              desktopClassName="h-auto bg-slate-200/50 border border-slate-200/80 px-1.5 py-1 gap-1 rounded-xl shadow-2xs"
-              mobileClassName=""
-            />
+          <div className="ml-auto shrink-0 flex items-center gap-2">
             <LiveStamp match={(n) => n.projectId === projectId} className="hidden lg:inline-flex" />
-            {/* Hide margins, costs and collections while the screen is shared (lib/figuresPrivacy). */}
             {holdsFinanceRole(currentRole) && <HideFiguresButton />}
-            {/* One bell: what reached you, and first what this project is waiting on. Those alerts lead to screens a Designer does not have. */}
-            <NotifyBell project={!isLimited ? {
-              name: [projectContext?.name || 'This project', projectContext?.clientName].filter(Boolean).join(' · '),
-              alerts: hubAlerts.alerts, onGo: setActiveTab, onDismiss: hubAlerts.dismiss,
-            } : undefined} />
-          </div>
-          {/*
-            "Your access" (R3 in the header mockups). A Designer changes drawings
-            and nothing else: every other screen they have is look-only
-            (ViewOnlyGuard below), their saves are switched off in dbService and
-            refused by the Firestore rules. This says so up front, where the
-            tabs are, instead of a yellow bar across every screen.
-          */}
-          {isDesigner && (
-            <div className="phd-pop shrink-0 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 shadow-2xs">
-              <div className="grid gap-1 text-[11.5px] leading-tight">
-                <span className="flex items-center gap-1.5 text-slate-700">
-                  <Pencil className="w-3.5 h-3.5 text-[#1F4D45]" />
-                  <b className="text-slate-900">You can edit:</b> Drawing Tracker
-                </span>
-                <span className="flex items-center gap-1.5 text-slate-600">
-                  <Eye className="w-3.5 h-3.5 text-amber-600" />
-                  <b className="text-slate-900">Read-only:</b> Brief &amp; Site, Design Gate, Timeline, Decisions
-                </span>
-              </div>
-              {!DESIGNER_EDITABLE_TABS.has(activeTab) && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab(limitedHome)}
-                  className="phd-lift px-3 py-1.5 rounded-xl bg-[#1F4D45] hover:bg-[#12332E] text-white text-[11.5px] font-extrabold whitespace-nowrap"
-                >
-                  Open Drawing Tracker
-                </button>
-              )}
-            </div>
-          )}
-          {/* Client Relations: the same note. Their own tools -- the Ops Desk and the follow-up log -- come next. */}
-          {isLimited && !isDesigner && (
-            <div className="phd-pop shrink-0 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 shadow-2xs">
-              <span className="flex items-center gap-1.5 text-[11.5px] leading-tight text-slate-600">
-                <Eye className="w-3.5 h-3.5 text-amber-600" />
-                <b className="text-slate-900">Read-only:</b> Messages, Timeline, Decisions, Drawings, Design Gate, Brief &amp; Site
+            {isLimited && !(isDesigner && DESIGNER_EDITABLE_TABS.has(activeTab)) && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700"
+                title={isDesigner ? 'You can edit the Drawing Tracker. Other screens are read-only for you.' : 'Messages, Timeline, Decisions, Drawings, Design Gate and Brief & Site are read-only for you.'}>
+                <Eye className="w-3 h-3" /> Read-only
               </span>
-            </div>
-          )}
+            )}
+            {isDesigner && !DESIGNER_EDITABLE_TABS.has(activeTab) && (
+              <button type="button" onClick={() => setActiveTab(limitedHome)} className="px-3 py-1.5 rounded-xl bg-[#3D52A0] hover:bg-[#334486] text-white text-xs font-bold whitespace-nowrap">
+                Open Drawing Tracker
+              </button>
+            )}
+          </div>
         </div>
 
-        </header>
 
       {/* Workspace Body */}
       <div className="flex flex-1 overflow-hidden min-w-0">
@@ -1092,6 +823,7 @@ export function ProjectWorkspace({
             </div>
           ) : children}
         </ViewOnlyGuard>
+      </div>
       </div>
       </div>
 
