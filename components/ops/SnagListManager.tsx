@@ -30,6 +30,7 @@ import {
   Download
 } from '@/lib/lucide-shim';
 import { formatINR } from "../../lib/utils";
+import { EmptyState } from '../ui/kit';
 
 // Trade categories with highly polished pre-set snag items for quick logging
 const DEFAULT_TILES = [
@@ -915,13 +916,14 @@ export default function SnagListManager({ projectContext, setProjectContext, emb
       {/* Snag Items List / Grid View */}
       <div className="space-y-3">
         {filteredSnags.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-12 text-center">
-            <ClipboardList className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm font-bold text-slate-500">No snag items match filters</p>
-            <p className="text-xs text-slate-400 mt-1">
-              Either your filters are too strict, or this site is completely snag-free!
-            </p>
-          </div>
+          <EmptyState
+            className="bg-white"
+            icon={ClipboardList}
+            title={snags.length === 0 ? 'No snags logged' : 'No snag matches these filters'}
+            text={snags.length === 0
+              ? 'Log one when the walkthrough finds something to put right. The client sees the list in their portal.'
+              : 'Clear a filter or the search to see the rest.'}
+          />
         ) : (
           filteredSnags.map((snag) => (
             <motion.div

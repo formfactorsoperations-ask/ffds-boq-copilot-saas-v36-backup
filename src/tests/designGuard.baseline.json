@@ -111,9 +111,6 @@
     "offPalette": 2,
     "mono": 2
   },
-  "components/LockedState.tsx": {
-    "offPalette": 1
-  },
   "components/LoginScreen.tsx": {
     "halfPx": 9,
     "offPalette": 1
@@ -285,7 +282,7 @@
   "components/TimelineTab.tsx": {
     "halfPx": 4,
     "tinyPx": 18,
-    "offPalette": 13,
+    "offPalette": 10,
     "mono": 14
   },
   "components/VendorsManager.tsx": {
