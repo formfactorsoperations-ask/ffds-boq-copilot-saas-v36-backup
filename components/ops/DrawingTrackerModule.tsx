@@ -2393,9 +2393,11 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
                     {filteredDrawings.length === 0 && (
                         <LockedState
+                            className="m-4"
+                            icon={FileCheck2}
                             isEmptyState={true}
-                            title="No Drawings Found"
-                            why="No drawings matched your current search filters or BOQ triggers."
+                            title="No drawings found"
+                            why="No drawing matches the search or the BOQ triggers. Sync with the BOQ to list the drawings it needs."
                             actionLabel={syncing ? "Syncing..." : "Sync with BOQ"}
                             onAction={handleSync}
                         />
@@ -2444,9 +2446,10 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
                     {filteredDrawings.length === 0 && (
                         <LockedState
+                            icon={FileCheck2}
                             isEmptyState={true}
-                            title="No Drawings Found"
-                            why="No drawings matched your current search filters or BOQ triggers."
+                            title="No drawings found"
+                            why="No drawing matches the search or the BOQ triggers. Sync with the BOQ to list the drawings it needs."
                             actionLabel={syncing ? "Syncing..." : "Sync with BOQ"}
                             onAction={handleSync}
                         />

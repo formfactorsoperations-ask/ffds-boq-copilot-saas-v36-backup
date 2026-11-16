@@ -21,7 +21,7 @@
 import React from 'react';
 import fs from 'fs';
 import path from 'path';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, fireEvent, within } from '@testing-library/react';
 import { describe, test, expect, vi, afterEach, beforeEach } from 'vitest';
 
 vi.mock('../../contexts/OrgContext', () => ({
@@ -68,8 +68,12 @@ const release = (ctx: any) => {
 const portal = (issue: any) =>
   render(<DocumentRenderer issue={issue} surface="portal" studioName="Form Factors" />).container;
 
-const studioPage = (ctx: any) =>
-  render(<HandoverDocketPage projectContext={ctx} setProjectContext={vi.fn()} projectId="juhu-1" />).container;
+/** The studio page, opened on its Document view (it opens on the Summary). */
+const studioPage = (ctx: any) => {
+  const { container } = render(<HandoverDocketPage projectContext={ctx} setProjectContext={vi.fn()} projectId="juhu-1" />);
+  fireEvent.click(within(container).getByRole('radio', { name: 'Document' }));
+  return container;
+};
 
 /**
  * The document itself, without the Project Ref value. The portal has never

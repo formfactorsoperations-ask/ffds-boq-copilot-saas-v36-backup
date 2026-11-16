@@ -457,6 +457,14 @@ One frame (owner, 16 Nov 2026, after the audit of every project screen):
 - Nothing floats over a screen's content. The next step is the sidebar's Next card, which opens the
   Ops Matrix; the floating "Up next" card and process panel are gone.
 - Documents take the studio's name from `studioDisplayName` (`lib/studioName.ts`).
+- A client document screen (Terms Docket, Execution Agreement, Handover Docket) opens on a summary:
+  one row with a `Segmented` Summary / Document switch, the status `Chip` and the actions; then
+  "Where it stands" (three steps), what the client agrees to, and the outline. The document itself
+  is not restyled: it is what the client's copy and the PDF show, so Download PDF and Print open
+  it first.
+- A screen, or a list on it, with nothing in it yet shows the kit's `EmptyState`: the icon chip, a
+  title, one line and at most one button. A locked screen uses `LockedState`, which is the same
+  `EmptyState` with an amber "Opens after …" chip. No heroes, big icons or centred 24px titles.
 
 Motion and icons (the owner asked to go beyond the console kit here): every stage and screen has its
 own Lucide icon, and each moves on hover in its own way (a bounce, a swing, a spin, a rewind; some

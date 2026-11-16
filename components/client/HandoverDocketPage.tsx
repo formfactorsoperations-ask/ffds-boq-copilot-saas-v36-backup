@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { buildSignoffPatch } from '../../services/clientApprovalEngine';
 import { ProjectContext, DigitalSignatureDocket } from '../../types';
-import { Download, Printer } from '@/lib/lucide-shim';
+import { Download, Printer, Clock, ListChecks, BookOpen, Link2 } from '@/lib/lucide-shim';
+import { Panel, Button, Chip, Segmented, buttonClass } from '../ui/kit';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
 import { studioDisplayName } from '../../lib/studioName';
@@ -39,6 +40,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
       portal draws from the released snapshot, so the two copies cannot drift.
     */
     const designOnly = engagementOf(projectContext) === 'design_only';
+    const docTitle = designOnly ? 'Design Closeout' : 'Handover Docket';
     const fileStem = designOnly ? 'Design_Closeout' : 'Handover_Docket';
     const drawingsIssued = drawingsIssuedOf(projectContext);
     const [copied, setCopied] = useState(false);
@@ -127,51 +129,86 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
         }
     }
 
+    /*
+      Summary first, like the Terms Docket (DESIGN.md "Screen kit",
+      standardisation PR 6): where the docket stands, what the client signs,
+      and the outline. The page bar names the screen, so there is no title of
+      its own, and the workspace scrolls rather than a box inside it. The
+      docket below is the same markup as before; the PDF and Print capture it,
+      so both show it first.
+    */
+    const [viewMode, setViewMode] = useState<'summary' | 'doc'>('summary');
+    const statusChip = signoffStatus === 'signed'
+        ? <Chip tone="good">Signed</Chip>
+        : signoffStatus === 'sent' ? <Chip tone="warn">Sent · awaiting signature</Chip> : <Chip tone="slate">Not sent</Chip>;
+    const when = (t?: string | number | null) => (t ? new Date(t).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
+    const steps = [
+        { label: 'Prepared', sub: `Dated ${displayDate}`, done: true },
+        { label: 'Sent to client', sub: currentSignoff?.sentAt ? when(currentSignoff.sentAt) : signoffStatus === 'signed' ? 'Recorded by the studio' : 'From Documents', done: signoffStatus !== 'pending' },
+        { label: 'Signed', sub: signoffStatus === 'signed' ? (when(currentSignoff?.signedAt) || 'Signed') : 'Not yet', done: signoffStatus === 'signed' },
+    ];
+    const checklist: string[] = designOnly
+        ? ['Final drawing set', 'Selections', 'Design fee settled', 'Site queries']
+        : ['Final financial settlement', 'Defect rectification', 'Site clearance', 'Access handover'];
+    const outline: string[] = designOnly
+        ? ['Design Completion', 'Closure Checklist']
+        : ['Practical Completion', 'Closure Checklist', 'Warranty Certificate', 'Care & Maintenance'];
+    const showDoc = (then?: () => void) => {
+        setViewMode('doc');
+        if (then) window.setTimeout(then, 300);
+    };
+    /* The PDF and the print are taken from the docket on screen, so show it first. */
+    const downloadPdf = () => (viewMode === 'doc' ? handleDownloadPdf() : showDoc(handleDownloadPdf));
+    const printDocket = () => (viewMode === 'doc' ? handlePrint() : showDoc(handlePrint));
+
     return (
-        <div className="flex flex-col h-full bg-slate-50 relative">
+        <div className="w-full space-y-4 pb-20">
+            {/* One row: the view, where the docket stands, the date it carries, and what can be done with it. */}
+            <div className="flex flex-wrap items-center gap-2 no-print">
+                <Segmented
+                    label={`${docTitle} view`}
+                    size="sm"
+                    value={viewMode}
+                    options={[
+                        { id: 'summary', label: 'Summary' },
+                        { id: 'doc', label: 'Document' },
+                    ]}
+                    onChange={setViewMode}
+                />
+                {statusChip}
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-500">
+                        {designOnly ? 'Closeout date' : 'Handover date'} <b className="font-semibold text-slate-800">{displayDate}</b>
+                    </span>
+                    <Button size="sm" variant="quiet" icon={Printer} onClick={printDocket}>Print</Button>
+                    <Button size="sm" icon={Download} onClick={downloadPdf}>Download PDF</Button>
+                </div>
+            </div>
+
+            {!projectContext.handoverDate && (
+                <p className="text-xs text-slate-500 no-print">Dated today until the handover is marked in Site Control Room or on the project card.</p>
+            )}
+
             {/* Status Banner */}
             {signoffStatus === 'sent' && currentSignoff?.token && (
-                <div className="bg-amber-50 border border-amber-200 p-6 no-print">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                        <div className="flex-grow">
-                            <h3 className="text-lg font-black text-amber-900 uppercase tracking-wider mb-2">Awaiting Client Sign-Off</h3>
-                            <p className="text-sm text-amber-800">The {designOnly ? "design closeout" : "handover docket"} has been generated and is awaiting digital signature.</p>
-                            
-                            <div className="mt-4 p-4 bg-white rounded-xl border border-amber-200 shadow-xs">
-                                <div className="flex items-center justify-between mb-2 pb-2 border-b border-amber-100">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Digital Sign-Off URL</span>
-                                    <button 
-                                        onClick={() => handleCopy(getSignoffUrl(currentSignoff.token!))}
-                                        className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold rounded transition-all cursor-pointer"
-                                    >
-                                        {copied ? "Copied!" : "Copy Link"}
-                                    </button>
-                                </div>
-                                <div className="text-[11px] font-mono break-all text-slate-500 bg-slate-50 p-2.5 rounded border border-slate-200">
-                                    {getSignoffUrl(currentSignoff.token!)}
-                                </div>
-                                <div className="mt-3 flex items-center gap-2">
-                                    <a href={getSignoffUrl(currentSignoff.token!)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-[11px] font-bold tracking-tight inline-block cursor-pointer">
-                                        Open Sign-Off Screen &rarr;
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="shrink-0 border-l border-amber-200 pl-6 space-y-2">
-                            <button
-                                onClick={() => setShowOverrideModal(true)}
-                                className="px-4 py-2.5 bg-white border border-amber-300 text-amber-900 text-xs font-bold rounded-xl shadow-xs hover:bg-amber-100 transition uppercase tracking-wider cursor-pointer"
-                            >
-                                Ops Override: Record Acceptance
-                            </button>
-                        </div>
+                <Panel
+                    icon={Link2}
+                    title="Waiting for the client's sign-off"
+                    badge={<Chip tone="warn">Sent</Chip>}
+                    blurb={`The ${designOnly ? 'design closeout' : 'handover docket'} is with the client for their digital signature. Share this link if they ask for it.`}
+                    className="no-print"
+                >
+                    <p className="text-xs text-slate-600 break-all bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">{getSignoffUrl(currentSignoff.token!)}</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Button size="sm" onClick={() => handleCopy(getSignoffUrl(currentSignoff.token!))}>{copied ? 'Copied' : 'Copy link'}</Button>
+                        <a href={getSignoffUrl(currentSignoff.token!)} target="_blank" rel="noopener noreferrer" className={buttonClass('secondary', 'sm')}>Open sign-off screen</a>
+                        <Button size="sm" onClick={() => setShowOverrideModal(true)} title="Record a signature given by WhatsApp, email or on paper">Record acceptance</Button>
                     </div>
-                </div>
+                </Panel>
             )}
-            
+
             {signoffStatus === 'signed' && (
-                <div className="p-6 bg-slate-50 no-print">
+                <div className="no-print">
                     <DigitalSignatureDocketView
                         docket={currentSignoff?.docket || {
                             signatoryName: currentSignoff?.clientName || projectContext.clientName || 'Client Signatory',
@@ -229,34 +266,76 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                     font-family: 'Plus Jakarta Sans', sans-serif;
                 }
             `}} />
-            
-            <div className="flex-none p-6 border-b border-slate-200 bg-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4 z-10 sticky top-0 shadow-sm print:hidden">
-                <div>
-                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2 docket-font">
-                        {designOnly ? 'Design Closeout' : 'Handover Docket & Warranty'}
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-1">{designOnly ? 'The client’s sign-off on the final drawing set, closing the design engagement.' : 'Formal completion certificate, warranty terms, and care guidelines.'}</p>
-                    {!projectContext.handoverDate && <p className="text-xs text-slate-500 mt-1">Dated today until the handover is marked in Site Control Room or on the project card.</p>}
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                    <button
-                        onClick={handlePrint}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded hover:bg-slate-50 transition-colors"
-                    >
-                        <Printer className="w-4 h-4" />
-                        Print
-                    </button>
-                    <button
-                        onClick={handleDownloadPdf}
-                        className="flex items-center gap-2 px-4 py-2 bg-[#3D52A0] text-white text-sm font-medium rounded-lg hover:bg-[#334486] transition-colors"
-                    >
-                        <Download className="w-4 h-4" />
-                        Download PDF
-                    </button>
-                </div>
-            </div>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center pb-24 print:p-0 print:pb-0 print:bg-white">
+            {viewMode === 'summary' && (
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,380px)] gap-4 items-start no-print">
+                    <div className="space-y-4 min-w-0">
+                        <Panel
+                            icon={Clock}
+                            title="Where it stands"
+                            badge={statusChip}
+                            blurb={signoffStatus === 'signed'
+                                ? (designOnly ? 'Signed: the design engagement is closed.' : 'Signed: the site is handed over and the warranty runs from the handover date.')
+                                : signoffStatus === 'sent'
+                                    ? 'With the client for their signature.'
+                                    : 'Not sent yet. Issue it to the client from Documents once the work is complete.'}
+                        >
+                            <ol className="grid grid-cols-3 gap-3">
+                                {steps.map((st, i) => (
+                                    <li key={st.label} className="hud-row-in min-w-0" style={{ animationDelay: `${i * 30}ms` }}>
+                                        <span className={`block h-1 rounded-full ${st.done ? 'bg-[#3D52A0]' : 'bg-slate-200'}`} />
+                                        <b className="block mt-2 text-sm font-semibold text-slate-800">{st.label}</b>
+                                        <span className="block text-[11px] text-slate-500">{st.sub}</span>
+                                    </li>
+                                ))}
+                            </ol>
+                        </Panel>
+
+                        <Panel icon={ListChecks} title="What the client signs" blurb="The closure the docket records. Open the document to read it in full." delay={30}>
+                            <div className="divide-y divide-slate-100">
+                                <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-baseline py-2.5 px-1">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{designOnly ? 'Closeout' : 'Handover'}</span>
+                                    <span className="text-sm text-slate-700">{displayDate} · {clientName}</span>
+                                </div>
+                                <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-baseline py-2.5 px-1">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Checklist</span>
+                                    <span className="text-sm text-slate-700">{checklist.join(' · ')}</span>
+                                </div>
+                                {designOnly ? (
+                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-baseline py-2.5 px-1">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Drawings</span>
+                                        <span className="text-sm text-slate-700">{drawingsIssued ? `${drawingsIssued} in the final set` : 'The final Good for Construction set'}</span>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-baseline py-2.5 px-1">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Warranty</span>
+                                        <span className="text-sm text-slate-700">{defaultWarrantyPeriod} months on workmanship, from the handover date</span>
+                                    </div>
+                                )}
+                            </div>
+                        </Panel>
+                    </div>
+
+                    <div className="space-y-4 min-w-0">
+                        <Panel icon={BookOpen} title="The document" blurb={`${docTitle} · ${outline.length} sections`} delay={60}>
+                            <ol>
+                                {outline.map((t, i) => (
+                                    <li key={t}>
+                                        <button type="button" onClick={() => showDoc()} className="w-full flex gap-2 px-1 py-1.5 rounded-lg text-left text-sm text-slate-700 hover:bg-slate-50">
+                                            <span className="w-6 shrink-0 text-slate-400 tabular-nums">{i + 1}</span>
+                                            <span className="min-w-0">{t}</span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ol>
+                            <Button size="sm" className="mt-3" icon={BookOpen} onClick={() => showDoc()}>Read the document</Button>
+                        </Panel>
+                    </div>
+                </div>
+            )}
+
+            {viewMode === 'doc' && (
+            <div className="bg-slate-100 rounded-2xl p-4 md:p-8 flex justify-center overflow-x-auto print:p-0 print:bg-white">
                 <HandoverDocketSheet
                     projectContext={projectContext}
                     studioName={studioName}
@@ -275,6 +354,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
                     drawingsIssued={drawingsIssued}
                 />
             </div>
+            )}
         </div>
     );
 }
