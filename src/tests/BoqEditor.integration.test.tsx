@@ -316,10 +316,12 @@ const otherProject = (id: string, name: string, area: number, gm: number) => ({
 /* Rename, Sync, Copy and Delete sit under each option's ⋯ menu on the grid (components/pricing/PricingGrid). */
 const openMore = (name: string) => fireEvent.click(screen.getByRole('button', { name: `More for ${name}` }));
 const renameFromMenu = (name: string) => { openMore(name); fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' })); };
+const openView = (name: string) => fireEvent.click(screen.getByRole('tab', { name: new RegExp(`^${name}`) }));
 
 describe('Pricing & Tiers: only real benchmarks', () => {
   it('with no other projects it says so, and invents none', () => {
     render(<TierHarness projects={[]} />);
+    openView('Margin');
     expect(screen.queryByText(/median/i)).toBeNull();
     expect(screen.queryByText(/Majiwada|Hiranandani/)).toBeNull();
     expect(screen.getByText('No other priced projects to compare yet')).toBeTruthy();
@@ -333,11 +335,12 @@ describe('Pricing & Tiers: only real benchmarks', () => {
       otherProject('p2', 'Thane 1BHK', 480, 24),
       otherProject('p3', 'Powai 3BHK', 1400, 30),
     ]} />);
-    expect(within(screen.getByRole('region', { name: 'Margin check' })).getByText('Studio median 24.0%')).toBeTruthy();
+    openView('Margin');
+    expect(within(screen.getByRole('region', { name: 'Margin' })).getByText('Studio median 24.0%')).toBeTruthy();
     expect(screen.getByText('Thane 1BHK')).toBeTruthy();
     expect(screen.getByText('Andheri 2BHK')).toBeTruthy();
     expect(screen.queryByText('Powai 3BHK')).toBeNull();
-    expect(within(screen.getByRole('region', { name: 'Margin check' })).getAllByText(/^[▲▼] \d+\.\d pts$/).length).toBe(2);
+    expect(within(screen.getByRole('region', { name: 'Margin' })).getAllByText(/^[▲▼] \d+\.\d pts$/).length).toBe(2);
   });
 });
 

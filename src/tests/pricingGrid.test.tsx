@@ -52,7 +52,8 @@ function Harness({ initial = [ESS, COM], ctx = CTX, active = 'com', probe, onEdi
 
 const column = (name: string) => screen.getByRole('article', { name });
 const menu = (name: string) => fireEvent.click(screen.getByRole('button', { name: `More for ${name}` }));
-const band = (name: string) => screen.getByRole('region', { name });
+/* The view under the options, picked from the switcher. */
+const view = (name: string) => { fireEvent.click(screen.getByRole('tab', { name: new RegExp(`^${name}`) })); return screen.getByRole('region', { name }); };
 
 describe('Options and their versions (lib/optionChains)', () => {
   const v1 = tier('a', 'Comfort', [], 1, 0, 0, { timestamp: 10 });
@@ -101,11 +102,22 @@ describe('Pricing & Tiers grid', () => {
     expect(within(com).getByText('₹ 16,000')).toBeTruthy(); // the exact figure, for screen readers, beside the count-up
     expect(within(com).getByTestId('option-split').textContent).toContain('work ₹ 14,800');
     expect(within(com).getByText('Selected')).toBeTruthy();
-    expect(within(band('Where the money goes')).getByText('Carpentry')).toBeTruthy();
-    expect(within(band('Offers and what the client pays')).getAllByText('5% off carpentry')).toHaveLength(1);
-    expect(within(band('Milestones')).getByText('Material advance')).toBeTruthy();
-    expect(within(band('Margin check')).getAllByText('2 lines')).toHaveLength(2); // both options price wardrobe and paint at 0%
+    expect(within(view('Where the money goes')).getByText('Carpentry')).toBeTruthy();
     expect(screen.getByTestId('coverage-total-com').textContent).toBe('₹ 16,000');
+    const pay = view('Offers & payments');
+    expect(within(pay).getAllByText('5% off carpentry')).toHaveLength(1);
+    expect(within(pay).getByText('Material advance')).toBeTruthy();
+    expect(within(view('Margin')).getAllByText('2 lines')).toHaveLength(2); // both options price wardrobe and paint at 0%
+  });
+
+  it('each part opens to its trades, and the parts add up to the work', () => {
+    render(<Harness />);
+    const money = view('Where the money goes');
+    expect(within(money).getAllByText('adds up')).toHaveLength(2);
+    fireEvent.click(within(money).getByRole('button', { name: /^Functional/ }));
+    expect(within(money).getByText('Painting')).toBeTruthy();
+    fireEvent.click(within(money).getByRole('button', { name: 'Open every part' }));
+    expect(within(money).getAllByText('Civil')).toHaveLength(2); // the part, and the trade inside it
   });
 
   it('selecting a column selects the option', () => {
@@ -118,7 +130,7 @@ describe('Pricing & Tiers grid', () => {
   it('New version keeps the option in its column, as v2, and says what changed', () => {
     let s: any;
     render(<Harness probe={(x) => { s = x; }} />);
-    fireEvent.click(within(band('Actions')).getAllByRole('button', { name: /New version/ })[1]);
+    fireEvent.click(within(column('Comfort')).getByRole('button', { name: /New version/ }));
     expect(s.tiers).toHaveLength(3);
     const v2 = s.tiers[2];
     expect(v2.parentTierId).toBe('com');
@@ -129,7 +141,7 @@ describe('Pricing & Tiers grid', () => {
     expect(screen.getAllByRole('article')).toHaveLength(2);
     const versions = within(column('Comfort')).getByRole('group', { name: 'Versions of Comfort' });
     expect(within(versions).getAllByRole('button').map((b) => b.textContent)).toEqual([expect.stringMatching(/^v1/), expect.stringMatching(/^v2/)]);
-    expect(within(band('Changed since the previous version')).getAllByText(/vs v1/)).toHaveLength(1);
+    expect(within(view('Versions & contract')).getAllByText(/vs v1/)).toHaveLength(1);
   });
 
   it('an earlier version opens as it was, and Back returns to the newest', () => {
@@ -147,7 +159,7 @@ describe('Pricing & Tiers grid', () => {
     let s: any;
     const v2 = { ...COM, id: 'com2', parentTierId: 'com', timestamp: 3, boq: [...COM.boq, line('6', 'w', 8, 'Study')] };
     render(<Harness initial={[ESS, COM, v2]} active="com2" probe={(x) => { s = x; }} />);
-    const offers = band('Offers and what the client pays');
+    const offers = view('Offers & payments');
     expect(within(offers).getByText(/Priced on v1\. On v2 it is ₹ 1,000\./)).toBeTruthy();
     fireEvent.click(within(offers).getByRole('button', { name: 'Update' }));
     expect(s.ctx.financials.discounts[0]).toMatchObject({ value: 1000, basis: { tierId: 'com2' } });
@@ -157,7 +169,7 @@ describe('Pricing & Tiers grid', () => {
     let s: any;
     const onEditBoq = vi.fn();
     render(<Harness ctx={{ ...CTX, approvedTierId: 'com' }} probe={(x) => { s = x; }} onEditBoq={onEditBoq} />);
-    fireEvent.click(within(band('Actions')).getAllByRole('button', { name: /Edit BOQ/ })[1]);
+    fireEvent.click(within(column('Comfort')).getByRole('button', { name: /Edit BOQ/ }));
     const v2 = s.tiers.find((t: any) => t.parentTierId === 'com');
     expect(v2).toBeTruthy();
     expect(onEditBoq).toHaveBeenCalledWith(v2.id);
@@ -196,7 +208,7 @@ describe('Pricing & Tiers grid', () => {
     expect(screen.getAllByRole('article').map((a) => a.getAttribute('aria-label'))).toEqual(['Comfort']);
     expect(within(column('Comfort')).getByText('Signed')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Start a revision' })).toBeTruthy();
-    expect(within(band('Actions')).queryByRole('button', { name: /New version/ })).toBeNull();
+    expect(within(column('Comfort')).queryByRole('button', { name: /New version/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show them' }));
     expect(screen.getAllByRole('article')).toHaveLength(2);
   });

@@ -404,20 +404,27 @@ the brand, slate, and rose/amber/emerald for state. Light only: the owner chose 
 ### Pricing & Tiers motion (approved 15 Nov 2026)
 
 The owner approved Pricing & Tiers as one grid (layouts D and E, 15 Nov 2026) and asked for
-"some animations and cool icons too". It uses the People motion kit (`components/people/PeopleBits.tsx`)
-and the Ops Desk card motion (`cardV` in `components/opsDesk/DeskBits.tsx`), with the same fonts and colours.
+"some animations and cool icons too"; on 16 Nov they asked for less scrolling and livelier motion.
+It uses the People motion kit (`components/people/PeopleBits.tsx`) and the Ops Desk card motion
+(`cardV`, `deskSectionV` in `components/opsDesk/DeskBits.tsx`), with the same fonts and colours.
 Only `components/pricing/` and the Pricing & Tiers screen (`components/TierManager.tsx`) use it.
 
-- Every section is a band (a Panel card) whose rows read across the option columns. Its header is an
-  `IconTile` that turns on hover: a branch (changes), a pie (where the money goes), compare arrows
-  (what separates them), a gift (offers), a calendar (milestones), a gauge (margin check).
-- Bands rise in with `cardV`, one after another; their rows rise with `listV` and `rowV`.
-- The selected column is tinted `bg-[#3D52A0]/5` all the way down, and its brand rule along the top
-  glides to the column you pick (`layoutId`).
-- Prices count up with `CountUp`; the exact figure is beside it for screen readers.
-- Bars grow from the left. When a column switches version (v1, v2...), its cells turn in again.
-- Approving an option draws a `DoneTick` and a short `Confetti` burst on its column; the Approve
-  button is `pp-press`.
+- One card per option, side by side. Under them, ONE view at a time from a switcher (Where the money
+  goes, What's different, Offers & payments, Margin, Versions & contract), not a page of stacked sections.
+- Each option carries an `IconTile` medal by its place in price: a sprout (lowest), a gem, a crown
+  (highest). Its margin is a `Ring` that fills from empty, amber below the studio median or the 20% floor.
+- Its price plate (price, ring, parts bar) tilts to the pointer (`Tilt`). The name, versions, Approve
+  and the buttons around it do not tilt, so a click always lands where it is aimed.
+- What an option is made of is one bar in four shades of the brand (Carpentry, Functional, Civil,
+  Others), filling in one after another, with an icon per part: a hammer, a bolt, a brick wall, a box.
+- Rows in the views carry trade icons (a chef's hat for the kitchen, a paint roller, a ceiling lamp,
+  drops for plumbing, a truck for site services...). A part opens to its trades; the chevron turns.
+- The view switcher's white pill glides to the chosen view (`layoutId`); its icon tips on hover. A
+  view turns up into place (`deskSectionV`) and its rows rise (`listV`, `rowV`).
+- The selected card gets the brand border and a rule along its top that glides to the card you pick.
+  The version pill glides between v1, v2... the same way.
+- Figures count up with `CountUp`; the exact price is beside it for screen readers. Bars grow from the left.
+- Approving an option draws a `DoneTick` and a `Confetti` burst on its card; Approve is `pp-press`.
 - Regenerate's icon turns half a circle on hover, and Add option's plus a quarter.
 - The ⋯ menu and the Tune margin dialog use `phd-pop` (and `phd-scrim` for the dialog).
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel sizes.

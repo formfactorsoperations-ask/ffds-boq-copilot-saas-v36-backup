@@ -23,54 +23,96 @@ export type ScopePart = 'carpentry' | 'functional' | 'civil' | 'others';
 
 export const SCOPE_PARTS: { id: ScopePart; label: string; detail: string }[] = [
   { id: 'carpentry', label: 'Carpentry', detail: 'Wardrobes, kitchen, TV units, panelling: the woodwork' },
-  { id: 'functional', label: 'Functional', detail: 'Painting, false ceiling, electrical' },
-  { id: 'civil', label: 'Civil', detail: 'Civil, demolition, tiling and plumbing' },
+  { id: 'functional', label: 'Functional', detail: 'Painting, false ceiling, electrical and plumbing' },
+  { id: 'civil', label: 'Civil', detail: 'Flooring, tiling, waterproofing and demolition' },
   { id: 'others', label: 'Others', detail: 'Decor, glass, loose items and site services' },
 ];
 
 export const partLabel = (p: ScopePart) => SCOPE_PARTS.find((x) => x.id === p)?.label || p;
 
 const CARPENTRY = /carpentry|woodwork|modular|kitchen|wardrobe|furniture|joinery/i;
+const CEILING = /false ceiling|\bpop\b|gypsum ceiling|ceiling board|grid ceiling/i;
+const CIVIL = /civil|tiling|tile|flooring|floor|waterproof|demolition|masonry|stone|marble|granite|plaster/i;
+
+/** The trade a line is: the part of the job it belongs to, and what to call it inside that part. */
+export interface Trade { part: ScopePart; trade: string }
 
 /**
- * Which part of the job a BOQ line belongs to.
+ * Which part of the job a BOQ line belongs to, from the item itself.
  *
- * The BOQ's own scope rooms come first: a line in Civil or Functional is that,
- * whatever its category. Otherwise woodwork is Carpentry, and the rest follows
- * the studio's scope classifier (lib/scopeBuckets bucketForItem), so this split
- * agrees with the Civil and Functional groups the BOQ already shows.
+ * The owner found the split disagreeing with the BOQ: it went by the scope
+ * room a line was filed in first, and the generator files lines by a rule of
+ * its own. POP false ceiling is a Civil item in the bank but filed under
+ * Functional, so it showed as Civil in one view and Functional in another;
+ * plumbing is filed under Functional in one place and Civil in another. The
+ * item decides now, by the studio's own definitions (lib/scopeBuckets
+ * SCOPE_BUCKET_META): painting, false ceiling, electrical and plumbing are
+ * Functional; flooring, tiling, waterproofing and demolition are Civil; the
+ * woodwork is Carpentry; the rest is Others. The room is only a fallback, for
+ * a line whose item is not in the bank.
  */
-export function partOfLine(room: string | undefined, item: Pick<Item, 'cat' | 'name'> | undefined): ScopePart {
-  const bucket = asScopeBucket(room);
-  if (bucket === 'Civil') return 'civil';
-  if (bucket === 'Functional') return 'functional';
-  if (CARPENTRY.test(item?.cat || '')) return 'carpentry';
+export function tradeOfLine(room: string | undefined, item: Pick<Item, 'cat' | 'name'> | undefined): Trade {
+  const cat = (item?.cat || '').trim();
+  const name = item?.name || '';
+  if (!item) {
+    const bucket = asScopeBucket(room);
+    return { part: bucket === 'Civil' ? 'civil' : bucket === 'Functional' ? 'functional' : 'others', trade: 'Other' };
+  }
+  if (CEILING.test(name) || /ceiling/i.test(cat)) return { part: 'functional', trade: 'False ceiling' };
+  if (CARPENTRY.test(cat)) return { part: 'carpentry', trade: cat };
+  if (/paint/i.test(cat)) return { part: 'functional', trade: 'Painting' };
+  if (/electric|lighting/i.test(cat)) return { part: 'functional', trade: 'Electrical' };
+  if (/plumb|sanitary/i.test(cat)) return { part: 'functional', trade: 'Plumbing' };
+  if (/hvac|air.?con/i.test(cat)) return { part: 'functional', trade: 'HVAC' };
+  if (/site service/i.test(cat) || /debris|protection|cleaning|disposal|scaffold/i.test(name)) return { part: 'others', trade: 'Site services' };
+  if (CIVIL.test(cat)) return { part: 'civil', trade: cat };
+  const named = asScopeBucket(cat);
+  if (named) return { part: named === 'Civil' ? 'civil' : named === 'Functional' ? 'functional' : 'others', trade: cat };
   const b = bucketForItem(item);
-  return b === 'Civil' ? 'civil' : b === 'Functional' ? 'functional' : 'others';
+  return { part: b === 'Civil' ? 'civil' : b === 'Functional' ? 'functional' : 'others', trade: cat || 'Other' };
 }
 
-export interface SplitLine { key: string; name: string; room: string; total: number }
+/** The part alone (see tradeOfLine). */
+export function partOfLine(room: string | undefined, item: Pick<Item, 'cat' | 'name'> | undefined): ScopePart {
+  return tradeOfLine(room, item).part;
+}
+
+export interface SplitLine { key: string; name: string; room: string; trade: string; total: number }
 export interface ScopeSplit {
   /** The option's work value: billable lines, as-actuals left out (lib/boqPricing boqTotal). */
   total: number;
-  parts: Record<ScopePart, { value: number; lines: SplitLine[] }>;
+  parts: Record<ScopePart, { value: number; lines: SplitLine[]; trades: { trade: string; value: number; lines: number }[] }>;
+  /** Lines the client pays vendors for directly: shown, never in the price. */
+  asActuals: number;
 }
 
-/** An option's work value, part by part, priced line for line as its summary is. */
+/** An option's work value, part by part and trade by trade, priced line for line as its summary is. */
 export function scopeSplit(tier: Pick<ProposalTier, 'boq'> | undefined, bankMap: Map<string, Item>): ScopeSplit {
-  const parts = Object.fromEntries(SCOPE_PARTS.map((p) => [p.id, { value: 0, lines: [] as SplitLine[] }])) as ScopeSplit['parts'];
+  const parts = Object.fromEntries(SCOPE_PARTS.map((p) => [p.id, { value: 0, lines: [] as SplitLine[], trades: [] as { trade: string; value: number; lines: number }[] }])) as ScopeSplit['parts'];
   let total = 0;
+  let asActuals = 0;
   (tier?.boq || []).forEach((line: any, i: number) => {
     const priced = resolveBoqLine(line, bankMap);
-    if (!priced.billable || priced.asActuals) return;
-    const part = partOfLine(line.roomId || priced.room, bankMap.get(line.bankId));
+    if (!priced.billable) return;
+    if (priced.asActuals) { asActuals += priced.total; return; }
+    const { part, trade } = tradeOfLine(line.roomId || priced.room, bankMap.get(line.bankId));
     const key = String(line.id || `${priced.key}#${i}`);
     parts[part].value += priced.total;
-    parts[part].lines.push({ key, name: priced.name, room: priced.room, total: priced.total });
+    parts[part].lines.push({ key, name: priced.name, room: priced.room, trade, total: priced.total });
     total += priced.total;
   });
-  SCOPE_PARTS.forEach((p) => parts[p.id].lines.sort((a, b) => b.total - a.total));
-  return { total, parts };
+  SCOPE_PARTS.forEach((p) => {
+    const part = parts[p.id];
+    part.lines.sort((a, b) => b.total - a.total);
+    const byTrade = new Map<string, { trade: string; value: number; lines: number }>();
+    part.lines.forEach((l) => {
+      const t = byTrade.get(l.trade) || { trade: l.trade, value: 0, lines: 0 };
+      t.value += l.total; t.lines += 1;
+      byTrade.set(l.trade, t);
+    });
+    part.trades = Array.from(byTrade.values()).sort((a, b) => b.value - a.value);
+  });
+  return { total, parts, asActuals };
 }
 
 /** How an offer was worked out, kept on its discount. */

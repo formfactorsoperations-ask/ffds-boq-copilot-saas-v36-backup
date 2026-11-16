@@ -13,7 +13,6 @@ import { compareTiers, optionPrice } from '../lib/tierComparison';
 import { builtInSpecsName } from '../lib/comparison';
 import { otherBenchmarks, medianGm, closestInSize } from '../lib/tierBenchmarks';
 import PricingGrid, { type GridColumn } from './pricing/PricingGrid';
-import { Panel as DeskPanel } from './opsDesk/DeskBits';
 import { optionChains, chainOf, latestOf, shownVersion, previousVersion, versionNo } from '../lib/optionChains';
 import './projectHeader/projectHeader.css';
 import { contextWithApproved, tiersWithApproved, describeApproval, contextWithoutApproved, tiersWithoutApproved, previousBaseline } from '../lib/tierApproval';
@@ -629,31 +628,37 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                 describeApproval={describeApproval}
                 canDelete={(tid) => tid !== signedTierId}
                 renaming={{ id: editingTierId, value: editingTierName, onChange: setEditingTierName, onSave: handleSaveEdit, onKey: handleNameKey }}
-                actions={{
-                    select: (tid) => setActiveTierId(tid),
-                    pickVersion: handlePickVersion,
-                    editBoq: handleEditBoq,
-                    newVersion: (tid) => { handleNewVersion(tid); },
-                    copyAsOption: handleCopyAsOption,
-                    ownOption: handleOwnOption,
-                    startRename: (tid) => { const t = tiers.find(x => x.id === tid); if (t) handleStartEditing(t); },
-                    importBoq: onImportClick,
-                    remove: handleDeleteTier,
-                    approve: handleApproveTier,
-                    askRevert: () => setRevertOpen(true),
-                    keepApproval: () => setRevertOpen(false),
-                    revert: handleRevertApproval,
-                    sync: handleSyncTier,
-                    tuneMargin: (tid) => { setActiveTierId(tid); setMarginShiftAmount(0); setTuneOpen(true); },
-                    startRevision: () => setActiveTab('revision-studio'),
-                    offers: (tid) => { setActiveTierId(tid); setActiveTab('analytics'); },
-                    saveDiscounts: (next) => setProjectContext(prev => ({ ...prev, financials: { ...(prev.financials as any), discounts: next } })),
-                }}
-            />
-
-            <div className="grid gap-4 md:grid-cols-2">
-                {/* The contract's value from booking to today. */}
-                <DeskPanel icon={LineChart} title="Contract value over time" blurb={contractTimeline.length === 0 ? 'Nothing approved yet. Approve an option to set the booking value; every revision is then tracked against it.' : 'From the booking value to today, revision by revision.'}>
+                comparables={<>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" /> Comparable past projects · closest in size</p>
+                    {comparableProjects.length === 0 ? (
+                        <p className="text-xs text-slate-500">No other priced projects yet. This fills in as the studio quotes more.</p>
+                    ) : (
+                        <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                            {comparableProjects.map((p, idx) => {
+                                const raw = (activeTier.summary.blendedGm ?? 0) - p.gm;
+                                const diffPct = Math.abs(raw) < 0.05 ? 0 : raw;
+                                return (
+                                    <li key={p.id || idx} className="px-4 py-2.5 flex items-center justify-between gap-3 hud-row-in" style={{ animationDelay: `${idx * 30}ms` }}>
+                                        <span className="min-w-0">
+                                            <span className="block text-sm font-semibold text-slate-800">{p.name}</span>
+                                            <span className="block text-[11px] text-slate-500">{formatCurrency(p.value)} · {p.itemsCount} items</span>
+                                        </span>
+                                        <span className="text-right">
+                                            <span className="block text-sm font-black text-slate-800 tabular-nums">{p.gm.toFixed(1)}%</span>
+                                            <span className={`block text-[11px] font-semibold tabular-nums ${diffPct > 0 ? 'text-[#3D52A0]' : diffPct < 0 ? 'text-rose-700' : 'text-slate-400'}`}>
+                                                {diffPct > 0 ? `+${diffPct.toFixed(1)}` : diffPct.toFixed(1)} pts vs {activeTier.name}
+                                            </span>
+                                        </span>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                </>}
+                hasHistory={contractTimeline.length > 0}
+                history={<>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5"><LineChart className="w-3.5 h-3.5" /> Contract value over time</p>
+                    {contractTimeline.length === 0 && <p className="text-xs text-slate-500">Nothing approved yet. Approve an option to set the booking value; every revision is then tracked against it.</p>}
                     {contractTimeline.length > 0 && (
                         <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
                             {contractTimeline.map((point, idx) => (
@@ -682,36 +687,28 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                             )}
                         </ul>
                     )}
-                </DeskPanel>
-
-                {/* The studio's own projects, closest in size. */}
-                <DeskPanel icon={Building2} title="Comparable past projects" blurb="The studio's own priced projects, closest in size to this one.">
-                    {comparableProjects.length === 0 ? (
-                        <p className="text-xs text-slate-500">No other priced projects yet. This fills in as the studio quotes more.</p>
-                    ) : (
-                        <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-                            {comparableProjects.map((p, idx) => {
-                                const raw = (activeTier.summary.blendedGm ?? 0) - p.gm;
-                                const diffPct = Math.abs(raw) < 0.05 ? 0 : raw;
-                                return (
-                                    <li key={p.id || idx} className="px-4 py-2.5 flex items-center justify-between gap-3 hud-row-in" style={{ animationDelay: `${idx * 30}ms` }}>
-                                        <span className="min-w-0">
-                                            <span className="block text-sm font-semibold text-slate-800">{p.name}</span>
-                                            <span className="block text-[11px] text-slate-500">{formatCurrency(p.value)} · {p.itemsCount} items</span>
-                                        </span>
-                                        <span className="text-right">
-                                            <span className="block text-sm font-black text-slate-800 tabular-nums">{p.gm.toFixed(1)}%</span>
-                                            <span className={`block text-[11px] font-semibold tabular-nums ${diffPct > 0 ? 'text-[#3D52A0]' : diffPct < 0 ? 'text-rose-700' : 'text-slate-400'}`}>
-                                                {diffPct > 0 ? `+${diffPct.toFixed(1)}` : diffPct.toFixed(1)} pts vs {activeTier.name}
-                                            </span>
-                                        </span>
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    )}
-                </DeskPanel>
-            </div>
+                </>}
+                actions={{
+                    select: (tid) => setActiveTierId(tid),
+                    pickVersion: handlePickVersion,
+                    editBoq: handleEditBoq,
+                    newVersion: (tid) => { handleNewVersion(tid); },
+                    copyAsOption: handleCopyAsOption,
+                    ownOption: handleOwnOption,
+                    startRename: (tid) => { const t = tiers.find(x => x.id === tid); if (t) handleStartEditing(t); },
+                    importBoq: onImportClick,
+                    remove: handleDeleteTier,
+                    approve: handleApproveTier,
+                    askRevert: () => setRevertOpen(true),
+                    keepApproval: () => setRevertOpen(false),
+                    revert: handleRevertApproval,
+                    sync: handleSyncTier,
+                    tuneMargin: (tid) => { setActiveTierId(tid); setMarginShiftAmount(0); setTuneOpen(true); },
+                    startRevision: () => setActiveTab('revision-studio'),
+                    offers: (tid) => { setActiveTierId(tid); setActiveTab('analytics'); },
+                    saveDiscounts: (next) => setProjectContext(prev => ({ ...prev, financials: { ...(prev.financials as any), discounts: next } })),
+                }}
+            />
 
             {/* Tune margin: the old Systematic Margin Adjuster, for the option it was opened on. */}
             {tuneOpen && createPortal(

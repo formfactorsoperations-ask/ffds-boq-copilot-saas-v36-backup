@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import { buildBankMap } from '../../lib/boqPricing';
-import { partOfLine, scopeSplit, offerValue, offerDiscount, staleOffer, marginWith, discountTotal, offerName } from '../../lib/offers';
+import { partOfLine, tradeOfLine, scopeSplit, offerValue, offerDiscount, staleOffer, marginWith, discountTotal, offerName } from '../../lib/offers';
 import MoneyOffersTab from '../../components/money/MoneyOffersTab';
 import { ALWAYS_ON_BAND, NAV_CONFIG } from '../../components/navConfig';
 
@@ -45,16 +45,32 @@ describe('What an option is made of', () => {
     expect(s.parts.carpentry.lines[0].name).toBe('Wardrobe with loft');
   });
 
-  it('respects the BOQ scope rooms first', () => {
-    expect(partOfLine('Civil', { cat: 'Carpentry', name: 'x' })).toBe('civil');
-    expect(partOfLine('Functional', { cat: 'Carpentry', name: 'x' })).toBe('functional');
+  it('goes by the item, not the scope room the generator filed it in', () => {
+    // POP false ceiling is a Civil item in the bank, filed under Functional by the generator.
+    expect(tradeOfLine('Functional', { cat: 'Civil', name: 'POP FALSE CEILING (Standard)' })).toEqual({ part: 'functional', trade: 'False ceiling' });
+    expect(partOfLine('Civil', { cat: 'Plumbing', name: 'PLUMBING POINT (NEW/SHIFT)' })).toBe('functional');
+    expect(partOfLine('Functional', { cat: 'Plumbing', name: 'PLUMBING POINT (NEW/SHIFT)' })).toBe('functional');
+    expect(partOfLine('Functional', { cat: 'Civil', name: 'Floor tiling' })).toBe('civil');
+    expect(partOfLine('Civil', { cat: 'Carpentry', name: 'x' })).toBe('carpentry');
     expect(partOfLine('Kitchen', { cat: 'Modular Kitchen', name: 'x' })).toBe('carpentry');
-    expect(partOfLine('Bath', { cat: 'Plumbing', name: 'x' })).toBe('civil');
+    expect(partOfLine('Others', { cat: 'Site Services', name: 'Debris removal' })).toBe('others');
+    expect(partOfLine('Living', { cat: 'Decor', name: 'Wall art' })).toBe('others');
+    // Only a line whose item is not in the bank falls back to its scope room.
+    expect(partOfLine('Civil', undefined)).toBe('civil');
+  });
+
+  it('adds up trade by trade inside each part', () => {
+    const s = scopeSplit({ boq: BOQ } as any, map);
+    expect(s.parts.carpentry.trades).toEqual([{ trade: 'Carpentry', value: 12000, lines: 2 }]);
+    expect(s.parts.functional.trades.map((t) => t.trade)).toEqual(['False ceiling', 'Painting']);
+    const sum = Object.values(s.parts).reduce((a, p) => a + p.trades.reduce((b, t) => b + t.value, 0), 0);
+    expect(sum).toBe(s.total);
   });
 
   it('leaves out lines that are not billed, or paid to vendors directly', () => {
     const s = scopeSplit({ boq: [...BOQ, { ...line('x', 'wardrobe', 5, 'Bed 2'), asActuals: true }] } as any, map);
     expect(s.total).toBe(17000);
+    expect(s.asActuals).toBe(5000); // shown apart, never in the price
   });
 });
 
