@@ -44,6 +44,7 @@ import {
   type ActionLane, type ChipTone,
 } from "../../lib/minutes";
 import "../projectHeader/projectHeader.css";
+import { EmptyState } from "../ui/kit";
 
 /*
   MINUTES AND ACTIONS, for one project.
@@ -326,11 +327,11 @@ export function MomActionTracker({
             {loading ? (
               <p className="text-xs text-slate-500 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading the minutes…</p>
             ) : !grouped.length ? (
-              <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center">
-                <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto" />
-                <p className="text-sm font-semibold text-slate-800 mt-2">{filter === "done" ? "Nothing ticked done yet" : "Nothing waiting here"}</p>
-                <p className="text-xs text-slate-500 mt-1">{searchQuery ? "No action matches the search." : "Actions from sent minutes show here until someone ticks them done."}</p>
-              </div>
+              <EmptyState
+                icon={CheckCircle2}
+                title={filter === "done" ? "Nothing ticked done yet" : "Nothing waiting here"}
+                text={searchQuery ? "No action matches the search." : "Actions from sent minutes show here until someone ticks them done."}
+              />
             ) : grouped.map((g) => (
               <section key={g.id}>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">{g.label} · {g.rows.length}</p>

@@ -58,6 +58,8 @@ import { sendDecisionNotification, sendSignoffRequest } from '../../services/ema
 import { useOrg } from '../../contexts/OrgContext';
 import { issuePortalAccess, portalTokenOf } from '../../services/portalAccessService';
 import { publicAppOrigin } from '../../lib/publicUrl';
+import { EmptyState } from '../ui/kit';
+import { Scale as EmptyDecisionsIcon } from '@/lib/lucide-shim';
 
 interface DecisionTrackerProps {
     projectContext: ProjectContext;
@@ -1120,11 +1122,14 @@ export default function DecisionTracker({ projectContext, setProjectContext, pro
                 </div>
 
                 {visibleDecisions.length === 0 ? (
-                    <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-sm text-slate-400 font-medium">
-                        {serverDecisions.length === 0
-                            ? 'No decisions recorded yet. Use the logger above to secure your first change.'
-                            : `No ${natureFilter} decisions on this project yet.`}
-                    </div>
+                    <EmptyState
+                        className="bg-white"
+                        icon={EmptyDecisionsIcon}
+                        title={serverDecisions.length === 0 ? 'No decisions recorded yet' : `No ${natureFilter} decisions on this project yet`}
+                        text={serverDecisions.length === 0
+                            ? 'Log a decision when the client agrees a change, so what it cost and who agreed stays on record.'
+                            : 'Pick All to see every decision.'}
+                    />
                 ) : (
                     visibleDecisions.map((decision, rowIndex) => {
                         const id = (decision as any).id;
