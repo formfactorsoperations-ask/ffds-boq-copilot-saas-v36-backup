@@ -13,6 +13,9 @@ import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 import DigitalSignatureDocketView from '../common/DigitalSignatureDocket';
 import ManualAcceptanceOverrideModal from '../ops/ManualAcceptanceOverrideModal';
 import { publicAppOrigin } from '../../lib/publicUrl';
+import { resolveTokens } from '../documents/DocumentBlocks';
+import { Button, Chip, Segmented, StateDot, IconChip, buttonClass } from '../ui/kit';
+import { Clock, ListChecks, BookOpen, History, Link2 } from '@/lib/lucide-shim';
 
 interface TermsDocketPageProps {
     projectContext: ProjectContext;
@@ -52,6 +55,10 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
     const [activeSectionIdx, setActiveSectionIdx] = useState<number | null>(null);
     const [editLayoutMode, setEditLayoutMode] = useState<'editor' | 'split' | 'preview'>('editor');
     const [activeSubTab, setActiveSubTab] = useState<'view' | 'edit'>('view');
+    /* Summary first (owner, 16 Nov 2026); a link that names a part of the document opens the document. */
+    const [viewMode, setViewMode] = useState<'summary' | 'doc'>(() => {
+        try { return new URLSearchParams(window.location.search).get('focus') ? 'doc' : 'summary'; } catch { return 'summary'; }
+    });
 
     const deepCopyTerms = (config: TermsSettings): TermsSettings => {
         return JSON.parse(JSON.stringify(config));
@@ -491,18 +498,9 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
     const activeTermsConfig = (isAmending && editedTermsConfig) ? editedTermsConfig : snapshotTermsConfig;
 
     const renderBlock = (block: any, idx: number) => {
-        let processed = block.text || '';
-        if (processed) {
-            processed = processed.replace(/\{\{studioName\}\}/g, orgData.orgName || '[set in Studio Settings]');
-            processed = processed.replace(/\{\{studioFoundedYear\}\}/g, activeTermsConfig?.studioFoundedYear?.toString() || '[set in Studio Settings]');
-            processed = processed.replace(/\{\{changeRequestResponseDays\}\}/g, activeTermsConfig?.changeRequestResponseDays?.toString() || '[set in Studio Settings]');
-            processed = processed.replace(/\{\{paymentOverdueGraceDays\}\}/g, activeTermsConfig?.paymentOverdueGraceDays?.toString() || '[set in Studio Settings]');
-            processed = processed.replace(/\{\{resumeAfterPaymentDays\}\}/g, activeTermsConfig?.resumeAfterPaymentDays?.toString() || '[set in Studio Settings]');
-            processed = processed.replace(/\{\{paymentMethods\}\}/g, activeTermsConfig?.paymentMethods?.join(' / ') || '[set in Studio Settings]');
-            processed = processed.replace(/\{\{gstRate\}\}/g, activeTermsConfig?.gstRate?.toString() || '[set in Studio Settings]');
-            processed = processed.replace(/\{\{disputeMediationDays\}\}/g, activeTermsConfig?.disputeMediationDays?.toString() || '[set in Studio Settings]');
-            processed = processed.replace(/\{\{disputeJurisdiction\}\}/g, activeTermsConfig?.disputeJurisdiction || '[set in Studio Settings]');
-        }
+        /* The same resolver as the client's copy (components/documents/DocumentBlocks), so
+           the studio's view and its PDF can never read differently from the portal. */
+        const processed = resolveTokens(block.text || '', activeTermsConfig, orgData.orgName || '');
 
         if (block.type === 'clause') {
             return (
@@ -570,86 +568,138 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
         return null;
     };
 
+    /* ── Summary-first layout (owner's mock-up, 16 Nov 2026) ─────────────────
+       Everything below is how the screen is laid out. The docket's records, the
+       sign-off, the PDF block and every handler above are unchanged, so what
+       reaches the client's portal is exactly what it was. */
+    const cfg = activeTermsConfig;
+    const secWith = (pred: (b: any) => boolean) => cfg?.sections?.find((sec: any) => sec.blocks?.some(pred))?.n;
+    const secWithToken = (token: string) => secWith((b: any) => String(b.text || '').includes(`{{${token}}}`));
+    /* The section named for the topic wins over one that merely mentions its number. */
+    const secTitled = (re: RegExp) => cfg?.sections?.find((sec: any) => re.test(sec.title || ''))?.n;
+    const months = (m: number) => (m >= 12 && m % 12 === 0 ? `${m / 12} year${m / 12 > 1 ? 's' : ''}` : `${m} months`);
+    const keyTerms = [
+        cfg?.paymentOverdueGraceDays ? { topic: 'Late payment', ref: secTitled(/payment/i) ?? secWithToken('paymentOverdueGraceDays'),
+            text: `Work may pause if an advance is unpaid ${cfg.paymentOverdueGraceDays} days after it falls due${cfg.resumeAfterPaymentDays ? `; it resumes within ${cfg.resumeAfterPaymentDays} working days of payment` : ''}.` } : null,
+        cfg?.changeRequestResponseDays ? { topic: 'Changes', ref: secTitled(/change/i) ?? secWithToken('changeRequestResponseDays'),
+            text: `A written change request; the studio states the cost and time within ${cfg.changeRequestResponseDays} working days.` } : null,
+        cfg?.includedRevisionRounds ? { topic: 'Revisions', ref: secWithToken('includedRevisionRounds'),
+            text: `${cfg.includedRevisionRounds} design revision rounds included.` } : null,
+        cfg?.warrantyPeriods?.length ? { topic: 'Warranty', ref: secWith((b: any) => b.source === 'warrantyPeriods'),
+            text: cfg.warrantyPeriods.map((w: any) => `${w.trade} ${months(w.months)}`).join(' · ') } : null,
+        cfg?.snagCategories?.length ? { topic: 'Snags', ref: secWith((b: any) => b.source === 'snagCategories'),
+            text: cfg.snagCategories.map((c: any) => `${c.label} within ${c.resolveDays} working days`).join(' · ') } : null,
+        cfg?.disputeMediationDays ? { topic: 'Disputes', ref: secTitled(/dispute/i) ?? secWithToken('disputeMediationDays'),
+            text: `Mediation for ${cfg.disputeMediationDays} days, then ${cfg.disputeJurisdiction ? `the courts in ${cfg.disputeJurisdiction}` : 'the courts'}.` } : null,
+        cfg?.gstRate ? { topic: 'GST', ref: secWithToken('gstRate'), text: `${cfg.gstRate}% on every amount.` } : null,
+        cfg?.paymentMethods?.length ? { topic: 'Payment', ref: secWithToken('paymentMethods'), text: cfg.paymentMethods.join(' / ') } : null,
+    ].filter(Boolean) as Array<{ topic: string; ref?: number; text: string }>;
+
+    const isSigned = signoffStatus === 'signed' || latestDocket.status === 'acknowledged' || latestDocket.status === 'issued';
+    const statusChip = latestDocket.status === 'draft'
+        ? <Chip tone="slate">Draft</Chip>
+        : latestDocket.status === 'sent'
+            ? <Chip tone="warn">Sent · awaiting signature</Chip>
+            : <Chip tone="good">{latestDocket.docketRef?.includes('-AMD-') ? 'Executed amendment' : 'Active terms'}</Chip>;
+    const when = (t?: number | null) => (t ? new Date(t).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
+    const steps = [
+        { label: 'Generated', sub: when(latestDocket.generatedAt), done: true },
+        { label: 'Sent to client', sub: latestDocket.sentAt ? when(latestDocket.sentAt) : 'Not yet', done: !!latestDocket.sentAt || latestDocket.status !== 'draft' },
+        { label: 'Signed', sub: latestDocket.acknowledgedAt ? when(latestDocket.acknowledgedAt) : signoffStatus === 'signed' ? 'Signed in the portal' : 'Not yet', done: isSigned },
+    ];
+
+    const openSection = (n?: number) => {
+        setActiveSubTab('view');
+        setIsAmending(false);
+        setViewMode('doc');
+        if (n != null) window.setTimeout(() => document.getElementById(`terms-sec-${n}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+    };
+    const pickView = (v: 'summary' | 'doc' | 'clauses') => {
+        if (v === 'clauses') {
+            if (latestDocket.status !== 'draft') {
+                alert("This document has been sent/executed and cannot be edited. Please create an amendment/addendum.");
+                return;
+            }
+            setActiveSubTab('edit');
+            if (!isAmending) startAmending();
+            return;
+        }
+        setActiveSubTab('view');
+        setIsAmending(false);
+        setViewMode(v);
+    };
+    /* The PDF is captured from the document on screen, so show it first when the summary is open. */
+    const downloadPdf = () => {
+        if (document.getElementById('terms-docket-pdf-render')) { handleDownloadPdf(); return; }
+        setViewMode('doc');
+        if (isAmending && editLayoutMode === 'editor') setEditLayoutMode('split');
+        window.setTimeout(() => handleDownloadPdf(), 300);
+    };
+    const showDocument = activeSubTab === 'edit' || viewMode === 'doc';
+    /* After saving clause changes, show the document so the change can be read in place. */
+    const saveAndShow = () => { saveAmendments(); setViewMode('doc'); };
+
     return (
-        <div className="w-full space-y-6 animate-in fade-in pb-20">
-            {/* Sub-tabs Navigation */}
-            <div className="flex border-b border-slate-200 no-print mb-2 bg-stone-50/50 p-1.5 rounded-2xl border">
-                <button
-                    onClick={() => {
-                        setActiveSubTab('view');
-                        setIsAmending(false);
-                    }}
-                    className={`flex-1 sm:flex-initial px-6 py-2.5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
-                        activeSubTab === 'view'
-                            ? 'bg-[#3D52A0] text-white shadow-sm'
-                            : 'text-slate-600 hover:text-slate-800 hover:bg-slate-100/50'
-                    }`}
-                >
-                    Document Viewer & Stream
-                </button>
-                <button
-                    onClick={() => {
-                        if (latestDocket.status !== 'draft') {
-                            alert("This document has been sent/executed and cannot be edited. Please create an amendment/addendum.");
-                            return;
-                        }
-                        setActiveSubTab('edit');
-                        if (!isAmending) {
-                            startAmending();
-                        }
-                    }}
-                    disabled={latestDocket.status !== 'draft'}
-                    className={`flex-1 sm:flex-initial px-6 py-2.5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
-                        latestDocket.status !== 'draft'
-                            ? 'opacity-40 cursor-not-allowed text-slate-400'
-                            : activeSubTab === 'edit'
-                            ? 'bg-[#3D52A0] text-white shadow-sm'
-                            : 'text-slate-600 hover:text-slate-800 hover:bg-slate-100/50'
-                    }`}
-                >
-                    Clause & Settings Editor
-                </button>
+        <div className="w-full space-y-4 pb-20">
+            {/* One row: the view, where the docket stands, and what can be done with it. */}
+            <div className="flex flex-wrap items-center gap-2 no-print">
+                <Segmented
+                    label="Terms Docket view"
+                    size="sm"
+                    value={activeSubTab === 'edit' ? 'clauses' : viewMode}
+                    options={[
+                        { id: 'summary', label: 'Summary' },
+                        { id: 'doc', label: 'Document' },
+                        { id: 'clauses', label: 'Clauses & settings' },
+                    ]}
+                    onChange={pickView}
+                />
+                {statusChip}
+                <span className="text-xs text-slate-500 tabular-nums">{latestDocket.docketRef}</span>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                    {latestDocket.status === 'draft' && !isLocked && (
+                        <Button variant="quiet" size="sm" icon={FileText} onClick={handleGenerate} disabled={isGenerating} title="Start this docket again from the studio's current terms">Regenerate</Button>
+                    )}
+                    <Button size="sm" icon={Download} onClick={downloadPdf} disabled={!isValid}>Download PDF</Button>
+                    {latestDocket.status === 'draft' && (
+                        isAmending
+                            ? <Button size="sm" icon={Save} onClick={saveAndShow}>Save changes</Button>
+                            : <Button size="sm" icon={Edit3} onClick={startAmending}>Amend terms</Button>
+                    )}
+                    {latestDocket.status === 'sent' && !isLocked && (
+                        <Button size="sm" icon={Check} onClick={handleAcknowledge}>Mark as acknowledged</Button>
+                    )}
+                    {latestDocket.status !== 'draft' && (
+                        <Button size="sm" icon={Plus} onClick={handleGenerateAmendment} disabled={isGenerating}>Create amendment</Button>
+                    )}
+                    {latestDocket.status === 'draft' && (
+                        !showSendConfirm
+                            ? <Button variant="primary" size="sm" icon={Send} onClick={() => setShowSendConfirm(true)} disabled={isSending}>{isSending ? 'Sending…' : 'Send to client'}</Button>
+                            : <>
+                                <Button variant="primary" size="sm" onClick={sendEmailSignoff}>Confirm send</Button>
+                                <Button variant="quiet" size="sm" onClick={() => setShowSendConfirm(false)}>Cancel</Button>
+                              </>
+                    )}
+                </div>
             </div>
 
             {/* Status Banner */}
             {signoffStatus === 'sent' && currentSignoff?.token && (
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 no-print">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                        <div className="flex-grow">
-                            <h3 className="text-lg font-black text-amber-900 uppercase tracking-wider mb-2">Awaiting Client Sign-Off</h3>
-                            <p className="text-sm text-amber-800">The design agreement has been generated and is awaiting digital signature.</p>
-                            
-                            <div className="mt-4 p-4 glass-light rounded-lg border border-amber-200 shadow-sm">
-                                <div className="flex items-center justify-between mb-2 pb-2 border-b border-amber-100">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Digital Sign-Off URL</span>
-                                    <button 
-                                        onClick={() => handleCopy(getSignoffUrl(currentSignoff.token!))}
-                                        className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold rounded transition-all cursor-pointer"
-                                    >
-                                        {copied ? "Copied!" : "Copy Link"}
-                                    </button>
-                                </div>
-                                <div className="text-[11px] font-mono break-all text-slate-500 bg-slate-50 p-2.5 rounded border border-slate-200">
-                                    {getSignoffUrl(currentSignoff.token!)}
-                                </div>
-                                <div className="mt-3 flex items-center gap-2">
-                                    <a href={getSignoffUrl(currentSignoff.token!)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-[11px] font-bold tracking-tight inline-block cursor-pointer">
-                                        Open Sign-Off Screen &rarr;
-                                    </a>
-                                </div>
-                            </div>
+                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hud-panel-in no-print">
+                    <div className="flex flex-wrap items-start gap-3">
+                        <IconChip icon={Link2} />
+                        <div className="min-w-0 flex-1">
+                            <h2 className="font-bold text-slate-800 flex flex-wrap items-center gap-2">Waiting for the client's sign-off <Chip tone="warn">Sent</Chip></h2>
+                            <p className="text-xs text-slate-500 mt-0.5">The docket is with the client for their digital signature. Share this link if they ask for it.</p>
+                            <p className="mt-3 text-xs text-slate-600 break-all bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">{getSignoffUrl(currentSignoff.token!)}</p>
                         </div>
-
-                        <div className="shrink-0 border-l border-amber-200 pl-6 space-y-2">
-                            <button
-                                onClick={() => setShowOverrideModal(true)}
-                                className="px-4 py-2.5 bg-white border border-amber-300 text-amber-900 text-xs font-bold rounded-xl shadow-xs hover:bg-amber-100 transition uppercase tracking-wider cursor-pointer"
-                            >
-                                Ops Override: Record Acceptance
-                            </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button size="sm" onClick={() => handleCopy(getSignoffUrl(currentSignoff.token!))}>{copied ? 'Copied' : 'Copy link'}</Button>
+                            <a href={getSignoffUrl(currentSignoff.token!)} target="_blank" rel="noopener noreferrer" className={buttonClass('secondary', 'sm')}>Open sign-off screen</a>
+                            <Button size="sm" onClick={() => setShowOverrideModal(true)} title="Record a signature given by WhatsApp, email or in person">Record acceptance</Button>
                         </div>
                     </div>
-                </div>
+                </section>
             )}
             
             {signoffStatus === 'signed' && (
@@ -705,295 +755,202 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
             )}
 
             {localError && (
-                <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm mb-4">
+                <div className="p-4 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-sm">
                     {localError}
                 </div>
             )}
 
-            {activeSubTab === 'view' && (
-                <>
-                    {/* Terms & Amendments Version Ledger */}
-                    <div className="glass-light border border-slate-200/80 rounded-3xl p-6 shadow-sm no-print">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-100">
-                            <div className="flex items-center gap-3">
-                                <div className="bg-sky-50 p-2.5 rounded-xl border border-sky-100/50">
-                                    <FileText className="w-5 h-5 text-[#334486]" />
+            {activeSubTab === 'view' && viewMode === 'summary' && (
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,380px)] gap-4 items-start no-print">
+                    <div className="space-y-4 min-w-0">
+                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in">
+                            <div className="flex items-start gap-3">
+                                <IconChip icon={Clock} />
+                                <div className="min-w-0">
+                                    <h2 className="font-bold text-slate-800 flex flex-wrap items-center gap-2">Where it stands {statusChip}</h2>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                        {latestDocket.status === 'draft'
+                                            ? 'Not sent yet. The client signs this before any design work, proposal or Discovery Workshop starts.'
+                                            : isSigned ? 'Signed: these are the terms the project runs on.' : 'With the client for their signature.'}
+                                    </p>
                                 </div>
-                                <div>
-                                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Document Stream & Version Ledger</h3>
-                                    <p className="text-xs text-slate-500 mt-0.5">Track every change, revision, signed amendment, and digital sign-off record in one place.</p>
+                            </div>
+                            <ol className="mt-5 grid grid-cols-3 gap-3">
+                                {steps.map((st, i) => (
+                                    <li key={st.label} className="hud-row-in min-w-0" style={{ animationDelay: `${i * 30}ms` }}>
+                                        <span className={`block h-1 rounded-full ${st.done ? 'bg-[#3D52A0]' : 'bg-slate-200'}`} />
+                                        <b className="block mt-2 text-sm font-semibold text-slate-800">{st.label}</b>
+                                        <span className="block text-[11px] text-slate-500">{st.sub}</span>
+                                    </li>
+                                ))}
+                            </ol>
+                        </section>
+
+                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in" style={{ animationDelay: '30ms' }}>
+                            <div className="flex items-start gap-3">
+                                <IconChip icon={ListChecks} />
+                                <div className="min-w-0">
+                                    <h2 className="font-bold text-slate-800">The terms clients ask about</h2>
+                                    <p className="text-xs text-slate-500 mt-0.5">From this docket's settings. Open one to read its section.</p>
                                 </div>
                             </div>
-                            <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
-                                {dockets.length} {dockets.length === 1 ? 'Document' : 'Documents'} in stream
-                            </span>
-                        </div>
-
-                        {dockets.length === 0 ? (
-                            <div className="text-center py-8">
-                                <FileText className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                                <p className="text-sm text-slate-400 italic">No document history found. Please generate a docket to establish governing terms.</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse min-w-[650px]">
-                                    <thead>
-                                        <tr className="border-b border-slate-100 bg-slate-50/50">
-                                            <th className="py-2.5 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Document Type & Reference</th>
-                                            <th className="py-2.5 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Status Badge</th>
-                                            <th className="py-2.5 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Activity & Timeline Log</th>
-                                            <th className="py-2.5 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Operator / Signatory</th>
-                                            <th className="py-2.5 px-4 text-right text-[10px] font-bold uppercase tracking-wider text-slate-400">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {dockets.map((doc, dIdx) => {
-                                            const isSelected = doc.id === latestDocket?.id;
-                                            const isAmendment = doc.docketRef?.includes('-AMD-');
-                                            
-                                            // Status styling
-                                            let statusBg = 'bg-slate-50 text-slate-600 border-slate-200';
-                                            let statusText = 'Draft';
-                                            if (doc.status === 'sent') {
-                                                statusBg = 'bg-amber-50 text-amber-800 border-amber-200';
-                                                statusText = 'Sent - Awaiting Signature';
-                                            } else if (doc.status === 'acknowledged' || doc.status === 'issued') {
-                                                statusBg = 'bg-emerald-50 text-emerald-800 border-emerald-200/60';
-                                                statusText = isAmendment ? 'Executed Amendment' : 'Active Governing Terms';
-                                            }
-
-                                            return (
-                                                <tr key={doc.id || dIdx} className={`border-b border-slate-100 last:border-b-0 hover:bg-slate-50/30 transition-colors ${isSelected ? 'bg-sky-50/20' : ''}`}>
-                                                    <td className="py-3.5 px-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`p-2 rounded-lg ${isAmendment ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-sky-50 text-[#334486] border border-sky-100'}`}>
-                                                                <FileText className="w-4 h-4" />
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-xs font-black text-slate-800 block leading-tight">
-                                                                    {isAmendment ? 'Addendum / Amendment' : 'Governing Terms of Engagement'}
-                                                                </span>
-                                                                <span className="font-mono text-[10px] text-slate-500 mt-1 block tracking-wider font-semibold">
-                                                                    {doc.docketRef}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-3.5 px-4">
-                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-wider border ${statusBg}`}>
-                                                            <span className="w-1.5 h-1.5 rounded-full mr-1.5 bg-current"></span>
-                                                            {statusText}
-                                                        </span>
-                                                    </td>
-                                                    <td className="py-3.5 px-4 text-[11px] text-slate-600">
-                                                        <div className="space-y-1">
-                                                            <div className="flex items-center gap-2 text-slate-500">
-                                                                <span className="text-[10px] font-bold text-slate-400 uppercase w-14">Created:</span>
-                                                                <span className="font-semibold text-slate-700">{new Date(doc.generatedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-                                                            </div>
-                                                            {doc.sentAt && (
-                                                                <div className="flex items-center gap-2 text-[#3D52A0]">
-                                                                    <span className="text-[10px] font-bold text-sky-400 uppercase w-14">Sent:</span>
-                                                                    <span className="font-semibold">{new Date(doc.sentAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-                                                                </div>
-                                                            )}
-                                                            {doc.acknowledgedAt && (
-                                                                <div className="flex items-center gap-2 text-emerald-600">
-                                                                    <span className="text-[10px] font-bold text-emerald-400 uppercase w-14">Signed:</span>
-                                                                    <span className="font-semibold">{new Date(doc.acknowledgedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-3.5 px-4">
-                                                        <div className="text-xs">
-                                                            <span className="text-slate-800 font-bold block">{doc.sentBy || 'System Operator'}</span>
-                                                            <span className="text-[10px] text-slate-400 font-medium">Digital Architect</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-3.5 px-4 text-right">
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            {isSelected ? (
-                                                                <span className="px-3 py-1.5 bg-[#3D52A0] text-white text-[10px] font-extrabold rounded-lg uppercase tracking-wider shadow-sm">
-                                                                    Active Preview
-                                                                </span>
-                                                            ) : (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        setSelectedDocketId(doc.id || null);
-                                                                        setIsAmending(false);
-                                                                    }}
-                                                                    className="px-3 py-1.5 bg-white/60 backdrop-blur-md border border-slate-200 hover:border-[#3D52A0] hover:text-[#3D52A0] hover:bg-sky-50/50 text-slate-700 text-[10px] font-extrabold rounded-lg transition-all cursor-pointer shadow-sm uppercase tracking-wider"
-                                                                >
-                                                                    Load View
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
+                            {keyTerms.length === 0 ? (
+                                <p className="mt-4 text-xs text-slate-500">This docket has no settings to summarise; read the document.</p>
+                            ) : (
+                                <div className="mt-4 divide-y divide-slate-100">
+                                    {keyTerms.map((t) => (
+                                        <button key={t.topic} type="button" onClick={() => openSection(t.ref)}
+                                            className="w-full grid grid-cols-[120px_minmax(0,1fr)_auto] gap-3 items-baseline py-2.5 text-left hover:bg-slate-50 rounded-lg px-1">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t.topic}</span>
+                                            <span className="text-sm text-slate-700">{t.text}</span>
+                                            <span className="text-xs font-bold text-[#3D52A0]">{t.ref != null ? `§ ${t.ref}` : ''}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
                     </div>
 
-                    {/* Header Actions */}
-                    <div className="flex flex-col md:flex-row justify-between items-center gap-4 glass-light p-4 rounded-2xl shadow-sm border border-slate-200 no-print">
-                        <div className="flex items-center gap-4">
-                            <div className="bg-slate-100 p-3 rounded-xl border border-slate-200">
-                                <FileText className="w-6 h-6 text-slate-500" />
-                            </div>
-                            <div>
-                                <h2 className="text-lg font-bold text-slate-800 leading-tight">Terms Docket <span className="font-mono text-slate-500 ml-2 text-sm">{latestDocket.docketRef}</span></h2>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded ${latestDocket.status === 'draft' ? 'bg-slate-100 text-slate-600' : latestDocket.status === 'sent' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                        {latestDocket.status}
-                                    </span>
-                                    <span className="text-xs text-slate-500">
-                                        Generated {new Date(latestDocket.generatedAt).toLocaleDateString()}
-                                    </span>
+                    <div className="space-y-4 min-w-0">
+                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in" style={{ animationDelay: '60ms' }}>
+                            <div className="flex items-start gap-3">
+                                <IconChip icon={BookOpen} />
+                                <div className="min-w-0">
+                                    <h2 className="font-bold text-slate-800">The document</h2>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                        {latestDocket.docketRef?.includes('-AMD-') ? 'Amendment to the terms of engagement' : 'Terms of engagement'} · {cfg?.sections?.length || 0} sections
+                                    </p>
                                 </div>
                             </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => setPreviewMode(!previewMode)} className="px-4 py-2 bg-white/60 backdrop-blur-md border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2">
-                                <Eye className="w-4 h-4" /> {previewMode ? 'Exit Preview' : 'Preview as PDF'}
-                            </button>
-                            <button onClick={handleDownloadPdf} disabled={!isValid} className="px-4 py-2 bg-white/60 backdrop-blur-md border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                                <Download className="w-4 h-4" /> Download PDF
-                            </button>
-                            {latestDocket.status === 'draft' && (
-                                <>
-                                    {!isAmending ? (
-                                        <button onClick={startAmending} className="px-4 py-2 bg-amber-500 border border-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-lg transition flex items-center gap-2 shadow-sm cursor-pointer">
-                                            <Edit3 className="w-4 h-4" /> Amend Terms
+                            <ol className="mt-3">
+                                {(cfg?.sections || []).map((sec: any) => (
+                                    <li key={sec.n}>
+                                        <button type="button" onClick={() => openSection(sec.n)} className="w-full flex gap-2 px-1 py-1.5 rounded-lg text-left text-sm text-slate-700 hover:bg-slate-50">
+                                            <span className="w-6 shrink-0 text-slate-400 tabular-nums">{sec.n}</span>
+                                            <span className="min-w-0">{resolveTokens(sec.title || '', cfg, orgData.orgName || '')}</span>
                                         </button>
-                                    ) : (
-                                        <button onClick={saveAmendments} className="px-4 py-2 bg-emerald-600 border border-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg transition flex items-center gap-2 shadow-sm cursor-pointer">
-                                            <Save className="w-4 h-4" /> Save Changes
-                                        </button>
-                                    )}
+                                    </li>
+                                ))}
+                            </ol>
+                            <Button size="sm" className="mt-3" icon={BookOpen} onClick={() => openSection()}>Read the document</Button>
+                        </section>
 
-                                    {!isLocked && (
-                                        <button onClick={handleGenerate} disabled={isGenerating} className="px-4 py-2 bg-white/60 backdrop-blur-md border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition flex items-center gap-2">
-                                            <FileText className="w-4 h-4" /> Regenerate
-                                        </button>
-                                    )}
-                                    
-                                    {!showSendConfirm ? (
-                                        <button onClick={() => setShowSendConfirm(true)} disabled={isSending} className="px-4 py-2 bg-[#3D52A0] border border-[#3D52A0] text-white font-bold text-sm rounded-lg hover:bg-[#334486] transition flex items-center gap-2 shadow-sm">
-                                            <Send className="w-4 h-4" /> {isSending ? 'Sending...' : 'Send to Client'}
-                                        </button>
-                                    ) : (
-                                        <div className="flex items-center gap-2">
-                                            <button onClick={sendEmailSignoff} className="px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white font-bold rounded text-sm transition shadow-sm">Confirm Send</button>
-                                            <button onClick={() => setShowSendConfirm(false)} className="px-4 py-2 bg-white/60 backdrop-blur-md border border-slate-200 text-slate-700 font-bold rounded text-sm hover:bg-slate-50 transition">Cancel</button>
+                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in" style={{ animationDelay: '90ms' }}>
+                            <div className="flex items-start gap-3">
+                                <IconChip icon={History} />
+                                <div className="min-w-0">
+                                    <h2 className="font-bold text-slate-800">Versions</h2>
+                                    <p className="text-xs text-slate-500 mt-0.5">Every docket and amendment, oldest first.</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 space-y-2">
+                                {dockets.map((doc, dIdx) => {
+                                    const isSelected = doc.id === latestDocket?.id;
+                                    const isAmendment = doc.docketRef?.includes('-AMD-');
+                                    const tone = doc.status === 'sent' ? 'warn' : (doc.status === 'acknowledged' || doc.status === 'issued') ? 'good' : 'slate';
+                                    const label = doc.status === 'sent' ? 'Sent' : (doc.status === 'acknowledged' || doc.status === 'issued') ? (isAmendment ? 'Executed' : 'Active') : 'Draft';
+                                    return (
+                                        <div key={doc.id || dIdx} className={`rounded-xl border px-3 py-2.5 flex items-start justify-between gap-3 ${isSelected ? 'border-[#3D52A0]/40 bg-[#3D52A0]/5' : 'border-slate-200'}`}>
+                                            <div className="min-w-0">
+                                                <b className="block text-sm font-semibold text-slate-800">{isAmendment ? 'Amendment' : 'Terms of engagement'}</b>
+                                                <span className="block text-[11px] text-slate-500 tabular-nums">{doc.docketRef}</span>
+                                                <span className="block text-[11px] text-slate-500">
+                                                    Created {when(doc.generatedAt)}{doc.sentAt ? ` · sent ${when(doc.sentAt)}` : ''}{doc.acknowledgedAt ? ` · signed ${when(doc.acknowledgedAt)}` : ''}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                                <Chip tone={tone as any}>{label}</Chip>
+                                                {isSelected
+                                                    ? <span className="text-[11px] font-semibold text-[#3D52A0]">Showing</span>
+                                                    : <Button variant="quiet" size="sm" onClick={() => { setSelectedDocketId(doc.id || null); setIsAmending(false); }}>Show</Button>}
+                                            </div>
                                         </div>
-                                    )}
-                                </>
-                            )}
-                            {latestDocket.status === 'sent' && !isLocked && (
-                                <button onClick={handleAcknowledge} className="px-4 py-2 bg-emerald-600 border border-emerald-600 text-white font-bold text-sm rounded-lg hover:bg-emerald-700 transition flex items-center gap-2 shadow-sm">
-                                    <Check className="w-4 h-4" /> Mark as Acknowledged
-                                </button>
-                            )}
-                            {latestDocket.status !== 'draft' && (
-                                <button onClick={handleGenerateAmendment} disabled={isGenerating} className="px-4 py-2 bg-[#3D52A0] border border-[#3D52A0] text-white font-bold text-sm rounded-lg hover:bg-[#334486] transition flex items-center gap-2 shadow-sm cursor-pointer">
-                                    <Plus className="w-4 h-4" /> Create Amendment / Addendum
-                                </button>
-                            )}
-                        </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
                     </div>
-                </>
+                </div>
             )}
 
             {!isValid && (
-                <div className="bg-red-50 border border-red-200 p-4 rounded-xl flex items-center gap-3 no-print">
-                    <AlertTriangle className="w-5 h-5 text-red-600" />
-                    <p className="text-sm text-red-800 font-medium">Cannot export PDF. Missing required data: {missingData.join(', ')}. Please update in settings or project details.</p>
+                <div className="bg-white border border-slate-200 px-4 py-3 rounded-xl flex items-center gap-3 no-print">
+                    <StateDot tone="bad" />
+                    <p className="text-sm text-slate-700">Cannot export PDF. Missing required data: {missingData.join(', ')}. Please update in settings or project details.</p>
                 </div>
             )}
 
             {/* Workspace Layout Sub-Tabs */}
             {isAmending && (
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between glass-light border border-slate-200/80 p-3 rounded-2xl shadow-sm no-print mb-6 gap-3">
-                    <div className="flex items-center gap-2 pl-1">
-                        <div className="bg-sky-50 p-1.5 rounded-lg border border-sky-100/50">
-                            <Columns className="w-4 h-4 text-[#334486]" />
-                        </div>
-                        <div>
-                            <span className="text-xs font-black text-slate-900 uppercase tracking-wider block">Workspace Layout</span>
-                            <span className="text-[10px] text-slate-400 font-medium">Select view option for comfortable editing</span>
-                        </div>
-                    </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 no-print">
+                    <span className="text-xs text-slate-500">Editing the clauses. Save changes to keep them.</span>
                     <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
                         <button
                             type="button"
                             onClick={() => setEditLayoutMode('editor')}
-                            className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                            className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2 ${
                                 editLayoutMode === 'editor'
-                                    ? 'bg-[#3D52A0] text-white shadow-sm'
-                                    : 'text-slate-600 hover:text-slate-800'
+                                    ? 'bg-white text-slate-800 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
                             }`}
                         >
                             <Edit3 className="w-3.5 h-3.5" />
-                            <span>Spacious Editor</span>
+                            <span>Editor</span>
                         </button>
                         <button
                             type="button"
                             onClick={() => setEditLayoutMode('split')}
-                            className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                            className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2 ${
                                 editLayoutMode === 'split'
-                                    ? 'bg-[#3D52A0] text-white shadow-sm'
-                                    : 'text-slate-600 hover:text-slate-800'
+                                    ? 'bg-white text-slate-800 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
                             }`}
                         >
                             <Columns className="w-3.5 h-3.5" />
-                            <span>Split View</span>
+                            <span>Side by side</span>
                         </button>
                         <button
                             type="button"
                             onClick={() => setEditLayoutMode('preview')}
-                            className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                            className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2 ${
                                 editLayoutMode === 'preview'
-                                    ? 'bg-[#3D52A0] text-white shadow-sm'
-                                    : 'text-slate-600 hover:text-slate-800'
+                                    ? 'bg-white text-slate-800 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
                             }`}
                         >
                             <Eye className="w-3.5 h-3.5" />
-                            <span>Live Preview</span>
+                            <span>Preview</span>
                         </button>
                     </div>
                 </div>
             )}
 
-            {/* Split Workspace and Document View */}
-            <div className={`grid grid-cols-1 ${isAmending && editLayoutMode === 'split' ? 'lg:grid-cols-12' : ''} gap-8 items-start`}>
+            {/* Split Workspace and Document View: on Document, or while the clauses are being edited. */}
+            {showDocument && (
+            <div className={`grid grid-cols-1 ${isAmending && editLayoutMode === 'split' ? 'lg:grid-cols-12' : !isAmending ? 'lg:grid-cols-[220px_minmax(0,1fr)]' : ''} gap-6 items-start`}>
+                {!isAmending && (
+                    <nav aria-label="Sections" className="no-print hidden lg:block sticky top-4 bg-white rounded-2xl border border-slate-200 shadow-sm p-3 max-h-[80vh] overflow-y-auto">
+                        <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Sections</p>
+                        {(activeTermsConfig?.sections || []).map((sec: any) => (
+                            <button key={sec.n} type="button" onClick={() => openSection(sec.n)} className="w-full flex gap-2 px-2 py-1.5 rounded-lg text-left text-xs text-slate-700 hover:bg-slate-50">
+                                <span className="w-5 shrink-0 text-slate-400 tabular-nums">{sec.n}</span>
+                                <span className="min-w-0">{resolveTokens(sec.title || '', activeTermsConfig, orgData.orgName || '')}</span>
+                            </button>
+                        ))}
+                    </nav>
+                )}
                 
                 {/* Left side: Amendment Workspace */}
                 {isAmending && editedTermsConfig && editLayoutMode !== 'preview' && (
                     <div className={`${editLayoutMode === 'editor' ? 'w-full lg:col-span-12' : 'lg:col-span-5'} space-y-6 bg-slate-50 border border-slate-200 p-6 rounded-3xl no-print sticky top-6 max-h-[85vh] overflow-y-auto`}>
                         <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-2">
                             <div>
-                                <h3 className="text-md font-bold text-slate-900 tracking-tight">Amendment Workspace</h3>
-                                <p className="text-xs text-slate-500 mt-0.5">Customize current terms or append project-specific addenda.</p>
+                                <h3 className="font-bold text-slate-800">Clauses &amp; settings</h3>
+                                <p className="text-xs text-slate-500 mt-0.5">Change this docket's terms or add sections for this project.</p>
                             </div>
                             <div className="flex gap-2">
-                                <button
-                                    onClick={saveAmendments}
-                                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition shadow-sm cursor-pointer flex items-center gap-1"
-                                >
-                                    <Save className="w-3.5 h-3.5" /> Save
-                                </button>
-                                <button
-                                    onClick={() => setIsAmending(false)}
-                                    className="px-3 py-1.5 bg-white/60 backdrop-blur-md border border-slate-200 text-slate-700 font-bold rounded-lg text-xs hover:bg-slate-50 transition cursor-pointer flex items-center gap-1"
-                                >
-                                    <X className="w-3.5 h-3.5" /> Close
-                                </button>
+                                <Button variant="primary" size="sm" icon={Save} onClick={saveAndShow}>Save</Button>
+                                <Button size="sm" icon={X} onClick={() => setIsAmending(false)}>Close</Button>
                             </div>
                         </div>
 
@@ -1199,7 +1156,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                 {/* Right side: Live Document Preview */}
                 {(!isAmending || editLayoutMode !== 'editor') && (
                     <div className={isAmending && editLayoutMode === 'split' ? "lg:col-span-7 flex justify-center w-full" : "w-full"}>
-                        <div className={`transition-all duration-500 w-full flex justify-center ${previewMode ? 'glass-light p-8 -mx-8 rounded-3xl overflow-x-auto shadow-inner' : ''}`}>
+                        <div className={`w-full flex justify-center ${previewMode ? 'bg-slate-100 p-4 sm:p-6 rounded-2xl overflow-x-auto' : ''}`}>
                         <div id="terms-docket-pdf-render" className={`terms-docket-template ${previewMode ? 'print-only' : ''}`}>
                             <style dangerouslySetInnerHTML={{__html: `
                                 :root{
@@ -1320,9 +1277,10 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                                 {/* Dynamic Section Rendering */}
                                 {activeTermsConfig?.sections && activeTermsConfig.sections.length > 0 ? (
                                     activeTermsConfig.sections.map((sec, sIdx) => (
-                                        <div key={sec.n || sIdx} className="sec-group">
+                                        <div key={sec.n || sIdx} className="sec-group" id={`terms-sec-${sec.n}`}>
                                             <h2 className="sec">
-                                                <span className="n">{sec.n}</span> {sec.title}
+                                                {/* Titles carry tokens too ("About {{studioName}}"); the PDF printed them raw. */}
+                                                <span className="n">{sec.n}</span> {resolveTokens(sec.title || '', activeTermsConfig, orgData.orgName || '')}
                                                 {sec.recommended && <span className="added">Recommended</span>}
                                             </h2>
                                             {sec.blocks?.map((block, bIdx) => renderBlock(block, bIdx))}
@@ -1353,6 +1311,7 @@ export default function TermsDocketPage({ projectContext, setProjectContext, ten
                 )}
 
             </div>
+            )}
         </div>
     );
 }
