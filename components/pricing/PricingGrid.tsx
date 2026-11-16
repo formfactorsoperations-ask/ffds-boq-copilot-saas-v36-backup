@@ -94,6 +94,9 @@ interface Props {
   history?: React.ReactNode;
   /** True when the contract has a value over time to show. */
   hasHistory?: boolean;
+  /** "3 options · 4 versions", and the buttons that act on every option (Add option, Regenerate). */
+  summary?: string;
+  toolbar?: React.ReactNode;
 }
 
 type Lens = 'money' | 'diff' | 'pay' | 'margin' | 'history';
@@ -501,11 +504,13 @@ export default function PricingGrid(props: Props) {
 
           {/* The options: one card each, with versions, price, margin, what it is made of, approval and actions. */}
           <section aria-label="Options side by side" className="grid gap-3" style={grid}>
-            <div className="sticky left-0 z-10 bg-slate-50 pr-3 pt-2 flex flex-col gap-3">
+            {/* The left column holds what acts on every option, so the cards do not float right of an empty gap. */}
+            <div className="sticky left-0 z-10 bg-slate-50 flex flex-col gap-3 pt-1">
               <div>
-                <p className={EYEBROW}>Options</p>
-                <p className="text-[11px] text-slate-500 mt-1">Click a card to select it. Its versions are under its name.</p>
+                <p className={EYEBROW}>{props.summary || 'Options'}</p>
+                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">Click a card to select it. A client’s change is a new version in the same card.</p>
               </div>
+              {props.toolbar && <div className="flex flex-col gap-2">{props.toolbar}</div>}
             </div>
             {cols.map((c, i) => {
               const t = c.tier;
@@ -610,7 +615,7 @@ export default function PricingGrid(props: Props) {
                       </Tilt>
 
                       <div onClick={(e) => e.stopPropagation()}>{approval(c)}</div>
-                      <div onClick={(e) => e.stopPropagation()} className="mt-auto pt-1 flex flex-wrap gap-2">
+                      <div onClick={(e) => e.stopPropagation()} className="flex flex-wrap gap-2">
                         <ColumnActions col={c} {...props} />
                       </div>
                     </article>

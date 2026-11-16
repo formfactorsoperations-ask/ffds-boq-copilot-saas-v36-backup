@@ -590,26 +590,19 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
 
     return (
         <div className="w-full max-w-[1400px] mx-auto flex flex-col gap-4 font-sans pb-12">
-            {/* What there is, and the two things that act on every option. */}
-            <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{chains.length} {chains.length === 1 ? 'option' : 'options'}{versionCount > chains.length ? ` · ${versionCount} versions` : ''}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Every section lines up under the options. A client's change is a new version in the same column.</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" onClick={() => setRegenOpen(true)} title="Rebuild all options from the current brief, rooms and civil scope"
-                        className="group inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">
-                        <RefreshCw className="w-4 h-4 text-slate-400 transition-transform duration-500 group-hover:rotate-180" /> Regenerate
-                    </button>
-                    <button type="button" onClick={handleAddTier}
-                        className="group inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">
-                        <Plus className="w-4 h-4 text-slate-400 transition-transform duration-300 group-hover:rotate-90" /> Add option
-                    </button>
-                </div>
-            </div>
-
             <PricingGrid
                 columns={visibleColumns}
+                summary={`${chains.length} ${chains.length === 1 ? 'option' : 'options'}${versionCount > chains.length ? ` · ${versionCount} versions` : ''}`}
+                toolbar={<>
+                    <button type="button" onClick={handleAddTier}
+                        className="group w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486]">
+                        <Plus className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90" /> Add option
+                    </button>
+                    <button type="button" onClick={() => setRegenOpen(true)} title="Rebuild all options from the current brief, rooms and civil scope"
+                        className="group w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">
+                        <RefreshCw className="w-4 h-4 text-slate-400 transition-transform duration-500 group-hover:rotate-180" /> Regenerate
+                    </button>
+                </>}
                 notChosen={notChosen}
                 showNotChosen={showNotChosen}
                 onToggleNotChosen={() => setShowNotChosen(v => !v)}
