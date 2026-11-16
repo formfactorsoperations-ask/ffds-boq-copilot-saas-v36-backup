@@ -60,12 +60,12 @@ const META: Record<string, PageMeta> = {
 
   // ---- Project: stage 3 ---------------------------------------------------
   client:                 { subtitle: 'The proposal as the client receives it' },
-  'revision-studio':      { title: 'Revisions', subtitle: 'Track scope changes and compare versions' },
+  'revision-studio':      { title: 'Versions & Revision Studio', subtitle: 'Track scope changes and compare versions' },
   'client-boq-pack':      { title: 'Client BOQ Pack', subtitle: 'Printable scope pack for the client' },
 
   // ---- Project: stage 4 ---------------------------------------------------
   'execution-agreement':  { subtitle: 'Contract terms and signature status' },
-  'payment-calc':         { title: 'Payment Schedule', subtitle: 'Milestones, billing status and collections' },
+  'payment-calc':         { title: 'Money', subtitle: 'Payment schedule, billing and collections' },
   'payment-schedule':     { title: 'Payment Schedule', subtitle: 'Milestones, billing status and collections' },
   onboarding:             { subtitle: 'What the client receives at kickoff' },
   'drawing-tracker':      { subtitle: 'Drawing issue status and revisions' },
@@ -88,12 +88,12 @@ const META: Record<string, PageMeta> = {
   docs:                   { subtitle: 'Drawings, contracts and shared files' },
   'client-portal':        { title: 'Client Portal', subtitle: 'What the client sees, and what they still owe you' },
   timeline:               { subtitle: 'Programme dates and dependencies' },
-  'comms-tracker':        { title: 'Client Messages', subtitle: 'What your client has written from their portal' },
+  'comms-tracker':        { title: 'Messages', subtitle: 'What your client has written from their portal' },
   'record-decision':      { subtitle: 'Decisions taken, and who signed off' },
   history:                { subtitle: 'Change timeline and data trail' },
   'mom-action-tracker':   { title: 'Meeting Actions', subtitle: 'Actions captured from meeting notes' },
   'update-client-feed':   { title: 'Client Update', subtitle: 'Post an update to the client feed' },
-  dashboard:              { title: 'Project Setup', subtitle: 'Configure scope before building the BOQ' },
+  dashboard:              { title: 'Hub', subtitle: 'The project at a glance' },
 };
 
 /** Returns the meta for a route, with the title resolved from the nav where possible. */

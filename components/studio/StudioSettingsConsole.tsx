@@ -23,6 +23,7 @@ import { uploadPlanImage } from '../../services/planStorage';
 import { downscalePlanToBase64 } from '../../lib/imageDownscale';
 import { connectGoogleCalendar, isGoogleCalendarConnected } from '../../services/googleCalendarService';
 import { CountUp, Dot } from '../ui/HudBits';
+import { Panel as KitPanel, Chip } from '../ui/kit';
 import StudioTeamSection from './StudioTeamSection';
 import ZohoBooksCard from './ZohoBooksCard';
 import GoogleDriveCard from './GoogleDriveCard';
@@ -129,27 +130,12 @@ const Field: React.FC<FieldProps> = ({ field, value, onChange, disabled, multili
 
 const Panel: React.FC<{ id: SectionId; title: string; blurb: string; missing: number; children: React.ReactNode }> =
   ({ id, title, blurb, missing, children }) => {
-    const Icon = SECTION_ICON[id];
+    /* The kit's Panel (components/ui/kit): Studio settings is the reference screen it was taken from. */
     return (
-      <section id={`section-${id}`} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in scroll-mt-24">
-        <div className="flex items-start gap-3 mb-5">
-          <div className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] flex items-center justify-center shrink-0">
-            <Icon className="w-4.5 h-4.5" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="font-bold text-slate-800 flex items-center gap-2">
-              {title}
-              {missing > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold uppercase tracking-wider">
-                  {missing} missing
-                </span>
-              )}
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">{blurb}</p>
-          </div>
-        </div>
+      <KitPanel id={`section-${id}`} className="scroll-mt-24" icon={SECTION_ICON[id]} title={title} blurb={blurb}
+        badge={missing > 0 ? <Chip tone="bad">{missing} missing</Chip> : undefined}>
         {children}
-      </section>
+      </KitPanel>
     );
   };
 

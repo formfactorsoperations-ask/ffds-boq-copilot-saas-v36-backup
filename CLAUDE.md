@@ -6,7 +6,10 @@ Every screen, panel, modal and control you add or change must follow `DESIGN.md`
 scale, colours, surfaces, controls and motion. The studio owner has asked for this explicitly:
 new work must look like part of the existing app, not a new design.
 
-- Build console screens from `ConsoleHeader`, the Studio settings rail and the `Panel` card pattern.
+- Build console screens from `ConsoleHeader`, the Studio settings rail and the screen kit in
+  `components/ui/kit.tsx` (`Panel`, `Button`, `Chip`, `Segmented`, `SummaryStrip`, `EmptyState`).
+  Do not write a card, button or empty state of your own. `src/tests/designGuard.test.ts` must pass:
+  no file may add half-pixel or 6–9px text, colours outside the palette or a font of its own.
 - Use only the existing motion classes (`hud-panel-in`, `hud-swap`, `hud-row-in`, `hud-rail-active`,
   `phd-scrim`, `phd-pop`, `CountUp`).
   People (`components/people/`), the Ops Desk (`components/opsDesk/`), Pricing & Tiers

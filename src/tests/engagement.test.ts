@@ -12,7 +12,7 @@ import {
   journeyStepsFor, phasesFor, gateStepIds, stageLabel, proposalModeFor, isFeeOnly, PMC_AVAILABLE,
 } from '../../lib/engagement';
 import { JOURNEY_STEPS, PHASES } from '../../constants/journeyConstants';
-import { NAV_CONFIG } from '../../components/navConfig';
+import { NAV_CONFIG, ALWAYS_ON_BAND } from '../../components/navConfig';
 import { billingBase, billingSummary, computeSchedule } from '../../lib/paymentSchedule';
 import { applyEngagement } from '../../components/projects/EngagementPicker';
 import { marginOf, type ProjectFact } from '../../lib/ownerReports';
@@ -97,9 +97,11 @@ describe('the project rail', () => {
     for (const gone of ['ops', 'boq-editor', 'analytics', 'revision-studio', 'execution-agreement', 'site-ops', 'scope-additions']) {
       expect(r).not.toContain(gone);
     }
-    for (const kept of ['leadiq', 'client', 'terms-docket', 'onboarding', 'payment-calc', 'design-gate', 'materials', 'handover-docket']) {
+    for (const kept of ['leadiq', 'client', 'terms-docket', 'onboarding', 'design-gate', 'materials', 'handover-docket']) {
       expect(r).toContain(kept);
     }
+    // Money is in the Project Hub, for every engagement, not in a stage.
+    expect(navItemsFor('design_only', ALWAYS_ON_BAND).map((i) => i.route)).toContain('payment-calc');
     expect(isRouteHidden('design_only', 'site-ops')).toBe(true);
     expect(isRouteHidden('turnkey', 'site-ops')).toBe(false);
   });

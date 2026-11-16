@@ -126,22 +126,19 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
     const rise = stillMotion ? {} : { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 } };
 
     return (
-        <div className="flex flex-col max-w-[1600px] mx-auto pb-24">
+        <div className="flex flex-col w-full pb-24">
 
             {/* ── What to do now ─────────────────────────────────────────── */}
             <motion.div
                 {...rise}
                 transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
-                className="rounded-2xl border bg-white p-5 relative overflow-hidden"
-                style={{ borderColor: LINE }}
+                className="rounded-2xl border border-slate-200 shadow-sm bg-white p-6"
             >
-                <span aria-hidden className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: nextStep ? PRIMARY : '#CBD1E4' }} />
-
-                <div className="flex flex-wrap items-start justify-between gap-4 pl-1">
+                <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0">
                         <div className="flex items-center gap-2">
                             <Sparkles className="w-3.5 h-3.5" style={{ color: PRIMARY }} />
-                            <h2 className="text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Do this next</h2>
+                            <h2 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Do this next</h2>
                         </div>
 
                         {nextStep ? (
@@ -154,7 +151,7 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
                                 <StepIllustration id={nextStep.illustration} />
                                 <div className="min-w-0">
                                 <div className="flex items-baseline gap-2 flex-wrap">
-                                    <span className="text-[22px] leading-none font-black" style={{ color: INK }}>{nextStep.title}</span>
+                                    <span className="text-lg font-bold text-slate-800">{nextStep.title}</span>
                                     {nextStep.isAutoDerived && (
                                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold rounded-full border px-1.5 py-0.5"
                                               style={{ color: PRIMARY, borderColor: PALE, background: '#EDE8F5' }}>
@@ -162,7 +159,7 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-[11px] mt-1.5 leading-snug" style={{ color: SOFT }}>
+                                <p className="text-xs mt-1 text-slate-500">
                                     {nextStep.description}
                                 </p>
                                 </div>
@@ -178,8 +175,7 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
                         {nextStep?.linkedTab && onNavigate && (
                             <button
                                 onClick={() => onNavigate(nextStep.linkedTab!)}
-                                className="text-[11px] font-bold uppercase tracking-wider px-4 py-2.5 rounded-xl text-white transition-colors flex items-center gap-2"
-                                style={{ background: PRIMARY }}
+                                className="text-sm font-bold px-4 py-2 rounded-xl text-white bg-[#3D52A0] hover:bg-[#334486] transition-colors flex items-center gap-2"
                             >
                                 Open {nextStep.linkedFeature?.split('→').pop()?.trim() || 'task'}
                                 <ArrowRight className="w-3.5 h-3.5" />
@@ -197,7 +193,7 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
                 </div>
 
                 {/* the three counts that say how much work is really left */}
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-4 pt-3 border-t pl-1" style={{ borderColor: '#EDEFF7' }}>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-4 pt-3 border-t border-slate-100">
                     <Readout value={`${forecast.openNow}`} label={forecast.openNow === 1 ? 'gateway open' : 'gateways open'} />
                     <Readout value={`${forecast.needsSignoff}`} label="need your sign-off" tone={forecast.needsSignoff > 0 ? 'warn' : 'plain'} />
                     <Readout value={`${forecast.auto}`} label={`of ${forecast.open} remaining tick themselves`} />
@@ -221,8 +217,8 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
                             className="w-4 h-4 rounded cursor-pointer accent-[#3D52A0]"
                             style={{ borderColor: LINE }}
                         />
-                        <label htmlFor="autoStageCompletionToggle" className="text-[10px] font-bold uppercase tracking-wider cursor-pointer select-none" style={{ color: MUTED }}>
-                            Auto-complete steps
+                        <label htmlFor="autoStageCompletionToggle" className="text-xs font-semibold text-slate-600 cursor-pointer select-none">
+                            Tick steps off by themselves
                         </label>
                     </div>
                 </div>
@@ -232,11 +228,10 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
             <motion.div
                 {...rise}
                 transition={{ duration: 0.34, delay: 0.06, ease: [0.22, 1, 0.36, 1] }}
-                className="rounded-2xl border bg-white p-5 mt-4"
-                style={{ borderColor: LINE }}
+                className="rounded-2xl border border-slate-200 shadow-sm bg-white p-6 mt-4"
             >
                 <div className="flex items-baseline justify-between gap-3 mb-4">
-                    <h3 className="text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Project lifecycle</h3>
+                    <h3 className="font-bold text-slate-800">Project lifecycle</h3>
                     <span className="text-[11px] font-semibold tabular-nums" style={{ color: MUTED }}>
                         <b style={{ color: INK }}>{overall.done}</b> of {overall.total} cleared · {overall.pct}%
                     </span>
@@ -276,8 +271,7 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
                                 <span className="flex items-center gap-1.5 min-w-0">
                                     <span className="text-[10px] tabular-nums shrink-0" style={{ color: SOFT }}>{prog.done}/{prog.total}</span>
                                     {isEngine && (
-                                        <span className="text-[8px] font-bold uppercase tracking-wider px-1 py-[1px] rounded shrink-0"
-                                              style={{ color: PRIMARY, background: '#fff', border: `1px solid ${PALE}` }}>now</span>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-px rounded-full shrink-0 bg-[#3D52A0]/10 text-[#3D52A0]">Now</span>
                                     )}
                                     {span && (
                                         <span className="text-[10px] tabular-nums truncate" style={{ color: PALE }}>· {span}</span>
@@ -293,17 +287,16 @@ export default function ProjectJourneyPage({ projectId, projectContext, onClose,
             <div className="mt-4">
                 <div className="flex flex-wrap items-end justify-between gap-4 mb-3 px-1">
                     <div className="min-w-0">
-                        <h2 className="text-lg font-black tracking-tight" style={{ color: INK }}>{currentPhaseDef.name}</h2>
-                        <p className="text-[11px] mt-0.5" style={{ color: SOFT }}>{currentPhaseDef.desc}</p>
+                        <h2 className="font-bold text-slate-800">{currentPhaseDef.name}</h2>
+                        <p className="text-xs mt-0.5 text-slate-500">{currentPhaseDef.desc}</p>
                     </div>
                     {(pendingSteps.length > 0 || lockedSteps.length > 0) && (
                         <button
                             onClick={handleRetrofitPhase}
                             title="Marks every remaining step in this phase as done"
-                            className="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors border shrink-0"
-                            style={retrofitMode
-                                ? { color: '#9F1239', background: '#FFF1F2', borderColor: '#FECDD3' }
-                                : { color: SOFT, background: 'transparent', borderColor: LINE }}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors border shrink-0 ${retrofitMode
+                                ? 'text-rose-700 bg-white border-rose-200 hover:bg-rose-50'
+                                : 'text-slate-700 bg-white border-slate-300 hover:bg-slate-50'}`}
                         >
                             {retrofitMode ? <AlertTriangle className="w-3.5 h-3.5" /> : <FastForward className="w-3.5 h-3.5" />}
                             {retrofitMode ? 'Confirm — complete all?' : 'Retrofit phase'}
@@ -403,12 +396,13 @@ function Group({ title, icon, steps, children }: { title: string; icon: React.Re
     if (steps.length === 0) return null;
     return (
         <div>
-            <div className="flex items-center gap-2 pb-2 mb-2.5 border-b" style={{ borderColor: '#EDEFF7' }}>
+            <div className="flex items-center gap-2 mb-2 px-1">
                 {icon}
-                <h3 className="text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>{title}</h3>
-                <span className="text-[10px] tabular-nums" style={{ color: PALE }}>{steps.length}</span>
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{title}</h3>
+                <span className="text-[11px] tabular-nums text-slate-400">{steps.length}</span>
             </div>
-            <div className="space-y-2">{children}</div>
+            {/* One card of rows, not a stack of separate cards (DESIGN.md "Surfaces"). */}
+            <div className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden divide-y divide-slate-100">{children}</div>
         </div>
     );
 }
@@ -436,12 +430,8 @@ function StepRow({
             initial={still ? false : { opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.28, delay: Math.min(index * 0.035, 0.25), ease: [0.22, 1, 0.36, 1] }}
-            className="group flex flex-col md:flex-row md:items-center justify-between gap-3 py-3.5 px-4 rounded-2xl border bg-white transition-colors"
-            style={{
-                borderColor: isActive ? PRIMARY : LINE,
-                boxShadow: isActive ? '0 0 0 1px rgba(61,82,160,.25)' : undefined,
-                opacity: locked ? 0.75 : 1,
-            }}
+            className={`group flex flex-col md:flex-row md:items-center justify-between gap-3 py-3 px-4 transition-colors ${isActive ? 'bg-[#3D52A0]/5' : 'bg-white'}`}
+            style={{ opacity: locked ? 0.75 : 1 }}
         >
             <div className="flex items-start gap-3 flex-1 min-w-0">
                 <span className="mt-0.5 shrink-0 w-5 h-5 rounded-full flex items-center justify-center"
@@ -456,10 +446,9 @@ function StepRow({
 
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[13px] font-bold tracking-tight" style={{ color: locked ? MUTED : INK }}>{step.title}</span>
+                        <span className={`text-sm font-semibold ${locked ? 'text-slate-500' : 'text-slate-800'}`}>{step.title}</span>
                         {step.isAutoDerived && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-[2px]"
-                                  style={{ color: PRIMARY, background: '#EDE8F5' }}>
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider rounded-full px-1.5 py-px bg-[#3D52A0]/10 text-[#3D52A0]">
                                 <Zap className="w-2.5 h-2.5" /> auto
                             </span>
                         )}
@@ -491,10 +480,7 @@ function StepRow({
                     <button
                         onClick={onNavigate}
                         disabled={!step.linkedTab || locked}
-                        className="text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 border disabled:cursor-not-allowed"
-                        style={step.linkedTab && !locked
-                            ? { color: PRIMARY, background: '#F6F7FB', borderColor: LINE }
-                            : { color: PALE, background: 'transparent', borderColor: 'transparent' }}
+                        className="text-xs font-bold px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Open <ArrowRight className="w-3 h-3" />
                     </button>
@@ -502,8 +488,7 @@ function StepRow({
                 {!isDone && onInteract && (
                     <button
                         onClick={onInteract}
-                        className="text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-xl text-white transition-colors"
-                        style={{ background: PRIMARY }}
+                        className="text-xs font-bold px-3 py-1.5 rounded-xl text-white bg-[#3D52A0] hover:bg-[#334486] transition-colors"
                     >
                         Sign off
                     </button>
@@ -511,8 +496,7 @@ function StepRow({
                 {isDone && onUndo && (
                     <button
                         onClick={onUndo}
-                        className="text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-xl transition-colors hover:bg-[#F6F7FB]"
-                        style={{ color: SOFT }}
+                        className="text-xs font-bold px-3 py-1.5 rounded-xl transition-colors text-[#3D52A0] hover:bg-[#3D52A0]/10"
                     >
                         Undo
                     </button>

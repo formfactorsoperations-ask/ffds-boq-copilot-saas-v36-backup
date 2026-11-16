@@ -667,13 +667,13 @@ export default function RevisionStudio({
     actions: currentSelectedTier ? (
       <button
         onClick={() => setShowBaselineModal(true)}
-        className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/80 rounded-xl text-xs font-bold text-emerald-950 flex items-center gap-1.5 transition-all shadow-2xs hover:scale-[1.01] cursor-pointer"
-        title="Click to view locked contractual Baseline BOQ scope"
+        className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+        title="Open the baseline BOQ this screen compares against"
       >
-        <Lock className="w-3.5 h-3.5 text-emerald-600" />
-        <span>Contract Baseline: {currentSelectedTier.name}</span>
-        <span className="text-emerald-300">•</span>
-        <span className="text-emerald-700">{formatINR(originalTotal)}</span>
+        <Lock className="w-3.5 h-3.5 text-slate-400" />
+        <span>Baseline: {currentSelectedTier.name}</span>
+        <span className="text-slate-300">·</span>
+        <span className="tabular-nums">{formatINR(originalTotal)}</span>
       </button>
     ) : null
   }, [currentSelectedTier?.name, originalTotal]);
@@ -4984,9 +4984,9 @@ export default function RevisionStudio({
   };
 
   return (
-    <div className="h-full flex flex-col bg-slate-50/50 relative">
-      {/* Main Full-Width Workspace (Uses maximum available screen real estate) */}
-      <div className="flex-grow p-4 sm:p-5 overflow-y-auto">
+    <div className="flex flex-col relative">
+      {/* No scroll box or padding of its own: the workspace gives every screen one (DESIGN.md "One frame"). */}
+      <div className="flex-grow">
         {projectContext && setProjectContext && scopeFlowOn ? (
           /* Signed scope: one screen replaces the Workbench and its tabs. */
           <ScopeWorkspace

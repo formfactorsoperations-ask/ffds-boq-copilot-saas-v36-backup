@@ -5,6 +5,7 @@ import { ProjectContext, DigitalSignatureDocket } from '../../types';
 import { Download, Printer, CheckCircle2, Calendar, ShieldCheck } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
+import { studioDisplayName } from '../../lib/studioName';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 import DigitalSignatureDocketView from '../common/DigitalSignatureDocket';
 import ManualAcceptanceOverrideModal from '../ops/ManualAcceptanceOverrideModal';
@@ -22,7 +23,7 @@ export default function HandoverDocketPage({ projectContext, setProjectContext, 
     const studioId = orgData?.tenantId || 'demo-tenant-01';
     const { settings } = useStudioSettings(studioId);
     
-    const studioName = orgData?.name || 'Form Factors Design Studio';
+    const studioName = studioDisplayName(settings, orgData);
     const clientName = projectContext.clientName || 'Valued Client';
     const projectName = projectContext?.name || 'Untitled Project';
     const projectId = propProjectId || (projectContext as any).projectId || (projectContext as any).id || (projectContext.name ? projectContext.name.replace(/[^a-zA-Z0-9_-]/g, '_') : 'PRJ-0000');
