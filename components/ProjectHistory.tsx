@@ -8,6 +8,7 @@ import {
   HardDriveDownload, HardDriveUpload, Cloud, HardDrive, Search, ShieldCheck, ShieldAlert,
   ChevronDown, X,
 } from '@/lib/lucide-shim';
+import { Segmented, EmptyState, INPUT } from './ui/kit';
 
 // ============================================================================
 // ProjectHistory — two views over one idea: "trust what the DB holds".
@@ -39,23 +40,14 @@ export default function ProjectHistory({
   const [tab, setTab] = useState<'timeline' | 'data'>('timeline');
 
   return (
-    <div className="max-w-[1600px] mx-auto py-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-lg font-black tracking-tight" style={{ color: INK }}>Project history</h1>
-          <p className="text-[11px] mt-0.5" style={{ color: SOFT }}>Every meaningful change, and proof of what is saved in the database.</p>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {(['timeline', 'data'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className="px-3.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors border"
-              style={tab === t
-                ? { background: PRIMARY, color: '#fff', borderColor: PRIMARY }
-                : { background: '#fff', color: MUTED, borderColor: LINE }}>
-              {t === 'timeline' ? 'Timeline' : 'Data trail'}
-            </button>
-          ))}
-        </div>
+    <div className="space-y-4">
+      {/* The page bar names the screen; this row only switches the view (DESIGN.md "Screen kit"). */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented label="History view" size="sm" value={tab} onChange={setTab}
+          options={[{ id: 'timeline', label: 'Timeline' }, { id: 'data', label: 'Data trail' }]} />
+        <span className="text-xs text-slate-500">
+          {tab === 'timeline' ? 'Every meaningful change, newest first.' : 'Proof of what is saved in the database.'}
+        </span>
       </div>
 
       {tab === 'timeline' ? <Timeline history={projectContext.history || []} projectId={activeInternalId} /> : <DataTrail projectContext={projectContext} activeInternalId={activeInternalId} />}
@@ -186,11 +178,8 @@ function Timeline({ history, projectId }: { history: HistoryEvent[]; projectId?:
 
   if (history.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed bg-white p-10 text-center" style={{ borderColor: LINE }}>
-        <Clock className="w-8 h-8 mx-auto mb-3" style={{ color: PALE }} />
-        <p className="text-sm font-bold" style={{ color: MUTED }}>No history yet</p>
-        <p className="text-xs mt-1" style={{ color: SOFT }}>As you move the project along — raise payments, freeze the BOQ, sign documents — those changes appear here automatically.</p>
-      </div>
+      <EmptyState icon={Clock} title="No history yet"
+        text="As the project moves along (payments raised, the BOQ frozen, documents signed) the changes appear here by themselves." />
     );
   }
 
@@ -198,10 +187,10 @@ function Timeline({ history, projectId }: { history: HistoryEvent[]; projectId?:
     <div className="space-y-4">
 
       {/* ── what this log is made of ──────────────────────────────────── */}
-      <div className="rounded-2xl border bg-white p-4" style={{ borderColor: LINE }}>
+      <div className="rounded-2xl border border-slate-200 shadow-sm bg-white p-4 hud-panel-in">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>
-            <History className="w-3.5 h-3.5" style={{ color: PRIMARY }} /> What is in here
+          <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <History className="w-3.5 h-3.5 text-slate-400" /> What is in here
           </span>
           <Fact n={shape.total} label="events" />
           <Fact n={shape.distinct} label="distinct" />
@@ -228,10 +217,10 @@ function Timeline({ history, projectId }: { history: HistoryEvent[]; projectId?:
                   background: PRIMARY,
                   opacity: 0.35 + 0.65 * (v.n / peakDay),
                 }} />
-                <span className="block text-[9px] mt-1 truncate tabular-nums" style={{ color: SOFT }}>
+                <span className="block text-[10px] mt-1 truncate tabular-nums" style={{ color: SOFT }}>
                   {new Date(v.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
                 </span>
-                <span className="block text-[9px] tabular-nums" style={{ color: PALE }}>{v.n}</span>
+                <span className="block text-[10px] tabular-nums" style={{ color: PALE }}>{v.n}</span>
               </button>
             ))}
           </div>
@@ -241,13 +230,13 @@ function Timeline({ history, projectId }: { history: HistoryEvent[]; projectId?:
       {/* ── search + category ─────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: PALE }} />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search summary, detail or person…"
-            className="w-full rounded-xl border bg-white pl-9 pr-8 py-2 text-xs font-semibold outline-none focus:border-[#3D52A0]"
-            style={{ borderColor: LINE, color: INK }}
+            aria-label="Search the history"
+            className={`${INPUT} !py-1.5 pl-9 pr-8`}
           />
           {query && (
             <button onClick={() => setQuery('')} aria-label="Clear search"
@@ -263,79 +252,67 @@ function Timeline({ history, projectId }: { history: HistoryEvent[]; projectId?:
       </div>
 
       {events.length === 0 && (
-        <div className="rounded-2xl border border-dashed bg-white p-10 text-center text-xs" style={{ borderColor: LINE, color: SOFT }}>
-          Nothing matches {q ? `“${query}”` : 'that filter'}.
-        </div>
+        <EmptyState icon={Search} title="Nothing matches" text={q ? `No change mentions “${query}”.` : 'No change of that kind yet.'} />
       )}
 
       {/* ── the ledger ────────────────────────────────────────────────── */}
+      {/* One card per day, one row per change: time, what happened, its kind, who. */}
       {groups.map(group => (
         <div key={group.key} ref={el => { dayRefs.current[group.key] = el; }}
-             className="rounded-2xl border bg-white p-4 scroll-mt-4" style={{ borderColor: LINE }}>
-          <div className="flex items-baseline justify-between gap-3 mb-3">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: SOFT }}>{group.label}</p>
-            <span className="text-[10px] tabular-nums" style={{ color: PALE }}>{group.count} {group.count === 1 ? 'event' : 'events'}</span>
+             className="rounded-2xl border border-slate-200 shadow-sm bg-white scroll-mt-4 overflow-hidden hud-panel-in">
+          <div className="flex items-baseline justify-between gap-3 px-4 py-2.5 bg-slate-50 border-b border-slate-100">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{group.label}</p>
+            <span className="text-[11px] text-slate-500 tabular-nums">{group.count} {group.count === 1 ? 'change' : 'changes'}</span>
           </div>
-
-          <div className="relative pl-4">
-            <div className="absolute left-[5px] top-1 bottom-1 w-px" style={{ background: HAIR }} />
-            <div className="space-y-2.5">
-              {group.runs.map(run => {
-                const meta = CATEGORY_META[run.first.category];
-                const many = run.events.length > 1;
-                const isOpen = !!open[run.key];
-                const unseen = run.first.at > lastSeen && lastSeen > 0;
-                return (
-                  <div key={run.key} className="relative">
-                    <span className={`absolute -left-4 top-1.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${meta.dot}`} />
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-[13px] font-bold" style={{ color: INK }}>{run.first.summary}</p>
-                          {many && (
-                            <button
-                              onClick={() => setOpen(o => ({ ...o, [run.key]: !o[run.key] }))}
-                              className="inline-flex items-center gap-1 text-[10px] font-bold rounded-full border px-1.5 py-[1px] transition-colors"
-                              style={{ color: MUTED, borderColor: LINE, background: '#F6F7FB' }}
-                              aria-expanded={isOpen}
-                            >
-                              ×{run.events.length}
-                              <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                            </button>
-                          )}
-                          {unseen && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-[1px] rounded"
-                                  style={{ color: PRIMARY, background: '#EDE8F5' }}>new</span>
-                          )}
-                        </div>
-                        {run.first.detail && <p className="text-[11px] mt-0.5" style={{ color: SOFT }}>{run.first.detail}</p>}
-
-                        {many && isOpen && (
-                          <div className="mt-1.5 space-y-0.5 border-l pl-2.5" style={{ borderColor: HAIR }}>
-                            {[...run.events].sort((a, b) => a.at - b.at).map(e => (
-                              <p key={e.id} className="text-[10px] tabular-nums" style={{ color: PALE }}>
-                                {new Date(e.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                                {e.detail ? ` · ${e.detail}` : ''}
-                              </p>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="shrink-0 text-right">
-                        <span className={`inline-block text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${meta.chip}`}>{meta.label}</span>
-                        <p className="text-[10px] mt-1 tabular-nums" style={{ color: PALE }}>
-                          {many
-                            ? `${hhmm(Math.min(...run.events.map(x => x.at)))}–${hhmm(Math.max(...run.events.map(x => x.at)))}`
-                            : new Date(run.first.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                          {' · '}{run.first.actor}
-                        </p>
-                      </div>
+          <div className="divide-y divide-slate-100">
+            {group.runs.map((run, i) => {
+              const meta = CATEGORY_META[run.first.category];
+              const many = run.events.length > 1;
+              const isOpen = !!open[run.key];
+              const unseen = run.first.at > lastSeen && lastSeen > 0;
+              const time = many
+                ? `${hhmm(Math.min(...run.events.map(x => x.at)))}–${hhmm(Math.max(...run.events.map(x => x.at)))}`
+                : hhmm(run.first.at);
+              return (
+                <div key={run.key} className="px-4 py-2 hud-row-in" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
+                  <div className="grid grid-cols-[88px_minmax(0,1fr)_auto] items-baseline gap-3">
+                    <span className="text-xs text-slate-500 tabular-nums">{time}</span>
+                    <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className={`self-center w-2 h-2 rounded-full shrink-0 ${meta.dot}`} aria-hidden />
+                      <p className="text-sm font-semibold text-slate-800">{run.first.summary}</p>
+                      {run.first.detail && <p className="text-xs text-slate-500">{run.first.detail}</p>}
+                      {many && (
+                        <button
+                          onClick={() => setOpen(o => ({ ...o, [run.key]: !o[run.key] }))}
+                          className="inline-flex items-center gap-1 text-[10px] font-bold rounded-full border border-slate-200 bg-slate-50 text-slate-600 px-1.5 py-px"
+                          aria-expanded={isOpen}
+                          title={isOpen ? 'Hide each time' : 'Show each time'}
+                        >
+                          ×{run.events.length}
+                          <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                      )}
+                      {unseen && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-px rounded-full bg-[#3D52A0]/10 text-[#3D52A0]">New</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${meta.chip}`}>{meta.label}</span>
+                      <span className="hidden sm:inline text-[11px] text-slate-500 max-w-[140px] truncate">{run.first.actor}</span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                  {many && isOpen && (
+                    <div className="mt-1.5 ml-[100px] space-y-0.5 border-l border-slate-100 pl-2.5">
+                      {[...run.events].sort((a, b) => a.at - b.at).map(e => (
+                        <p key={e.id} className="text-[11px] text-slate-500 tabular-nums">
+                          {hhmm(e.at)}{e.detail ? ` · ${e.detail}` : ''}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}
@@ -351,10 +328,10 @@ const Fact: React.FC<{ n: number; label: string }> = ({ n, label }) => (
 
 const FilterChip: React.FC<{ active: boolean; onClick: () => void; label: string; dot: string }> = ({ active, onClick, label, dot }) => (
   <button onClick={onClick}
-    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-colors"
-    style={active
-      ? { background: INK, color: '#fff', borderColor: INK }
-      : { background: '#fff', color: MUTED, borderColor: LINE }}>
+    aria-pressed={active}
+    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${active
+      ? 'bg-[#3D52A0]/10 text-[#3D52A0] border-[#3D52A0]/30'
+      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
     <span className={`w-1.5 h-1.5 rounded-full ${dot}`} /> {label}
   </button>
 );

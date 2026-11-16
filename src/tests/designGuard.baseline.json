@@ -185,7 +185,7 @@
     "offPalette": 3
   },
   "components/ProjectHistory.tsx": {
-    "tinyPx": 5,
+    "tinyPx": 1,
     "offPalette": 2,
     "mono": 1
   },
@@ -617,11 +617,6 @@
     "halfPx": 1,
     "offPalette": 23
   },
-  "components/ops/DesignCompleteGate.tsx": {
-    "tinyPx": 3,
-    "offPalette": 40,
-    "mono": 1
-  },
   "components/ops/DesignDocumentsManager.tsx": {
     "halfPx": 1,
     "tinyPx": 4,
@@ -686,12 +681,9 @@
     "offPalette": 8,
     "mono": 3
   },
-  "components/ops/ScopeAdditionsHeader.tsx": {
-    "halfPx": 6
-  },
   "components/ops/ScopeAdditionsModule.tsx": {
     "halfPx": 29,
-    "offPalette": 26,
+    "offPalette": 23,
     "mono": 1
   },
   "components/ops/ScopeAdditionsMoneyPanel.tsx": {
@@ -728,7 +720,6 @@
     "mono": 1
   },
   "components/ops/journey/ProjectJourneyPage.tsx": {
-    "tinyPx": 2,
     "mono": 1
   },
   "components/opsDesk/ClientWall.tsx": {
@@ -787,7 +778,7 @@
     "halfPx": 4
   },
   "components/scope/ScopeWorkspace.tsx": {
-    "halfPx": 106,
+    "halfPx": 102,
     "tinyPx": 1,
     "offPalette": 12
   },

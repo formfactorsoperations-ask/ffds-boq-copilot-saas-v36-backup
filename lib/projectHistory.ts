@@ -111,9 +111,10 @@ export function appendHistory(existing: HistoryEvent[] | undefined, events: Hist
 }
 
 export const CATEGORY_META: Record<HistoryCategory, { label: string; dot: string; chip: string }> = {
-  stage: { label: 'Stage', dot: 'bg-sky-500', chip: 'bg-sky-50 text-sky-700 border-sky-200' },
-  money: { label: 'Money', dot: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  design: { label: 'Design', dot: 'bg-violet-500', chip: 'bg-violet-50 text-violet-700 border-violet-200' },
-  docs: { label: 'Docs', dot: 'bg-blue-500', chip: 'bg-blue-50 text-blue-700 border-blue-200' },
-  scope: { label: 'Scope', dot: 'bg-amber-500', chip: 'bg-amber-50 text-amber-700 border-amber-200' },
+  /* Kinds of change, not states, so they are not colour-coded (DESIGN.md "Colour"): the label says which. */
+  stage: { label: 'Stage', dot: 'bg-[#3D52A0]', chip: 'bg-[#3D52A0]/10 text-[#3D52A0] border-transparent' },
+  money: { label: 'Money', dot: 'bg-slate-400', chip: 'bg-slate-100 text-slate-600 border-transparent' },
+  design: { label: 'Design', dot: 'bg-slate-400', chip: 'bg-slate-100 text-slate-600 border-transparent' },
+  docs: { label: 'Docs', dot: 'bg-slate-400', chip: 'bg-slate-100 text-slate-600 border-transparent' },
+  scope: { label: 'Scope', dot: 'bg-slate-400', chip: 'bg-slate-100 text-slate-600 border-transparent' },
 };
