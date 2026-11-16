@@ -401,6 +401,21 @@ the brand, slate, and rose/amber/emerald for state. Light only: the owner chose 
   WhatsApp-style preview beside the editable text.
 - Everything stops under `prefers-reduced-motion`.
 
+### Project header: three rows (approved 16 Nov 2026)
+
+Inside a project the header was five rows (project bar, stages, sub-tabs, the Project Hub strip, and
+the page's title row) and took a third of the screen. The owner chose to merge them into three:
+
+1. The project bar, unchanged.
+2. The stages, unchanged.
+3. One row: the stage's sub-tabs on the left (or the screen's name where no sub-tab names it, as on
+   the Hub's screens), the page's badge and figures from `usePageHeader` beside them, and the Project
+   Hub on the right as icons with their counts (names on hover), then the eye and the bell.
+
+There is no title row under it: the highlighted sub-tab names the screen. A page's `views` and
+`actions` still show, in a slim row of their own at the top of the page (`PageTitleBlock compact`),
+and only when the page has some. The studio's top tabs keep their title row (above).
+
 ### Pricing & Tiers motion (approved 15 Nov 2026)
 
 The owner approved Pricing & Tiers as one grid (layouts D and E, 15 Nov 2026) and asked for

@@ -15,6 +15,7 @@ import ProjectTeamButton from './projectHeader/ProjectTeamButton';
 import StudioMenuButton from './projectHeader/StudioMenuButton';
 import './projectHeader/projectHeader.css';
 import PageTitleBlock from './PageTitleBlock';
+import { usePageHeaderSlots } from '../contexts/PageHeaderContext';
 import { LogOut, Home, Building2, Users, BarChart3, Library, CreditCard } from '@/lib/lucide-shim';
 import ProjectStatusTransitionModal from './ProjectStatusTransitionModal';
 import { FloatingDock, FloatingDockItem } from './ui/floating-dock';
@@ -51,6 +52,29 @@ const ENGAGEMENT_PAGE_TITLES: Partial<Record<string, Record<string, { title: str
     'handover-docket': { title: 'Design Closeout', subtitle: 'Final drawing set issued and the client’s sign-off' },
     materials: { title: 'SOF & Selections', subtitle: 'Finishes and fittings chosen with the client' },
   },
+};
+
+/*
+  The page's figures and the version it is acting on (the PageHeader slots),
+  in the merged sub-tab row. They used to sit in a title row of their own under
+  four header rows; the owner found the header taking a third of the screen.
+*/
+const HeaderFigures: React.FC = () => {
+  const { badge, vitals } = usePageHeaderSlots();
+  if (!badge && !(vitals && vitals.length)) return null;
+  return (
+    <div className="hidden lg:flex items-center gap-3 min-w-0 pl-3 border-l border-slate-200">
+      {badge && (
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#3D52A0]/10 text-[#3D52A0] whitespace-nowrap truncate max-w-[180px]" title={badge}>{badge}</span>
+      )}
+      {(vitals || []).slice(0, 4).map((v) => (
+        <span key={v.label} className="leading-tight whitespace-nowrap">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">{v.label}</span>
+          <span className={`block text-xs font-bold tabular-nums ${v.tone === 'good' ? 'text-emerald-600' : v.tone === 'warn' ? 'text-amber-600' : 'text-slate-800'}`}>{v.value}</span>
+        </span>
+      ))}
+    </div>
+  );
 };
 
 function ProgressRing({ pct }: { pct: number }) {
@@ -388,6 +412,10 @@ export function ProjectWorkspace({
     return null;
   };
 
+  /* The screen's name, for screens with no sub-tab to highlight (the Hub, the Project Hub's screens). */
+  const screenTitle = (!isWizard && ENGAGEMENT_PAGE_TITLES[engagement]?.[activeTab]?.title)
+    || getPageMeta(isWizard ? 'project-setup' : activeTab)?.title || '';
+
   return (
     <div className="flex flex-col h-full bg-slate-50">
       {/* Workspace Header .phead */}
@@ -620,9 +648,17 @@ export function ProjectWorkspace({
           </div>
         </div>
 
-        {/* Row 3: Stage Sub-Menus (Screens in active/selected stage) */}
-        {activeTab !== 'dashboard' && !BAND.some(i => i.route === activeTab) && selectedStage > 0 && activeStageConfig && activeStageConfig.items.length > 0 && (
-          <div className="bg-slate-50/60 border-b border-slate-200 px-4 lg:px-6 py-2 flex items-center gap-2 shrink-0 flex-wrap">
+        {/*
+          Row 3: the stage's screens, the page's figures, and the Project Hub,
+          in one row. They were two rows, with a third under them for the page's
+          name (already the highlighted sub-tab) and its figures; the owner
+          found the header taking a third of the screen. The hub keeps its
+          icons and counts; their names show on hover.
+        */}
+        <div className="bg-slate-50/60 border-b border-slate-200 px-4 lg:px-6 py-1.5 flex items-center gap-x-3 gap-y-2 flex-wrap min-h-[48px]">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            {(activeTab !== 'dashboard' && !BAND.some(i => i.route === activeTab) && selectedStage > 0 && activeStageConfig && activeStageConfig.items.length > 0) ? (
+              <>
             {activeStageConfig.items.map(item => {
               if (hiddenForRole(item)) return null;
               const isActive = activeTab === item.route;
@@ -664,19 +700,16 @@ export function ProjectWorkspace({
                 </button>
               );
             })}
+              </>
+            ) : (
+              <h2 className="text-sm font-bold text-slate-800 whitespace-nowrap">{screenTitle}</h2>
+            )}
           </div>
-        )}
-
-      {/* Row 4: Project Hub (Always On) */}
-        <div className="bg-slate-100/90 border-b border-slate-200 text-slate-600 px-4 lg:px-6 py-1.5 flex items-center justify-start gap-3 flex-wrap shadow-2xs min-h-[52px]">
-          <div className="flex items-center gap-1.5 text-slate-500 text-xs shrink-0 mr-1">
-            <span className="font-bold text-slate-500 uppercase tracking-widest text-[10px]">PROJECT HUB</span>
-            <span className="text-[10px] text-slate-400 font-medium hidden lg:inline">· Always On</span>
-          </div>
-          <div className="flex items-center gap-1 shrink-0 flex-wrap">
+          <HeaderFigures />
+          <div className="ml-auto shrink-0 flex items-center gap-2 flex-wrap">
             <FloatingDock
               tooltipPosition="bottom"
-              alwaysShowLabels={true}
+              alwaysShowLabels={false}
               items={BAND.filter((item) => !(hiddenForRole(item))).map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.route || (item.route === 'dashboard' && activeTab === 'dashboard');
@@ -696,27 +729,9 @@ export function ProjectWorkspace({
                   isActive,
                 };
               })}
-              desktopClassName="h-auto bg-slate-200/50 border border-slate-200/80 px-2 py-1 gap-1 rounded-xl shadow-2xs"
+              desktopClassName="h-auto bg-slate-200/50 border border-slate-200/80 px-1.5 py-1 gap-1 rounded-xl shadow-2xs"
               mobileClassName=""
             />
-          </div>
-
-          {/*
-            What is waiting on you, at the end of the row.
-
-            Pushed to the far right and behind a divider because it is a
-            different kind of object from the tiles: those are places to go,
-            this is a thing to do. It sends nothing -- every alert opens the
-            screen that owns the decision, so the Client Portal tab stays the
-            only thing that can reach a client.
-          */}
-          {/*
-            A change to this project as it happens (components/notify): a
-            chip that turns in beside the alerts, and the bell for everything
-            that reached you, here because the studio's top bar is hidden
-            inside a project.
-          */}
-          <div className="ml-auto shrink-0 flex items-center gap-2">
             <LiveStamp match={(n) => n.projectId === projectId} className="hidden lg:inline-flex" />
             {/* Hide margins, costs and collections while the screen is shared (lib/figuresPrivacy). */}
             {holdsFinanceRole(currentRole) && <HideFiguresButton />}
@@ -726,7 +741,6 @@ export function ProjectWorkspace({
               alerts: hubAlerts.alerts, onGo: setActiveTab, onDismiss: hubAlerts.dismiss,
             } : undefined} />
           </div>
-
           {/*
             "Your access" (R3 in the header mockups). A Designer changes drawings
             and nothing else: every other screen they have is look-only
@@ -1044,6 +1058,7 @@ export function ProjectWorkspace({
         {/* The dashboard route shows the setup wizard until the project has tiers,
             so the title has to follow the screen rather than the route. */}
         <PageTitleBlock
+          compact
           route={isWizard ? 'project-setup' : activeTab}
           {...(!isWizard && ENGAGEMENT_PAGE_TITLES[engagement]?.[activeTab] ? ENGAGEMENT_PAGE_TITLES[engagement]![activeTab] : {})}
         />
