@@ -101,11 +101,6 @@
     "offPalette": 36,
     "mono": 2
   },
-  "components/InteractiveBoqEditor.tsx": {
-    "tinyPx": 16,
-    "offPalette": 24,
-    "mono": 20
-  },
   "components/InternalComparisonTable.tsx": {
     "tinyPx": 3,
     "offPalette": 2,
@@ -145,10 +140,6 @@
   "components/PageTitleBlock.tsx": {
     "tinyPx": 1,
     "offPalette": 2
-  },
-  "components/PaymentCalculatorTab.tsx": {
-    "tinyPx": 37,
-    "offPalette": 19
   },
   "components/PaymentHealth.tsx": {
     "tinyPx": 6,
@@ -204,10 +195,6 @@
   },
   "components/RevisionExcelImportModal.tsx": {
     "offPalette": 21,
-    "mono": 3
-  },
-  "components/RevisionStudio.tsx": {
-    "offPalette": 43,
     "mono": 3
   },
   "components/RoomCard.tsx": {
@@ -278,12 +265,6 @@
   },
   "components/TierManager.tsx": {
     "offPalette": 3
-  },
-  "components/TimelineTab.tsx": {
-    "halfPx": 4,
-    "tinyPx": 18,
-    "offPalette": 10,
-    "mono": 14
   },
   "components/VendorsManager.tsx": {
     "tinyPx": 1,
@@ -611,12 +592,6 @@
     "halfPx": 3,
     "tinyPx": 3,
     "offPalette": 1
-  },
-  "components/ops/DrawingTrackerModule.tsx": {
-    "halfPx": 1,
-    "tinyPx": 6,
-    "offPalette": 10,
-    "mono": 4
   },
   "components/ops/EngagementLifecycleWidget.tsx": {
     "offPalette": 2

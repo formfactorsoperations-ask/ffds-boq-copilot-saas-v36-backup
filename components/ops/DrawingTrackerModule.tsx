@@ -35,7 +35,7 @@ interface DrawingTrackerModuleProps {
 
 function AnimatedNumber({ value }: { value: number }) {
     return (
-        <span className="font-['Plus_Jakarta_Sans'] text-2xl sm:text-3xl font-extrabold text-slate-900 tabular-nums">
+        <span className=" text-2xl sm:text-3xl font-extrabold text-slate-900 tabular-nums">
             {value}
         </span>
     );
@@ -1220,7 +1220,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
             case 'Missing':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-rose-50 text-rose-800 border border-rose-200 shadow-2xs"><FileWarning className="w-3.5 h-3.5 text-rose-600" />Missing</span>;
             case 'Approved':
-                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-teal-50 text-teal-800 border border-teal-200 shadow-2xs"><CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />Approved</span>;
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />Approved</span>;
             case 'Client Review':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs"><User className="w-3.5 h-3.5 text-[#2E7D6B]" />Client Review</span>;
             case 'Site Hold':
@@ -1240,7 +1240,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
             case 'In Progress':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs"><PenTool className="w-3.5 h-3.5 text-slate-500" />In Progress</span>;
             case 'Studio Review':
-                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 shadow-2xs"><Send className="w-3.5 h-3.5 text-indigo-600" />{isOwner ? 'Ready for your review' : 'With studio for review'}</span>;
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#3D52A0]/5 text-[#334486] border border-[#3D52A0]/20 shadow-2xs"><Send className="w-3.5 h-3.5 text-[#3D52A0]" />{isOwner ? 'Ready for your review' : 'With studio for review'}</span>;
             default:
                 if (status.includes('Issued')) {
                     return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs"><Clock className="w-3.5 h-3.5 text-amber-600" />{status}</span>;
@@ -1302,7 +1302,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                             <div className="bg-white p-3.5 border border-slate-200/80 rounded-xl shadow-2xs">
                                 <div className="flex items-center justify-between gap-2">
                                     <span className="font-extrabold text-xs text-slate-900">Round {r.roundNumber}</span>
-                                    <span className={`px-2 py-0.5 text-[9px] font-black rounded uppercase tracking-wider ${
+                                    <span className={`px-2 py-0.5 text-[10px] font-black rounded uppercase tracking-wider ${
                                         r.status === 'approved' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
                                         r.status === 'in_review' ? 'bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC]' :
                                         r.status === 'issued' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
@@ -1420,7 +1420,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         {list.map((rev, idx) => (
                             <div key={idx} className="p-3 bg-white border border-slate-200/90 rounded-xl text-xs flex flex-col gap-1.5 shadow-2xs">
                                 <div className="flex items-center justify-between">
-                                    <span className={`px-2 py-0.5 text-[9px] font-black tracking-wider uppercase rounded ${
+                                    <span className={`px-2 py-0.5 text-[10px] font-black tracking-wider uppercase rounded ${
                                         rev.cause === 'CLIENT_REVISION' ? 'bg-rose-50 text-rose-700 border border-rose-100' :
                                         rev.cause === 'FFDS_DESIGN_MISS' ? 'bg-[#F1F7F5] text-[#1F4D45] border border-[#DCEBE6]' :
                                         'bg-amber-50 text-amber-700 border border-amber-100'
@@ -1527,7 +1527,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         <ShieldCheck className="w-4 h-4 text-emerald-600" />
                         Good-For-Construction Release
                     </span>
-                    <span className={`px-2.5 py-0.5 text-[9px] font-black rounded-full uppercase tracking-wider ${
+                    <span className={`px-2.5 py-0.5 text-[10px] font-black rounded-full uppercase tracking-wider ${
                         isSuperseded ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
                     }`}>
                         {d.gfc.status}
@@ -1545,7 +1545,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                     </div>
                     <div>
                         <span className="text-slate-400 text-[10px] block uppercase font-bold tracking-tight">BOQ Hash Ref</span>
-                        <span className="text-slate-900 select-all font-mono bg-white px-2 py-0.5 rounded border border-slate-200 inline-block text-[11px] font-bold">
+                        <span className="text-slate-900 select-all tabular-nums bg-white px-2 py-0.5 rounded border border-slate-200 inline-block text-[11px] font-bold">
                             {(() => {
                                 const rawRef = d.gfc.boqVersionRef;
                                 if (!rawRef || rawRef === 'unknown_hash' || rawRef.startsWith('unknown')) {
@@ -1629,7 +1629,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         <span className="flex items-center gap-2 min-w-0">
                             <span className="text-sm font-semibold text-slate-800 truncate">{d.name}</span>
                             {d.priority === 'high' && (
-                                <span className="shrink-0 px-1.5 py-px text-[9px] font-black uppercase tracking-wider rounded bg-rose-100 text-rose-700">
+                                <span className="shrink-0 px-1.5 py-px text-[10px] font-black uppercase tracking-wider rounded bg-rose-100 text-rose-700">
                                     High
                                 </span>
                             )}
@@ -1664,7 +1664,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 <span
                                     key={r}
                                     title={`Round ${r}`}
-                                    className={`w-5 h-5 rounded-full text-[9px] font-black flex items-center justify-center ${
+                                    className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center ${
                                         state === 'completed' ? 'bg-emerald-100 text-emerald-800'
                                         : state === 'active' ? 'bg-[#DCEBE6] text-[#12332E]'
                                         : 'bg-slate-100 text-slate-300'
@@ -1689,7 +1689,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 type="button"
                                 onClick={e => { e.stopPropagation(); openInDesignReview(projectId, d.id, FROM_DRAWINGS); }}
                                 title="Open in Design Desk"
-                                className="mt-0.5 block max-w-full truncate text-left text-[10.5px] font-semibold text-[#5B5BD6] hover:underline"
+                                className="mt-0.5 block max-w-full truncate text-left text-[11px] font-semibold text-[#5B5BD6] hover:underline"
                             >
                                 v{d.review.versionNo} · {d.review.state === 'APPROVED' ? 'Design Head approved' : STATE_LABEL[d.review.state]}{d.review.state === 'CHANGES_REQUESTED' && d.review.marksOpen ? ` · ${d.review.marksOpen} open` : ''}
                             </button>
@@ -1739,7 +1739,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 type="button"
                                 title={d.review?.state ? 'Open in Design Desk' : 'Upload the PDF in Design Desk'}
                                 onClick={e => { e.stopPropagation(); openInDesignReview(projectId, d.id, FROM_DRAWINGS); }}
-                                className="p-1.5 text-[#5B5BD6] hover:bg-indigo-50 rounded-lg transition-colors"
+                                className="p-1.5 text-[#5B5BD6] hover:bg-[#3D52A0]/5 rounded-lg transition-colors"
                             >
                                 <PenTool className="w-3.5 h-3.5" />
                             </button>
@@ -1804,7 +1804,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 ? 'approved' : status === 'Site Hold' ? 'rejected' : 'pending';
                             const opts: [string, 'pending' | 'approved' | 'rejected', string][] = [
                                 ['Pending', 'pending', 'bg-[#1F4D45] text-white'],
-                                ['Approved', 'approved', 'bg-teal-600 text-white'],
+                                ['Approved', 'approved', 'bg-emerald-600 text-white'],
                                 ['On hold', 'rejected', 'bg-rose-600 text-white'],
                             ];
                             return (
@@ -2720,7 +2720,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                             <td className="p-3">{renderStatusBadge(statusOf(d), d)}</td>
                                             <td className="p-3 font-bold">R{d.currentRound || 0}</td>
                                             <td className="p-3 text-slate-600">{formatDate(d.approvedAt)}</td>
-                                            <td className="p-3 font-mono font-bold text-slate-900">{d.gfc?.boqVersionRef || '—'}</td>
+                                            <td className="p-3 tabular-nums font-bold text-slate-900">{d.gfc?.boqVersionRef || '—'}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -3066,10 +3066,10 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         <div className="space-y-2 max-h-[160px] overflow-y-auto">
                             {logs.map((log) => (
                                 <div key={log.id} className="flex gap-3 text-xs leading-relaxed items-start text-left">
-                                    <span className="text-slate-400 font-semibold select-none font-mono text-[10px] pt-0.5">
+                                    <span className="text-slate-400 font-semibold select-none tabular-nums text-[10px] pt-0.5">
                                         [{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}]
                                     </span>
-                                    <span className={`font-black shrink-0 uppercase text-[9px] tracking-wider px-1.5 py-0.5 rounded border ${
+                                    <span className={`font-black shrink-0 uppercase text-[10px] tracking-wider px-1.5 py-0.5 rounded border ${
                                         log.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                                         log.type === 'warning' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                                         log.type === 'error' ? 'bg-rose-50 text-rose-700 border-rose-200' :

@@ -1133,7 +1133,7 @@ export default function RevisionStudio({
       action.type === "APPROVE_PENDING"
     ) {
       return (
-        <span className="text-purple-600 font-medium">Status Updated</span>
+        <span className="text-[#3D52A0] font-medium">Status Updated</span>
       );
     }
     return null;
@@ -1237,10 +1237,10 @@ export default function RevisionStudio({
     const actionTypes: { type: ActionType; label: string; icon: any; color: string }[] = [
       { type: "ADD", label: "+ Add Item", icon: PlusCircle, color: "hover:border-emerald-500 hover:text-emerald-700 hover:bg-emerald-50" },
       { type: "REVISE_QTY", label: "✎ Revise Qty", icon: Edit3, color: "hover:border-amber-500 hover:text-amber-700 hover:bg-amber-50" },
-      { type: "REVISE_RATE", label: "⚡ Revise Rate", icon: TrendingUp, color: "hover:border-[#3D52A0] hover:text-[#334486] hover:bg-sky-50" },
-      { type: "REPLACE", label: "⇄ Replace Item", icon: RefreshCw, color: "hover:border-blue-500 hover:text-blue-700 hover:bg-blue-50" },
+      { type: "REVISE_RATE", label: "⚡ Revise Rate", icon: TrendingUp, color: "hover:border-[#3D52A0] hover:text-[#334486] hover:bg-[#3D52A0]/5" },
+      { type: "REPLACE", label: "⇄ Replace Item", icon: RefreshCw, color: "hover:border-[#3D52A0] hover:text-[#334486] hover:bg-[#3D52A0]/5" },
       { type: "REMOVE", label: "⛔ Remove", icon: Trash2, color: "hover:border-rose-500 hover:text-rose-700 hover:bg-rose-50" },
-      { type: "MARK_PENDING", label: "❓ Mark Pending", icon: HelpCircle, color: "hover:border-purple-500 hover:text-purple-700 hover:bg-purple-50" },
+      { type: "MARK_PENDING", label: "❓ Mark Pending", icon: HelpCircle, color: "hover:border-[#3D52A0] hover:text-[#334486] hover:bg-[#3D52A0]/5" },
       { type: "APPROVE_PENDING", label: "✓ Approve Pending", icon: CheckCircle2, color: "hover:border-emerald-500 hover:text-emerald-700 hover:bg-emerald-50" },
       { type: "MARK_VENDOR", label: "🏬 Vendor Direct", icon: FileText, color: "hover:border-slate-500 hover:text-slate-700 hover:bg-slate-100" },
     ];
@@ -1257,7 +1257,7 @@ export default function RevisionStudio({
                   <span>Proposal / Version Target:</span>
                 </div>
                 {currentSelectedTier && (
-                  <span className="text-[11px] font-extrabold text-[#334486] bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">
+                  <span className="text-[11px] font-extrabold text-[#334486] bg-[#3D52A0]/5 px-2 py-0.5 rounded-md border border-[#3D52A0]/10">
                     {formatINR(currentSelectedTier.executionValue)}
                   </span>
                 )}
@@ -1325,7 +1325,7 @@ export default function RevisionStudio({
               </h4>
               <button
                 onClick={() => setShowExcelImportModal(true)}
-                className="px-2.5 py-1 text-[11px] font-bold text-[#4f46e5] hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-1.5 border border-indigo-200/70 bg-indigo-50/50"
+                className="px-2.5 py-1 text-[11px] font-bold text-[#4f46e5] hover:bg-[#3D52A0]/5 rounded-lg transition-colors flex items-center gap-1.5 border border-[#3D52A0]/14 bg-[#3D52A0]/2"
                 title="Import revised BOQ from Excel spreadsheet"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-[#4f46e5]" />
@@ -1700,7 +1700,7 @@ export default function RevisionStudio({
 
               <button
                 onClick={() => setShowExcelImportModal(true)}
-                className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100/80 text-[#4f46e5] border border-indigo-200/90 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-[#3D52A0]/5 hover:bg-[#3D52A0]/8 text-[#4f46e5] border border-[#3D52A0]/18 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5"
                 title="Upload updated Excel spreadsheet to detect scope changes automatically"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-[#4f46e5]" />
@@ -1767,7 +1767,7 @@ export default function RevisionStudio({
                           if (item.status === "Revised" || item.status === "Replaced")
                             rowClass += " bg-amber-50/40";
                           if (item.status === "Pending Decision")
-                            rowClass += " bg-purple-50/40";
+                            rowClass += " bg-[#3D52A0]/2";
 
                           return (
                             <tr key={`${section}-${idx}`} className={rowClass}>
@@ -1786,7 +1786,7 @@ export default function RevisionStudio({
                                   </div>
                                 )}
                                 {item.status === "Pending Decision" && (
-                                  <div className="text-[10px] text-purple-600 font-semibold mt-0.5">
+                                  <div className="text-[10px] text-[#3D52A0] font-semibold mt-0.5">
                                     Awaiting client confirmation
                                   </div>
                                 )}
@@ -1809,7 +1809,7 @@ export default function RevisionStudio({
                                           : item.status === "Vendor Direct"
                                             ? "bg-slate-100 text-slate-700"
                                             : item.status === "Pending Decision"
-                                              ? "border border-purple-300 text-purple-800 bg-purple-50"
+                                              ? "border border-[#3D52A0]/30 text-[#334486] bg-[#3D52A0]/5"
                                               : "bg-amber-100 text-amber-800"
                                   }`}
                                 >
@@ -1884,7 +1884,7 @@ export default function RevisionStudio({
               ) : (
                 [...actions].reverse().map((action) => (
                   <tr key={action.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-4 py-3 text-slate-500 font-mono text-[11px]">
+                    <td className="px-4 py-3 text-slate-500 tabular-nums text-[11px]">
                       {new Date(action.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </td>
                     <td className="px-4 py-3">
@@ -1899,7 +1899,7 @@ export default function RevisionStudio({
                       {formatChangeDetail(action)}
                     </td>
                     <td className="px-4 py-3 text-slate-500 font-medium">
-                      <span className="px-2 py-0.5 bg-sky-50 text-[#334486] rounded-md text-[10px] font-bold">
+                      <span className="px-2 py-0.5 bg-[#3D52A0]/5 text-[#334486] rounded-md text-[10px] font-bold">
                         {action.reasonCategory || "Uncategorized"}
                       </span>
                     </td>
@@ -3597,7 +3597,7 @@ export default function RevisionStudio({
                         </span>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-200">
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                           Vendor-direct at actuals
                         </span>
                         <span className="font-bold text-slate-900 text-xs">
@@ -3617,7 +3617,7 @@ export default function RevisionStudio({
                         </span>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#3D52A0]/10 text-[#334486] border border-[#3D52A0]/20">
                           Pending client confirmation
                         </span>
                         <span className="font-bold text-slate-900 text-xs">
@@ -3811,13 +3811,13 @@ export default function RevisionStudio({
                             item.status === "Revised" ||
                             item.status === "Replaced"
                           ) {
-                            rowClass = "bg-blue-50";
+                            rowClass = "bg-[#3D52A0]/5";
                             statusText = item.status === "Replaced" ? "Replaced with alternative" : "Revised as per final design";
                           } else if (item.status === "Pending Decision") {
-                            rowClass = "bg-purple-50";
+                            rowClass = "bg-[#3D52A0]/5";
                             statusText = "Pending client confirmation";
                           } else if (item.status === "Vendor Direct") {
-                            rowClass = "bg-orange-50 text-orange-800";
+                            rowClass = "bg-amber-50 text-amber-800";
                             statusText = "As Actuals (Vendor Direct)";
                           }
 
@@ -4233,8 +4233,8 @@ export default function RevisionStudio({
             </div>
           </Card>
 
-          <Card className="p-6 border border-sky-900 bg-gradient-to-br from-[#004D99] to-[#3D52A0] text-white shadow-md rounded-2xl relative overflow-hidden">
-            <div className="flex items-center gap-2 mb-4 text-sky-200">
+          <Card className="p-6 border border-[#334486] bg-gradient-to-br from-[#004D99] to-[#3D52A0] text-white shadow-md rounded-2xl relative overflow-hidden">
+            <div className="flex items-center gap-2 mb-4 text-white/80">
               <TrendingUp className="w-4 h-4 text-amber-300" />
               <h4 className="font-bold uppercase tracking-wider text-xs">
                 Design Fee Impact
@@ -4242,7 +4242,7 @@ export default function RevisionStudio({
             </div>
             <div className="space-y-3">
               <div className="flex justify-between text-xs">
-                <span className="text-sky-200 font-medium">
+                <span className="text-white/80 font-medium">
                   Original Design Fee{" "}
                   {!projectContext?.designFeeType ||
                   projectContext?.designFeeType === "percentage"
@@ -4256,13 +4256,13 @@ export default function RevisionStudio({
               {(!projectContext?.designFeeType ||
                 projectContext?.designFeeType === "percentage") && (
                 <>
-                  <div className="flex justify-between text-xs text-sky-100">
+                  <div className="flex justify-between text-xs text-white/90">
                     <span>Revised BOQ Base</span>
                     <span className="font-semibold">
                       {formatINR(rawRevisedExecutionTotal)}
                     </span>
                   </div>
-                  <div className="flex justify-between text-xs text-sky-100">
+                  <div className="flex justify-between text-xs text-white/90">
                     <span>Total Design Base</span>
                     <span className="font-semibold">
                       {formatINR(rawRevisedDesignBaseTotal)}
@@ -4270,7 +4270,7 @@ export default function RevisionStudio({
                   </div>
                 </>
               )}
-              <div className="flex justify-between text-xs text-sky-100">
+              <div className="flex justify-between text-xs text-white/90">
                 <span>Revised Fee (Gross)</span>
                 <span className="font-semibold">
                   {formatINR(rawRevisedDesignFee)}
@@ -4285,7 +4285,7 @@ export default function RevisionStudio({
                 </div>
               )}
               <div className="pt-3 border-t border-white/20 flex justify-between items-center">
-                <span className="font-semibold text-sky-100 text-xs">
+                <span className="font-semibold text-white/90 text-xs">
                   Net Revised Design Fee
                 </span>
                 <span className="font-bold text-white text-base">
@@ -4293,7 +4293,7 @@ export default function RevisionStudio({
                 </span>
               </div>
               <div className="pt-2 flex justify-between items-center">
-                <span className="font-semibold text-sky-200 text-xs">
+                <span className="font-semibold text-white/80 text-xs">
                   Net Fee Variance
                 </span>
                 <span className="text-sm font-bold px-2.5 py-1 bg-white/20 text-white rounded-lg">
@@ -4337,7 +4337,7 @@ export default function RevisionStudio({
             onClick={exportToPDF}
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-sky-50 text-[#3D52A0] flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-[#3D52A0]/5 text-[#3D52A0] flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform">
                 <Download className="w-5 h-5" />
               </div>
               <div>
@@ -4652,11 +4652,11 @@ export default function RevisionStudio({
                             key={`${idx}-bal`}
                             style={{ ...rowStyle, backgroundColor: "#eff6ff" }}
                           >
-                            <span className="text-blue-800 font-medium pl-4">
+                            <span className="text-[#334486] font-medium pl-4">
                               ↳ Balance Payable
                             </span>
                             <div className="flex items-center gap-3">
-                              <span className="font-semibold text-blue-800">
+                              <span className="font-semibold text-[#334486]">
                                 {formatINR(Math.round(current.revisedTotal))}
                               </span>
                               <span
@@ -4887,7 +4887,7 @@ export default function RevisionStudio({
                     Copy Email
                   </button>
                 </div>
-                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-700 whitespace-pre-wrap font-mono">
+                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-700 whitespace-pre-wrap tabular-nums">
                   {(() => {
                     const deltaText =
                       netDelta === 0
@@ -4961,7 +4961,7 @@ export default function RevisionStudio({
                     Copy WhatsApp
                   </button>
                 </div>
-                <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200 text-sm text-slate-700 whitespace-pre-wrap font-mono">
+                <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200 text-sm text-slate-700 whitespace-pre-wrap tabular-nums">
                   {(() => {
                     const waDeltaText =
                       netDelta === 0

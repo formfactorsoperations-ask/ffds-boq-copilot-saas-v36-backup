@@ -352,7 +352,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
             </span>
           </div>
           <div className="text-xs text-slate-500 font-normal">
-            <span title="The BOQ lines only. The project total with the design fee is at the foot of the editor.">Work total (before design fee):</span> <strong className="font-mono text-slate-900 text-sm font-bold tabular-nums">{formatCurrency(projectStats.grandTotal)}</strong>
+            <span title="The BOQ lines only. The project total with the design fee is at the foot of the editor.">Work total (before design fee):</span> <strong className=" text-slate-900 text-sm font-bold tabular-nums">{formatCurrency(projectStats.grandTotal)}</strong>
             {projectStats.asActuals > 0 && <span className="text-slate-400" title="Paid by the client to vendors directly; not in the work total."> · as actuals {formatCurrency(projectStats.asActuals)} not included</span>}
           </div>
         </div>
@@ -380,10 +380,10 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                 All Rooms combined
               </div>
               <div className="flex justify-between items-center mt-0.5">
-                <span className={`text-[9px] font-bold ${selectedRoomId === 'All Rooms' ? 'text-slate-300' : 'text-slate-500'}`}>
+                <span className={`text-[10px] font-bold ${selectedRoomId === 'All Rooms' ? 'text-slate-300' : 'text-slate-500'}`}>
                   {items.filter(i => i.boqStatus !== 'deleted' && i.boqStatus !== 'excluded').length} items
                 </span>
-                <span className={`text-xs font-mono font-black ${selectedRoomId === 'All Rooms' ? 'text-white' : 'text-slate-800'}`}>
+                <span className={`text-xs tabular-nums font-black ${selectedRoomId === 'All Rooms' ? 'text-white' : 'text-slate-800'}`}>
                   {formatCurrency(projectStats.grandTotal)}
                 </span>
               </div>
@@ -420,10 +420,10 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     {room.name}
                   </div>
                   <div className="flex justify-between items-center mt-0.5">
-                    <span className={`text-[9px] font-bold ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
+                    <span className={`text-[10px] font-bold ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
                       {stats.count} items • {room.size} {room.unit}
                     </span>
-                    <span className={`text-xs font-mono font-black ${isActive ? 'text-white' : 'text-slate-800'}`}>
+                    <span className={`text-xs tabular-nums font-black ${isActive ? 'text-white' : 'text-slate-800'}`}>
                       {formatCurrency(stats.total)}
                     </span>
                   </div>
@@ -458,10 +458,10 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                   </div>
                   <div className="flex justify-between items-center mt-0.5">
                     {/* No area: a scope covers the flat, it does not have a size. */}
-                    <span className={`text-[9px] font-bold ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
+                    <span className={`text-[10px] font-bold ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
                       {stats.count} items • project-wide
                     </span>
-                    <span className={`text-xs font-mono font-black ${isActive ? 'text-white' : 'text-slate-800'}`}>
+                    <span className={`text-xs tabular-nums font-black ${isActive ? 'text-white' : 'text-slate-800'}`}>
                       {formatCurrency(stats.total)}
                     </span>
                   </div>
@@ -491,10 +491,10 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
               <div className="min-w-0 flex-grow">
                 <div className={`text-xs font-black truncate ${selectedRoomId === 'Unassigned' ? 'text-white' : 'text-slate-900'}`}>Unassigned Items</div>
                 <div className="flex justify-between items-center mt-0.5">
-                  <span className={`text-[9px] font-bold ${selectedRoomId === 'Unassigned' ? 'text-slate-300' : 'text-slate-400'}`}>
+                  <span className={`text-[10px] font-bold ${selectedRoomId === 'Unassigned' ? 'text-slate-300' : 'text-slate-400'}`}>
                     {roomStats['Unassigned'].count} items
                   </span>
-                  <span className={`text-xs font-mono font-black ${selectedRoomId === 'Unassigned' ? 'text-white' : 'text-slate-800'}`}>
+                  <span className={`text-xs tabular-nums font-black ${selectedRoomId === 'Unassigned' ? 'text-white' : 'text-slate-800'}`}>
                     {formatCurrency(roomStats['Unassigned'].total)}
                   </span>
                 </div>
@@ -514,7 +514,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
           <div className="p-3.5 border-b border-slate-100 bg-slate-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[9px] font-black uppercase tracking-widest text-[#3D52A0]">Active Workspace</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#3D52A0]">Active Workspace</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               </div>
               <h2 className="text-sm font-black text-slate-900 flex items-center gap-2 mt-0.5">
@@ -554,7 +554,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     setActiveCategory(cat);
                     setSelectedItemId(null); // Clear selected item when filter changes
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
                     activeCategory === cat
                       ? 'bg-[#3D52A0] text-white shadow-sm'
                       : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
@@ -570,7 +570,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
           <div className="flex-grow overflow-y-auto p-4 space-y-3 bg-slate-50/30">
             {filteredItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center py-12">
-                <div className="w-12 h-12 bg-sky-50 text-[#3D52A0] rounded-2xl flex items-center justify-center mb-3">
+                <div className="w-12 h-12 bg-[#3D52A0]/5 text-[#3D52A0] rounded-2xl flex items-center justify-center mb-3">
                   <Briefcase className="w-6 h-6" />
                 </div>
                 <h3 className="text-slate-800 font-black text-sm mb-1">No Design Items Listed</h3>
@@ -590,7 +590,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     onClick={() => setSelectedItemId(item.id)}
                     className={`p-3.5 rounded-2xl border transition-all text-xs flex flex-col md:flex-row gap-3 items-start md:items-center justify-between cursor-pointer relative ${
                       isSelected
-                        ? 'bg-sky-50 border-sky-300 shadow-md ring-2 ring-[#3D52A0]/10'
+                        ? 'bg-[#3D52A0]/5 border-[#3D52A0]/30 shadow-md ring-2 ring-[#3D52A0]/10'
                         : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-sm'
                     }`}
                   >
@@ -604,7 +604,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                           <span className="font-extrabold text-slate-900 text-xs leading-tight group-hover:text-slate-800">
                             {item.name}
                           </span>
-                          <span className="text-[8px] uppercase tracking-widest font-black text-slate-400">
+                          <span className="text-[10px] uppercase tracking-widest font-black text-slate-400">
                             {item.cat}
                           </span>
                         </div>
@@ -620,7 +620,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                         {/* Compact Rate Tag */}
                         <div className="text-[10px] text-slate-400 mt-1 font-medium flex items-center gap-1.5">
                           <span>Unit Rate:</span>
-                          <strong className="font-mono text-slate-700">{formatCurrency(sellPrice)} / {item.unit}</strong>
+                          <strong className="tabular-nums text-slate-700">{formatCurrency(sellPrice)} / {item.unit}</strong>
                           {finance && (<>
                           <span className="text-slate-200">|</span>
                           <span className="text-slate-400 flex items-center gap-1.5 flex-wrap">
@@ -657,10 +657,10 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                             min={0}
                             onCommit={(v) => onUpdate(item.id, 'qty', v ?? 0)}
                             aria-label={`Quantity of ${item.name}`}
-                            className="w-full text-center font-mono font-black text-xs text-slate-900 bg-transparent border-0 p-0 m-0 focus:ring-0 focus:outline-none"
+                            className="w-full text-center tabular-nums font-black text-xs text-slate-900 bg-transparent border-0 p-0 m-0 focus:ring-0 focus:outline-none"
                             placeholder="0"
                           />
-                          <span className="block text-[8px] uppercase font-bold text-slate-400 select-none pointer-events-none -mt-0.5 leading-none">{item.unit}</span>
+                          <span className="block text-[10px] uppercase font-bold text-slate-400 select-none pointer-events-none -mt-0.5 leading-none">{item.unit}</span>
                         </div>
 
                         <button
@@ -677,10 +677,10 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
 
                       {/* Prominent Formatted Price */}
                       <div className="text-right min-w-[100px]">
-                        <div className="text-xs font-black text-slate-900 font-mono">
+                        <div className="text-xs font-black text-slate-900 tabular-nums">
                           {formatCurrency(totalSell)}
                         </div>
-                        <span className="text-[9px] text-slate-400 uppercase tracking-widest font-black">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black">
                           Subtotal
                         </span>
                       </div>
@@ -709,7 +709,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
           {/* Left panel subtotal summary */}
           <div className="p-3.5 border-t border-slate-100 bg-slate-50/40 shrink-0 flex justify-between items-center text-xs">
             <span className="text-slate-500 font-medium">Selected Room Subtotal:</span>
-            <strong className="font-mono text-slate-900 font-black text-base">
+            <strong className="tabular-nums text-slate-900 font-black text-base">
               {formatCurrency(
                 selectedRoomId === 'All Rooms' 
                   ? projectStats.grandTotal 
@@ -727,13 +727,13 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
             <div className="flex flex-col h-full overflow-hidden">
               
               {/* Editor Header */}
-              <div className="p-3.5 border-b border-slate-100 bg-sky-50/30 flex justify-between items-center shrink-0">
+              <div className="p-3.5 border-b border-slate-100 bg-[#3D52A0]/2 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 bg-sky-100 text-sky-800 rounded-lg flex items-center justify-center text-xs">
+                  <div className="w-7 h-7 bg-[#3D52A0]/10 text-[#334486] rounded-lg flex items-center justify-center text-xs">
                     <Edit2 className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-[#3D52A0]">Component Inspector</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#3D52A0]">Component Inspector</span>
                     <h3 className="text-xs font-black text-slate-900 truncate max-w-[210px]">{activeSelectedItem.name}</h3>
                   </div>
                 </div>
@@ -758,7 +758,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     type="text"
                     value={activeSelectedItem.name || ''}
                     onChange={e => onUpdate(activeSelectedItem.id, 'name', e.target.value)}
-                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-extrabold text-slate-900 transition-all shadow-inner"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0]/10 rounded-xl text-xs font-extrabold text-slate-900 transition-all shadow-inner"
                   />
                 </div>
 
@@ -772,7 +772,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     value={activeSelectedItem.specs || ''}
                     onChange={e => onUpdate(activeSelectedItem.id, 'specs', e.target.value)}
                     placeholder="E.g., 18mm Century Laminate, heavy duty hardware, premium PU paint finish..."
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-medium text-slate-700 transition-all leading-relaxed shadow-inner"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0]/10 rounded-xl text-xs font-medium text-slate-700 transition-all leading-relaxed shadow-inner"
                   />
                 </div>
 
@@ -792,7 +792,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                       type="text"
                       value={activeSelectedItem.cat || ''}
                       onChange={e => onUpdate(activeSelectedItem.id, 'cat' as keyof BoqItem, e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-bold text-slate-800"
+                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0]/10 rounded-xl text-xs font-bold text-slate-800"
                     />
                   </div>
 
@@ -804,7 +804,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                       type="text"
                       value={activeSelectedItem.unit || ''}
                       onChange={e => onUpdate(activeSelectedItem.id, 'unit', e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-bold text-slate-800 text-center uppercase"
+                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0]/10 rounded-xl text-xs font-bold text-slate-800 text-center uppercase"
                     />
                   </div>
 
@@ -817,7 +817,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                       min={0}
                       onCommit={(v) => onUpdate(activeSelectedItem.id, 'qty', v ?? 0)}
                       aria-label="Quantity"
-                      className="w-full px-2.5 py-1.5 bg-sky-50/50 border border-sky-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-black text-slate-900 font-mono text-center"
+                      className="w-full px-2.5 py-1.5 bg-[#3D52A0]/2 border border-[#3D52A0]/20 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0]/10 rounded-xl text-xs font-black text-slate-900 tabular-nums text-center"
                     />
                   </div>
                 </div>
@@ -825,7 +825,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                 {!finance && (
                   <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 flex justify-between items-center text-[11px] text-slate-500">
                     <span>Client Sell Price (Unit):</span>
-                    <span className="font-mono text-slate-900 font-extrabold">
+                    <span className="tabular-nums text-slate-900 font-extrabold">
                       {formatCurrency(calculateSellPrice(activeSelectedItem.materials, activeSelectedItem.labor, activeSelectedItem.margin))}
                     </span>
                   </div>
@@ -838,7 +838,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400">
                       Total Unit Cost (Combined Mat + Lab)
                     </label>
-                    <span className="text-[9px] text-[#3D52A0] font-bold bg-sky-50/60 px-1.5 py-0.5 rounded-md">
+                    <span className="text-[10px] text-[#3D52A0] font-bold bg-[#3D52A0]/3 px-1.5 py-0.5 rounded-md">
                       Keeps this line's material : labour split
                     </span>
                   </div>
@@ -859,7 +859,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                       }}
                       aria-label="Total unit cost"
                       placeholder="Enter combined total cost to auto-split..."
-                      className="w-full pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-mono font-black text-slate-900 shadow-inner"
+                      className="w-full pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0]/10 rounded-xl text-xs tabular-nums font-black text-slate-900 shadow-inner"
                     />
                   </div>
                 </div>
@@ -877,7 +877,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                         min={0}
                         onCommit={v => onUpdate(activeSelectedItem.id, 'baseRate', v ?? 0)}
                         aria-label="Material rate"
-                        className="w-full pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-mono font-bold text-slate-800 text-right shadow-inner"
+                        className="w-full pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0]/10 rounded-xl text-xs tabular-nums font-bold text-slate-800 text-right shadow-inner"
                       />
                     </div>
                   </div>
@@ -893,7 +893,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                         min={0}
                         onCommit={v => onUpdate(activeSelectedItem.id, 'labor', v ?? 0)}
                         aria-label="Labour rate"
-                        className="w-full pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-sky-100 rounded-xl text-xs font-mono font-bold text-slate-800 text-right shadow-inner"
+                        className="w-full pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0]/10 rounded-xl text-xs tabular-nums font-bold text-slate-800 text-right shadow-inner"
                       />
                     </div>
                   </div>
@@ -905,7 +905,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                     <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">
                       Studio Profit Margin (%)
                     </label>
-                    <span className="text-xs font-black text-[#334486] font-mono bg-sky-50 px-2 py-0.5 rounded">
+                    <span className="text-xs font-black text-[#334486] tabular-nums bg-[#3D52A0]/5 px-2 py-0.5 rounded">
                       {activeSelectedItem.margin}%
                     </span>
                   </div>
@@ -924,19 +924,19 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                   <div className="space-y-1 pt-1 border-t border-slate-200/50 text-[11px] text-slate-500">
                     <div className="flex justify-between items-center">
                       <span>Total Unit Cost (Mat + Lab):</span>
-                      <span className="font-mono text-slate-700">
+                      <span className="tabular-nums text-slate-700">
                         {formatCurrency((activeSelectedItem.materials || 0) + (activeSelectedItem.labor || 0))}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span>Client Sell Price (Unit):</span>
-                      <span className="font-mono text-slate-900 font-extrabold">
+                      <span className="tabular-nums text-slate-900 font-extrabold">
                         {formatCurrency(calculateSellPrice(activeSelectedItem.materials, activeSelectedItem.labor, activeSelectedItem.margin))}
                       </span>
                     </div>
                     <div className="flex justify-between items-center pt-1 border-t border-dashed border-slate-200 text-emerald-600 font-bold">
                       <span>Projected Studio Profit (Total):</span>
-                      <span className="font-mono text-xs font-black">
+                      <span className="tabular-nums text-xs font-black">
                         {formatCurrency(
                           (calculateSellPrice(activeSelectedItem.materials, activeSelectedItem.labor, activeSelectedItem.margin) - 
                           ((activeSelectedItem.materials || 0) + (activeSelectedItem.labor || 0))) * activeSelectedItem.qty
@@ -1044,7 +1044,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                         <button
                           key={cat}
                           onClick={() => setLibCategory(cat)}
-                          className={`px-2 py-0.5 rounded text-[9px] font-black shrink-0 transition-all ${
+                          className={`px-2 py-0.5 rounded text-[10px] font-black shrink-0 transition-all ${
                             libCategory === cat
                               ? 'bg-[#3D52A0] text-white shadow-sm'
                               : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
@@ -1083,7 +1083,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                                 <span className="font-extrabold text-slate-900 text-xs leading-tight block truncate group-hover:text-slate-800">
                                   {bankItem.name}
                                 </span>
-                                <span className="text-[8px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wider font-black">
+                                <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wider font-black">
                                   {bankItem.unit}
                                 </span>
                               </div>
@@ -1095,10 +1095,10 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                               <div className="flex justify-between items-center mt-2 border-t border-slate-50 pt-1.5">
                                 <span className="text-[10px] text-slate-500">
                                   {finance
-                                    ? <>Base Cost: <strong className="font-mono text-slate-700">{formatCurrency(bankItem.materials)}</strong></>
-                                    : <>Client price: <strong className="font-mono text-slate-700">{formatCurrency(calculateSellPrice(bankItem.materials, bankItem.labor, bankItem.margin))}</strong></>}
+                                    ? <>Base Cost: <strong className="tabular-nums text-slate-700">{formatCurrency(bankItem.materials)}</strong></>
+                                    : <>Client price: <strong className="tabular-nums text-slate-700">{formatCurrency(calculateSellPrice(bankItem.materials, bankItem.labor, bankItem.margin))}</strong></>}
                                 </span>
-                                <span className="text-[8px] text-slate-400 font-extrabold bg-sky-50/50 px-1.5 py-0.5 rounded uppercase">
+                                <span className="text-[10px] text-slate-400 font-extrabold bg-[#3D52A0]/2 px-1.5 py-0.5 rounded uppercase">
                                   {bankItem.cat}
                                 </span>
                               </div>
@@ -1112,7 +1112,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                               className={`p-1.5 rounded-lg transition-all self-center shadow-sm flex items-center justify-center shrink-0 ${
                                 isAdded
                                   ? 'bg-emerald-500 text-white'
-                                  : 'bg-sky-50 hover:bg-[#3D52A0] text-[#334486] hover:text-white border border-sky-100'
+                                  : 'bg-[#3D52A0]/5 hover:bg-[#3D52A0] text-[#334486] hover:text-white border border-[#3D52A0]/10'
                               }`}
                             >
                               {isAdded ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
@@ -1138,18 +1138,18 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                             ? 'bg-emerald-50 border-emerald-200'
                             : bundle.isCustom
                               ? 'bg-amber-50/40 border-amber-100 hover:border-amber-400'
-                              : 'bg-white border-slate-100 hover:border-sky-400'
+                              : 'bg-white border-slate-100 hover:border-[#3D52A0]/60'
                         }`}
                       >
                         {bundle.isCustom && (
-                          <span className="absolute top-0 right-0 bg-amber-500 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-bl tracking-widest">
+                          <span className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-bl tracking-widest">
                             Custom
                           </span>
                         )}
 
                         <div className="flex gap-3 items-start">
                           <div className={`text-xl w-8 h-8 flex items-center justify-center rounded-full shrink-0 ${
-                            bundle.isCustom ? 'bg-amber-100' : 'bg-sky-50'
+                            bundle.isCustom ? 'bg-amber-100' : 'bg-[#3D52A0]/5'
                           }`}>
                             {bundle.icon}
                           </div>
@@ -1161,8 +1161,8 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                             </p>
                             
                             <div className="flex items-center justify-between mt-3 border-t border-slate-100/60 pt-2">
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded ${
-                                bundle.isCustom ? 'bg-amber-100 text-amber-800' : 'bg-sky-50/80 text-[#334486]'
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded ${
+                                bundle.isCustom ? 'bg-amber-100 text-amber-800' : 'bg-[#3D52A0]/4 text-[#334486]'
                               }`}>
                                 {bundle.itemIds.length} Items
                               </span>

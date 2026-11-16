@@ -116,7 +116,7 @@ const CashGapChart: React.FC<{ months: GapMonth[] }> = ({ months }) => {
     return (
         <div className="mt-3">
             <div className="flex justify-end">
-                <span className="text-[9px] text-[#ADBBDA] tabular-nums leading-none">₹{compact(hi)}</span>
+                <span className="text-[10px] text-[#ADBBDA] tabular-nums leading-none">₹{compact(hi)}</span>
             </div>
 
             <div className="relative mt-1" style={{ height: `${H}px` }}>
@@ -153,7 +153,7 @@ const CashGapChart: React.FC<{ months: GapMonth[] }> = ({ months }) => {
                     style={{ top: `${zeroY}%`, borderColor: dips ? '#E8A6A0' : '#CBD1E4' }}
                 />
                 <span
-                    className="absolute left-0 text-[9px] text-[#ADBBDA] leading-none"
+                    className="absolute left-0 text-[10px] text-[#ADBBDA] leading-none"
                     style={{ top: `calc(${zeroY}% + 3px)` }}
                 >₹0</span>
 
@@ -176,21 +176,21 @@ const CashGapChart: React.FC<{ months: GapMonth[] }> = ({ months }) => {
             >
                 <span />
                 {months.map(m => (
-                    <span key={m.key} className={`text-[9px] text-center truncate ${m.isPast ? 'text-[#C3CBE4]' : 'text-[#8E96B8]'}`}>
+                    <span key={m.key} className={`text-[10px] text-center truncate ${m.isPast ? 'text-[#C3CBE4]' : 'text-[#8E96B8]'}`}>
                         {m.label}
                     </span>
                 ))}
 
-                <span className="text-[9px] text-[#ADBBDA]">in</span>
+                <span className="text-[10px] text-[#ADBBDA]">in</span>
                 {months.map(m => (
-                    <span key={m.key} className="text-[9px] text-center tabular-nums truncate text-[#3A416B] font-semibold">
+                    <span key={m.key} className="text-[10px] text-center tabular-nums truncate text-[#3A416B] font-semibold">
                         {cell(m.inflow)}
                     </span>
                 ))}
 
-                <span className="text-[9px] text-[#ADBBDA]">out</span>
+                <span className="text-[10px] text-[#ADBBDA]">out</span>
                 {months.map(m => (
-                    <span key={m.key} className={`text-[9px] text-center tabular-nums truncate font-semibold ${m.outflow ? 'text-[#C4574F]' : 'text-[#C3CBE4]'}`}>
+                    <span key={m.key} className={`text-[10px] text-center tabular-nums truncate font-semibold ${m.outflow ? 'text-[#C4574F]' : 'text-[#C3CBE4]'}`}>
                         {cell(m.outflow)}
                     </span>
                 ))}
@@ -1728,7 +1728,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     {/* Trigger (WHEN) & Deliverables (UNLOCKS) - Elegant, Flat, Non-collapsible */}
                     <div className="space-y-1.5 border-l border-[#E2E5F0] pl-3 ml-0.5">
                         <div className="flex items-start gap-1.5 text-[11px] text-[#5A628A] font-medium">
-                            <span className="font-extrabold text-[#8E96B8] uppercase tracking-wider shrink-0 text-[9px] w-14 mt-0.5">WHEN:</span>
+                            <span className="font-extrabold text-[#8E96B8] uppercase tracking-wider shrink-0 text-[10px] w-14 mt-0.5">WHEN:</span>
                             {isCleared ? (
                                 <span className="text-[#4A5178] font-semibold leading-relaxed">{m.trigger || '—'}</span>
                             ) : (
@@ -1743,7 +1743,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         </div>
 
                         <div className="flex items-start gap-1.5 text-[11px] text-[#5A628A] font-medium">
-                            <span className="font-extrabold text-[#7091E6] uppercase tracking-wider shrink-0 text-[9px] w-14 mt-0.5">UNLOCKS:</span>
+                            <span className="font-extrabold text-[#7091E6] uppercase tracking-wider shrink-0 text-[10px] w-14 mt-0.5">UNLOCKS:</span>
                             {isCleared ? (
                                 <span className="text-slate-900 font-semibold leading-relaxed">{m.unlocks || '—'}</span>
                             ) : (
@@ -1759,7 +1759,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
                         {/* The date, beside the conditions rather than buried under them. */}
                         <div className="flex items-start gap-2 text-[11px]">
-                            <span className="font-extrabold text-[#8E96B8] uppercase tracking-wider shrink-0 text-[9px] w-14 mt-1">DATE:</span>
+                            <span className="font-extrabold text-[#8E96B8] uppercase tracking-wider shrink-0 text-[10px] w-14 mt-1">DATE:</span>
                             {renderTargetDate(m, mainIndex, isCleared)}
                         </div>
 
@@ -1768,7 +1768,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             <div className="pt-0.5">
                                 {isCleared ? (
                                     m.isHandoverAdvance && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 border border-amber-200/50 text-[9px] font-black text-amber-800 uppercase tracking-wider mt-0.5">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 border border-amber-200/50 text-[10px] font-black text-amber-800 uppercase tracking-wider mt-0.5">
                                             HANDOVER ADVANCE
                                         </span>
                                     )
@@ -1992,14 +1992,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                         <div className="flex bg-[#EDEFF7] p-0.5 rounded-lg border border-[#E2E5F0] select-none">
                                                             <button 
                                                                 onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: false })}
-                                                                className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all ${!m.isFixedAmount ? 'bg-white text-[#334486] shadow-xs' : 'text-[#5A628A] hover:text-[#252C4E]'}`}
+                                                                className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-all ${!m.isFixedAmount ? 'bg-white text-[#334486] shadow-xs' : 'text-[#5A628A] hover:text-[#252C4E]'}`}
                                                                 title="Percentage Mode"
                                                             >
                                                                 %
                                                             </button>
                                                             <button 
                                                                 onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: true, fixedAmount: m.fixedAmount || rowBaseOriginal })}
-                                                                className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all ${m.isFixedAmount ? 'bg-white text-[#334486] shadow-xs' : 'text-[#5A628A] hover:text-[#252C4E]'}`}
+                                                                className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-all ${m.isFixedAmount ? 'bg-white text-[#334486] shadow-xs' : 'text-[#5A628A] hover:text-[#252C4E]'}`}
                                                                 title="Fixed Amount Mode"
                                                             >
                                                                 ₹
@@ -2041,7 +2041,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             
                                             <td className="p-4 text-right tabular-nums text-slate-900 bg-[#F6F7FB]/20 border-l border-[#EDEFF7] align-top">
                                                 <div className="font-bold text-sm">{formatCurrency(rowInvoiceTotal + deductedInitiationFee)}</div>
-                                                <div className="text-[9px] text-[#8E96B8]">
+                                                <div className="text-[10px] text-[#8E96B8]">
                                                     (Base: {formatCurrency(rowBillable)} + {applicableGstRate}% GST)
                                                 </div>
                                             </td>
@@ -2051,7 +2051,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     {m.status || 'Pending'}
                                                 </div>
                                                 {m.invoiceNumber && (
-                                                    <div className="text-[9px] text-[#8E96B8] tabular-nums mt-1.5">{m.invoiceNumber}</div>
+                                                    <div className="text-[10px] text-[#8E96B8] tabular-nums mt-1.5">{m.invoiceNumber}</div>
                                                 )}
                                             </td>
 
@@ -2123,14 +2123,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             <td className="p-4 text-right tabular-nums text-xs">-</td>
                                         </tr>
                                         )}
-                                        <tr className="bg-blue-50/10 border-t border-blue-100/40">
+                                        <tr className="bg-[#3D52A0]/1 border-t border-[#3D52A0]/4">
                                             <td className="p-4 pl-8 text-slate-900 text-xs font-bold leading-relaxed">
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="text-[#3D52A0] font-bold">↳</span>
                                                     <span>Balance Payable on Milestone</span>
                                                 </div>
                                             </td>
-                                            <td className="p-4 text-center text-blue-600 tabular-nums text-xs">-</td>
+                                            <td className="p-4 text-center text-[#3D52A0] tabular-nums text-xs">-</td>
                                             <td className="p-4 text-right tabular-nums text-slate-900 font-black border-l border-[#EDEFF7] text-sm">{formatCurrency(rowInvoiceTotal)}</td>
                                             <td className="p-4 text-center">
                                                 <div className={`px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider ${statusColor}`}>
@@ -2154,14 +2154,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 <div className="flex bg-[#EDEFF7] p-0.5 rounded-lg border border-[#E2E5F0] select-none">
                                                     <button 
                                                         onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: false })}
-                                                        className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all ${!m.isFixedAmount ? 'bg-white text-[#334486] shadow-xs' : 'text-[#5A628A] hover:bg-slate-200'}`}
+                                                        className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-all ${!m.isFixedAmount ? 'bg-white text-[#334486] shadow-xs' : 'text-[#5A628A] hover:bg-slate-200'}`}
                                                         title="Percentage Mode"
                                                     >
                                                         %
                                                     </button>
                                                     <button 
                                                         onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: true, fixedAmount: m.fixedAmount || rowBaseOriginal })}
-                                                        className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-all ${m.isFixedAmount ? 'bg-white text-[#334486] shadow-xs' : 'text-[#5A628A] hover:bg-slate-200'}`}
+                                                        className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-all ${m.isFixedAmount ? 'bg-white text-[#334486] shadow-xs' : 'text-[#5A628A] hover:bg-slate-200'}`}
                                                         title="Fixed Amount Mode"
                                                     >
                                                         ₹
@@ -2203,11 +2203,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                     
                                     <td className="p-4 text-right tabular-nums text-slate-900 bg-[#F6F7FB]/20 border-l border-[#EDEFF7] align-top">
                                         <div className="font-bold text-sm">{formatCurrency(rowInvoiceTotal)}</div>
-                                        <div className="text-[9px] text-[#6F779E] font-sans font-medium mt-0.5">
+                                        <div className="text-[10px] text-[#6F779E] font-sans font-medium mt-0.5">
                                             (Base: {formatCurrency(rowBillable)} + {applicableGstRate}% GST)
                                         </div>
                                         {rowDiscount > 0 && (
-                                            <div className="text-[9px] text-rose-700 font-bold tabular-nums mt-0.5">
+                                            <div className="text-[10px] text-rose-700 font-bold tabular-nums mt-0.5">
                                                 -{formatCurrency(rowDiscount)} discount (billed {formatCurrency(rowBeforeDiscount)})
                                                 {m.discountReason ? <span className="text-[#8E96B8] font-medium"> &middot; {m.discountReason}</span> : null}
                                             </div>
@@ -2216,7 +2216,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             <button
                                                 type="button"
                                                 onClick={() => setDiscountFor(discountFor === m.id ? null : m.id)}
-                                                className="text-[9px] font-bold text-[#8E96B8] hover:text-[#3D52A0] mt-0.5 cursor-pointer"
+                                                className="text-[10px] font-bold text-[#8E96B8] hover:text-[#3D52A0] mt-0.5 cursor-pointer"
                                             >
                                                 {rowDiscount > 0 ? 'Edit discount' : 'Add discount'}
                                             </button>
@@ -2261,7 +2261,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             </td>
                                             <td className="p-4 text-right tabular-nums text-[#12182F] bg-[#F6F7FB]/40 border-l border-[#EDEFF7] align-top">
                                                 <div className="font-black text-sm">{formatCurrency(rowInvoiceTotal + rowCash)}</div>
-                                                <div className="text-[9px] text-[#6F779E] font-sans font-medium mt-0.5">invoice + cash</div>
+                                                <div className="text-[10px] text-[#6F779E] font-sans font-medium mt-0.5">invoice + cash</div>
                                             </td>
                                         </>
                                     )}
@@ -2271,7 +2271,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             {m.status || 'Pending'}
                                         </div>
                                         {m.invoiceNumber && (
-                                            <div className="text-[9px] text-[#8E96B8] tabular-nums mt-1.5">{m.invoiceNumber}</div>
+                                            <div className="text-[10px] text-[#8E96B8] tabular-nums mt-1.5">{m.invoiceNumber}</div>
                                         )}
                                     </td>
 
@@ -2550,7 +2550,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             />
                                         )}
                                         {isNextUp && (
-                                            <span className="inline-flex items-center gap-1 bg-[#EDE8F5] text-[#334486] text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider select-none shrink-0 h-4.5 border border-[#DDE3F5]">
+                                            <span className="inline-flex items-center gap-1 bg-[#EDE8F5] text-[#334486] text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider select-none shrink-0 h-4.5 border border-[#DDE3F5]">
                                                 <motion.span 
                                                     animate={{ opacity: [1, 0.3, 1], scale: [1, 1.4, 1] }}
                                                     transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
@@ -2623,7 +2623,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                         {renderTargetDate(m, mainIndex, isCleared)}
                                     </div>
                                     {m.invoiceNumber && (
-                                        <div className="text-[9px] text-[#8E96B8] tabular-nums mt-1.5">Ref: {m.invoiceNumber}</div>
+                                        <div className="text-[10px] text-[#8E96B8] tabular-nums mt-1.5">Ref: {m.invoiceNumber}</div>
                                     )}
                                 </div>
 
@@ -2667,12 +2667,12 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                     <div className="text-right min-w-[100px]">
                                         <div className="font-extrabold text-[#12182F] text-sm tabular-nums">{formatCurrency(finalItemAmountToShow)}</div>
                                         {isExecution && billablePercent < 100 && (
-                                            <div className="text-[9px] text-[#8E96B8] tabular-nums mt-0.5">
+                                            <div className="text-[10px] text-[#8E96B8] tabular-nums mt-0.5">
                                                 Inv: {formatCurrency(rowInvoiceTotal)} | Cash: {formatCurrency(rowCash)}
                                             </div>
                                         )}
                                         {deductedInitiationFee > 0 && (
-                                            <div className="text-[9px] text-amber-700 tabular-nums mt-0.5">
+                                            <div className="text-[10px] text-amber-700 tabular-nums mt-0.5">
                                                 -{formatCurrency(deductedInitiationFee)} Retainer applied (Gross: {formatCurrency(rowInvoiceTotal + deductedInitiationFee)})
                                             </div>
                                         )}
@@ -2682,7 +2682,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                           tell a discounted invoice from a cheaper milestone.
                                         */}
                                         {rowDiscount > 0 && (
-                                            <div className="text-[9px] text-rose-700 tabular-nums mt-0.5">
+                                            <div className="text-[10px] text-rose-700 tabular-nums mt-0.5">
                                                 -{formatCurrency(rowDiscount)} discount (billed {formatCurrency(rowBeforeDiscount)})
                                                 {m.discountReason ? <span className="text-[#8E96B8]"> &middot; {m.discountReason}</span> : null}
                                             </div>
@@ -2691,7 +2691,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             <button
                                                 type="button"
                                                 onClick={() => setDiscountFor(discountFor === m.id ? null : m.id)}
-                                                className="text-[9px] font-bold text-[#8E96B8] hover:text-[#3D52A0] mt-0.5 cursor-pointer"
+                                                className="text-[10px] font-bold text-[#8E96B8] hover:text-[#3D52A0] mt-0.5 cursor-pointer"
                                             >
                                                 {rowDiscount > 0 ? 'Edit discount' : 'Add discount'}
                                             </button>
@@ -2699,7 +2699,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                     </div>
 
                                     {/* Status Badge */}
-                                    <div className={`px-2 py-1 rounded-lg border text-[9px] font-black uppercase tracking-wider text-center w-20 shrink-0 ${statusColor}`}>
+                                    <div className={`px-2 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider text-center w-20 shrink-0 ${statusColor}`}>
                                         {m.status || 'Pending'}
                                     </div>
 
@@ -2754,7 +2754,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                     {discountFor === m.id && (
                                         <div className="mt-3 pt-3 border-t border-[#EDEFF7] flex flex-wrap items-end gap-2">
                                             <div>
-                                                <label className="block text-[9px] font-black text-[#8E96B8] uppercase tracking-wider mb-1">Discount off this invoice</label>
+                                                <label className="block text-[10px] font-black text-[#8E96B8] uppercase tracking-wider mb-1">Discount off this invoice</label>
                                                 <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#F6F7FB] rounded-xl border border-[#E2E5F0]">
                                                     <span className="font-bold text-[#8E96B8] text-xs">&#8377;</span>
                                                     <input
@@ -2768,7 +2768,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 </div>
                                             </div>
                                             <div className="flex-1 min-w-[160px]">
-                                                <label className="block text-[9px] font-black text-[#8E96B8] uppercase tracking-wider mb-1">Reason</label>
+                                                <label className="block text-[10px] font-black text-[#8E96B8] uppercase tracking-wider mb-1">Reason</label>
                                                 <input
                                                     type="text"
                                                     defaultValue={m.discountReason || ''}
@@ -3253,7 +3253,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 <span className="text-xl font-black text-[#12182F] tabular-nums leading-none">
                                                     <AnimatedNumber value={Math.round(paidPct)} format={v => `${Math.round(v)}%`} />
                                                 </span>
-                                                <span className="text-[9px] font-bold uppercase tracking-wider text-[#8E96B8] mt-0.5">collected</span>
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-[#8E96B8] mt-0.5">collected</span>
                                             </div>
                                         </div>
 
@@ -3870,7 +3870,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     >
                         <div className="flex justify-between items-start">
                             <span className="text-[10px] font-bold text-[#8E96B8] uppercase tracking-wider">Tax & Recovery Ask</span>
-                            <div className="px-1.5 py-0.5 bg-[#EDE8F5] text-[#334486] text-[9px] font-black rounded">18% GST</div>
+                            <div className="px-1.5 py-0.5 bg-[#EDE8F5] text-[#334486] text-[10px] font-black rounded">18% GST</div>
                         </div>
                         <h3 className="text-xl font-extrabold text-[#12182F] tabular-nums mt-2">{formatCurrency(totalGST)}</h3>
                         <p className="text-[10px] text-[#8E96B8] mt-1">
@@ -3947,7 +3947,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     ? 'bg-amber-50/50 border-amber-200/60 text-amber-800' 
                                                     : insight.type === 'success'
                                                     ? 'bg-emerald-50/50 border-emerald-200/60 text-emerald-800'
-                                                    : 'bg-blue-50/50 border-blue-200/60 text-blue-800'
+                                                    : 'bg-[#3D52A0]/2 border-[#3D52A0]/12 text-[#334486]'
                                             }`}
                                         >
                                             <div className="mt-0.5">
@@ -3956,7 +3956,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 ) : insight.type === 'success' ? (
                                                     <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                                                 ) : (
-                                                    <Info className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                                    <Info className="w-3.5 h-3.5 text-[#3D52A0] shrink-0" />
                                                 )}
                                             </div>
                                             <p className="leading-relaxed font-medium">{insight.text}</p>
@@ -4088,7 +4088,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 <div key={discount.id} className="flex justify-between items-center text-xs p-3 bg-red-50/60 rounded-xl border border-red-100">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-red-800 font-bold">{discount.name}</span>
-                                                        <span className="text-[9px] text-red-600 bg-red-100/60 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">{discount.target}</span>
+                                                        <span className="text-[10px] text-red-600 bg-red-100/60 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">{discount.target}</span>
                                                     </div>
                                                     <span className="font-extrabold text-red-700 tabular-nums">
                                                         -{discount.type === 'percentage' ? `${discount.value}%` : formatCurrency(discount.value)}
@@ -4154,7 +4154,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 </div>
                                             </label>
                                             <div className="text-right border-l border-[#E2E5F0] pl-4">
-                                                <p className="text-[9px] text-[#8E96B8] font-bold uppercase tracking-wider">Estimated Cash value</p>
+                                                <p className="text-[10px] text-[#8E96B8] font-bold uppercase tracking-wider">Estimated Cash value</p>
                                                 <p className="text-sm font-extrabold text-amber-700 tabular-nums">{formatCurrency(executionCash)}</p>
                                             </div>
                                         </div>
@@ -4188,7 +4188,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 </div>
                                             </label>
                                             <div className="text-right border-l border-[#E2E5F0] pl-4">
-                                                <p className="text-[9px] text-[#8E96B8] font-bold uppercase tracking-wider">GST on design</p>
+                                                <p className="text-[10px] text-[#8E96B8] font-bold uppercase tracking-wider">GST on design</p>
                                                 <p className="text-sm font-extrabold text-[#3A416B] tabular-nums">{formatCurrency(gstOnDesign)}</p>
                                             </div>
                                         </div>
@@ -4449,8 +4449,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             <th className="p-3 w-[25%]">Stage</th>
                                             <th className="p-3 text-right">% / Amt</th>
                                             <th className="p-3 text-right">Base Exec</th>
-                                            <th className="p-3 text-right bg-blue-50/10">Labor Base</th>
-                                            <th className="p-3 text-right bg-blue-50/10">Labor GST/Rec</th>
+                                            <th className="p-3 text-right bg-[#3D52A0]/1">Labor Base</th>
+                                            <th className="p-3 text-right bg-[#3D52A0]/1">Labor GST/Rec</th>
                                             <th className="p-3 text-right bg-amber-50/50 text-amber-800">Mat. Base (Cash)</th>
                                             <th className="p-3 text-right bg-amber-50/50 text-amber-800">Recovery ({materialGstRecovery}%)</th>
                                             <th className="p-3 text-right bg-[#EDE8F5]/50 text-[#2A3A73]">Total Ask (Inv + Cash)</th>
@@ -4484,8 +4484,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                     <td className="p-3 text-xs font-bold text-[#252C4E] truncate" title={m.name}>{m.name}</td>
                                                     <td className="p-3 text-right text-xs text-[#5A628A] tabular-nums">{m.isFixedAmount ? 'Fixed' : `${m.percentage}%`}</td>
                                                     <td className="p-3 text-right text-xs text-[#252C4E] tabular-nums">{formatCurrency(rowBase)}</td>
-                                                    <td className="p-3 text-right text-xs text-slate-800 bg-blue-50/5 tabular-nums">{formatCurrency(rowLaborBase)}</td>
-                                                    <td className="p-3 text-right text-xs text-slate-800 bg-blue-50/5 tabular-nums">
+                                                    <td className="p-3 text-right text-xs text-slate-800 bg-[#3D52A0]/1 tabular-nums">{formatCurrency(rowLaborBase)}</td>
+                                                    <td className="p-3 text-right text-xs text-slate-800 bg-[#3D52A0]/1 tabular-nums">
                                                         {simulatedLaborGstEnabled ? formatCurrency(rowLaborGST) : `+${formatCurrency(rowLaborRecovery)}`}
                                                     </td>
                                                     <td className="p-3 text-right text-xs text-amber-900 bg-amber-50/5 tabular-nums">{formatCurrency(rowMaterialBase)}</td>
@@ -4499,8 +4499,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                         <tr className="bg-[#F6F7FB] border-t-2 border-[#E2E5F0]">
                                             <td colSpan={2} className="p-3 text-right text-xs font-black text-[#252C4E]">Totals</td>
                                             <td className="p-3 text-right text-xs font-bold text-[#252C4E] tabular-nums">{formatCurrency(taxableExecution)}</td>
-                                            <td className="p-3 text-right text-xs font-bold text-blue-700 bg-blue-50/5 tabular-nums">{formatCurrency(simulatedTaxableLabor)}</td>
-                                            <td className="p-3 text-right text-xs font-bold text-blue-700 bg-blue-50/5 tabular-nums">
+                                            <td className="p-3 text-right text-xs font-bold text-[#334486] bg-[#3D52A0]/1 tabular-nums">{formatCurrency(simulatedTaxableLabor)}</td>
+                                            <td className="p-3 text-right text-xs font-bold text-[#334486] bg-[#3D52A0]/1 tabular-nums">
                                                 {simulatedLaborGstEnabled ? formatCurrency(simulatedGstOnLabor) : `+${formatCurrency(simulatedLaborRecovery)}`}
                                             </td>
                                             <td className="p-3 text-right text-xs font-bold text-amber-700 bg-amber-50/5 tabular-nums">{formatCurrency(simulatedTaxableMaterial)}</td>
@@ -4887,7 +4887,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                     )}
                                     <span className={`max-w-[150px] truncate ${isSelected ? "font-bold text-slate-900" : "text-[#3A416B]"}`}>{ver.name}</span>
                                     {ver.lifecycleTag && (
-                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
                                             isSelected 
                                                 ? ver.isCurrentActive ? "bg-[#DDE3F5] text-[#334486] font-bold" : "bg-amber-100 text-amber-900 font-bold"
                                                 : "bg-[#EDEFF7] text-[#4A5178]"
@@ -4959,7 +4959,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                             <div className="flex items-center justify-center gap-2">
                                                 <button 
                                                     onClick={() => setCompareRevision(rev)}
-                                                    className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors border border-blue-200"
+                                                    className="px-3 py-1.5 bg-[#3D52A0]/5 text-[#334486] hover:bg-[#3D52A0]/10 rounded-lg text-xs font-bold transition-colors border border-[#3D52A0]/20"
                                                 >
                                                     Compare
                                                 </button>
