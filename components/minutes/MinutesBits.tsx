@@ -4,6 +4,7 @@ import {
 } from '@/lib/lucide-shim';
 import { FLOW_STEPS, KIND_LABEL, type ChipTone, type LineKind, type SendCheck, type TrailEntry, stepLabel } from '../../lib/minutes';
 import '../projectHeader/projectHeader.css';
+import { Panel as KitPanel } from '../ui/kit';
 
 /*
   The pieces every minutes screen shares, built to DESIGN.md: the Panel card,
@@ -34,20 +35,11 @@ export const IconChip: React.FC<{ icon: React.ComponentType<any> }> = ({ icon: I
   <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><I className="w-4 h-4" /></span>
 );
 
+/* The kit's Panel (components/ui/kit), under the name these screens already use. */
 export const Panel: React.FC<{
   icon: React.ComponentType<any>; title: string; blurb?: string; right?: React.ReactNode; children?: React.ReactNode; className?: string;
-}> = ({ icon, title, blurb, right, children, className = '' }) => (
-  <section className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hud-panel-in ${className}`}>
-    <header className={`flex items-start gap-3 ${children ? 'mb-4' : ''}`}>
-      <IconChip icon={icon} />
-      <div className="flex-1 min-w-0">
-        <h3 className="font-bold text-slate-800">{title}</h3>
-        {blurb && <p className="text-xs text-slate-500 mt-0.5">{blurb}</p>}
-      </div>
-      {right}
-    </header>
-    {children}
-  </section>
+}> = ({ icon, title, blurb, right, children, className }) => (
+  <KitPanel as="h3" icon={icon} title={title} blurb={blurb} aside={right} className={className}>{children}</KitPanel>
 );
 
 export function Seg<T extends string>({ value, options, onChange, label, small }: {

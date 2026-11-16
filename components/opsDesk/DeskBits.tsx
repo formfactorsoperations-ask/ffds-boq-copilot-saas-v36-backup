@@ -1,6 +1,7 @@
 import React, { createContext, useContext } from 'react';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { EASE, IconTile, Skeleton, type RingTone } from '../people/PeopleBits';
+import { PanelHead } from '../ui/kit';
 import type { OpsSettings, QueueItem, WaitingItem, FollowUp, Escalation } from '../../lib/opsDesk';
 import type { Lead } from '../../lib/leads';
 import type { ProjectRef } from '../../lib/leadSmart';
@@ -181,15 +182,9 @@ export const Panel: React.FC<{
     <motion.section variants={still ? undefined : cardV} initial={still ? false : 'hidden'} animate="show" data-tour={tour}
       style={{ transformPerspective: 1200 }}
       className={`group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 ${className}`}>
-      <div className={`flex items-start gap-3 ${children ? 'mb-5' : ''}`}>
-        <IconTile icon={icon} tone={tone} size="sm" className="!w-9 !h-9 !rounded-xl" />
-        <div className="min-w-0 flex-1">
-          <h2 className="font-bold text-slate-800">{title}</h2>
-          {blurb && <p className="text-xs text-slate-500 mt-0.5">{blurb}</p>}
-        </div>
-        {right}
-      </div>
-      {children}
+      {/* The kit's header (components/ui/kit), with the desk's turning IconTile. */}
+      <PanelHead chip={<IconTile icon={icon} tone={tone} size="sm" className="!w-9 !h-9 !rounded-xl" />} title={title} blurb={blurb} aside={right} />
+      {children != null && children !== false && <div className="mt-5">{children}</div>}
     </motion.section>
   );
 };

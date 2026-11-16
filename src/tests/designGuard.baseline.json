@@ -1,0 +1,883 @@
+{
+  "App.tsx": {
+    "offPalette": 11,
+    "mono": 1
+  },
+  "components/3d-card-demo-2.tsx": {
+    "offPalette": 4
+  },
+  "components/3d-card-demo.tsx": {
+    "offPalette": 4
+  },
+  "components/3d-pin-demo.tsx": {
+    "offPalette": 2,
+    "mono": 1
+  },
+  "components/AICoach.tsx": {
+    "offPalette": 1
+  },
+  "components/AIStatusIndicator.tsx": {
+    "offPalette": 2
+  },
+  "components/AIStrategyTab.tsx": {
+    "offPalette": 3
+  },
+  "components/AddItemModal.tsx": {
+    "tinyPx": 1,
+    "offPalette": 11
+  },
+  "components/AgreementSignoffPage.tsx": {
+    "offPalette": 1,
+    "mono": 2
+  },
+  "components/BankItemCard.tsx": {
+    "tinyPx": 5,
+    "offPalette": 14,
+    "mono": 4
+  },
+  "components/BankTab.tsx": {
+    "offPalette": 31,
+    "mono": 2
+  },
+  "components/BoqItemCard.tsx": {
+    "tinyPx": 18,
+    "offPalette": 26
+  },
+  "components/BulkImportModal.tsx": {
+    "offPalette": 1,
+    "mono": 2
+  },
+  "components/CashFlowForecastDashboard.tsx": {
+    "tinyPx": 3,
+    "offPalette": 3
+  },
+  "components/ClientLoginScreen.tsx": {
+    "halfPx": 14,
+    "offPalette": 1
+  },
+  "components/ClientPortal.tsx": {
+    "halfPx": 6,
+    "tinyPx": 2,
+    "offPalette": 89,
+    "mono": 1
+  },
+  "components/ClientsDirectory.tsx": {
+    "halfPx": 1,
+    "tinyPx": 3,
+    "offPalette": 2
+  },
+  "components/CloudConfigModal.tsx": {
+    "tinyPx": 2,
+    "offPalette": 11,
+    "mono": 1
+  },
+  "components/DocumentsHub.tsx": {
+    "tinyPx": 3,
+    "offPalette": 9,
+    "mono": 1
+  },
+  "components/EmailDraftsTab.tsx": {
+    "offPalette": 9
+  },
+  "components/EmailPreviewModal.tsx": {
+    "tinyPx": 1,
+    "offPalette": 2
+  },
+  "components/ExcelImportModal.tsx": {
+    "offPalette": 14,
+    "mono": 2
+  },
+  "components/ExecutionBundleWidget.tsx": {
+    "tinyPx": 9,
+    "offPalette": 2
+  },
+  "components/ExecutionWorkspace.tsx": {
+    "offPalette": 20
+  },
+  "components/HandoverReadinessWidget.tsx": {
+    "tinyPx": 1,
+    "offPalette": 2,
+    "mono": 1
+  },
+  "components/Header.tsx": {
+    "halfPx": 6,
+    "offPalette": 36,
+    "mono": 2
+  },
+  "components/InteractiveBoqEditor.tsx": {
+    "tinyPx": 16,
+    "offPalette": 24,
+    "mono": 20
+  },
+  "components/InternalComparisonTable.tsx": {
+    "tinyPx": 3,
+    "offPalette": 2,
+    "mono": 2
+  },
+  "components/LeadBrainTab.tsx": {
+    "offPalette": 1
+  },
+  "components/LockedState.tsx": {
+    "offPalette": 1
+  },
+  "components/LoginScreen.tsx": {
+    "halfPx": 9,
+    "offPalette": 1
+  },
+  "components/MarginDeviationIndicator.tsx": {
+    "tinyPx": 1,
+    "offPalette": 2
+  },
+  "components/MarginOptimizer.tsx": {
+    "mono": 3
+  },
+  "components/MaterialTab.tsx": {
+    "tinyPx": 10,
+    "offPalette": 34,
+    "mono": 4
+  },
+  "components/MilestoneCardView.tsx": {
+    "tinyPx": 4,
+    "offPalette": 22,
+    "mono": 9
+  },
+  "components/OnboardingTab.tsx": {
+    "offPalette": 1
+  },
+  "components/OrdersCard.tsx": {
+    "tinyPx": 5
+  },
+  "components/PWAInstallPrompt.tsx": {
+    "offPalette": 32,
+    "mono": 1
+  },
+  "components/PageTitleBlock.tsx": {
+    "tinyPx": 1,
+    "offPalette": 2
+  },
+  "components/PaymentCalculatorTab.tsx": {
+    "tinyPx": 37,
+    "offPalette": 19
+  },
+  "components/PaymentHealth.tsx": {
+    "tinyPx": 6,
+    "offPalette": 1
+  },
+  "components/PhaseTransitionWidget.tsx": {
+    "offPalette": 5
+  },
+  "components/ProcurementGateWidget.tsx": {
+    "tinyPx": 5,
+    "mono": 1
+  },
+  "components/ProcurementTab.tsx": {
+    "tinyPx": 1,
+    "offPalette": 5,
+    "mono": 3
+  },
+  "components/ProfitabilityHotspots.tsx": {
+    "tinyPx": 2,
+    "mono": 2
+  },
+  "components/ProjectContextCard.tsx": {
+    "tinyPx": 4,
+    "offPalette": 41
+  },
+  "components/ProjectContextTier.tsx": {
+    "halfPx": 3,
+    "offPalette": 3
+  },
+  "components/ProjectHistory.tsx": {
+    "tinyPx": 5,
+    "offPalette": 2,
+    "mono": 1
+  },
+  "components/ProjectListTab.tsx": {
+    "halfPx": 14,
+    "tinyPx": 19,
+    "offPalette": 30
+  },
+  "components/ProjectSetupWizard.tsx": {
+    "tinyPx": 1,
+    "offPalette": 30
+  },
+  "components/ProjectStatusTransitionModal.tsx": {
+    "tinyPx": 2,
+    "offPalette": 24
+  },
+  "components/ProjectWorkspace.tsx": {
+    "offPalette": 15
+  },
+  "components/RaisePOModal.tsx": {
+    "offPalette": 6,
+    "mono": 4
+  },
+  "components/RevisionExcelImportModal.tsx": {
+    "offPalette": 21,
+    "mono": 3
+  },
+  "components/RevisionStudio.tsx": {
+    "offPalette": 43,
+    "mono": 3
+  },
+  "components/RoomCard.tsx": {
+    "offPalette": 8
+  },
+  "components/SOFBoardTab.tsx": {
+    "offPalette": 17,
+    "mono": 5
+  },
+  "components/ScenarioSimulator.tsx": {
+    "tinyPx": 1,
+    "offPalette": 3,
+    "mono": 5
+  },
+  "components/ScheduleGantt.tsx": {
+    "halfPx": 1,
+    "tinyPx": 58,
+    "offPalette": 55,
+    "mono": 2
+  },
+  "components/SiteActivityWidget.tsx": {
+    "tinyPx": 9,
+    "offPalette": 9,
+    "mono": 1
+  },
+  "components/SiteVisitLogModal.tsx": {
+    "halfPx": 7
+  },
+  "components/StudioDashboard.tsx": {
+    "halfPx": 3,
+    "tinyPx": 1,
+    "offPalette": 8,
+    "mono": 5
+  },
+  "components/StudioExcelGrid.tsx": {
+    "halfPx": 3,
+    "tinyPx": 5,
+    "offPalette": 22,
+    "mono": 14
+  },
+  "components/StudioHome.tsx": {
+    "offPalette": 35,
+    "mono": 1
+  },
+  "components/StudioHomeOrbit.tsx": {
+    "mono": 1
+  },
+  "components/StudioSetupWizard.tsx": {
+    "mono": 6
+  },
+  "components/SubscriptionTab.tsx": {
+    "offPalette": 10
+  },
+  "components/SupervisorMobileApp.tsx": {
+    "offPalette": 21
+  },
+  "components/TakeoffPanel.tsx": {
+    "tinyPx": 5,
+    "offPalette": 11,
+    "mono": 7
+  },
+  "components/TeamTab.tsx": {
+    "offPalette": 11
+  },
+  "components/TemplateEditorTab.tsx": {
+    "tinyPx": 1,
+    "offPalette": 15
+  },
+  "components/TierManager.tsx": {
+    "offPalette": 3
+  },
+  "components/TimelineTab.tsx": {
+    "halfPx": 4,
+    "tinyPx": 18,
+    "offPalette": 13,
+    "mono": 14
+  },
+  "components/VendorsManager.tsx": {
+    "tinyPx": 1,
+    "offPalette": 94,
+    "mono": 9
+  },
+  "components/ZohoRaiseInvoiceDialog.tsx": {
+    "mono": 2
+  },
+  "components/admin/PlatformAdminConsole.tsx": {
+    "halfPx": 2,
+    "offPalette": 4,
+    "mono": 11
+  },
+  "components/background-beams-with-collision-demo.tsx": {
+    "offPalette": 6
+  },
+  "components/bank/BankBulkActionModal.tsx": {
+    "tinyPx": 1,
+    "offPalette": 9,
+    "mono": 1
+  },
+  "components/bank/BankItemProjectUsageModal.tsx": {
+    "offPalette": 8,
+    "mono": 4
+  },
+  "components/bank/BankSpreadsheetTable.tsx": {
+    "offPalette": 16,
+    "mono": 6
+  },
+  "components/client/BoqVersionCompare.tsx": {
+    "tinyPx": 2,
+    "offPalette": 3
+  },
+  "components/client/ClientAccountMenu.tsx": {
+    "halfPx": 3
+  },
+  "components/client/ClientBlockEstimate.tsx": {
+    "offPalette": 4
+  },
+  "components/client/ClientBookletProposal.tsx": {
+    "tinyPx": 12,
+    "offPalette": 24,
+    "mono": 82
+  },
+  "components/client/ClientDecisionCard.tsx": {
+    "halfPx": 2,
+    "offPalette": 8
+  },
+  "components/client/ClientDecisionLock.tsx": {
+    "offPalette": 7
+  },
+  "components/client/ClientDesignFees.tsx": {
+    "offPalette": 1,
+    "mono": 1
+  },
+  "components/client/ClientDiscountShowcase.tsx": {
+    "tinyPx": 1
+  },
+  "components/client/ClientDocumentVault.tsx": {
+    "offPalette": 1
+  },
+  "components/client/ClientExportView.tsx": {
+    "offPalette": 1
+  },
+  "components/client/ClientIntroduction.tsx": {
+    "tinyPx": 2,
+    "offPalette": 6
+  },
+  "components/client/ClientMaterials.tsx": {
+    "offPalette": 1
+  },
+  "components/client/ClientMoMViewerModal.tsx": {
+    "offPalette": 18
+  },
+  "components/client/ClientOnboarding.tsx": {
+    "tinyPx": 2,
+    "offPalette": 31
+  },
+  "components/client/ClientOptions.tsx": {
+    "offPalette": 4
+  },
+  "components/client/ClientPayments.tsx": {
+    "tinyPx": 4,
+    "offPalette": 8,
+    "mono": 2
+  },
+  "components/client/ClientPrintView.tsx": {
+    "offPalette": 11
+  },
+  "components/client/ClientRoomDetails.tsx": {
+    "offPalette": 3
+  },
+  "components/client/ClientRoomwise.tsx": {
+    "offPalette": 4,
+    "mono": 4
+  },
+  "components/client/ClientSnapshot.tsx": {
+    "offPalette": 2,
+    "mono": 9
+  },
+  "components/client/ClientTab.tsx": {
+    "offPalette": 4
+  },
+  "components/client/ClientTimeline.tsx": {
+    "offPalette": 4,
+    "mono": 4
+  },
+  "components/client/ClientTotals.tsx": {
+    "offPalette": 7
+  },
+  "components/client/ClientWhyUs.tsx": {
+    "offPalette": 1
+  },
+  "components/client/DocumentReadingRoom.tsx": {
+    "tinyPx": 3,
+    "offPalette": 2,
+    "mono": 3
+  },
+  "components/client/ExecutionAgreementPage.tsx": {
+    "tinyPx": 2,
+    "offPalette": 8,
+    "mono": 2
+  },
+  "components/client/HandoverDocketPage.tsx": {
+    "tinyPx": 7,
+    "mono": 1
+  },
+  "components/client/OnboardingKitPage.tsx": {
+    "tinyPx": 6,
+    "offPalette": 4,
+    "mono": 21
+  },
+  "components/client/PaymentSchedulePage.tsx": {
+    "offPalette": 1,
+    "mono": 3
+  },
+  "components/client/PortalDesignRecord.tsx": {
+    "offPalette": 1
+  },
+  "components/client/PortalFinishCard.tsx": {
+    "halfPx": 7,
+    "tinyPx": 1
+  },
+  "components/client/PortalHero.tsx": {
+    "offPalette": 5,
+    "mono": 1
+  },
+  "components/client/PortalMeetingViewer.tsx": {
+    "halfPx": 2,
+    "offPalette": 1
+  },
+  "components/client/PortalOverview.tsx": {
+    "offPalette": 7,
+    "mono": 1
+  },
+  "components/client/PortalPayments.tsx": {
+    "offPalette": 4
+  },
+  "components/client/PortalScopeAdditions.tsx": {
+    "halfPx": 10
+  },
+  "components/client/PortalScopePanel.tsx": {
+    "halfPx": 28,
+    "tinyPx": 1,
+    "offPalette": 12
+  },
+  "components/client/PortalSpine.tsx": {
+    "offPalette": 5
+  },
+  "components/client/PortalTables.tsx": {
+    "offPalette": 11
+  },
+  "components/client/PortalTimeline.tsx": {
+    "tinyPx": 2,
+    "offPalette": 13
+  },
+  "components/client/QualityChecklistReportPage.tsx": {
+    "tinyPx": 10,
+    "offPalette": 2,
+    "mono": 2
+  },
+  "components/client/ScopeApprovalCard.tsx": {
+    "halfPx": 11,
+    "tinyPx": 1,
+    "offPalette": 2
+  },
+  "components/client/SignatureCertificate.tsx": {
+    "mono": 2
+  },
+  "components/client/SnagListReportPage.tsx": {
+    "tinyPx": 3,
+    "offPalette": 2,
+    "mono": 3
+  },
+  "components/client/TermsDocketPage.tsx": {
+    "tinyPx": 12,
+    "offPalette": 18,
+    "mono": 6
+  },
+  "components/common/DigitalSignatureDocket.tsx": {
+    "tinyPx": 1,
+    "mono": 3
+  },
+  "components/common/DigitalSignaturePad.tsx": {
+    "tinyPx": 1,
+    "offPalette": 6,
+    "mono": 11
+  },
+  "components/documents/ApprovalRecordSheet.tsx": {
+    "mono": 2
+  },
+  "components/documents/ClientDocumentBoard.tsx": {
+    "halfPx": 12,
+    "tinyPx": 1,
+    "offPalette": 11
+  },
+  "components/documents/DocumentBlocks.tsx": {
+    "mono": 1
+  },
+  "components/documents/DocumentDownload.tsx": {
+    "halfPx": 1
+  },
+  "components/documents/DocumentRenderer.tsx": {
+    "offPalette": 6
+  },
+  "components/documents/ExecutionStamp.tsx": {
+    "halfPx": 5,
+    "tinyPx": 3,
+    "mono": 2
+  },
+  "components/documents/HandoverDocketSheet.tsx": {
+    "tinyPx": 7
+  },
+  "components/documents/OnboardingKitSheet.tsx": {
+    "tinyPx": 6,
+    "mono": 21
+  },
+  "components/documents/SnagListSheet.tsx": {
+    "halfPx": 8,
+    "tinyPx": 2
+  },
+  "components/documents/TermsDocketSheet.tsx": {
+    "offPalette": 3
+  },
+  "components/drawingReview/AddPdfs.tsx": {
+    "halfPx": 7
+  },
+  "components/drawingReview/AllSheets.tsx": {
+    "halfPx": 3
+  },
+  "components/drawingReview/ClientSign.tsx": {
+    "halfPx": 2
+  },
+  "components/drawingReview/DeskParts.tsx": {
+    "halfPx": 4
+  },
+  "components/drawingReview/ForYou.tsx": {
+    "halfPx": 2
+  },
+  "components/drawingReview/LayoutPlan.tsx": {
+    "halfPx": 2
+  },
+  "components/drawingReview/MeetingMode.tsx": {
+    "halfPx": 2
+  },
+  "components/drawingReview/Meetings.tsx": {
+    "halfPx": 9
+  },
+  "components/drawingReview/PdfStage.tsx": {
+    "halfPx": 2,
+    "mono": 5
+  },
+  "components/drawingReview/ProjectBand.tsx": {
+    "halfPx": 4
+  },
+  "components/drawingReview/SheetStudio.tsx": {
+    "halfPx": 27
+  },
+  "components/home/ClockCalendar.tsx": {
+    "halfPx": 1,
+    "tinyPx": 5,
+    "offPalette": 13,
+    "mono": 1
+  },
+  "components/home/DayBoard.tsx": {
+    "mono": 1
+  },
+  "components/home/MonthCalendar.tsx": {
+    "halfPx": 3,
+    "offPalette": 16,
+    "mono": 1
+  },
+  "components/home/StoryDeck.tsx": {
+    "mono": 1
+  },
+  "components/home/StudioFooter.tsx": {
+    "halfPx": 7,
+    "mono": 1
+  },
+  "components/home/WavingGreeting.tsx": {
+    "offPalette": 13,
+    "mono": 1
+  },
+  "components/home/WeekAhead.tsx": {
+    "halfPx": 1,
+    "tinyPx": 1,
+    "offPalette": 3
+  },
+  "components/lamp-demo.tsx": {
+    "mono": 1
+  },
+  "components/minutes/MinutesDocument.tsx": {
+    "tinyPx": 7
+  },
+  "components/notify/NotifyBell.tsx": {
+    "offPalette": 1
+  },
+  "components/ops/ClientUpdatesManager.tsx": {
+    "tinyPx": 2,
+    "offPalette": 14
+  },
+  "components/ops/DecisionTracker.tsx": {
+    "halfPx": 1,
+    "offPalette": 23
+  },
+  "components/ops/DesignCompleteGate.tsx": {
+    "tinyPx": 3,
+    "offPalette": 40,
+    "mono": 1
+  },
+  "components/ops/DesignDocumentsManager.tsx": {
+    "halfPx": 1,
+    "tinyPx": 4,
+    "offPalette": 11,
+    "mono": 1
+  },
+  "components/ops/DocumentMeter.tsx": {
+    "halfPx": 3,
+    "tinyPx": 3,
+    "offPalette": 1
+  },
+  "components/ops/DrawingTrackerModule.tsx": {
+    "halfPx": 1,
+    "tinyPx": 6,
+    "offPalette": 10,
+    "mono": 4
+  },
+  "components/ops/EngagementLifecycleWidget.tsx": {
+    "offPalette": 2
+  },
+  "components/ops/MomActionTracker.tsx": {
+    "offPalette": 7
+  },
+  "components/ops/MomCaptureModal.tsx": {
+    "offPalette": 4
+  },
+  "components/ops/MomEmailComposer.tsx": {
+    "halfPx": 5
+  },
+  "components/ops/MomReviewModal.tsx": {
+    "tinyPx": 4,
+    "offPalette": 7
+  },
+  "components/ops/PortalPublishControls.tsx": {
+    "offPalette": 5
+  },
+  "components/ops/PortfolioMarginPanel.tsx": {
+    "mono": 10
+  },
+  "components/ops/PreHandoverChecklist.tsx": {
+    "tinyPx": 6,
+    "offPalette": 9,
+    "mono": 2
+  },
+  "components/ops/ProjectPnlCard.tsx": {
+    "halfPx": 9,
+    "mono": 6
+  },
+  "components/ops/ProjectReportsTab.tsx": {
+    "halfPx": 2
+  },
+  "components/ops/ProposalAcceptanceCard.tsx": {
+    "halfPx": 7,
+    "offPalette": 3
+  },
+  "components/ops/ReportCharts.tsx": {
+    "halfPx": 5,
+    "mono": 2
+  },
+  "components/ops/RoomProgressTracker.tsx": {
+    "tinyPx": 5,
+    "offPalette": 8,
+    "mono": 3
+  },
+  "components/ops/ScopeAdditionsHeader.tsx": {
+    "halfPx": 6
+  },
+  "components/ops/ScopeAdditionsModule.tsx": {
+    "halfPx": 29,
+    "offPalette": 26,
+    "mono": 1
+  },
+  "components/ops/ScopeAdditionsMoneyPanel.tsx": {
+    "halfPx": 5
+  },
+  "components/ops/SnagListManager.tsx": {
+    "tinyPx": 9,
+    "offPalette": 76
+  },
+  "components/ops/WeeklyPulseDashboard.tsx": {
+    "tinyPx": 19
+  },
+  "components/ops/WeeklyPulseManager.tsx": {
+    "tinyPx": 7,
+    "offPalette": 4
+  },
+  "components/ops/decisions/ConfirmDialog.tsx": {
+    "offPalette": 1
+  },
+  "components/ops/decisions/DecisionAttentionPanel.tsx": {
+    "halfPx": 1,
+    "offPalette": 2
+  },
+  "components/ops/decisions/DecisionAuditTimeline.tsx": {
+    "offPalette": 4,
+    "mono": 1
+  },
+  "components/ops/decisions/DecisionStatusRail.tsx": {
+    "tinyPx": 1,
+    "offPalette": 1
+  },
+  "components/ops/documents/StudioDocumentShell.tsx": {
+    "tinyPx": 1,
+    "mono": 1
+  },
+  "components/ops/journey/ProjectJourneyPage.tsx": {
+    "tinyPx": 2,
+    "mono": 1
+  },
+  "components/opsDesk/ClientWall.tsx": {
+    "mono": 1
+  },
+  "components/opsDesk/FormLink.tsx": {
+    "mono": 1
+  },
+  "components/opsDesk/OpsAssist.tsx": {
+    "mono": 1
+  },
+  "components/people/OfficeEssentials.tsx": {
+    "mono": 2
+  },
+  "components/people/OfficeGuide.tsx": {
+    "mono": 5
+  },
+  "components/people/PeoplePage.tsx": {
+    "tinyPx": 1
+  },
+  "components/projectHeader/AssignProjectsModal.tsx": {
+    "halfPx": 8
+  },
+  "components/projectHeader/ProjectTeamButton.tsx": {
+    "halfPx": 2
+  },
+  "components/projects/MarginReveal.tsx": {
+    "tinyPx": 1
+  },
+  "components/reports/BulkTagPanel.tsx": {
+    "halfPx": 5,
+    "offPalette": 2
+  },
+  "components/reports/HudCharts.tsx": {
+    "halfPx": 2,
+    "mono": 1
+  },
+  "components/reports/StudioMemoryInstruments.tsx": {
+    "halfPx": 3
+  },
+  "components/reports/StudioMemoryView.tsx": {
+    "tinyPx": 4,
+    "mono": 8
+  },
+  "components/saas/SuperAdminDashboard.tsx": {
+    "offPalette": 12,
+    "mono": 1
+  },
+  "components/scope/ClientTotalsPicker.tsx": {
+    "halfPx": 5
+  },
+  "components/scope/MeetingScopeInbox.tsx": {
+    "halfPx": 2
+  },
+  "components/scope/ScopeFlowPanel.tsx": {
+    "halfPx": 4
+  },
+  "components/scope/ScopeWorkspace.tsx": {
+    "halfPx": 106,
+    "tinyPx": 1,
+    "offPalette": 12
+  },
+  "components/shared/Card.tsx": {
+    "offPalette": 4
+  },
+  "components/studio/DataPrivacyPage.tsx": {
+    "halfPx": 9
+  },
+  "components/studio/GoogleDriveCard.tsx": {
+    "offPalette": 3,
+    "mono": 1
+  },
+  "components/studio/StepDeliverableChecklist.tsx": {
+    "offPalette": 6
+  },
+  "components/studio/StudioSettingsTab.tsx": {
+    "tinyPx": 1,
+    "offPalette": 21,
+    "mono": 17
+  },
+  "components/studio/StudioTeamSection.tsx": {
+    "halfPx": 3,
+    "offPalette": 2
+  },
+  "components/studio/SupportDeskPage.tsx": {
+    "halfPx": 9
+  },
+  "components/studio/TermsAndPaymentTab.tsx": {
+    "offPalette": 14,
+    "mono": 4
+  },
+  "components/studio/TermsOfUsePage.tsx": {
+    "halfPx": 4
+  },
+  "components/studio/ZohoBooksCard.tsx": {
+    "offPalette": 3,
+    "mono": 4
+  },
+  "components/templates/AddRoomScopeModal.tsx": {
+    "offPalette": 6
+  },
+  "components/templates/AddTypologyModal.tsx": {
+    "offPalette": 7
+  },
+  "components/templates/AiTemplateArchitectModal.tsx": {
+    "tinyPx": 1,
+    "offPalette": 13
+  },
+  "components/templates/AiTemplateAuditDrawer.tsx": {
+    "offPalette": 10
+  },
+  "components/templates/TemplateThreeTierPreviewModal.tsx": {
+    "offPalette": 12
+  },
+  "components/ui/3d-pin.tsx": {
+    "offPalette": 16,
+    "mono": 1
+  },
+  "components/ui/HideFigures.tsx": {
+    "offPalette": 1
+  },
+  "components/ui/LiquidGlassFlipCard.tsx": {
+    "mono": 2
+  },
+  "components/ui/RefreshApp.tsx": {
+    "offPalette": 1
+  },
+  "components/ui/background-beams-with-collision.tsx": {
+    "offPalette": 16
+  },
+  "components/ui/cards-demo-3.tsx": {
+    "offPalette": 6
+  },
+  "components/ui/floating-dock.tsx": {
+    "tinyPx": 2,
+    "offPalette": 4,
+    "mono": 1
+  },
+  "components/ui/lamp.tsx": {
+    "offPalette": 10
+  },
+  "pages/SelectionConfirmPage.tsx": {
+    "offPalette": 1
+  },
+  "pages/SiteVisitHistory.tsx": {
+    "tinyPx": 3,
+    "offPalette": 19
+  }
+}

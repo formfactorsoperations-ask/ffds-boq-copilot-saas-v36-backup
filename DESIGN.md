@@ -67,6 +67,28 @@ different, fix it before shipping.
 - **Secondary button:** `px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 disabled:opacity-50`.
 - **Segmented choice:** `inline-flex p-1 rounded-xl bg-slate-100`. The selected option is `bg-white text-slate-800 shadow-sm`; the others are `text-slate-500`.
 
+## Screen kit (owner, 16 Nov 2026)
+
+The parts above are components in `components/ui/kit.tsx`. Build screens from them rather than
+copying their classes:
+
+- `Panel` (and `PanelHead` for a card with motion of its own): the content card, its icon chip,
+  title, blurb, `badge` after the title, `aside` on the right and an optional `foot` strip.
+- `Button` (`primary`, `secondary`, `quiet`, `danger`; `sm`), or `buttonClass()` for a link.
+- `Chip` and `StateDot` (tones `brand`, `slate`, `good`, `warn`, `bad`): state lives here, never in a
+  tinted tile or a coloured button.
+- `Segmented` for a view switch; `Toolbar` for filters and search; `LABEL` and `INPUT` for fields.
+- `SummaryStrip` / `StatTile`: three to five white figure tiles above the work, a `StateDot` for state.
+- `EmptyState`: an icon chip, a title, one line and at most one button, sized to its words.
+
+People, the Ops Desk and Pricing keep their approved motion by passing their own tile as `chip`.
+
+`src/tests/designGuard.test.ts` counts half-pixel sizes, 6–9px text, colours outside the palette
+and fonts of their own in every app file. A file may only go down from the counts recorded on
+16 Nov 2026 (`designGuard.baseline.json`), and a new file starts at zero. After cleaning a file up,
+run `UPDATE_DESIGN_BASELINE=1 npx vitest run src/tests/designGuard.test.ts`. Design Desk
+(`components/drawingReview`) keeps its own colours.
+
 ## Modals
 
 Copy `AssignProjectsModal`:
