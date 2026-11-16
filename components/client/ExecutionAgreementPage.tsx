@@ -8,21 +8,21 @@ import { useOrg } from '../../contexts/OrgContext';
 import { useStudioSettings } from '../../hooks/useStudioSettings';
 import { studioDisplayName } from '../../lib/studioName';
 import { useProjectProgramme } from '../../hooks/useProjectProgramme';
-import { Download, Share2, Copy, ExternalLink, Tablet, KeyRound, Check, Pencil, GitCompare } from '@/lib/lucide-shim';
-import { calculateSellPrice } from '../../lib/utils';
-import { approvedOption, resolveAgreement, type AgreementOverrides } from '../../lib/executionAgreement';
+import { Download, Share2, Copy, ExternalLink, Tablet, KeyRound, Check, Pencil, GitCompare, Clock, ListChecks, BookOpen, ShieldCheck, Send, Mail, XIcon } from '@/lib/lucide-shim';
+import { calculateSellPrice, formatCurrency } from '../../lib/utils';
+import { approvedOption, resolveAgreement, AGREEMENT_ARTICLES, type AgreementOverrides } from '../../lib/executionAgreement';
 import { pendingRevision } from '../../lib/revisionMoneyPreview';
-import { ShieldCheckIcon } from '../Icons';
 import { sendAgreementSignoffRequest } from '../../services/emailService';
 import { db as dbService } from '../../services/dbService';
 import { db as firestore } from '../../services/firebaseClient';
 import { doc, updateDoc } from 'firebase/firestore';
-import { usePageHeader } from '../../contexts/PageHeaderContext';
 import { downloadSectionsAsPdf } from '../../lib/documentPdf';
 import DigitalSignatureDocketView from '../common/DigitalSignatureDocket';
 import DigitalSignaturePad from '../common/DigitalSignaturePad';
 import ManualAcceptanceOverrideModal from '../ops/ManualAcceptanceOverrideModal';
 import { publicAppOrigin } from '../../lib/publicUrl';
+import { Panel, Button, Chip, Segmented, StateDot, LABEL, INPUT, buttonClass } from '../ui/kit';
+import '../projectHeader/projectHeader.css';
 
 interface ExecutionAgreementPageProps {
     projectContext: ProjectContext;
@@ -50,6 +50,7 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
     const { settings } = useStudioSettings(tenantId || '');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
+    const [viewMode, setViewMode] = useState<'summary' | 'doc'>('summary');
     const contentRef = useRef<HTMLDivElement>(null);
 
     const studioName = settings?.companyName || orgData.orgName || 'Form Factors Design Studio';
@@ -183,104 +184,242 @@ export default function ExecutionAgreementPage({ projectContext, setProjectConte
         }, 150);
     };
 
-    usePageHeader({
-        badge: isEditMode ? 'Editing' : undefined,
-        actions: (
-            <div className="flex items-center gap-2">
-                <button
-                    type="button"
-                    onClick={() => setIsEditMode(!isEditMode)}
-                    className={isEditMode
-                        ? 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486]'
-                        : 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50'}
-                >
-                    <Pencil className="w-3.5 h-3.5" />
-                    {isEditMode ? 'Done editing' : 'Edit agreement'}
-                </button>
-                <button
-                    type="button"
-                    onClick={handleDownloadPdf}
-                    disabled={isGenerating}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486] disabled:opacity-50"
-                >
-                    <Download className="w-3.5 h-3.5" />
-                    {isGenerating ? 'Making the PDF…' : 'Download PDF'}
-                </button>
-            </div>
-        )
-    }, [isEditMode, isGenerating]);
+    /*
+      Summary first, like the Terms Docket (DESIGN.md "Screen kit",
+      standardisation PR 6): where the agreement stands, the figures a client
+      asks about, and the outline. The agreement itself is one click away, and
+      is what the PDF is captured from, so the PDF shows it first.
+    */
+    const signoff = (projectContext as any).executionSignoff;
+    const signState: 'pending' | 'sent' | 'signed' = signoff?.status === 'signed' ? 'signed' : signoff?.status === 'sent' ? 'sent' : 'pending';
+    const statusChip = signState === 'signed'
+        ? <Chip tone="good">Signed</Chip>
+        : signState === 'sent' ? <Chip tone="warn">Sent · awaiting signature</Chip> : <Chip tone="slate">Not sent</Chip>;
+    const when = (t?: string | number | null) => (t ? new Date(t).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
+    const steps = [
+        { label: 'Prepared', sub: agreement.agreementDate || 'From the approved option', done: true },
+        { label: 'Sent to client', sub: signoff?.sentAt ? when(signoff.sentAt) : signState === 'signed' ? 'Recorded by the studio' : 'Not yet', done: signState !== 'pending' },
+        { label: 'Signed', sub: signState === 'signed' ? (when(signoff?.signedAt) || 'Signed') : 'Not yet', done: signState === 'signed' },
+    ];
+    const m = agreement.money;
+    const figures = [
+        { topic: 'Contract value', text: `${formatCurrency(m.grandTotal)} including GST`, to: '4' },
+        { topic: 'Execution', text: `${formatCurrency(m.netExecution)}${m.executionDiscount > 0 ? ` after ${m.executionDiscountLabel || 'a discount'} of ${formatCurrency(m.executionDiscount)}` : ''}${m.optionName ? ` · ${m.optionName}` : ''}`, to: '2' },
+        m.netDesign > 0 ? { topic: 'Design fee', text: `${formatCurrency(m.netDesign)}${m.designDiscount > 0 ? ` after ${m.designDiscountLabel || 'a discount'} of ${formatCurrency(m.designDiscount)}` : ''}`, to: '3' } : null,
+        { topic: 'GST', text: `${m.gstRate}% · ${formatCurrency(m.executionGst + m.designGst)}`, to: '4' },
+        { topic: 'Payments', text: agreement.schedule.length ? `${agreement.schedule.length} stages, from ${agreement.schedule[0].name}` : 'No stages in Money yet', to: 'A' },
+        { topic: 'Duration', text: agreement.programme
+            ? `${agreement.programme.totalDays} days, start to handover (design ${agreement.programme.designDays} + site ${agreement.programme.siteDays}), from ${agreement.commencementTrigger}`
+            : `${agreement.estimatedDuration} working days from ${agreement.commencementTrigger}`, to: '5' },
+        { topic: 'Scope', text: `${agreement.boq.length} BOQ ${agreement.boq.length === 1 ? 'line' : 'lines'}`, to: 'F' },
+        { topic: 'Client', text: [agreement.parties.clientName, agreement.parties.projectAddress].filter(Boolean).join(' · ') || 'Not set', to: '1' },
+    ].filter(Boolean) as Array<{ topic: string; text: string; to: string }>;
+    const ANNEXURES = [
+        { no: 'A', title: 'Payment Schedule' },
+        { no: 'B', title: 'Revision and Change Request Charges' },
+        { no: 'C', title: 'As-Actuals and Client-Procured Items' },
+        { no: 'D', title: 'Scope Exclusion Checklist' },
+        { no: 'E', title: 'Execution Start Readiness Checklist' },
+        { no: 'F', title: 'Final Approved BOQ & Technical Specifications' },
+    ];
+    /* Articles carry ids (sec-1 … sec-10); an annexure is found by its title. */
+    const findPart = (to: string) => /^\d+$/.test(to)
+        ? contentRef.current?.querySelector(`#sec-${to}`)
+        : (Array.from(contentRef.current?.querySelectorAll('.ea-annex-title') || []) as HTMLElement[]).find((el) => (el.textContent || '').startsWith(`Annexure ${to}`));
+    const openPart = (to?: string) => {
+        setViewMode('doc');
+        if (to) window.setTimeout(() => (findPart(to) as HTMLElement | undefined)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    };
+    const pickView = (v: 'summary' | 'doc') => {
+        if (v === 'summary') setIsEditMode(false);
+        setViewMode(v);
+    };
+    const toggleEdit = () => {
+        if (!isEditMode) setViewMode('doc');
+        setIsEditMode(!isEditMode);
+    };
+    /* The PDF is captured from the agreement on screen, so show it first when the summary is open. */
+    const downloadPdf = () => {
+        if (viewMode === 'doc' && contentRef.current) { handleDownloadPdf(); return; }
+        setViewMode('doc');
+        window.setTimeout(() => handleDownloadPdf(), 300);
+    };
+
+    const signoffBlock = (
+        <ExecutionAgreementSignoffBlock
+            clientName={agreement.parties.clientName || 'Client'}
+            location={projectContext.location || 'Site'}
+            projectId={projectId}
+            setProjectContext={setProjectContext}
+            projectContext={projectContext}
+            grandTotal={agreement.money.grandTotal}
+            tenantId={tenantId}
+        />
+    );
 
     return (
-        <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in pb-16">
-
-            {isEditMode && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-start gap-3 hud-panel-in">
-                    <div className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] flex items-center justify-center shrink-0">
-                        <Pencil className="w-4 h-4" />
-                    </div>
-                    <div>
-                        <h4 className="font-bold text-slate-800">Editing this agreement</h4>
-                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                            Client and project details, the representatives, the payment schedule wording, Annexures B and C and each BOQ line's description can be changed on the pages below. Use "Add clause" at the end of any article to add your own clauses and sub-clauses. Figures come from Money and the approved BOQ as they stand now. Everything is saved as you type and goes into the copy the client receives when you next issue it.
-                        </p>
-                    </div>
+        <div className="w-full space-y-4 pb-20">
+            {/* One row: the view, where the agreement stands, and what can be done with it. */}
+            <div className="flex flex-wrap items-center gap-2 no-print">
+                <Segmented
+                    label="Execution Agreement view"
+                    size="sm"
+                    value={viewMode}
+                    options={[
+                        { id: 'summary', label: 'Summary' },
+                        { id: 'doc', label: 'Agreement' },
+                    ]}
+                    onChange={pickView}
+                />
+                {statusChip}
+                {isEditMode && <Chip tone="brand">Editing</Chip>}
+                <span className="text-xs text-slate-500 tabular-nums">{projectId}</span>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <Button size="sm" variant={isEditMode ? 'primary' : 'secondary'} icon={isEditMode ? Check : Pencil} onClick={toggleEdit}>
+                        {isEditMode ? 'Done editing' : 'Edit agreement'}
+                    </Button>
+                    <Button size="sm" icon={Download} onClick={downloadPdf} disabled={isGenerating}>
+                        {isGenerating ? 'Making the PDF…' : 'Download PDF'}
+                    </Button>
                 </div>
-            )}
+            </div>
 
             {openRevision && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-start gap-3 hud-panel-in">
-                    <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                        <GitCompare className="w-4 h-4" />
+                <Panel
+                    icon={GitCompare}
+                    title={`Scope Revision ${openRevision.number}${openRevision.reference ? ` (${openRevision.reference})` : ''} is not in this agreement yet`}
+                    badge={<Chip tone="warn">{openRevision.state === 'approved' ? 'Signed, not applied' : openRevision.state === 'sent_back' ? 'Sent back' : 'With the client'}</Chip>}
+                    blurb={openRevision.state === 'approved'
+                        ? 'It is signed but not applied. Apply it in Scope & Strategy, then Annexure F, its specifications and the figures here follow the revised BOQ.'
+                        : openRevision.state === 'sent_back'
+                            ? 'The client sent it back. Until a revision is signed and applied, this agreement states the scope in force.'
+                            : 'It is with the client. Once it is signed and applied, Annexure F, its specifications and the figures here follow the revised BOQ.'}
+                    className="no-print"
+                />
+            )}
+
+            {viewMode === 'summary' && (
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,380px)] gap-4 items-start no-print">
+                    <div className="space-y-4 min-w-0">
+                        <Panel
+                            icon={Clock}
+                            title="Where it stands"
+                            badge={statusChip}
+                            blurb={signState === 'signed'
+                                ? 'Signed: this is the agreement the site work runs on.'
+                                : signState === 'sent'
+                                    ? 'With the client for their signature.'
+                                    : 'Not sent yet. The client signs this before work starts on site.'}
+                        >
+                            <ol className="grid grid-cols-3 gap-3">
+                                {steps.map((st, i) => (
+                                    <li key={st.label} className="hud-row-in min-w-0" style={{ animationDelay: `${i * 30}ms` }}>
+                                        <span className={`block h-1 rounded-full ${st.done ? 'bg-[#3D52A0]' : 'bg-slate-200'}`} />
+                                        <b className="block mt-2 text-sm font-semibold text-slate-800">{st.label}</b>
+                                        <span className="block text-[11px] text-slate-500">{st.sub}</span>
+                                    </li>
+                                ))}
+                            </ol>
+                        </Panel>
+
+                        <Panel icon={ShieldCheck} title="Client signature" blurb="Send the agreement for a digital signature, or record one given another way." delay={30}>
+                            {signoffBlock}
+                        </Panel>
+
+                        <Panel icon={ListChecks} title="What the client agrees to" blurb="From Money, the approved option and the Timeline, as they stand now. Open one to read it in the agreement." delay={60}>
+                            <div className="divide-y divide-slate-100">
+                                {figures.map((f) => (
+                                    <button key={f.topic} type="button" onClick={() => openPart(f.to)}
+                                        className="w-full grid grid-cols-[120px_minmax(0,1fr)_auto] gap-3 items-baseline py-2.5 text-left hover:bg-slate-50 rounded-lg px-1">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{f.topic}</span>
+                                        <span className="text-sm text-slate-700 tabular-nums">{f.text}</span>
+                                        <span className="text-xs font-bold text-[#3D52A0]">{/^\d+$/.test(f.to) ? `Art. ${f.to}` : `Annex ${f.to}`}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </Panel>
                     </div>
-                    <div>
-                        <h4 className="font-bold text-slate-800">
-                            Scope Revision {openRevision.number}{openRevision.reference ? ` (${openRevision.reference})` : ''} is not in this agreement yet
-                        </h4>
-                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                            {openRevision.state === 'approved'
-                                ? 'It is signed but not applied. Apply it in Scope & Strategy, then Annexure F, its specifications and the figures here follow the revised BOQ.'
-                                : openRevision.state === 'sent_back'
-                                    ? 'The client sent it back. Until a revision is signed and applied, this agreement states the scope in force.'
-                                    : 'It is with the client. Once it is signed and applied, Annexure F, its specifications and the figures here follow the revised BOQ.'}
-                        </p>
+
+                    <div className="space-y-4 min-w-0">
+                        <Panel icon={BookOpen} title="The agreement" blurb={`Integrated execution agreement · ${AGREEMENT_ARTICLES.length} articles and ${ANNEXURES.length} annexures`} delay={90}>
+                            <ol>
+                                {AGREEMENT_ARTICLES.map((a) => (
+                                    <li key={a.no}>
+                                        <button type="button" onClick={() => openPart(a.no)} className="w-full flex gap-2 px-1 py-1.5 rounded-lg text-left text-sm text-slate-700 hover:bg-slate-50">
+                                            <span className="w-6 shrink-0 text-slate-400 tabular-nums">{a.no}</span>
+                                            <span className="min-w-0">{a.title}</span>
+                                        </button>
+                                    </li>
+                                ))}
+                                {ANNEXURES.map((a) => (
+                                    <li key={a.no}>
+                                        <button type="button" onClick={() => openPart(a.no)} className="w-full flex gap-2 px-1 py-1.5 rounded-lg text-left text-sm text-slate-700 hover:bg-slate-50">
+                                            <span className="w-6 shrink-0 text-slate-400">{a.no}</span>
+                                            <span className="min-w-0">{a.title}</span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ol>
+                            <Button size="sm" className="mt-3" icon={BookOpen} onClick={() => openPart()}>Read the agreement</Button>
+                        </Panel>
                     </div>
                 </div>
             )}
 
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto p-4 sm:p-8 flex justify-center">
-                <ExecutionAgreementSheet
-                    agreement={agreement}
-                    studioName={studioName}
-                    studioAddress={studioAddress}
-                    studioEmail={studioEmail}
-                    repName={repName}
-                    repTitle={orgData.signatoryTitle}
-                    projectId={projectId}
-                    contentRef={contentRef}
-                    signature={execIssue?.clientSignature || execIssue?.counterSignature
-                        ? <ExecutionStamp issue={execIssue} mode="signature" />
-                        : undefined}
-                    isEditMode={isEditMode}
-                    onChange={changeOverrides}
-                />
-            </div>
-            
-            {/* Sign-off & Execution Protocol */}
-            <div className="mt-8 pt-8 border-t-4 border-[#334486] break-inside-avoid">
-                <h3 className="text-lg font-bold text-slate-900 uppercase tracking-wide mb-6 font-opensans">
-                    Acceptance & Sign-off
-                </h3>
-                
-                <ExecutionAgreementSignoffBlock 
-                    clientName={agreement.parties.clientName || 'Client'} 
-                    location={projectContext.location || 'Site'} 
-                    projectId={projectId} 
-                    setProjectContext={setProjectContext} 
-                    projectContext={projectContext} 
-                    grandTotal={agreement.money.grandTotal} 
-                    tenantId={tenantId}
-                />
-            </div>
+            {viewMode === 'doc' && (
+                <div className="grid grid-cols-1 2xl:grid-cols-[220px_minmax(0,1fr)] gap-4 items-start">
+                    <nav aria-label="Articles" className="no-print hidden 2xl:block sticky top-4 bg-white rounded-2xl border border-slate-200 shadow-sm p-3 max-h-[80vh] overflow-y-auto">
+                        <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Articles</p>
+                        {AGREEMENT_ARTICLES.map((a) => (
+                            <button key={a.no} type="button" onClick={() => openPart(a.no)} className="w-full flex gap-2 px-2 py-1.5 rounded-lg text-left text-xs text-slate-700 hover:bg-slate-50">
+                                <span className="w-5 shrink-0 text-slate-400 tabular-nums">{a.no}</span>
+                                <span className="min-w-0">{a.title}</span>
+                            </button>
+                        ))}
+                        <p className="px-2 pt-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Annexures</p>
+                        {ANNEXURES.map((a) => (
+                            <button key={a.no} type="button" onClick={() => openPart(a.no)} className="w-full flex gap-2 px-2 py-1.5 rounded-lg text-left text-xs text-slate-700 hover:bg-slate-50">
+                                <span className="w-5 shrink-0 text-slate-400">{a.no}</span>
+                                <span className="min-w-0">{a.title}</span>
+                            </button>
+                        ))}
+                    </nav>
+
+                    <div className="space-y-4 min-w-0">
+                        {isEditMode && (
+                            <Panel
+                                icon={Pencil}
+                                title="Editing this agreement"
+                                blurb={`Client and project details, the representatives, the payment schedule wording, Annexures B and C and each BOQ line's description can be changed on the pages below. Use "Add clause" at the end of any article to add your own clauses and sub-clauses. Figures come from Money and the approved BOQ as they stand now. Everything is saved as you type and goes into the copy the client receives when you next issue it.`}
+                                className="no-print"
+                            />
+                        )}
+
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto p-4 sm:p-6 flex justify-center">
+                            <ExecutionAgreementSheet
+                                agreement={agreement}
+                                studioName={studioName}
+                                studioAddress={studioAddress}
+                                studioEmail={studioEmail}
+                                repName={repName}
+                                repTitle={orgData.signatoryTitle}
+                                projectId={projectId}
+                                contentRef={contentRef}
+                                signature={execIssue?.clientSignature || execIssue?.counterSignature
+                                    ? <ExecutionStamp issue={execIssue} mode="signature" />
+                                    : undefined}
+                                isEditMode={isEditMode}
+                                onChange={changeOverrides}
+                            />
+                        </div>
+
+                        {/* Sign-off: the same block as on the summary, after the agreement it signs. */}
+                        <Panel icon={ShieldCheck} title="Client signature" blurb="Send the agreement for a digital signature, or record one given another way." className="no-print break-inside-avoid">
+                            {signoffBlock}
+                        </Panel>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -487,7 +626,7 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
         };
 
         return (
-            <div className="mt-6 space-y-4 break-inside-avoid">
+            <div className="break-inside-avoid">
                 <DigitalSignatureDocketView
                     docket={docketToRender}
                     documentTitle="Integrated Interior Execution Agreement"
@@ -508,132 +647,81 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
         const accessPin = currentSignoff?.accessPin || 'SEC-8492';
 
         return (
-            <div className="mt-4 bg-amber-50 text-amber-900 border border-amber-200 rounded-2xl p-6 relative break-inside-avoid shadow-xs">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                    <div className="flex-grow w-full md:w-auto">
-                         <div className="flex items-center gap-2 mb-1.5">
-                             <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-                             <h4 className="text-sm font-bold uppercase tracking-widest text-amber-900">
-                                 Awaiting Client Signature
-                             </h4>
-                         </div>
-                         <p className="text-xs text-amber-800 max-w-xl">
-                             Digital agreement active at {sentTimestamp}. Dispatched to <strong>{projectContext.clientEmail || 'Client'}</strong>.
-                         </p>
+            <div className="space-y-4 break-inside-avoid">
+                <p className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+                    <StateDot tone="warn" />
+                    <span>Sent {sentTimestamp} to <b className="font-semibold text-slate-800">{projectContext.clientEmail || 'the client'}</b>. Waiting for their signature.</span>
+                </p>
 
-                         {/* Security PIN & Anti-Phishing Details */}
-                         <div className="mt-4 p-4 bg-white rounded-xl border border-amber-200 shadow-xs space-y-3">
-                             <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
-                                 <div className="flex items-center gap-2">
-                                     <KeyRound className="w-4 h-4 text-[#3D52A0]" />
-                                     <span className="text-xs font-bold text-slate-900">Document Access PIN:</span>
-                                     <span className="font-mono text-sm font-extrabold text-[#3D52A0] bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
-                                         {accessPin}
-                                     </span>
-                                 </div>
-                                 <button 
-                                     onClick={() => handleCopyPin(accessPin)}
-                                     className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded transition-all flex items-center gap-1 cursor-pointer"
-                                 >
-                                     {pinCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                                     {pinCopied ? "PIN Copied!" : "Copy PIN"}
-                                 </button>
-                             </div>
-
-                             <div>
-                                 <div className="flex items-center justify-between mb-1.5">
-                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Secure Direct Link</span>
-                                     <button 
-                                         onClick={() => handleCopy(link)}
-                                         className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold rounded transition-all flex items-center gap-1 cursor-pointer"
-                                     >
-                                         {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                                         {copied ? "Link Copied!" : "Copy Link"}
-                                     </button>
-                                 </div>
-                                 <div className="text-[11px] font-mono break-all text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-200">
-                                     {link}
-                                 </div>
-                             </div>
-
-                             <div className="pt-2 flex flex-wrap items-center gap-2">
-                                 <a 
-                                     href={link} 
-                                     target="_blank" 
-                                     rel="noopener noreferrer" 
-                                     className="px-3.5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-xs font-bold tracking-tight inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                 >
-                                     <ExternalLink className="w-3.5 h-3.5" />
-                                     Open Client Sign-Off Screen
-                                 </a>
-                                 <button 
-                                     onClick={() => shareViaWhatsApp(link, accessPin)}
-                                     className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                 >
-                                     <Share2 className="w-3.5 h-3.5" />
-                                     Share on WhatsApp
-                                 </button>
-                             </div>
-                         </div>
-
-                         <div className="flex items-center gap-3 mt-4 text-xs font-bold">
-                             <button onClick={() => setShowSendConfirm(true)} disabled={isSending} className="underline text-amber-700 hover:text-amber-900 cursor-pointer">
-                                 {isSending ? 'Dispatching...' : 'Resend Email'}
-                             </button>
-                             <span className="text-amber-300">|</span>
-                             <button onClick={handleReset} className="underline text-amber-700 hover:text-amber-900 cursor-pointer">
-                                 Cancel Request
-                             </button>
-                         </div>
-                         {showSendConfirm && (
-                             <div className="mt-4 p-4 border border-amber-300 bg-amber-100 rounded-xl flex flex-col gap-2">
-                                 <p className="text-xs font-bold">Confirm Resend Execution Agreement?</p>
-                                 <div className="flex items-center gap-2">
-                                     <button onClick={sendEmailSignoff} className="px-3 py-1 bg-amber-600 text-white rounded text-xs cursor-pointer">Yes, Resend</button>
-                                     <button onClick={() => setShowSendConfirm(false)} className="px-3 py-1 bg-transparent border border-amber-600 text-amber-700 rounded text-xs cursor-pointer">Cancel</button>
-                                 </div>
-                             </div>
-                         )}
-                         {localError && <p className="text-red-600 text-xs mt-2">{localError}</p>}
+                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,200px)_minmax(0,1fr)] gap-4 items-start">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <p className={LABEL}>Access PIN</p>
+                        <p className="mt-1 flex items-center gap-2">
+                            <KeyRound className="w-4 h-4 text-[#3D52A0]" />
+                            <b className="text-lg font-bold text-slate-800 tabular-nums tracking-wider">{accessPin}</b>
+                        </p>
+                        <Button size="sm" variant="quiet" className="mt-2" icon={pinCopied ? Check : Copy} onClick={() => handleCopyPin(accessPin)}>
+                            {pinCopied ? 'PIN copied' : 'Copy PIN'}
+                        </Button>
                     </div>
-
-                    <div className="no-print shrink-0 border-t md:border-t-0 md:border-l border-amber-200 pt-4 md:pt-0 md:pl-6 space-y-2.5 w-full md:w-auto">
-                        <button 
-                            onClick={() => setShowInPersonModal(true)}
-                            className="w-full flex justify-center items-center gap-2 px-4 py-2.5 bg-[#3D52A0] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#334486] transition-all cursor-pointer"
-                        >
-                            <Tablet className="w-4 h-4" />
-                            Client In-Person Signing (Tablet)
-                        </button>
-                        <button 
-                            onClick={() => setShowMarkManual(true)}
-                            className="w-full flex justify-center items-center gap-2 px-4 py-2.5 bg-white border border-amber-300 text-amber-800 text-[10px] font-bold rounded-xl shadow-xs hover:bg-amber-100 transition-all uppercase tracking-widest cursor-pointer"
-                        >
-                            Ops Override: Record Acceptance
-                        </button>
+                    <div className="min-w-0">
+                        <p className={LABEL}>Sign-off link</p>
+                        <p className="mt-1 text-xs text-slate-600 break-all bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">{link}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <Button size="sm" icon={copied ? Check : Copy} onClick={() => handleCopy(link)}>{copied ? 'Link copied' : 'Copy link'}</Button>
+                            <a href={link} target="_blank" rel="noopener noreferrer" className={buttonClass('secondary', 'sm')}>
+                                <ExternalLink className="w-3.5 h-3.5" /> Open sign-off screen
+                            </a>
+                            <Button size="sm" icon={Share2} onClick={() => shareViaWhatsApp(link, accessPin)}>Share on WhatsApp</Button>
+                        </div>
                     </div>
                 </div>
 
+                <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-slate-100 no-print">
+                    <Button size="sm" variant="primary" icon={Tablet} onClick={() => setShowInPersonModal(true)}>Sign in person</Button>
+                    <Button size="sm" onClick={() => setShowMarkManual(true)} title="Record a signature given by WhatsApp, email or on paper">Record acceptance</Button>
+                    <div className="ml-auto flex flex-wrap items-center gap-2">
+                        {showSendConfirm ? (
+                            <>
+                                <span className="text-xs text-slate-600">Send the agreement again?</span>
+                                <Button size="sm" variant="primary" onClick={sendEmailSignoff}>Yes, resend</Button>
+                                <Button size="sm" variant="quiet" onClick={() => setShowSendConfirm(false)}>Cancel</Button>
+                            </>
+                        ) : (
+                            <Button size="sm" variant="quiet" icon={Mail} onClick={() => setShowSendConfirm(true)} disabled={isSending}>
+                                {isSending ? 'Sending…' : 'Resend email'}
+                            </Button>
+                        )}
+                        <Button size="sm" variant="quiet" onClick={handleReset}>Cancel request</Button>
+                    </div>
+                </div>
+                {localError && <p className="text-xs text-rose-700">{localError}</p>}
+
                 {showInPersonModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-                        <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                                <div className="flex items-center gap-2 text-slate-900 font-bold">
-                                    <Tablet className="w-5 h-5 text-[#3D52A0]" />
-                                    <span>In-Person Client Signing</span>
+                    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="In-person signing">
+                        <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={() => setShowInPersonModal(false)} />
+                        <div className="phd-pop relative bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="px-6 pt-5 pb-4 flex items-start gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">Execution Agreement</p>
+                                    <h3 className="text-lg font-bold text-slate-800">Sign in person</h3>
+                                    <p className="text-xs text-slate-500">
+                                        Hand your device or tablet to <b className="font-semibold text-slate-700">{projectContext.clientName || 'the client'}</b> to sign here.
+                                    </p>
                                 </div>
-                                <button onClick={() => setShowInPersonModal(false)} className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">&times;</button>
+                                <button type="button" onClick={() => setShowInPersonModal(false)} aria-label="Close" className="w-9 h-9 rounded-xl grid place-items-center text-slate-400 hover:bg-slate-100">
+                                    <XIcon className="w-5 h-5" />
+                                </button>
                             </div>
-                            <p className="text-xs text-slate-600">
-                                Hand your device or tablet to <strong>{projectContext.clientName || 'the client'}</strong> to affix their signature in person.
-                            </p>
-                            <DigitalSignaturePad
-                                initialName={projectContext.clientName || ''}
-                                initialEmail={projectContext.clientEmail || ''}
-                                documentTitle="Integrated Interior Execution Agreement"
-                                projectTitle={projectContext.name}
-                                onSignComplete={handleInPersonSignSubmit}
-                            />
+                            <div className="px-6 pb-6">
+                                <DigitalSignaturePad
+                                    initialName={projectContext.clientName || ''}
+                                    initialEmail={projectContext.clientEmail || ''}
+                                    documentTitle="Integrated Interior Execution Agreement"
+                                    projectTitle={projectContext.name}
+                                    onSignComplete={handleInPersonSignSubmit}
+                                />
+                            </div>
                         </div>
                     </div>
                 )}
@@ -653,131 +741,76 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
     }
 
     // View: PENDING (Instructions)
+    const emailSet = !!projectContext.clientEmail && projectContext.clientEmail.includes('@');
     return (
-        <div className="mt-4 bg-slate-50 border border-slate-200 rounded-xl p-6 relative break-inside-avoid">
-            <div className="flex flex-col md:flex-row justify-between items-start gap-6">
-                <div className="flex-grow">
-                    <h4 className="text-sm font-bold text-slate-900 uppercase tracking-widest mb-2 flex items-center gap-2">
-                        Execution Protocol
-                    </h4>
-                    <p className="text-xs text-slate-600 leading-relaxed max-w-xl mb-4">
-                        <strong>No physical signature required.</strong> To execute this agreement, click "Send agreement" to securely email the digital sign-off link to the client.
-                    </p>
+        <div className="space-y-4 break-inside-avoid">
+            <p className="text-sm text-slate-600">
+                No physical signature needed. Send the agreement and the client signs it with a link and an access PIN.
+            </p>
 
-                    <div className="mt-4 mb-5 p-4 border rounded-xl bg-sky-50/50 border-sky-200 max-w-xl">
-                        <label className="block text-[11px] font-bold text-slate-900 uppercase tracking-wider mb-1.5">
-                            Client Email Address Setup
-                        </label>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                            <input 
-                                type="email" 
-                                value={projectContext.clientEmail || ''} 
-                                onChange={e => {
-                                    const emailVal = e.target.value;
-                                    setProjectContext?.((prev: any) => ({ ...prev, clientEmail: emailVal }));
-                                }} 
-                                className="flex-grow text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-[#3D52A0] focus:ring-1 focus:ring-[#3D52A0] shadow-sm" 
-                                placeholder="Enter client's email address (e.g. client@example.com)" 
-                            />
-                            {projectContext.clientEmail && projectContext.clientEmail.includes('@') ? (
-                                <span className="bg-emerald-100 border border-emerald-200 text-emerald-800 text-[10px] font-bold tracking-tight rounded-md px-3 py-2 flex items-center justify-center gap-1">
-                                    <svg className="w-3.5 h-3.5 text-emerald-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-                                    Configured
-                                </span>
-                            ) : (
-                                <span className="bg-amber-100 border border-amber-200 text-amber-800 text-[10px] font-bold tracking-tight rounded-md px-3 py-2 flex items-center justify-center gap-1">
-                                    &#9888; Email Missing
-                                </span>
-                            )}
-                        </div>
-                        {!projectContext.clientEmail && (
-                            <p className="text-[10px] text-red-600 font-semibold mt-2">
-                                * An email address is required to dispatch the execution link. Please enter it above.
-                            </p>
-                        )}
-                    </div>
-                    {localError && (
-                        <div className="text-red-600 text-xs mb-4 p-3.5 bg-red-50 rounded-lg border border-red-200/60 leading-relaxed">
-                            <div className="font-bold mb-1">Email Transfer Interrupted:</div>
-                            <p className="text-slate-600 text-[11px] mb-2">
-                                {localError}
-                            </p>
-                            <div className="pt-2.5 border-t border-red-200/50 flex flex-col sm:flex-row sm:items-center gap-2">
-                                <span className="font-bold text-red-800 text-[10px] uppercase tracking-wider block">Sandbox Controls:</span>
-                                <button 
-                                    onClick={async () => {
-                                        setLocalError(null);
-                                        setIsSending(true);
-                                        try {
-                                            const randomPart = Math.random().toString(36).substring(2, 15);
-                                            const token = `EXEC_AGREEMENT_${projectId}_${randomPart}`;
-                                            const newSignoff = {
-                                                status: 'sent',
-                                                token: token,
-                                                sentAt: new Date().toISOString()
-                                            };
-                                            setProjectContext?.((prev: any) => ({ ...prev, executionSignoff: newSignoff }));
-                                        } catch (e: any) {
-                                            setLocalError(e.message);
-                                        } finally {
-                                            setIsSending(false);
-                                        }
-                                    }}
-                                    className="px-3 py-1.5 bg-[#3D52A0] hover:bg-[#334486] text-white font-bold rounded-md text-[10px] shadow-sm uppercase tracking-wider cursor-pointer inline-block text-center"
-                                >
-                                    Force Generate Digital Sign-Off Link (Sandbox Bypass)
-                                </button>
-                            </div>
-                        </div>
-                    )}
+            <div className="max-w-xl">
+                <label htmlFor="ea-client-email" className={LABEL}>Client email</label>
+                <div className="mt-1 flex flex-col sm:flex-row sm:items-center gap-2">
+                    <input
+                        id="ea-client-email"
+                        type="email"
+                        value={projectContext.clientEmail || ''}
+                        onChange={e => {
+                            const emailVal = e.target.value;
+                            setProjectContext?.((prev: any) => ({ ...prev, clientEmail: emailVal }));
+                        }}
+                        className={INPUT}
+                        placeholder="client@example.com"
+                    />
+                    {emailSet ? <Chip tone="good" className="self-start sm:self-auto">Set</Chip> : <Chip tone="warn" className="self-start sm:self-auto">Missing</Chip>}
                 </div>
-                
-                {/* Admin Control - Hidden in Print */}
-                <div className="no-print shrink-0 flex flex-col gap-2 min-w-[200px]">
-                    {!showSendConfirm ? (
-                        <button 
-                            onClick={() => setShowSendConfirm(true)}
-                            disabled={isSending}
-                            className="flex justify-center items-center gap-2 px-4 py-2.5 bg-[#3D52A0] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#334486] transition-all w-full cursor-pointer disabled:opacity-50"
-                        >
-                            <ShieldCheckIcon className="w-4 h-4" /> {isSending ? 'Dispatching...' : 'Send to Client'}
-                        </button>
-                    ) : (
-                        <div className="p-3.5 border border-sky-200 bg-sky-50 rounded-xl flex flex-col gap-2 shadow-xs">
-                            <p className="text-xs font-bold text-slate-800">Send Agreement via Email?</p>
-                            <div className="flex items-center gap-2">
-                                <button 
-                                    onClick={sendEmailSignoff} 
-                                    disabled={isSending} 
-                                    className="px-3 py-1.5 bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-60 text-white font-bold rounded-lg text-xs flex-1 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                                >
-                                    {isSending ? (
-                                        <>
-                                            <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-                                            <span>Sending...</span>
-                                        </>
-                                    ) : (
-                                        'Confirm'
-                                    )}
-                                </button>
-                                <button 
-                                    onClick={() => setShowSendConfirm(false)} 
-                                    disabled={isSending} 
-                                    className="px-3 py-1.5 bg-white border border-sky-200 text-[#334486] font-bold rounded-lg text-xs flex-1 hover:bg-sky-100 transition cursor-pointer disabled:opacity-50"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                    
-                    <button 
-                        onClick={() => setShowMarkManual(true)}
-                        className="flex justify-center items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-[10px] uppercase tracking-widest font-bold rounded-lg hover:bg-slate-50 transition-all w-full cursor-pointer"
+                {!projectContext.clientEmail && (
+                    <p className="text-xs text-rose-700 mt-1.5">An email address is needed to send the sign-off link.</p>
+                )}
+            </div>
+
+            {localError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 space-y-2">
+                    <p className="text-xs text-rose-700"><b className="font-semibold">The email did not go.</b> {localError}</p>
+                    <Button
+                        size="sm"
+                        onClick={async () => {
+                            setLocalError(null);
+                            setIsSending(true);
+                            try {
+                                const randomPart = Math.random().toString(36).substring(2, 15);
+                                const token = `EXEC_AGREEMENT_${projectId}_${randomPart}`;
+                                const newSignoff = {
+                                    status: 'sent',
+                                    token: token,
+                                    sentAt: new Date().toISOString()
+                                };
+                                setProjectContext?.((prev: any) => ({ ...prev, executionSignoff: newSignoff }));
+                            } catch (e: any) {
+                                setLocalError(e.message);
+                            } finally {
+                                setIsSending(false);
+                            }
+                        }}
                     >
-                        Ops Override: Record Acceptance
-                    </button>
+                        Make the sign-off link without email
+                    </Button>
                 </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-slate-100 no-print">
+                {!showSendConfirm ? (
+                    <Button variant="primary" size="sm" icon={Send} onClick={() => setShowSendConfirm(true)} disabled={isSending}>
+                        {isSending ? 'Sending…' : 'Send to client'}
+                    </Button>
+                ) : (
+                    <>
+                        <span className="text-xs text-slate-600">Email the agreement to {projectContext.clientEmail || 'the client'}?</span>
+                        <Button variant="primary" size="sm" onClick={sendEmailSignoff} disabled={isSending}>{isSending ? 'Sending…' : 'Confirm send'}</Button>
+                        <Button variant="quiet" size="sm" onClick={() => setShowSendConfirm(false)} disabled={isSending}>Cancel</Button>
+                    </>
+                )}
+                <Button size="sm" onClick={() => setShowMarkManual(true)} title="Record a signature given by WhatsApp, email or on paper">Record acceptance</Button>
             </div>
 
             {showMarkManual && (
@@ -790,18 +823,6 @@ const ExecutionAgreementSignoffBlock: React.FC<{ clientName: string, location: s
                     onClose={() => setShowMarkManual(false)}
                 />
             )}
-            
-            {/* Print Fallback Visual Lines */}
-            <div className="mt-8 pt-6 border-t border-slate-200/60 grid grid-cols-2 gap-12 opacity-40 grayscale print:opacity-60">
-                <div>
-                    <div className="h-8 border-b border-slate-300 mb-1"></div>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase">Client Authorization</p>
-                </div>
-                <div>
-                    <div className="h-8 border-b border-slate-300 mb-1"></div>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase">Studio Representative</p>
-                </div>
-            </div>
         </div>
     );
 }
