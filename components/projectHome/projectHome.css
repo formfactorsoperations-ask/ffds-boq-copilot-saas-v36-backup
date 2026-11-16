@@ -330,7 +330,7 @@ button.ph-step:hover{border-color:var(--ph-b-tint);background:var(--ph-wash)}
 .ph-donut .ctr span{font-size:10.5px;color:var(--ph-mut);font-weight:600;margin-top:2px;max-width:104px;line-height:1.3}
 /* programme: names on the left (they wrap, never cut), bars on a quiet month grid, depth from soft shadows only */
 .ph-gt-scroll{overflow-x:auto;margin:0 -4px;padding:0 4px 4px}
-.ph-gt{position:relative;min-width:600px;--nw:clamp(170px,27%,280px);padding-bottom:24px}
+.ph-gt{position:relative;min-width:600px;--nw:clamp(170px,30%,340px);padding-bottom:24px}
 .ph-gt-grid{position:absolute;top:0;bottom:0;left:var(--nw);right:0;pointer-events:none}
 .ph-gt-month{position:absolute;top:0;bottom:0;border-left:1px solid rgba(173,187,218,.28)}
 .ph-gt-month.alt{background:rgba(238,241,249,.42)}

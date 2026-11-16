@@ -57,11 +57,11 @@ export const HandoverReadinessWidget = ({
             <div className={`w-7 h-7 rounded-lg flex items-center justify-center border ${
               isReady 
                 ? 'bg-[#FAF9F5] border-[#ebdcb9]/40 text-[#B5945B]' 
-                : 'bg-sky-50/50 border-sky-100/30 text-slate-900'
+                : 'bg-[#3D52A0]/2 border-[#3D52A0]/3 text-slate-900'
             }`}>
               <Award className="w-4 h-4" />
             </div>
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest font-mono">Handover Checklist</h3>
+            <h3 className="font-bold text-slate-800">Handover Checklist</h3>
           </div>
           <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full ${
             isReady 
@@ -75,7 +75,7 @@ export const HandoverReadinessWidget = ({
         {!isExecutionOrHandover && (
           <div className="p-3 bg-slate-50 border border-slate-200/60 rounded-xl flex items-center justify-between text-[11px] text-slate-500 font-medium">
             <span>Project in Stage {currentStage}: Handover gates unlock in Stage 6</span>
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-200/60 px-2 py-0.5 rounded-md shrink-0">Stage 6 Gate</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-200/60 px-2 py-0.5 rounded-md shrink-0">Stage 6 Gate</span>
           </div>
         )}
 

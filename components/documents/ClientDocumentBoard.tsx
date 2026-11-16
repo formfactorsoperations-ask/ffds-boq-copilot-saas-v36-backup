@@ -806,7 +806,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
         the row objects and never reached a screen. The rail is that knowledge,
         stated once, in numbers.
       */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_288px] gap-4 items-start">
+      <div className="grid grid-cols-1 min-[1700px]:grid-cols-[minmax(0,1fr)_288px] gap-4 items-start">
       <div className="space-y-5 min-w-0">
 
       {/* One sentence about the whole register, above the filters it agrees with. */}
@@ -1418,7 +1418,7 @@ const ClientDocumentBoard: React.FC<ClientDocumentBoardProps> = ({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        className="bg-white border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 xl:sticky xl:top-4"
+        className="order-first min-[1700px]:order-none bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col sm:flex-row sm:[&>*]:flex-1 divide-y sm:divide-y-0 sm:divide-x min-[1700px]:flex-col min-[1700px]:divide-x-0 min-[1700px]:divide-y divide-slate-100 min-[1700px]:sticky min-[1700px]:top-4"
       >
 
         {/* ── executed, as a ring ─────────────────────────────────── */}

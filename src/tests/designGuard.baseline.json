@@ -91,11 +91,6 @@
     "tinyPx": 9,
     "offPalette": 2
   },
-  "components/HandoverReadinessWidget.tsx": {
-    "tinyPx": 1,
-    "offPalette": 2,
-    "mono": 1
-  },
   "components/Header.tsx": {
     "halfPx": 6,
     "offPalette": 36,
@@ -147,10 +142,6 @@
   },
   "components/PhaseTransitionWidget.tsx": {
     "offPalette": 5
-  },
-  "components/ProcurementGateWidget.tsx": {
-    "tinyPx": 5,
-    "mono": 1
   },
   "components/ProcurementTab.tsx": {
     "tinyPx": 1,
