@@ -4,7 +4,7 @@ import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, use
 import { ArrowRight, ExternalLink, FolderOpen, LogIn, LogOut, MapPin, X } from '@/lib/lucide-shim';
 import type { Mode } from '../../lib/peopleDesk';
 import { Glide, DoneTick, Confetti, Notice, MODE_ICON, EASE } from './PeopleBits';
-import { LABEL, INPUT, Button } from '../ui/kit';
+import { LABEL, INPUT, Button, Chip } from '../ui/kit';
 import '../projectHeader/projectHeader.css';
 
 /*
@@ -52,6 +52,8 @@ export interface LampCheckInProps {
   onDismissProblem: () => void;
   onConfirm: () => void;
   onClose: () => void;
+  /** A practice run (?try-lamp): the card says so, and nothing is saved. */
+  practice?: boolean;
 }
 
 /* The cord hangs from the shade's rim, this far, in the lamp's own pixels. */
@@ -259,7 +261,10 @@ export default function LampCheckIn(p: LampCheckInProps) {
                   initial={still ? false : { opacity: 0, x: 28, y: 6, scale: 0.97 }}
                   animate={{ opacity: 1, x: 0, y: 0, scale: 1, transition: { duration: 0.55, ease: EASE, delay: still ? 0 : 0.35 } }}
                   exit={{ opacity: 0, x: 16, transition: { duration: 0.25 } }}>
-                  <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">{title}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">{title}</p>
+                    {p.practice && <Chip tone="warn" title="Nothing you do here is saved">Practice</Chip>}
+                  </div>
 
                   <AnimatePresence mode="wait">
                     {finished ? (

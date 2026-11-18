@@ -350,6 +350,9 @@ the Site Supervisor's app still check in straight from the card.
   before the window closes.
 - Framer-motion only, no new keyframes. Under `prefers-reduced-motion` the light
   is already on and the card already there.
+- To try it without checking in or out, open People with `?try-lamp=in` or
+  `?try-lamp=out` in the address: the same window, an amber "Practice" chip on
+  the card, and nothing saved.
 
 ### Ops Desk motion (approved 21 Oct 2026)
 

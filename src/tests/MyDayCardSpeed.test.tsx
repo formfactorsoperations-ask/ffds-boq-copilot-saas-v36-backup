@@ -50,4 +50,18 @@ describe('My day', () => {
     await act(async () => { finish({ ok: true }); });
     expect(screen.getAllByText('Checked in. Have a good day.').length).toBeGreaterThan(0);
   });
+
+  it('runs a practice lamp from ?try-lamp=in that saves nothing', async () => {
+    run.mockClear();
+    window.history.pushState({}, '', '/?try-lamp=in');
+    const { default: MyDayCard } = await import('../../components/people/MyDayCard');
+    render(<MyDayCard variant="full" />);
+    expect(screen.getByRole('dialog', { name: 'Start your day' })).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Pull the cord to turn the lamp on/ })); });
+    expect(await screen.findByText('Practice', undefined, { timeout: 3000 })).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Start my day/ })); });
+    expect(await screen.findByText('Practice done. Nothing was saved.', undefined, { timeout: 3000 })).toBeTruthy();
+    expect(run).not.toHaveBeenCalled();
+    window.history.pushState({}, '', '/');
+  });
 });

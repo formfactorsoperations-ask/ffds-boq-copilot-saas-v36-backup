@@ -21,7 +21,18 @@ import LampCheckIn from './LampCheckIn';
   On People, Check in and Check out open the lamp (LampCheckIn): pull its
   cord, the light comes on, and the day starts or ends from the card beside
   it. Home and the Site Supervisor's app check in straight from the card.
+
+  To try the lamp without checking in or out, open People with ?try-lamp=in
+  or ?try-lamp=out in the address. It runs the whole window, says "Practice"
+  on the card, and saves nothing.
 */
+
+/** ?try-lamp=in or ?try-lamp=out: a practice run of the lamp that saves nothing. */
+const practiceFromUrl = (): 'in' | 'out' | null => {
+  if (typeof window === 'undefined') return null;
+  const v = new URLSearchParams(window.location.search).get('try-lamp');
+  return v === 'in' || v === 'out' ? v : null;
+};
 
 const btnPri = 'pp-press inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50';
 const btnSec = 'inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors disabled:opacity-50';
@@ -72,6 +83,9 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   const [pending, setPending] = useState<{ checkIn: string; mode: Mode; site: string } | null>(null);
   /* The lamp window, open to start or to end the day. */
   const [lamp, setLamp] = useState<'in' | 'out' | null>(null);
+  /* A practice run of the lamp (?try-lamp=in|out): the same window, nothing saved. */
+  const [practice, setPractice] = useState<'in' | 'out' | null>(() => (variant === 'full' ? practiceFromUrl() : null));
+  const [practicePhase, setPracticePhase] = useState<'idle' | 'saving' | 'done'>('idle');
   /* Not checked in yet and working somewhere with a location: take a reading now, so the tap does not wait for one. */
   const needsReading = !!snapshot && !myDay(snapshot).session && mode !== 'WFH';
   useEffect(() => { if (needsReading) warmLocation(); }, [needsReading]);
@@ -156,6 +170,20 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   const hour = (Number(hm[0]) % 12) + (ampm === 'PM' ? 12 : 0);
   const modeNote = mode === 'WFH' ? 'No location is recorded when you work from home.' : `Your location is recorded${policy.requireLocation ? '' : ' if you allow it'}. Late after ${clock12(policy.lateAfter)}.`;
   const closeLamp = () => { setLamp(null); setProblem(null); };
+  const closePractice = () => {
+    setPractice(null);
+    setPracticePhase('idle');
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('try-lamp');
+      window.history.replaceState(window.history.state, '', url.toString());
+    } catch { /* the address stays as it is */ }
+  };
+  const practiseConfirm = () => {
+    setPracticePhase('saving');
+    window.setTimeout(() => setPracticePhase('done'), 700);
+    window.setTimeout(closePractice, practice === 'out' ? 3000 : 2600);
+  };
 
   return (
     <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}
@@ -295,6 +323,20 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
           updateUrl={updateUrl || undefined}
           phase={phase} done={justDone} problem={problem} onDismissProblem={() => setProblem(null)}
           onConfirm={lamp === 'in' ? checkIn : checkOut} onClose={closeLamp} />
+      )}
+      {practice && !lamp && (
+        <LampCheckIn kind={practice} practice name={snapshot.me.name.split(/\s+/)[0] || snapshot.me.name}
+          dateLabel={niceDate(today)} timeLabel={clock12(now, policy.timezone)}
+          partOfDay={hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}
+          mode={mode} onMode={setMode} site={site} onSite={setSite} sites={sites} note={modeNote}
+          inAt={session ? clock12(session.checkIn, policy.timezone) : clock12(policy.start)}
+          worked={session ? duration(worked) : duration(dayLen)}
+          where={session ? (session.mode === 'WFH' ? 'From home' : session.site || session.mode) : 'Office'}
+          updateUrl={updateUrl || undefined}
+          phase={practicePhase}
+          done={practicePhase === 'done' ? 'Practice done. Nothing was saved.' : null}
+          problem={null} onDismissProblem={() => undefined}
+          onConfirm={practiseConfirm} onClose={closePractice} />
       )}
     </motion.section>
   );
