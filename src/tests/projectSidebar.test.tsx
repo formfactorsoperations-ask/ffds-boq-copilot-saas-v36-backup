@@ -6,7 +6,7 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
-import ProjectSidebar, { type SidebarStage } from '../../components/projectNav/ProjectSidebar';
+import ProjectSidebar, { glassEdge, glassPath, type SidebarStage } from '../../components/projectNav/ProjectSidebar';
 
 afterEach(cleanup);
 beforeEach(() => { try { localStorage.clear(); } catch { /* none */ } });
@@ -82,5 +82,13 @@ describe('Project sidebar', () => {
     const { nav } = setup();
     fireEvent.click(within(nav).getByRole('button', { name: /Anish K/ }));
     expect(screen.getByRole('menuitem', { name: /Projects/ })).toBeTruthy();
+  });
+});
+
+describe('Project sidebar: glass', () => {
+  it('is a straight-sided pane that meets the window, with its right edge drawn on its own', () => {
+    expect(glassPath(280, 840)).toBe('M280 0V840H0V0Z');
+    expect(glassEdge(280, 840)).toBe('M280 0V840');
+    expect(glassPath(0, 840)).toBe('');
   });
 });

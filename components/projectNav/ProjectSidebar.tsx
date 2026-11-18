@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   MessagesSquare, Ruler, FileText, PenTool, HardHat, KeyRound, MapPin, Layers, Table, BadgePercent, Presentation,
@@ -80,7 +80,117 @@ const Ic = ({ icon: I, move = 'nudge', draw = false }: { icon: React.ComponentTy
 );
 
 const KEY = 'sd.projectSidebar';
-const MIN = 200, MAX = 400, SNAP = 150, OPEN_W = 268;
+const MIN = 200, MAX = 400, SNAP = 150, OPEN_W = 280;
+
+/*
+  The glass sidebar (asked for 18 Nov 2026): one pane of clear, glossy glass
+  set into the window's left edge from top to bottom, so it reads as part of
+  the app rather than a card stuck on it. The owner tried a curved right side
+  the same day and chose straight sides. The pane is drawn for its real size,
+  so the glass follows as it opens, closes or is dragged wider.
+*/
+const n1 = (v: number) => Math.round(v * 10) / 10;
+/** The right edge alone: what lights up while you hover or drag it to resize. */
+export function glassEdge(w: number, h: number): string {
+  if (w <= 0 || h <= 0) return '';
+  return `M${n1(w)} 0V${n1(h)}`;
+}
+export function glassPath(w: number, h: number): string {
+  if (w <= 0 || h <= 0) return '';
+  return `${glassEdge(w, h)}H0V0Z`;
+}
+
+function Glass({ hot }: { hot: boolean }) {
+  const id = useId().replace(/:/g, '');
+  const frame = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = frame.current; if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth, h = el.clientHeight;
+      setBox((b) => (Math.abs(b.w - w) < 0.5 && Math.abs(b.h - h) < 0.5 ? b : { w, h }));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const { w, h } = box;
+  const d = glassPath(w, h);
+  const edge = glassEdge(w, h);
+  const u = (k: string) => `url(#${id}${k})`;
+  return (
+    <div className="psb-glass" ref={frame} aria-hidden>
+      {/* frosts whatever is behind the pane (the page, under the phone drawer) */}
+      {d && <div className="psb-frost" style={{ clipPath: `path('${d}')`, WebkitClipPath: `path('${d}')` } as React.CSSProperties} />}
+      {d && (
+        <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+          <defs>
+            <clipPath id={`${id}c`}><path d={d} /></clipPath>
+            {/* the shadow falls outside the pane only, so the glass stays clear */}
+            <filter id={`${id}o`} x="-40%" y="-15%" width="180%" height="135%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="14" result="b" />
+              <feOffset in="b" dx="6" result="o" />
+              <feFlood floodColor="#0F172A" floodOpacity=".16" />
+              <feComposite in2="o" operator="in" result="s" />
+              <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b2" />
+              <feOffset in="b2" dx="1" result="o2" />
+              <feFlood floodColor="#3D52A0" floodOpacity=".14" />
+              <feComposite in2="o2" operator="in" result="s2" />
+              <feMerge result="all"><feMergeNode in="s" /><feMergeNode in="s2" /></feMerge>
+              <feComposite in="all" in2="SourceAlpha" operator="out" />
+            </filter>
+            <filter id={`${id}z`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="16" /></filter>
+            <filter id={`${id}y`} x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2" /></filter>
+            <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#FFFFFF" stopOpacity=".4" />
+              <stop offset=".5" stopColor="#FFFFFF" stopOpacity=".16" />
+              <stop offset="1" stopColor="#FFFFFF" stopOpacity=".3" />
+            </linearGradient>
+            <linearGradient id={`${id}t`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#FFFFFF" stopOpacity=".95" />
+              <stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id={`${id}r`} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#FFFFFF" stopOpacity="1" />
+              <stop offset=".45" stopColor="#FFFFFF" stopOpacity=".35" />
+              <stop offset="1" stopColor="#FFFFFF" stopOpacity=".9" />
+            </linearGradient>
+            <linearGradient id={`${id}e`} x1="0" y1="0" x2="1" y2="1">
+              <stop offset=".35" stopColor="#64748B" stopOpacity="0" />
+              <stop offset="1" stopColor="#64748B" stopOpacity=".32" />
+            </linearGradient>
+          </defs>
+
+          <path d={d} fill="#000" filter={u('o')} />
+          <g clipPath={u('c')}>
+            {/* what the glass sits over: soft brand and slate light, blurred */}
+            <rect width={w} height={h} fill="#F1F5F9" fillOpacity=".3" />
+            <g filter={u('z')}>
+              <ellipse cx={w * 0.08} cy={h * 0.1} rx={w * 0.75} ry={h * 0.12} fill="#3D52A0" fillOpacity=".26" />
+              <path d={`M${-w * 0.3} ${h * 0.4}C${w * 0.3} ${h * 0.28} ${w * 0.7} ${h * 0.6} ${w * 1.3} ${h * 0.4}L${w * 1.3} ${h * 0.5}C${w * 0.7} ${h * 0.7} ${w * 0.3} ${h * 0.38} ${-w * 0.3} ${h * 0.52}Z`} fill="#3D52A0" fillOpacity=".17" />
+              <path d={`M${-w * 0.3} ${h * 0.74}C${w * 0.4} ${h * 0.64} ${w * 0.6} ${h * 0.9} ${w * 1.3} ${h * 0.72}L${w * 1.3} ${h * 0.84}C${w * 0.6} ${h * 1.0} ${w * 0.4} ${h * 0.74} ${-w * 0.3} ${h * 0.86}Z`} fill="#94A3B8" fillOpacity=".42" />
+              <ellipse cx={w * 0.95} cy={h * 0.98} rx={w * 0.6} ry={h * 0.1} fill="#3D52A0" fillOpacity=".2" />
+            </g>
+            {/* the glass itself, then its gloss */}
+            <rect width={w} height={h} fill={u('f')} />
+            <rect width={w} height={Math.min(220, h * 0.28)} fill={u('t')} />
+            <g filter={u('y')} className="psb-sheen">
+              <path d={`M${w * 0.42} 0L${w * 0.62} 0L${w * 0.02} ${h * 0.62}L${-w * 0.18} ${h * 0.62}Z`} fill="#FFFFFF" fillOpacity=".55" />
+              <path d={`M${w * 0.7} 0L${w * 0.76} 0L${w * 0.16} ${h * 0.62}L${w * 0.1} ${h * 0.62}Z`} fill="#FFFFFF" fillOpacity=".45" />
+            </g>
+            {/* thickness: a shade along the lower and right inner edge, a bright rim */}
+            <path d={d} fill="none" stroke={u('e')} strokeWidth="12" filter={u('y')} />
+            <path d={d} fill="none" stroke={u('r')} strokeWidth="4" />
+          </g>
+          {/* the right edge: a slate hairline, brand while you hover or drag it to resize */}
+          <path d={edge} fill="none" className={`psb-edge ${hot ? 'is-hot' : ''}`} />
+        </svg>
+      )}
+    </div>
+  );
+}
 
 export default function ProjectSidebar(p: Props) {
   /* Open or icons, and the width: remembered on this device. */
@@ -124,6 +234,7 @@ export default function ProjectSidebar(p: Props) {
   /* Drag the edge: narrow enough and it snaps to icons; drag out again to reopen. */
   const aside = useRef<HTMLElement>(null);
   const [drag, setDrag] = useState<null | string>(null);
+  const [edgeHover, setEdgeHover] = useState(false);
   const startResize = (e: React.PointerEvent) => {
     if (phone) return;
     e.preventDefault();
@@ -154,8 +265,18 @@ export default function ProjectSidebar(p: Props) {
     const r = el.getBoundingClientRect(), s = sc.getBoundingClientRect();
     setInd({ y: r.top - s.top + sc.scrollTop, h: r.height });
   }, [closed, p.selectedStage]);
-  useLayoutEffect(() => { place(); const t = setTimeout(place, 520); return () => clearTimeout(t); }, [place, p.activeTab, open, width, shut]);
-  useEffect(() => { window.addEventListener('resize', place); return () => window.removeEventListener('resize', place); }, [place]);
+  /* No scrollbar on the glass (on Windows a grey bar with arrows broke the pane): the list fades at an edge with more beyond it. */
+  const [more, setMore] = useState({ up: false, down: false });
+  const edges = useCallback(() => {
+    const sc = scroller.current; if (!sc) return;
+    const up = sc.scrollTop > 2, down = sc.scrollTop + sc.clientHeight < sc.scrollHeight - 2;
+    setMore((m) => (m.up === up && m.down === down ? m : { up, down }));
+  }, []);
+  useLayoutEffect(() => { place(); edges(); const t = setTimeout(() => { place(); edges(); }, 520); return () => clearTimeout(t); }, [place, edges, p.activeTab, open, width, shut, p.selectedStage]);
+  useEffect(() => {
+    const on = () => { place(); edges(); };
+    window.addEventListener('resize', on); return () => window.removeEventListener('resize', on);
+  }, [place, edges]);
 
   /* The journey line fills to the stage the project is at. */
   const journeyRef = useRef<HTMLDivElement>(null);
@@ -214,12 +335,13 @@ export default function ProjectSidebar(p: Props) {
         onMouseOver={hover}
         onMouseLeave={leave}
       >
+        <Glass hot={edgeHover || !!drag} />
         {!phone && (
           <button type="button" className="psb-toggle" onClick={toggle} aria-label={closed ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl/⌘ B">
             <ChevronLeft strokeWidth={2.4} />
           </button>
         )}
-        {!phone && <div className="psb-resize" onPointerDown={startResize} onDoubleClick={resetWidth} title="Drag to resize · double-click to reset" aria-hidden />}
+        {!phone && <div className="psb-resize" onPointerDown={startResize} onDoubleClick={resetWidth} onPointerEnter={() => setEdgeHover(true)} onPointerLeave={() => setEdgeHover(false)} title="Drag to resize · double-click to reset" aria-hidden />}
         {drag && <div className="psb-wlabel">{drag}</div>}
 
         {/* Studio home and the bell: always on screen. */}
@@ -232,7 +354,7 @@ export default function ProjectSidebar(p: Props) {
         </div>
 
         {/* The project, its status and its next step. */}
-        <div className="flex items-center gap-[11px] px-3.5 pt-2.5 pb-3">
+        <div className="psb-px flex items-center gap-[11px] pt-2.5 pb-3">
           <button type="button" className="psb-tile" onClick={p.progress.onClick} data-tip={p.project.name} data-tipsub={`${Math.round(p.progress.pct)}% · Next: ${p.progress.next || 'Up next'}`} aria-label={`Progress ${Math.round(p.progress.pct)}%`}>
             {p.project.initials}
             <svg className="psb-ring" viewBox="0 0 56 56" aria-hidden><circle className="bg" cx="28" cy="28" r="26" /><circle className="fg" cx="28" cy="28" r="26" style={{ strokeDashoffset: ringOffset }} /></svg>
@@ -245,21 +367,21 @@ export default function ProjectSidebar(p: Props) {
             </button>
           </div>
         </div>
-        {p.projectTools && <div className="psb-hide-closed psb-lbl flex items-center gap-2 px-3 pb-2">{p.projectTools}</div>}
+        {p.projectTools && <div className="psb-hide-closed psb-lbl psb-px flex items-center gap-2 pb-2">{p.projectTools}</div>}
         {p.progress.next && (
-          <button type="button" onClick={p.progress.onClick} className="psb-hide-closed psb-btn mx-3 mb-2.5 flex items-center gap-2.5 rounded-xl bg-white border border-slate-200 px-2.5 py-2 text-left hover:border-[#C9D1EE]">
+          <button type="button" onClick={p.progress.onClick} className="psb-hide-closed psb-btn psb-mx psb-glassy mb-2.5 flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left">
             <span className="psb-ic text-[#3D52A0]" data-a="spin"><Sparkles className="!w-4 !h-4" /></span>
             <span className="min-w-0"><small className="block text-[10px] font-extrabold tracking-[0.1em] text-slate-400">NEXT · {Math.round(p.progress.pct)}%</small><b className="block text-xs text-slate-800 truncate">{p.progress.next}</b></span>
           </button>
         )}
         <button type="button" onClick={() => setPalette(true)} data-tip="Jump to…" data-tipsub="Ctrl/⌘ K"
-          className={`psb-btn mx-3 mb-1.5 flex items-center gap-2.5 rounded-xl bg-white border border-slate-200 text-slate-500 text-[13px] hover:border-[#C9D1EE] hover:text-slate-800 ${closed ? 'justify-center py-2.5' : 'px-2.5 py-2'}`}>
+          className={`psb-btn psb-mx psb-glassy mb-1.5 flex items-center gap-2.5 rounded-xl text-slate-500 text-[13px] hover:text-slate-800 ${closed ? 'justify-center py-2.5' : 'px-2.5 py-2'}`}>
           <span className="psb-ic" data-a="tilt"><Search className="!w-[18px] !h-[18px]" /></span>
           <span className="psb-lbl">Jump to…</span>
           <kbd className="psb-lbl ml-auto font-sans text-[10px] font-bold px-1.5 rounded-md bg-slate-100 text-slate-500">⌘K</kbd>
         </button>
 
-        <div className="psb-scroll" ref={scroller} onScroll={() => setTip(null)}>
+        <div className={`psb-scroll ${more.up ? 'more-up' : ''} ${more.down ? 'more-down' : ''}`} ref={scroller} onScroll={() => { setTip(null); edges(); }}>
           {ind && <span className="psb-ind" style={{ transform: `translateY(${ind.y}px)`, height: ind.h }} />}
 
           <div className="psb-group">

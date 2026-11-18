@@ -531,6 +531,21 @@ own Lucide icon, and each moves on hover in its own way (a bounce, a swing, a sp
 draw themselves). A white highlight slides to the screen you are on. Counts pop in. Everything stops
 under `prefers-reduced-motion`. Same font and brand colour.
 
+**Glass** (asked for 18 Nov 2026): the sidebar is one pane of clear, glossy glass set into the
+window's left edge from top to bottom, so it reads as part of the app, not a card stuck on it. Its
+sides are straight: the owner tried a curved right side the same day and chose straight. The pane is
+an SVG drawn for its real size (`glassPath` in `ProjectSidebar.tsx`). Under the glass, soft blurred
+brand and slate light shows through. On it are a bright top highlight, two diagonal reflections, a
+bright rim, a shade along the lower and right inner edge, a slate-400 hairline on the right edge, and
+a shadow that falls to the right of the pane only. Brand and slate only, no other colours. The Next
+and Jump to cards and the highlight under the current screen are glossy white glass. Content keeps
+16px from each side (12px as icons). Open it is 280px wide and 76px as icons.
+
+**Resizing:** drag the right edge, which turns brand blue while you hover or drag it (`glassEdge`).
+The drag range is 200 to 400px, narrower than 150px snaps to icons, and a double click resets it.
+The list has no scrollbar (on Windows a grey bar with arrows broke the pane); it fades at the top or
+bottom when there is more to scroll.
+
 ### Projects as glass folders (approved 16 Nov 2026)
 
 The owner chose this for the Projects screen (plan item 10): every project is a glass folder on one
