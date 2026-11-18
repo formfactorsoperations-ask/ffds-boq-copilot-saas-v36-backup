@@ -219,6 +219,8 @@ export default function App() {
   const [startingProject, setStartingProject] = useState(false);
   /* Pricing & Tiers' "Edit BOQ": the option's BOQ over the comparison (components/pricing/BoqSlideOver). */
   const [boqDrawerOpen, setBoqDrawerOpen] = useState(false);
+  /* The lines to show when the slide-over opens from "Where the money goes"; `at` re-focuses the same line. */
+  const [boqFocus, setBoqFocus] = useState<{ ids: string[]; at: number } | null>(null);
   useEffect(() => { if (activeTab !== "ops") setBoqDrawerOpen(false); }, [activeTab]);
   useEffect(() => {
     const handleTabChange = (e: any) => {
@@ -2836,6 +2838,7 @@ export default function App() {
   const renderBoqEditor = () => (
                         <StudioDashboard
                           onStartRevision={() => setActiveTab("revision-studio")}
+                          focusLines={boqDrawerOpen ? boqFocus : null}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           tiers={tiersWithCalculatedSummaries}
@@ -3925,13 +3928,13 @@ export default function App() {
                           projects={visibleProjects}
                           projectId={activeInternalId || undefined}
                           templates={templates}
-                          onEditBoq={(tierId) => { setActiveTierId(tierId); setBoqDrawerOpen(true); }}
+                          onEditBoq={(tierId, focusLineIds) => { setActiveTierId(tierId); setBoqFocus(focusLineIds?.length ? { ids: focusLineIds, at: Date.now() } : null); setBoqDrawerOpen(true); }}
                         />
                       )}
                       {activeTab === "ops" && boqDrawerOpen && (
                         <BoqSlideOver
                           title={tiers.find((t) => t.id === activeTierId)?.name || "Option"}
-                          onClose={() => setBoqDrawerOpen(false)}
+                          onClose={() => { setBoqDrawerOpen(false); setBoqFocus(null); }}
                         >
                           {renderBoqEditor()}
                         </BoqSlideOver>
@@ -4634,13 +4637,13 @@ export default function App() {
                           projects={visibleProjects}
                           projectId={activeInternalId || undefined}
                           templates={templates}
-                          onEditBoq={(tierId) => { setActiveTierId(tierId); setBoqDrawerOpen(true); }}
+                          onEditBoq={(tierId, focusLineIds) => { setActiveTierId(tierId); setBoqFocus(focusLineIds?.length ? { ids: focusLineIds, at: Date.now() } : null); setBoqDrawerOpen(true); }}
                         />
                       )}
                       {activeTab === "ops" && boqDrawerOpen && (
                         <BoqSlideOver
                           title={tiers.find((t) => t.id === activeTierId)?.name || "Option"}
-                          onClose={() => setBoqDrawerOpen(false)}
+                          onClose={() => { setBoqDrawerOpen(false); setBoqFocus(null); }}
                         >
                           {renderBoqEditor()}
                         </BoqSlideOver>

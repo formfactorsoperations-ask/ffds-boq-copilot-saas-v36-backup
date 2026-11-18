@@ -12,7 +12,7 @@ import { buildBankMap } from '../../lib/boqPricing';
 import { optionPrice, type compareTiers } from '../../lib/tierComparison';
 import { formatCurrency } from '../../lib/utils';
 import { computeSchedule, contractInForce, gstTermsOf } from '../../lib/paymentSchedule';
-import { SCOPE_PARTS, scopeSplit, dealFor, lowMarginLines, staleOffer, refreshedOffer, type OfferDiscount, type ScopePart } from '../../lib/offers';
+import { SCOPE_PARTS, scopeSplit, dealFor, lowMarginLines, staleOffer, refreshedOffer, type OfferDiscount, type ScopePart, type SplitLine } from '../../lib/offers';
 import { buildRevisionIndex, diffTiers } from '../../lib/boqVersions';
 import { versionNo, sameOption, optionChains, type OptionChain } from '../../lib/optionChains';
 import { IconTile, Ring, Tilt, DoneTick, Confetti, EASE, listV, rowV } from '../people/PeopleBits';
@@ -30,7 +30,8 @@ import { CountUp } from '../ui/HudBits';
   contract. The owner found a page of stacked sections too long to scroll.
 
   "Where the money goes" is the check on the figures: each part opens to the
-  trades that make it up, and the parts add up to the option's work, which
+  trades that make it up, and each trade to its BOQ lines (a line opens in
+  the BOQ Editor, at that line), and the parts add up to the option's work, which
   the screen says in so many words (or says by how much it does not).
 */
 
@@ -48,6 +49,8 @@ export interface GridActions {
   select: (tierId: string) => void;
   pickVersion: (tierId: string) => void;
   editBoq?: (tierId: string) => void;
+  /** Opens the option's BOQ in the editor at these lines ("Where the money goes" → a line). */
+  openLines?: (tierId: string, lineIds: string[]) => void;
   newVersion: (tierId: string) => void;
   copyAsOption: (tierId: string) => void;
   ownOption: (tierId: string) => void;
@@ -254,6 +257,9 @@ export default function PricingGrid(props: Props) {
   const [openParts, setOpenParts] = useState<Set<ScopePart>>(new Set());
   const togglePart = (p: ScopePart) => setOpenParts((prev) => { const n = new Set(prev); if (n.has(p)) n.delete(p); else n.add(p); return n; });
   const allOpen = openParts.size === SCOPE_PARTS.length;
+  /* A trade opens to its BOQ lines, keyed "part|trade". */
+  const [openTrades, setOpenTrades] = useState<Set<string>>(new Set());
+  const toggleTrade = (k: string) => setOpenTrades((prev) => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const [showAll, setShowAll] = useState(false);
 
   /* Approving draws a tick and a burst on that option. */
@@ -348,13 +354,57 @@ export default function PricingGrid(props: Props) {
                 );
               }}
             />
-            {open && trades.map((trade) => (
-              <Row key={`${p.id}-${trade}`} icon={tradeIcon(trade)} label={<span className="font-medium">{trade}</span>} cells={(c) => {
-                const t = c.split.parts[p.id].trades.find((x: any) => x.trade === trade);
-                return !t ? <span className="text-slate-300">not in this option</span>
-                  : <span className="flex justify-between gap-2"><span className="font-semibold">{money(t.value)}</span><span className="text-[10px] text-slate-400">{t.lines} {t.lines === 1 ? 'line' : 'lines'}</span></span>;
-              }} />
-            ))}
+            {open && trades.map((trade) => {
+              const tk = `${p.id}|${trade}`;
+              const tradeOpen = openTrades.has(tk);
+              /* Its lines, matched across the options by item and room, the largest first. */
+              const lineKey = (l: SplitLine) => `${l.name}\u001f${l.room}`;
+              const linesOf = (c: any): SplitLine[] => c.split.parts[p.id].lines.filter((l: SplitLine) => l.trade === trade);
+              const sumOf = (c: any, k: string) => linesOf(c).filter((l) => lineKey(l) === k);
+              const keys = tradeOpen
+                ? Array.from(new Set<string>(cols.flatMap((c) => linesOf(c).map(lineKey))))
+                  .sort((a, b) => cols.reduce((s, c) => s + sumOf(c, b).reduce((x, l) => x + l.total, 0), 0) - cols.reduce((s, c) => s + sumOf(c, a).reduce((x, l) => x + l.total, 0), 0))
+                : [];
+              return (
+                <React.Fragment key={tk}>
+                  <Row icon={tradeIcon(trade)} label={<span className="font-medium">{trade}</span>} sub={tradeOpen ? 'close' : 'open'}
+                    onLabel={() => toggleTrade(tk)} open={tradeOpen} cells={(c) => {
+                    const t = c.split.parts[p.id].trades.find((x: any) => x.trade === trade);
+                    return !t ? <span className="text-slate-300">not in this option</span>
+                      : <span className="flex justify-between gap-2"><span className="font-semibold">{money(t.value)}</span><span className="text-[10px] text-slate-400">{t.lines} {t.lines === 1 ? 'line' : 'lines'}</span></span>;
+                  }} />
+                  {keys.map((k) => {
+                    const [name, room] = k.split('\u001f');
+                    return (
+                      <Row key={`${tk}\u001f${k}`} title={`${name} · ${room}`}
+                        label={<span className="block pl-9 font-medium text-slate-700">{name}</span>}
+                        sub={<span className="block pl-9">{room}</span>}
+                        cells={(c) => {
+                          const ls = sumOf(c, k);
+                          if (!ls.length) return <span className="text-slate-300">not in this option</span>;
+                          const total = ls.reduce((x, l) => x + l.total, 0);
+                          const qty = ls.reduce((x, l) => x + (l.qty || 0), 0);
+                          const unit = ls[0].unit;
+                          const figures = (
+                            <>
+                              <span>{money(total)}</span>
+                              <span className="text-[10px] text-slate-400">{Number(qty.toFixed(2))}{unit ? ` ${unit}` : ''}</span>
+                            </>
+                          );
+                          /* A line opens in the BOQ Editor, at that line, for this option. */
+                          return actions.openLines ? (
+                            <button type="button" onClick={() => actions.openLines!(c.tier.id, ls.map((l) => l.key))}
+                              aria-label={`Open ${name}, ${room}, in the BOQ Editor for ${c.tier.name}`} title="Open in the BOQ Editor"
+                              className="w-full flex justify-between gap-2 text-left rounded-md hover:text-[#3D52A0] hover:underline underline-offset-2">
+                              {figures}
+                            </button>
+                          ) : <span className="flex justify-between gap-2">{figures}</span>;
+                        }} />
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
           </React.Fragment>
         );
       })}

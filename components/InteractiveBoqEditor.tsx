@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ProjectContext, Item, BoqItem, Room, FullBoqItem } from '../types';
 import { calculateSellPrice, formatCurrency, generateId } from '../lib/utils';
 import { isAsActuals } from '../lib/boqPricing';
@@ -50,6 +50,8 @@ interface InteractiveBoqEditorProps {
   setTiers: React.Dispatch<React.SetStateAction<any[]>>;
   activeTierId: string | null;
   boqFrozen?: boolean;
+  /** Lines to open at: their room is shown, the first is selected and scrolled to. `at` re-focuses the same line. */
+  focus?: { ids: string[]; at: number } | null;
 }
 
 export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
@@ -62,7 +64,8 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
   onDelete,
   setTiers,
   activeTierId,
-  boqFrozen = false
+  boqFrozen = false,
+  focus = null
 }) => {
   // Navigation & Filtering State
   const [selectedRoomId, setSelectedRoomId] = useState<string>(rooms[0]?.name || 'All Rooms');
@@ -88,6 +91,37 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
   useEffect(() => {
     setSelectedItemId(null);
   }, [selectedRoomId]);
+
+  /*
+    Opened at a line (Pricing & Tiers, "Where the money goes"): show its room
+    with no category or search filter, select it, and scroll to it. Declared
+    after the reset above, so a room change in the same pass keeps the
+    selection.
+  */
+  const focusId = focus?.ids.find(id => items.some(i => i.id === id)) || null;
+  useEffect(() => {
+    if (!focusId) return;
+    const line = items.find(i => i.id === focusId);
+    if (!line) return;
+    const home = resolvedRoomId(line as any, line as any, roomNameSet) || 'Unassigned';
+    setActiveCategory('All');
+    setSearchQuery('');
+    if (selectedRoomId !== 'All Rooms' && selectedRoomId !== home) setSelectedRoomId(home);
+  }, [focus?.at, focusId]);
+  /* Once per opening: switching rooms afterwards must not pull the line back. */
+  const focusDone = useRef<number | null>(null);
+  useEffect(() => {
+    if (!focusId || !focus || focusDone.current === focus.at) return;
+    const line = items.find(i => i.id === focusId);
+    if (!line || !inSelectedRoom(line)) return; // its room is on its way (above)
+    focusDone.current = focus.at;
+    setSelectedItemId(focusId);
+    const raf = requestAnimationFrame(() => {
+      const card = Array.from(document.querySelectorAll<HTMLElement>('[data-boq-line]')).find(el => el.dataset.boqLine === focusId);
+      card?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [focus?.at, focusId, selectedRoomId]);
 
   /*
     Rooms and scopes, kept apart.
@@ -587,6 +621,7 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
                 return (
                   <div
                     key={item.id}
+                    data-boq-line={item.id}
                     onClick={() => setSelectedItemId(item.id)}
                     className={`p-3.5 rounded-2xl border transition-all text-xs flex flex-col md:flex-row gap-3 items-start md:items-center justify-between cursor-pointer relative ${
                       isSelected

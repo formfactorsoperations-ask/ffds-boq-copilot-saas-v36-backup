@@ -528,7 +528,9 @@ Only `components/pricing/` and the Pricing & Tiers screen (`components/TierManag
 - What an option is made of is one bar in four shades of the brand (Carpentry, Functional, Civil,
   Others), filling in one after another, with an icon per part: a hammer, a bolt, a brick wall, a box.
 - Rows in the views carry trade icons (a chef's hat for the kitchen, a paint roller, a ceiling lamp,
-  drops for plumbing, a truck for site services...). A part opens to its trades; the chevron turns.
+  drops for plumbing, a truck for site services...). A part opens to its trades, and a trade to its BOQ lines (item, room, amount, quantity); the chevron turns.
+  A line's figure opens the BOQ slide-over at that line (its room shown, the line selected); on an
+  approved option a `phd-pop` dialog asks first, since editing it makes the next version.
 - The view switcher's white pill glides to the chosen view (`layoutId`); its icon tips on hover. A
   view turns up into place (`deskSectionV`) and its rows rise (`listV`, `rowV`).
 - The selected card gets the brand border and a rule along its top that glides to the card you pick.
