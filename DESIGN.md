@@ -553,6 +553,37 @@ Only `components/pricing/` and the Pricing & Tiers screen (`components/TierManag
 - The ⋯ menu and the Tune margin dialog use `phd-pop` (and `phd-scrim` for the dialog).
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel sizes.
 
+### Money motion (approved 18 Nov 2026)
+
+The owner chose the "Money milestones in motion" mockup on 18 Nov 2026: Money opens on the design
+and execution milestones side by side, with the GST and taxable figures on the same screen, and
+"some animations and awesome icons" from the kits already approved, not a new look. Same fonts and
+colours (brand, slate, rose/amber/emerald). Only the Money screen (`components/money/board/`, and
+`components/PaymentCalculatorTab.tsx` where it mounts the board) uses it.
+
+- Pieces: the People kit (`IconTile`, `Ring`, `Glide`, `DoneTick`, `Confetti`, `pp-press`, `pp-lift`,
+  `pp-live`), framer-motion rises and swaps, and `CountUp` for every figure. Styles of its own are in
+  `components/money/board/moneyBoardStyles.ts`, added to the page when first imported.
+- Each milestone carries an `IconTile` by what it is called (`milestoneKind` in `lib/moneyBoard.ts`):
+  a bulb for concept, a box for 3D, a drafting compass for drawings, a truck for material, a hammer for
+  carcass and civil, a paint roller for finishes, a key for handover. Design is a pen tool, execution a
+  hard hat.
+- Each track has a tax plate: a `Ring` for the taxable share, a `Glide` of stops (0, 30, 50, 70,
+  100%) with ±5%, one bar of what the client pays (invoiced in brand, GST in drifting brand stripes,
+  cash in slate) that grows from the left, then Invoiced, GST and Cash with their icons, and
+  "Taxable → Client pays".
+- A change to the split or GST is a preview first: a sticky brand-bordered bar says what moves, every
+  changed figure sweeps once (`mb-sheen`) with the old value struck through and the difference in a
+  chip. Apply or Discard; nothing is saved until Apply.
+- Moments, once each: raising sends a paper plane and stamps "Sent"; a payment draws a `DoneTick` with
+  `Confetti` and stamps "Paid"; earned stamps "Earned" with a small burst, and the icon breathes a
+  brand halo (`mb-halo`) until it is invoiced. A change that came from the portal or the site, not
+  this screen, turns in a "Live update" badge.
+- Cards lift on hover (`mb-card`), the More chevron turns, details open by height.
+- Edit milestones is a modal on the `AssignProjectsModal` pattern; rows rise and leave, and the
+  % / ₹ choice on each row glides (`layoutId`).
+- Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel sizes.
+
 ### Notifications motion (approved 22 Oct 2026)
 
 The owner chose four of the fifteen notification patterns in the round-two
