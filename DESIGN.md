@@ -329,6 +329,48 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
   Emergency contacts) and Admin (Reports). Group names are field labels, shown
   from `lg` up; a group with nothing in it for that person is left out.
 
+### People: the lamp (asked for 18 Nov 2026, round two the same day)
+
+On People, Check in and Check out on the My day card open the lamp
+(`components/people/LampCheckIn.tsx`) instead of acting at once. Home's pin and
+the Site Supervisor's app still check in straight from the card.
+
+- The studio in the dark (the scrim's navy, `#12182F`), with nothing that says
+  night (owner, 18 Nov 2026: no moon or window, it reads wrong at the start of
+  the day): a shelf of books and a vase, a mood board of swatches and a sketch,
+  a desk with a closed laptop and a mug, and a plant, all nearly lost in the
+  dark; and a floor lamp drawn in SVG: pleated slate cloth, amber brass.
+- The cord is a bead chain with a brass bead that glows and sways a little,
+  asking to be pulled. Drag it down and let go, or press it (it is a button,
+  and takes focus when the window opens). The chain swings after the pull and
+  the lamp head nods and wobbles back on a spring.
+- The light comes on with a short flicker and a warm wash over the room: the
+  shade glows from inside with the bulb seen under it, a feathered cone and a
+  bright core fall to a pool on the floor, the wall warms, the studio comes out
+  of the dark (the plant rim-lit, steam rising from the mug when the day is
+  starting), and dust drifts up through the light, which breathes gently. All of it amber, the state colour; nothing new.
+- Then the card swings in beside the lamp in 3D, its near edge catching the
+  warm light: the People glass (`pp-glass`) with the modal eyebrow, "Good
+  morning, Anish. / The light's on for you." in the page-title size (the second
+  line in brand), where you are working (`Glide`), the site, the location note
+  and "Start my day", its lines rising in one after another. The end-of-day
+  card shows in at, worked and where, the daily work update link, "End my day"
+  and "Keep working".
+- Ending the day is the other way round (owner, 18 Nov 2026): the light put on
+  in the morning is still on and the card is already there. Pulling the cord
+  ("Pull to switch off") turns the light off, and that checks you out; "End my
+  day" on the card does the same. The shade keeps a slow afterglow. If the
+  check-out does not go through, the light comes back on with the reason.
+- Done: the success tick and confetti, then the window closes.
+- Framer-motion only, no new keyframes. Under `prefers-reduced-motion` nothing
+  sways or flickers: the light is already on and the card already there.
+- To try it without checking in or out, open People with `?try-lamp=in` or
+  `?try-lamp=out` in the address: the same window, an amber "Practice" chip on
+  the card, and nothing saved.
+- A day left open whose correction is waiting on the approver no longer blocks
+  checking in (`lib/peopleDesk.ts`, 18 Nov 2026): the card and the lamp say the
+  correction is waiting, in an amber note, and offer Check in as usual.
+
 ### Ops Desk motion (approved 21 Oct 2026)
 
 The owner asked for the Ops Desk to stop looking static and to work for a team

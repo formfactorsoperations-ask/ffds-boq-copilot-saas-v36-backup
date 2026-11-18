@@ -792,12 +792,30 @@ export function execute(
   const data = command.data;
   const today = businessDate(now, store.policy.timezone);
   /* An imported day with no check-out is history, not a session left open. */
-  const open = store.attendance.find(
+  const opens = store.attendance.filter(
     (s) => s.employeeId === actor.id && !s.checkOut && !s.imported,
   );
   if (command.action === "checkin") {
+    /*
+      A day left open blocks the next check-in until a correction is asked
+      for. Once one is waiting on the approver, the person may check in
+      today (owner, 18 Nov 2026), so today's arrival is recorded when it
+      happens rather than when the approver gets to it.
+    */
+    const blocking = opens.find(
+      (s) =>
+        !(
+          s.date < today &&
+          store.requests.some(
+            (r) =>
+              r.kind === "correction" &&
+              r.correction?.sessionId === s.id &&
+              r.status === "Pending",
+          )
+        ),
+    );
     assert(
-      !open,
+      !blocking,
       "You have an open attendance session. Check out or request a correction.",
       "CONFLICT",
       409,
@@ -822,9 +840,11 @@ export function execute(
       checkInLocation: located(data.location, sessionMode, store.policy),
     };
   } else if (command.action === "checkout") {
-    assert(open, "No open session to check out.", "CONFLICT", 409);
+    assert(opens.length, "No open session to check out.", "CONFLICT", 409);
+    /* The session named: today's, while an earlier one waits on its correction. */
+    const open = opens.find((s) => s.id === data.sessionId);
     assert(
-      data.sessionId === open.id && data.version === open.version,
+      open && data.version === open.version,
       "Attendance changed. Refresh and try again.",
       "CONFLICT",
       409,

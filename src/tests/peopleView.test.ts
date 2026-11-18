@@ -18,6 +18,14 @@ describe('the working day', () => {
     expect(myDay(s)).toMatchObject({ today: '2026-10-07', session: { id: 'at1' }, stale: { id: 'old' } });
   });
 
+  it('lets a day whose correction is waiting stop blocking check-in', () => {
+    const fix = { id: 'r1', employeeId: 'me', kind: 'correction', type: 'PL', start: '2026-10-05', end: '2026-10-05', portion: 'Full day', days: [], reason: 'Forgot', status: 'Pending', version: 1, createdAt: '2026-10-06T00:00:00Z', decisions: [],
+      correction: { sessionId: 'old', sessionVersion: 1, checkIn: '2026-10-05T04:00:00Z', checkOut: '2026-10-05T12:00:00Z', mode: 'Office', site: '' } } as any;
+    const s = snap({ attendance: [session({ id: 'old', date: '2026-10-05' })], requests: [fix] });
+    expect(myDay(s)).toMatchObject({ session: null, stale: null, awaiting: { id: 'old' } });
+    expect(myDay(snap({ attendance: [session({ id: 'old', date: '2026-10-05' })], requests: [{ ...fix, status: 'Rejected' }] }))).toMatchObject({ stale: { id: 'old' }, awaiting: null });
+  });
+
   it('counts hours, and how far through the day it is', () => {
     expect(minutesWorked(session({}), '2026-10-07T08:00:00.000Z')).toBe(180);
     expect(minutesWorked(session({ checkOut: '2026-10-07T12:45:00.000Z' }), '2026-10-07T20:00:00.000Z')).toBe(465);

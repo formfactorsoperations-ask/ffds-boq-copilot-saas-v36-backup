@@ -11,14 +11,21 @@ import {
 
 export const todayOf = (s: Pick<Snapshot, 'serverTime' | 'policy'>) => businessDate(s.serverTime, s.policy.timezone);
 
-/** Today's session for the signed-in person, and any session still open from an earlier day. */
-export function myDay(s: Snapshot): { today: string; session: Attendance | null; stale: Attendance | null } {
+/**
+ * Today's session for the signed-in person, and any session still open from
+ * an earlier day. `stale` blocks checking in; a day whose correction is
+ * already waiting on the approver is `awaiting` instead, and does not.
+ */
+export function myDay(s: Snapshot): { today: string; session: Attendance | null; stale: Attendance | null; awaiting: Attendance | null } {
   const today = todayOf(s);
   const mine = s.attendance.filter((a) => a.employeeId === s.me.id);
+  const left = mine.filter((a) => a.date < today && !a.checkOut && !a.imported);
+  const pending = (a: Attendance) => s.requests.some((r) => r.kind === 'correction' && r.correction?.sessionId === a.id && r.status === 'Pending');
   return {
     today,
     session: mine.find((a) => a.date === today) || null,
-    stale: mine.find((a) => a.date < today && !a.checkOut && !a.imported) || null,
+    stale: left.find((a) => !pending(a)) || null,
+    awaiting: left.find(pending) || null,
   };
 }
 
