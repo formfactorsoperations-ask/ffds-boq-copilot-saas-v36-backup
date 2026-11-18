@@ -3,7 +3,7 @@
   confirms it when the server answers (components/people/MyDayCard.tsx).
 */
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DEFAULT_POLICY, type Snapshot } from '../../lib/peopleDesk';
 
@@ -21,6 +21,9 @@ vi.mock('../../services/peopleService', () => ({
 }));
 
 describe('My day', () => {
+  /* The lamp has already opened by itself today, so these tests see only what they press. */
+  beforeEach(() => { window.localStorage.setItem('studiodesk.lamp.autoOpened.me', '2026-10-27'); });
+
   it('shows the check-in at once, and confirms it when the server answers', async () => {
     const { default: MyDayCard } = await import('../../components/people/MyDayCard');
     render(<MyDayCard variant="full" lamp={false} />);
@@ -97,5 +100,45 @@ describe('My day', () => {
     await act(async () => { finish({ ok: true }); });
     expect(screen.getAllByText('Checked out. Enjoy your evening.').length).toBeGreaterThan(0);
     snapshot.attendance = [];
+  });
+
+  it("opens the lamp from Home's My day pin too", async () => {
+    run.mockClear();
+    const { default: MyDayCard } = await import('../../components/people/MyDayCard');
+    render(<MyDayCard variant="pin" lamp />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Check in$/ })); });
+    expect(screen.getByRole('dialog', { name: 'Start your day' })).toBeTruthy();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('opens the lamp by itself once a day before check-in, and not again after it is closed', async () => {
+    window.localStorage.removeItem('studiodesk.lamp.autoOpened.me');
+    const { default: MyDayCard } = await import('../../components/people/MyDayCard');
+    const first = render(<MyDayCard variant="pin" lamp />);
+    expect(await screen.findByRole('dialog', { name: 'Start your day' }, { timeout: 3000 })).toBeTruthy();
+    expect(window.localStorage.getItem('studiodesk.lamp.autoOpened.me')).toBe('2026-10-27');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Close' })); });
+    first.unmount();
+    /* Back on Home later the same day: it stays shut. */
+    render(<MyDayCard variant="pin" lamp />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 1000)); });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('knows when the lamp should open by itself', async () => {
+    window.localStorage.removeItem('studiodesk.lamp.autoOpened.me');
+    const { shouldAutoOpenLamp } = await import('../../components/people/MyDayCard');
+    const at = '2026-10-27T05:00:00.000Z';
+    expect(shouldAutoOpenLamp(snapshot, at)).toBe(true);
+    /* Already in, after the studio's day, on a holiday, or away all day: no. */
+    expect(shouldAutoOpenLamp({ ...snapshot, attendance: [{ id: 'a', employeeId: 'me', date: '2026-10-27', checkIn: at, mode: 'Office', site: '', version: 1 } as any] }, at)).toBe(false);
+    expect(shouldAutoOpenLamp(snapshot, '2026-10-27T16:30:00.000Z')).toBe(false);
+    expect(shouldAutoOpenLamp({ ...snapshot, policy: { ...snapshot.policy, holidays: ['2026-10-27'] } as any }, at)).toBe(false);
+    expect(shouldAutoOpenLamp({ ...snapshot, availability: [{ requestId: 'r', employeeId: 'me', start: '2026-10-27', end: '2026-10-27', portion: 'Full day', status: 'Approved', mode: 'Away' }] }, at)).toBe(false);
+    /* Working from home still checks in. */
+    expect(shouldAutoOpenLamp({ ...snapshot, availability: [{ requestId: 'r', employeeId: 'me', start: '2026-10-27', end: '2026-10-27', portion: 'Full day', status: 'Approved', mode: 'WFH' }] }, at)).toBe(true);
+    /* Opened once today already: no. */
+    window.localStorage.setItem('studiodesk.lamp.autoOpened.me', '2026-10-27');
+    expect(shouldAutoOpenLamp(snapshot, at)).toBe(false);
   });
 });

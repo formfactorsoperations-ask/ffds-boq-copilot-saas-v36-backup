@@ -332,8 +332,9 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
 ### People: the lamp (asked for 18 Nov 2026, round two the same day)
 
 On People, Check in and Check out on the My day card open the lamp
-(`components/people/LampCheckIn.tsx`) instead of acting at once. Home's pin and
-the Site Supervisor's app still check in straight from the card.
+(`components/people/LampCheckIn.tsx`) instead of acting at once. So do the same
+buttons on Home's My day pin (owner, 18 Nov 2026). The Site Supervisor's app
+still checks in straight from the card.
 
 - The studio in the dark (the scrim's navy, `#12182F`), with nothing that says
   night (owner, 18 Nov 2026: no moon or window, it reads wrong at the start of
@@ -364,7 +365,12 @@ the Site Supervisor's app still check in straight from the card.
 - Done: the success tick and confetti, then the window closes.
 - Framer-motion only, no new keyframes. Under `prefers-reduced-motion` nothing
   sways or flickers: the light is already on and the card already there.
-- To try it without checking in or out, open People with `?try-lamp=in` or
+- It opens by itself once a day to start the day (owner, 18 Nov 2026): the first
+  time Home or People shows someone who has not checked in, on a working day
+  (not a holiday, an off day or a whole day away; working from home counts),
+  before the studio's day ends. Closing it counts, so it does not come back
+  that day. Check-out only opens from its button.
+- To try it without checking in or out, open Home or People with `?try-lamp=in` or
   `?try-lamp=out` in the address: the same window, an amber "Practice" chip on
   the card, and nothing saved.
 - A day left open whose correction is waiting on the approver no longer blocks
