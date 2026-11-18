@@ -365,6 +365,11 @@ still checks in straight from the card.
 - Done: the success tick and confetti, then the window closes.
 - Framer-motion only, no new keyframes. Under `prefers-reduced-motion` nothing
   sways or flickers: the light is already on and the card already there.
+- It opens by itself once a day to start the day (owner, 18 Nov 2026): the first
+  time Home or People shows someone who has not checked in, on a working day
+  (not a holiday, an off day or a whole day away; working from home counts),
+  before the studio's day ends. Closing it counts, so it does not come back
+  that day. Check-out only opens from its button.
 - To try it without checking in or out, open Home or People with `?try-lamp=in` or
   `?try-lamp=out` in the address: the same window, an amber "Practice" chip on
   the card, and nothing saved.

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MapPin, LogIn, LogOut, FolderOpen, ExternalLink, ArrowRight, Sun, CalendarDays, AlertTriangle } from '@/lib/lucide-shim';
-import { clock12, isLate, isOff, type Attendance, type Mode } from '../../lib/peopleDesk';
+import { clock12, isLate, isOff, timeLabel, type Attendance, type Mode, type Snapshot } from '../../lib/peopleDesk';
 import { myDay, minutesWorked, duration, dayProgress, whereLabel, mapLink, CHARGED, currentFy, leaveLabel } from '../../lib/peopleView';
 import { usePeople, locate, warmLocation } from '../../services/peopleService';
 import { Ring, Glide, DoneTick, Skeleton, Notice, Confetti, Tilt, MODE_ICON, EASE } from './PeopleBits';
@@ -28,6 +28,33 @@ import LampCheckIn from './LampCheckIn';
   or ?try-lamp=out in the address. It runs the whole window, says "Practice"
   on the card, and saves nothing.
 */
+
+/*
+  Once a day the lamp opens by itself to start the day (owner, 18 Nov 2026):
+  the first time Home or People shows someone who has not checked in yet, on
+  a working day, before the studio's day ends. Closing it counts: it does not
+  open again that day. Check-out only ever opens from its button.
+*/
+const AUTO_KEY = (personId: string) => `studiodesk.lamp.autoOpened.${personId}`;
+/* Where the browser keeps nothing (private mode), remember for this visit only. */
+const autoOpenedHere = new Set<string>();
+const autoOpenedOn = (personId: string): string | null => {
+  try { return window.localStorage.getItem(AUTO_KEY(personId)); } catch { return null; }
+};
+const markAutoOpened = (personId: string, day: string) => {
+  try { window.localStorage.setItem(AUTO_KEY(personId), day); } catch { autoOpenedHere.add(`${personId}:${day}`); }
+};
+/** Should the lamp open by itself now, to start this person's day? */
+export function shouldAutoOpenLamp(s: Snapshot, nowIso: string): boolean {
+  const { today, session, stale } = myDay(s);
+  if (session || stale) return false;
+  const policy = s.policy;
+  if (policy.holidays.includes(today) || isOff(today, policy)) return false;
+  /* Away for the whole day; working from home still checks in. */
+  if (s.availability.some((a) => a.employeeId === s.me.id && a.start <= today && a.end >= today && a.status !== 'Pending' && a.mode === 'Away' && a.portion === 'Full day')) return false;
+  if (timeLabel(nowIso, policy.timezone) >= policy.end) return false;
+  return autoOpenedOn(s.me.id) !== today && !autoOpenedHere.has(`${s.me.id}:${today}`);
+}
 
 /** ?try-lamp=in or ?try-lamp=out: a practice run of the lamp that saves nothing. */
 const practiceFromUrl = (): 'in' | 'out' | null => {
@@ -67,7 +94,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   /** Check in and out through the lamp window (People, by default). */
   lamp?: boolean;
 }) {
-  const { snapshot, loading, error, run, refresh } = usePeople();
+  const { snapshot, loading, error, stale: offline, run, refresh } = usePeople();
   /* On Home, those who approve hear about arrivals too: refresh every two minutes while it is on screen. */
   const watching = variant !== 'full' && !!snapshot && snapshot.me.accessRole !== 'employee';
   useEffect(() => {
@@ -88,6 +115,17 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   /* A practice run of the lamp (?try-lamp=in|out): the same window, nothing saved. */
   const [practice, setPractice] = useState<'in' | 'out' | null>(() => (variant !== 'compact' ? practiceFromUrl() : null));
   const [practicePhase, setPracticePhase] = useState<'idle' | 'saving' | 'done'>('idle');
+  /* Once a day, before check-in, the lamp opens by itself after the page has settled. */
+  useEffect(() => {
+    /* Only on a fresh answer from the studio, so a check-in made on another device is known first. */
+    if (!snapshot || loading || offline || !lampOn || variant === 'compact' || practice || lamp || pending || phase !== 'idle') return;
+    if (!shouldAutoOpenLamp(snapshot, now)) return;
+    const t = window.setTimeout(() => {
+      markAutoOpened(snapshot.me.id, myDay(snapshot).today);
+      setLamp('in');
+    }, 700);
+    return () => window.clearTimeout(t);
+  }, [snapshot, loading, offline, lampOn, variant, practice, lamp, pending, phase, now]);
   /* Not checked in yet and working somewhere with a location: take a reading now, so the tap does not wait for one. */
   const needsReading = !!snapshot && !myDay(snapshot).session && mode !== 'WFH';
   useEffect(() => { if (needsReading) warmLocation(); }, [needsReading]);
