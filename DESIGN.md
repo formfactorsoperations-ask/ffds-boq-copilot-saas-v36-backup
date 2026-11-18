@@ -525,18 +525,24 @@ own Lucide icon, and each moves on hover in its own way (a bounce, a swing, a sp
 draw themselves). A white highlight slides to the screen you are on. Counts pop in. Everything stops
 under `prefers-reduced-motion`. Same font and brand colour.
 
-**Curved glass** (asked for 18 Nov 2026, round three the same day): the sidebar floats 10px off the
-page as one pane of clear, glossy glass. The left side is straight; only the right side curves,
-bowing in along its whole height, deepest at the middle (16px open, 6px as icons). The pane is an SVG drawn for its
-real size (`glassPath` in `ProjectSidebar.tsx`), so the corners stay round while it opens, folds or
-is dragged. Under the glass, soft blurred brand and slate light shows through. On it are a bright top
-highlight, two diagonal reflections, a bright rim, a shade along the lower and right inner edge, a
-slate-400 hairline, and a shadow that falls outside the pane only. Brand and slate only, no other
-colours. The Next and Jump to cards and the highlight under the current screen are glossy white glass.
-Everything inside keeps `--psb-l` (14px) from the straight left edge and `--psb-r` (22px) from the
-curved right edge (12px each as icons), so nothing meets the curve. Open it is 296px wide and 84px as icons; the drag range is unchanged. The list has no
-scrollbar (on Windows a straight bar cut across the curve); it fades at the top or bottom when there
-is more to scroll.
+**Curved glass** (asked for 18 Nov 2026, four rounds the same day): the sidebar is one pane of
+clear, glossy glass set into the window's left edge from top to bottom, so it reads as part of the
+app, not a card stuck on it. Its left, top and bottom meet the window; only its right side curves,
+bowing in along its whole height, deepest at the middle (16px open, 6px as icons). The pane is an
+SVG drawn for its real size (`glassPath` in `ProjectSidebar.tsx`), so the curve follows as it opens,
+folds or is dragged. Under the glass, soft blurred brand and slate light shows through. On it are a
+bright top highlight, two diagonal reflections, a bright rim, a shade along the lower and right inner
+edge, a slate-400 hairline on the curve, and a shadow that falls to the right of the pane only.
+Brand and slate only, no other colours. The Next and Jump to cards and the highlight under the
+current screen are glossy white glass. Everything inside keeps `--psb-l` (16px) from the left edge
+and `--psb-r` (22px) from the curved right edge (12px each as icons), so nothing meets the curve.
+Open it is 288px wide and 76px as icons.
+
+**Resizing along the curve:** the whole curve is the handle. The grab strip is 26px wide, so it
+covers the curve's full depth, and while you hover or drag it the curved edge itself turns brand
+blue (`glassEdge`). The drag range is 200 to 400px, narrower than 150px snaps to icons, and a double
+click resets it. The list has no scrollbar (on Windows a straight bar cut across the curve); it fades
+at the top or bottom when there is more to scroll.
 
 ### Projects as glass folders (approved 16 Nov 2026)
 

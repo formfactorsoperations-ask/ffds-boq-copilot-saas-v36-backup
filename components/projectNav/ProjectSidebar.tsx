@@ -80,35 +80,32 @@ const Ic = ({ icon: I, move = 'nudge', draw = false }: { icon: React.ComponentTy
 );
 
 const KEY = 'sd.projectSidebar';
-const MIN = 200, MAX = 400, SNAP = 150, OPEN_W = 296;
+const MIN = 200, MAX = 400, SNAP = 150, OPEN_W = 288;
 
 /*
-  The curved glass (asked for 18 Nov 2026, round three the same day): the
-  sidebar floats as one pane of clear, glossy glass. Its left side is straight;
-  its right side bows in along its whole height, deepest at the middle. The outline is drawn for the pane's real size, so the corners
-  stay round while it opens, closes or is dragged wider.
+  The curved glass (asked for 18 Nov 2026, rounds three and four the same
+  day): the sidebar is one pane of clear, glossy glass set into the window's
+  left edge, from top to bottom, so it reads as part of the app rather than a
+  card stuck on it. Its left, top and bottom meet the window; its right side
+  bows in along its whole height, deepest at the middle. The outline is drawn
+  for the pane's real size, so the curve follows as it opens, closes or is
+  dragged wider.
 */
 export function glassDepth(w: number, closed: boolean): number {
   return closed ? 6 : Math.round(Math.max(8, Math.min(16, w * 0.06)));
 }
+const n1 = (v: number) => Math.round(v * 10) / 10;
+/** The curved right side alone: what lights up while you hover or drag it. */
+export function glassEdge(w: number, h: number, closed: boolean): string {
+  if (w <= 0 || h <= 0) return '';
+  return `M${n1(w)} 0Q${n1(w - 2 * glassDepth(w, closed))} ${n1(h / 2)} ${n1(w)} ${n1(h)}`;
+}
 export function glassPath(w: number, h: number, closed: boolean): string {
   if (w <= 0 || h <= 0) return '';
-  const r = Math.min(closed ? 20 : 26, w / 2, h / 4);
-  const d = glassDepth(w, closed);
-  const m = h / 2, c = r * 0.448;
-  const e = (2 * d * c) / Math.max(1, m - r); // the corner leaves on the side's own slope: no kink
-  const n = (v: number) => Math.round(v * 10) / 10;
-  return [
-    `M${n(r)} 0H${n(w - r)}C${n(w - c)} 0 ${n(w + e)} ${n(r - c)} ${n(w)} ${n(r)}`,
-    `Q${n(w - 2 * d)} ${n(m)} ${n(w)} ${n(h - r)}`,
-    `C${n(w + e)} ${n(h - r + c)} ${n(w - c)} ${n(h)} ${n(w - r)} ${n(h)}H${n(r)}`,
-    `C${n(c)} ${n(h)} 0 ${n(h - c)} 0 ${n(h - r)}`,
-    `V${n(r)}`,
-    `C0 ${n(c)} ${n(c)} 0 ${n(r)} 0Z`,
-  ].join('');
+  return `${glassEdge(w, h, closed)}H0V0Z`;
 }
 
-function Glass({ closed }: { closed: boolean }) {
+function Glass({ closed, hot }: { closed: boolean; hot: boolean }) {
   const id = useId().replace(/:/g, '');
   const frame = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
@@ -126,6 +123,7 @@ function Glass({ closed }: { closed: boolean }) {
   }, []);
   const { w, h } = box;
   const d = glassPath(w, h, closed);
+  const edge = glassEdge(w, h, closed);
   const u = (k: string) => `url(#${id}${k})`;
   return (
     <div className="psb-glass" ref={frame} aria-hidden>
@@ -138,11 +136,11 @@ function Glass({ closed }: { closed: boolean }) {
             {/* the shadow falls outside the pane only, so the glass stays clear */}
             <filter id={`${id}o`} x="-40%" y="-15%" width="180%" height="135%">
               <feGaussianBlur in="SourceAlpha" stdDeviation="14" result="b" />
-              <feOffset in="b" dy="16" result="o" />
+              <feOffset in="b" dx="6" result="o" />
               <feFlood floodColor="#0F172A" floodOpacity=".16" />
               <feComposite in2="o" operator="in" result="s" />
               <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b2" />
-              <feOffset in="b2" dy="2" result="o2" />
+              <feOffset in="b2" dx="1" result="o2" />
               <feFlood floodColor="#3D52A0" floodOpacity=".14" />
               <feComposite in2="o2" operator="in" result="s2" />
               <feMerge result="all"><feMergeNode in="s" /><feMergeNode in="s2" /></feMerge>
@@ -187,11 +185,12 @@ function Glass({ closed }: { closed: boolean }) {
               <path d={`M${w * 0.42} 0L${w * 0.62} 0L${w * 0.02} ${h * 0.62}L${-w * 0.18} ${h * 0.62}Z`} fill="#FFFFFF" fillOpacity=".55" />
               <path d={`M${w * 0.7} 0L${w * 0.76} 0L${w * 0.16} ${h * 0.62}L${w * 0.1} ${h * 0.62}Z`} fill="#FFFFFF" fillOpacity=".45" />
             </g>
-            {/* thickness: a shade along the lower and right inner edge, a bright rim on top */}
+            {/* thickness: a shade along the lower and right inner edge, a bright rim */}
             <path d={d} fill="none" stroke={u('e')} strokeWidth="12" filter={u('y')} />
             <path d={d} fill="none" stroke={u('r')} strokeWidth="4" />
           </g>
-          <path d={d} fill="none" stroke="#94A3B8" strokeOpacity=".6" strokeWidth="1" />
+          {/* the curved edge: a slate hairline, brand while you hover or drag it to resize */}
+          <path d={edge} fill="none" className={`psb-edge ${hot ? 'is-hot' : ''}`} />
         </svg>
       )}
     </div>
@@ -240,6 +239,7 @@ export default function ProjectSidebar(p: Props) {
   /* Drag the edge: narrow enough and it snaps to icons; drag out again to reopen. */
   const aside = useRef<HTMLElement>(null);
   const [drag, setDrag] = useState<null | string>(null);
+  const [edgeHover, setEdgeHover] = useState(false);
   const startResize = (e: React.PointerEvent) => {
     if (phone) return;
     e.preventDefault();
@@ -340,13 +340,13 @@ export default function ProjectSidebar(p: Props) {
         onMouseOver={hover}
         onMouseLeave={leave}
       >
-        <Glass closed={closed} />
+        <Glass closed={closed} hot={edgeHover || !!drag} />
         {!phone && (
           <button type="button" className="psb-toggle" onClick={toggle} aria-label={closed ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl/⌘ B">
             <ChevronLeft strokeWidth={2.4} />
           </button>
         )}
-        {!phone && <div className="psb-resize" onPointerDown={startResize} onDoubleClick={resetWidth} title="Drag to resize · double-click to reset" aria-hidden />}
+        {!phone && <div className="psb-resize" onPointerDown={startResize} onDoubleClick={resetWidth} onPointerEnter={() => setEdgeHover(true)} onPointerLeave={() => setEdgeHover(false)} title="Drag to resize · double-click to reset" aria-hidden />}
         {drag && <div className="psb-wlabel">{drag}</div>}
 
         {/* Studio home and the bell: always on screen. */}
