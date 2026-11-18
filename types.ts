@@ -311,6 +311,10 @@ export interface PaymentMilestone {
      */
     paidDate?: string;
     lockedTaxableBase?: number; // The taxable base amount at the time of invoicing
+    /** The share billed with GST when this was invoiced, 0-100. Later changes to the split leave it alone. */
+    lockedBillablePercent?: number;
+    /** The GST rate charged when this was invoiced: 0 when GST was off. */
+    lockedGstRate?: number;
     /**
      * Set only when the studio uses the optional Zoho Books add-in and this
      * invoice was drafted there. `invoiceNumber` then holds Zoho's own number.
@@ -368,6 +372,7 @@ export interface PaymentSnapshot {
     approvedDesignValue: number;
     milestones: PaymentMilestone[];
     billablePercent?: number;
+    designBillablePercent?: number;
     executionGstEnabled?: boolean;
     designGstEnabled?: boolean;
 }
@@ -375,6 +380,8 @@ export interface PaymentSnapshot {
 export interface FinancialConfig {
     initiationFeePaid: number;
     billablePercent: number; // 0 to 100
+    /** Percent of the design fee invoiced with GST; absent means 100. */
+    designBillablePercent?: number;
     executionGstEnabled: boolean; // Toggle for GST on execution
     designGstEnabled?: boolean;   // Toggle for GST on the design fee. Absent means charged.
     projectedCashValue: number; // Saved value for global tracking

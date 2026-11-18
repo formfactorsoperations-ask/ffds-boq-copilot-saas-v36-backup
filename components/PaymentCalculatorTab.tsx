@@ -37,6 +37,13 @@ import RevisionMoneyPanel from './money/RevisionMoneyPanel';
 import { pendingRevision, previewRevisionMoney } from '../lib/revisionMoneyPreview';
 import AsActualsCorrectionPanel from './money/AsActualsCorrectionPanel';
 import { asActualsInContract, takeAsActualsOut } from '../lib/asActualsCorrection';
+import { MoneyBoard, BOARD_ICONS, type BoardTile, type BoardTotals, type BoardPreview } from './money/board/MoneyBoard';
+import { TrackColumn, TaxPlate, type TrackFigures, type CardActions } from './money/board/TrackColumn';
+import { EditMilestonesModal, type StudioStages } from './money/board/EditMilestonesModal';
+import { MilestoneSummary } from './money/board/MilestoneSummary';
+import { cardStates, trackTotal, shareOf, sameTerms, termsChanges, studioCashPct, type TaxTerms, type ScheduleChange, type Track as BoardTrack } from '../lib/moneyBoard';
+import { Button } from './ui/kit';
+import { Wallet, SlidersHorizontal } from '@/lib/lucide-shim';
 
 interface PaymentCalculatorTabProps {
     projectContext: ProjectContext;
@@ -266,6 +273,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const [localGstRate, setGstRate] = useState<number>(projectContext.gstRate || 18);
     const [localInitiationFee, setInitiationFee] = useState<number>(financials.initiationFeePaid);
     const [localBillablePercent, setBillablePercent] = useState<number>(financials.billablePercent);
+    const [localDesignBillablePercent, setDesignBillablePercent] = useState<number>(financials.designBillablePercent);
     const [localExecutionGstEnabled, setExecutionGstEnabled] = useState<boolean>(financials.executionGstEnabled);
     const [localDesignGstEnabled, setDesignGstEnabled] = useState<boolean>(financials.designGstEnabled);
     const [localCashLimit, setCashLimit] = useState<number>(financials.taxLimitYearly);
@@ -289,6 +297,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             designValue: number;
             milestones: PaymentMilestone[];
             billablePercent?: number;
+            designBillablePercent?: number;
             executionGstEnabled?: boolean;
             designGstEnabled?: boolean;
             isCurrentActive: boolean;
@@ -307,6 +316,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             designValue: liveDesign,
             milestones: projectContext.paymentMilestones || [],
             billablePercent: localBillablePercent,
+            designBillablePercent: localDesignBillablePercent,
             executionGstEnabled: localExecutionGstEnabled,
             designGstEnabled: localDesignGstEnabled,
             isCurrentActive: true,
@@ -333,6 +343,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 designValue: tDesign,
                 milestones: tMilestones,
                 billablePercent: matchingSnapshot?.billablePercent,
+                designBillablePercent: matchingSnapshot?.designBillablePercent,
                 executionGstEnabled: matchingSnapshot?.executionGstEnabled,
                 designGstEnabled: matchingSnapshot?.designGstEnabled,
                 isCurrentActive: false,
@@ -352,6 +363,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     designValue: s.approvedDesignValue || 0,
                     milestones: s.milestones || [],
                     billablePercent: s.billablePercent,
+                    designBillablePercent: s.designBillablePercent,
                     executionGstEnabled: s.executionGstEnabled,
                     designGstEnabled: s.designGstEnabled,
                     isCurrentActive: false,
@@ -361,7 +373,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         });
 
         return list;
-    }, [activeTier, tiers, projectContext.tiers, projectContext.approvedTierId, projectContext.paymentMilestones, snapshots, financials.approvedExecutionValue, financials.approvedDesignValue, liveBase.execution, liveBase.design, localBillablePercent, localExecutionGstEnabled]);
+    }, [activeTier, tiers, projectContext.tiers, projectContext.approvedTierId, projectContext.paymentMilestones, snapshots, financials.approvedExecutionValue, financials.approvedDesignValue, liveBase.execution, liveBase.design, localBillablePercent, localDesignBillablePercent, localExecutionGstEnabled]);
 
     const selectedHistoricalEntry = selectedSnapshotId ? availableVersions.find(v => v.id === selectedSnapshotId) : null;
     const activeSnapshot = selectedHistoricalEntry;
@@ -381,6 +393,10 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const billablePercent = selectedHistoricalEntry && selectedHistoricalEntry.billablePercent !== undefined 
         ? selectedHistoricalEntry.billablePercent 
         : localBillablePercent;
+
+    const designBillablePercent = selectedHistoricalEntry && selectedHistoricalEntry.designBillablePercent !== undefined
+        ? selectedHistoricalEntry.designBillablePercent
+        : localDesignBillablePercent;
 
     const executionGstEnabled = selectedHistoricalEntry && selectedHistoricalEntry.executionGstEnabled !== undefined 
         ? selectedHistoricalEntry.executionGstEnabled 
@@ -854,6 +870,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
         setInitiationFee(defaultFinancials.initiationFeePaid);
         setBillablePercent(defaultFinancials.billablePercent);
+        setDesignBillablePercent(100);
         setExecutionGstEnabled(defaultFinancials.executionGstEnabled);
         setDesignGstEnabled(defaultFinancials.designGstEnabled);
         setCashLimit(defaultFinancials.taxLimitYearly);
@@ -948,6 +965,12 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
     type InvoiceAction = 'generate_invoice' | 'mark_paid' | 'revert_invoice' | 'revert_payment';
 
+    /* The split and GST rate an invoice goes out at, kept on the milestone so later changes leave it alone. */
+    const lockedTermsFor = (m?: PaymentMilestone) => !m ? {} : {
+        lockedBillablePercent: m.type === 'execution' ? billablePercent : designBillablePercent,
+        lockedGstRate: (m.type === 'execution' ? executionGstEnabled : designGstEnabled) ? gstRate : 0,
+    };
+
     const executeInvoiceAction = (index: number, action: InvoiceAction, lockedTaxableBase?: number) => {
         const projectCode = (projectContext?.name || 'PRJ').substring(0, 3).toUpperCase();
         const seq = String(index + 1).padStart(2, '0');
@@ -965,7 +988,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     status: 'invoiced', 
                     invoiceNumber: invNumber, 
                     invoiceDate: new Date().toISOString(),
-                    lockedTaxableBase: lockedTaxableBase
+                    lockedTaxableBase: lockedTaxableBase,
+                    ...lockedTermsFor(milestones[index]),
                 });
                 showSuccessWithNext('Invoice raised successfully');
             };
@@ -998,7 +1022,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             })();
         } else if (action === 'mark_paid') {
             /* The day it landed, for Reports: cash by month and days to get paid. */
-            handleUpdateMilestone(index, { status: 'paid', paidDate: new Date().toLocaleDateString('en-CA') });
+            const pm = milestones[index];
+            handleUpdateMilestone(index, {
+                status: 'paid', paidDate: new Date().toLocaleDateString('en-CA'),
+                ...(pm && typeof pm.lockedBillablePercent !== 'number' ? lockedTermsFor(pm) : {}),
+            });
         } else if (action === 'revert_payment') {
             /*
               Un-marking a payment is not the same as cancelling the invoice.
@@ -1029,6 +1057,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 invoiceDate: undefined,
                 paidDate: undefined,
                 lockedTaxableBase: undefined,
+                lockedBillablePercent: undefined,
+                lockedGstRate: undefined,
                 zohoInvoiceId: undefined
             });
         }
@@ -1145,7 +1175,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
     // 4. GST (Liability) - Calculated on Taxable Amount
     const gstOnExecution = executionGstEnabled ? (executionBillable * (gstRate / 100)) : 0;
-    const gstOnDesign = designGstEnabled ? taxableDesign * (gstRate / 100) : 0;
+    const gstOnDesign = designGstEnabled ? taxableDesign * (designBillablePercent / 100) * (gstRate / 100) : 0;
     const totalGST = gstOnExecution + gstOnDesign;
 
     // 5. Totals & Net
@@ -1174,6 +1204,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         overrides: {
             gstRate,
             billablePercent,
+            designBillablePercent,
             executionGstEnabled,
             designGstEnabled,
             initiationFeePaid: initiationFee,
@@ -1182,7 +1213,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             approvedDesignValue: rawDesignFee,
         },
     }), [projectContext, milestones, originalExecutionTotal, originalDesignFee, gstRate,
-         billablePercent, executionGstEnabled, designGstEnabled, initiationFee, discounts,
+         billablePercent, designBillablePercent, executionGstEnabled, designGstEnabled, initiationFee, discounts,
          rawExecutionTotal, rawDesignFee]);
     const schedule = useMemo(() => computeSchedule(scheduleArgs), [scheduleArgs]);
 
@@ -1269,7 +1300,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
       moved in the file; they are gated on which tab is open, so the tax
       simulator is one click away instead of twelve screens down.
     */
-    const [moneyTab, setMoneyTab] = useState<'overview' | 'milestones' | 'tax' | 'history'>('overview');
+    const [moneyTab, setMoneyTab] = useState<'board' | 'history'>('board');
+    /* The Money board: the tax tools panel, a tax change being previewed, and the milestone editor. */
+    const [taxToolsOpen, setTaxToolsOpen] = useState(false);
+    const [termsDraft, setTermsDraft] = useState<TaxTerms | null>(null);
+    const [termsReason, setTermsReason] = useState('');
+    const [editFocus, setEditFocus] = useState<BoardTrack | 'both' | null>(null);
+    /* Which cards this screen just changed, so a change from the portal or the site can be told apart. */
+    const localTouch = useRef<Map<string, number>>(new Map());
     /* Retainer editor on the overview. Closed unless the user opens it. */
     const [retainerOpen, setRetainerOpen] = useState(false);
     /* Per-invoice concession editor: the milestone id being edited, or null. */
@@ -1431,7 +1469,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     };
 
     const goToMilestone = (id: string) => {
-        setMoneyTab('milestones');
+        setMoneyTab('board');
         setHighlightMilestoneId(id);
         // Let the tab paint before looking for the row.
         setTimeout(() => {
@@ -1532,6 +1570,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         const newConfig = {
             initiationFeePaid: initiationFee,
             billablePercent,
+            designBillablePercent,
             executionGstEnabled,
             designGstEnabled,
             projectedCashValue: executionCash,
@@ -1552,11 +1591,12 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
               difference counts as a change.
             */
             if (!sameFinancials(resolveFinancials(projectContext.financials), newConfig)) {
-                setProjectContext(prev => ({ ...prev, financials: newConfig }));
+                /* Merged, not replaced: the record also holds the revision log, version snapshots and schedule changes. */
+                setProjectContext(prev => ({ ...prev, financials: { ...(prev.financials || {}), ...newConfig } as any }));
             }
         }, 500);
         return () => clearTimeout(timer);
-    }, [initiationFee, billablePercent, executionGstEnabled, designGstEnabled, executionCash, cashLimit, discounts, financials.approvedExecutionValue, financials.approvedDesignValue, isReadOnlyMode, projectId, projectContext?.name]);
+    }, [initiationFee, billablePercent, designBillablePercent, executionGstEnabled, designGstEnabled, executionCash, cashLimit, discounts, financials.approvedExecutionValue, financials.approvedDesignValue, isReadOnlyMode, projectId, projectContext?.name]);
 
 
     /*
@@ -1624,1200 +1664,6 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             }),
         }));
         setDatingTrack(null);
-    };
-
-    const renderTargetDate = (m: PaymentMilestone, mainIndex: number, isCleared: boolean) => (
-        <DateField
-            size="sm"
-            value={m.date || ''}
-            onChange={v => handleUpdateMilestone(mainIndex, { date: v || undefined })}
-            placeholder={isCleared ? 'set date on record' : 'set target date'}
-            showRelative={!isCleared}
-            disabled={isReadOnlyMode}
-            title={isCleared
-                ? 'When this milestone fell due. Editing a settled row corrects the record \u2014 it does not reopen the invoice.'
-                : 'Target date \u2014 drives the cash-flow forecast and is shown to the client'}
-        />
-    );
-
-    const renderSplitTable = (
-        items: PaymentMilestone[], 
-        baseAmount: number, 
-        originalBaseAmount: number,
-        isExecution: boolean, 
-        title: string
-    ) => {
-        let totalEffectivePercent = 0;
-        items.forEach(m => {
-            if (m.isFixedAmount && m.fixedAmount !== undefined) {
-                totalEffectivePercent += baseAmount > 0 ? (m.fixedAmount / baseAmount) * 100 : 0;
-            } else {
-                totalEffectivePercent += m.percentage;
-            }
-        });
-        const isBalanced = Math.abs(totalEffectivePercent - 100) < 0.1;
-
-        const paidItems = items.filter(m => m.status === 'paid' || m.status === 'invoiced');
-        const unpaidItems = items.filter(m => m.status !== 'paid' && m.status !== 'invoiced');
-        const unpaidPct = unpaidItems.reduce((sum, m) => sum + m.percentage, 0);
-        
-        const viewMode = isExecution ? executionViewMode : designViewMode;
-        const setViewMode = isExecution ? setExecutionViewMode : setDesignViewMode;
-        
-        let lockedBase = 0;
-        paidItems.forEach(m => {
-            if (m.isFixedAmount && m.fixedAmount !== undefined) {
-                lockedBase += m.fixedAmount;
-            } else {
-                lockedBase += (m.lockedTaxableBase || originalBaseAmount) * (m.percentage / 100);
-            }
-        });
-        const remainingBaseAmount = baseAmount - lockedBase;
-
-        const renderStageAndConditions = (m: PaymentMilestone, mainIndex: number, isCleared: boolean, filteredIdx: number, totalFiltered: number) => {
-            return (
-                <div className="space-y-3 py-1.5">
-                    <div className="flex items-center gap-2">
-                        {(!m.status || m.status === 'pending') && (
-                            <div className="flex items-center gap-0.5 shrink-0 bg-[#EDEFF7] p-0.5 rounded-lg border border-[#E2E5F0] select-none mr-1">
-                                <button 
-                                    onClick={() => handleMoveMilestone(m.id, 'up')}
-                                    disabled={filteredIdx === 0}
-                                    className={`p-0.5 rounded transition-all ${filteredIdx === 0 ? 'text-[#CBD1E4] cursor-not-allowed' : 'text-[#4A5178] hover:text-[#12182F] hover:bg-white shadow-xs'}`}
-                                    title="Move Up"
-                                >
-                                    <ChevronUpIcon className="w-3.5 h-3.5" />
-                                </button>
-                                <button 
-                                    onClick={() => handleMoveMilestone(m.id, 'down')}
-                                    disabled={filteredIdx === totalFiltered - 1}
-                                    className={`p-0.5 rounded transition-all ${filteredIdx === totalFiltered - 1 ? 'text-[#CBD1E4] cursor-not-allowed' : 'text-[#4A5178] hover:text-[#12182F] hover:bg-white shadow-xs'}`}
-                                    title="Move Down"
-                                >
-                                    <ChevronDownIcon className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        )}
-                        <input 
-                            type="text" 
-                            value={m.name} 
-                            onChange={e => handleUpdateMilestone(mainIndex, { name: e.target.value })}
-                            className="bg-transparent outline-none font-extrabold text-[#12182F] focus:border-b focus:border-[#8E96B8] text-xs font-semibold py-0.5 w-full max-w-md transition-colors"
-                            disabled={isCleared}
-                        />
-                        {(!m.status || m.status === 'pending') && (
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button 
-                                    onClick={() => handleSplitMilestone(m.id)}
-                                    className="text-[#8E96B8] hover:text-[#3D52A0] shrink-0 p-1 bg-[#F6F7FB] hover:bg-[#EDE8F5] rounded-lg border border-[#E2E5F0] transition-all shadow-2xs"
-                                    title="Split Milestone"
-                                >
-                                    <ScissorsIcon className="w-3.5 h-3.5" />
-                                </button>
-                                <button 
-                                    onClick={() => handleDeleteMilestone(mainIndex)}
-                                    className="text-[#8E96B8] hover:text-red-500 shrink-0 p-1 bg-[#F6F7FB] hover:bg-red-50 rounded-lg border border-[#E2E5F0] transition-all shadow-2xs"
-                                    title="Delete Milestone"
-                                >
-                                    <DeleteIcon className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Trigger (WHEN) & Deliverables (UNLOCKS) - Elegant, Flat, Non-collapsible */}
-                    <div className="space-y-1.5 border-l border-[#E2E5F0] pl-3 ml-0.5">
-                        <div className="flex items-start gap-1.5 text-[11px] text-[#5A628A] font-medium">
-                            <span className="font-extrabold text-[#8E96B8] uppercase tracking-wider shrink-0 text-[10px] w-14 mt-0.5">WHEN:</span>
-                            {isCleared ? (
-                                <span className="text-[#4A5178] font-semibold leading-relaxed">{m.trigger || '—'}</span>
-                            ) : (
-                                <input 
-                                    type="text" 
-                                    value={m.trigger || ''} 
-                                    onChange={e => handleUpdateMilestone(mainIndex, { trigger: e.target.value })} 
-                                    placeholder="Trigger condition..." 
-                                    className="bg-transparent border-b border-dashed border-[#E2E5F0] hover:border-[#8E96B8] focus:border-[#5A628A] outline-none w-full max-w-lg py-0.5 text-[11px] font-semibold text-[#3A416B] transition-colors"
-                                />
-                            )}
-                        </div>
-
-                        <div className="flex items-start gap-1.5 text-[11px] text-[#5A628A] font-medium">
-                            <span className="font-extrabold text-[#7091E6] uppercase tracking-wider shrink-0 text-[10px] w-14 mt-0.5">UNLOCKS:</span>
-                            {isCleared ? (
-                                <span className="text-slate-900 font-semibold leading-relaxed">{m.unlocks || '—'}</span>
-                            ) : (
-                                <input 
-                                    type="text" 
-                                    value={m.unlocks || ''} 
-                                    onChange={e => handleUpdateMilestone(mainIndex, { unlocks: e.target.value })} 
-                                    placeholder="Unlocks deliverables..." 
-                                    className="bg-transparent border-b border-dashed border-[#E2E5F0] hover:border-[#7091E6] focus:border-[#3D52A0] outline-none w-full max-w-lg py-0.5 text-[11px] font-semibold text-slate-900 transition-colors"
-                                />
-                            )}
-                        </div>
-
-                        {/* The date, beside the conditions rather than buried under them. */}
-                        <div className="flex items-start gap-2 text-[11px]">
-                            <span className="font-extrabold text-[#8E96B8] uppercase tracking-wider shrink-0 text-[10px] w-14 mt-1">DATE:</span>
-                            {renderTargetDate(m, mainIndex, isCleared)}
-                        </div>
-
-                        {/* Handover advance checkbox for execution milestones */}
-                        {isExecution && (
-                            <div className="pt-0.5">
-                                {isCleared ? (
-                                    m.isHandoverAdvance && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 border border-amber-200/50 text-[10px] font-black text-amber-800 uppercase tracking-wider mt-0.5">
-                                            HANDOVER ADVANCE
-                                        </span>
-                                    )
-                                ) : (
-                                    <label className="flex items-center gap-1.5 cursor-pointer mt-0.5 select-none">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={m.isHandoverAdvance || false}
-                                            onChange={(e) => handleUpdateMilestone(mainIndex, { isHandoverAdvance: e.target.checked })}
-                                            className="w-3.5 h-3.5 text-amber-600 rounded border-[#CBD1E4] focus:ring-amber-500 cursor-pointer"
-                                        />
-                                        <span className="text-[10px] font-extrabold text-[#5A628A] uppercase tracking-wider">Is Handover Advance</span>
-                                    </label>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Pre-requisites checklist */}
-                    <div className="pl-3.5 pt-1 space-y-1.5">
-                        {m.subSteps && m.subSteps.length > 0 && (
-                            <div className="space-y-1.5 max-w-md">
-                                {m.subSteps.map((step, sIdx) => (
-                                    <div key={step.id} className="flex items-center gap-2 group/step">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={step.isDone} 
-                                            onChange={() => handleToggleSubStep(mainIndex, sIdx)}
-                                            className="rounded text-[#3D52A0] w-3.5 h-3.5 cursor-pointer border-[#CBD1E4] focus:ring-[#3D52A0]"
-                                        />
-                                        {isCleared ? (
-                                            <span className={`text-[11px] font-semibold ${step.isDone ? 'text-[#8E96B8] line-through' : 'text-[#4A5178]'}`}>
-                                                {step.label}
-                                            </span>
-                                        ) : (
-                                            <div className="flex items-center gap-1 w-full">
-                                                <input 
-                                                    value={step.label || ''}
-                                                    onChange={(e) => handleUpdateSubStepLabel(mainIndex, sIdx, e.target.value)}
-                                                    className={`bg-transparent outline-none text-[11px] font-semibold w-full py-0.5 border-b border-transparent hover:border-[#E2E5F0] focus:border-[#CBD1E4] ${step.isDone ? 'text-[#8E96B8] line-through' : 'text-[#3A416B]'}`}
-                                                />
-                                                <button 
-                                                    onClick={() => handleDeleteSubStep(mainIndex, sIdx)} 
-                                                    className="text-[#CBD1E4] hover:text-red-500 p-0.5 opacity-0 group-hover/step:opacity-100 transition-opacity shrink-0"
-                                                    title="Remove condition"
-                                                >
-                                                    <DeleteIcon className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                        {!isCleared && (
-                            <button 
-                                onClick={() => handleAddSubStep(mainIndex)} 
-                                className="text-[10px] text-[#3D52A0] hover:text-[#334486] font-extrabold flex items-center gap-1 py-1 transition-colors uppercase tracking-wider"
-                            >
-                                <PlusIcon className="w-3 h-3" /> Add Pre-requisite Condition
-                            </button>
-                        )}
-                    </div>
-                </div>
-            );
-        };
-
-        return (
-            <div className="bg-white border border-[#E2E5F0] rounded-2xl overflow-hidden shadow-sm mb-8">
-                <div className="bg-[#F6F7FB]/50 px-6 py-4 border-b border-[#E2E5F0] flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                    <div>
-                        <h3 className="text-sm font-extrabold text-[#12182F] uppercase tracking-wider">{title} Tracking</h3>
-                        <div className="text-[11px] text-[#5A628A] mt-1 flex flex-wrap gap-x-4 gap-y-1 items-center font-medium">
-                            {baseAmount !== originalBaseAmount ? (
-                                <div className="flex items-center gap-2">
-                                    <span className="line-through text-[#8E96B8]" title="Original Taxable Base">Orig: {formatCurrency(originalBaseAmount)}</span>
-                                    <span className="text-[#3D52A0] font-bold tabular-nums" title="Revised Taxable Base">Rev: {formatCurrency(baseAmount)}</span>
-                                </div>
-                            ) : (
-                                <span>Taxable Base: <span className="tabular-nums font-bold text-[#3A416B]">{formatCurrency(baseAmount)}</span></span>
-                            )}
-                            {isExecution && (
-                                <>
-                                    {billablePercent < 100 && (
-                                        <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200/60 tabular-nums text-[10px]">
-                                            Split: {billablePercent}% / {100 - billablePercent}%
-                                        </span>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                        {/* Segmented Toggle Control */}
-                        <div className="flex bg-[#EDEFF7] p-0.5 rounded-xl border border-[#E2E5F0] select-none">
-                            <button 
-                                onClick={() => setViewMode('simple')}
-                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${viewMode === 'simple' ? 'bg-white text-slate-900 shadow-xs border border-[#E2E5F0]/50' : 'text-[#5A628A] hover:text-[#252C4E]'}`}
-                            >
-                                Simple
-                            </button>
-                            <button 
-                                onClick={() => setViewMode('advanced')}
-                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${viewMode === 'advanced' ? 'bg-white text-slate-900 shadow-xs border border-[#E2E5F0]/50' : 'text-[#5A628A] hover:text-[#252C4E]'}`}
-                            >
-                                Advanced
-                            </button>
-                        </div>
-
-                        {!isReadOnlyMode && (
-                            <button
-                                onClick={() => {
-                                    setDatingTrack(isExecution ? 'execution' : 'design');
-                                    setDateStart(isoOf(new Date()));
-                                }}
-                                className="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl border border-[#E2E5F0] bg-white text-[#3A416B] hover:border-[#3D52A0] hover:text-[#3D52A0] transition-colors cursor-pointer"
-                                title="Give every milestone in this track a date, spaced evenly"
-                            >
-                                Set dates
-                            </button>
-                        )}
-
-                        <div className={`text-xs font-black px-3 py-1.5 rounded-xl border tabular-nums ${isBalanced ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}`}>
-                            Total: {totalEffectivePercent.toFixed(1).replace('.0', '')}%
-                        </div>
-                    </div>
-                </div>
-
-                <div className="overflow-x-auto w-full">
-                <table className="w-full text-xs text-left min-w-[850px]">
-                    <thead className="bg-[#F6F7FB] text-[10px] font-bold text-[#5A628A] uppercase tracking-wider border-b border-[#E2E5F0]">
-                        <tr>
-                            <th className="p-4 min-w-[325px]">Stage & Conditions</th>
-                            <th className="p-4 w-32 text-center">% / Amt</th>
-                            <th className="p-4 text-right min-w-[150px] bg-[#F6F7FB]/30 text-[#12182F] font-black">Invoice Amount</th>
-                            {isExecution && billablePercent < 100 && (
-                                <>
-                                    <th className="p-4 text-right min-w-[120px] bg-amber-50/10 text-amber-900 font-black">Cash</th>
-                                    {/*
-                                      Invoice and cash sat side by side with no total, so
-                                      this was the one view that never said what the client
-                                      owes on a milestone — the Simple card, Collections and
-                                      the realization pipeline all do. Shown only when there
-                                      is a split; without one it would repeat the invoice
-                                      column exactly.
-                                    */}
-                                    <th className="p-4 text-right min-w-[130px] bg-[#F6F7FB]/60 text-[#12182F] font-black">Total Owed</th>
-                                </>
-                            )}
-                            <th className="p-4 text-center w-28">Status</th>
-                            <th className="p-4 text-right w-32">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#EDEFF7]">
-                        {items.map((m, i) => {
-                            const isCleared = m.status === 'paid' || m.status === 'invoiced';
-                            let rowBaseOriginal = 0;
-                            let effectiveTaxableBaseForLocking = baseAmount;
-                            if (isCleared) {
-                                rowBaseOriginal = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : ((m.lockedTaxableBase || originalBaseAmount) * (m.percentage / 100));
-                                effectiveTaxableBaseForLocking = m.lockedTaxableBase || originalBaseAmount;
-                            } else {
-                                if (m.isFixedAmount && m.fixedAmount !== undefined) {
-                                    rowBaseOriginal = m.fixedAmount;
-                                } else {
-                                    const fixedPendingTotal = unpaidItems.filter(x => x.isFixedAmount).reduce((sum, x) => sum + (x.fixedAmount || 0), 0);
-                                    const remainingBaseForPercentages = Math.max(0, remainingBaseAmount - fixedPendingTotal);
-                                    
-                                    const unpaidPctExcludingFixed = unpaidItems.filter(x => !x.isFixedAmount).reduce((sum, x) => sum + x.percentage, 0);
-                                    const relativePct = unpaidPctExcludingFixed > 0 ? (m.percentage / unpaidPctExcludingFixed) : 0;
-                                    rowBaseOriginal = remainingBaseForPercentages * relativePct;
-                                }
-                                effectiveTaxableBaseForLocking = m.percentage > 0 ? (rowBaseOriginal / (m.percentage / 100)) : baseAmount;
-                            }
-                            rowBaseOriginal = Math.round(rowBaseOriginal);
-                            
-                            let rowBillable = Math.round(isExecution ? rowBaseOriginal * (billablePercent / 100) : rowBaseOriginal);
-                            const rowCash = Math.round(isExecution ? rowBaseOriginal * ((100 - billablePercent) / 100) : 0);
-                            
-                            const applicableGstRate = isExecution
-                                ? (executionGstEnabled ? gstRate : 0)
-                                : (designGstEnabled ? gstRate : 0);
-                            let rowGST = Math.round(rowBillable * (applicableGstRate / 100));
-                            
-                            let rowInvoiceTotal = Math.round(rowBillable + rowGST);
-                            
-                            let deductedInitiationFee = 0;
-                            if (!isExecution && i === 0 && initiationFee > 0) {
-                                deductedInitiationFee = Math.min(rowInvoiceTotal, initiationFee);
-                                rowInvoiceTotal = Math.max(0, rowInvoiceTotal - initiationFee);
-                            }
-
-                            /*
-                              The concession, in the same order as the card view
-                              and `computeSchedule`: after GST, after the retainer.
-                              Computed before the retainer branch below so both
-                              table paths report the same payable.
-                            */
-                            const rowBeforeDiscount = rowInvoiceTotal;
-                            const rowDiscount = Math.min(Math.max(0, Number(m.discountAmount) || 0), rowInvoiceTotal);
-                            rowInvoiceTotal = Math.max(0, rowInvoiceTotal - rowDiscount);
-                            
-                            const mainIndex = milestones.findIndex(x => x.id === m.id);
-                            
-                            const statusColor = m.status === 'paid' 
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-100' 
-                                : m.status === 'invoiced' 
-                                    ? 'bg-[#EDE8F5]/50 text-[#2A3A73] border-[#ADBBDA]' 
-                                    : 'bg-[#F6F7FB] text-[#5A628A] border-[#E2E5F0]/50';
-
-                            if (deductedInitiationFee > 0) {
-                                return (
-                                    <React.Fragment key={m.id}>
-                                        <tr id={m.id} className="hover:bg-[#F6F7FB]/10 transition-colors group scroll-mt-24">
-                                            <td className="p-4 align-top">
-                                                {renderStageAndConditions(m, mainIndex, isCleared, i, items.length)}
-                                            </td>
-                                            <td className="p-4 text-center align-top">
-                                                <div className="flex flex-col items-center justify-center gap-1.5">
-                                                    {!isCleared && (
-                                                        <div className="flex bg-[#EDEFF7] p-0.5 rounded-lg border border-[#E2E5F0] select-none">
-                                                            <button 
-                                                                onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: false })}
-                                                                className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-all ${!m.isFixedAmount ? 'bg-white text-[#334486] shadow-xs' : 'text-[#5A628A] hover:text-[#252C4E]'}`}
-                                                                title="Percentage Mode"
-                                                            >
-                                                                %
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: true, fixedAmount: m.fixedAmount || rowBaseOriginal })}
-                                                                className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-all ${m.isFixedAmount ? 'bg-white text-[#334486] shadow-xs' : 'text-[#5A628A] hover:text-[#252C4E]'}`}
-                                                                title="Fixed Amount Mode"
-                                                            >
-                                                                ₹
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                    {!m.isFixedAmount ? (
-                                                        <div className="flex items-center gap-1 text-[#1B2240] font-bold tabular-nums">
-                                                            {isCleared ? (
-                                                                <span>{m.percentage}%</span>
-                                                            ) : (
-                                                                <>
-                                                                    <input 
-                                                                        type="number" 
-                                                                        value={m.percentage} 
-                                                                        onChange={e => handleUpdateMilestone(mainIndex, { percentage: Number(e.target.value) })}
-                                                                        className="w-10 text-center font-bold text-[#252C4E] outline-none bg-[#F6F7FB] border border-[#E2E5F0] rounded-lg py-1 focus:ring-1 focus:ring-[#ADBBDA]"
-                                                                    />
-                                                                    <span className="text-[10px] text-[#8E96B8] font-bold">%</span>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex items-center gap-1 text-[#1B2240] font-bold tabular-nums">
-                                                            {isCleared ? (
-                                                                <span>{formatCurrency(m.fixedAmount || 0)}</span>
-                                                            ) : (
-                                                                <input 
-                                                                    type="number" 
-                                                                    value={m.fixedAmount || 0} 
-                                                                    onChange={e => handleUpdateMilestone(mainIndex, { fixedAmount: Number(e.target.value) })}
-                                                                    className="w-24 text-center font-bold text-[#252C4E] outline-none bg-amber-50/50 border border-amber-200/50 rounded-lg py-1 focus:ring-1 focus:ring-amber-400"
-                                                                />
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            
-                                            <td className="p-4 text-right tabular-nums text-slate-900 bg-[#F6F7FB]/20 border-l border-[#EDEFF7] align-top">
-                                                <div className="font-bold text-sm">{formatCurrency(rowInvoiceTotal + deductedInitiationFee)}</div>
-                                                <div className="text-[10px] text-[#8E96B8]">
-                                                    (Base: {formatCurrency(rowBillable)} + {applicableGstRate}% GST)
-                                                </div>
-                                            </td>
-
-                                            <td className="p-4 text-center align-top">
-                                                <div className={`px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider ${statusColor}`}>
-                                                    {m.status || 'Pending'}
-                                                </div>
-                                                {m.invoiceNumber && (
-                                                    <div className="text-[10px] text-[#8E96B8] tabular-nums mt-1.5">{m.invoiceNumber}</div>
-                                                )}
-                                            </td>
-
-                                            <td className="p-4 text-right align-top">
-                                                {!m.status || m.status === 'pending' ? (
-                                                    <button 
-                                                        onClick={() => handleInvoiceAction(mainIndex, 'generate_invoice', effectiveTaxableBaseForLocking)}
-                                                        className="px-3.5 py-1.5 bg-[#3D52A0] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#334486] transition-all"
-                                                    >
-                                                        Raise Invoice
-                                                    </button>
-                                                ) : m.status === 'invoiced' ? (
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <button 
-                                                            onClick={() => handleInvoiceAction(mainIndex, 'revert_invoice')}
-                                                            className="p-1.5 text-[#8E96B8] hover:text-red-650 hover:bg-red-50 rounded transition-colors"
-                                                            title="Revert Invoice"
-                                                        >
-                                                            <RotateCcw className="w-4 h-4" />
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => handleInvoiceAction(mainIndex, 'mark_paid')}
-                                                            className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl shadow-xs hover:bg-emerald-100 transition-all"
-                                                        >
-                                                            Mark Paid
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-emerald-600 text-xs font-extrabold flex items-center justify-end gap-1">
-                                                        <button
-                                                        onClick={() => handleInvoiceAction(mainIndex, 'revert_payment')}
-                                                        className="p-1 text-[#8E96B8] hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                                        title="Not actually paid - step back to invoiced"
-                                                    >
-                                                        <RotateCcw className="w-3.5 h-3.5" />
-                                                    </button>
-                                                        <CheckIcon className="w-3.5 h-3.5 stroke-2" /> Paid
-                                                    </span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                        <tr className="bg-amber-50/20 border-t border-amber-100/50">
-                                            <td className="p-4 pl-8 text-amber-900 text-xs font-semibold leading-relaxed">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-amber-500 font-bold">↳</span>
-                                                    <span>Less: Project Initiation Fee (Design Retainer)</span>
-                                                </div>
-                                            </td>
-                                            <td className="p-4 text-center text-amber-600 tabular-nums text-xs">-</td>
-                                            <td className="p-4 text-right tabular-nums text-amber-700 font-bold border-l border-[#EDEFF7] text-sm">-{formatCurrency(deductedInitiationFee)}</td>
-                                            <td className="p-4 text-center">
-                                                <span className="px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border-emerald-200">Paid</span>
-                                            </td>
-                                            <td className="p-4 text-right tabular-nums text-xs">-</td>
-                                        </tr>
-                                        {rowDiscount > 0 && (
-                                        <tr className="bg-rose-50/20 border-t border-rose-100/50">
-                                            <td className="p-4 pl-8 text-rose-900 text-xs font-semibold leading-relaxed">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-rose-500 font-bold">&#8627;</span>
-                                                    <span>Less: discount{m.discountReason ? ` — ${m.discountReason}` : ''}</span>
-                                                </div>
-                                            </td>
-                                            <td className="p-4 text-center text-rose-600 tabular-nums text-xs">-</td>
-                                            <td className="p-4 text-right tabular-nums text-rose-700 font-bold border-l border-[#EDEFF7] text-sm">-{formatCurrency(rowDiscount)}</td>
-                                            <td className="p-4 text-center">
-                                                <span className="px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-800 border-rose-200">Discount</span>
-                                            </td>
-                                            <td className="p-4 text-right tabular-nums text-xs">-</td>
-                                        </tr>
-                                        )}
-                                        <tr className="bg-[#3D52A0]/1 border-t border-[#3D52A0]/4">
-                                            <td className="p-4 pl-8 text-slate-900 text-xs font-bold leading-relaxed">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-[#3D52A0] font-bold">↳</span>
-                                                    <span>Balance Payable on Milestone</span>
-                                                </div>
-                                            </td>
-                                            <td className="p-4 text-center text-[#3D52A0] tabular-nums text-xs">-</td>
-                                            <td className="p-4 text-right tabular-nums text-slate-900 font-black border-l border-[#EDEFF7] text-sm">{formatCurrency(rowInvoiceTotal)}</td>
-                                            <td className="p-4 text-center">
-                                                <div className={`px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider ${statusColor}`}>
-                                                    {m.status || 'Pending'}
-                                                </div>
-                                            </td>
-                                            <td className="p-4 text-right tabular-nums text-xs">-</td>
-                                        </tr>
-                                    </React.Fragment>
-                                );
-                            }
-
-                            return (
-                                <tr key={m.id} id={m.id} data-milestone-id={m.id} className="hover:bg-[#F6F7FB]/10 transition-colors group scroll-mt-24">
-                                    <td className="p-4 align-top">
-                                        {renderStageAndConditions(m, mainIndex, isCleared, i, items.length)}
-                                    </td>
-                                    <td className="p-4 text-center align-top">
-                                        <div className="flex flex-col items-center justify-center gap-1.5">
-                                            {!isCleared && (
-                                                <div className="flex bg-[#EDEFF7] p-0.5 rounded-lg border border-[#E2E5F0] select-none">
-                                                    <button 
-                                                        onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: false })}
-                                                        className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-all ${!m.isFixedAmount ? 'bg-white text-[#334486] shadow-xs' : 'text-[#5A628A] hover:bg-slate-200'}`}
-                                                        title="Percentage Mode"
-                                                    >
-                                                        %
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => handleUpdateMilestone(mainIndex, { isFixedAmount: true, fixedAmount: m.fixedAmount || rowBaseOriginal })}
-                                                        className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-all ${m.isFixedAmount ? 'bg-white text-[#334486] shadow-xs' : 'text-[#5A628A] hover:bg-slate-200'}`}
-                                                        title="Fixed Amount Mode"
-                                                    >
-                                                        ₹
-                                                    </button>
-                                                </div>
-                                            )}
-                                            {!m.isFixedAmount ? (
-                                                <div className="flex items-center gap-1 text-[#1B2240] font-bold tabular-nums">
-                                                    {isCleared ? (
-                                                        <span>{m.percentage}%</span>
-                                                    ) : (
-                                                        <>
-                                                            <input 
-                                                                type="number" 
-                                                                value={m.percentage} 
-                                                                onChange={e => handleUpdateMilestone(mainIndex, { percentage: Number(e.target.value) })}
-                                                                className="w-10 text-center font-bold text-[#252C4E] outline-none bg-[#F6F7FB] border border-[#E2E5F0] rounded-lg py-1 focus:ring-1 focus:ring-[#ADBBDA]"
-                                                            />
-                                                            <span className="text-[10px] text-[#8E96B8] font-bold">%</span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center gap-1 text-[#1B2240] font-bold tabular-nums">
-                                                    {isCleared ? (
-                                                        <span>{formatCurrency(m.fixedAmount || 0)}</span>
-                                                    ) : (
-                                                        <input 
-                                                            type="number" 
-                                                            value={m.fixedAmount || 0} 
-                                                            onChange={e => handleUpdateMilestone(mainIndex, { fixedAmount: Number(e.target.value) })}
-                                                            className="w-24 text-center font-bold text-[#252C4E] outline-none bg-amber-50/50 border border-amber-200/50 rounded-lg py-1 focus:ring-1 focus:ring-amber-400"
-                                                        />
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </td>
-                                    
-                                    <td className="p-4 text-right tabular-nums text-slate-900 bg-[#F6F7FB]/20 border-l border-[#EDEFF7] align-top">
-                                        <div className="font-bold text-sm">{formatCurrency(rowInvoiceTotal)}</div>
-                                        <div className="text-[10px] text-[#6F779E] font-sans font-medium mt-0.5">
-                                            (Base: {formatCurrency(rowBillable)} + {applicableGstRate}% GST)
-                                        </div>
-                                        {rowDiscount > 0 && (
-                                            <div className="text-[10px] text-rose-700 font-bold tabular-nums mt-0.5">
-                                                -{formatCurrency(rowDiscount)} discount (billed {formatCurrency(rowBeforeDiscount)})
-                                                {m.discountReason ? <span className="text-[#8E96B8] font-medium"> &middot; {m.discountReason}</span> : null}
-                                            </div>
-                                        )}
-                                        {!isReadOnlyMode && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setDiscountFor(discountFor === m.id ? null : m.id)}
-                                                className="text-[10px] font-bold text-[#8E96B8] hover:text-[#3D52A0] mt-0.5 cursor-pointer"
-                                            >
-                                                {rowDiscount > 0 ? 'Edit discount' : 'Add discount'}
-                                            </button>
-                                        )}
-                                        {discountFor === m.id && !isReadOnlyMode && (
-                                            <div className="mt-2 flex flex-col items-end gap-1.5">
-                                                <div className="flex items-center gap-1 px-2 py-1 bg-[#F6F7FB] rounded-lg border border-[#E2E5F0]">
-                                                    <span className="font-bold text-[#8E96B8] text-[10px]">&#8377;</span>
-                                                    <input
-                                                        type="number"
-                                                        autoFocus
-                                                        defaultValue={m.discountAmount || ''}
-                                                        placeholder="0"
-                                                        onChange={e => handleUpdateMilestone(mainIndex, { discountAmount: Math.max(0, Number(e.target.value) || 0) } as any)}
-                                                        className="w-20 text-right font-black text-[#252C4E] bg-transparent outline-none tabular-nums text-[11px]"
-                                                    />
-                                                </div>
-                                                <input
-                                                    type="text"
-                                                    defaultValue={m.discountReason || ''}
-                                                    placeholder="Reason"
-                                                    onChange={e => handleUpdateMilestone(mainIndex, { discountReason: e.target.value } as any)}
-                                                    className="w-36 px-2 py-1 bg-[#F6F7FB] rounded-lg border border-[#E2E5F0] text-[10px] text-[#252C4E] outline-none focus:border-[#ADBBDA] text-right"
-                                                />
-                                                <div className="flex items-center gap-1">
-                                                    <button type="button" onClick={() => setDiscountFor(null)}
-                                                        className="px-2 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-extrabold rounded-lg cursor-pointer">Done</button>
-                                                    {(m.discountAmount || 0) > 0 && (
-                                                        <button type="button"
-                                                            onClick={() => { handleUpdateMilestone(mainIndex, { discountAmount: 0, discountReason: '' } as any); setDiscountFor(null); }}
-                                                            className="px-2 py-1 text-[10px] font-bold text-[#8E96B8] hover:text-red-600 rounded-lg cursor-pointer">Remove</button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </td>
-
-                                    {isExecution && billablePercent < 100 && (
-                                        <>
-                                            <td className="p-4 text-right tabular-nums text-amber-900 bg-amber-50/5 border-l border-[#EDEFF7] font-bold align-top text-sm">
-                                                {formatCurrency(rowCash)}
-                                            </td>
-                                            <td className="p-4 text-right tabular-nums text-[#12182F] bg-[#F6F7FB]/40 border-l border-[#EDEFF7] align-top">
-                                                <div className="font-black text-sm">{formatCurrency(rowInvoiceTotal + rowCash)}</div>
-                                                <div className="text-[10px] text-[#6F779E] font-sans font-medium mt-0.5">invoice + cash</div>
-                                            </td>
-                                        </>
-                                    )}
-
-                                    <td className="p-4 text-center align-top">
-                                        <div className={`px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider ${statusColor}`}>
-                                            {m.status || 'Pending'}
-                                        </div>
-                                        {m.invoiceNumber && (
-                                            <div className="text-[10px] text-[#8E96B8] tabular-nums mt-1.5">{m.invoiceNumber}</div>
-                                        )}
-                                    </td>
-
-                                    <td className="p-4 text-right align-top">
-                                        {!m.status || m.status === 'pending' ? (
-                                            <button 
-                                                onClick={() => handleInvoiceAction(mainIndex, 'generate_invoice', effectiveTaxableBaseForLocking)}
-                                                className="px-3.5 py-1.5 bg-[#3D52A0] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#334486] transition-all"
-                                            >
-                                                Raise Invoice
-                                            </button>
-                                        ) : m.status === 'invoiced' ? (
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button 
-                                                    onClick={() => handleInvoiceAction(mainIndex, 'revert_invoice')}
-                                                    className="p-1.5 text-[#8E96B8] hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                                                    title="Revert Invoice"
-                                                >
-                                                    <RotateCcw className="w-4 h-4" />
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleInvoiceAction(mainIndex, 'mark_paid')}
-                                                    className="px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl shadow-xs hover:bg-emerald-100 transition-all"
-                                                >
-                                                    Mark Paid
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <span className="text-emerald-600 text-xs font-extrabold flex items-center justify-end gap-1">
-                                                <button
-                                                        onClick={() => handleInvoiceAction(mainIndex, 'revert_payment')}
-                                                        className="p-1 text-[#8E96B8] hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                                        title="Not actually paid - step back to invoiced"
-                                                    >
-                                                        <RotateCcw className="w-3.5 h-3.5" />
-                                                    </button>
-                                                <CheckIcon className="w-3.5 h-3.5 stroke-2" /> Paid
-                                            </span>
-                                        )}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-                </div>
-
-                <div className="p-4 bg-[#F6F7FB]/50 border-t border-[#EDEFF7] flex justify-center">
-                    <button 
-                        onClick={() => handleAddMilestone(isExecution ? 'execution' : 'design')}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-[#E2E5F0] text-[#3A416B] text-xs font-extrabold rounded-xl shadow-sm hover:bg-[#F6F7FB] hover:text-[#3D52A0] transition-all"
-                    >
-                        <PlusIcon className="w-4 h-4" /> Add {isExecution ? 'Execution' : 'Design'} Milestone
-                    </button>
-                </div>
-            </div>
-        );
-    };
-
-    const renderSimpleTrackView = (
-        items: PaymentMilestone[], 
-        baseAmount: number, 
-        originalBaseAmount: number,
-        isExecution: boolean, 
-        title: string
-    ) => {
-        let totalEffectivePercent = 0;
-        items.forEach(m => {
-            if (m.isFixedAmount && m.fixedAmount !== undefined) {
-                totalEffectivePercent += baseAmount > 0 ? (m.fixedAmount / baseAmount) * 100 : 0;
-            } else {
-                totalEffectivePercent += m.percentage;
-            }
-        });
-        const isBalanced = Math.abs(totalEffectivePercent - 100) < 0.1;
-
-        const paidItems = items.filter(m => m.status === 'paid' || m.status === 'invoiced');
-        const unpaidItems = items.filter(m => m.status !== 'paid' && m.status !== 'invoiced');
-        
-        let lockedBase = 0;
-        paidItems.forEach(m => {
-            if (m.isFixedAmount && m.fixedAmount !== undefined) {
-                lockedBase += m.fixedAmount;
-            } else {
-                lockedBase += (m.lockedTaxableBase || originalBaseAmount) * (m.percentage / 100);
-            }
-        });
-        const remainingBaseAmount = baseAmount - lockedBase;
-        const firstPendingIndex = items.findIndex(m => m.status !== 'paid' && m.status !== 'invoiced');
-
-        const viewMode = isExecution ? executionViewMode : designViewMode;
-        const setViewMode = isExecution ? setExecutionViewMode : setDesignViewMode;
-
-        return (
-            <div className="bg-white border border-[#E2E5F0] rounded-2xl overflow-hidden shadow-sm mb-8">
-                {/* Header */}
-                <div className="bg-[#F6F7FB]/50 px-6 py-4 border-b border-[#E2E5F0] flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                    <div>
-                        <h3 className="text-sm font-extrabold text-[#12182F] uppercase tracking-wider">{title} Tracking</h3>
-                        <div className="text-[11px] text-[#5A628A] mt-1 flex flex-wrap gap-x-4 gap-y-1 items-center font-medium">
-                            {baseAmount !== originalBaseAmount ? (
-                                <div className="flex items-center gap-2">
-                                    <span className="line-through text-[#8E96B8]" title="Original Taxable Base">Orig: {formatCurrency(originalBaseAmount)}</span>
-                                    <span className="text-[#3D52A0] font-bold tabular-nums" title="Revised Taxable Base">Rev: {formatCurrency(baseAmount)}</span>
-                                </div>
-                            ) : (
-                                <span>Taxable Base: <span className="tabular-nums font-bold text-[#3A416B]">{formatCurrency(baseAmount)}</span></span>
-                            )}
-                            {isExecution && (
-                                <>
-                                    {billablePercent < 100 && (
-                                        <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200/60 tabular-nums text-[10px]">
-                                            Split: {billablePercent}% / {100 - billablePercent}%
-                                        </span>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                    </div>
-                    
-                    <div className="flex flex-wrap items-center gap-3">
-                        {/* Segmented Toggle Control */}
-                        <div className="flex bg-[#EDEFF7] p-0.5 rounded-xl border border-[#E2E5F0] select-none">
-                            <button 
-                                onClick={() => setViewMode('simple')}
-                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${viewMode === 'simple' ? 'bg-white text-slate-900 shadow-xs border border-[#E2E5F0]/50' : 'text-[#5A628A] hover:text-[#252C4E]'}`}
-                            >
-                                Simple
-                            </button>
-                            <button 
-                                onClick={() => setViewMode('advanced')}
-                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${viewMode === 'advanced' ? 'bg-white text-slate-900 shadow-xs border border-[#E2E5F0]/50' : 'text-[#5A628A] hover:text-[#252C4E]'}`}
-                            >
-                                Advanced
-                            </button>
-                        </div>
-                        
-                        {!isReadOnlyMode && (
-                            <button
-                                onClick={() => {
-                                    setDatingTrack(isExecution ? 'execution' : 'design');
-                                    setDateStart(isoOf(new Date()));
-                                }}
-                                className="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl border border-[#E2E5F0] bg-white text-[#3A416B] hover:border-[#3D52A0] hover:text-[#3D52A0] transition-colors cursor-pointer"
-                                title="Give every milestone in this track a date, spaced evenly"
-                            >
-                                Set dates
-                            </button>
-                        )}
-
-                        <div className={`text-xs font-black px-3 py-1.5 rounded-xl border tabular-nums ${isBalanced ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}`}>
-                            Total: {totalEffectivePercent.toFixed(1).replace('.0', '')}%
-                        </div>
-                    </div>
-                </div>
-
-                {/* Cards List */}
-                <div className="p-6 bg-[#F6F7FB]/20 space-y-4">
-                    {items.map((m, i) => {
-                        const isCleared = m.status === 'paid' || m.status === 'invoiced';
-                        let rowBaseOriginal = 0;
-                        let effectiveTaxableBaseForLocking = baseAmount;
-                        if (isCleared) {
-                            rowBaseOriginal = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : ((m.lockedTaxableBase || originalBaseAmount) * (m.percentage / 100));
-                            effectiveTaxableBaseForLocking = m.lockedTaxableBase || originalBaseAmount;
-                        } else {
-                            if (m.isFixedAmount && m.fixedAmount !== undefined) {
-                                rowBaseOriginal = m.fixedAmount;
-                            } else {
-                                const fixedPendingTotal = unpaidItems.filter(x => x.isFixedAmount).reduce((sum, x) => sum + (x.fixedAmount || 0), 0);
-                                const remainingBaseAmountValue = Math.max(0, remainingBaseAmount - fixedPendingTotal);
-                                
-                                const unpaidPctExcludingFixed = unpaidItems.filter(x => !x.isFixedAmount).reduce((sum, x) => sum + x.percentage, 0);
-                                const relativePct = unpaidPctExcludingFixed > 0 ? (m.percentage / unpaidPctExcludingFixed) : 0;
-                                rowBaseOriginal = remainingBaseAmountValue * relativePct;
-                            }
-                            effectiveTaxableBaseForLocking = m.percentage > 0 ? (rowBaseOriginal / (m.percentage / 100)) : baseAmount;
-                        }
-                        rowBaseOriginal = Math.round(rowBaseOriginal);
-                        
-                        let rowBillable = Math.round(isExecution ? rowBaseOriginal * (billablePercent / 100) : rowBaseOriginal);
-                        const rowCash = Math.round(isExecution ? rowBaseOriginal * ((100 - billablePercent) / 100) : 0);
-                        
-                        const applicableGstRate = isExecution
-                            ? (executionGstEnabled ? gstRate : 0)
-                            : (designGstEnabled ? gstRate : 0);
-                        let rowGST = Math.round(rowBillable * (applicableGstRate / 100));
-                        
-                        let rowInvoiceTotal = Math.round(rowBillable + rowGST);
-                        
-                        let deductedInitiationFee = 0;
-                        if (!isExecution && i === 0 && initiationFee > 0) {
-                            deductedInitiationFee = Math.min(rowInvoiceTotal, initiationFee);
-                            rowInvoiceTotal = Math.max(0, rowInvoiceTotal - initiationFee);
-                        }
-
-                        /*
-                          A concession on this invoice, after GST and after the
-                          retainer -- the same order `computeSchedule` uses, so
-                          this row and the schedule cannot disagree.
-                        */
-                        const rowBeforeDiscount = rowInvoiceTotal;
-                        const rowDiscount = Math.min(Math.max(0, Number(m.discountAmount) || 0), rowInvoiceTotal);
-                        rowInvoiceTotal = Math.max(0, rowInvoiceTotal - rowDiscount);
-
-                        const mainIndex = milestones.findIndex(x => x.id === m.id);
-                        
-                        const statusColor = m.status === 'paid' 
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-100' 
-                            : m.status === 'invoiced' 
-                                ? 'bg-[#EDE8F5]/50 text-[#2A3A73] border-[#ADBBDA]' 
-                                : 'bg-[#F6F7FB] text-[#5A628A] border-[#E2E5F0]/50';
-
-                        /*
-                          What the client owes on this milestone, cash side included.
-
-                          This showed the tax-invoice total alone, so a part-cash
-                          execution milestone read lower here than the same milestone
-                          did in Collections and in the realization pipeline, both of
-                          which count the cash portion as money owed. The Inv | Cash
-                          line directly beneath already breaks this figure into its
-                          two parts, and the Advanced table still lists them in
-                          separate columns, so nothing about the invoice itself is
-                          restated — only the total is now present.
-
-                          Zero for design milestones and for fully billable execution,
-                          so this changes nothing outside a genuine cash split.
-                        */
-                        const finalItemAmountToShow = rowInvoiceTotal + rowCash;
-
-                        const isNextUp = i === firstPendingIndex;
-
-                        return (
-                            <motion.div 
-                                key={m.id}
-                                data-milestone-id={m.id}
-                                
-                                animate={isNextUp ? {
-                                    boxShadow: [
-                                        "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
-                                        "0 0 0 3px rgba(99, 102, 241, 0.15)",
-                                        "0 1px 2px 0 rgba(0, 0, 0, 0.05)"
-                                    ]
-                                } : {}}
-                                transition={isNextUp ? {
-                                    duration: 3,
-                                    repeat: Infinity,
-                                    ease: "easeInOut"
-                                } : {}}
-                                className={`bg-white border ${isNextUp ? 'border-[#ADBBDA] shadow-md' : 'border-[#E2E5F0]/80 hover:border-[#CBD1E4]'} rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative transition-all shadow-xs pl-6`}
-                            >
-                                {/* Colored Left Accent Bar with Heartbeat effect if Next Up */}
-                                <motion.div 
-                                    animate={isNextUp ? {
-                                        opacity: [1, 0.6, 1]
-                                    } : {}}
-                                    transition={isNextUp ? {
-                                        duration: 1.5,
-                                        repeat: Infinity,
-                                        ease: "easeInOut"
-                                    } : {}}
-                                    className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${isExecution ? 'bg-amber-400' : 'bg-[#3D52A0]'}`} 
-                                />
-
-                                {/* Milestone Info Column */}
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        {isCleared ? (
-                                            <span className="font-extrabold text-[#12182F] text-sm block truncate">{m.name}</span>
-                                        ) : (
-                                            <input 
-                                                type="text" 
-                                                value={m.name} 
-                                                onChange={e => handleUpdateMilestone(mainIndex, { name: e.target.value })}
-                                                className="bg-transparent font-extrabold text-[#12182F] text-sm py-0.5 outline-none focus:border-b focus:border-[#8E96B8] w-full"
-                                            />
-                                        )}
-                                        {isNextUp && (
-                                            <span className="inline-flex items-center gap-1 bg-[#EDE8F5] text-[#334486] text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider select-none shrink-0 h-4.5 border border-[#DDE3F5]">
-                                                <motion.span 
-                                                    animate={{ opacity: [1, 0.3, 1], scale: [1, 1.4, 1] }}
-                                                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                                                    className="w-1.5 h-1.5 bg-[#3D52A0] rounded-full inline-block"
-                                                />
-                                                Next Up
-                                            </span>
-                                        )}
-                                        {(!m.status || m.status === 'pending') && (
-                                            <div className="flex items-center gap-1 shrink-0 select-none">
-                                                <button 
-                                                    onClick={() => handleMoveMilestone(m.id, 'up')}
-                                                    disabled={i === 0}
-                                                    className={`p-1 rounded transition-colors ${i === 0 ? 'text-[#E2E5F0] cursor-not-allowed' : 'text-[#5A628A] hover:text-[#252C4E] hover:bg-[#EDEFF7]'}`}
-                                                    title="Move Up"
-                                                >
-                                                    <ChevronUpIcon className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleMoveMilestone(m.id, 'down')}
-                                                    disabled={i === items.length - 1}
-                                                    className={`p-1 rounded transition-colors ${i === items.length - 1 ? 'text-[#E2E5F0] cursor-not-allowed' : 'text-[#5A628A] hover:text-[#252C4E] hover:bg-[#EDEFF7]'}`}
-                                                    title="Move Down"
-                                                >
-                                                    <ChevronDownIcon className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleSplitMilestone(m.id)}
-                                                    className="text-[#8E96B8] hover:text-[#3D52A0] p-1 hover:bg-[#EDE8F5] rounded transition-colors"
-                                                    title="Split Milestone"
-                                                >
-                                                    <ScissorsIcon className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleDeleteMilestone(mainIndex)}
-                                                    className="text-[#8E96B8] hover:text-red-500 p-1 hover:bg-red-55 rounded transition-colors shrink-0"
-                                                    title="Delete Milestone"
-                                                >
-                                                    <DeleteIcon className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="text-[11px] text-[#5A628A] mt-1 leading-relaxed">
-                                        {isCleared ? (
-                                            <span>{m.unlocks || m.description || 'No deliverables mapped.'}</span>
-                                        ) : (
-                                            <input 
-                                                type="text" 
-                                                value={m.unlocks || m.description || ''} 
-                                                onChange={e => handleUpdateMilestone(mainIndex, { unlocks: e.target.value })}
-                                                placeholder="Unlocks deliverables..."
-                                                className="bg-transparent text-[11px] text-[#5A628A] focus:border-b focus:border-[#8E96B8] w-full outline-none"
-                                            />
-                                        )}
-                                    </div>
-                                    {/*
-                                      The target date.
-
-                                      `PaymentMilestone.date` has always existed and nothing
-                                      on this screen ever wrote to it, so every milestone
-                                      carried null and no cash-flow forecast was possible.
-                                      It is edited here, where the schedule is planned.
-
-                                      Note this is client-visible: the portal's spine, tables
-                                      and timeline all read this field, so a date entered
-                                      here appears in what the client sees.
-                                    */}
-                                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                        {renderTargetDate(m, mainIndex, isCleared)}
-                                    </div>
-                                    {m.invoiceNumber && (
-                                        <div className="text-[10px] text-[#8E96B8] tabular-nums mt-1.5">Ref: {m.invoiceNumber}</div>
-                                    )}
-                                </div>
-
-                                {/* Calculation and Inputs Column */}
-                                <div className="flex flex-wrap items-center gap-4 sm:gap-6 shrink-0">
-                                    {/* Percentage input */}
-                                    <div className="flex items-center gap-1.5">
-                                        {!m.isFixedAmount ? (
-                                            <div className="flex items-center gap-1">
-                                                {isCleared ? (
-                                                    <span className="font-bold text-[#3A416B] bg-[#F6F7FB] px-2.5 py-1 rounded-lg border border-[#E2E5F0] text-xs tabular-nums">{m.percentage}%</span>
-                                                ) : (
-                                                    <>
-                                                        <input 
-                                                            type="number" 
-                                                            value={m.percentage} 
-                                                            onChange={e => handleUpdateMilestone(mainIndex, { percentage: Number(e.target.value) })}
-                                                            className="w-12 text-center text-xs font-bold text-[#252C4E] outline-none bg-[#F6F7FB] border border-[#E2E5F0] rounded-lg py-1 focus:ring-1 focus:ring-[#ADBBDA] tabular-nums"
-                                                        />
-                                                        <span className="text-[10px] text-[#8E96B8] font-bold">%</span>
-                                                    </>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-1">
-                                                {isCleared ? (
-                                                    <span className="font-bold text-[#3A416B] bg-[#F6F7FB] px-2.5 py-1 rounded-lg border border-[#E2E5F0] text-xs tabular-nums">{formatCurrency(m.fixedAmount || 0)}</span>
-                                                ) : (
-                                                    <input 
-                                                        type="number" 
-                                                        value={m.fixedAmount || 0} 
-                                                        onChange={e => handleUpdateMilestone(mainIndex, { fixedAmount: Number(e.target.value) })}
-                                                        className="w-24 text-center text-xs font-bold text-[#252C4E] outline-none bg-amber-50/50 border border-amber-200/50 rounded-lg py-1 focus:ring-1 focus:ring-amber-400 tabular-nums"
-                                                    />
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Amount Display */}
-                                    <div className="text-right min-w-[100px]">
-                                        <div className="font-extrabold text-[#12182F] text-sm tabular-nums">{formatCurrency(finalItemAmountToShow)}</div>
-                                        {isExecution && billablePercent < 100 && (
-                                            <div className="text-[10px] text-[#8E96B8] tabular-nums mt-0.5">
-                                                Inv: {formatCurrency(rowInvoiceTotal)} | Cash: {formatCurrency(rowCash)}
-                                            </div>
-                                        )}
-                                        {deductedInitiationFee > 0 && (
-                                            <div className="text-[10px] text-amber-700 tabular-nums mt-0.5">
-                                                -{formatCurrency(deductedInitiationFee)} Retainer applied (Gross: {formatCurrency(rowInvoiceTotal + deductedInitiationFee)})
-                                            </div>
-                                        )}
-                                        {/*
-                                          Billed, forgiven, payable -- three facts, not one
-                                          smaller number. Without the first of them nobody can
-                                          tell a discounted invoice from a cheaper milestone.
-                                        */}
-                                        {rowDiscount > 0 && (
-                                            <div className="text-[10px] text-rose-700 tabular-nums mt-0.5">
-                                                -{formatCurrency(rowDiscount)} discount (billed {formatCurrency(rowBeforeDiscount)})
-                                                {m.discountReason ? <span className="text-[#8E96B8]"> &middot; {m.discountReason}</span> : null}
-                                            </div>
-                                        )}
-                                        {!isReadOnlyMode && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setDiscountFor(discountFor === m.id ? null : m.id)}
-                                                className="text-[10px] font-bold text-[#8E96B8] hover:text-[#3D52A0] mt-0.5 cursor-pointer"
-                                            >
-                                                {rowDiscount > 0 ? 'Edit discount' : 'Add discount'}
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Status Badge */}
-                                    <div className={`px-2 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider text-center w-20 shrink-0 ${statusColor}`}>
-                                        {m.status || 'Pending'}
-                                    </div>
-
-                                    {/* Action Button */}
-                                    <div className="w-24 flex justify-end shrink-0">
-                                        {!m.status || m.status === 'pending' ? (
-                                            <button 
-                                                onClick={() => handleInvoiceAction(mainIndex, 'generate_invoice', effectiveTaxableBaseForLocking)}
-                                                className="w-full text-center px-3 py-1.5 bg-[#3D52A0] hover:bg-[#334486] text-white text-[11px] font-extrabold rounded-xl shadow-xs transition-all uppercase tracking-wider"
-                                            >
-                                                Raise
-                                            </button>
-                                        ) : m.status === 'invoiced' ? (
-                                            <div className="flex items-center gap-1.5 w-full">
-                                                <button 
-                                                    onClick={() => handleInvoiceAction(mainIndex, 'revert_invoice')}
-                                                    className="p-1.5 text-[#8E96B8] hover:text-red-650 hover:bg-red-50 rounded transition-colors shrink-0"
-                                                    title="Revert Invoice"
-                                                >
-                                                    <RotateCcw className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleInvoiceAction(mainIndex, 'mark_paid')}
-                                                    className="flex-1 text-center py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold rounded-xl shadow-xs transition-all uppercase tracking-wider"
-                                                >
-                                                    Paid
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <span className="text-emerald-600 text-xs font-extrabold flex items-center gap-1">
-                                                <button
-                                                        onClick={() => handleInvoiceAction(mainIndex, 'revert_payment')}
-                                                        className="p-1 text-[#8E96B8] hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                                        title="Not actually paid - step back to invoiced"
-                                                    >
-                                                        <RotateCcw className="w-3.5 h-3.5" />
-                                                    </button>
-                                                <CheckIcon className="w-3.5 h-3.5 stroke-2" /> Paid
-                                            </span>
-                                        )}
-                                    </div>
-                                    </div>
-
-                                    {/*
-                                      Setting a concession on this invoice.
-
-                                      Available on settled rows too, which is the
-                                      point: a closing discount is agreed after the
-                                      invoice has gone out, and every other control
-                                      on a paid row is hidden.
-                                    */}
-                                    {discountFor === m.id && (
-                                        <div className="mt-3 pt-3 border-t border-[#EDEFF7] flex flex-wrap items-end gap-2">
-                                            <div>
-                                                <label className="block text-[10px] font-black text-[#8E96B8] uppercase tracking-wider mb-1">Discount off this invoice</label>
-                                                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#F6F7FB] rounded-xl border border-[#E2E5F0]">
-                                                    <span className="font-bold text-[#8E96B8] text-xs">&#8377;</span>
-                                                    <input
-                                                        type="number"
-                                                        autoFocus
-                                                        defaultValue={m.discountAmount || ''}
-                                                        placeholder="0"
-                                                        onChange={e => handleUpdateMilestone(mainIndex, { discountAmount: Math.max(0, Number(e.target.value) || 0) } as any)}
-                                                        className="w-24 text-right font-black text-[#252C4E] bg-transparent outline-none tabular-nums text-xs"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="flex-1 min-w-[160px]">
-                                                <label className="block text-[10px] font-black text-[#8E96B8] uppercase tracking-wider mb-1">Reason</label>
-                                                <input
-                                                    type="text"
-                                                    defaultValue={m.discountReason || ''}
-                                                    placeholder="e.g. agreed at project close"
-                                                    onChange={e => handleUpdateMilestone(mainIndex, { discountReason: e.target.value } as any)}
-                                                    className="w-full px-2.5 py-1.5 bg-[#F6F7FB] rounded-xl border border-[#E2E5F0] text-xs text-[#252C4E] outline-none focus:border-[#ADBBDA]"
-                                                />
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => setDiscountFor(null)}
-                                                className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold rounded-xl transition-all uppercase tracking-wider cursor-pointer"
-                                            >
-                                                Done
-                                            </button>
-                                            {(m.discountAmount || 0) > 0 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => { handleUpdateMilestone(mainIndex, { discountAmount: 0, discountReason: '' } as any); setDiscountFor(null); }}
-                                                    className="px-3 py-1.5 text-[11px] font-bold text-[#8E96B8] hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
-                                                >
-                                                    Remove
-                                                </button>
-                                            )}
-                                        </div>
-                                    )}
-                            </motion.div>
-                        );
-                    })}
-                </div>
-
-                {/* Switching help caption */}
-                <div className="px-6 py-2 bg-[#F6F7FB]/50 border-t border-[#E2E5F0]">
-                    <p className="text-[10px] text-[#8E96B8] text-center font-medium leading-relaxed">
-                        Switch to <span className="font-extrabold text-[#3D52A0] cursor-pointer hover:underline" onClick={() => setViewMode('advanced')}>Advanced View</span> for triggers, release conditions, fixed amounts & cash split.
-                    </p>
-                </div>
-
-                {/* Footer Add Button */}
-                <div className="bg-[#F6F7FB]/50 px-6 py-4 border-t border-[#E2E5F0] flex justify-center">
-                    <button 
-                        onClick={() => handleAddMilestone(isExecution ? 'execution' : 'design')}
-                        className="px-4 py-2 bg-white hover:bg-[#F6F7FB] border border-[#E2E5F0] rounded-xl text-xs font-bold text-[#3A416B] shadow-xs flex items-center gap-1.5 transition-all"
-                    >
-                        <PlusIcon className="w-3.5 h-3.5" /> Add {isExecution ? 'Execution' : 'Design'} Milestone
-                    </button>
-                </div>
-            </div>
-        );
     };
 
     // --- TAX SIMULATOR ---
@@ -3041,6 +1887,399 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         return list;
     }, [milestones, originalNetDesign, originalNetExecution, projectContext.lifecycle?.stage, cashUtilization, projectContext.engagement?.status, designMilestones, executionMilestones]);
 
+    /*
+      The Money board (DESIGN.md → "Money motion", chosen by the owner on 18 Nov 2026).
+
+      Money opens on the design and execution milestones side by side, each
+      track with its tax plate. A change to the taxable share or GST is
+      previewed on every unpaid milestone before it is applied; the schedule
+      itself is edited in one window and saved in one go. Both are kept in
+      History with what moved and why.
+    */
+    const savedTerms: TaxTerms = { billablePercent, designBillablePercent, executionGstEnabled, designGstEnabled, gstRate };
+    const shownTerms: TaxTerms = termsDraft || savedTerms;
+    const previewing = !!termsDraft && !sameTerms(termsDraft, savedTerms);
+    const previewSchedule = useMemo(
+        () => (previewing && termsDraft ? computeSchedule({ ...scheduleArgs, overrides: { ...scheduleArgs.overrides, ...termsDraft } }) : null),
+        [previewing, termsDraft, scheduleArgs],
+    );
+    const priceDraft = useCallback(
+        (draft: PaymentMilestone[]) => computeSchedule({ ...scheduleArgs, context: { ...scheduleArgs.context, paymentMilestones: draft } }),
+        [scheduleArgs],
+    );
+    const shown = previewSchedule || schedule;
+    const touch = (id: string) => { localTouch.current.set(id, Date.now()); };
+    const wasLocal = useCallback((id: string) => Date.now() - (localTouch.current.get(id) || 0) < 15000, []);
+
+    const trackOf = (m: PaymentMilestone): BoardTrack => (m.type === 'execution' ? 'execution' : 'design');
+    const figuresOf = (s: typeof schedule, t: BoardTrack): TrackFigures => {
+        const rows = s.amounts.filter(a => a.type === t);
+        const sum = (k: 'billable' | 'gst' | 'cash' | 'base') => rows.reduce((x, a) => x + (a[k] || 0), 0);
+        const taxable = t === 'design' ? s.totals.taxableDesign : s.totals.taxableExecution;
+        const gross = t === 'design' ? rawDesignFee : rawExecutionTotal;
+        return { gross, discount: Math.max(0, gross - taxable), taxable, billable: sum('billable'), gst: sum('gst'), cash: sum('cash'), total: sum('base') + sum('gst') };
+    };
+    const earnedIds = useMemo(() => new Set((billable.items || []).filter(i => i.earned).map(i => i.id)), [billable]);
+    const states = useMemo(() => cardStates(milestones, earnedIds), [milestones, earnedIds]);
+    const owedWhere = (s: typeof schedule, pick: (m: PaymentMilestone) => boolean) =>
+        milestones.filter(pick).reduce((x, m) => x + (s.byId[m.id]?.owed || 0), 0);
+    const sumOf = (s: typeof schedule, k: 'gst' | 'cash' | 'base') => s.amounts.reduce((x, a) => x + (a[k] || 0), 0);
+    const contractOf = (s: typeof schedule) => sumOf(s, 'base') + sumOf(s, 'gst');
+
+    const boardTotals: BoardTotals = (() => {
+        const contract = contractOf(schedule);
+        const collected = totalPaid;
+        const withClient = owedWhere(schedule, m => states[m.id] === 'invoiced');
+        const earned = owedWhere(schedule, m => states[m.id] === 'earned');
+        return {
+            contract, collected, withClient, earned,
+            notEarned: Math.max(0, contract - collected - withClient - earned),
+            taxable: schedule.totals.taxableDesign + schedule.totals.taxableExecution,
+            gst: sumOf(schedule, 'gst'), cash: sumOf(schedule, 'cash'),
+        };
+    })();
+    const boardStatus: { label: string; tone: 'brand' | 'warn' | 'good' | 'bad' } = chase.amountOverdue > 0
+        ? { label: `${formatCurrency(chase.amountOverdue)} overdue`, tone: 'bad' }
+        : boardTotals.earned > 0
+            ? { label: `${formatCurrency(boardTotals.earned)} to invoice`, tone: 'brand' }
+            : boardTotals.withClient > 0
+                ? { label: `${formatCurrency(boardTotals.withClient)} with client`, tone: 'warn' }
+                : { label: 'Nothing overdue', tone: 'good' };
+
+    const scheduleAccepted = projectContext.engagement?.status === 'acknowledged';
+    const scheduleAction = !latestSchedule
+        ? { label: 'Generate payment schedule', onClick: handleGenerateSchedule }
+        : hasUnsavedScheduleChanges
+            ? { label: `Generate revised schedule (v${latestSchedule.version + 1})`, onClick: handleGenerateSchedule }
+            : { label: `Payment schedule v${latestSchedule.version}`, onClick: () => setMoneyTab('history') };
+
+    const today = new Date();
+    const in30 = milestones.filter(m => m.status !== 'paid' && m.date && (new Date(m.date.slice(0, 10) + 'T00:00:00').getTime() - today.getTime()) <= 30 * 864e5);
+    const undated = milestones.filter(m => m.status !== 'paid' && !m.date);
+    const projectCashOf = (s: typeof schedule) => s.amounts.reduce((x, a) => x + (a.type === 'execution' ? a.cash : 0), 0);
+    const studioPctNow = cashUtilization;
+    const studioPctPreview = previewSchedule ? studioCashPct(otherProjectsCash, projectCashOf(previewSchedule), cashLimit) : null;
+    const studioPct = studioPctPreview ?? studioPctNow;
+    const boardTiles: BoardTile[] = [
+        {
+            key: 'collections', label: 'Collections', icon: BOARD_ICONS.Coins,
+            tone: chase.chaseNow > 0 ? 'bad' : chase.items.length > 0 ? 'warn' : 'ok',
+            value: formatCurrency(chase.amountOutstanding),
+            sub: chase.chaseNow > 0 ? `${chase.chaseNow} past due` : chase.items.length > 0 ? `${chase.items.length} open, none past due` : 'Nothing out with the client',
+        },
+        {
+            key: 'next30', label: 'Next 30 days', icon: BOARD_ICONS.CalendarClock, tone: 'brand',
+            value: formatCurrency(in30.reduce((x, m) => x + (schedule.byId[m.id]?.owed || 0), 0)),
+            sub: undated.length ? `Expected in · ${undated.length} undated, tap to date them from the timeline` : `Expected in · ${formatCurrency(gap.outflowTotal + gap.undatedOutflow)} owed to vendors`,
+            onClick: undated.length && !isReadOnlyMode ? runDateDerivation : undefined,
+        },
+        {
+            key: 'schedule', label: 'Payment schedule', icon: BOARD_ICONS.FileSignature,
+            tone: !latestSchedule || hasUnsavedScheduleChanges ? 'warn' : scheduleAccepted ? 'ok' : 'slate',
+            value: !latestSchedule ? 'Not generated' : hasUnsavedScheduleChanges ? 'Out of date' : scheduleAccepted ? 'Accepted' : `v${latestSchedule.version} issued`,
+            sub: !latestSchedule ? 'Tap to generate it from these milestones' : hasUnsavedScheduleChanges ? 'Milestones changed since it was issued' : scheduleAccepted ? 'The client accepted the schedule and terms' : 'Waiting for the client to accept it',
+            onClick: (!latestSchedule || hasUnsavedScheduleChanges) && !isReadOnlyMode ? handleGenerateSchedule : undefined,
+        },
+        {
+            key: 'studio', label: 'Studio cash this FY', icon: BOARD_ICONS.Gauge,
+            tone: studioPct > 100 ? 'bad' : studioPct > 85 ? 'warn' : 'ok',
+            value: <>{Math.round(studioPct)}% <span className="text-xs font-semibold text-slate-500">of limit</span>
+                {studioPctPreview !== null && Math.round(studioPctPreview - studioPctNow) !== 0 && (
+                    <span className={`ml-1.5 px-1.5 rounded-md text-[10px] font-bold ${studioPctPreview > studioPctNow ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {studioPctPreview > studioPctNow ? '+' : ''}{Math.round(studioPctPreview - studioPctNow)} pts
+                    </span>
+                )}</>,
+            sub: 'Every project. Moves with this project\'s split.',
+            meter: { pct: studioPct, tone: studioPct > 100 ? 'bad' : studioPct > 85 ? 'warn' : 'ok' },
+        },
+    ];
+
+    const setTerm = (up: Partial<TaxTerms>) => {
+        const next = { ...shownTerms, ...up };
+        setTermsDraft(sameTerms(next, savedTerms) ? null : next);
+    };
+    const clearedCount = milestones.filter(m => m.status === 'paid' || m.status === 'invoiced').length;
+    const applyTerms = () => {
+        if (!termsDraft) return;
+        const before = contractOf(schedule), after = previewSchedule ? contractOf(previewSchedule) : before;
+        const entry: ScheduleChange = { id: generateId(), date: new Date().toISOString(), kind: 'terms', changes: termsChanges(savedTerms, termsDraft), reason: termsReason.trim() || undefined, before, after };
+        setBillablePercent(termsDraft.billablePercent);
+        setDesignBillablePercent(termsDraft.designBillablePercent);
+        setExecutionGstEnabled(termsDraft.executionGstEnabled);
+        setDesignGstEnabled(termsDraft.designGstEnabled);
+        setGstRate(termsDraft.gstRate);
+        setProjectContext(prev => ({ ...prev, gstRate: termsDraft.gstRate, financials: { ...(prev.financials as any || {}), scheduleChanges: [...((prev.financials as any)?.scheduleChanges || []), entry] } as any }));
+        setTermsDraft(null);
+        setTermsReason('');
+        showSuccessWithNext('Tax terms applied to the schedule');
+    };
+    const boardPreview: BoardPreview | null = previewing && previewSchedule ? {
+        before: contractOf(schedule), after: contractOf(previewSchedule),
+        gstBefore: sumOf(schedule, 'gst'), gstAfter: sumOf(previewSchedule, 'gst'),
+        cashBefore: sumOf(schedule, 'cash'), cashAfter: sumOf(previewSchedule, 'cash'),
+        changed: milestones.filter(m => m.status !== 'paid' && m.status !== 'invoiced' && Math.round(previewSchedule.byId[m.id]?.owed || 0) !== Math.round(schedule.byId[m.id]?.owed || 0)).length,
+        locked: clearedCount,
+        needReason: clearedCount > 0, reason: termsReason, onReason: setTermsReason,
+        onApply: applyTerms, onDiscard: () => { setTermsDraft(null); setTermsReason(''); },
+    } : null;
+
+    const indexOf = (id: string) => milestones.findIndex(m => m.id === id);
+    const cardActions: CardActions = {
+        raise: (id) => { const i = indexOf(id); if (i < 0) return; if (previewing) { alert('Apply or discard the tax preview first, so the invoice goes out on the terms you mean.'); return; } touch(id); handleInvoiceAction(i, 'generate_invoice', schedule.byId[id]?.taxableBaseForLocking); },
+        markPaid: (id) => { const i = indexOf(id); if (i < 0) return; touch(id); handleInvoiceAction(i, 'mark_paid'); },
+        revertInvoice: (id) => { const i = indexOf(id); if (i < 0) return; touch(id); handleInvoiceAction(i, 'revert_invoice'); },
+        revertPayment: (id) => { const i = indexOf(id); if (i < 0) return; touch(id); handleInvoiceAction(i, 'revert_payment'); },
+        toggleStep: (id, k) => { const i = indexOf(id); if (i < 0) return; touch(id); handleToggleSubStep(i, k); },
+        setDate: (id, v) => { const i = indexOf(id); if (i < 0) return; touch(id); handleUpdateMilestone(i, { date: v || undefined }); },
+        setDiscount: (id, amount, reason) => { const i = indexOf(id); if (i < 0) return; touch(id); handleUpdateMilestone(i, { discountAmount: amount > 0 ? amount : undefined, discountReason: amount > 0 ? reason : undefined }); },
+        setHandover: (id, on) => { const i = indexOf(id); if (i < 0) return; touch(id); handleUpdateMilestone(i, { isHandoverAdvance: on }); },
+        edit: (t) => openEditor(t),
+    };
+    function openEditor(t: BoardTrack | 'both') {
+        if (previewing) { alert('Apply or discard the tax preview first.'); return; }
+        setEditFocus(t);
+    }
+
+    const retainerLine = (
+        <span className="basis-full inline-flex flex-wrap items-center gap-2 text-slate-600">
+            <Wallet className="w-3.5 h-3.5 text-[#3D52A0]" />
+            Initiation retainer: {initiationFee > 0 ? <b className="text-slate-800 tabular-nums">{formatCurrency(initiationFee)}</b> : 'none taken'}
+            {initiationFee > 0 && <span className="text-slate-500">· comes off the first design invoice</span>}
+            {!isReadOnlyMode && !retainerOpen && <Button size="sm" variant="quiet" onClick={() => setRetainerOpen(true)}>{initiationFee > 0 ? 'Change' : 'Add retainer'}</Button>}
+            {!isReadOnlyMode && retainerOpen && (
+                <span className="inline-flex flex-wrap items-center gap-1.5">
+                    {[4999, 10000, 25000].map(v => <Button key={v} size="sm" variant={initiationFee === v ? 'primary' : 'secondary'} onClick={() => setInitiationFee(v)}>{formatCurrency(v)}</Button>)}
+                    <input className="w-24 px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs tabular-nums" inputMode="numeric" aria-label="Retainer amount"
+                        value={initiationFee || ''} placeholder="₹0" onChange={e => setInitiationFee(Math.max(0, Number(e.target.value.replace(/[^0-9]/g, '')) || 0))} />
+                    <Button size="sm" variant="secondary" onClick={() => setRetainerOpen(false)}>Done</Button>
+                    {initiationFee > 0 && <Button size="sm" variant="quiet" onClick={() => { setInitiationFee(0); setRetainerOpen(false); }}>Remove</Button>}
+                </span>
+            )}
+        </span>
+    );
+
+    const tracks: BoardTrack[] = feeOnly ? ['design'] : ['design', 'execution'];
+    const boardColumns = tracks.map((t, n) => {
+        const rows = milestones.filter(m => trackOf(m) === t);
+        const taxableT = t === 'design' ? taxableDesign : taxableExecution;
+        const tot = trackTotal(rows, taxableT);
+        const share = t === 'design' ? shownTerms.designBillablePercent : shownTerms.billablePercent;
+        const gstOnT = t === 'design' ? shownTerms.designGstEnabled : shownTerms.executionGstEnabled;
+        const collectedT = owedWhere(schedule, m => trackOf(m) === t && m.status === 'paid');
+        const withClientT = owedWhere(schedule, m => trackOf(m) === t && m.status === 'invoiced');
+        return (
+            <TrackColumn key={t} index={n} track={t}
+                value={t === 'design' ? rawDesignFee : rawExecutionTotal}
+                plate={(
+                    <TaxPlate track={t} share={share} gstOn={gstOnT} gstRate={shownTerms.gstRate}
+                        figures={figuresOf(shown, t)} saved={previewSchedule ? figuresOf(schedule, t) : undefined}
+                        readOnly={isReadOnlyMode}
+                        onShare={v => setTerm(t === 'design' ? { designBillablePercent: v } : { billablePercent: v })}
+                        onGst={on => setTerm(t === 'design' ? { designGstEnabled: on } : { executionGstEnabled: on })}
+                        footer={t === 'design' ? retainerLine : undefined} />
+                )}
+                milestones={rows} states={states} amounts={shown.byId} saved={previewSchedule ? schedule.byId : undefined}
+                shares={Object.fromEntries(rows.map(m => [m.id, shareOf(m, taxableT)]))}
+                totalPct={tot.pct} whole={tot.whole || rows.length === 0}
+                collected={collectedT} withClient={withClientT} clientPays={figuresOf(schedule, t).total}
+                waitingOnClient={!scheduleAccepted} readOnly={isReadOnlyMode} wasLocal={wasLocal}
+                actions={cardActions} highlightId={highlightMilestoneId}
+                onSetDates={isReadOnlyMode ? undefined : () => setDatingTrack(t)} />
+        );
+    });
+
+    const boardSummary = (
+        <MilestoneSummary onOpen={goToMilestone} tracks={tracks.map(t => {
+            const rows = milestones.filter(m => trackOf(m) === t);
+            const taxableT = t === 'design' ? taxableDesign : taxableExecution;
+            return { track: t, milestones: rows, states, amounts: shown.byId, saved: previewSchedule ? schedule.byId : undefined,
+                shares: Object.fromEntries(rows.map(m => [m.id, shareOf(m, taxableT)])) };
+        })} />
+    );
+
+    const versionPill = availableVersions.length > 1 ? (
+        <button type="button" onClick={() => setMoneyTab('history')} title="Switch or audit billing versions in History"
+            className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 hover:border-[#3D52A0]/40">
+            <History className="w-3.5 h-3.5 text-[#3D52A0]" />
+            {selectedHistoricalEntry ? `Viewing ${selectedHistoricalEntry.name}` : (availableVersions.find(v => v.isCurrentActive)?.name || 'Active version')}
+            <span className="text-slate-400">· {availableVersions.length} versions</span>
+        </button>
+    ) : null;
+
+    const boardNotices = (
+        <>
+            {(schedule.overBilled || []).map(ob => (
+                <div key={ob.track} className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-xs text-amber-900">
+                    <p className="text-sm font-bold">{ob.track === 'design' ? 'Design' : 'Execution'} is billed {formatCurrency(ob.overBy)} over its contract</p>
+                    <p className="mt-1">Invoiced milestones account for {formatCurrency(ob.lockedBase)} against a contract of {formatCurrency(ob.taxableBase)}.
+                        {ob.unpaidCount > 0 ? ` The ${ob.unpaidCount} milestone${ob.unpaidCount === 1 ? '' : 's'} still unpaid ${ob.unpaidCount === 1 ? 'is' : 'are'} shown as zero owed, because there is nothing left to bill against.` : ' Every milestone on this track is settled, so the difference sits in what was invoiced.'}
+                        {' '}Either the contract value is understated, or a milestone was invoiced at the wrong base.</p>
+                </div>
+            ))}
+            {asActualsFix && asActualsPreview && <AsActualsCorrectionPanel c={asActualsFix} preview={asActualsPreview} onApply={applyAsActualsFix} />}
+            {openRevision && revisionPreview && <RevisionMoneyPanel rev={openRevision} preview={revisionPreview} compact onOpen={() => openEditor('both')} />}
+            <ScopeAdditionsMoneyPanel summary={scopeSummary} contractedExGst={scopeContracted} baseMarginPct={scopeBaseMarginPct} loading={scopeLoading} error={scopeError} />
+            {dateProposal && (
+                <div className="bg-white border border-[#ADBBDA] rounded-2xl px-5 py-4 mny-rise">
+                    {dateProposal.proposals.length > 0 ? (
+                        <>
+                            <h4 className="text-sm font-bold text-[#12182F]">
+                                {dateProposal.proposals.length} {dateProposal.proposals.length === 1 ? 'date' : 'dates'} from the programme
+                            </h4>
+                            <p className="text-[11px] text-[#5A628A] mt-0.5 leading-snug">
+                                Read off {dateProposal.phaseCount} timeline {dateProposal.phaseCount === 1 ? 'phase' : 'phases'}.
+                                <b> Mapped</b> means the studio configured that step to trigger the milestone;
+                                <b> placed</b> means it was positioned by where it sits in its own schedule.
+                            </p>
+                            <ul className="mt-2.5 space-y-1.5">
+                                {dateProposal.proposals.map(d => (
+                                    <li key={d.id} className="flex items-center gap-2 text-xs">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#3D52A0] shrink-0" />
+                                        <span className="text-[#2B3358] flex-1 min-w-0 truncate">{d.name}</span>
+                                        <span className="text-[#8E96B8] text-[10px] truncate">
+                                            {d.how === 'mapped' ? 'mapped to' : 'placed in'} {d.from}
+                                        </span>
+                                        <span className="font-bold text-[#12182F] tabular-nums shrink-0">{d.date}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                            <div className="flex items-center gap-2 mt-3.5">
+                                <button
+                                    type="button"
+                                    onClick={applyDateProposal}
+                                    className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#3D52A0] hover:bg-[#334486] rounded-lg cursor-pointer"
+                                >
+                                    Apply {dateProposal.proposals.length === 1 ? 'it' : 'them'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setDateProposal(null)}
+                                    className="px-3 py-1.5 text-xs font-bold text-[#5A628A] hover:text-[#12182F] cursor-pointer"
+                                >
+                                    Discard
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <h4 className="text-sm font-bold text-[#12182F]">Nothing could be dated from the programme</h4>
+                            <p className="text-[11px] text-[#5A628A] mt-1 leading-relaxed max-w-2xl">
+                                A date is traced from a milestone to the studio milestone of the same name, to the
+                                design step configured to trigger it, to that step's phase on this project's timeline.
+                                Here is where that broke:
+                            </p>
+                        </>
+                    )}
+
+                    {dateProposal.unmatched.length > 0 && (
+                        <ul className="mt-3 space-y-1 border-t border-[#E2E5F0] pt-3">
+                            {dateProposal.unmatched.map((u, i) => (
+                                <li key={i} className="flex items-start gap-2 text-[11px]">
+                                    <span className="w-1 h-1 rounded-full bg-[#CBD1E4] mt-1.5 shrink-0" />
+                                    <span className="text-[#2B3358] font-semibold shrink-0">{u.name}</span>
+                                    <span className="text-[#8E96B8]">— {u.reason}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+
+                    {dateProposal.proposals.length === 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setDateProposal(null)}
+                            className="mt-3 px-3 py-1.5 text-xs font-bold text-[#5A628A] hover:text-[#12182F] cursor-pointer"
+                        >
+                            Close
+                        </button>
+                    )}
+                </div>
+            )}
+        </>
+    );
+
+    const breakdownToggle = (
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+            <div className="flex flex-wrap items-center gap-3">
+                <button type="button" onClick={() => setTaxToolsOpen(o => !o)} aria-expanded={taxToolsOpen} className="group flex flex-1 min-w-[240px] items-center gap-3 text-left">
+                    <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center"><SlidersHorizontal className="w-4 h-4" /></span>
+                    <span className="min-w-0">
+                        <span className="block font-bold text-slate-800">Contract breakdown and tax tools</span>
+                        <span className="block text-xs text-slate-500">The full table, the cash limit, discounts and the split-GST simulator.</span>
+                    </span>
+                    <ChevronDownIcon className={`ml-auto w-4 h-4 text-slate-400 mb-turn ${taxToolsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                <span className="flex flex-wrap gap-2">
+                    {setBoq && <Button size="sm" variant="secondary" icon={TrendingUp} onClick={() => setActiveSmartView('margin')}>Margin optimizer</Button>}
+                    <Button size="sm" variant="secondary" icon={Coins} onClick={() => setActiveSmartView('cash-flow')}>Cash flow forecast</Button>
+                </span>
+            </div>
+        </section>
+    );
+
+    const scheduleChangeLog: ScheduleChange[] = ((financials as any)?.scheduleChanges || []) as ScheduleChange[];
+    const scheduleLog = scheduleChangeLog.length > 0 ? (
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in">
+            <div className="flex items-start gap-3">
+                <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center"><History className="w-4 h-4" /></span>
+                <div><h3 className="font-bold text-slate-800">Schedule and tax changes</h3>
+                    <p className="text-xs text-slate-500">Every saved change to the milestones or the tax terms, with what moved and why.</p></div>
+            </div>
+            <div className="mt-4 divide-y divide-slate-100">
+                {[...scheduleChangeLog].reverse().map((c, i) => (
+                    <div key={c.id} className="py-3 hud-row-in" style={{ animationDelay: `${i * 30}ms` }}>
+                        <div className="flex flex-wrap items-center gap-2 text-sm">
+                            <b className="text-slate-800">{c.kind === 'terms' ? 'Tax terms' : 'Milestones'}</b>
+                            <span className="text-xs text-slate-500">{new Date(c.date).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                            {typeof c.before === 'number' && typeof c.after === 'number' && Math.round(c.before) !== Math.round(c.after) && (
+                                <span className="ml-auto text-xs text-slate-600 tabular-nums">Client pays {formatCurrency(c.before)} → <b className="text-slate-800">{formatCurrency(c.after)}</b></span>
+                            )}
+                        </div>
+                        {c.reason && <p className="text-xs text-slate-700 mt-1">{c.reason}</p>}
+                        <ul className="mt-1 text-[11px] text-slate-500 list-disc pl-4">{c.changes.map((x, k) => <li key={k}>{x}</li>)}</ul>
+                    </div>
+                ))}
+            </div>
+        </section>
+    ) : null;
+
+    const studioStages: StudioStages | null = (() => {
+        const s: any = studioPaymentStr || FFDS_PAYMENT_STRUCTURE_DEFAULTS;
+        if (!s?.designStages && !s?.executionStages) return null;
+        const map = (list: any[]) => (list || []).map((x: any) => ({ name: x.name, pct: Number(x.pct) || 0, trigger: x.trigger, unlocks: x.unlocks }));
+        return { design: map(s.designStages), execution: map(s.executionStages) };
+    })();
+
+    const saveScheduleDraft = (draft: PaymentMilestone[], reason: string, changes: string[]) => {
+        const before = contractOf(schedule), after = contractOf(priceDraft(draft));
+        const entry: ScheduleChange = { id: generateId(), date: new Date().toISOString(), kind: 'schedule', changes, reason: reason || undefined, before, after };
+        draft.forEach(m => touch(m.id));
+        setProjectContext(prev => ({
+            ...prev,
+            paymentMilestones: [...draft, ...((prev.paymentMilestones || []).filter(m => feeOnly && m.type === 'execution'))],
+            financials: { ...(prev.financials as any || {}), scheduleChanges: [...((prev.financials as any)?.scheduleChanges || []), entry] } as any,
+        }));
+        setEditFocus(null);
+        showSuccessWithNext('Milestones saved');
+    };
+
+    const saveDraftAsStudioDefaults = async (draft: PaymentMilestone[]) => {
+        if (!window.confirm('Save these milestones as the studio defaults for future projects?')) return;
+        try {
+            const stage = (m: PaymentMilestone, k: string) => ({ code: k, name: m.name, pct: Math.round(shareOf(m, trackOf(m) === 'design' ? taxableDesign : taxableExecution) * 100) / 100, trigger: m.trigger || '', unlocks: m.unlocks || '' });
+            const structure = {
+                designStages: draft.filter(m => trackOf(m) === 'design').map((m, i) => stage(m, `D${i + 1}`)),
+                executionStages: draft.filter(m => trackOf(m) === 'execution').map((m, i) => stage(m, `E${i + 1}`)),
+                validation: { designSumMustEqual: 100, executionSumMustEqual: 100 },
+            };
+            await setPaymentStructure(orgData?.tenantId || 'demo-tenant-01', structure as any);
+            setStudioPaymentStr(structure);
+            showSuccessWithNext('Saved as the studio defaults');
+        } catch (err: any) {
+            alert(`Could not save the studio defaults: ${err?.message || err}`);
+        }
+    };
+
+
     return (
         <div className="mny w-full space-y-6 animate-in fade-in">
             
@@ -3155,824 +2394,27 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
             {activeTier && (
                 <>
-                    {/*
-                      The money summary, and the four ways into it.
-
-                      This is the one place the whole picture is stated: what
-                      has been billed, what has landed, what is late. The
-                      sections below are unchanged — they are simply behind
-                      whichever tab they belong to now.
-                    */}
-                    <div className="relative overflow-hidden bg-white border border-[#E2E5F0] rounded-2xl px-5 py-4 mny-frame">
-                        <div className="mny-sweep" />
-                        <div className="flex flex-wrap items-start justify-between gap-4">
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-2.5 flex-wrap">
-                                    <h2 className="text-lg font-black tracking-tight text-[#12182F]">Money</h2>
-                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                                        chase.amountOverdue > 0
-                                            ? 'bg-rose-50 text-rose-800 border-rose-200'
-                                            : billable.total > 0
-                                                ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                                : 'bg-[#EDE8F5] text-[#3D52A0] border-[#ADBBDA]'
-                                    }`}>
-                                        <span className={`w-1.5 h-1.5 rounded-full ${
-                                            chase.amountOverdue > 0 ? 'bg-rose-500 mny-pulse'
-                                            : billable.total > 0 ? 'bg-amber-500' : 'bg-[#3D52A0]'
-                                        }`} />
-                                        {chase.amountOverdue > 0
-                                            ? 'Overdue'
-                                            : billable.total > 0
-                                                ? 'Ready to bill'
-                                                : 'Nothing outstanding'}
-                                    </span>
-                                </div>
-                                {availableVersions.length > 1 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setMoneyTab('history')}
-                                        title="Switch or audit billing versions in History"
-                                        className="inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-md bg-[#F6F7FB] border border-[#E2E5F0] text-[10px] font-bold text-[#5A628A] hover:border-[#ADBBDA] hover:text-[#3D52A0] transition-colors cursor-pointer"
-                                    >
-                                        <History className="w-3 h-3" />
-                                        {selectedHistoricalEntry
-                                            ? `Viewing ${selectedHistoricalEntry.name}`
-                                            : (availableVersions.find(v => v.isCurrentActive)?.name || 'Active version')}
-                                        <span className="text-[#8E96B8]">· {availableVersions.length} total</span>
-                                    </button>
-                                )}
-                                <p className="text-xs text-[#5A628A] font-semibold mt-1">
-                                    {milestones.length} {milestones.length === 1 ? 'milestone' : 'milestones'} against a contract of{' '}
-                                    <b className="text-[#12182F]">{formatCurrency(grossProjectValue)}</b>
-                                </p>
-                                <div className="mt-2.5 h-1.5 w-full max-w-md rounded-full bg-[#EDEFF7] overflow-hidden mny-progress">
-                                    <div
-                                        className="h-full rounded-full mny-bar"
-                                        style={{
-                                            width: `${grossProjectValue > 0 ? Math.min(100, (totalPaid / grossProjectValue) * 100) : 0}%`,
-                                            background: 'linear-gradient(90deg,#7091E6,#3D52A0)',
-                                        }}
-                                    />
-                                </div>
-                            </div>
-
-                            {/*
-                              The right half of this header was empty.
-
-                              It now carries the one picture the whole screen is
-                              about: of everything contracted, how much has landed,
-                              how much is invoiced and waiting, and how much has not
-                              been asked for yet. The ring draws itself on arrival
-                              and the figure counts up to meet it.
-                            */}
-                            {grossProjectValue > 0 && (() => {
-                                const paidPct = Math.min(100, (totalPaid / grossProjectValue) * 100);
-                                const billedPct = Math.min(100 - paidPct, (billable.total / grossProjectValue) * 100);
-                                const R = 46, C = 2 * Math.PI * R;
-                                const seg = (pct: number) => (pct / 100) * C;
-                                return (
-                                    <div className="flex items-center gap-5 shrink-0 mny-rise" style={{ animationDelay: '.2s' }}>
-                                        <div className="relative shrink-0">
-                                            <svg width="112" height="112" viewBox="0 0 112 112" className="-rotate-90">
-                                                <circle cx="56" cy="56" r={R} fill="none" stroke="#EDEFF7" strokeWidth="11" />
-                                                {/* not yet asked for sits under everything */}
-                                                <circle
-                                                    cx="56" cy="56" r={R} fill="none" stroke="#ADBBDA" strokeWidth="11" strokeLinecap="round"
-                                                    className="mny-ring"
-                                                    style={{ strokeDasharray: C, strokeDashoffset: C - seg(paidPct + billedPct),
-                                                             ['--ring-len' as any]: String(C), ['--ring-off' as any]: String(C - seg(paidPct + billedPct)) }}
-                                                />
-                                                <circle
-                                                    cx="56" cy="56" r={R} fill="none" stroke="#3D52A0" strokeWidth="11" strokeLinecap="round"
-                                                    className="mny-ring"
-                                                    style={{ strokeDasharray: C, strokeDashoffset: C - seg(paidPct), animationDelay: '.35s',
-                                                             ['--ring-len' as any]: String(C), ['--ring-off' as any]: String(C - seg(paidPct)) }}
-                                                />
-                                            </svg>
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                <span className="text-xl font-black text-[#12182F] tabular-nums leading-none">
-                                                    <AnimatedNumber value={Math.round(paidPct)} format={v => `${Math.round(v)}%`} />
-                                                </span>
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-[#8E96B8] mt-0.5">collected</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2 min-w-[150px]">
-                                            {([
-                                                ['Collected', totalPaid, '#3D52A0'],
-                                                ['Next to bill', billable.total, '#ADBBDA'],
-                                                ['Not yet raised', Math.max(0, grossProjectValue - totalPaid - billable.total), '#EDEFF7'],
-                                            ] as [string, number, string][]).map(([label, val, col]) => (
-                                                <div key={label} className="flex items-center gap-2">
-                                                    <span className="w-2.5 h-2.5 rounded-sm shrink-0 border border-[#E2E5F0]" style={{ background: col }} />
-                                                    <span className="text-[11px] text-[#5A628A] flex-1">{label}</span>
-                                                    <span className="text-[11px] font-bold text-[#12182F] tabular-nums">{formatCurrency(val)}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-
-                        {/*
-                          Billed past the contract, said out loud.
-
-                          `computeSchedule` floors the remaining balance at zero
-                          when cleared milestones have already taken more than
-                          the contract holds. That made every unpaid row read a
-                          flat zero owed with nothing explaining why, and on a
-                          fully-billed track it hid the overage entirely -- Lake
-                          Pleasant carried 13,754 of it for months. The number
-                          is the point, so it goes above the tabs rather than
-                          inside one of them.
-                        */}
-                        {(schedule.overBilled || []).map(ob => (
-                            <div key={ob.track} className="mt-4 rounded-2xl border border-amber-300 bg-amber-50/70 px-5 py-4">
-                                <div className="flex items-start gap-3">
-                                    <span className="text-amber-600 text-lg leading-none mt-0.5">&#9888;</span>
-                                    <div className="min-w-0">
-                                        <p className="text-[13px] font-extrabold text-amber-900">
-                                            {ob.track === 'design' ? 'Design' : 'Execution'} is billed {formatCurrency(ob.overBy)} over its contract
-                                        </p>
-                                        <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">
-                                            Invoiced milestones account for {formatCurrency(ob.lockedBase)} against a contract of{' '}
-                                            {formatCurrency(ob.taxableBase)}.{' '}
-                                            {ob.unpaidCount > 0
-                                                ? `The ${ob.unpaidCount} milestone${ob.unpaidCount === 1 ? '' : 's'} still unpaid ${ob.unpaidCount === 1 ? 'is' : 'are'} reported as zero owed, because there is nothing left to bill against.`
-                                                : 'Every milestone on this track is settled, so the difference sits in what was invoiced rather than in what is owed.'}
-                                        </p>
-                                        <p className="text-[11px] text-amber-800 mt-1.5 leading-relaxed">
-                                            Either the contract value is understated, or a milestone was invoiced at the wrong base.
-                                            Check the locked base on each settled row under <span className="font-bold">Milestones</span>.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-
-                        <div className="mt-4">
-                            <Tabs
-                                ariaLabel="Money sections"
-                                value={moneyTab}
-                                onChange={(id) => setMoneyTab(id as any)}
-                                items={[
-                                    { id: 'overview', label: 'Overview' },
-                                    { id: 'milestones', label: 'Milestones', count: milestones.length },
-                                    { id: 'tax', label: 'Tax & ratios' },
-                                    { id: 'history', label: 'History', count: (financials?.paymentRevisions || []).length, tone: 'attention' },
-                                ]}
-                            />
-                        </div>
-                    </div>
-
-                    {moneyTab === 'overview' && (<>
-                    {asActualsFix && asActualsPreview && (
-                        <AsActualsCorrectionPanel c={asActualsFix} preview={asActualsPreview} onApply={applyAsActualsFix} />
-                    )}
-                    {openRevision && revisionPreview && (
-                        <RevisionMoneyPanel rev={openRevision} preview={revisionPreview} compact onOpen={() => setMoneyTab('milestones')} />
-                    )}
-                    {/*
-                      The four questions that decide whether a project collects.
-
-                      Every figure here comes from records this screen already
-                      held and never read: payment-request timestamps against
-                      the studio's own escalation thresholds, milestone
-                      sub-steps and dates, and the revision log.
-                    */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-
-                        {/* Who is late */}
-                        <button type="button" onClick={() => setMoneyTab('milestones')} className={PANEL_CLASS} style={{ animationDelay: '.08s' }}>
-                            <PanelHead
-                                title="Collections"
-                                action="See the schedule &rsaquo;"
-                                tone={chase.chaseNow > 0 ? 'alert' : chase.items.length > 0 ? 'watch' : 'clear'}
-                                state={chase.chaseNow > 0
-                                    ? `${chase.chaseNow} past due`
-                                    : chase.items.length > 0
-                                        ? `${chase.items.length} open`
-                                        : 'Nothing to chase'}
-                            />
-                            <PanelMetric
-                                value={formatCurrency(chase.amountOutstanding)}
-                                caption="outstanding"
-                                muted={chase.amountOutstanding === 0}
-                            />
-
-                            {chase.items.length === 0 ? (
-                                <>
-                                    {/*
-                                      The escalation ladder was drawn here in full colour
-                                      whatever the state, so a project with nothing
-                                      outstanding showed an amber-to-red bar under the
-                                      words "nothing to chase". With no request open the
-                                      terms are just terms, so they read as a line of text
-                                      and the ladder returns when something is on it.
-                                    */}
-                                    <p className="text-[11px] text-[#8E96B8] mt-1.5 leading-snug">
-                                        No request open &middot; terms {chase.thresholds.reminderDays}d remind
-                                        &middot; {chase.thresholds.warnDays}d call
-                                        &middot; {chase.thresholds.pauseDays}d hold
-                                    </p>
-                                    {behaviourBlock}
-                                </>
-                            ) : (
-                                <>
-                                    {/*
-                                      The ladder, now that something is actually on it.
-                                      A caret marks where the oldest item stands against
-                                      the studio's own thresholds, so the terms are read
-                                      as a position rather than as decoration.
-                                    */}
-                                    {(() => {
-                                        const th = chase.thresholds;
-                                        const pause = th.pauseDays || 1;
-                                        const at = (d: number) => Math.min(100, Math.max(0, (d / pause) * 100));
-                                        const worst = chase.worst;
-                                        return (
-                                            <div className="mt-3">
-                                                <div className="relative">
-                                                    <div className="flex h-2 rounded-full overflow-hidden bg-[#EDEFF7]">
-                                                        <div className="mny-bar" style={{ width: `${at(th.reminderDays)}%`, background: '#ADBBDA' }} />
-                                                        <div className="mny-bar" style={{ width: `${at(th.warnDays) - at(th.reminderDays)}%`, background: '#D9A441', animationDelay: '.1s' }} />
-                                                        <div className="mny-bar flex-1" style={{ background: '#C4574F', animationDelay: '.2s' }} />
-                                                    </div>
-                                                    {worst && (
-                                                        <span
-                                                            title={`Oldest: ${worst.daysOutstanding}d`}
-                                                            className="absolute w-[2px] rounded-full bg-[#12182F]"
-                                                            style={{ left: `${at(worst.daysOutstanding)}%`, top: -3, bottom: -3, marginLeft: -1 }}
-                                                        />
-                                                    )}
-                                                </div>
-                                                <div className="flex justify-between mt-1.5 text-[10px] text-[#8E96B8]">
-                                                    <span>day 0</span>
-                                                    <span>{th.reminderDays}d remind</span>
-                                                    <span>{th.warnDays}d call</span>
-                                                    <span>{th.pauseDays}d hold</span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
-                                    {chase.chaseNow > 0 && (
-                                        <p className="text-[11px] text-rose-700 font-semibold mt-1.5">
-                                            {chase.chaseNow} past the reminder threshold
-                                            {chase.amountOverdue > 0 && <> — {formatCurrency(chase.amountOverdue)}</>}
-                                        </p>
-                                    )}
-                                    <ul className="mt-3 space-y-1.5">
-                                        {chase.items.slice(0, 4).map(item => (
-                                            <li key={item.id} className="flex items-center gap-2">
-                                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                                    item.level >= 3 ? 'bg-rose-600'
-                                                    : item.level === 2 ? 'bg-rose-400'
-                                                    : item.level === 1 ? 'bg-amber-500' : 'bg-[#ADBBDA]'
-                                                }`} />
-                                                <span className="flex-1 min-w-0">
-                                                    <span className="block text-xs text-[#2B3358] truncate">{item.label}</span>
-                                                    {item.reference && (
-                                                        <span className="block text-[10px] text-[#8E96B8] truncate">{item.reference}</span>
-                                                    )}
-                                                </span>
-                                                <span className="text-[10px] font-bold text-[#8E96B8] shrink-0">{CHASE_LABEL[item.level]}</span>
-                                                <span className="text-[11px] font-black text-[#12182F] tabular-nums shrink-0 w-12 text-right">
-                                                    {item.daysOutstanding}d
-                                                </span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    {behaviourBlock}
-                                </>
-                            )}
-                        </button>
-
-                        {/* Earned, not invoiced */}
-                        <button type="button" onClick={() => setMoneyTab('milestones')} className={PANEL_CLASS} style={{ animationDelay: '.16s' }}>
-                            <PanelHead
-                                title="Next to bill"
-                                action="Open milestones &rsaquo;"
-                                tone={billable.earnedTotal > 0 ? 'watch' : 'clear'}
-                                state={billable.items.length === 0
-                                    ? 'All invoiced'
-                                    : billable.earnedTotal > 0
-                                        ? 'Ready to raise'
-                                        : `${billable.items.length} queued`}
-                            />
-                            {/*
-                              The earned figure, not the total: the total is already
-                              stated on the dial at the top of the screen, and repeating
-                              it here would be the fourth copy of one number.
-                            */}
-                            <PanelMetric
-                                value={formatCurrency(billable.earnedTotal)}
-                                caption="earned, not yet invoiced"
-                                muted={billable.earnedTotal === 0}
-                            />
-                            {billable.items.length === 0 ? (
-                                <p className="text-xs text-[#5A628A] mt-3 leading-relaxed">
-                                    Every milestone on both tracks is already invoiced or paid.
-                                </p>
-                            ) : (
-                                <>
-                                    <p className="text-[11px] text-[#8E96B8] mt-1.5 leading-snug">
-                                        {billable.items.length} {billable.items.length === 1 ? 'milestone' : 'milestones'} up next,
-                                        worth <b className="text-[#5A628A]">{formatCurrency(billable.total)}</b> in all
-                                    </p>
-                                    <ul className="mt-3 space-y-1.5">
-                                        {billable.items.slice(0, 4).map(item => (
-                                            <li key={item.id}>
-                                                <span
-                                                    role="button"
-                                                    tabIndex={0}
-                                                    onClick={e => { e.stopPropagation(); goToMilestone(item.id); }}
-                                                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); goToMilestone(item.id); } }}
-                                                    className="group/row flex items-center gap-2 w-full rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[#F6F7FB] cursor-pointer transition-colors"
-                                                >
-                                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.earned ? 'bg-[#3D52A0]' : 'bg-[#ADBBDA]'}`} />
-                                                    <span className="flex-1 min-w-0">
-                                                        <span className="block text-xs text-[#2B3358] truncate">{item.name}</span>
-                                                        <span className="block text-[10px] text-[#8E96B8] truncate">{item.reason}</span>
-                                                    </span>
-                                                    <span className="text-[10px] font-semibold text-[#ADBBDA] opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0">
-                                                        raise &rsaquo;
-                                                    </span>
-                                                    <span className="text-[11px] font-black text-[#12182F] tabular-nums shrink-0">
-                                                        {formatCurrency(item.amount)}
-                                                    </span>
-                                                </span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </>
-                            )}
-                        </button>
-
-                        {/* When the money lands */}
-                        {/*
-                          Does the money coming in cover what is already promised out.
-
-                          This replaced the Expected inflow panel, which drew the same
-                          months from the same milestones — this one adds the vendor
-                          side, so it answers what that one did and more.
-                        */}
-                        <button type="button" onClick={() => setMoneyTab('milestones')} className={PANEL_CLASS} style={{ animationDelay: '.24s' }}>
-                            <PanelHead
-                                title="Cash gap"
-                                action="Set target dates &rsaquo;"
-                                tone={gap.firstNegative ? 'alert' : gap.undatedOutflow > 0 ? 'watch' : 'clear'}
-                                state={gap.firstNegative
-                                    ? `Short in ${gap.firstNegative.label}`
-                                    : gap.undatedOutflow > 0
-                                        ? `${gap.undatedOrders} undated`
-                                        : gap.outflowTotal > 0 ? 'Covered' : 'Nothing committed'}
-                            />
-                            <PanelMetric
-                                value={gap.firstNegative
-                                    ? formatCurrency(Math.abs(gap.firstNegative.cumulative))
-                                    : formatCurrency(gap.outflowTotal + gap.undatedOutflow)}
-                                caption={gap.firstNegative
-                                    ? `short by ${gap.firstNegative.label}`
-                                    : 'committed to vendors'}
-                                muted={!gap.firstNegative && gap.outflowTotal + gap.undatedOutflow === 0}
-                            />
-                            {gap.months.length === 0 ? (
-                                <p className="text-xs text-[#5A628A] mt-3 leading-relaxed">
-                                    Nothing carries a date &mdash; no milestone, no purchase order &mdash; so there is no timeline to set them against.
-                                </p>
-                            ) : (
-                                <>
-                                    <CashGapChart months={gap.months} />
-                                    {/*
-                                      The verdict, stated. Without this the reader has to
-                                      infer the tightest month off the line by eye, which
-                                      is exactly the work the panel should be doing.
-                                    */}
-                                    {(() => {
-                                        const low = gap.months.reduce((a, m) => (m.cumulative < a.cumulative ? m : a), gap.months[0]);
-                                        return gap.firstNegative ? (
-                                            <p className="text-[11px] font-semibold text-rose-700 mt-2 leading-snug">
-                                                Short {formatCurrency(Math.abs(gap.firstNegative.cumulative))} by {gap.firstNegative.label}
-                                            </p>
-                                        ) : (
-                                            <p className="text-[11px] text-[#5A628A] mt-2 leading-snug">
-                                                Tightest at <b className="text-[#12182F]">{formatCurrency(low.cumulative)}</b> in {low.label}
-                                                <span className="text-[#8E96B8]"> · never below zero</span>
-                                            </p>
-                                        );
-                                    })()}
-                                    <p className="text-[11px] text-[#8E96B8] mt-0.5 leading-snug">
-                                        <b className="text-[#5A628A]">{formatCurrency(gap.inflowTotal)}</b> expected in across{' '}
-                                        {gap.months.length} {gap.months.length === 1 ? 'month' : 'months'}
-                                    </p>
-                                </>
-                            )}
-                            {(gap.undatedOutflow > 0 || gap.undatedInflow > 0) && (
-                                <p className="text-[11px] text-amber-700 mt-2 leading-snug border-t border-[#EDEFF7] pt-2">
-                                    {gap.undatedOutflow > 0 && (
-                                        <>
-                                            <b>{formatCurrency(gap.undatedOutflow)}</b> committed to vendors with no delivery date
-                                            {gap.undatedOrders > 0 && <> ({gap.undatedOrders} {gap.undatedOrders === 1 ? 'order' : 'orders'})</>}
-                                            , so it sits outside this chart.
-                                        </>
-                                    )}
-                                    {gap.undatedOutflow > 0 && gap.undatedInflow > 0 && ' '}
-                                    {gap.undatedInflow > 0 && (
-                                        <><b>{formatCurrency(gap.undatedInflow)}</b> of milestone money is undated too.</>
-                                    )}
-                                </p>
-                            )}
-                        </button>
-
-                        {/* Does the schedule still match the contract */}
-                        <button type="button" onClick={() => setMoneyTab('history')} className={PANEL_CLASS} style={{ animationDelay: '.32s' }}>
-                            <PanelHead
-                                title="Contract drift"
-                                action="Open history &rsaquo;"
-                                tone={(!drift.designBalanced || !drift.executionBalanced) ? 'alert' : drift.revisions > 0 ? 'watch' : 'clear'}
-                                state={(!drift.designBalanced || !drift.executionBalanced)
-                                    ? 'Schedule off 100%'
-                                    : drift.revisions > 0
-                                        ? `${drift.revisions} revised`
-                                        : 'Matches contract'}
-                            />
-                            <PanelMetric
-                                value={String(drift.revisions)}
-                                caption={drift.revisions === 1 ? 'revision logged' : 'revisions logged'}
-                                muted={drift.revisions === 0}
-                            />
-                            {(drift.designBalanced && drift.executionBalanced && drift.revisions === 0) ? (
-                                <>
-                                    <p className="text-[11px] text-[#8E96B8] mt-1.5 leading-snug">
-                                        Both tracks total 100% and the contract has not been revised.
-                                    </p>
-                                    {/* Both tracks drawn, because "it adds up" is worth seeing, not just reading. */}
-                                    <div className="mt-4 space-y-2.5">
-                                        {([['Design', drift.designPct], ['Execution', drift.executionPct]] as [string, number][])
-                                            .filter(([, pct]) => pct > 0)
-                                            .map(([label, pct], i) => (
-                                            <div key={label}>
-                                                <div className="flex justify-between text-[10px] text-[#5A628A] mb-1">
-                                                    <span className="font-semibold">{label} milestones</span>
-                                                    <span className="font-bold tabular-nums text-[#12182F]">{pct}%</span>
-                                                </div>
-                                                <div className="h-2 rounded-full bg-[#EDEFF7] overflow-hidden">
-                                                    <div
-                                                        className="h-full rounded-full mny-bar"
-                                                        style={{ width: `${Math.min(100, pct)}%`, background: 'linear-gradient(90deg,#7091E6,#3D52A0)', animationDelay: `${0.15 + i * 0.1}s` }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="mt-3 space-y-2">
-                                    {!drift.executionBalanced && (
-                                        <p className="text-[11px] text-rose-700 leading-snug">
-                                            Execution milestones total <b>{drift.executionPct}%</b>, not 100% — the schedule no
-                                            longer matches the contract.
-                                        </p>
-                                    )}
-                                    {!drift.designBalanced && (
-                                        <p className="text-[11px] text-rose-700 leading-snug">
-                                            Design milestones total <b>{drift.designPct}%</b>, not 100%.
-                                        </p>
-                                    )}
-                                    {drift.revisions > 0 && (
-                                        <p className="text-[11px] text-[#5A628A] leading-snug">
-                                            <b className="text-[#12182F]">{drift.revisions}</b>{' '}
-                                            {drift.revisions === 1 ? 'revision' : 'revisions'}
-                                            {drift.valueMoved !== 0 && (
-                                                <> moving <b className="text-[#12182F]">{formatCurrency(Math.abs(drift.valueMoved))}</b>{' '}
-                                                {drift.valueMoved > 0 ? 'up' : 'down'}</>
-                                            )}
-                                            {drift.lastRevisedOn && <> · last on {drift.lastRevisedOn}</>}
-                                        </p>
-                                    )}
-                                    {drift.designBalanced && drift.executionBalanced && (
-                                        <p className="text-[11px] text-[#3D52A0] leading-snug">
-                                            Milestones were re-based correctly after the revisions.
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-                        </button>
-                    </div>
-
-                    {/*
-                      Scope additions, over and above the frozen BOQ.
-
-                      Placed directly under the four panels because it changes
-                      what every one of them is a share OF: the contract this
-                      screen reports is no longer the BOQ alone.
-                    */}
-                    <ScopeAdditionsMoneyPanel
-                        summary={scopeSummary}
-                        contractedExGst={scopeContracted}
-                        baseMarginPct={scopeBaseMarginPct}
-                        loading={scopeLoading}
-                        error={scopeError}
+                    <MoneyBoard
+                        totals={boardTotals}
+                        milestoneCount={milestones.length}
+                        status={boardStatus}
+                        tab={moneyTab}
+                        onTab={setMoneyTab}
+                        historyCount={(financials?.paymentRevisions || []).length + scheduleChangeLog.length}
+                        onSchedule={scheduleAction.onClick}
+                        scheduleLabel={scheduleAction.label}
+                        onEdit={() => openEditor('both')}
+                        readOnly={isReadOnlyMode}
+                        tiles={boardTiles}
+                        preview={boardPreview}
+                        versionPill={versionPill}
+                        notices={boardNotices}
+                        summary={boardSummary}
+                        columns={boardColumns}
+                        breakdown={breakdownToggle}
                     />
 
-                    {/*
-                      The initiation retainer, where it can actually be found.
-
-                      It lived as a bare number input inside "Tax & ratios",
-                      three clicks from the money it changes, while defaulting
-                      to 4,999 on every project -- so the one figure nobody had
-                      chosen was applied silently, and the studio had to go
-                      hunting to correct it. It is optional, so the card states
-                      plainly when none is applied and offers to add one.
-                    */}
-                    <div className="rounded-2xl border border-[#E2E5F0] bg-white p-5 shadow-sm">
-                        <div className="flex items-start justify-between gap-4">
-                            <div className="min-w-0">
-                                <h4 className="text-[11px] font-black text-[#8E96B8] uppercase tracking-wider">Initiation retainer</h4>
-                                {initiationFee > 0 ? (
-                                    <>
-                                        <p className="text-2xl font-black text-[#12182F] tabular-nums mt-1.5">{formatCurrency(initiationFee)}</p>
-                                        <p className="text-[11px] text-[#5A628A] mt-1 leading-relaxed">
-                                            Already collected — deducted from the first design invoice.
-                                        </p>
-                                    </>
-                                ) : (
-                                    <>
-                                        <p className="text-sm font-extrabold text-[#3A416B] mt-1.5">Not applied</p>
-                                        <p className="text-[11px] text-[#5A628A] mt-1 leading-relaxed max-w-md">
-                                            Optional. Add one only if the client paid a retainer up front — it is then
-                                            deducted from the first design invoice.
-                                        </p>
-                                    </>
-                                )}
-                            </div>
-                            {!isReadOnlyMode && !retainerOpen && (
-                                <button
-                                    type="button"
-                                    onClick={() => setRetainerOpen(true)}
-                                    className="shrink-0 px-3.5 py-1.5 bg-[#3D52A0] hover:bg-[#334486] text-white text-[11px] font-extrabold rounded-xl shadow-xs transition-all uppercase tracking-wider cursor-pointer"
-                                >
-                                    {initiationFee > 0 ? 'Edit' : 'Add retainer'}
-                                </button>
-                            )}
-                        </div>
-
-                        {!isReadOnlyMode && retainerOpen && (
-                            <div className="mt-4 pt-4 border-t border-[#EDEFF7] space-y-3">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    {[4999, 10000, 25000].map(v => (
-                                        <button
-                                            key={v}
-                                            type="button"
-                                            onClick={() => setInitiationFee(v)}
-                                            className={`px-3 py-1.5 text-[11px] font-extrabold rounded-xl border transition-all cursor-pointer tabular-nums ${
-                                                initiationFee === v
-                                                    ? 'bg-[#EDE8F5] border-[#ADBBDA] text-[#334486]'
-                                                    : 'bg-white border-[#E2E5F0] text-[#5A628A] hover:border-[#ADBBDA] hover:text-[#334486]'
-                                            }`}
-                                        >
-                                            {formatCurrency(v)}
-                                        </button>
-                                    ))}
-                                    <span className="text-[10px] text-[#8E96B8] font-semibold uppercase tracking-wider ml-1">or</span>
-                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F6F7FB] rounded-xl border border-[#E2E5F0]">
-                                        <span className="font-bold text-[#8E96B8] text-xs">₹</span>
-                                        <input
-                                            type="number"
-                                            autoFocus
-                                            value={initiationFee || ''}
-                                            placeholder="0"
-                                            onChange={e => setInitiationFee(Math.max(0, Number(e.target.value) || 0))}
-                                            className="w-24 text-right font-black text-[#252C4E] bg-transparent outline-none tabular-nums text-xs"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setRetainerOpen(false)}
-                                        className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold rounded-xl transition-all uppercase tracking-wider cursor-pointer"
-                                    >
-                                        Done
-                                    </button>
-                                    {initiationFee > 0 && (
-                                        <button
-                                            type="button"
-                                            onClick={() => { setInitiationFee(0); setRetainerOpen(false); }}
-                                            className="px-3 py-1.5 text-[11px] font-bold text-[#8E96B8] hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
-                                        >
-                                            Remove
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-
-
-
-
-                    {/* Payment Schedule Banner */}
-                    {(!latestSchedule || hasUnsavedScheduleChanges) && (
-                        <div className={`p-4 rounded-xl border flex items-center justify-between shadow-sm ${latestSchedule ? 'bg-amber-50 border-amber-200' : 'bg-[#EDE8F5] border-[#ADBBDA]'}`}>
-                            <div>
-                                <h3 className={`text-sm font-bold ${latestSchedule ? 'text-amber-800' : 'text-[#2A3A73]'}`}>
-                                    {latestSchedule ? `Milestones have changed since the last Payment Schedule (v${latestSchedule.version}).` : 'No Advance Payment Schedule document generated yet.'}
-                                </h3>
-                                <p className={`text-xs mt-1 ${latestSchedule ? 'text-amber-700' : 'text-[#3D52A0]'}`}>
-                                    {latestSchedule ? 'Generate a revised Payment Schedule to keep the client updated.' : 'Generate the document from these milestones to send to the client.'}
-                                </p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                {latestSchedule && <button className="text-sm font-semibold text-amber-700 hover:text-amber-900">Later</button>}
-                                <button onClick={handleGenerateSchedule} className={`px-4 py-2 text-sm font-bold rounded-lg shadow-sm text-white transition-all ${latestSchedule ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#3D52A0] hover:bg-[#334486]'}`}>
-                                    {latestSchedule ? `Generate Revised Schedule (v${latestSchedule.version + 1})` : 'Generate Payment Schedule'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* NEW HIGH-FIDELITY MILKY WHITE METRICS DASHBOARD BANNER */}
-                    <div className="bg-white rounded-3xl border border-[#E2E5F0] shadow-sm p-6 space-y-6">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <h2 className="text-xl font-black text-[#12182F] tracking-tight">Payment Realization Dashboard</h2>
-                        <p className="text-xs text-[#8E96B8] mt-0.5">Real-time financials and billing status for <strong>{activeTier?.name || 'Active Tier'}</strong></p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button 
-                            onClick={() => setShowInsights(!showInsights)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${showInsights ? 'bg-[#EDE8F5] border-[#DDE3F5] text-[#334486] hover:bg-[#DDE3F5]' : 'bg-white border-[#E2E5F0] text-[#4A5178] hover:bg-[#F6F7FB]'}`}
-                        >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            {showInsights ? 'Hide Insights' : 'Show Insights'}
-                        </button>
-                    </div>
-                </div>
-
-                {/*
-                  Four facts the header dial does not carry.
-
-                  Three of these cards used to be Gross Project Value, Total
-                  Collected and Remaining Balance — the dial states all three,
-                  so they were repetition in the most prominent slot on the
-                  tab. The fourth was already unique and is untouched.
-                */}
-                <div className={`grid grid-cols-1 sm:grid-cols-2 ${feeOnly ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
-                    {/* The execution's billable and cash split: nothing to split on a fee-only project. */}
-                    {!feeOnly && (
-                    <motion.div
-                        whileHover={{ y: -4, scale: 1.01 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                        className="bg-[#F6F7FB]/50 p-4 rounded-2xl border border-[#E2E5F0]/80 shadow-xs relative overflow-hidden group cursor-default"
-                    >
-                        <div className="flex justify-between items-start">
-                            <span className="text-[10px] font-bold text-[#8E96B8] uppercase tracking-wider">Billable vs cash</span>
-                            <div className="text-[10px] font-bold text-[#8E96B8]">{billablePercent}% billed</div>
-                        </div>
-                        <h3 className="text-xl font-extrabold text-[#12182F] tabular-nums mt-2">{formatCurrency(executionBillable)}</h3>
-                        <p className="text-[10px] text-[#8E96B8] mt-1">Cash side: {formatCurrency(executionCash)}</p>
-                    </motion.div>
-                    )}
-
-                    <motion.div
-                        whileHover={{ y: -4, scale: 1.01 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                        className="bg-[#F6F7FB]/50 p-4 rounded-2xl border border-[#E2E5F0]/80 shadow-xs relative overflow-hidden group cursor-default"
-                    >
-                        <div className="flex justify-between items-start">
-                            <span className="text-[10px] font-bold text-[#8E96B8] uppercase tracking-wider">Initiation fee</span>
-                            <div className="text-[10px] font-bold text-[#8E96B8]">{initiationFee > 0 ? "applied" : "none"}</div>
-                        </div>
-                        <h3 className="text-xl font-extrabold text-[#12182F] tabular-nums mt-2">{formatCurrency(initiationFee)}</h3>
-                        <p className="text-[10px] text-[#8E96B8] mt-1">Deducted from the first invoice raised</p>
-                    </motion.div>
-
-                    <motion.div
-                        whileHover={{ y: -4, scale: 1.01 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                        className="bg-[#F6F7FB]/50 p-4 rounded-2xl border border-[#E2E5F0]/80 shadow-xs relative overflow-hidden group cursor-default"
-                    >
-                        <div className="flex justify-between items-start">
-                            <span className="text-[10px] font-bold text-[#8E96B8] uppercase tracking-wider">Cash exposure this FY</span>
-                            <div className="text-[10px] font-bold text-[#8E96B8]">{Math.round(cashUtilization)}% of limit</div>
-                        </div>
-                        <h3 className="text-xl font-extrabold text-[#12182F] tabular-nums mt-2">{formatCurrency(totalFYCash)}</h3>
-                        <p className="text-[10px] text-[#8E96B8] mt-1">Across every project, not just this one</p>
-                    </motion.div>
-
-<motion.div 
-                        whileHover={{ y: -4, scale: 1.01 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                        className="bg-[#F6F7FB]/50 p-4 rounded-2xl border border-[#E2E5F0]/80 shadow-xs relative overflow-hidden group cursor-pointer"
-                    >
-                        <div className="flex justify-between items-start">
-                            <span className="text-[10px] font-bold text-[#8E96B8] uppercase tracking-wider">Tax & Recovery Ask</span>
-                            <div className="px-1.5 py-0.5 bg-[#EDE8F5] text-[#334486] text-[10px] font-black rounded">18% GST</div>
-                        </div>
-                        <h3 className="text-xl font-extrabold text-[#12182F] tabular-nums mt-2">{formatCurrency(totalGST)}</h3>
-                        <p className="text-[10px] text-[#8E96B8] mt-1">
-                            Cash Portion: <span className="font-semibold text-amber-700 tabular-nums">{formatCurrency(executionCash)}</span>
-                        </p>
-                    </motion.div>
-                </div>
-
-                {/* REALIZATION PIPELINE PROGRESS BAR */}
-                <div className="bg-[#F6F7FB]/50 p-4 rounded-2xl border border-[#E2E5F0]/80 space-y-3">
-                    <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-[#3A416B]">Realization Pipeline</span>
-                        <span className="font-medium text-[#8E96B8]">Visual Collection Map</span>
-                    </div>
-                    <div className="w-full h-3 bg-[#E2E5F0] rounded-full overflow-hidden flex">
-                        {paidPercentOfGross > 0 && (
-                            <div 
-                                style={{ width: `${paidPercentOfGross}%` }} 
-                                className="bg-emerald-500 transition-all duration-500" 
-                                title={`Collected: ${paidPercentOfGross.toFixed(1)}%`}
-                            />
-                        )}
-                        {invoicedPercentOfGross > 0 && (
-                            <div 
-                                style={{ width: `${invoicedPercentOfGross}%` }} 
-                                className="bg-[#3D52A0] transition-all duration-500" 
-                                title={`Billed / Outstanding: ${invoicedPercentOfGross.toFixed(1)}%`}
-                            />
-                        )}
-                        {pendingPercentOfGross > 0 && (
-                            <div 
-                                style={{ width: `${pendingPercentOfGross}%` }} 
-                                className="bg-[#CBD1E4] transition-all duration-500" 
-                                title={`Pending Release: ${pendingPercentOfGross.toFixed(1)}%`}
-                            />
-                        )}
-                    </div>
-                    <div className="flex flex-wrap justify-between gap-4 text-[10px] font-bold text-[#5A628A] pt-1">
-                        <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 bg-emerald-500 rounded-sm" />
-                            <span>Settled ({paidPercentOfGross.toFixed(1)}%)</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 bg-[#3D52A0] rounded-sm" />
-                            <span>Invoiced / Unpaid: {formatCurrency(totalInvoicedButNotPaid)} ({invoicedPercentOfGross.toFixed(1)}%)</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 bg-[#CBD1E4] rounded-sm" />
-                            <span>Pending Release: {formatCurrency(remainingBalance - totalInvoicedButNotPaid)} ({pendingPercentOfGross.toFixed(1)}%)</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* COPILOT SMART BILLING INSIGHTS */}
-                <AnimatePresence>
-                    {showInsights && (
-                        <motion.div 
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="overflow-hidden"
-                        >
-                            <div className="p-4 bg-[#EDE8F5]/40 rounded-2xl border border-[#DDE3F5]/60 space-y-3">
-                                <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                                    <Sparkles className="w-4 h-4 text-[#3D52A0] animate-pulse" />
-                                    <span>Smart Billing Insights</span>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {billingInsights.map((insight, index) => (
-                                        <div 
-                                            key={index} 
-                                            className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
-                                                insight.type === 'warning' 
-                                                    ? 'bg-amber-50/50 border-amber-200/60 text-amber-800' 
-                                                    : insight.type === 'success'
-                                                    ? 'bg-emerald-50/50 border-emerald-200/60 text-emerald-800'
-                                                    : 'bg-[#3D52A0]/2 border-[#3D52A0]/12 text-[#334486]'
-                                            }`}
-                                        >
-                                            <div className="mt-0.5">
-                                                {insight.type === 'warning' ? (
-                                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                                ) : insight.type === 'success' ? (
-                                                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                                ) : (
-                                                    <Info className="w-3.5 h-3.5 text-[#3D52A0] shrink-0" />
-                                                )}
-                                            </div>
-                                            <p className="leading-relaxed font-medium">{insight.text}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
-
-
-            </>)}
-
-            {moneyTab === 'tax' && (<>
+            {moneyTab === 'board' && taxToolsOpen && !isReadOnlyMode && (<>
 
             {/* COLLAPSIBLE FINANCIAL CONTROLS & RATIOS */}
             <div className="bg-white rounded-3xl border border-[#E2E5F0] shadow-sm overflow-hidden">
@@ -4518,230 +2960,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
             </>)}
 
-            {moneyTab === 'milestones' && (<>
+            {moneyTab === 'history' && (<>
 
-            {asActualsFix && asActualsPreview && (
-                <AsActualsCorrectionPanel c={asActualsFix} preview={asActualsPreview} onApply={applyAsActualsFix} />
-            )}
-            {openRevision && revisionPreview && <RevisionMoneyPanel rev={openRevision} preview={revisionPreview} />}
-
-            {/*
-              Dating the schedule from the programme.
-
-              Sits here because this is where the schedule is planned, and it
-              is explicit about what it could and could not trace — on a
-              project with no timeline, or where the studio has not mapped a
-              step to each milestone, it says so rather than inventing dates.
-            */}
-            <div className="bg-white border border-[#E2E5F0] rounded-2xl px-5 py-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0">
-                    <h4 className="text-sm font-bold text-[#12182F]">Target dates</h4>
-                    <p className="text-[11px] text-[#5A628A] mt-0.5 leading-snug max-w-xl">
-                        {milestones.filter(m => m.date).length} of {milestones.length} milestones carry a date.
-                        Dates drive the cash-flow forecast, and the client portal shows them.
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    onClick={runDateDerivation}
-                    className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#3D52A0] hover:bg-[#334486] rounded-lg transition-colors cursor-pointer"
-                >
-                    <CalendarIcon className="w-3.5 h-3.5" />
-                    Derive from timeline
-                </button>
-            </div>
-
-            {dateProposal && (
-                <div className="bg-white border border-[#ADBBDA] rounded-2xl px-5 py-4 mny-rise">
-                    {dateProposal.proposals.length > 0 ? (
-                        <>
-                            <h4 className="text-sm font-bold text-[#12182F]">
-                                {dateProposal.proposals.length} {dateProposal.proposals.length === 1 ? 'date' : 'dates'} from the programme
-                            </h4>
-                            <p className="text-[11px] text-[#5A628A] mt-0.5 leading-snug">
-                                Read off {dateProposal.phaseCount} timeline {dateProposal.phaseCount === 1 ? 'phase' : 'phases'}.
-                                <b> Mapped</b> means the studio configured that step to trigger the milestone;
-                                <b> placed</b> means it was positioned by where it sits in its own schedule.
-                            </p>
-                            <ul className="mt-2.5 space-y-1.5">
-                                {dateProposal.proposals.map(d => (
-                                    <li key={d.id} className="flex items-center gap-2 text-xs">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-[#3D52A0] shrink-0" />
-                                        <span className="text-[#2B3358] flex-1 min-w-0 truncate">{d.name}</span>
-                                        <span className="text-[#8E96B8] text-[10px] truncate">
-                                            {d.how === 'mapped' ? 'mapped to' : 'placed in'} {d.from}
-                                        </span>
-                                        <span className="font-bold text-[#12182F] tabular-nums shrink-0">{d.date}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                            <div className="flex items-center gap-2 mt-3.5">
-                                <button
-                                    type="button"
-                                    onClick={applyDateProposal}
-                                    className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#3D52A0] hover:bg-[#334486] rounded-lg cursor-pointer"
-                                >
-                                    Apply {dateProposal.proposals.length === 1 ? 'it' : 'them'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setDateProposal(null)}
-                                    className="px-3 py-1.5 text-xs font-bold text-[#5A628A] hover:text-[#12182F] cursor-pointer"
-                                >
-                                    Discard
-                                </button>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <h4 className="text-sm font-bold text-[#12182F]">Nothing could be dated from the programme</h4>
-                            <p className="text-[11px] text-[#5A628A] mt-1 leading-relaxed max-w-2xl">
-                                A date is traced from a milestone to the studio milestone of the same name, to the
-                                design step configured to trigger it, to that step's phase on this project's timeline.
-                                Here is where that broke:
-                            </p>
-                        </>
-                    )}
-
-                    {dateProposal.unmatched.length > 0 && (
-                        <ul className="mt-3 space-y-1 border-t border-[#E2E5F0] pt-3">
-                            {dateProposal.unmatched.map((u, i) => (
-                                <li key={i} className="flex items-start gap-2 text-[11px]">
-                                    <span className="w-1 h-1 rounded-full bg-[#CBD1E4] mt-1.5 shrink-0" />
-                                    <span className="text-[#2B3358] font-semibold shrink-0">{u.name}</span>
-                                    <span className="text-[#8E96B8]">— {u.reason}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-
-                    {dateProposal.proposals.length === 0 && (
-                        <button
-                            type="button"
-                            onClick={() => setDateProposal(null)}
-                            className="mt-3 px-3 py-1.5 text-xs font-bold text-[#5A628A] hover:text-[#12182F] cursor-pointer"
-                        >
-                            Close
-                        </button>
-                    )}
-                </div>
-            )}
-
-            {/* 3. BREAKDOWN TABLES & MAIN MILESTONES SECTION */}
-            <div className="bg-white rounded-3xl border border-[#E2E5F0] shadow-sm p-6 space-y-6">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-[#EDEFF7] pb-4">
-                        <div>
-                            <h3 className="text-base font-extrabold text-[#12182F]">Milestones Realization Schedule</h3>
-                            <p className="text-xs text-[#8E96B8] mt-0.5">Track, release, and audit design and execution fee structures</p>
-                        </div>
-                        {activeTier && !feeOnly && (
-                            <div className="flex flex-wrap items-center gap-3">
-                                <div className="flex bg-[#EDEFF7] p-1 rounded-xl border border-[#E2E5F0]/60 max-w-fit">
-                                    <button 
-                                        onClick={() => setActiveTrackTab('all')}
-                                        className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeTrackTab === 'all' ? 'bg-white text-slate-900 shadow-sm border border-[#E2E5F0]/50 font-black' : 'text-[#5A628A] hover:text-[#12182F]'}`}
-                                    >
-                                        Show All
-                                    </button>
-                                    <button 
-                                        onClick={() => setActiveTrackTab('design')}
-                                        className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeTrackTab === 'design' ? 'bg-white text-slate-900 shadow-sm border border-[#E2E5F0]/50 font-black' : 'text-[#5A628A] hover:text-[#12182F]'}`}
-                                    >
-                                        Design Track ({designMilestones.length})
-                                    </button>
-                                    <button 
-                                        onClick={() => setActiveTrackTab('execution')}
-                                        className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeTrackTab === 'execution' ? 'bg-white text-slate-900 shadow-sm border border-[#E2E5F0]/50 font-black' : 'text-[#5A628A] hover:text-[#12182F]'}`}
-                                    >
-                                        Execution Track ({executionMilestones.length})
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Preset Stages & Defaults Management Panel */}
-                    {!isReadOnlyMode && (
-                        <div className="bg-[#F6F7FB] border border-[#E2E5F0]/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-[#E2E5F0]/50 text-[#3A416B] rounded-xl">
-                                    <Sliders className="w-4 h-4 text-slate-900" />
-                                </div>
-                                <div>
-                                    <span className="text-xs font-bold text-[#252C4E] block">Preset Stages & Defaults</span>
-                                    <span className="text-[10px] text-[#8E96B8] block mt-0.5">Synchronize, load, or update studio-wide payment templates</span>
-                                </div>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                {activeTier && (
-                                    <>
-                                        <button 
-                                            onClick={handleLoadDefaults}
-                                            className="text-[10px] font-black tracking-wider uppercase transition-all flex items-center gap-1 px-3 py-2 rounded-xl border border-[#E2E5F0] bg-white text-[#3A416B] hover:bg-[#EDEFF7] hover:text-[#12182F] shadow-xs"
-                                        >
-                                            <RotateCcw className="w-3.5 h-3.5 text-[#5A628A]" /> Load Studio Defaults
-                                        </button>
-                                        <button 
-                                            onClick={handleSaveAsStudioDefaults}
-                                            disabled={savingStudioDefaults}
-                                            className="text-[10px] font-black tracking-wider uppercase transition-all flex items-center gap-1 px-3 py-2 rounded-xl border border-[#E2E5F0] bg-white text-[#3A416B] hover:bg-[#EDEFF7] hover:text-[#12182F] shadow-xs disabled:opacity-50"
-                                        >
-                                            {savingStudioDefaults ? (
-                                                <>
-                                                    <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-[#5A628A]" /> Saving...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Sparkles className="w-3.5 h-3.5 text-[#3D52A0] animate-pulse" /> Save as Studio Defaults
-                                                </>
-                                            )}
-                                        </button>
-                                        <div className="h-6 w-px bg-[#E2E5F0] hidden md:block" />
-                                    </>
-                                )}
-                                <button 
-                                    onClick={() => setIsStudioDefaultsModalOpen(true)}
-                                    className="text-[10px] font-black tracking-wider uppercase transition-all flex items-center gap-1 px-3 py-2 rounded-xl border border-[#DDE3F5] bg-[#EDE8F5]/50 text-[#334486] hover:bg-[#DDE3F5] hover:text-[#334486]"
-                                >
-                                    <Sliders className="w-3.5 h-3.5 text-[#3D52A0]" /> Configure Studio Rules
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {!activeTier ? (
-                        <div className="bg-[#F6F7FB] border border-[#E2E5F0] rounded-2xl p-8 text-center max-w-2xl mx-auto my-8">
-                            <Sliders className="w-10 h-10 text-[#3D52A0] mx-auto mb-4" />
-                            <h3 className="text-sm font-extrabold text-[#12182F] uppercase tracking-wider">No Active Project Tier Selected</h3>
-                            <p className="text-xs text-[#5A628A] mt-2 leading-relaxed">
-                                Please select an active project tier (such as Luxury or Premium) in the BOQ Editor to calculate project-specific milestone amounts and enable billing.
-                            </p>
-                            <p className="text-xs text-[#3D52A0] font-bold mt-4">
-                                In the meantime, you can configure the studio-wide default templates using the "Configure Studio Rules" button above!
-                            </p>
-                        </div>
-                    ) : (
-                        /* Milestone tracking container - grid side-by-side if All is selected and viewLayout is side-by-side */
-                        <div className={`grid grid-cols-1 ${activeTrackTab === 'all' && viewLayout === 'side-by-side' && !feeOnly ? 'xl:grid-cols-2 gap-8' : 'gap-12'} items-start`}>
-                            {(feeOnly || activeTrackTab === 'all' || activeTrackTab === 'design') && (
-                                designViewMode === 'simple' ? (
-                                    renderSimpleTrackView(designMilestones, taxableDesign, originalNetDesign, false, "Design Fees")
-                                ) : (
-                                    renderSplitTable(designMilestones, taxableDesign, originalNetDesign, false, "Design Fees")
-                                )
-                            )}
-                            {!feeOnly && (activeTrackTab === 'all' || activeTrackTab === 'execution') && (
-                                executionViewMode === 'simple' ? (
-                                    renderSimpleTrackView(executionMilestones, taxableExecution, originalNetExecution, true, "Execution Milestones")
-                                ) : (
-                                    renderSplitTable(executionMilestones, taxableExecution, originalNetExecution, true, "Execution Milestones")
-                                )
-                            )}
-                        </div>
-                    )}
-
-
-            </div>
+            {scheduleLog}
 
             {/* 4. ADVANCE PAYMENT SCHEDULES ARCHIVE */}
             {paymentSchedules.length > 0 && (
@@ -4835,9 +3056,6 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 </div>
             )}
 
-            </>)}
-
-            {moneyTab === 'history' && (<>
 
             {/*
               Versioning lives with the history it belongs to.
@@ -4989,6 +3207,21 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
               single biggest source of duplicate text on this screen.
             */}
             </>)}
+
+            {editFocus && !isReadOnlyMode && (
+                <EditMilestonesModal
+                    milestones={milestones}
+                    focus={editFocus}
+                    feeOnly={feeOnly}
+                    taxable={{ design: taxableDesign, execution: taxableExecution }}
+                    price={priceDraft}
+                    saved={schedule}
+                    studio={studioStages}
+                    onSaveAsDefaults={saveDraftAsStudioDefaults}
+                    onClose={() => setEditFocus(null)}
+                    onSave={saveScheduleDraft}
+                />
+            )}
 
             {/* COMPARE REVISION MODAL */}
             <AnimatePresence>
@@ -5179,6 +3412,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                     // A linked invoice keeps the date it has in Zoho; a new draft is dated today.
                                     invoiceDate: result.invoiceDate || new Date().toISOString(),
                                     lockedTaxableBase: zohoRaise.lockedTaxableBase,
+                                    ...lockedTermsFor(x),
                                     zohoInvoiceId: result.invoiceId,
                                 } : x),
                             }));

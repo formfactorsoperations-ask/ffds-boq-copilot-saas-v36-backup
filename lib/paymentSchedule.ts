@@ -31,6 +31,12 @@ import { engagementOf, isFeeOnly } from './engagement';
 export interface ScheduleFinancials {
   initiationFeePaid: number;
   billablePercent: number;
+  /**
+   * Percent of the design fee invoiced with GST, 0-100; the rest is billed
+   * without it. Absent means 100, which is how every design fee was billed
+   * before the choice existed, so no stored contract moves.
+   */
+  designBillablePercent: number;
   executionGstEnabled: boolean;
   /** The design fee is invoiced officially unless this says otherwise. */
   designGstEnabled: boolean;
@@ -57,6 +63,7 @@ export interface ScheduleFinancials {
 export const DEFAULT_FINANCIALS: ScheduleFinancials = {
   initiationFeePaid: 0,
   billablePercent: 100,
+  designBillablePercent: 100,
   executionGstEnabled: true,
   designGstEnabled: true,
   projectedCashValue: 0,
@@ -100,6 +107,7 @@ export function resolveFinancials(raw: any): ScheduleFinancials {
     ...f,
     initiationFeePaid: num(f.initiationFeePaid, DEFAULT_FINANCIALS.initiationFeePaid),
     billablePercent: num(f.billablePercent, DEFAULT_FINANCIALS.billablePercent),
+    designBillablePercent: num(f.designBillablePercent, DEFAULT_FINANCIALS.designBillablePercent),
     executionGstEnabled: typeof f.executionGstEnabled === 'boolean'
       ? f.executionGstEnabled
       : (hasRecord ? false : DEFAULT_FINANCIALS.executionGstEnabled),
@@ -191,6 +199,8 @@ export interface GstTerms {
   rate: number;
   /** Percent of execution invoiced with GST, 0-100; the rest is billed without it. */
   billablePercent: number;
+  /** Percent of the design fee invoiced with GST; the rest is billed without it. Absent means 100. */
+  designBillablePercent?: number;
   executionGst: boolean;
   designGst: boolean;
 }
@@ -200,6 +210,7 @@ export function gstTermsOf(ctx: any): GstTerms {
   return {
     rate: ctx?.gstRate || 18,
     billablePercent: f.billablePercent,
+    designBillablePercent: f.designBillablePercent,
     executionGst: f.executionGstEnabled,
     designGst: f.designGstEnabled,
   };
@@ -211,7 +222,7 @@ export function gstOn(taxableExecution: number, taxableDesign: number, t: GstTer
   const execution = t.executionGst ? taxableExecution * (t.billablePercent / 100) * r : 0;
   return {
     execution,
-    design: t.designGst ? taxableDesign * r : 0,
+    design: t.designGst ? taxableDesign * ((t.designBillablePercent ?? 100) / 100) * r : 0,
     /** GST on all of execution, before the cash share or a waiver. */
     potentialExecution,
     /** No execution GST is charged at all: switched off, or billed entirely in cash. */
@@ -222,7 +233,9 @@ export function gstOn(taxableExecution: number, taxableDesign: number, t: GstTer
 /** The one-line GST note under the payment terms, true to how execution is billed. */
 export function gstNoteFor(t: GstTerms): string {
   const r = `GST @ ${t.rate}%`;
-  const design = t.designGst ? 'on Professional/Design Fees' : '';
+  const dbp = t.designBillablePercent ?? 100;
+  const design = !t.designGst || dbp === 0 ? ''
+    : dbp < 100 ? `on ${dbp}% of Professional/Design Fees` : 'on Professional/Design Fees';
   if (!t.executionGst || t.billablePercent === 0) {
     return design
       ? `${r} applicable only ${design}. Execution billing is net of taxes (Vendor Direct / Cash).`
@@ -358,6 +371,7 @@ export function computeSchedule(args: {
   const taxableDesign = Math.max(0, rawDes - deduction(rawDes, 'design', ds));
 
   const bp = financials.billablePercent;
+  const dbp = financials.designBillablePercent ?? 100;
   const amounts: MilestoneAmount[] = [];
   const overBilled: OverBilled[] = [];
 
@@ -438,11 +452,22 @@ export function computeSchedule(args: {
       }
 
       base = R(base);
-      const billable = R(isExec ? base * (bp / 100) : base);
-      const cash = R(isExec ? base * ((100 - bp) / 100) : 0);
-      const rate = isExec
-        ? (financials.executionGstEnabled ? gstRate : 0)
-        : (financials.designGstEnabled ? gstRate : 0);
+      /*
+        A milestone already invoiced keeps the split and GST rate it was billed
+        at. Changing the split afterwards used to re-price invoices that had
+        gone out, so the screen quoted GST that was never on the invoice.
+        Milestones raised before these were recorded carry neither, and keep
+        following the current terms as they always did.
+      */
+      const lockedSplit = clearedRow && typeof m.lockedBillablePercent === 'number';
+      const share = lockedSplit ? m.lockedBillablePercent : (isExec ? bp : dbp);
+      const billable = R(base * (share / 100));
+      const cash = R(base - billable);
+      const rate = clearedRow && typeof m.lockedGstRate === 'number'
+        ? m.lockedGstRate
+        : isExec
+          ? (financials.executionGstEnabled ? gstRate : 0)
+          : (financials.designGstEnabled ? gstRate : 0);
       const gst = R(billable * (rate / 100));
       let invoiceTotal = R(billable + gst);
 
@@ -486,7 +511,7 @@ export function computeSchedule(args: {
   const executionBillable = taxableExecution * (bp / 100);
   const executionCash = taxableExecution * ((100 - bp) / 100);
   const gstOnExecution = financials.executionGstEnabled ? executionBillable * (gstRate / 100) : 0;
-  const gstOnDesign = financials.designGstEnabled ? taxableDesign * (gstRate / 100) : 0;
+  const gstOnDesign = financials.designGstEnabled ? taxableDesign * (dbp / 100) * (gstRate / 100) : 0;
   const grossProjectValue = taxableExecution + taxableDesign + gstOnExecution + gstOnDesign;
 
   const byId: Record<string, MilestoneAmount> = {};
@@ -523,7 +548,7 @@ export function computeSchedule(args: {
  */
 export function sameFinancials(a: any, b: any): boolean {
   if (!a || !b) return false;
-  const scalars = ['initiationFeePaid', 'billablePercent', 'executionGstEnabled', 'designGstEnabled',
+  const scalars = ['initiationFeePaid', 'billablePercent', 'designBillablePercent', 'executionGstEnabled', 'designGstEnabled',
                    'projectedCashValue', 'taxLimitYearly', 'goodwillDiscount',
                    'approvedExecutionValue', 'approvedDesignValue'];
   for (const k of scalars) {
