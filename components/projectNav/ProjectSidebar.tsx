@@ -83,10 +83,9 @@ const KEY = 'sd.projectSidebar';
 const MIN = 200, MAX = 400, SNAP = 150, OPEN_W = 296;
 
 /*
-  The curved glass (asked for 18 Nov 2026, round two the same day): the
-  sidebar floats as one pane of clear, glossy glass whose two long sides bow
-  in along their whole height, deepest at the middle, like the owner's
-  reference. The outline is drawn for the pane's real size, so the corners
+  The curved glass (asked for 18 Nov 2026, round three the same day): the
+  sidebar floats as one pane of clear, glossy glass. Its left side is straight;
+  its right side bows in along its whole height, deepest at the middle. The outline is drawn for the pane's real size, so the corners
   stay round while it opens, closes or is dragged wider.
 */
 export function glassDepth(w: number, closed: boolean): number {
@@ -103,9 +102,9 @@ export function glassPath(w: number, h: number, closed: boolean): string {
     `M${n(r)} 0H${n(w - r)}C${n(w - c)} 0 ${n(w + e)} ${n(r - c)} ${n(w)} ${n(r)}`,
     `Q${n(w - 2 * d)} ${n(m)} ${n(w)} ${n(h - r)}`,
     `C${n(w + e)} ${n(h - r + c)} ${n(w - c)} ${n(h)} ${n(w - r)} ${n(h)}H${n(r)}`,
-    `C${n(c)} ${n(h)} ${n(-e)} ${n(h - r + c)} 0 ${n(h - r)}`,
-    `Q${n(2 * d)} ${n(m)} 0 ${n(r)}`,
-    `C${n(-e)} ${n(r - c)} ${n(c)} 0 ${n(r)} 0Z`,
+    `C${n(c)} ${n(h)} 0 ${n(h - c)} 0 ${n(h - r)}`,
+    `V${n(r)}`,
+    `C0 ${n(c)} ${n(c)} 0 ${n(r)} 0Z`,
   ].join('');
 }
 

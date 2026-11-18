@@ -86,13 +86,15 @@ describe('Project sidebar', () => {
 });
 
 describe('Project sidebar: curved glass', () => {
-  it('draws a closed outline whose two long sides bow in, deepest at the middle', () => {
+  it('draws a closed outline: the left side straight, the right side bowing in at the middle', () => {
     const d = glassPath(286, 840, false);
     expect(d.startsWith('M26 0')).toBe(true);
     expect(d.endsWith('Z')).toBe(true);
-    // each side is one curve through the middle, pulled 2 x 16px in: 16px deep at the waist
+    // the right side is one curve through the middle, pulled 2 x 16px in: 16px deep at the waist
     expect(d).toContain('Q254 420');
-    expect(d).toContain('Q32 420');
+    // the left side is a straight line between its corners
+    expect(d).toContain('0 814V26');
+    expect(d.match(/Q/g)).toHaveLength(1);
   });
   it('curves less when folded to icons, and draws nothing before it has a size', () => {
     expect(glassDepth(74, true)).toBe(6);
