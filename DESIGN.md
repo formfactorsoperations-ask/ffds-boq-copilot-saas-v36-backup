@@ -335,19 +335,20 @@ On People, Check in and Check out on the My day card open the lamp
 (`components/people/LampCheckIn.tsx`) instead of acting at once. Home's pin and
 the Site Supervisor's app still check in straight from the card.
 
-- A room at night (the scrim's navy, `#12182F`): moonlight through an arched
-  window (slate and brand, with twinkling stars and its light on the floor), a
-  picture in the studio's colours and a plant, both nearly lost in the dark,
-  and a floor lamp drawn in SVG: pleated slate cloth, amber brass.
+- The studio in the dark (the scrim's navy, `#12182F`), with nothing that says
+  night (owner, 18 Nov 2026: no moon or window, it reads wrong at the start of
+  the day): a shelf of books and a vase, a mood board of swatches and a sketch,
+  a desk with a closed laptop and a mug, and a plant, all nearly lost in the
+  dark; and a floor lamp drawn in SVG: pleated slate cloth, amber brass.
 - The cord is a bead chain with a brass bead that glows and sways a little,
   asking to be pulled. Drag it down and let go, or press it (it is a button,
   and takes focus when the window opens). The chain swings after the pull and
   the lamp head nods and wobbles back on a spring.
 - The light comes on with a short flicker and a warm wash over the room: the
   shade glows from inside with the bulb seen under it, a feathered cone and a
-  bright core fall to a pool on the floor, the wall warms, the picture and the
-  plant (rim-lit) come out of the dark, and dust drifts up through the light,
-  which breathes gently. All of it amber, the state colour; nothing new.
+  bright core fall to a pool on the floor, the wall warms, the studio comes out
+  of the dark (the plant rim-lit, steam rising from the mug when the day is
+  starting), and dust drifts up through the light, which breathes gently. All of it amber, the state colour; nothing new.
 - Then the card swings in beside the lamp in 3D, its near edge catching the
   warm light: the People glass (`pp-glass`) with the modal eyebrow, "Good
   morning, Anish. / The light's on for you." in the page-title size (the second

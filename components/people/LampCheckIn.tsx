@@ -10,19 +10,20 @@ import '../projectHeader/projectHeader.css';
 /*
   THE LAMP: starting and ending the day (DESIGN.md → "People: the lamp").
 
-  Check in and Check out on the My day card open this window: a room at night,
-  lit only by the moon through an arched window, and a floor lamp. The cord
-  sways a little, asking to be pulled. Pull it (drag it down and let go, or
-  press it): the chain swings, the lamp head wobbles, the bulb flickers on,
-  the room warms and its picture and plant come out of the dark, dust drifts
-  in the light, and the card to start or end the day swings in beside it,
-  its edge catching the lamp's glow. Checking out turns the light off again;
+  Check in and Check out on the My day card open this window: the studio in
+  the dark (a shelf of books, a mood board, a desk with a laptop and a mug, a
+  plant) and a floor lamp. The cord sways a little, asking to be pulled. Pull
+  it (drag it down and let go, or press it): the chain swings, the lamp head
+  wobbles, the bulb flickers on, the room warms and the studio comes out of
+  the dark, steam rises from the mug when the day is starting, dust drifts in
+  the light, and the card to start or end the day swings in beside it, its
+  edge catching the lamp's glow. Checking out turns the light off again;
   the shade keeps a little afterglow as it fades.
 
   The window only shows the choice and the button: the check-in and check-out
   themselves stay in MyDayCard, so the card and the window always agree.
 
-  Colours: the room is the scrim's navy, the moonlight slate and brand, the
+  Colours: the room is the scrim's navy, its things slate, brand and amber, the
   lamp light amber; the lamp is slate cloth and amber brass; the card is the
   People glass with brand text. Under reduced motion nothing sways or
   flickers: the light is already on and the card already there.
@@ -265,8 +266,8 @@ function Cord({ lit, onPull, disabled, still, focusRef, onTug, idle }: {
   );
 }
 
-/** The room: night through an arched window, a picture and a plant that come out of the dark. */
-function Room({ lit }: { lit: boolean }) {
+/** The studio before anyone is in: a shelf, a mood board, a desk and a plant that come out of the dark. */
+function Room({ lit, steam }: { lit: boolean; steam: boolean }) {
   const state = lit ? 'on' : 'off';
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0">
@@ -274,28 +275,62 @@ function Room({ lit }: { lit: boolean }) {
       <motion.div className="absolute inset-0 md:hidden" initial={false} animate={state} variants={glowV}
         style={{ background: 'radial-gradient(70% 60% at 50% 26%, rgba(245, 158, 11, 0.30), rgba(217, 119, 6, 0.10) 45%, transparent 75%)' }} />
 
-      {/* The window, with stars and the moon, and its light on the floor. */}
-      <div className="absolute left-[7%] top-[11%] w-[19%] max-w-[104px] aspect-[3/5] rounded-t-full overflow-hidden border-[3px] border-slate-700 bg-gradient-to-b from-[#3D52A0]/40 via-[#3D52A0]/15 to-slate-900/40">
-        <span className="absolute right-[18%] top-[16%] w-[26%] aspect-square rounded-full bg-slate-200 shadow-[0_0_18px_4px_rgba(226,232,240,0.35)]" />
-        {[[22, 30], [60, 44], [34, 58], [72, 70], [18, 76], [48, 24]].map(([l, t], i) => (
-          <motion.span key={i} className="absolute w-0.5 h-0.5 rounded-full bg-slate-200" style={{ left: `${l}%`, top: `${t}%` }}
-            animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 2 + i * 0.6, repeat: Infinity, ease: 'easeInOut', delay: i * 0.3 }} />
-        ))}
-        <span className="absolute inset-y-0 left-1/2 w-[3px] -ml-px bg-slate-700" />
-        <span className="absolute inset-x-0 top-[55%] h-[3px] bg-slate-700" />
-      </div>
-      <motion.div className="absolute inset-0" initial={false} animate={{ opacity: lit ? 0.35 : 1 }} transition={{ duration: 0.8 }}
-        style={{ clipPath: 'polygon(8% 85%, 24% 85%, 40% 100%, 6% 100%)', background: 'linear-gradient(180deg, rgba(203, 213, 225, 0.16), rgba(61, 82, 160, 0.04))', filter: 'blur(5px)' }} />
+      {/* A shelf of books and a small vase. */}
+      <motion.svg className="absolute left-[5%] top-[13%] w-[30%] max-w-[168px]" viewBox="0 0 200 84" initial={false} animate={state} variants={roomV}>
+        <g>
+          <rect x="14" y="16" width="13" height="48" rx="1.5" fill="#3D52A0" />
+          <rect x="29" y="24" width="10" height="40" rx="1.5" fill="#475569" />
+          <rect x="41" y="12" width="14" height="52" rx="1.5" fill="#B45309" />
+          <rect x="57" y="22" width="9" height="42" rx="1.5" fill="#64748B" />
+          <rect x="70" y="20" width="11" height="44" rx="1.5" fill="#3D52A0" opacity="0.7" transform="rotate(12 75 64)" />
+          <rect x="44" y="20" width="8" height="2" fill="#FDE68A" opacity="0.5" />
+          <rect x="17" y="24" width="7" height="2" fill="#F8FAFC" opacity="0.4" />
+        </g>
+        <g>
+          <path d="M150 64 C 140 64, 138 48, 146 40 L 146 34 L 154 34 L 154 40 C 162 48, 160 64, 150 64 Z" fill="#94A3B8" />
+          <path d="M150 34 C 148 22, 142 14, 136 8 M150 34 C 152 20, 158 12, 166 6" fill="none" stroke="#64748B" strokeWidth="1.6" strokeLinecap="round" />
+          <circle cx="136" cy="8" r="3" fill="#B45309" />
+          <circle cx="166" cy="6" r="3" fill="#D97706" />
+          <rect x="112" y="50" width="22" height="14" rx="2" fill="#334155" />
+          <rect x="112" y="44" width="22" height="6" rx="1.5" fill="#475569" />
+        </g>
+        <rect x="0" y="64" width="200" height="5" rx="1.5" fill={lit ? '#92400E' : '#334155'} style={{ transition: 'fill 700ms' }} />
+        <path d="M30 69 V78 H40 M170 69 V78 H160" fill="none" stroke="#475569" strokeWidth="2" />
+      </motion.svg>
 
-      {/* A picture on the wall: the studio's colours, a hill and a sun. */}
-      <motion.div className="absolute right-[9%] top-[15%] w-[17%] max-w-[92px] aspect-[4/5] rounded-sm border-[4px] border-amber-900 bg-slate-800 shadow-xl overflow-hidden"
+      {/* The mood board: swatches and a sketch pinned up for the day's work. */}
+      <motion.div className="absolute right-[7%] top-[20%] md:top-[12%] w-[23%] max-w-[124px] aspect-[5/4] rounded-md border-[3px] border-slate-600 bg-amber-900/60 shadow-xl"
         initial={false} animate={state} variants={roomV}>
-        <span className="absolute inset-[10%] bg-slate-100 overflow-hidden">
-          <span className="absolute left-[24%] top-[18%] w-[30%] aspect-square rounded-full bg-amber-400" />
-          <span className="absolute -left-[20%] -bottom-[30%] w-[90%] aspect-square rounded-full bg-[#3D52A0]" />
-          <span className="absolute -right-[30%] -bottom-[40%] w-[90%] aspect-square rounded-full bg-[#3D52A0]/60" />
+        <span className="absolute left-[8%] top-[10%] w-[34%] h-[46%] bg-slate-100 rotate-[-6deg] shadow">
+          <span className="absolute inset-x-[12%] top-[16%] h-[2px] bg-slate-400" />
+          <span className="absolute left-[12%] right-[30%] top-[34%] h-[2px] bg-slate-400" />
+          <span className="absolute left-[12%] w-[40%] bottom-[14%] aspect-square border-2 border-[#3D52A0]" />
         </span>
+        <span className="absolute right-[10%] top-[8%] w-[28%] aspect-square bg-[#3D52A0] rotate-[5deg] shadow" />
+        <span className="absolute right-[34%] bottom-[10%] w-[24%] aspect-square bg-amber-500 rotate-[-4deg] shadow" />
+        <span className="absolute right-[8%] bottom-[14%] w-[22%] aspect-square bg-slate-300 rotate-[8deg] shadow" />
+        <span className="absolute left-[22%] top-[6%] w-1.5 h-1.5 rounded-full bg-amber-300" />
+        <span className="absolute right-[22%] top-[4%] w-1.5 h-1.5 rounded-full bg-amber-300" />
       </motion.div>
+
+      {/* A desk with a closed laptop and a mug: steam rises from it when the day starts. */}
+      <motion.svg className="absolute left-[3%] bottom-[12%] w-[30%] max-w-[170px]" viewBox="0 0 200 130" initial={false} animate={state} variants={roomV}>
+        <rect x="6" y="62" width="188" height="7" rx="2" fill={lit ? '#92400E' : '#334155'} style={{ transition: 'fill 700ms' }} />
+        <rect x="6" y="62" width="188" height="2" rx="1" fill="#FDE68A" opacity={lit ? 0.35 : 0} style={{ transition: 'opacity 700ms' }} />
+        <path d="M18 69 V128 M182 69 V128" stroke="#475569" strokeWidth="4" strokeLinecap="round" />
+        <rect x="24" y="69" width="60" height="22" rx="2" fill="#1E293B" stroke="#334155" />
+        <rect x="48" y="78" width="12" height="2" rx="1" fill="#64748B" />
+        <rect x="40" y="54" width="78" height="8" rx="2" fill="#64748B" />
+        <rect x="40" y="54" width="78" height="2" rx="1" fill="#94A3B8" />
+        <path d="M140 38 H160 V60 Q160 62 158 62 H142 Q140 62 140 60 Z" fill="#F8FAFC" opacity="0.9" />
+        <path d="M160 44 C 168 44, 168 56, 160 56" fill="none" stroke="#F8FAFC" strokeWidth="3" opacity="0.9" />
+        <rect x="140" y="38" width="20" height="4" fill="#3D52A0" />
+        {steam && lit && [0, 1, 2].map((i) => (
+          <motion.path key={i} d={`M${144 + i * 6} 34 c -4 -6, 4 -10, 0 -16 c -3 -5, 3 -8, 0 -12`} fill="none" stroke="#F8FAFC" strokeWidth="1.6" strokeLinecap="round"
+            initial={{ opacity: 0, y: 4 }} animate={{ opacity: [0, 0.55, 0], y: [4, -6, -14] }}
+            transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut', delay: 1 + i * 0.7 }} />
+        ))}
+      </motion.svg>
 
       {/* A plant in a pot, rim-lit by the lamp. */}
       <motion.svg className="absolute right-[7%] bottom-[7%] w-[16%] max-w-[92px]" viewBox="0 0 90 130" initial={false} animate={state} variants={roomV}>
@@ -395,7 +430,7 @@ export default function LampCheckIn(p: LampCheckInProps) {
         <div className="relative grid md:grid-cols-[1fr_400px] md:min-h-[560px] items-center">
           {/* The room and the lamp */}
           <div className="relative h-[330px] md:h-[560px] md:self-stretch">
-            <Room lit={lit} />
+            <Room lit={lit} steam={starting && !still} />
             <div className="relative flex justify-center pt-6 md:pt-12 h-full">
               <div className="relative w-[240px] h-[460px] origin-top scale-[0.62] md:scale-100">
               <motion.div className="relative w-full h-full" style={{ rotate: head, transformOrigin: '50% 100%' }}>
