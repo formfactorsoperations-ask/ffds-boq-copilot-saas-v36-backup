@@ -6,7 +6,7 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
-import ProjectSidebar, { type SidebarStage } from '../../components/projectNav/ProjectSidebar';
+import ProjectSidebar, { glassPath, type SidebarStage } from '../../components/projectNav/ProjectSidebar';
 
 afterEach(cleanup);
 beforeEach(() => { try { localStorage.clear(); } catch { /* none */ } });
@@ -82,5 +82,20 @@ describe('Project sidebar', () => {
     const { nav } = setup();
     fireEvent.click(within(nav).getByRole('button', { name: /Anish K/ }));
     expect(screen.getByRole('menuitem', { name: /Projects/ })).toBeTruthy();
+  });
+});
+
+describe('Project sidebar: curved glass', () => {
+  it('draws a closed outline whose long sides curve in at the middle', () => {
+    const d = glassPath(258, 840, false);
+    expect(d.startsWith('M24 0')).toBe(true);
+    expect(d.endsWith('Z')).toBe(true);
+    // the waist: the right side reaches w - 9.8 at half height, the left side 9.8
+    expect(d).toContain('248.2 420');
+    expect(d).toContain('9.8 420');
+  });
+  it('curves less when folded to icons, and draws nothing before it has a size', () => {
+    expect(glassPath(74, 840, true)).toContain('69 420');
+    expect(glassPath(0, 840, false)).toBe('');
   });
 });

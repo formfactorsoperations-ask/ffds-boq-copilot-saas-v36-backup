@@ -525,6 +525,14 @@ own Lucide icon, and each moves on hover in its own way (a bounce, a swing, a sp
 draw themselves). A white highlight slides to the screen you are on. Counts pop in. Everything stops
 under `prefers-reduced-motion`. Same font and brand colour.
 
+**Curved glass** (asked for 18 Nov 2026): the sidebar floats 10px off the page as one pane of
+frosted glass whose long sides curve gently in towards the middle (up to 10px open, 5px as icons).
+The pane is an SVG drawn for its real size (`glassPath` in `ProjectSidebar.tsx`), so the corners
+stay round while it opens, folds or is dragged. It is white to slate-50, with a faint brand glow
+behind the project, a soft diagonal sheen, a bright inner rim on a slate-300 hairline, and a slate
+shadow. No other colours. The highlight under the screen you are on has a hairline brand border and
+its bar sits inside it. Open it is 280px wide and 84px as icons; the drag range is unchanged.
+
 ### Projects as glass folders (approved 16 Nov 2026)
 
 The owner chose this for the Projects screen (plan item 10): every project is a glass folder on one

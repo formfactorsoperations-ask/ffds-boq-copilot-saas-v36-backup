@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   MessagesSquare, Ruler, FileText, PenTool, HardHat, KeyRound, MapPin, Layers, Table, BadgePercent, Presentation,
@@ -80,7 +80,88 @@ const Ic = ({ icon: I, move = 'nudge', draw = false }: { icon: React.ComponentTy
 );
 
 const KEY = 'sd.projectSidebar';
-const MIN = 200, MAX = 400, SNAP = 150, OPEN_W = 268;
+const MIN = 200, MAX = 400, SNAP = 150, OPEN_W = 280;
+
+/*
+  The curved glass (asked for 18 Nov 2026): the sidebar floats as one pane of
+  frosted glass whose long sides curve gently in towards the middle. The
+  outline is drawn for the pane's real size, so the corners stay round while
+  it opens, closes or is dragged wider.
+*/
+export function glassPath(w: number, h: number, closed: boolean): string {
+  if (w <= 0 || h <= 0) return '';
+  const r = Math.min(closed ? 20 : 24, w / 2, h / 4);
+  const d = closed ? 5 : Math.max(6, Math.min(10, w * 0.038)); // how far the sides curve in
+  const c = r * 0.448, k = Math.max(0, h / 2 - r) * 0.6, m = h / 2;
+  const n = (v: number) => Math.round(v * 10) / 10;
+  return [
+    `M${n(r)} 0H${n(w - r)}C${n(w - c)} 0 ${n(w)} ${n(c)} ${n(w)} ${n(r)}`,
+    `C${n(w)} ${n(r + k)} ${n(w - d)} ${n(m - k)} ${n(w - d)} ${n(m)}`,
+    `C${n(w - d)} ${n(m + k)} ${n(w)} ${n(h - r - k)} ${n(w)} ${n(h - r)}`,
+    `C${n(w)} ${n(h - c)} ${n(w - c)} ${n(h)} ${n(w - r)} ${n(h)}H${n(r)}`,
+    `C${n(c)} ${n(h)} 0 ${n(h - c)} 0 ${n(h - r)}`,
+    `C0 ${n(h - r - k)} ${n(d)} ${n(m + k)} ${n(d)} ${n(m)}`,
+    `C${n(d)} ${n(m - k)} 0 ${n(r + k)} 0 ${n(r)}`,
+    `C0 ${n(c)} ${n(c)} 0 ${n(r)} 0Z`,
+  ].join('');
+}
+
+function Glass({ closed }: { closed: boolean }) {
+  const id = useId().replace(/:/g, '');
+  const frame = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = frame.current; if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth, h = el.clientHeight;
+      setBox((b) => (Math.abs(b.w - w) < 0.5 && Math.abs(b.h - h) < 0.5 ? b : { w, h }));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const d = glassPath(box.w, box.h, closed);
+  return (
+    <div className="psb-glass" ref={frame} aria-hidden>
+      {d && <svg width={box.w} height={box.h} viewBox={`0 0 ${box.w} ${box.h}`}>
+      <defs>
+        <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#FFFFFF" stopOpacity=".97" />
+          <stop offset=".55" stopColor="#F8FAFC" stopOpacity=".93" />
+          <stop offset="1" stopColor="#F1F5F9" stopOpacity=".95" />
+        </linearGradient>
+        <radialGradient id={`${id}g`} cx=".15" cy=".07" r=".55">
+          <stop offset="0" stopColor="#3D52A0" stopOpacity=".13" />
+          <stop offset="1" stopColor="#3D52A0" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={`${id}b`} cx=".9" cy="1" r=".5">
+          <stop offset="0" stopColor="#3D52A0" stopOpacity=".07" />
+          <stop offset="1" stopColor="#3D52A0" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={`${id}s`} x1="0" y1="0" x2="1" y2=".55">
+          <stop offset=".28" stopColor="#FFFFFF" stopOpacity="0" />
+          <stop offset=".42" stopColor="#FFFFFF" stopOpacity=".7" />
+          <stop offset=".56" stopColor="#FFFFFF" stopOpacity="0" />
+        </linearGradient>
+        <filter id={`${id}h`} x="-30%" y="-10%" width="160%" height="125%">
+          <feDropShadow dx="0" dy="14" stdDeviation="14" floodColor="#0F172A" floodOpacity=".09" />
+          <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#3D52A0" floodOpacity=".08" />
+        </filter>
+        <clipPath id={`${id}c`}><path d={d} /></clipPath>
+      </defs>
+      <path d={d} fill={`url(#${id}f)`} filter={`url(#${id}h)`} />
+      <path d={d} fill={`url(#${id}g)`} />
+      <path d={d} fill={`url(#${id}b)`} />
+      <path d={d} fill={`url(#${id}s)`} className="psb-sheen" />
+      {/* the rim: a bright inner edge on a hairline outer one */}
+      <path d={d} fill="none" stroke="#FFFFFF" strokeWidth="3" clipPath={`url(#${id}c)`} />
+      <path d={d} fill="none" stroke="#CBD5E1" strokeOpacity=".75" strokeWidth="1" />
+      </svg>}
+    </div>
+  );
+}
 
 export default function ProjectSidebar(p: Props) {
   /* Open or icons, and the width: remembered on this device. */
@@ -214,6 +295,7 @@ export default function ProjectSidebar(p: Props) {
         onMouseOver={hover}
         onMouseLeave={leave}
       >
+        <Glass closed={closed} />
         {!phone && (
           <button type="button" className="psb-toggle" onClick={toggle} aria-label={closed ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl/⌘ B">
             <ChevronLeft strokeWidth={2.4} />
