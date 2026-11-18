@@ -120,6 +120,22 @@ describe('Pricing & Tiers grid', () => {
     expect(within(money).getAllByText('Civil')).toHaveLength(2); // the part, and the trade inside it
   });
 
+  it('a trade opens to its BOQ lines, with each option’s amount and quantity', () => {
+    render(<Harness />);
+    const money = view('Where the money goes');
+    fireEvent.click(within(money).getByRole('button', { name: /^Carpentry/ }));
+    expect(within(money).queryByText('Wardrobe')).toBeNull();
+    fireEvent.click(within(money).getByRole('button', { name: /^Carpentry\s*open$/ }));
+    const row = within(money).getByText('Wardrobe').closest('.grid')!;
+    expect(row.textContent).toContain('Bed');
+    expect(row.textContent).toContain('₹ 10,000'); // Essential: 10 sqft
+    expect(row.textContent).toContain('10 sqft');
+    expect(row.textContent).toContain('₹ 12,000'); // Comfort: 12 sqft
+    expect(row.textContent).toContain('12 sqft');
+    fireEvent.click(within(money).getByRole('button', { name: /^Carpentry\s*close$/ }));
+    expect(within(money).queryByText('Wardrobe')).toBeNull();
+  });
+
   it('follows the BOQ as it is edited: a line moved to another category moves part', async () => {
     const props = { setTiers: () => undefined, activeTierId: 'com', setActiveTierId: () => undefined, projectContext: CTX, setProjectContext: () => undefined, bank: BANK, setActiveTab: () => undefined } as any;
     const { rerender } = render(<TierManager tiers={[COM]} {...props} />);

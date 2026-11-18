@@ -97,7 +97,7 @@ export function partOfLine(room: string | undefined, item: Pick<Item, 'cat' | 'n
   return tradeOfLine(room, item).part;
 }
 
-export interface SplitLine { key: string; name: string; room: string; trade: string; total: number }
+export interface SplitLine { key: string; name: string; room: string; trade: string; total: number; qty?: number; unit?: string }
 export interface ScopeSplit {
   /** The option's work value: billable lines, as-actuals left out (lib/boqPricing boqTotal). */
   total: number;
@@ -122,7 +122,7 @@ export function scopeSplit(tier: Pick<ProposalTier, 'boq'> | undefined, bankMap:
     if (!item && part === 'others') part = tradeOfLine(room, undefined).part;
     const key = String(line.id || `${priced.key}#${i}`);
     parts[part].value += priced.total;
-    parts[part].lines.push({ key, name: priced.name, room: priced.room, trade, total: priced.total });
+    parts[part].lines.push({ key, name: priced.name, room: priced.room, trade, total: priced.total, qty: priced.qty, unit: priced.unit });
     total += priced.total;
   });
   SCOPE_PARTS.forEach((p) => {
