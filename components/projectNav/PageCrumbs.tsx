@@ -5,8 +5,9 @@
 
   - The stage opens a list of every stage: the one the project is at says NOW,
     locked ones are greyed with their note, and a stage opens its first screen.
-  - On a wide screen the stage's screens sit beside it as a Segmented choice,
-    so the screen next door is one click away. Narrower, the screen's name opens
+  - On a wide screen the stage's screens sit beside it as the gliding choice
+    (Glide, DESIGN.md "People motion"), so the screen next door is one click
+    away and the white pill slides to it. Narrower, the screen's name opens
     the same choice as a list.
   - Project Hub screens read "Project Hub / Ops Matrix ▾" and list the hub.
 
@@ -15,7 +16,7 @@
 */
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Lock, Check } from '@/lib/lucide-shim';
-import { Segmented } from '../ui/kit';
+import { Glide } from '../people/PeopleBits';
 import type { SidebarStage, SidebarHubItem } from './ProjectSidebar';
 
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
@@ -121,6 +122,10 @@ export default function PageCrumbs({ activeTab, title, stages, hub, home, onGo }
     key: x.route, label: x.label, on: x.route === activeTab, onPick: () => onGo(x.route, x.stage),
   }));
 
+  /* The pill moves the moment a screen is picked, not when the screen has loaded. */
+  const [picked, setPicked] = useState(activeTab);
+  useEffect(() => { setPicked(activeTab); }, [activeTab]);
+
   const NAME = 'text-base font-extrabold text-slate-800 tracking-tight truncate';
 
   return (
@@ -149,9 +154,9 @@ export default function PageCrumbs({ activeTab, title, stages, hub, home, onGo }
           {/* Wide: the stage's screens in a row. */}
           {stage && (
             <div className="hidden xl:block min-w-0">
-              <Segmented size="sm" label={`${stage.label} screens`} value={activeTab}
+              <Glide id="page-crumbs" label={`${stage.label} screens`} value={picked}
                 options={siblings.map(x => ({ id: x.route, label: x.label }))}
-                onChange={(route) => { if (route !== activeTab) onGo(route, stage.stage); }} />
+                onChange={(route) => { if (route === activeTab) return; setPicked(route); onGo(route, stage.stage); }} />
             </div>
           )}
           {/* Narrower, and always for the hub: the screen's name opens its neighbours. */}

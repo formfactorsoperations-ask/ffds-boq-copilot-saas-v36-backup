@@ -34,6 +34,8 @@ describe('Page bar breadcrumb', () => {
     expect(within(row).getByRole('radio', { name: 'Money & Offers' }).getAttribute('aria-checked')).toBe('true');
     fireEvent.click(within(row).getByRole('radio', { name: 'Pricing & Tiers' }));
     expect(onGo).toHaveBeenCalledWith('ops', 2);
+    // The pill moves on the click, before the page has changed.
+    expect(within(row).getByRole('radio', { name: 'Pricing & Tiers' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('the stage opens every stage; one opens its first screen, a locked one does not', () => {

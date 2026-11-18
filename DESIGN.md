@@ -454,8 +454,8 @@ you between screens without opening the sidebar:
 - **The stage** ("Scope & Strategy ▾") opens a list (`phd-pop`): Hub, then every stage. The current
   one is ticked, the one the project is at says NOW, locked ones are grey with their lock note and
   do nothing. A stage opens its first screen.
-- **The screens beside it.** On a wide screen (`xl`) the stage's screens sit after the `/` as a small
-  `Segmented`; one click opens the next screen. Narrower, the screen's name opens the same screens as
+- **The screens beside it.** On a wide screen (`xl`) the stage's screens sit after the `/` as the
+  gliding choice (`Glide`); one click opens the next screen and the white pill slides to it. Narrower, the screen's name opens the same screens as
   a list. A screen alone in its stage is just its name.
 - **Project Hub** screens read "Project Hub ▾ / Ops Matrix ▾"; the name lists the hub's screens.
 - It takes the sidebar's own stages and hub, so the two always show the same screens, roles and locks.
