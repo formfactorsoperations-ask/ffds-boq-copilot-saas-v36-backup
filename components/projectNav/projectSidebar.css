@@ -3,19 +3,18 @@
   The owner chose the quiet sidebar with animated Lucide icons, collapse on
   click, and a width you can drag. Everything here stops under reduced motion.
 
-  Curved glass (asked for 18 Nov 2026, rounds three and four the same day):
-  the sidebar is one pane of clear, glossy glass set into the window's left
-  edge, top to bottom. Only its right side curves, bowing in along its whole
-  height; the whole curve is the handle that resizes it. The pane is drawn by <Glass> (an SVG
-  sized to the sidebar) behind the content; the sidebar itself is clear.
-  Everything inside keeps --psb-l from the left edge and --psb-r from the curved
-  right edge, so nothing meets the curve.
+  Glass (asked for 18 Nov 2026): the sidebar is one pane of clear, glossy
+  glass set into the window's left edge, top to bottom, with straight sides
+  (the owner tried a curved right side the same day and chose straight).
+  The pane is drawn by <Glass> (an SVG sized to the sidebar) behind the
+  content; the sidebar itself is clear. Content keeps --psb-l and --psb-r
+  from the sides.
 */
 .psb {
-  --psb-w: 288px;
+  --psb-w: 280px;
   --psb-closed: 76px;
   --psb-l: 16px;
-  --psb-r: 22px;
+  --psb-r: 16px;
   --psb-spring: cubic-bezier(.22, 1, .36, 1);
   position: relative;
   flex: none;
@@ -57,9 +56,7 @@
 .psb-toggle:hover { background: #3D52A0; border-color: #3D52A0; color: #fff; }
 .psb-toggle svg { width: 14px; height: 14px; transition: transform .5s var(--psb-spring); }
 .psb.is-closed .psb-toggle svg { transform: rotate(180deg); }
-/* the grab strip covers the whole curve (16px deep at the middle), not just the corners */
-.psb-resize { position: absolute; top: 0; bottom: 0; right: -6px; width: 26px; cursor: col-resize; z-index: 5; }
-.psb.is-closed .psb-resize { width: 14px; }
+.psb-resize { position: absolute; top: 0; bottom: 0; right: -5px; width: 10px; cursor: col-resize; z-index: 5; }
 .psb-wlabel { position: absolute; top: 60px; right: -62px; z-index: 7; background: #0F172A; color: #fff; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 7px; pointer-events: none; }
 body.psb-resizing { cursor: col-resize; user-select: none; }
 

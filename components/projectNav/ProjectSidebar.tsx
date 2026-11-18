@@ -80,32 +80,27 @@ const Ic = ({ icon: I, move = 'nudge', draw = false }: { icon: React.ComponentTy
 );
 
 const KEY = 'sd.projectSidebar';
-const MIN = 200, MAX = 400, SNAP = 150, OPEN_W = 288;
+const MIN = 200, MAX = 400, SNAP = 150, OPEN_W = 280;
 
 /*
-  The curved glass (asked for 18 Nov 2026, rounds three and four the same
-  day): the sidebar is one pane of clear, glossy glass set into the window's
-  left edge, from top to bottom, so it reads as part of the app rather than a
-  card stuck on it. Its left, top and bottom meet the window; its right side
-  bows in along its whole height, deepest at the middle. The outline is drawn
-  for the pane's real size, so the curve follows as it opens, closes or is
-  dragged wider.
+  The glass sidebar (asked for 18 Nov 2026): one pane of clear, glossy glass
+  set into the window's left edge from top to bottom, so it reads as part of
+  the app rather than a card stuck on it. The owner tried a curved right side
+  the same day and chose straight sides. The pane is drawn for its real size,
+  so the glass follows as it opens, closes or is dragged wider.
 */
-export function glassDepth(w: number, closed: boolean): number {
-  return closed ? 6 : Math.round(Math.max(8, Math.min(16, w * 0.06)));
-}
 const n1 = (v: number) => Math.round(v * 10) / 10;
-/** The curved right side alone: what lights up while you hover or drag it. */
-export function glassEdge(w: number, h: number, closed: boolean): string {
+/** The right edge alone: what lights up while you hover or drag it to resize. */
+export function glassEdge(w: number, h: number): string {
   if (w <= 0 || h <= 0) return '';
-  return `M${n1(w)} 0Q${n1(w - 2 * glassDepth(w, closed))} ${n1(h / 2)} ${n1(w)} ${n1(h)}`;
+  return `M${n1(w)} 0V${n1(h)}`;
 }
-export function glassPath(w: number, h: number, closed: boolean): string {
+export function glassPath(w: number, h: number): string {
   if (w <= 0 || h <= 0) return '';
-  return `${glassEdge(w, h, closed)}H0V0Z`;
+  return `${glassEdge(w, h)}H0V0Z`;
 }
 
-function Glass({ closed, hot }: { closed: boolean; hot: boolean }) {
+function Glass({ hot }: { hot: boolean }) {
   const id = useId().replace(/:/g, '');
   const frame = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
@@ -122,8 +117,8 @@ function Glass({ closed, hot }: { closed: boolean; hot: boolean }) {
     return () => ro.disconnect();
   }, []);
   const { w, h } = box;
-  const d = glassPath(w, h, closed);
-  const edge = glassEdge(w, h, closed);
+  const d = glassPath(w, h);
+  const edge = glassEdge(w, h);
   const u = (k: string) => `url(#${id}${k})`;
   return (
     <div className="psb-glass" ref={frame} aria-hidden>
@@ -189,7 +184,7 @@ function Glass({ closed, hot }: { closed: boolean; hot: boolean }) {
             <path d={d} fill="none" stroke={u('e')} strokeWidth="12" filter={u('y')} />
             <path d={d} fill="none" stroke={u('r')} strokeWidth="4" />
           </g>
-          {/* the curved edge: a slate hairline, brand while you hover or drag it to resize */}
+          {/* the right edge: a slate hairline, brand while you hover or drag it to resize */}
           <path d={edge} fill="none" className={`psb-edge ${hot ? 'is-hot' : ''}`} />
         </svg>
       )}
@@ -270,7 +265,7 @@ export default function ProjectSidebar(p: Props) {
     const r = el.getBoundingClientRect(), s = sc.getBoundingClientRect();
     setInd({ y: r.top - s.top + sc.scrollTop, h: r.height });
   }, [closed, p.selectedStage]);
-  /* No scrollbar on the glass (on Windows it cut across the curve): the list fades at an edge with more beyond it. */
+  /* No scrollbar on the glass (on Windows a grey bar with arrows broke the pane): the list fades at an edge with more beyond it. */
   const [more, setMore] = useState({ up: false, down: false });
   const edges = useCallback(() => {
     const sc = scroller.current; if (!sc) return;
@@ -340,7 +335,7 @@ export default function ProjectSidebar(p: Props) {
         onMouseOver={hover}
         onMouseLeave={leave}
       >
-        <Glass closed={closed} hot={edgeHover || !!drag} />
+        <Glass hot={edgeHover || !!drag} />
         {!phone && (
           <button type="button" className="psb-toggle" onClick={toggle} aria-label={closed ? 'Expand sidebar' : 'Collapse sidebar'} title="Ctrl/⌘ B">
             <ChevronLeft strokeWidth={2.4} />

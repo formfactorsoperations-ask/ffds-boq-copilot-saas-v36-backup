@@ -6,7 +6,7 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
-import ProjectSidebar, { glassDepth, glassEdge, glassPath, type SidebarStage } from '../../components/projectNav/ProjectSidebar';
+import ProjectSidebar, { glassEdge, glassPath, type SidebarStage } from '../../components/projectNav/ProjectSidebar';
 
 afterEach(cleanup);
 beforeEach(() => { try { localStorage.clear(); } catch { /* none */ } });
@@ -85,16 +85,10 @@ describe('Project sidebar', () => {
   });
 });
 
-describe('Project sidebar: curved glass', () => {
-  it('meets the window on the left, top and bottom, and bows in on the right only', () => {
-    // the right side is one curve through the middle, pulled 2 x 16px in: 16px deep at the waist
-    expect(glassPath(288, 840, false)).toBe('M288 0Q256 420 288 840H0V0Z');
-    expect(glassEdge(288, 840, false)).toBe('M288 0Q256 420 288 840');
-  });
-  it('curves less when folded to icons, and draws nothing before it has a size', () => {
-    expect(glassDepth(76, true)).toBe(6);
-    expect(glassPath(76, 840, true)).toContain('Q64 420');
-    expect(glassDepth(150, false)).toBe(9);
-    expect(glassPath(0, 840, false)).toBe('');
+describe('Project sidebar: glass', () => {
+  it('is a straight-sided pane that meets the window, with its right edge drawn on its own', () => {
+    expect(glassPath(280, 840)).toBe('M280 0V840H0V0Z');
+    expect(glassEdge(280, 840)).toBe('M280 0V840');
+    expect(glassPath(0, 840)).toBe('');
   });
 });
