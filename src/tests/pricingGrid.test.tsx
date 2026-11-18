@@ -8,7 +8,7 @@
 */
 import React, { useMemo, useState } from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, within, waitFor } from '@testing-library/react';
 
 vi.mock('../../contexts/OrgContext', () => ({
   useOrg: () => ({ orgData: { tenantId: 't' }, currentRole: 'Owner', currentRoles: ['Owner'], currentUserAuth: { displayName: 'Priya Shah' } }),
@@ -118,6 +118,18 @@ describe('Pricing & Tiers grid', () => {
     expect(within(money).getByText('Painting')).toBeTruthy();
     fireEvent.click(within(money).getByRole('button', { name: 'Open every part' }));
     expect(within(money).getAllByText('Civil')).toHaveLength(2); // the part, and the trade inside it
+  });
+
+  it('follows the BOQ as it is edited: a line moved to another category moves part', async () => {
+    const props = { setTiers: () => undefined, activeTierId: 'com', setActiveTierId: () => undefined, projectContext: CTX, setProjectContext: () => undefined, bank: BANK, setActiveTab: () => undefined } as any;
+    const { rerender } = render(<TierManager tiers={[COM]} {...props} />);
+    const carpentry = () => screen.getByRole('button', { name: /^Carpentry/ }).closest('.grid')!.textContent;
+    await waitFor(() => expect(carpentry()).toContain('₹ 12,000'));
+    // The BOQ Editor's Design Category writes `cat` onto the line.
+    const edited = { ...COM, boq: COM.boq.map((l: any) => (l.id === '3' ? { ...l, cat: 'Civil' } : l)) };
+    rerender(<TierManager tiers={[edited]} {...props} />);
+    await waitFor(() => expect(carpentry()).toContain('₹ 0'));
+    expect(screen.getByRole('button', { name: /^Civil/ }).closest('.grid')!.textContent).toContain('₹ 13,800'); // 12,000 moved in beside the tiling's 1,800
   });
 
   it('selecting a column selects the option', () => {
