@@ -72,6 +72,26 @@ export function tradeOfLine(room: string | undefined, item: Pick<Item, 'cat' | '
   return { part: b === 'Civil' ? 'civil' : b === 'Functional' ? 'functional' : 'others', trade: cat || 'Other' };
 }
 
+/**
+ * What a BOQ line is, as the BOQ Editor shows it: a category written on the
+ * line itself wins over its bank item's. The name stays the bank's when there
+ * is one (it is what names a false ceiling); a line with no bank item goes by
+ * its own.
+ *
+ * The owner found "Where the money goes" not following BOQ edits. The editor
+ * lets a line's category be changed (Design Category), and an imported sheet
+ * writes its category onto lines that have no bank item; the split read only
+ * the bank item, so a recategorised line stayed in its old part and an imported
+ * one was filed by its room. Undefined when there is nothing to go by, so the
+ * room decides (tradeOfLine).
+ */
+export function lineLook(line: any, item: Pick<Item, 'cat' | 'name'> | undefined): Pick<Item, 'cat' | 'name'> | undefined {
+  const own = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const cat = own(line?.cat);
+  if (!item && !cat) return undefined;
+  return { cat: cat || item?.cat || '', name: item?.name || own(line?.name) };
+}
+
 /** The part alone (see tradeOfLine). */
 export function partOfLine(room: string | undefined, item: Pick<Item, 'cat' | 'name'> | undefined): ScopePart {
   return tradeOfLine(room, item).part;
@@ -95,7 +115,11 @@ export function scopeSplit(tier: Pick<ProposalTier, 'boq'> | undefined, bankMap:
     const priced = resolveBoqLine(line, bankMap);
     if (!priced.billable) return;
     if (priced.asActuals) { asActuals += priced.total; return; }
-    const { part, trade } = tradeOfLine(line.roomId || priced.room, bankMap.get(line.bankId));
+    const item = bankMap.get(line.bankId);
+    const room = line.roomId || priced.room;
+    let { part, trade } = tradeOfLine(room, lineLook(line, item));
+    /* A line with no bank item whose category says nothing of its part keeps the part its room gives it. */
+    if (!item && part === 'others') part = tradeOfLine(room, undefined).part;
     const key = String(line.id || `${priced.key}#${i}`);
     parts[part].value += priced.total;
     parts[part].lines.push({ key, name: priced.name, room: priced.room, trade, total: priced.total });

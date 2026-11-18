@@ -59,6 +59,27 @@ describe('What an option is made of', () => {
     expect(partOfLine('Civil', undefined)).toBe('civil');
   });
 
+  it('follows a category changed on the BOQ line, and an imported line’s own category', () => {
+    // The BOQ Editor's Design Category writes `cat` onto the line; it wins over the bank item's.
+    const moved = scopeSplit({ boq: BOQ.map((l) => (l.id === 'l2' ? { ...l, cat: 'Civil' } : l)) } as any, map);
+    expect(moved.parts.carpentry.value).toBe(10000);
+    expect(moved.parts.civil.value).toBe(3500);
+    expect(moved.parts.civil.trades.map((t) => t.trade)).toContain('Civil');
+    // A false ceiling stays one by its bank name, whatever the line is renamed to.
+    const renamed = scopeSplit({ boq: BOQ.map((l) => (l.id === 'l3' ? { ...l, name: 'Living room ceiling work' } : l)) } as any, map);
+    expect(renamed.parts.functional.value).toBe(3000);
+    // Imported lines carry no bank item, only their own category and a rate.
+    const imported = scopeSplit({ boq: [
+      { id: 'i1', name: 'Shoe rack', cat: 'Carpentry', roomId: 'Living', qty: 2, baseRate: 1000 },
+      { id: 'i2', name: 'Something', cat: 'Imported', roomId: 'Civil', qty: 1, baseRate: 500 },
+      { id: 'i3', name: 'Plain', roomId: 'Functional', qty: 1, baseRate: 300 },
+    ] } as any, map);
+    expect(imported.parts.carpentry.value).toBe(2000);
+    expect(imported.parts.civil.value).toBe(500); // a category that says nothing keeps its room's part
+    expect(imported.parts.functional.value).toBe(300);
+    expect(imported.parts.others.value).toBe(0);
+  });
+
   it('adds up trade by trade inside each part', () => {
     const s = scopeSplit({ boq: BOQ } as any, map);
     expect(s.parts.carpentry.trades).toEqual([{ trade: 'Carpentry', value: 12000, lines: 2 }]);
