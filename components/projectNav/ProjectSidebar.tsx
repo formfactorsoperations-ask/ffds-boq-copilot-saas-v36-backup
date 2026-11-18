@@ -144,9 +144,9 @@ function Glass({ hot }: { hot: boolean }) {
             <filter id={`${id}z`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="16" /></filter>
             <filter id={`${id}y`} x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2" /></filter>
             <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#FFFFFF" stopOpacity=".55" />
-              <stop offset=".5" stopColor="#FFFFFF" stopOpacity=".3" />
-              <stop offset="1" stopColor="#FFFFFF" stopOpacity=".45" />
+              <stop offset="0" stopColor="#FFFFFF" stopOpacity=".4" />
+              <stop offset=".5" stopColor="#FFFFFF" stopOpacity=".16" />
+              <stop offset="1" stopColor="#FFFFFF" stopOpacity=".3" />
             </linearGradient>
             <linearGradient id={`${id}t`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stopColor="#FFFFFF" stopOpacity=".95" />
@@ -166,7 +166,7 @@ function Glass({ hot }: { hot: boolean }) {
           <path d={d} fill="#000" filter={u('o')} />
           <g clipPath={u('c')}>
             {/* what the glass sits over: soft brand and slate light, blurred */}
-            <rect width={w} height={h} fill="#F1F5F9" fillOpacity=".55" />
+            <rect width={w} height={h} fill="#F1F5F9" fillOpacity=".3" />
             <g filter={u('z')}>
               <ellipse cx={w * 0.08} cy={h * 0.1} rx={w * 0.75} ry={h * 0.12} fill="#3D52A0" fillOpacity=".26" />
               <path d={`M${-w * 0.3} ${h * 0.4}C${w * 0.3} ${h * 0.28} ${w * 0.7} ${h * 0.6} ${w * 1.3} ${h * 0.4}L${w * 1.3} ${h * 0.5}C${w * 0.7} ${h * 0.7} ${w * 0.3} ${h * 0.38} ${-w * 0.3} ${h * 0.52}Z`} fill="#3D52A0" fillOpacity=".17" />
