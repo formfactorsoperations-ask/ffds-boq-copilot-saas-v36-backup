@@ -353,10 +353,15 @@ the Site Supervisor's app still check in straight from the card.
   warm light: the People glass (`pp-glass`) with the modal eyebrow, "Good
   morning, Anish. / The light's on for you." in the page-title size (the second
   line in brand), where you are working (`Glide`), the site, the location note
-  and "Start my day", its lines rising in one after another. Ending the day
-  shows in at, worked and where, the daily work update link, and "End my day".
-- Done: the success tick and confetti. Ending the day turns the light off again
-  before the window closes; the shade keeps a slow afterglow.
+  and "Start my day", its lines rising in one after another. The end-of-day
+  card shows in at, worked and where, the daily work update link, "End my day"
+  and "Keep working".
+- Ending the day is the other way round (owner, 18 Nov 2026): the light put on
+  in the morning is still on and the card is already there. Pulling the cord
+  ("Pull to switch off") turns the light off, and that checks you out; "End my
+  day" on the card does the same. The shade keeps a slow afterglow. If the
+  check-out does not go through, the light comes back on with the reason.
+- Done: the success tick and confetti, then the window closes.
 - Framer-motion only, no new keyframes. Under `prefers-reduced-motion` nothing
   sways or flickers: the light is already on and the card already there.
 - To try it without checking in or out, open People with `?try-lamp=in` or

@@ -81,4 +81,21 @@ describe('My day', () => {
     snapshot.attendance = [];
     snapshot.requests = [];
   });
+
+  it('ends the day with the lamp already lit: pulling the cord switches it off and checks out', async () => {
+    run.mockClear();
+    snapshot.attendance = [{ id: 'at1', employeeId: 'me', date: '2026-10-27', checkIn: '2026-10-27T04:00:00.000Z', mode: 'Office', site: '', version: 1 } as any];
+    const { default: MyDayCard } = await import('../../components/people/MyDayCard');
+    render(<MyDayCard variant="full" />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Check out$/ })); });
+    expect(screen.getByRole('dialog', { name: 'End your day' })).toBeTruthy();
+    /* Lit from the start: the card and its button are there, and the cord turns the lamp off. */
+    expect(screen.getByRole('button', { name: /End my day/ })).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Pull the cord to turn the lamp off/ })); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    expect(run).toHaveBeenCalledWith('checkout', expect.objectContaining({ sessionId: 'at1', version: 1 }));
+    await act(async () => { finish({ ok: true }); });
+    expect(screen.getAllByText('Checked out. Enjoy your evening.').length).toBeGreaterThan(0);
+    snapshot.attendance = [];
+  });
 });

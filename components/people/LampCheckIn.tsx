@@ -16,9 +16,14 @@ import '../projectHeader/projectHeader.css';
   it (drag it down and let go, or press it): the chain swings, the lamp head
   wobbles, the bulb flickers on, the room warms and the studio comes out of
   the dark, steam rises from the mug when the day is starting, dust drifts in
-  the light, and the card to start or end the day swings in beside it, its
-  edge catching the lamp's glow. Checking out turns the light off again;
-  the shade keeps a little afterglow as it fades.
+  the light, and the card to start the day swings in beside it, its edge
+  catching the lamp's glow.
+
+  Ending the day is the other way round (owner, 18 Nov 2026): the light put
+  on in the morning is still on and the card is already there. Pulling the
+  cord switches the light off, and that checks you out ("End my day" on the
+  card does the same); the shade keeps a little afterglow as it fades. If the
+  check-out does not go through, the light comes back on with the reason.
 
   The window only shows the choice and the button: the check-in and check-out
   themselves stay in MyDayCard, so the card and the window always agree.
@@ -212,8 +217,10 @@ function Lamp({ lit, still }: { lit: boolean; still: boolean }) {
 }
 
 /** The pull chain: drag the brass bead down and let go, or press it. It swings after. */
-function Cord({ lit, onPull, disabled, still, focusRef, onTug, idle }: {
-  lit: boolean; onPull: () => void; disabled: boolean; still: boolean; focusRef: React.RefObject<HTMLButtonElement | null>; onTug: () => void; idle: boolean;
+function Cord({ lit, onPull, disabled, still, focusRef, onTug, idle, beckon }: {
+  lit: boolean; onPull: () => void; disabled: boolean; still: boolean; focusRef: React.RefObject<HTMLButtonElement | null>; onTug: () => void;
+  /** Not touched yet: sway. */ idle: boolean;
+  /** Pulling it is the next step: the bead glows. */ beckon: boolean;
 }) {
   const y = useMotionValue(0);
   const swing = useMotionValue(0);
@@ -253,7 +260,7 @@ function Cord({ lit, onPull, disabled, still, focusRef, onTug, idle }: {
         onClick={() => { if (dragged.current) { dragged.current = false; return; } tug(); }}>
         {/* The brass bead, with a glint, and a glow while the lamp is dark. */}
         <span className="relative block">
-          {!lit && !still && !disabled && (
+          {beckon && !still && !disabled && (
             <motion.span aria-hidden className="absolute -inset-2 rounded-full bg-amber-400/25 blur-sm"
               animate={{ opacity: [0.2, 0.8, 0.2], scale: [0.9, 1.15, 0.9] }} transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }} />
           )}
@@ -364,7 +371,8 @@ function Ambient({ lit }: { lit: boolean }) {
 
 export default function LampCheckIn(p: LampCheckInProps) {
   const still = !!useReducedMotion();
-  const [lit, setLit] = useState(still);
+  /* Starting the day, the room is dark; ending it, the light you put on this morning is still on. */
+  const [lit, setLit] = useState(still || p.kind === 'out');
   const [touched, setTouched] = useState(false);
   const [flash, setFlash] = useState(0);
   const head = useMotionValue(0);
@@ -381,20 +389,18 @@ export default function LampCheckIn(p: LampCheckInProps) {
     return () => document.removeEventListener('keydown', esc);
   }, [busy, p.onClose]);
 
-  /* The cord takes focus first; once the light is on, the button does. */
-  useEffect(() => { if (!lit) cordRef.current?.focus({ preventScroll: true }); }, []);
+  /* The cord takes focus first; starting the day, once the light is on, the button does. */
+  useEffect(() => { if (!lit || !starting) cordRef.current?.focus({ preventScroll: true }); }, []);
   useEffect(() => {
-    if (!lit) return;
+    if (!lit || !starting) return;
     const t = window.setTimeout(() => goRef.current?.focus({ preventScroll: true }), still ? 0 : 900);
     return () => window.clearTimeout(t);
   }, [lit]);
 
-  /* Day ended: lights out. */
+  /* Ending the day did not go through: the light comes back on, with the reason on the card. */
   useEffect(() => {
-    if (!finished || starting) return;
-    const t = window.setTimeout(() => setLit(false), 1000);
-    return () => window.clearTimeout(t);
-  }, [finished, starting]);
+    if (!starting && p.problem) setLit(true);
+  }, [p.problem, starting]);
 
   /* A tug on the chain: the lamp head nods towards it and wobbles back. */
   const tug = () => {
@@ -402,15 +408,24 @@ export default function LampCheckIn(p: LampCheckInProps) {
     if (still) return;
     animate(head, 0, { type: 'spring', stiffness: 160, damping: 5, velocity: 26 });
   };
+  const confirm = () => {
+    /* Ending the day: the light goes off as you check out. */
+    if (!starting) setLit(false);
+    p.onConfirm();
+  };
   const pull = () => {
     if (busy || finished) return;
     setTouched(true);
+    /* The light is on at the end of the day: pulling the cord switches it off, and that ends the day. */
+    if (!starting && lit) { confirm(); return; }
     setLit((l) => {
       if (!l) setFlash((f) => f + 1);
       return !l;
     });
   };
-  const showCard = lit || (finished && !starting);
+  const showCard = lit || !starting;
+  /* The cord is the next thing to do: before the light is on in the morning, and while it is on at the end of the day. */
+  const beckon = !finished && !busy && (starting ? !lit : lit);
   const confirmLabel = starting
     ? (p.phase === 'locating' ? 'Finding you…' : p.phase === 'saving' ? 'Starting your day…' : 'Start my day')
     : (p.phase === 'saving' ? 'Ending your day…' : 'End my day');
@@ -435,12 +450,12 @@ export default function LampCheckIn(p: LampCheckInProps) {
               <div className="relative w-[240px] h-[460px] origin-top scale-[0.62] md:scale-100">
               <motion.div className="relative w-full h-full" style={{ rotate: head, transformOrigin: '50% 100%' }}>
                 <Lamp lit={lit} still={still} />
-                <Cord lit={lit} onPull={pull} onTug={tug} disabled={busy || finished} still={still} focusRef={cordRef} idle={!touched && !lit} />
+                <Cord lit={lit} onPull={pull} onTug={tug} disabled={busy || finished} still={still} focusRef={cordRef} idle={!touched && beckon} beckon={beckon} />
                 <AnimatePresence>
-                  {!lit && !finished && (
+                  {beckon && (
                     <motion.p key="hint" initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ delay: 0.6, duration: 0.4 }}
                       className={`${LABEL} !text-slate-300 absolute whitespace-nowrap flex items-center gap-2 pointer-events-none`} style={{ left: CORD_X + 24, top: CORD_Y + CORD + 6 }}>
-                      <span className="w-6 h-px bg-slate-500" />Pull the cord
+                      <span className="w-6 h-px bg-slate-500" />{starting ? 'Pull the cord' : 'Pull to switch off'}
                     </motion.p>
                   )}
                 </AnimatePresence>
@@ -462,7 +477,7 @@ export default function LampCheckIn(p: LampCheckInProps) {
                 <motion.div key="card" className="relative rounded-3xl pp-glass p-6 overflow-hidden"
                   style={{ transformOrigin: '0% 50%' }}
                   initial={still ? false : { opacity: 0, x: 36, rotateY: -24, scale: 0.96 }}
-                  animate={{ opacity: 1, x: 0, rotateY: 0, scale: 1, transition: { duration: 0.8, ease: EASE, delay: still ? 0 : 0.45 } }}
+                  animate={{ opacity: 1, x: 0, rotateY: 0, scale: 1, transition: { duration: 0.8, ease: EASE, delay: still ? 0 : starting ? 0.45 : 0.2 } }}
                   exit={{ opacity: 0, x: 20, rotateY: -12, transition: { duration: 0.3 } }}>
                   {/* The edge nearest the lamp catches its light. */}
                   <motion.span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-amber-200/40 via-amber-100/10 to-transparent"
@@ -482,7 +497,7 @@ export default function LampCheckIn(p: LampCheckInProps) {
                     ) : (
                       <motion.div key="form" className="relative flex flex-col gap-4" exit={{ opacity: 0 }}
                         initial={still ? false : 'hidden'} animate="show"
-                        variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: still ? 0 : 0.75 } } }}>
+                        variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: still ? 0 : starting ? 0.75 : 0.45 } } }}>
                         <div className="mt-1">
                           <motion.h3 variants={line} className="text-2xl font-bold text-slate-800 tracking-tight leading-tight">
                             {starting ? `Good ${p.partOfDay}, ${p.name}.` : `Good work today, ${p.name}.`}
@@ -542,7 +557,7 @@ export default function LampCheckIn(p: LampCheckInProps) {
                         <AnimatePresence>{p.problem && <Notice text={p.problem} tone="bad" onClose={p.onDismissProblem} />}</AnimatePresence>
 
                         <motion.div variants={line} className="flex flex-col gap-2 pt-1">
-                          <button ref={goRef} type="button" onClick={p.onConfirm} disabled={!canConfirm}
+                          <button ref={goRef} type="button" onClick={confirm} disabled={!canConfirm}
                             className="pp-press w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30 focus-visible:ring-offset-2">
                             {p.phase === 'locating'
                               ? <span className="pp-radar relative w-4 h-4 grid place-items-center rounded-full"><MapPin className="w-4 h-4" /></span>
@@ -551,6 +566,7 @@ export default function LampCheckIn(p: LampCheckInProps) {
                             {!busy && <ArrowRight className="w-4 h-4" />}
                           </button>
                           <Button variant="quiet" onClick={p.onClose} disabled={busy}>{starting ? 'Not now' : 'Keep working'}</Button>
+                          {!starting && <p className="text-[11px] text-slate-500 text-center">Or pull the lamp’s cord to switch off and end your day.</p>}
                         </motion.div>
                       </motion.div>
                     )}
@@ -561,9 +577,9 @@ export default function LampCheckIn(p: LampCheckInProps) {
                   className="text-center md:text-left px-2 py-4">
                   <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">{title}</p>
                   <p className="text-2xl font-bold text-slate-200 tracking-tight leading-tight mt-2">
-                    {starting ? 'It’s a little dark in here.' : 'Ready to call it a day?'}
+                    It’s a little dark in here.
                   </p>
-                  <p className="text-sm font-semibold text-slate-400 mt-2">{starting ? 'Pull the lamp’s cord to begin.' : 'Pull the cord to wrap up.'}</p>
+                  <p className="text-sm font-semibold text-slate-400 mt-2">Pull the lamp’s cord to begin.</p>
                   <p className="text-[11px] text-slate-500 mt-1">Drag it down and let go, or press it.</p>
                 </motion.div>
               )}
