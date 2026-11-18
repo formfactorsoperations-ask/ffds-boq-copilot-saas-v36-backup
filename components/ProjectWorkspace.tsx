@@ -16,6 +16,7 @@ import StudioMenuButton from './projectHeader/StudioMenuButton';
 import './projectHeader/projectHeader.css';
 import PageTitleBlock from './PageTitleBlock';
 import ProjectSidebar, { type SidebarStage, type SidebarHubItem } from './projectNav/ProjectSidebar';
+import PageCrumbs from './projectNav/PageCrumbs';
 import { usePageHeaderSlots } from '../contexts/PageHeaderContext';
 import { LogOut, Home, Building2, Users, BarChart3, Library, CreditCard, Menu } from '@/lib/lucide-shim';
 import ProjectStatusTransitionModal from './ProjectStatusTransitionModal';
@@ -221,9 +222,6 @@ export function ProjectWorkspace({
     const readOnly = !!accessBadge(item.route);
     return { route: item.route, label: item.label, badge, tone: readOnly ? 'warn' : (item.badgeTone ? item.badgeTone(projectContext) : null), readOnly };
   });
-  const crumbParent = activeTab === 'dashboard' ? 'Project'
-    : BAND.some(i => i.route === activeTab) ? 'Project Hub'
-    : (NAV.find(s => s.items.some(i => i.route === activeTab))?.label || 'Project');
 
   /*
     The page bar names the screen with the same words as the sidebar row that
@@ -237,18 +235,22 @@ export function ProjectWorkspace({
   const screenTitle = isWizard ? (getPageMeta('project-setup')?.title || '')
     : (ENGAGEMENT_PAGE_TITLES[engagement]?.[activeTab]?.title || sidebarLabel || getPageMeta(activeTab)?.title || '');
 
+  /* Opens a screen from the sidebar or the page bar's breadcrumb. */
+  const goTo = (route: string, stage?: number) => {
+    if (stage) setSelectedStage(stage);
+    else if (route === 'dashboard' || BAND.some(i => i.route === route)) setSelectedStage(0);
+    setActiveTab(route);
+  };
+  const homeRoute = isLimited ? limitedHome : 'dashboard';
+
   return (
     <div className="flex h-full bg-slate-50">
       {/* The project sidebar (components/projectNav/ProjectSidebar): it replaced the five header rows. */}
       <ProjectSidebar
         projectId={projectId}
         activeTab={activeTab}
-        onGo={(route, stage) => {
-          if (stage) setSelectedStage(stage);
-          else if (route === 'dashboard' || BAND.some(i => i.route === route)) setSelectedStage(0);
-          setActiveTab(route);
-        }}
-        home={{ route: isLimited ? limitedHome : 'dashboard', label: homeLabel }}
+        onGo={goTo}
+        home={{ route: homeRoute, label: homeLabel }}
         stages={sidebarStages}
         selectedStage={activeTab === 'dashboard' || BAND.some(i => i.route === activeTab) ? null : selectedStage}
         hub={sidebarHub}
@@ -285,11 +287,13 @@ export function ProjectWorkspace({
           <button type="button" onClick={() => setMobileNav(true)} aria-label="Open the project menu" className="md:hidden w-9 h-9 grid place-items-center rounded-xl text-slate-600 hover:bg-slate-100">
             <Menu className="w-5 h-5" />
           </button>
-          <div className="min-w-0 flex items-center gap-2">
-            <span className="hidden sm:inline text-[13px] text-slate-500 whitespace-nowrap">{crumbParent}</span>
-            <span className="hidden sm:inline text-slate-300">/</span>
+          {isWizard ? (
             <h1 className="text-base font-extrabold text-slate-800 tracking-tight truncate">{screenTitle}</h1>
-          </div>
+          ) : (
+            /* Where you are, and a way to the screens beside it (components/projectNav/PageCrumbs). */
+            <PageCrumbs activeTab={activeTab} title={screenTitle} stages={sidebarStages} hub={sidebarHub}
+              home={{ route: homeRoute, label: homeLabel }} onGo={goTo} />
+          )}
           <HeaderFigures />
           <div className="ml-auto shrink-0 flex items-center gap-2">
             <LiveStamp match={(n) => n.projectId === projectId} className="hidden lg:inline-flex" />
