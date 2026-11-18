@@ -55,8 +55,13 @@ describe('Money opens on the milestones, side by side', () => {
     expect(screen.getByRole('heading', { name: 'Design' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Execution' })).toBeTruthy();
     expect(screen.getAllByText('Taxable share')).toHaveLength(2);
-    expect(screen.getByText('Material Order Advance')).toBeTruthy();
+    expect(screen.getAllByText('Material Order Advance')).toHaveLength(2); // its summary row and its card
     expect(screen.getByText('Contract breakdown and tax tools')).toBeTruthy();
+    // The milestones at a glance, one table per track, above the cards.
+    const design = screen.getByRole('heading', { name: 'Design milestones' }).closest('section')!;
+    expect(within(design).getAllByRole('row')).toHaveLength(5); // header, 3 milestones, total
+    expect(within(design).getByText('Sign-up & Concept')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Execution milestones' })).toBeTruthy();
   });
 });
 

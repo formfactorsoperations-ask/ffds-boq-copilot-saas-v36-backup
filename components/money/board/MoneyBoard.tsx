@@ -96,6 +96,8 @@ export const MoneyBoard: React.FC<{
   preview: BoardPreview | null;
   versionPill?: React.ReactNode;
   notices?: React.ReactNode;
+  /** The milestones at a glance, under the notices and above the cards. */
+  summary?: React.ReactNode;
   columns: React.ReactNode;
   breakdown?: React.ReactNode;
   history?: React.ReactNode;
@@ -156,6 +158,7 @@ export const MoneyBoard: React.FC<{
       {p.tab === 'board' ? (
         <motion.div key="board" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="space-y-4">
           {p.notices}
+          {p.summary}
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
             {p.tiles.map((tile, i) => {
               const body = (

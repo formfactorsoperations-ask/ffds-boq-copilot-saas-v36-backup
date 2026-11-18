@@ -40,6 +40,7 @@ import { asActualsInContract, takeAsActualsOut } from '../lib/asActualsCorrectio
 import { MoneyBoard, BOARD_ICONS, type BoardTile, type BoardTotals, type BoardPreview } from './money/board/MoneyBoard';
 import { TrackColumn, TaxPlate, type TrackFigures, type CardActions } from './money/board/TrackColumn';
 import { EditMilestonesModal, type StudioStages } from './money/board/EditMilestonesModal';
+import { MilestoneSummary } from './money/board/MilestoneSummary';
 import { cardStates, trackTotal, shareOf, sameTerms, termsChanges, studioCashPct, type TaxTerms, type ScheduleChange, type Track as BoardTrack } from '../lib/moneyBoard';
 import { Button } from './ui/kit';
 import { Wallet, SlidersHorizontal } from '@/lib/lucide-shim';
@@ -2087,6 +2088,15 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         );
     });
 
+    const boardSummary = (
+        <MilestoneSummary onOpen={goToMilestone} tracks={tracks.map(t => {
+            const rows = milestones.filter(m => trackOf(m) === t);
+            const taxableT = t === 'design' ? taxableDesign : taxableExecution;
+            return { track: t, milestones: rows, states, amounts: shown.byId, saved: previewSchedule ? schedule.byId : undefined,
+                shares: Object.fromEntries(rows.map(m => [m.id, shareOf(m, taxableT)])) };
+        })} />
+    );
+
     const versionPill = availableVersions.length > 1 ? (
         <button type="button" onClick={() => setMoneyTab('history')} title="Switch or audit billing versions in History"
             className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 hover:border-[#3D52A0]/40">
@@ -2399,6 +2409,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         preview={boardPreview}
                         versionPill={versionPill}
                         notices={boardNotices}
+                        summary={boardSummary}
                         columns={boardColumns}
                         breakdown={breakdownToggle}
                     />
