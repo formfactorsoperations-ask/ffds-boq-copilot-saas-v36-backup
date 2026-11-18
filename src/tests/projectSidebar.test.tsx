@@ -6,7 +6,7 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
-import ProjectSidebar, { glassPath, type SidebarStage } from '../../components/projectNav/ProjectSidebar';
+import ProjectSidebar, { glassDepth, glassPath, type SidebarStage } from '../../components/projectNav/ProjectSidebar';
 
 afterEach(cleanup);
 beforeEach(() => { try { localStorage.clear(); } catch { /* none */ } });
@@ -86,16 +86,18 @@ describe('Project sidebar', () => {
 });
 
 describe('Project sidebar: curved glass', () => {
-  it('draws a closed outline whose long sides curve in at the middle', () => {
-    const d = glassPath(258, 840, false);
-    expect(d.startsWith('M24 0')).toBe(true);
+  it('draws a closed outline whose two long sides bow in, deepest at the middle', () => {
+    const d = glassPath(286, 840, false);
+    expect(d.startsWith('M26 0')).toBe(true);
     expect(d.endsWith('Z')).toBe(true);
-    // the waist: the right side reaches w - 9.8 at half height, the left side 9.8
-    expect(d).toContain('248.2 420');
-    expect(d).toContain('9.8 420');
+    // each side is one curve through the middle, pulled 2 x 16px in: 16px deep at the waist
+    expect(d).toContain('Q254 420');
+    expect(d).toContain('Q32 420');
   });
   it('curves less when folded to icons, and draws nothing before it has a size', () => {
-    expect(glassPath(74, 840, true)).toContain('69 420');
+    expect(glassDepth(74, true)).toBe(6);
+    expect(glassPath(74, 840, true)).toContain('Q62 420');
+    expect(glassDepth(150, false)).toBe(9);
     expect(glassPath(0, 840, false)).toBe('');
   });
 });

@@ -80,29 +80,32 @@ const Ic = ({ icon: I, move = 'nudge', draw = false }: { icon: React.ComponentTy
 );
 
 const KEY = 'sd.projectSidebar';
-const MIN = 200, MAX = 400, SNAP = 150, OPEN_W = 280;
+const MIN = 200, MAX = 400, SNAP = 150, OPEN_W = 296;
 
 /*
-  The curved glass (asked for 18 Nov 2026): the sidebar floats as one pane of
-  frosted glass whose long sides curve gently in towards the middle. The
-  outline is drawn for the pane's real size, so the corners stay round while
-  it opens, closes or is dragged wider.
+  The curved glass (asked for 18 Nov 2026, round two the same day): the
+  sidebar floats as one pane of clear, glossy glass whose two long sides bow
+  in along their whole height, deepest at the middle, like the owner's
+  reference. The outline is drawn for the pane's real size, so the corners
+  stay round while it opens, closes or is dragged wider.
 */
+export function glassDepth(w: number, closed: boolean): number {
+  return closed ? 6 : Math.round(Math.max(8, Math.min(16, w * 0.06)));
+}
 export function glassPath(w: number, h: number, closed: boolean): string {
   if (w <= 0 || h <= 0) return '';
-  const r = Math.min(closed ? 20 : 24, w / 2, h / 4);
-  const d = closed ? 5 : Math.max(6, Math.min(10, w * 0.038)); // how far the sides curve in
-  const c = r * 0.448, k = Math.max(0, h / 2 - r) * 0.6, m = h / 2;
+  const r = Math.min(closed ? 20 : 26, w / 2, h / 4);
+  const d = glassDepth(w, closed);
+  const m = h / 2, c = r * 0.448;
+  const e = (2 * d * c) / Math.max(1, m - r); // the corner leaves on the side's own slope: no kink
   const n = (v: number) => Math.round(v * 10) / 10;
   return [
-    `M${n(r)} 0H${n(w - r)}C${n(w - c)} 0 ${n(w)} ${n(c)} ${n(w)} ${n(r)}`,
-    `C${n(w)} ${n(r + k)} ${n(w - d)} ${n(m - k)} ${n(w - d)} ${n(m)}`,
-    `C${n(w - d)} ${n(m + k)} ${n(w)} ${n(h - r - k)} ${n(w)} ${n(h - r)}`,
-    `C${n(w)} ${n(h - c)} ${n(w - c)} ${n(h)} ${n(w - r)} ${n(h)}H${n(r)}`,
-    `C${n(c)} ${n(h)} 0 ${n(h - c)} 0 ${n(h - r)}`,
-    `C0 ${n(h - r - k)} ${n(d)} ${n(m + k)} ${n(d)} ${n(m)}`,
-    `C${n(d)} ${n(m - k)} 0 ${n(r + k)} 0 ${n(r)}`,
-    `C0 ${n(c)} ${n(c)} 0 ${n(r)} 0Z`,
+    `M${n(r)} 0H${n(w - r)}C${n(w - c)} 0 ${n(w + e)} ${n(r - c)} ${n(w)} ${n(r)}`,
+    `Q${n(w - 2 * d)} ${n(m)} ${n(w)} ${n(h - r)}`,
+    `C${n(w + e)} ${n(h - r + c)} ${n(w - c)} ${n(h)} ${n(w - r)} ${n(h)}H${n(r)}`,
+    `C${n(c)} ${n(h)} ${n(-e)} ${n(h - r + c)} 0 ${n(h - r)}`,
+    `Q${n(2 * d)} ${n(m)} 0 ${n(r)}`,
+    `C${n(-e)} ${n(r - c)} ${n(c)} 0 ${n(r)} 0Z`,
   ].join('');
 }
 
@@ -122,43 +125,76 @@ function Glass({ closed }: { closed: boolean }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const d = glassPath(box.w, box.h, closed);
+  const { w, h } = box;
+  const d = glassPath(w, h, closed);
+  const u = (k: string) => `url(#${id}${k})`;
   return (
     <div className="psb-glass" ref={frame} aria-hidden>
-      {d && <svg width={box.w} height={box.h} viewBox={`0 0 ${box.w} ${box.h}`}>
-      <defs>
-        <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#FFFFFF" stopOpacity=".97" />
-          <stop offset=".55" stopColor="#F8FAFC" stopOpacity=".93" />
-          <stop offset="1" stopColor="#F1F5F9" stopOpacity=".95" />
-        </linearGradient>
-        <radialGradient id={`${id}g`} cx=".15" cy=".07" r=".55">
-          <stop offset="0" stopColor="#3D52A0" stopOpacity=".13" />
-          <stop offset="1" stopColor="#3D52A0" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={`${id}b`} cx=".9" cy="1" r=".5">
-          <stop offset="0" stopColor="#3D52A0" stopOpacity=".07" />
-          <stop offset="1" stopColor="#3D52A0" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id={`${id}s`} x1="0" y1="0" x2="1" y2=".55">
-          <stop offset=".28" stopColor="#FFFFFF" stopOpacity="0" />
-          <stop offset=".42" stopColor="#FFFFFF" stopOpacity=".7" />
-          <stop offset=".56" stopColor="#FFFFFF" stopOpacity="0" />
-        </linearGradient>
-        <filter id={`${id}h`} x="-30%" y="-10%" width="160%" height="125%">
-          <feDropShadow dx="0" dy="14" stdDeviation="14" floodColor="#0F172A" floodOpacity=".09" />
-          <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#3D52A0" floodOpacity=".08" />
-        </filter>
-        <clipPath id={`${id}c`}><path d={d} /></clipPath>
-      </defs>
-      <path d={d} fill={`url(#${id}f)`} filter={`url(#${id}h)`} />
-      <path d={d} fill={`url(#${id}g)`} />
-      <path d={d} fill={`url(#${id}b)`} />
-      <path d={d} fill={`url(#${id}s)`} className="psb-sheen" />
-      {/* the rim: a bright inner edge on a hairline outer one */}
-      <path d={d} fill="none" stroke="#FFFFFF" strokeWidth="3" clipPath={`url(#${id}c)`} />
-      <path d={d} fill="none" stroke="#CBD5E1" strokeOpacity=".75" strokeWidth="1" />
-      </svg>}
+      {/* frosts whatever is behind the pane (the page, under the phone drawer) */}
+      {d && <div className="psb-frost" style={{ clipPath: `path('${d}')`, WebkitClipPath: `path('${d}')` } as React.CSSProperties} />}
+      {d && (
+        <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+          <defs>
+            <clipPath id={`${id}c`}><path d={d} /></clipPath>
+            {/* the shadow falls outside the pane only, so the glass stays clear */}
+            <filter id={`${id}o`} x="-40%" y="-15%" width="180%" height="135%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="14" result="b" />
+              <feOffset in="b" dy="16" result="o" />
+              <feFlood floodColor="#0F172A" floodOpacity=".16" />
+              <feComposite in2="o" operator="in" result="s" />
+              <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b2" />
+              <feOffset in="b2" dy="2" result="o2" />
+              <feFlood floodColor="#3D52A0" floodOpacity=".14" />
+              <feComposite in2="o2" operator="in" result="s2" />
+              <feMerge result="all"><feMergeNode in="s" /><feMergeNode in="s2" /></feMerge>
+              <feComposite in="all" in2="SourceAlpha" operator="out" />
+            </filter>
+            <filter id={`${id}z`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="16" /></filter>
+            <filter id={`${id}y`} x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2" /></filter>
+            <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#FFFFFF" stopOpacity=".55" />
+              <stop offset=".5" stopColor="#FFFFFF" stopOpacity=".3" />
+              <stop offset="1" stopColor="#FFFFFF" stopOpacity=".45" />
+            </linearGradient>
+            <linearGradient id={`${id}t`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#FFFFFF" stopOpacity=".95" />
+              <stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id={`${id}r`} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#FFFFFF" stopOpacity="1" />
+              <stop offset=".45" stopColor="#FFFFFF" stopOpacity=".35" />
+              <stop offset="1" stopColor="#FFFFFF" stopOpacity=".9" />
+            </linearGradient>
+            <linearGradient id={`${id}e`} x1="0" y1="0" x2="1" y2="1">
+              <stop offset=".35" stopColor="#64748B" stopOpacity="0" />
+              <stop offset="1" stopColor="#64748B" stopOpacity=".32" />
+            </linearGradient>
+          </defs>
+
+          <path d={d} fill="#000" filter={u('o')} />
+          <g clipPath={u('c')}>
+            {/* what the glass sits over: soft brand and slate light, blurred */}
+            <rect width={w} height={h} fill="#F1F5F9" fillOpacity=".55" />
+            <g filter={u('z')}>
+              <ellipse cx={w * 0.08} cy={h * 0.1} rx={w * 0.75} ry={h * 0.12} fill="#3D52A0" fillOpacity=".26" />
+              <path d={`M${-w * 0.3} ${h * 0.4}C${w * 0.3} ${h * 0.28} ${w * 0.7} ${h * 0.6} ${w * 1.3} ${h * 0.4}L${w * 1.3} ${h * 0.5}C${w * 0.7} ${h * 0.7} ${w * 0.3} ${h * 0.38} ${-w * 0.3} ${h * 0.52}Z`} fill="#3D52A0" fillOpacity=".17" />
+              <path d={`M${-w * 0.3} ${h * 0.74}C${w * 0.4} ${h * 0.64} ${w * 0.6} ${h * 0.9} ${w * 1.3} ${h * 0.72}L${w * 1.3} ${h * 0.84}C${w * 0.6} ${h * 1.0} ${w * 0.4} ${h * 0.74} ${-w * 0.3} ${h * 0.86}Z`} fill="#94A3B8" fillOpacity=".42" />
+              <ellipse cx={w * 0.95} cy={h * 0.98} rx={w * 0.6} ry={h * 0.1} fill="#3D52A0" fillOpacity=".2" />
+            </g>
+            {/* the glass itself, then its gloss */}
+            <rect width={w} height={h} fill={u('f')} />
+            <rect width={w} height={Math.min(220, h * 0.28)} fill={u('t')} />
+            <g filter={u('y')} className="psb-sheen">
+              <path d={`M${w * 0.42} 0L${w * 0.62} 0L${w * 0.02} ${h * 0.62}L${-w * 0.18} ${h * 0.62}Z`} fill="#FFFFFF" fillOpacity=".55" />
+              <path d={`M${w * 0.7} 0L${w * 0.76} 0L${w * 0.16} ${h * 0.62}L${w * 0.1} ${h * 0.62}Z`} fill="#FFFFFF" fillOpacity=".45" />
+            </g>
+            {/* thickness: a shade along the lower and right inner edge, a bright rim on top */}
+            <path d={d} fill="none" stroke={u('e')} strokeWidth="12" filter={u('y')} />
+            <path d={d} fill="none" stroke={u('r')} strokeWidth="4" />
+          </g>
+          <path d={d} fill="none" stroke="#94A3B8" strokeOpacity=".6" strokeWidth="1" />
+        </svg>
+      )}
     </div>
   );
 }
@@ -324,7 +360,7 @@ export default function ProjectSidebar(p: Props) {
         </div>
 
         {/* The project, its status and its next step. */}
-        <div className="flex items-center gap-[11px] px-3.5 pt-2.5 pb-3">
+        <div className="psb-px flex items-center gap-[11px] pt-2.5 pb-3">
           <button type="button" className="psb-tile" onClick={p.progress.onClick} data-tip={p.project.name} data-tipsub={`${Math.round(p.progress.pct)}% · Next: ${p.progress.next || 'Up next'}`} aria-label={`Progress ${Math.round(p.progress.pct)}%`}>
             {p.project.initials}
             <svg className="psb-ring" viewBox="0 0 56 56" aria-hidden><circle className="bg" cx="28" cy="28" r="26" /><circle className="fg" cx="28" cy="28" r="26" style={{ strokeDashoffset: ringOffset }} /></svg>
@@ -337,15 +373,15 @@ export default function ProjectSidebar(p: Props) {
             </button>
           </div>
         </div>
-        {p.projectTools && <div className="psb-hide-closed psb-lbl flex items-center gap-2 px-3 pb-2">{p.projectTools}</div>}
+        {p.projectTools && <div className="psb-hide-closed psb-lbl psb-px flex items-center gap-2 pb-2">{p.projectTools}</div>}
         {p.progress.next && (
-          <button type="button" onClick={p.progress.onClick} className="psb-hide-closed psb-btn mx-3 mb-2.5 flex items-center gap-2.5 rounded-xl bg-white border border-slate-200 px-2.5 py-2 text-left hover:border-[#C9D1EE]">
+          <button type="button" onClick={p.progress.onClick} className="psb-hide-closed psb-btn psb-mx psb-glassy mb-2.5 flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left">
             <span className="psb-ic text-[#3D52A0]" data-a="spin"><Sparkles className="!w-4 !h-4" /></span>
             <span className="min-w-0"><small className="block text-[10px] font-extrabold tracking-[0.1em] text-slate-400">NEXT · {Math.round(p.progress.pct)}%</small><b className="block text-xs text-slate-800 truncate">{p.progress.next}</b></span>
           </button>
         )}
         <button type="button" onClick={() => setPalette(true)} data-tip="Jump to…" data-tipsub="Ctrl/⌘ K"
-          className={`psb-btn mx-3 mb-1.5 flex items-center gap-2.5 rounded-xl bg-white border border-slate-200 text-slate-500 text-[13px] hover:border-[#C9D1EE] hover:text-slate-800 ${closed ? 'justify-center py-2.5' : 'px-2.5 py-2'}`}>
+          className={`psb-btn psb-mx psb-glassy mb-1.5 flex items-center gap-2.5 rounded-xl text-slate-500 text-[13px] hover:text-slate-800 ${closed ? 'justify-center py-2.5' : 'px-2.5 py-2'}`}>
           <span className="psb-ic" data-a="tilt"><Search className="!w-[18px] !h-[18px]" /></span>
           <span className="psb-lbl">Jump to…</span>
           <kbd className="psb-lbl ml-auto font-sans text-[10px] font-bold px-1.5 rounded-md bg-slate-100 text-slate-500">⌘K</kbd>
