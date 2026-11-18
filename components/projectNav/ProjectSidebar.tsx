@@ -235,8 +235,18 @@ export default function ProjectSidebar(p: Props) {
     const r = el.getBoundingClientRect(), s = sc.getBoundingClientRect();
     setInd({ y: r.top - s.top + sc.scrollTop, h: r.height });
   }, [closed, p.selectedStage]);
-  useLayoutEffect(() => { place(); const t = setTimeout(place, 520); return () => clearTimeout(t); }, [place, p.activeTab, open, width, shut]);
-  useEffect(() => { window.addEventListener('resize', place); return () => window.removeEventListener('resize', place); }, [place]);
+  /* No scrollbar on the glass (on Windows it cut across the curve): the list fades at an edge with more beyond it. */
+  const [more, setMore] = useState({ up: false, down: false });
+  const edges = useCallback(() => {
+    const sc = scroller.current; if (!sc) return;
+    const up = sc.scrollTop > 2, down = sc.scrollTop + sc.clientHeight < sc.scrollHeight - 2;
+    setMore((m) => (m.up === up && m.down === down ? m : { up, down }));
+  }, []);
+  useLayoutEffect(() => { place(); edges(); const t = setTimeout(() => { place(); edges(); }, 520); return () => clearTimeout(t); }, [place, edges, p.activeTab, open, width, shut, p.selectedStage]);
+  useEffect(() => {
+    const on = () => { place(); edges(); };
+    window.addEventListener('resize', on); return () => window.removeEventListener('resize', on);
+  }, [place, edges]);
 
   /* The journey line fills to the stage the project is at. */
   const journeyRef = useRef<HTMLDivElement>(null);
@@ -341,7 +351,7 @@ export default function ProjectSidebar(p: Props) {
           <kbd className="psb-lbl ml-auto font-sans text-[10px] font-bold px-1.5 rounded-md bg-slate-100 text-slate-500">⌘K</kbd>
         </button>
 
-        <div className="psb-scroll" ref={scroller} onScroll={() => setTip(null)}>
+        <div className={`psb-scroll ${more.up ? 'more-up' : ''} ${more.down ? 'more-down' : ''}`} ref={scroller} onScroll={() => { setTip(null); edges(); }}>
           {ind && <span className="psb-ind" style={{ transform: `translateY(${ind.y}px)`, height: ind.h }} />}
 
           <div className="psb-group">

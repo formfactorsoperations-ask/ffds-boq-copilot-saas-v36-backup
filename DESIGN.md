@@ -531,7 +531,9 @@ The pane is an SVG drawn for its real size (`glassPath` in `ProjectSidebar.tsx`)
 stay round while it opens, folds or is dragged. It is white to slate-50, with a faint brand glow
 behind the project, a soft diagonal sheen, a bright inner rim on a slate-300 hairline, and a slate
 shadow. No other colours. The highlight under the screen you are on has a hairline brand border and
-its bar sits inside it. Open it is 280px wide and 84px as icons; the drag range is unchanged.
+its bar sits inside it. Open it is 280px wide and 84px as icons; the drag range is unchanged. The list
+has no scrollbar (on Windows a straight bar cut across the curve); it fades at the top or bottom
+when there is more to scroll.
 
 ### Projects as glass folders (approved 16 Nov 2026)
 
