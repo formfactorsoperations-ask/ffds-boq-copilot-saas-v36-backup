@@ -98,4 +98,13 @@ describe('My day', () => {
     expect(screen.getAllByText('Checked out. Enjoy your evening.').length).toBeGreaterThan(0);
     snapshot.attendance = [];
   });
+
+  it("opens the lamp from Home's My day pin too", async () => {
+    run.mockClear();
+    const { default: MyDayCard } = await import('../../components/people/MyDayCard');
+    render(<MyDayCard variant="pin" lamp />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Check in$/ })); });
+    expect(screen.getByRole('dialog', { name: 'Start your day' })).toBeTruthy();
+    expect(run).not.toHaveBeenCalled();
+  });
 });

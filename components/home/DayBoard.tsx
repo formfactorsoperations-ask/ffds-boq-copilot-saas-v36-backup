@@ -95,7 +95,7 @@ export default function DayBoard({ feeds, projects, attention, onNavigate }: {
     p.kind === 'sheets' ? <ForYouWidget index={0} rows={rows} viewer={viewer} names={names} onOpen={(d) => openInDesignReview(d.projectId, d.id, { tab: 'home', label: 'Home' })} onAll={toDesk} />
       : p.kind === 'reviews' ? <ReviewWidget index={0} rows={rows} viewer={viewer} onAll={toDesk} />
       : p.kind === 'meetings' ? <ComingUpWidget index={0} list={visits} today={today} milestones={importantDates} onAll={mayOpenStudioTab('ops-desk', who) ? () => onNavigate('ops-desk') : undefined} />
-      : p.kind === 'checkin' ? <MyDayCard variant="pin" sites={sites} onOpenPeople={() => onNavigate('people')} />
+      : p.kind === 'checkin' ? <MyDayCard variant="pin" lamp sites={sites} onOpenPeople={() => onNavigate('people')} />
       : p.kind === 'attention' ? <AttentionWidget index={0} {...attention!} />
       : p.kind === 'life' ? (guide.view ? <StudioLifeWidget index={0} view={guide.view} onOpen={openPeople} /> : <div className="pp-shimmer h-40 rounded-2xl" />)
       : team ? <TeamWidget index={0} t={team} onAll={() => onNavigate('people')} />

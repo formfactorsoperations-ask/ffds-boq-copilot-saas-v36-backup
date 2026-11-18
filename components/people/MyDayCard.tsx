@@ -18,9 +18,11 @@ import LampCheckIn from './LampCheckIn';
   Home (as a pin on "Your day, in order"), at the top of People, and in the
   Site Supervisor's app.
 
-  On People, Check in and Check out open the lamp (LampCheckIn): pull its
-  cord, the light comes on, and the day starts or ends from the card beside
-  it. Home and the Site Supervisor's app check in straight from the card.
+  On People and on Home's My day pin, Check in and Check out open the lamp
+  (LampCheckIn): pull its cord, the light comes on, and the day starts from
+  the card beside it; at the end of the day it is already on, and pulling the
+  cord switches it off. The Site Supervisor's app checks in straight from the
+  card.
 
   To try the lamp without checking in or out, open People with ?try-lamp=in
   or ?try-lamp=out in the address. It runs the whole window, says "Practice"
@@ -84,7 +86,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   /* The lamp window, open to start or to end the day. */
   const [lamp, setLamp] = useState<'in' | 'out' | null>(null);
   /* A practice run of the lamp (?try-lamp=in|out): the same window, nothing saved. */
-  const [practice, setPractice] = useState<'in' | 'out' | null>(() => (variant === 'full' ? practiceFromUrl() : null));
+  const [practice, setPractice] = useState<'in' | 'out' | null>(() => (variant !== 'compact' ? practiceFromUrl() : null));
   const [practicePhase, setPracticePhase] = useState<'idle' | 'saving' | 'done'>('idle');
   /* Not checked in yet and working somewhere with a location: take a reading now, so the tap does not wait for one. */
   const needsReading = !!snapshot && !myDay(snapshot).session && mode !== 'WFH';
