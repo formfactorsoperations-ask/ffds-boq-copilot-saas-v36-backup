@@ -308,6 +308,39 @@ test("the studio's only admin signs off their own forgotten check-out and can ch
   assert.throws(() => send(u, "a", "correction", fix(u.attendance[0].id), "2026-10-08T03:30:00Z"), /No approver/);
 });
 
+test("a day left open blocks check-in until its correction is asked for, then check-in and check-out work while it waits", () => {
+  /* Checked in on the 7th, never checked out. */
+  let s = send(setup(), "a", "checkin", { mode: "Office" }, "2026-10-07T04:00:00Z");
+  const old = s.attendance[0];
+  assert.throws(() => send(s, "a", "checkin", { mode: "Office" }, "2026-10-08T04:00:00Z"), /open attendance/);
+
+  /* Asking for a correction lets today's check-in through while the approver decides. */
+  s = send(s, "a", "correction", {
+    sessionId: old.id, version: 1, checkIn: "2026-10-07T04:00:00Z", checkOut: "2026-10-07T12:30:00Z", mode: "Office", reason: "Forgot to check out",
+  }, "2026-10-08T03:30:00Z");
+  assert.equal(s.requests[0].status, "Pending");
+  s = send(s, "a", "checkin", { mode: "Office" }, "2026-10-08T04:00:00Z");
+  const today = s.attendance.find((x) => x.date === "2026-10-08")!;
+  assert.equal(today.checkIn, "2026-10-08T04:00:00Z");
+
+  /* Checking out names today's session, not the one still waiting. */
+  s = send(s, "a", "checkout", { sessionId: today.id, version: 1 }, "2026-10-08T12:00:00Z");
+  assert.equal(s.attendance.find((x) => x.id === today.id)!.checkOut, "2026-10-08T12:00:00Z");
+  assert.equal(s.attendance.find((x) => x.id === old.id)!.checkOut, undefined);
+
+  /* The approver still decides the old day, and it mends cleanly. */
+  s = send(s, "m", "decide", { requestId: s.requests[0].id, version: 1, decision: "approve" }, "2026-10-08T13:00:00Z");
+  assert.equal(s.attendance.find((x) => x.id === old.id)!.checkOut, "2026-10-07T12:30:00.000Z");
+
+  /* A rejected correction blocks again, from the next day. */
+  let r = send(setup(), "a", "checkin", { mode: "Office" }, "2026-10-07T04:00:00Z");
+  r = send(r, "a", "correction", {
+    sessionId: r.attendance[0].id, version: 1, checkIn: "2026-10-07T04:00:00Z", checkOut: "2026-10-07T12:30:00Z", mode: "Office", reason: "Forgot",
+  }, "2026-10-08T03:30:00Z");
+  r = send(r, "m", "decide", { requestId: r.requests[0].id, version: 1, decision: "reject", note: "Not right" }, "2026-10-08T03:40:00Z");
+  assert.throws(() => send(r, "a", "checkin", { mode: "Office" }, "2026-10-08T04:00:00Z"), /open attendance/);
+});
+
 test("daily update links are optional and private to the current member", () => {
   let s = setup();
   s.people[0].dailyUpdateUrl =

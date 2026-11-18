@@ -103,7 +103,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   }
 
   const policy = snapshot.policy;
-  const { today, session: saved, stale } = myDay(snapshot);
+  const { today, session: saved, stale, awaiting } = myDay(snapshot);
   const session: Attendance | null = saved || (pending ? { id: 'pending', employeeId: snapshot.me.id, date: today, version: 0, ...pending } : null);
   const holiday = policy.holidays.includes(today) ? policy.holidayNames?.[today] || 'Studio holiday' : null;
   const off = !holiday && isOff(today, policy);
@@ -170,6 +170,8 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   const hour = (Number(hm[0]) % 12) + (ampm === 'PM' ? 12 : 0);
   const modeNote = mode === 'WFH' ? 'No location is recorded when you work from home.' : `Your location is recorded${policy.requireLocation ? '' : ' if you allow it'}. Late after ${clock12(policy.lateAfter)}.`;
   const closeLamp = () => { setLamp(null); setProblem(null); };
+  /* A day left open whose correction is with the approver: check-in is allowed, and the card says why the day is still open. */
+  const awaitingNote = awaiting ? `Your correction for ${new Date(`${awaiting.date}T12:00:00+05:30`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} is waiting for approval. You can still check in today.` : null;
   const closePractice = () => {
     setPractice(null);
     setPracticePhase('idle');
@@ -269,6 +271,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
               )
             ) : (
               <motion.div key="in" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
+                {awaitingNote && <p className="flex items-start gap-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />{awaitingNote}</p>}
                 <div className="flex flex-wrap items-center gap-2">
                   <Glide id={`mode-${variant}`} label="Where are you working" value={mode} onChange={setMode} disabled={busy}
                     options={[{ id: 'Office', label: 'Office', icon: MODE_ICON.Office }, { id: 'Site', label: 'Site', icon: MODE_ICON.Site }, { id: 'WFH', label: 'From home', icon: MODE_ICON.WFH }]} />
@@ -316,7 +319,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
         <LampCheckIn kind={lamp} name={snapshot.me.name.split(/\s+/)[0] || snapshot.me.name}
           dateLabel={niceDate(today)} timeLabel={clock12(now, policy.timezone)}
           partOfDay={hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}
-          mode={mode} onMode={setMode} site={site} onSite={setSite} sites={sites} note={modeNote}
+          mode={mode} onMode={setMode} site={site} onSite={setSite} sites={sites} note={modeNote} awaitingNote={awaitingNote}
           inAt={session ? clock12(session.checkIn, policy.timezone) : undefined}
           worked={session ? duration(worked) : undefined}
           where={session ? (session.mode === 'WFH' ? 'From home' : session.site || session.mode) : undefined}

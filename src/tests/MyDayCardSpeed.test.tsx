@@ -64,4 +64,21 @@ describe('My day', () => {
     expect(run).not.toHaveBeenCalled();
     window.history.pushState({}, '', '/');
   });
+
+  it('offers check-in while yesterday waits on its correction, and says so', async () => {
+    const old = { id: 'old', employeeId: 'me', date: '2026-10-26', checkIn: '2026-10-26T04:00:00.000Z', mode: 'Office', site: '', version: 1 } as any;
+    snapshot.attendance = [old];
+    const { default: MyDayCard } = await import('../../components/people/MyDayCard');
+    const { unmount } = render(<MyDayCard variant="full" lamp={false} />);
+    expect(screen.getByText(/was never checked out/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Check in$/ })).toBeNull();
+    unmount();
+    snapshot.requests = [{ id: 'r1', employeeId: 'me', kind: 'correction', type: 'PL', start: '2026-10-26', end: '2026-10-26', portion: 'Full day', days: [], reason: 'Forgot', status: 'Pending', version: 1, createdAt: '2026-10-27T00:00:00Z', decisions: [],
+      correction: { sessionId: 'old', sessionVersion: 1, checkIn: '2026-10-26T04:00:00Z', checkOut: '2026-10-26T12:00:00Z', mode: 'Office', site: '' } } as any];
+    render(<MyDayCard variant="full" lamp={false} />);
+    expect(screen.getByText(/is waiting for approval\. You can still check in today\./)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Check in$/ })).toBeTruthy();
+    snapshot.attendance = [];
+    snapshot.requests = [];
+  });
 });
