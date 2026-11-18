@@ -329,6 +329,28 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
   Emergency contacts) and Admin (Reports). Group names are field labels, shown
   from `lg` up; a group with nothing in it for that person is left out.
 
+### People: the lamp (asked for 18 Nov 2026)
+
+On People, Check in and Check out on the My day card open the lamp
+(`components/people/LampCheckIn.tsx`) instead of acting at once. Home's pin and
+the Site Supervisor's app still check in straight from the card.
+
+- A dark room (the scrim's navy, `#12182F`) and a floor lamp drawn in SVG: slate
+  cloth, amber brass. The cord hangs from the shade; drag it down and let go, or
+  press it (it is a button, and takes focus when the window opens).
+- The light comes on with a short flicker: the shade glows from inside, a cone
+  falls to a pool on the floor, the room warms and dust drifts in the light.
+  All of it in amber, the state colour; nothing new.
+- Then the card rises in beside the lamp: the People glass (`pp-glass`) with the
+  modal eyebrow, "Good morning, Anish. / The light's on for you." in the page-title
+  size (the second line in brand), where you are working (`Glide`), the site, the
+  location note, and "Start my day". Ending the day shows in at, worked and where,
+  the daily work update link, and "End my day".
+- Done: the success tick and confetti. Ending the day turns the light off again
+  before the window closes.
+- Framer-motion only, no new keyframes. Under `prefers-reduced-motion` the light
+  is already on and the card already there.
+
 ### Ops Desk motion (approved 21 Oct 2026)
 
 The owner asked for the Ops Desk to stop looking static and to work for a team

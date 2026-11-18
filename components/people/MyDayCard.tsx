@@ -7,6 +7,7 @@ import { usePeople, locate, warmLocation } from '../../services/peopleService';
 import { Ring, Glide, DoneTick, Skeleton, Notice, Confetti, Tilt, MODE_ICON, EASE } from './PeopleBits';
 import { Dot } from '../ui/HudBits';
 import { ArrivalStrip, ArrivalToasts } from './Arrivals';
+import LampCheckIn from './LampCheckIn';
 
 /*
   MY DAY: check in and out (lib/peopleDesk via services/peopleService).
@@ -16,6 +17,10 @@ import { ArrivalStrip, ArrivalToasts } from './Arrivals';
   check-in, the hours worked once in, full when the day is done. Shown on
   Home (as a pin on "Your day, in order"), at the top of People, and in the
   Site Supervisor's app.
+
+  On People, Check in and Check out open the lamp (LampCheckIn): pull its
+  cord, the light comes on, and the day starts or ends from the card beside
+  it. Home and the Site Supervisor's app check in straight from the card.
 */
 
 const btnPri = 'pp-press inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50';
@@ -39,13 +44,15 @@ function useNow(serverTime?: string) {
   return new Date(now).toISOString();
 }
 
-export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, onCorrect }: {
+export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, onCorrect, lamp: lampOn = variant === 'full' }: {
   /** Project names to pick from for a site check-in. */
   sites?: string[];
   /** full: People; compact: a wide card; pin: one narrow column inside a pin on Home's day board. */
   variant?: 'full' | 'compact' | 'pin';
   onOpenPeople?: () => void;
   onCorrect?: (a: Attendance) => void;
+  /** Check in and out through the lamp window (People, by default). */
+  lamp?: boolean;
 }) {
   const { snapshot, loading, error, run, refresh } = usePeople();
   /* On Home, those who approve hear about arrivals too: refresh every two minutes while it is on screen. */
@@ -63,6 +70,8 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   const [justDone, setJustDone] = useState<string | null>(null);
   /* A check-in on its way to the server: shown at once, confirmed when it lands. */
   const [pending, setPending] = useState<{ checkIn: string; mode: Mode; site: string } | null>(null);
+  /* The lamp window, open to start or to end the day. */
+  const [lamp, setLamp] = useState<'in' | 'out' | null>(null);
   /* Not checked in yet and working somewhere with a location: take a reading now, so the tap does not wait for one. */
   const needsReading = !!snapshot && !myDay(snapshot).session && mode !== 'WFH';
   useEffect(() => { if (needsReading) warmLocation(); }, [needsReading]);
@@ -120,6 +129,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
     if ('error' in r) { setPhase('idle'); setProblem(r.error); return; }
     setPhase('done');
     setJustDone('Checked in. Have a good day.');
+    window.setTimeout(() => setLamp(null), 2200);
     window.setTimeout(() => { setPhase('idle'); setJustDone(null); }, 2600);
   };
 
@@ -133,6 +143,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
     if ('error' in r) { setPhase('idle'); setProblem(r.error); return; }
     setPhase('done');
     setJustDone('Checked out. Enjoy your evening.');
+    window.setTimeout(() => setLamp(null), 2400);
     window.setTimeout(() => { setPhase('idle'); setJustDone(null); }, 2600);
   };
 
@@ -142,6 +153,9 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
   const compact = variant !== 'full';
   const fy = currentFy(snapshot);
   const bal = snapshot.balances[fy];
+  const hour = (Number(hm[0]) % 12) + (ampm === 'PM' ? 12 : 0);
+  const modeNote = mode === 'WFH' ? 'No location is recorded when you work from home.' : `Your location is recorded${policy.requireLocation ? '' : ' if you allow it'}. Late after ${clock12(policy.lateAfter)}.`;
+  const closeLamp = () => { setLamp(null); setProblem(null); };
 
   return (
     <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}
@@ -219,7 +233,7 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
                 </motion.div>
               ) : (
                 <motion.div key="out" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-center gap-3">
-                  <button type="button" className={btnPri} disabled={busy} onClick={() => (updateUrl ? setPhase('update') : checkOut())}>
+                  <button type="button" className={btnPri} disabled={busy} onClick={() => (lampOn ? setLamp('out') : updateUrl ? setPhase('update') : checkOut())}>
                     <LogOut className="w-4 h-4" />{phase === 'saving' ? 'Checking out…' : 'Check out'}
                   </button>
                   <span className="text-[11px] text-slate-500">Studio day ends at {clock12(policy.end)}.</span>
@@ -239,14 +253,12 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <button type="button" className={btnPri} disabled={busy || (mode === 'Site' && !site)} onClick={checkIn}>
+                  <button type="button" className={btnPri} disabled={busy || (!lampOn && mode === 'Site' && !site)} onClick={lampOn ? () => setLamp('in') : checkIn}>
                     {phase === 'locating' ? (
                       <><span className="pp-radar relative w-4 h-4 grid place-items-center rounded-full"><MapPin className="w-4 h-4" /></span>Finding you…</>
                     ) : phase === 'saving' ? 'Checking in…' : (<><LogIn className="w-4 h-4" />Check in</>)}
                   </button>
-                  <span className="text-[11px] text-slate-500">
-                    {mode === 'WFH' ? 'No location is recorded when you work from home.' : `Your location is recorded${policy.requireLocation ? '' : ' if you allow it'}. Late after ${clock12(policy.lateAfter)}.`}
-                  </span>
+                  <span className="text-[11px] text-slate-500">{modeNote}</span>
                 </div>
               </motion.div>
             )}
@@ -272,6 +284,18 @@ export default function MyDayCard({ sites = [], variant = 'full', onOpenPeople, 
           {loading && <span className="sr-only">Refreshing</span>}
         </div>
       </div>
+      {lamp && (
+        <LampCheckIn kind={lamp} name={snapshot.me.name.split(/\s+/)[0] || snapshot.me.name}
+          dateLabel={niceDate(today)} timeLabel={clock12(now, policy.timezone)}
+          partOfDay={hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}
+          mode={mode} onMode={setMode} site={site} onSite={setSite} sites={sites} note={modeNote}
+          inAt={session ? clock12(session.checkIn, policy.timezone) : undefined}
+          worked={session ? duration(worked) : undefined}
+          where={session ? (session.mode === 'WFH' ? 'From home' : session.site || session.mode) : undefined}
+          updateUrl={updateUrl || undefined}
+          phase={phase} done={justDone} problem={problem} onDismissProblem={() => setProblem(null)}
+          onConfirm={lamp === 'in' ? checkIn : checkOut} onClose={closeLamp} />
+      )}
     </motion.section>
   );
 }
