@@ -35,8 +35,8 @@ interface TierManagerProps {
     projectId?: string;
     /** The studio's own typology templates. Falls back to the built-ins. */
     templates?: TemplateData;
-    /** Opens an option's BOQ over this screen (App's BOQ slide-over). */
-    onEditBoq?: (tierId: string) => void;
+    /** Opens an option's BOQ over this screen (App's BOQ slide-over), at these lines when given. */
+    onEditBoq?: (tierId: string, focusLineIds?: string[]) => void;
 }
 
 const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId, setActiveTierId, projectContext, setProjectContext, bank, setActiveTab, onImportClick, projects, projectId, templates, onEditBoq }) => {
@@ -448,6 +448,33 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         else setActiveTab('boq-editor');
     };
 
+    /*
+      A line in "Where the money goes" opens the BOQ Editor at that line. A
+      draft or a signed option opens straight away (opening changes nothing; a
+      signed BOQ is read-only there). An approved option asks first, because
+      editing it makes the next version, as Edit BOQ does.
+    */
+    const [openLinesAsk, setOpenLinesAsk] = useState<{ tierId: string; lineIds: string[] } | null>(null);
+    const openBoqAt = (tierId: string, lineIds: string[]) => {
+        setActiveTierId(tierId);
+        if (onEditBoq) onEditBoq(tierId, lineIds);
+        else setActiveTab('boq-editor');
+    };
+    const handleOpenLines = (tierId: string, lineIds: string[]) => {
+        if (projectContext.approvedTierId === tierId && tierId !== signedTierId) setOpenLinesAsk({ tierId, lineIds });
+        else openBoqAt(tierId, lineIds);
+    };
+    const confirmOpenLines = () => {
+        if (!openLinesAsk) return;
+        /* A version is a deep copy, so its lines keep their ids and the editor finds them. */
+        const target = handleNewVersion(openLinesAsk.tierId) || openLinesAsk.tierId;
+        setOpenLinesAsk(null);
+        openBoqAt(target, openLinesAsk.lineIds);
+    };
+    const askTier = openLinesAsk ? tiers.find(t => t.id === openLinesAsk.tierId) : undefined;
+    const askChain = askTier ? chainOf(chains, askTier.id) : undefined;
+    const askNext = askChain ? askChain.versions.length + 1 : 2;
+
     /* Approve and Sync are one rule (lib/tierApproval.ts): the replaced
        contract is snapshotted, and the approval records who and when. */
     const makeBaseline = (tier: ProposalTier) => {
@@ -685,6 +712,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                     select: (tid) => setActiveTierId(tid),
                     pickVersion: handlePickVersion,
                     editBoq: handleEditBoq,
+                    openLines: handleOpenLines,
                     newVersion: (tid) => { handleNewVersion(tid); },
                     copyAsOption: handleCopyAsOption,
                     ownOption: handleOwnOption,
@@ -740,6 +768,26 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                             <button type="button" onClick={() => setTuneOpen(false)} className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">Cancel</button>
                             <button type="button" disabled={marginShiftAmount === 0} onClick={() => { handleApplyMarginShift(); setTuneOpen(false); }}
                                 className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50">Apply to every line</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body,
+            )}
+            {/* A line clicked on an approved option: editing it makes the next version. */}
+            {openLinesAsk && askTier && createPortal(
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 no-print" role="dialog" aria-label={`Open ${askTier.name} in the BOQ Editor`}>
+                    <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={() => setOpenLinesAsk(null)} />
+                    <div className="phd-pop relative w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
+                        <div className="px-6 pt-5 pb-4">
+                            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">Open in the BOQ Editor</p>
+                            <h2 className="font-bold text-slate-800">{askTier.name} is approved</h2>
+                            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                                Editing it makes v{askNext}. v{askNext - 1} stays as approved, at the figure the client was shown.
+                            </p>
+                        </div>
+                        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+                            <button type="button" onClick={() => setOpenLinesAsk(null)} className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">Cancel</button>
+                            <button type="button" onClick={confirmOpenLines} className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486]">Open v{askNext}</button>
                         </div>
                     </div>
                 </div>,

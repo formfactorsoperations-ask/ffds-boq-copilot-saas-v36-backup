@@ -30,7 +30,8 @@ import { CountUp } from '../ui/HudBits';
   contract. The owner found a page of stacked sections too long to scroll.
 
   "Where the money goes" is the check on the figures: each part opens to the
-  trades that make it up, and each trade to its BOQ lines, and the parts add up to the option's work, which
+  trades that make it up, and each trade to its BOQ lines (a line opens in
+  the BOQ Editor, at that line), and the parts add up to the option's work, which
   the screen says in so many words (or says by how much it does not).
 */
 
@@ -48,6 +49,8 @@ export interface GridActions {
   select: (tierId: string) => void;
   pickVersion: (tierId: string) => void;
   editBoq?: (tierId: string) => void;
+  /** Opens the option's BOQ in the editor at these lines ("Where the money goes" → a line). */
+  openLines?: (tierId: string, lineIds: string[]) => void;
   newVersion: (tierId: string) => void;
   copyAsOption: (tierId: string) => void;
   ownOption: (tierId: string) => void;
@@ -382,12 +385,20 @@ export default function PricingGrid(props: Props) {
                           const total = ls.reduce((x, l) => x + l.total, 0);
                           const qty = ls.reduce((x, l) => x + (l.qty || 0), 0);
                           const unit = ls[0].unit;
-                          return (
-                            <span className="flex justify-between gap-2">
+                          const figures = (
+                            <>
                               <span>{money(total)}</span>
                               <span className="text-[10px] text-slate-400">{Number(qty.toFixed(2))}{unit ? ` ${unit}` : ''}</span>
-                            </span>
+                            </>
                           );
+                          /* A line opens in the BOQ Editor, at that line, for this option. */
+                          return actions.openLines ? (
+                            <button type="button" onClick={() => actions.openLines!(c.tier.id, ls.map((l) => l.key))}
+                              aria-label={`Open ${name}, ${room}, in the BOQ Editor for ${c.tier.name}`} title="Open in the BOQ Editor"
+                              className="w-full flex justify-between gap-2 text-left rounded-md hover:text-[#3D52A0] hover:underline underline-offset-2">
+                              {figures}
+                            </button>
+                          ) : <span className="flex justify-between gap-2">{figures}</span>;
                         }} />
                     );
                   })}

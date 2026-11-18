@@ -21,7 +21,7 @@ interface OperationsTabProps {
     /** The studio's own typology templates, for regenerating the BOQ. */
     templates?: TemplateData;
     /** Opens an option's BOQ over Pricing & Tiers (App's slide-over). */
-    onEditBoq?: (tierId: string) => void;
+    onEditBoq?: (tierId: string, focusLineIds?: string[]) => void;
 }
 
 const OperationsTab: React.FC<OperationsTabProps> = (props) => {

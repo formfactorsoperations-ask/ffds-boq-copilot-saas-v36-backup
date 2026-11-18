@@ -39,7 +39,7 @@ const CTX: any = {
 };
 
 /* Pricing & Tiers with its state, as App keeps it. */
-function Harness({ initial = [ESS, COM], ctx = CTX, active = 'com', probe, onEditBoq }: { initial?: any[]; ctx?: any; active?: string; probe?: (s: any) => void; onEditBoq?: (id: string) => void }) {
+function Harness({ initial = [ESS, COM], ctx = CTX, active = 'com', probe, onEditBoq }: { initial?: any[]; ctx?: any; active?: string; probe?: (s: any) => void; onEditBoq?: (id: string, lines?: string[]) => void }) {
   const [tiers, setTiers] = useState<any[]>(initial);
   const [context, setContext] = useState<any>(ctx);
   const [activeId, setActiveId] = useState<string | null>(active);
@@ -201,6 +201,43 @@ describe('Pricing & Tiers grid', () => {
     const v2 = s.tiers.find((t: any) => t.parentTierId === 'com');
     expect(v2).toBeTruthy();
     expect(onEditBoq).toHaveBeenCalledWith(v2.id);
+    expect(s.ctx.approvedTierId).toBe('com');
+  });
+
+  /* Where the money goes → Carpentry → its trade → the wardrobe line, in Comfort's column. */
+  const openWardrobe = () => {
+    const money = view('Where the money goes');
+    fireEvent.click(within(money).getByRole('button', { name: /^Carpentry/ }));
+    fireEvent.click(within(money).getByRole('button', { name: /^Carpentry\s*open$/ }));
+    fireEvent.click(within(money).getByRole('button', { name: 'Open Wardrobe, Bed, in the BOQ Editor for Comfort' }));
+  };
+
+  it('a line in Where the money goes opens the BOQ Editor at that line', () => {
+    let s: any;
+    const onEditBoq = vi.fn();
+    render(<Harness active="ess" probe={(x) => { s = x; }} onEditBoq={onEditBoq} />);
+    openWardrobe();
+    expect(onEditBoq).toHaveBeenCalledWith('com', ['3']);
+    expect(s.active).toBe('com');
+    expect(s.tiers).toHaveLength(2); // a draft: nothing made, nothing asked
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('a line on an approved option asks first, and opens its next version at that line', () => {
+    let s: any;
+    const onEditBoq = vi.fn();
+    render(<Harness ctx={{ ...CTX, approvedTierId: 'com' }} probe={(x) => { s = x; }} onEditBoq={onEditBoq} />);
+    openWardrobe();
+    const ask = screen.getByRole('dialog', { name: 'Open Comfort in the BOQ Editor' });
+    expect(ask.textContent).toContain('Editing it makes v2. v1 stays as approved');
+    fireEvent.click(within(ask).getByRole('button', { name: 'Cancel' }));
+    expect(onEditBoq).not.toHaveBeenCalled();
+    expect(s.tiers).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Wardrobe, Bed, in the BOQ Editor for Comfort' })); // still open
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Open v2' }));
+    const v2 = s.tiers.find((t: any) => t.parentTierId === 'com');
+    expect(v2.boq.map((l: any) => l.id)).toContain('3'); // the copy keeps its lines' ids
+    expect(onEditBoq).toHaveBeenCalledWith(v2.id, ['3']);
     expect(s.ctx.approvedTierId).toBe('com');
   });
 

@@ -43,6 +43,8 @@ interface StudioDashboardProps {
     onUpgradeArchitecture?: () => void;
     /** Opens the Revision Studio, where a signed scope is changed. */
     onStartRevision?: () => void;
+    /** Lines to show and highlight on opening (Pricing & Tiers, "Where the money goes" → a line). */
+    focusLines?: { ids: string[]; at: number } | null;
 }
 
 // Helper function for applying command actions
@@ -101,7 +103,7 @@ const itemVar = {
     show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100, damping: 12 } }
 };
 
-const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision }) => {
+const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision, focusLines }) => {
   /* Signed scope: the version the client signed is shown but never changed
      here. Every edit path below goes through setTiers, so it is guarded once. */
   const signedTierId = lockedTierId(projectContext);
@@ -165,6 +167,16 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                 
 
   const [highlightedItemIds, setHighlightedItemIds] = useState<string[]>([]);
+
+  /* Opened at a line: it is highlighted in the Excel view and scrolled to (the
+     interactive view selects it itself, InteractiveBoqEditor `focus`). */
+  useEffect(() => {
+    if (!focusLines?.ids.length) return;
+    setHighlightedItemIds(focusLines.ids);
+    if (viewMode !== 'excel') return;
+    const raf = requestAnimationFrame(() => document.getElementById(`item-${focusLines.ids[0]}`)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' }));
+    return () => cancelAnimationFrame(raf);
+  }, [focusLines?.at, viewMode]);
     
     const [marginAnalytics, setMarginAnalytics] = useState<any>(null);
 
@@ -769,6 +781,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                         setTiers={setTiers}
                         activeTierId={activeTierId}
                         boqFrozen={projectContext.boqFrozen}
+                        focus={focusLines}
                       />
                   </MotionDiv>
               )}
