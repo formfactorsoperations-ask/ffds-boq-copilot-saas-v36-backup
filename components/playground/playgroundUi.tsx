@@ -7,7 +7,7 @@ import { lineAmount, lineCost } from '../../lib/playground/pricing';
 import { markupOf, specWordsOf, DEFAULT_MARGIN_FLOOR } from '../../lib/playground/issues';
 import { withByRoomQty, type MeasureContext } from '../../lib/playground/rooms';
 import type { MaterialSpecsBank } from '../../lib/materialSpecs';
-import { staleParts } from '../../lib/lineSpecs';
+import { staleParts, shadeHexOf } from '../../lib/lineSpecs';
 import { artOfSpecs } from './pieceArt';
 
 /*
@@ -199,7 +199,7 @@ export function lineModel(line: BoqItem, bankMap: Map<string, Item>, rules: Pric
     billable: r.billable,
     separate,
     stale: spec?.offer ? staleParts(spec.bank, b) : [],
-    art: spec ? artOfSpecs(b.materialSpecs, spec.bank.materials) : {},
+    art: spec ? artOfSpecs(b.materialSpecs, spec.bank.materials, s => shadeHexOf(spec.bank, s)) : {},
   };
 }
 

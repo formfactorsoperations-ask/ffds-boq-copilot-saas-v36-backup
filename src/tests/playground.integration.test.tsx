@@ -451,7 +451,26 @@ describe('Material specs on the lines (S2)', () => {
     fireEvent.change(within(ins).getByRole('combobox', { name: 'Hardware' }), { target: { value: 'hw-hettich' } });
     expect(latest[0].boq[0].specs).toContain('tandem drawer runners (Hettich)');
     fireEvent.click(within(inspector()).getByRole('button', { name: /Veneer/ }));
-    expect(latest[0].boq[0]).toMatchObject({ baseRate: 1300, finishBase: 1000, materialSpecs: { 'Outer finish': { id: 'ven-walnut', v: 1 } } });
+    expect(latest[0].boq[0]).toMatchObject({ baseRate: 1300, finishBase: 1000, materialSpecs: { 'Outer finish': { id: 'ven-walnut', v: 2 } } });
+  });
+
+  it('a finish priced as a range is shown in a shade: the words name it, the price stays (PR M)', () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: [recipeLine()] }} probe={t => { latest = t; }} />);
+    lens('Sheet');
+    fireEvent.click(screen.getAllByText('Sliding wardrobe')[0]);
+    const ins = inspector();
+    expect(within(ins).getByText('chosen at Selections')).toBeTruthy();
+    expect(within(ins).getByText('250+ · one price')).toBeTruthy();
+    expect(within(ins).getByText('+242 at the studio')).toBeTruthy();
+    const before = latest.length ? latest[0].boq[0] : recipeLine();
+    fireEvent.click(within(ins).getByRole('button', { name: 'Show it in Smoked oak' }));
+    const l = latest[0].boq[0];
+    expect(l.materialSpecs['Outer finish']).toEqual({ id: 'lam-oak', v: 2, shade: 'Smoked oak' });
+    expect(l.baseRate).toBe(before.baseRate);
+    expect(l.specs).toContain('outside, Smoked oak or any of 250+ shades (Merino');
+    expect(screen.getByText(/Same price, any shade in the range costs the same/)).toBeTruthy();
+    expect(within(inspector()).getByRole('button', { name: 'Show it in Smoked oak' }).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('own words stop following the recipe until Back to the recipe', () => {

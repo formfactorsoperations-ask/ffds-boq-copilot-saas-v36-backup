@@ -6,8 +6,8 @@ import { SCOPE_BUCKETS } from '../../lib/scopeBuckets';
 import { ftin, round2 } from '../../lib/playground/geometry';
 import { roomShares, measureRoom, planVsRule, byRoomQty, measureShare, RULE_WALL, RULE_CEILING, type MeasureContext } from '../../lib/playground/rooms';
 import type { ShareBasis } from '../../types';
-import { currentVersion, versionAt, materialsIn, type MaterialSpecsBank } from '../../lib/materialSpecs';
-import { recipeOf, finishPartOf, withPart, updatedLine, withOwnWords, withRecipeWords, finishDelta } from '../../lib/lineSpecs';
+import { currentVersion, versionAt, materialsIn, type MaterialSpecsBank, type MaterialRange } from '../../lib/materialSpecs';
+import { recipeOf, finishPartOf, withPart, updatedLine, withOwnWords, withRecipeWords, finishDelta, withShade } from '../../lib/lineSpecs';
 import { AlertTriangle } from 'lucide-react';
 import { lineAmountsByRoom } from '../../lib/playground/pricing';
 import { unshare, shareIntoRooms, shareBasisFor, isWholeFlatLine } from '../../lib/playground/versions';
@@ -206,7 +206,7 @@ export function LineInspector({ m, index, count, issues, rooms, bankMap, rules, 
   /** This option may take newer versions of its materials (a draft). */
   offerUpdates?: boolean;
   onOpenRecipe?: (itemId: string) => void;
-  onReplace: (line: BoqItem) => void;
+  onReplace: (line: BoqItem, msg?: string) => void;
   onStep: (d: number) => void;
   onClose: () => void;
   onDuplicate: () => void;
@@ -499,9 +499,29 @@ function SplitOffer({ m, basis, rooms, hideFigures, onReplace }: { m: LineModel;
 /** A line built from a recipe: its parts, their versions, the finish as tiles, and the words they make. */
 function SpecBlock({ m, bank, readOnly, offerUpdates, hideFigures, onOpenRecipe, onReplace }: {
   m: LineModel; bank: MaterialSpecsBank; readOnly: boolean; offerUpdates: boolean; hideFigures: boolean;
-  onOpenRecipe?: (itemId: string) => void; onReplace: (l: BoqItem) => void;
+  onOpenRecipe?: (itemId: string) => void; onReplace: (l: BoqItem, msg?: string) => void;
 }) {
   const line = m.line;
+  /* A finish priced as a range: shown in a shade, which names it and never moves the price. */
+  const shadeRow = (part: string, s: { shade?: string }, r: MaterialRange) => (
+    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2 py-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-bold text-slate-700 truncate">Shade: {s.shade || <span className="font-semibold text-slate-500">chosen at Selections</span>}</span>
+        <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">{r.count.toLocaleString('en-IN')}+ · one price</span>
+      </div>
+      <div className="mt-1.5 flex items-center gap-1 flex-wrap">
+        {r.examples.map(e => {
+          const on = s.shade === e.name;
+          return (
+            <button key={e.name} type="button" disabled={readOnly} title={e.name} aria-label={`Show it in ${e.name}`} aria-pressed={on}
+              onClick={() => onReplace(withShade(bank, line, m.item, part, on ? null : e.name), on ? `${m.name}: shade left for Selections` : `${m.name}: shown in ${e.name}. Same price, any shade in the range costs the same.`)}
+              className={`w-5 h-5 rounded-full border ${on ? 'ring-2 ring-[#3D52A0] ring-offset-1 border-white' : 'border-slate-300'}`} style={{ background: e.hex }} />
+          );
+        })}
+        {r.count > r.examples.length && <span className="text-[10px] font-bold text-slate-400 ml-0.5">+{(r.count - r.examples.length).toLocaleString('en-IN')} at the studio</span>}
+      </div>
+    </div>
+  );
   const recipe = m.item ? recipeOf(m.item, bank) : null;
   const fin = finishPartOf(recipe)?.part;
   const stale = offerUpdates ? m.stale : [];
@@ -550,7 +570,7 @@ function SpecBlock({ m, bank, readOnly, offerUpdates, hideFigures, onOpenRecipe,
                     return (
                       <button key={x.id} type="button" disabled={readOnly} aria-pressed={on} title={x.name}
                         onClick={() => !on && onReplace(withPart(bank, line, m.item, part, x.id))}
-                        className={`rounded-lg p-1 border text-left ${on ? 'border-[#3D52A0] ring-2 ring-[#3D52A0]/25' : 'border-slate-200 hover:border-slate-300'}`}>
+                        className={`rounded-lg p-1 border ${on ? 'border-[#3D52A0] ring-2 ring-[#3D52A0]/25' : 'border-slate-200 hover:border-slate-300'}`}>
                         <svg viewBox="0 0 3 1.4" className="w-full h-6 rounded" aria-hidden focusable="false"><rect width="3" height="1.4" fill={x.swatch ? `url(#${x.swatch})` : '#e2e8f0'} /></svg>
                         <span className="block text-[10px] font-bold text-slate-600 truncate">{shortName(x.name)}</span>
                         {!hideFigures && <span className={`block text-[10px] font-bold tabular-nums ${Math.abs(d) < 1 ? 'text-slate-400' : d > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{Math.abs(d) < 1 ? 'now' : `${d > 0 ? '+' : '−'}${lakh(Math.abs(d))}`}</span>}
@@ -559,6 +579,8 @@ function SpecBlock({ m, bank, readOnly, offerUpdates, hideFigures, onOpenRecipe,
                   })}
                 </div>
               )}
+              {!isFin && h?.range && <div className="text-[10px] text-slate-400 mt-1">Any of {h.range.count.toLocaleString('en-IN')}+ {h.range.unit}, picked at Selections</div>}
+              {isFin && h?.range && shadeRow(part, s, h.range)}
             </div>
           );
         })}

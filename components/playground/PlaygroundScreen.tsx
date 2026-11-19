@@ -295,7 +295,7 @@ export default function PlaygroundScreen(props: Props) {
       specBank={specBank}
       offerUpdates={offer}
       onOpenRecipe={specBank ? setRecipeItemId : undefined}
-      onReplace={l => replace(l)}
+      onReplace={(l, msg) => replace(l, msg)}
       onStep={step}
       onClose={() => setSel(null)}
       onDuplicate={() => duplicate(selModel)}

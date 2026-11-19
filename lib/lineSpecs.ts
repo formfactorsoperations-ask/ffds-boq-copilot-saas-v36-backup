@@ -15,11 +15,15 @@
  * The outer finish is the one part that prices the piece: its version carries
  * a cost factor, applied to the line's materials rate (lib/playground/finishes).
  *
+ * A version priced as a range (PR M) is named as one in the words ("any of
+ * 250+ shades"). A part may carry a `shade` from the range: it is named in the
+ * words and colours the drawing, and never changes the price.
+ *
  * Pure.
  */
 import type { Item, BoqItem, ProposalTier, ProjectContext, LineMaterialSpec } from '../types';
 import {
-  currentVersion, versionAt, type Grade, type MaterialSpecsBank, type Recipe, type RecipePart,
+  currentVersion, versionAt, type Grade, type MaterialRange, type MaterialSpecsBank, type Recipe, type RecipePart,
 } from './materialSpecs';
 import { drawOf } from './playground/pieces';
 import { finishUpdates, finishBaseOf } from './playground/finishes';
@@ -86,12 +90,23 @@ export function specsFromRecipe(bank: MaterialSpecsBank, recipe: Recipe, grade: 
 
 /* ───────────────────────────── words ───────────────────────────── */
 
-/** One part in words: "18 mm BWR-grade plywood carcass (Century Club equivalent)". */
+/** The range a part is priced as, at its version: none on a version that is a single spec. */
+export const rangeOf = (bank: MaterialSpecsBank, spec: LineMaterialSpec | null | undefined): MaterialRange | undefined =>
+  (spec ? versionAt(bank, spec.id, spec.v)?.range : undefined);
+
+/**
+ * One part in words: "18 mm BWR-grade plywood carcass (Century Club equivalent)".
+ * A part priced as a range names it: "1 mm textured designer laminate outside,
+ * any of 250+ shades (Merino · Greenlam · Royale Touche)", or with a shade
+ * picked, "…outside, Smoked oak or any of 250+ shades (…)".
+ */
 export function partWords(bank: MaterialSpecsBank, part: string, spec: LineMaterialSpec): string {
   const h = versionAt(bank, spec.id, spec.v);
   if (!h) return '';
   const brand = h.brand && !PLAIN_BRAND.test(h.brand) ? ` (${h.brand})` : '';
-  return `${h.words}${SUFFIX[part] || ''}${brand}`;
+  const r = h.range;
+  const range = r ? `, ${spec.shade ? `${spec.shade} or any` : 'any'} of ${Number(r.count).toLocaleString('en-IN')}+ ${r.unit}` : '';
+  return `${h.words}${SUFFIX[part] || ''}${range}${brand}`;
 }
 
 /** The words a line's materials make, as the client reads them. */
@@ -173,6 +188,25 @@ export function withPart(bank: MaterialSpecsBank, line: BoqItem, item: Item | un
   if (!v || !line.materialSpecs?.[part]) return line;
   const materialSpecs = { ...line.materialSpecs, [part]: { id: mat, v } };
   return settle(bank, { ...line, materialSpecs }, item, item ? recipeOf(item, bank) : null);
+}
+
+/**
+ * The line shown in a shade of its range: the words name it, the drawing takes
+ * its colour, and the price does not move (every shade in a range costs the
+ * same). `null` leaves the shade for Selections.
+ */
+export function withShade(bank: MaterialSpecsBank, line: BoqItem, item: Item | undefined, part: string, shade: string | null): BoqItem {
+  const s = line.materialSpecs?.[part];
+  if (!s || !rangeOf(bank, s)) return line;
+  const { shade: _old, ...rest } = s;
+  const materialSpecs = { ...line.materialSpecs, [part]: shade ? { ...rest, shade } : rest };
+  return settle(bank, { ...line, materialSpecs }, item, item ? recipeOf(item, bank) : null);
+}
+
+/** The colour a part is shown in: its shade's, when one is picked from the range's examples. */
+export function shadeHexOf(bank: MaterialSpecsBank, spec: LineMaterialSpec | null | undefined): string | undefined {
+  if (!spec?.shade) return undefined;
+  return rangeOf(bank, spec)?.examples.find(e => e.name === spec.shade)?.hex;
 }
 
 /** "Write my own": the words as they are now, kept by hand from here on. */
