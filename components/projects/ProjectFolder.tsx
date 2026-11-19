@@ -49,6 +49,7 @@ export default function ProjectFolder(p: ProjectFolderProps) {
   const k = p.width / BASE_W;
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
+  const arcId = React.useId().replace(/:/g, '');
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -103,11 +104,23 @@ export default function ProjectFolder(p: ProjectFolderProps) {
           label={p.name}
           meta={p.meta}
           stickers={<>
-            {/* Stuck on the front glass, above the name: Actual / Dummy, and how its latest BOQ was made. */}
-            <span className={`pf-sticker kind ${p.kind}`}>{KIND_LABEL[p.kind]}</span>
+            {/* Round frosted-glass stickers on the front glass, above the name, one edge peeling. */}
+            <span className={`pf-sticker kind ${p.kind}`} title={KIND_LABEL[p.kind]}>
+              <span className="pf-st-face"><span className="pf-st-word">{KIND_LABEL[p.kind]}</span></span>
+              <i className="pf-st-peel" aria-hidden />
+            </span>
             {p.boq && (
-              <span className={`pf-sticker boq ${p.boq}`} title="How the project's latest BOQ was made. Classic BOQs open as they are; their next version can be a Playground version.">
-                {p.boq === 'playground' && <PenTool className="w-3 h-3" aria-hidden />}{BOQ_TAG_LABEL[p.boq]}
+              <span className={`pf-sticker boq ${p.boq}`} title={`${BOQ_TAG_LABEL[p.boq]}: how the project's latest BOQ was made. Classic BOQs open as they are; their next version can be a Playground version.`}>
+                <span className="pf-st-face">
+                  {/* The kind of BOQ runs round the top, like a seal; BOQ sits in the middle. */}
+                  <svg className="pf-st-arc" viewBox="0 0 62 62" aria-hidden>
+                    <defs><path id={`pf-arc-${arcId}`} d="M 8 33 A 23 23 0 0 1 54 33" /></defs>
+                    <text><textPath href={`#pf-arc-${arcId}`} startOffset="50%" textAnchor="middle">{p.boq === 'playground' ? 'Playground' : p.boq === 'classic' ? 'Classic' : 'No BOQ'}</textPath></text>
+                  </svg>
+                  <span className="sr-only">{p.boq === 'playground' ? 'Playground' : p.boq === 'classic' ? 'Classic' : 'No BOQ'}</span>{' '}
+                  <span className="pf-st-mid">{p.boq === 'none' ? 'yet' : 'BOQ'}</span>
+                </span>
+                <i className="pf-st-peel" aria-hidden />
               </span>
             )}
           </>}

@@ -191,7 +191,7 @@ describe('the BOQ tag (BOQ Playground PR T)', () => {
   it('is a sticker on each folder’s front glass, beside the Actual / Dummy sticker, while the Playground is on', async () => {
     orgFlags.playground = true;
     const view = await mount();
-    const tag = (id: string) => view.container.querySelector(`[data-testid="project-folder-${id}"] .pf-sticker.boq`)?.textContent;
+    const tag = (id: string) => view.container.querySelector(`[data-testid="project-folder-${id}"] .pf-sticker.boq`)?.getAttribute('title')?.split(':')[0];
     expect(tag('pg')).toBe('Playground BOQ');
     expect(tag('cl')).toBe('Classic BOQ');
     expect(tag('no')).toBe('No BOQ yet');
