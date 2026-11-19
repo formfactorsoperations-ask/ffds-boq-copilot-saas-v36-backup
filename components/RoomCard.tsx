@@ -7,7 +7,7 @@ import NumberField from './NumberField';
 import { AddToCartIcon } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useOrg } from '../contexts/OrgContext';
-import { seesStudioFinance } from '../lib/roleAccess';
+import { useSeesMargins } from './ui/HideFigures';
 
 interface RoomCardProps {
   room: Room;
@@ -41,9 +41,9 @@ const RoomCard: React.FC<RoomCardProps> = ({
   onSaveAsBundle
 }) => {
   const [isMarkupOpen, setIsMarkupOpen] = useState(false);
-  // Setting margins is studio finance (lib/roleAccess).
+  // Setting margins is studio finance (lib/roleAccess), and goes while figures are hidden.
   const { currentRole } = useOrg();
-  const finance = seesStudioFinance(currentRole);
+  const finance = useSeesMargins(currentRole);
   const [isBulkActionsOpen, setIsBulkActionsOpen] = useState(false);
   const [markupValue, setMarkupValue] = useState(20);
   const [bulkMarkupValue, setBulkMarkupValue] = useState(20);

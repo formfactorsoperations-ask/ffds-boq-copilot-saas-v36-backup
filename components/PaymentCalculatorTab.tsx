@@ -33,6 +33,7 @@ import { useZohoBooks } from '../hooks/useZohoBooks';
 import ZohoRaiseInvoiceDialog from './ZohoRaiseInvoiceDialog';
 import type { ZohoRaiseResult } from '../services/zohoBooksService';
 import ScopeAdditionsMoneyPanel from './ops/ScopeAdditionsMoneyPanel';
+import { useFiguresHidden, Masked, MarginsHidden } from './ui/HideFigures';
 import RevisionMoneyPanel from './money/RevisionMoneyPanel';
 import { pendingRevision, previewRevisionMoney } from '../lib/revisionMoneyPreview';
 import AsActualsCorrectionPanel from './money/AsActualsCorrectionPanel';
@@ -448,6 +449,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     // Track Filter Tab
     const [activeTrackTab, setActiveTrackTab] = useState<'all' | 'design' | 'execution'>('all');
     const [activeSmartView, setActiveSmartView] = useState<'none' | 'margin' | 'cash-flow'>('none');
+    /* Hide figures (lib/figuresPrivacy): the schedule, billing and collections stay; the margin optimizer and the simulator's cost and profit go. */
+    const marginsHidden = useFiguresHidden();
     const [viewLayout, setViewLayout] = useState<'stacked' | 'side-by-side'>('stacked');
     const [designViewMode, setDesignViewMode] = useState<'simple' | 'advanced'>('simple');
     const [executionViewMode, setExecutionViewMode] = useState<'simple' | 'advanced'>('simple');
@@ -2209,7 +2212,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     <ChevronDownIcon className={`ml-auto w-4 h-4 text-slate-400 mb-turn ${taxToolsOpen ? 'rotate-180' : ''}`} />
                 </button>
                 <span className="flex flex-wrap gap-2">
-                    {setBoq && <Button size="sm" variant="secondary" icon={TrendingUp} onClick={() => setActiveSmartView('margin')}>Margin optimizer</Button>}
+                    {setBoq && !marginsHidden && <Button size="sm" variant="secondary" icon={TrendingUp} onClick={() => setActiveSmartView('margin')}>Margin optimizer</Button>}
                     <Button size="sm" variant="secondary" icon={Coins} onClick={() => setActiveSmartView('cash-flow')}>Cash flow forecast</Button>
                 </span>
             </div>
@@ -2376,7 +2379,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             {/* Content */}
                             <div className="flex-1 overflow-y-auto p-6 space-y-6">
                                 {activeSmartView === 'margin' ? (
-                                    setBoq ? (
+                                    marginsHidden ? (
+                                        <MarginsHidden what="Margins" />
+                                    ) : setBoq ? (
                                         <MarginOptimizer boq={fullBoq} setBoq={setBoq} aiStrategy={aiStrategy} />
                                     ) : (
                                         <div className="p-6 text-center text-sm text-[#5A628A]">
@@ -2722,7 +2727,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     <div className="p-6 bg-[#F6F7FB]/40 space-y-6">
                         <p className="text-xs text-[#5A628A] max-w-3xl leading-relaxed">
                             Simulate treating Design Fees and Labor as GST-applicable (18%), and Materials as non-GST (0%). 
-                            The Material vs Labor % splits are calculated dynamically from the active project's BOQ line items (Material Cost: {formatCurrency(materialCostRaw)}, Labor Cost: {formatCurrency(laborCostRaw)}). This theoretical split is shown in the dedicated Simulated Execution Schedule table below.
+                            The Material vs Labor % splits are calculated dynamically from the active project's BOQ line items (Material Cost: <Masked>{formatCurrency(materialCostRaw)}</Masked>, Labor Cost: <Masked>{formatCurrency(laborCostRaw)}</Masked>). This theoretical split is shown in the dedicated Simulated Execution Schedule table below.
                         </p>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2871,10 +2876,10 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             
                             <div className="space-y-1 w-full md:w-auto text-right">
                                 <span className="text-[10px] font-bold text-[#8E96B8] uppercase tracking-wider block">Theoretical Firm Profit</span>
-                                <span className="text-2xl font-black text-emerald-400 tabular-nums">{formatCurrency(theoreticalProfit)}</span>
+                                <span className="text-2xl font-black text-emerald-400 tabular-nums"><Masked>{formatCurrency(theoreticalProfit)}</Masked></span>
                                 <div className="text-[10px] text-[#8E96B8] mt-1 font-medium leading-relaxed">
                                     (Accounts for {formatCurrency(estimatedMaterialInputGst)} dead input GST) <br/>
-                                    Implied Margin: {profitMargin.toFixed(1)}%
+                                    Implied Margin: <Masked dots="••">{profitMargin.toFixed(1)}%</Masked>
                                 </div>
                             </div>
                         </div>

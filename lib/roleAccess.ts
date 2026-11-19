@@ -24,10 +24,19 @@ const FINANCE_ROLES = new Set(['Super Admin', 'Admin', 'Ops Director', 'Owner'])
 export const holdsFinanceRole = (role?: RoleSet): boolean => hasRole(role, FINANCE_ROLES);
 
 /**
- * Whether the studio's money is SHOWN. No while figures are hidden for a
- * shared screen (lib/figuresPrivacy), whatever the role.
+ * Whether the studio's money is SHOWN: project values, collections, the money
+ * screens and their place in the menus. Hiding figures for a shared screen
+ * does not change this; it hides margins only (`seesMargins`).
  */
-export const seesStudioFinance = (role?: RoleSet): boolean => holdsFinanceRole(role) && !figuresHidden();
+export const seesStudioFinance = (role?: RoleSet): boolean => holdsFinanceRole(role);
+
+/**
+ * Whether margins are SHOWN: margin and profit, and the cost and buy rates
+ * they are worked out from. No while figures are hidden for a shared screen
+ * (lib/figuresPrivacy), whatever the role, so a client watching a pitch sees
+ * the prices and the payment plan but never what the studio makes on them.
+ */
+export const seesMargins = (role?: RoleSet): boolean => seesStudioFinance(role) && !figuresHidden();
 
 /**
  * A Designer works drawings on the projects they are assigned to, and only
@@ -202,3 +211,12 @@ export const FINANCE_TABS = new Set([
   'reports',          // studio Reports
   'admin-templates-bank', // item bank: cost and buy rates
 ]);
+
+/**
+ * Studio-wide screens that are made of margins and costs from end to end:
+ * Reports (every client's margin and the studio's profit) and the item bank
+ * (every cost and buy rate). While figures are hidden these are covered as a
+ * whole. Project screens are never covered: they show their prices and
+ * payments and hide only their margins and costs.
+ */
+export const MARGIN_SCREENS = new Set(['reports', 'admin-templates-bank', 'bank']);

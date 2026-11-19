@@ -5,7 +5,6 @@ import { formatINR, timeAgo } from "../lib/utils";
 import { getSingleProjectValue } from "../lib/financialsUtils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useOrg } from "../contexts/OrgContext";
-import { useFiguresHidden } from "./ui/HideFigures";
 import { usePageHeader } from "../contexts/PageHeaderContext";
 import { db } from "../services/dbService";
 import { issuePortalAccess, PortalAccess, portalTokenOf } from "../services/portalAccessService";
@@ -185,9 +184,8 @@ const WHATSAPP_TEMPLATES = [
 
 export default function ClientsDirectory({ projects, onOpenProject, onCreateNew }: ClientsDirectoryProps) {
   const { orgData, currentRole, currentUserAuth } = useOrg();
-  /* Other clients' account values: hidden from a Designer, and from everyone while figures are hidden for a shared screen. */
-  const figuresHidden = useFiguresHidden();
-  const isDesigner = currentRole === 'Designer' || figuresHidden;
+  /* Other clients' account values: hidden from a Designer. Hiding figures hides margins only, and this screen shows none. */
+  const isDesigner = currentRole === 'Designer';
 
   const [selectedBucket, setSelectedBucket] = useState<BucketType>('all');
   /* Opens on the real book. Sample projects are something you ask for. */

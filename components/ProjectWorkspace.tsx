@@ -24,6 +24,7 @@ import { FloatingDock, FloatingDockItem } from './ui/floating-dock';
 import { useHubAlerts } from './ops/useHubAlerts';
 import NotifyBell from './notify/NotifyBell';
 import { HideFiguresButton } from './ui/HideFigures';
+import StudioJump from './projectNav/StudioJump';
 import LiveStamp from './notify/LiveStamp';
 import { useInbox } from './notify/NotifyContext';
 import { Count } from './notify/NotifyBits';
@@ -123,7 +124,7 @@ export function ProjectWorkspace({
   onLeaveProject?: (targetTab?: string) => void;
   onStatusChange?: (status: ProjectStatus, note?: string) => Promise<void> | void;
 }) {
-  const { orgData, currentUserAuth } = useOrg();
+  const { orgData, currentUserAuth, currentRoles } = useOrg();
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
 
   const lifecycle = projectContext.lifecycle || { stage: 1, subState: 'pending', gates: {} };
@@ -297,6 +298,8 @@ export function ProjectWorkspace({
           <HeaderFigures />
           <div className="ml-auto shrink-0 flex items-center gap-2">
             <LiveStamp match={(n) => n.projectId === projectId} className="hidden lg:inline-flex" />
+            {/* The studio's desks, one click from any project screen (components/projectNav/StudioJump). */}
+            <StudioJump role={currentRoles?.length ? currentRoles : currentRole} onGo={(route) => onLeaveProject?.(route)} />
             {holdsFinanceRole(currentRole) && <HideFiguresButton />}
             {isLimited && !(isDesigner && DESIGNER_EDITABLE_TABS.has(activeTab)) && (
               <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700"

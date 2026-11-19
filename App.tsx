@@ -142,7 +142,7 @@ import { readPortalView } from "./services/portalViewService";
 import { syncStudioAccess, portalDoor } from "./services/studioAccess";
 import { publishProjectDirectory } from "./services/projectTeam";
 import { useFiguresHidden, useHideFiguresShortcut, FiguresHiddenCover } from "./components/ui/HideFigures";
-import { seesStudioFinance, holdsFinanceRole, FINANCE_TABS, isLimitedRole, limitedMayOpen, limitedHomeTab, mayOpenStudioTab, STUDIO_TABS, visibleToRole } from "./lib/roleAccess";
+import { seesStudioFinance, holdsFinanceRole, FINANCE_TABS, MARGIN_SCREENS, isLimitedRole, limitedMayOpen, limitedHomeTab, mayOpenStudioTab, STUDIO_TABS, visibleToRole } from "./lib/roleAccess";
 import { functions as firebaseFunctions } from "./services/firebaseClient";
 import { httpsCallable } from "firebase/functions";
 import { roleLabel } from "./lib/roles";
@@ -964,7 +964,7 @@ export default function App() {
       setActiveTab(STUDIO_TABS.has(activeTab) ? "projects" : limitedHomeTab(currentRole));
       return;
     }
-    /* By role: while figures are hidden the screen is covered instead (FiguresHiddenCover), so nobody is moved off it. */
+    /* By role only: hiding figures hides margins on a screen (or covers Reports and the item bank), so nobody is moved off it. */
     if (!(FINANCE_TABS.has(activeTab) && !holdsFinanceRole(currentRole))) return;
     const studioWide = ["reports", "admin-templates-bank", "clients", "studio-settings", "saas-dashboard"];
     setActiveTab(studioWide.includes(activeTab) ? "projects" : "dashboard");
@@ -3255,8 +3255,8 @@ export default function App() {
                     nothing in the console. A CSS entrance (hud-swap) needs no exit.
                   */}
                   <div key={activeTab} className="hud-swap relative">
-                  {/* Hide figures (lib/figuresPrivacy): a screen wholly about money is covered while a screen is shared. */}
-                  {figuresHidden && FINANCE_TABS.has(activeTab) && <FiguresHiddenCover />}
+                  {/* Hide figures (lib/figuresPrivacy): Reports and the item bank are covered; every other screen hides only its margins. */}
+                  {figuresHidden && MARGIN_SCREENS.has(activeTab) && <FiguresHiddenCover />}
                   <Suspense fallback={
                     <div className="p-12 flex flex-col items-center justify-center text-slate-400 space-y-3">
                       <div className="w-6 h-6 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
@@ -3981,8 +3981,8 @@ export default function App() {
                     nothing in the console. A CSS entrance (hud-swap) needs no exit.
                   */}
                   <div key={activeTab} className="hud-swap relative">
-                  {/* Hide figures (lib/figuresPrivacy): a screen wholly about money is covered while a screen is shared. */}
-                  {figuresHidden && FINANCE_TABS.has(activeTab) && <FiguresHiddenCover />}
+                  {/* Hide figures (lib/figuresPrivacy): Reports and the item bank are covered; every other screen hides only its margins. */}
+                  {figuresHidden && MARGIN_SCREENS.has(activeTab) && <FiguresHiddenCover />}
                   <Suspense fallback={
                     <div className="p-12 flex flex-col items-center justify-center text-slate-400 space-y-3">
                       <div className="w-6 h-6 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />

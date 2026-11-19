@@ -18,6 +18,7 @@ import { versionNo, sameOption, optionChains, type OptionChain } from '../../lib
 import { IconTile, Ring, Tilt, DoneTick, Confetti, EASE, listV, rowV } from '../people/PeopleBits';
 import { cardV, deskSectionV } from '../opsDesk/DeskBits';
 import { CountUp } from '../ui/HudBits';
+import { useFiguresHidden, Masked } from '../ui/HideFigures';
 
 /*
   Pricing & Tiers as one grid (DESIGN.md "Pricing & Tiers motion").
@@ -213,6 +214,8 @@ export default function PricingGrid(props: Props) {
   const { columns, bank, projectContext, activeTierId, specLabel = {}, comparison, actions } = props;
   const ctx: any = projectContext || {};
   const still = !!useReducedMotion();
+  /* Hide figures (lib/figuresPrivacy): the prices stay; the margin ring, the Margin view and Tune margin go. */
+  const marginsHidden = useFiguresHidden();
   const bankMap = useMemo(() => buildBankMap(bank || [], ctx.adHocItems), [bank, ctx.adHocItems]);
   const chains = useMemo(() => optionChains(props.allTiers), [props.allTiers]);
   const discounts: OfferDiscount[] = (ctx.financials?.discounts || []) as OfferDiscount[];
@@ -248,7 +251,7 @@ export default function PricingGrid(props: Props) {
     { id: 'money', label: 'Where the money goes', icon: ChartPie },
     { id: 'diff', label: 'What’s different', icon: GitCompareArrows, count: diffCount },
     { id: 'pay', label: 'Offers & payments', icon: HandCoins },
-    { id: 'margin', label: 'Margin', icon: Gauge },
+    ...(!marginsHidden ? [{ id: 'margin' as Lens, label: 'Margin', icon: Gauge }] : []),
     ...((anyChange || props.hasHistory) ? [{ id: 'history' as Lens, label: 'Versions & contract', icon: GitBranch, count: cols.filter((c) => c.prev).length || undefined }] : []),
   ];
   const [lens, setLens] = useState<Lens>('money');
@@ -636,10 +639,10 @@ export default function PricingGrid(props: Props) {
                               work {money(c.price.work)} + design fee {money(c.price.designFee)}
                             </p>
                           )}
-                          <p className="text-[11px] text-slate-400">{t.summary.itemCount ?? t.boq?.length ?? 0} items · {gm.toFixed(1)}% GM</p>
+                          <p className="text-[11px] text-slate-400">{t.summary.itemCount ?? t.boq?.length ?? 0} items · <Masked dots="••">{gm.toFixed(1)}%</Masked> GM</p>
                         </div>
-                        <Ring value={Math.max(0, gm) / 50} size={78} stroke={7} tone={tone as any} label={`${gm.toFixed(1)}% margin`}>
-                          <span className="block text-sm font-black text-slate-800 leading-none tabular-nums">{gm.toFixed(0)}%</span>
+                        <Ring value={marginsHidden ? 0 : Math.max(0, gm) / 50} size={78} stroke={7} tone={(marginsHidden ? 'ok' : tone) as any} label={marginsHidden ? 'Margin hidden' : `${gm.toFixed(1)}% margin`}>
+                          <span className="block text-sm font-black text-slate-800 leading-none tabular-nums"><Masked dots="••">{gm.toFixed(0)}%</Masked></span>
                           <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">margin</span>
                         </Ring>
                       </div>
@@ -728,6 +731,7 @@ function ColumnActions({ col, actions, projectContext, signedTierId, scopeFlowOn
   const ctx: any = projectContext || {};
   const isSigned = t.id === signedTierId;
   const [open, setOpen] = useState(false);
+  const marginsHidden = useFiguresHidden();
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -755,7 +759,7 @@ function ColumnActions({ col, actions, projectContext, signedTierId, scopeFlowOn
             <button role="menuitem" type="button" className={item} onClick={run(() => actions.ownOption(t.id))}><Unlink className="w-4 h-4 text-slate-400" /> Make it its own option</button>
           )}
           {latest && actions.offers && <button role="menuitem" type="button" className={item} onClick={run(() => actions.offers!(t.id))}><Gift className="w-4 h-4 text-slate-400" /> Offers in Money & Offers</button>}
-          {latest && !isSigned && <button role="menuitem" type="button" className={item} onClick={run(() => actions.tuneMargin(t.id))}><SlidersHorizontal className="w-4 h-4 text-slate-400" /> Tune margin</button>}
+          {latest && !isSigned && !marginsHidden && <button role="menuitem" type="button" className={item} onClick={run(() => actions.tuneMargin(t.id))}><SlidersHorizontal className="w-4 h-4 text-slate-400" /> Tune margin</button>}
           {latest && actions.importBoq && <button role="menuitem" type="button" className={item} onClick={run(actions.importBoq)}><Upload className="w-4 h-4 text-slate-400" /> Import a BOQ</button>}
           {latest && actions.sync && !scopeFlowOn && !isSigned && (
             <button role="menuitem" type="button" className={item} onClick={run(() => actions.sync!(t.id))}><RefreshCw className="w-4 h-4 text-slate-400" /> Sync to Payments & Revisions</button>

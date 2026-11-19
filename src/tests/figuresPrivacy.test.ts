@@ -1,17 +1,28 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { figuresHidden, setFiguresHidden, toggleFiguresHidden, subscribeFiguresHidden, isHideFiguresShortcut } from '../../lib/figuresPrivacy';
-import { seesStudioFinance, holdsFinanceRole } from '../../lib/roleAccess';
+import { seesStudioFinance, seesMargins, holdsFinanceRole, MARGIN_SCREENS, FINANCE_TABS } from '../../lib/roleAccess';
 
 afterEach(() => setFiguresHidden(false));
 
 describe('hide figures for a shared screen', () => {
-  it('stops every role seeing the studio money, without taking away what they may do', () => {
-    expect(seesStudioFinance('Owner')).toBe(true);
+  it('hides margins from every role, and nothing else', () => {
+    expect(seesMargins('Owner')).toBe(true);
     setFiguresHidden(true);
-    expect(seesStudioFinance('Owner')).toBe(false);
-    expect(seesStudioFinance(['Admin', 'Designer'])).toBe(false);
+    expect(seesMargins('Owner')).toBe(false);
+    expect(seesMargins(['Admin', 'Designer'])).toBe(false);
+    // Values, collections and the money screens stay: hiding figures is not a role change.
+    expect(seesStudioFinance('Owner')).toBe(true);
     expect(holdsFinanceRole('Owner')).toBe(true);
     expect(seesStudioFinance('Designer')).toBe(false);
+    expect(seesMargins('Designer')).toBe(false);
+  });
+
+  it('covers only the studio screens made of margins, never a project screen', () => {
+    expect([...MARGIN_SCREENS].sort()).toEqual(['admin-templates-bank', 'bank', 'reports']);
+    for (const tab of ['ops', 'analytics', 'payment-calc', 'project-reports']) {
+      expect(FINANCE_TABS.has(tab)).toBe(true);
+      expect(MARGIN_SCREENS.has(tab)).toBe(false);
+    }
   });
 
   it('is remembered in this browser and tells the app when it changes', () => {

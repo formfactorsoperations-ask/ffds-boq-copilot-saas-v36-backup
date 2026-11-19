@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useFiguresHidden } from '../ui/HideFigures';
 import { Gift, Percent, Wallet, Trash2, AlertTriangle, Layers } from '@/lib/lucide-shim';
 import { Item, ProjectContext, ProposalTier } from '../../types';
 import { buildBankMap } from '../../lib/boqPricing';
@@ -77,6 +78,7 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
 
   const benchmarks = useMemo(() => otherBenchmarks(projects, { id: projectId, name: projectId ? undefined : ctx.name }), [projects, projectId, ctx.name]);
   const median = useMemo(() => medianGm(benchmarks), [benchmarks]);
+  const marginsHidden = useFiguresHidden();
 
   /* ---- the offer being written ---- */
   const [adding, setAdding] = useState<AddKind | null>(null);
@@ -316,9 +318,12 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
 
                 <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs text-slate-600 space-y-1">
                   <p>Worth <b className="text-slate-800 tabular-nums">{formatCurrency(Math.round(draftValue))}</b>{draftBasis ? ` · "${offerName(draftBasis)}"` : ''}</p>
+                  {/* Hide figures (lib/figuresPrivacy): what the offer is worth stays; what it does to the margin goes. */}
+                  {!marginsHidden && (
                   <p>Margin on this option {pct(margin.after)} → <b className={belowMedian(marginIfAdded.after) ? 'text-amber-700' : 'text-slate-800'}>{pct(marginIfAdded.after)}</b>
                     {belowMedian(marginIfAdded.after) && <> · {whyLow(marginIfAdded.after)}</>}
                   </p>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-2">
@@ -345,10 +350,12 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
                 <dd className="text-2xl font-black text-slate-800 tabular-nums">{formatCurrency(Math.round(clientPays))}</dd>
               </div>
             </dl>
+            {!marginsHidden && (
             <p className={`mt-2 text-[11px] ${belowMedian(margin.after) ? 'text-amber-700' : 'text-slate-500'}`}>
               Margin {pct(margin.before)}{execOff > 0 ? ` → ${pct(margin.after)} after offers` : ''}
               {median !== null ? ` · studio median ${pct(median)}` : ''}
             </p>
+            )}
           </section>
 
           {/* Milestones */}

@@ -8,7 +8,7 @@ import { TrendingUp, Coins, Tag, ChevronDown, ChevronUp, AlignLeft, Info, Sparkl
 import { refineItemSpecs, generateLumpsumBreakdown } from '../services/geminiService';
 import { MarginDeviationIndicator } from './MarginDeviationIndicator';
 import { useOrg } from '../contexts/OrgContext';
-import { seesStudioFinance } from '../lib/roleAccess';
+import { useSeesMargins } from './ui/HideFigures';
 import { SizePanel, sizeLabel } from './BoqSizeField';
 import NumberField from './NumberField';
 import { roomChoice } from '../lib/scopeMigration';
@@ -138,9 +138,9 @@ const BoqItemCard: React.FC<BoqItemCardProps> = ({ item, rooms, searchQuery, onU
   const [isGeneratingBreakdown, setIsGeneratingBreakdown] = useState(false);
   
   const sellPrice = useMemo(() => calculateSellPrice(item.materials, item.labor, item.margin), [item.materials, item.labor, item.margin]);
-  // Cost, margin and profit are studio finance (lib/roleAccess); the sell rate is not.
+  // Cost, margin and profit are studio finance (lib/roleAccess) and go while figures are hidden; the sell rate is not.
   const { currentRole } = useOrg();
-  const finance = seesStudioFinance(currentRole);
+  const finance = useSeesMargins(currentRole);
   const totalLineItem = sellPrice * item.qty;
   const categoryStyle = getCategoryStyle(item.cat);
 
