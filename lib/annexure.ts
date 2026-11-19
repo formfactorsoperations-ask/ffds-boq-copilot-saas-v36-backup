@@ -131,6 +131,8 @@ export const ANNEXURE_DEFAULTS: AnnexureClauses = {
   ],
   materials: [
     c('012d8dd8', 'Final brands, shades and finishes are selected against physical samples during the Schedule of Finishes stage and recorded in writing.'),
+    c('annex.10.ranges', 'Each finish is priced as a range. Any shade within the range you approved costs the same.'),
+    c('annex.10.tiles', 'Tiles are priced at the allowance stated per sq ft. A tile above it is charged at the difference; one below it is credited.'),
     c('annex.10.equivalent', 'Where a specified brand is unavailable, {{companyName}} will propose an equivalent of the same or higher grade for written approval before ordering. No substitution will be made without approval.'),
     c('03e3b121', 'Carpentry is built to approved GFC drawings. Exposed surfaces are laminated, edges banded and carcass interiors finished. Electrical points are tested and recorded before ceiling closure.'),
   ],

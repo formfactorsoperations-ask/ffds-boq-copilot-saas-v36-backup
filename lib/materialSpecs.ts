@@ -82,6 +82,33 @@ export interface MaterialVersion {
   at: number;
   /** Outer finishes only: what this finish does to a piece's price (1 = as priced). */
   costFactor?: number;
+  /**
+   * Priced as a range (PR M): every shade in it costs the same. A line names
+   * the range; the client picks the exact shade at Selections. A version
+   * without one is a single spec.
+   */
+  range?: MaterialRange;
+}
+
+/** One example of a range, shown to clients: a shade from the sample boards. */
+export interface RangeExample {
+  name: string;
+  /** The colour it is drawn in, e.g. #c9a37a. */
+  hex: string;
+  /** The catalogue code, e.g. Merino 21071. */
+  code?: string;
+  photo?: string;
+}
+
+/** A material priced as a range: how many choices, of what, and a few examples. */
+export interface MaterialRange {
+  /** How many shades (or species, or colours) the range holds, e.g. 250. */
+  count: number;
+  /** shades, species, colours. */
+  unit: string;
+  /** What the range holds, e.g. "Synchronised woodgrains, textures and stones". */
+  kinds: string;
+  examples: RangeExample[];
 }
 
 export interface MaterialSpecsBank {
@@ -180,7 +207,14 @@ export interface NewVersion {
   brand?: string;
   note: string;
   costFactor?: number;
+  /** The range: kept from the current version when not given; null makes it a single spec. */
+  range?: MaterialRange | null;
 }
+
+/** "250+ shades". */
+export const rangeLabel = (r: MaterialRange) => `${Number(r.count).toLocaleString('en-IN')}+ ${r.unit}`;
+
+const sameRange = (a?: MaterialRange | null, b?: MaterialRange | null) => JSON.stringify(a || null) === JSON.stringify(b || null);
 
 /** Why a new version cannot be saved, or null when it can. */
 export function newVersionProblem(bank: MaterialSpecsBank, mat: string, next: NewVersion): string | null {
@@ -192,7 +226,10 @@ export function newVersionProblem(bank: MaterialSpecsBank, mat: string, next: Ne
   if (next.costFactor != null && !(Number(next.costFactor) > 0 && Number(next.costFactor) <= 5)) return 'A cost factor is a number above 0 and up to 5.';
   const finish = !!familyOf(bank, mat)?.finish;
   const sameFactor = !finish || Number(next.costFactor ?? cur?.costFactor ?? 1) === Number(cur?.costFactor ?? 1);
-  if (cur && cur.words === words && (cur.brand || '') === String(next.brand || '').trim() && sameFactor) {
+  if (next.range && !(Number(next.range.count) > 0)) return 'Say how many the range holds.';
+  if (next.range && next.range.examples.some(e => !String(e.name || '').trim() || !/^#[0-9a-f]{6}$/i.test(e.hex))) return 'Each example needs a name and a colour.';
+  const rangeKept = next.range === undefined || sameRange(next.range, cur?.range);
+  if (cur && cur.words === words && (cur.brand || '') === String(next.brand || '').trim() && sameFactor && rangeKept) {
     return 'Nothing has changed from the current version.';
   }
   return null;
@@ -205,6 +242,7 @@ export function saveNewVersion(bank: MaterialSpecsBank, mat: string, next: NewVe
   const cur = currentVersion(bank, mat);
   const finish = !!familyOf(bank, mat)?.finish;
   const brand = String(next.brand || '').trim();
+  const range = next.range === undefined ? cur?.range : next.range;
   const version: MaterialVersion = {
     mat, v: (cur?.v || 0) + 1,
     words: String(next.words).trim(),
@@ -212,8 +250,21 @@ export function saveNewVersion(bank: MaterialSpecsBank, mat: string, next: NewVe
     note: String(next.note).trim(),
     by, at,
     ...(finish ? { costFactor: Number(next.costFactor ?? cur?.costFactor ?? 1) } : {}),
+    ...(range ? { range: cleanRange(range) } : {}),
   };
   return { ...bank, versions: [...bank.versions, version], updatedAt: at, updatedBy: by };
+}
+
+/** A range as it is saved: trimmed, and nothing undefined (Firestore refuses it). */
+function cleanRange(r: MaterialRange): MaterialRange {
+  return {
+    count: Math.round(Number(r.count)), unit: String(r.unit || 'shades').trim(), kinds: String(r.kinds || '').trim(),
+    examples: r.examples.map(e => ({
+      name: String(e.name).trim(), hex: e.hex.toLowerCase(),
+      ...(e.code && e.code.trim() ? { code: e.code.trim() } : {}),
+      ...(e.photo ? { photo: e.photo } : {}),
+    })),
+  };
 }
 
 /** A new material in a family, at version 1. */
@@ -329,6 +380,49 @@ const STANDARD_MATERIALS: StdMat[] = [
   ['elec', 'el-legrand', 'Legrand Arteor switches', 'Arteor modular switches with FR copper wiring', 'Legrand / Finolex', 'P'],
 ];
 
+type Eg = [name: string, hex: string];
+const R = (count: number, unit: string, kinds: string, eg: Eg[]): MaterialRange =>
+  ({ count, unit, kinds, examples: eg.map(([name, hex]) => ({ name, hex })) });
+const PAINT_EG: Eg[] = [['Off-white', '#f2eee6'], ['Sand', '#e3d6bf'], ['Grey mist', '#d5d7d8'], ['Sky', '#d4e1ea'], ['Sage', '#cfd6c4'], ['Blush', '#ecd7cf']];
+
+/** Why the studio standard's ranges arrived as a new version. */
+export const RANGE_NOTE = 'Priced as a range; the shade is picked at Selections';
+
+/**
+ * The studio standard's ranges (PR M): outer finishes, countertops and paint,
+ * each priced as a range from its version 2. Version 1 stays a single spec, so
+ * a line on it keeps its words.
+ */
+export const STANDARD_RANGES: Record<string, MaterialRange> = {
+  'lam-ash': R(300, 'shades', 'Woodgrains, solids, stones and fabrics', [['Nordic ash', '#e2d3bb'], ['Light oak', '#d9c3a1'], ['Frosty white', '#f3efe7'], ['Cashmere', '#d8cfc2'], ['Concrete', '#a7aaae'], ['Teak', '#a0744c'], ['Slate', '#6b7078'], ['Sage', '#b7bfa6']]),
+  'lam-oak': R(250, 'shades', 'Synchronised woodgrains, textures and stones', [['Natural oak', '#c9a37a'], ['Smoked oak', '#8d6e52'], ['Elm', '#b89474'], ['Travertine', '#d8ccb8'], ['Linen weave', '#e2dccf'], ['Calacatta', '#ece8e2'], ['Charcoal oak', '#4f4741'], ['Ink blue', '#3f4a63']]),
+  'ven-walnut': R(80, 'species', 'Walnut, oak, teak, smoked and dyed veneers', [['American walnut', '#7a5436'], ['White oak', '#c8ab86'], ['Burma teak', '#9a6a3e'], ['Smoked oak', '#5e4634'], ['Ash', '#d6c3a3'], ['Wenge', '#3f3029']]),
+  'lam-graphite': R(60, 'shades', 'Solids and soft woodgrains', [['Graphite', '#4b505a'], ['Fjord blue', '#56657a'], ['Olive', '#6f7357'], ['Clay', '#b78f7a'], ['Pebble', '#c9c4bb'], ['Pure white', '#f4f3ef']]),
+  'acr-ivory': R(40, 'shades', 'Solids and metallics', [['Ivory', '#efe8da'], ['Pearl white', '#f7f5f0'], ['Cappuccino', '#b49c84'], ['Dove grey', '#bdbab4'], ['Midnight', '#2f3440'], ['Wine', '#6d2e3a']]),
+  'top-granite': R(25, 'colours', 'Indian granites', [['Black galaxy', '#2d2f33'], ['Tan brown', '#5a4236'], ['Steel grey', '#6f7277'], ['Kashmir white', '#e4e0da']]),
+  'top-quartz': R(60, 'colours', 'Engineered quartz', [['Statuario', '#ecebe7'], ['Concrete', '#b9b8b3'], ['Carrara', '#e6e5e1'], ['Absolute black', '#232427'], ['Sahara beige', '#d6c6ad']]),
+  'pt-tractor': R(1500, 'shades', 'Asian Paints colour cards', PAINT_EG),
+  'pt-royale': R(1800, 'shades', 'Asian Paints colour cards', PAINT_EG),
+};
+
+/**
+ * The bank with the studio standard's ranges: each standard material that has
+ * never been priced as a range gets a new version, its current one with the
+ * range added (words, brand and cost factor as they are). Appended, so a save
+ * of the result is append-only; a material that ever had a range is left alone.
+ */
+export function withStandardRanges(bank: MaterialSpecsBank): MaterialSpecsBank {
+  const add: MaterialVersion[] = [];
+  Object.entries(STANDARD_RANGES).forEach(([mat, range]) => {
+    if (!bank.materials.some(m => m.id === mat)) return;
+    const vs = versionsOf(bank, mat);
+    if (!vs.length || vs.some(x => x.range)) return;
+    const { range: _r, ...cur } = vs[vs.length - 1];
+    add.push({ ...cur, v: cur.v + 1, range, note: RANGE_NOTE, by: STD_BY, at: STD_AT });
+  });
+  return add.length ? { ...bank, versions: [...bank.versions, ...add] } : bank;
+}
+
 const P = (part: string, fam: string, E: string, C: string, Pm: string, finish?: boolean): RecipePart =>
   ({ part, fam, byGrade: { E, C, P: Pm }, ...(finish ? { finish: true } : {}) });
 
@@ -382,12 +476,13 @@ export function studioStandard(): MaterialSpecsBank {
   }));
   const recipes: Record<string, Recipe> = {};
   STANDARD_RECIPES.forEach(r => { recipes[r.id] = r; });
-  return { families: STANDARD_FAMILIES, materials, versions, recipes, updatedAt: STD_AT, updatedBy: STD_BY };
+  return withStandardRanges({ families: STANDARD_FAMILIES, materials, versions, recipes, updatedAt: STD_AT, updatedBy: STD_BY });
 }
 
 /**
  * A saved bank with anything of the studio standard it lacks added after it:
- * families, materials (at v1) and recipes it does not have. What it has is
+ * families, materials (at v1) and recipes it does not have, and the
+ * standard's ranges as a new version of each material that never had one. What it has is
  * kept as it is, and nothing is removed, so a save of the result is append-only.
  */
 export function withStandard(bank: MaterialSpecsBank | null | undefined): MaterialSpecsBank {
@@ -397,13 +492,13 @@ export function withStandard(bank: MaterialSpecsBank | null | undefined): Materi
   const mats = new Set(bank.materials.map(m => m.id));
   const added = std.materials.filter(m => !mats.has(m.id));
   const addedIds = new Set(added.map(m => m.id));
-  return {
+  return withStandardRanges({
     ...bank,
     families: [...bank.families, ...std.families.filter(f => !fams.has(f.id))],
     materials: [...bank.materials, ...added],
     versions: [...bank.versions, ...std.versions.filter(v => addedIds.has(v.mat))],
     recipes: { ...std.recipes, ...(bank.recipes || {}) },
-  };
+  });
 }
 
 /** The recipe with one part's material at one grade changed. */

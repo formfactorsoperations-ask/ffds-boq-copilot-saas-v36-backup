@@ -68,6 +68,41 @@ describe('the Material specs screen', () => {
     await waitFor(() => expect(saved.length).toBe(1));
     expect(saved[0].materials.at(-1)).toMatchObject({ name: 'Plywood 12 mm', fam: 'ply' });
   });
+
+  it('shows a finish priced as a range: its size, examples and what it holds', () => {
+    role.current = 'Designer';
+    render(<MaterialSpecsTab specs={specs()} items={items} projects={projects} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Outer finishes/ }));
+    expect(screen.getByText(/5 materials · 5 priced as ranges, 730\+ shades in all · a line names the range, the client picks at Selections/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Designer laminate, 1 mm/ }));
+    expect(screen.getByText('Priced as a range')).toBeTruthy();
+    const egs = screen.getByRole('list', { name: 'Designer laminate, 1 mm: examples' });
+    expect(within(egs).getAllByRole('listitem')).toHaveLength(8);
+    expect(within(egs).getByText('Smoked oak')).toBeTruthy();
+    expect(screen.getByText(/Every shade in this range costs the same/)).toBeTruthy();
+    expect(screen.getByText('Synchronised woodgrains, textures and stones · Merino · Greenlam · Royale Touche')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '+ Example' })).toBeNull();
+  });
+
+  it('lets the Owner add an example, saved as a new version with the range', async () => {
+    role.current = 'Owner';
+    render(<MaterialSpecsTab specs={specs()} items={items} projects={projects} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Outer finishes/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Designer laminate, 1 mm/ }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Example' }));
+    fireEvent.change(screen.getByLabelText('Example'), { target: { value: 'Walnut 21071' } });
+    fireEvent.change(screen.getByLabelText('Catalogue code'), { target: { value: 'Merino 21071' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add example' }));
+    expect(screen.getByText('This becomes version 3')).toBeTruthy();
+    expect(screen.getByText('Walnut 21071', { selector: 'b' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save as v3' }));
+    await waitFor(() => expect(saved.length).toBe(1));
+    expect(versionsAppendOnly(std, saved[0])).toBe(true);
+    const v3 = currentVersion(saved[0], 'lam-oak')!;
+    expect(v3).toMatchObject({ v: 3, words: '1 mm textured designer laminate', note: 'Range examples changed', costFactor: 1 });
+    expect(v3.range!.examples).toHaveLength(9);
+    expect(v3.range!.examples.at(-1)).toEqual({ name: 'Walnut 21071', hex: '#c9a37a', code: 'Merino 21071' });
+  });
 });
 
 describe('the item’s recipe drawer', () => {

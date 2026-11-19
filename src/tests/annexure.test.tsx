@@ -66,6 +66,13 @@ describe('assumptions', () => {
 });
 
 describe('the studio’s wording', () => {
+  it('clause 10 says finishes are priced as ranges and tiles at an allowance (PR M)', () => {
+    const t = ANNEXURE_DEFAULTS.materials.map(c => c.text);
+    expect(t).toContain('Each finish is priced as a range. Any shade within the range you approved costs the same.');
+    expect(t).toContain('Tiles are priced at the allowance stated per sq ft. A tile above it is charged at the difference; one below it is credited.');
+    expect(t[1]).toMatch(/^Each finish is priced as a range/);
+  });
+
   it('defaults to today’s wording, with the booklet’s edit keys', () => {
     const a = annexureOf(undefined);
     expect(a).toEqual(ANNEXURE_DEFAULTS);

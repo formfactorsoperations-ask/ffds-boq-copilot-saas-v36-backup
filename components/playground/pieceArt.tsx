@@ -227,18 +227,24 @@ export function PieceThumb({ kind, w, d, words, fill, base, top, className = 'w-
   );
 }
 
-/** A line's look from its materials: the outer finish's pattern and the countertop's. */
-export function artOfSpecs(
-  specs: Record<string, { id: string }> | null | undefined,
+/**
+ * A line's look from its materials: the outer finish's pattern and the
+ * countertop's. A finish shown in a shade of its range (PR M) is drawn in that
+ * shade's colour; `hexOf` gives it.
+ */
+export function artOfSpecs<S extends { id: string; shade?: string }>(
+  specs: Record<string, S> | null | undefined,
   materials: { id: string; fam: string; swatch?: string; base?: string }[] | null | undefined,
+  hexOf?: (spec: S) => string | undefined,
 ): { fill?: string; base?: string; top?: string } {
   if (!specs || !materials) return {};
   const out: { fill?: string; base?: string; top?: string } = {};
   Object.values(specs).forEach(s => {
     const m = materials.find(x => x.id === s.id);
     if (!m?.swatch) return;
-    if (m.fam === 'top') out.top = `url(#${m.swatch})`;
-    else if (!out.fill) { out.fill = `url(#${m.swatch})`; out.base = m.base; }
+    const hex = hexOf?.(s);
+    if (m.fam === 'top') out.top = hex || `url(#${m.swatch})`;
+    else if (!out.fill) { out.fill = hex || `url(#${m.swatch})`; out.base = hex || m.base; }
   });
   return out;
 }
