@@ -36,6 +36,7 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
   onReplaceMany: (lines: BoqItem[]) => void;
 }) {
   const realNames = rooms.map(r => r.name);
+  const artOf = (id: string) => models.find(m => m.line.id === id)?.art;
   const others = Array.from(new Set(models.map(m => m.room))).filter(n => !realNames.includes(n) && !SCOPE_BUCKETS.includes(n as any));
   const cards: { name: string; room?: Room }[] = [
     ...rooms.map(r => ({ name: r.name, room: r })),
@@ -63,7 +64,7 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
             style={{ animationDelay: `${i * 30}ms` }}>
             {room && (
               <button type="button" onClick={() => onRoom(name)} className="block bg-slate-50 border-b border-slate-100 p-1.5" aria-label={`Open ${name}`}>
-                <RoomMini room={room} lines={all.map(m => m.line)} bankMap={bankMap} />
+                <RoomMini room={room} lines={all.map(m => m.line)} bankMap={bankMap} art={artOf} />
               </button>
             )}
             <div className="px-3 pt-2.5 flex items-start justify-between gap-2">
@@ -85,9 +86,10 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
                 <button key={m.line.id} type="button" onClick={() => onSel(m.line.id)}
                   className={`w-full flex items-center gap-2 px-1.5 py-1 rounded-lg text-left ${sel === m.line.id ? 'bg-[#3D52A0]/[0.08]' : 'hover:bg-slate-50'}`}>
                   <span className="w-7 h-6 shrink-0">
-                    {m.draw && m.size ? <PieceThumb kind={m.draw.kind} w={m.size.w} d={m.size.d} words={m.words} className="w-7 h-6" /> : <span className="w-7 h-6 grid place-items-center text-slate-300"><Layers className="w-3 h-3" aria-hidden /></span>}
+                    {m.draw && m.size ? <PieceThumb kind={m.draw.kind} w={m.size.w} d={m.size.d} words={m.words} {...m.art} className="w-7 h-6" /> : <span className="w-7 h-6 grid place-items-center text-slate-300"><Layers className="w-3 h-3" aria-hidden /></span>}
                   </span>
                   <span className="flex-1 min-w-0 text-xs font-semibold text-slate-700 truncate">{m.name}{m.line.byRoom ? <span className="font-normal text-slate-400"> · shared into the rooms</span> : null}</span>
+                  {m.stale.length > 0 && <span className="px-1 rounded bg-amber-100 text-amber-700 text-[10px] font-bold">new spec</span>}
                   {!hideFigures && <span className={`text-xs font-bold tabular-nums ${m.billable ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{lakh(m.amount)}</span>}
                 </button>
               ))}
@@ -129,7 +131,7 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
 }
 
 /** The room drawn small, with its pieces, flat. */
-function RoomMini({ room, lines, bankMap }: { room: Room; lines: BoqItem[]; bankMap: Map<string, Item> }) {
+function RoomMini({ room, lines, bankMap, art }: { room: Room; lines: BoqItem[]; bankMap: Map<string, Item>; art?: (id: string) => LineModel['art'] | undefined }) {
   const r = room.plan;
   if (!r) return <div className="h-28 grid place-items-center text-[11px] text-slate-400">Not on the plan yet</div>;
   const pad = 0.35;
@@ -139,7 +141,7 @@ function RoomMini({ room, lines, bankMap }: { room: Room; lines: BoqItem[]; bank
       <rect x={r.x} y={r.y} width={r.w} height={r.h} fill="#fbfaf7" stroke="#334155" strokeWidth={0.22} />
       {pieces.map(p => (
         <g key={p.id} transform={`translate(${p.place.x} ${p.place.y}) rotate(${p.place.rot})`}>
-          <PieceArt kind={p.draw.kind} w={p.size.w} d={p.size.d} words={p.line.specs ?? p.item?.specs} high={p.high} flat />
+          <PieceArt kind={p.draw.kind} w={p.size.w} d={p.size.d} words={p.line.specs ?? p.item?.specs} high={p.high} flat {...(art?.(p.id) || {})} />
         </g>
       ))}
     </svg>

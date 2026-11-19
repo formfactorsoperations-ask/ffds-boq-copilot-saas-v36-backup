@@ -31,11 +31,18 @@ vi.mock('../../services/geminiService', () => ({
 }));
 vi.mock('../../services/planImage', () => ({ planImageFromFile: vi.fn(), planImageFromUrl: vi.fn(), storePlanImage: vi.fn(), planBase64FromUrl: vi.fn() }));
 vi.mock('../../components/SuccessWithNextToast', () => ({ showSuccessWithNext: vi.fn() }));
+const specStore: { bank: any } = { bank: null };
+vi.mock('../../services/materialSpecsService', () => ({
+  watchMaterialSpecs: (_t: string, onBank: (b: any) => void) => { onBank(specStore.bank); return () => {}; },
+  saveMaterialSpecs: vi.fn(async () => undefined),
+}));
 
 import StudioDashboard from '../../components/StudioDashboard';
 import { stageStats } from '../../components/playground/PlanStage';
 import { setFiguresHidden } from '../../lib/figuresPrivacy';
 import { PLAYGROUND_PRICING, ceilTo } from '../../lib/playground/pricing';
+import { studioStandard, saveNewVersion } from '../../lib/materialSpecs';
+import { withRecipeSpecs } from '../../lib/lineSpecs';
 
 const bank: any[] = [
   { id: 'wardrobe', name: 'Sliding wardrobe', cat: 'Carpentry', unit: 'sq ft', specs: 'Walnut laminate', materials: 1000, labor: 400, margin: 20 },
@@ -106,7 +113,7 @@ const drag = async (el: Element, from: [number, number], to: [number, number], o
   fireEvent.pointerUp(stage(), { ...at(...to), pointerId: 1, ...opts });
 };
 
-beforeEach(() => { org.playground = true; org.role = 'Super Admin'; setFiguresHidden(false); try { localStorage.clear(); } catch { /* jsdom */ } });
+beforeEach(() => { org.playground = true; org.role = 'Super Admin'; specStore.bank = null; setFiguresHidden(false); try { localStorage.clear(); } catch { /* jsdom */ } });
 afterEach(() => { cleanup(); });
 
 describe('one screen, five lenses', () => {
@@ -396,7 +403,7 @@ describe('Across the flat', () => {
     render(<Harness tier={{ boq: flat }} probe={t => { latest = t; }} />);
     lens('Sheet');
     fireEvent.click(screen.getAllByText('Wall paint')[1]);
-    fireEvent.click(within(inspector()).getByRole('button', { name: 'Split by room' }));
+    fireEvent.click(within(inspector()).getByRole('button', { name: /^Use the room figures/ }));
     const shared = latest[0].boq.find((l: any) => l.id === 'l4');
     expect(shared.byRoom.basis).toBe('wallPaint');
     const both = shared.qty;
@@ -406,5 +413,81 @@ describe('Across the flat', () => {
     expect(fewer.qty).toBeLessThan(both);
     fireEvent.click(within(inspector()).getByRole('button', { name: 'One figure for the flat' }));
     expect(latest[0].boq.find((l: any) => l.id === 'l4').byRoom).toBeUndefined();
+  });
+});
+
+describe('Material specs on the lines (S2)', () => {
+  const std = studioStandard();
+  const recipeLine = (o: any = {}) => withRecipeSpecs({ id: 'r1', bankId: 'wardrobe', qty: 40, roomId: 'Bedroom', baseRate: 1000, ...o } as any, bank[0], std, 'C');
+
+  it('a new line on a Playground version takes its recipe’s materials at the option’s grade, and their words', () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Sliding wardrobe to Bedroom' }));
+    const l = latest[0].boq[0];
+    expect(l.materialSpecs.Carcass).toEqual({ id: 'ply-bwr', v: 1 });
+    expect(l.specs).toMatch(/^18 mm BWR-grade plywood carcass/);
+  });
+
+  it('a Classic BOQ’s new lines keep the Item Bank’s words', () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ boq: [] }} probe={t => { latest = t; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Sliding wardrobe to Bedroom' }));
+    expect(latest[0].boq[0].materialSpecs).toBeUndefined();
+    expect(latest[0].boq[0].specs).toBeUndefined();
+  });
+
+  it('the inspector shows the parts; a part and a finish change the words and the price', () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: [recipeLine()] }} probe={t => { latest = t; }} />);
+    lens('Sheet');
+    fireEvent.click(screen.getAllByText('Sliding wardrobe')[0]);
+    const ins = inspector();
+    expect(within(ins).getByText('Material specs')).toBeTruthy();
+    fireEvent.change(within(ins).getByRole('combobox', { name: 'Hardware' }), { target: { value: 'hw-hettich' } });
+    expect(latest[0].boq[0].specs).toContain('tandem drawer runners (Hettich)');
+    fireEvent.click(within(inspector()).getByRole('button', { name: /Veneer/ }));
+    expect(latest[0].boq[0]).toMatchObject({ baseRate: 1300, finishBase: 1000, materialSpecs: { 'Outer finish': { id: 'ven-walnut', v: 1 } } });
+  });
+
+  it('own words stop following the recipe until Back to the recipe', () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: [recipeLine()] }} probe={t => { latest = t; }} />);
+    lens('Sheet');
+    fireEvent.click(screen.getAllByText('Sliding wardrobe')[0]);
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Write my own' }));
+    expect(latest[0].boq[0].specsOwn).toBe(true);
+    const box = within(inspector()).getByRole('textbox', { name: 'Own words' });
+    fireEvent.change(box, { target: { value: 'As agreed on site.' } });
+    fireEvent.blur(box);
+    expect(latest[0].boq[0].specs).toBe('As agreed on site.');
+    fireEvent.click(within(inspector()).getByRole('button', { name: 'Back to the recipe' }));
+    expect(latest[0].boq[0].specsOwn).toBeUndefined();
+    expect(latest[0].boq[0].specs).toMatch(/^18 mm BWR/);
+  });
+
+  it('a newer version is offered to a draft: the Live BOQ updates the lines on request', () => {
+    specStore.bank = saveNewVersion(std, 'hw-ss', { words: 'soft-close hinges and Hafele channels', brand: 'Hafele equivalent', note: 'Hafele named' }, 'Owner', 5);
+    let latest: any[] = [];
+    const before = recipeLine();
+    render(<Harness tier={{ ...PG, boq: [before] }} probe={t => { latest = t; }} />);
+    expect(screen.getByText('Newer material specs are out')).toBeTruthy();
+    expect(latest[0].boq[0].specs).toBe(before.specs);
+    fireEvent.click(screen.getByRole('button', { name: 'Update 1 line' }));
+    expect(latest[0].boq[0].materialSpecs.Hardware).toEqual({ id: 'hw-ss', v: 2 });
+    expect(latest[0].boq[0].specs).toContain('Hafele channels (Hafele equivalent)');
+  });
+
+  it('an option already sent to the client is never offered it', () => {
+    specStore.bank = saveNewVersion(std, 'hw-ss', { words: 'soft-close hinges and Hafele channels', note: 'Hafele named' }, 'Owner', 5);
+    function Sent() {
+      const [tiers, setTiers] = useState<any[]>([{ id: 't1', name: 'Comfort Upgrade', boq: [recipeLine()], ...PG }]);
+      return <StudioDashboard projectContext={{ name: 'Test', rooms, documents: { issues: [{ kind: 'proposal', snapshot: { tierId: 't1' } }] } } as any} setProjectContext={() => {}}
+        tiers={tiers.map(t => ({ ...t, summary: {} }))} setTiers={setTiers as any} activeTierId="t1" bank={bank} aiStrategy={'balanced' as any}
+        onViewInBank={() => undefined} onSaveProject={async () => undefined} projectId="" />;
+    }
+    render(<Sent />);
+    expect(screen.queryByText('Newer material specs are out')).toBeNull();
+    expect(screen.queryByText('new spec')).toBeNull();
   });
 });

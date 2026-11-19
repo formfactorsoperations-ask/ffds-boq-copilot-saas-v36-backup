@@ -49,6 +49,8 @@ interface Props {
   hideFigures?: boolean;
   /** Asked to fit the view again (a counter). */
   fitSignal?: number;
+  /** A new line from the library, given its recipe's materials (S2). */
+  prepareNew?: (line: BoqItem) => BoqItem;
 }
 
 type Drag =
@@ -61,7 +63,7 @@ type Drag =
 export const stageStats = { pieceRenders: 0 };
 
 export default function PlanStage(props: Props) {
-  const { ctx, rooms, boq, bank, bankMap, models, roomTotals, readOnly, sel, onSel, selRoom, onSelRoom, commit, newId, libOpen, hideFigures, fitSignal } = props;
+  const { ctx, rooms, boq, bank, bankMap, models, roomTotals, readOnly, sel, onSel, selRoom, onSelRoom, commit, newId, libOpen, hideFigures, fitSignal, prepareNew } = props;
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const [view, setView] = useState<View>({ k: 20, tx: 40, ty: 60 });
@@ -162,8 +164,9 @@ export default function PlanStage(props: Props) {
     if (!item || !at || !draw) return;
     const probe: PlacedPiece = { id: '__new', fp: { w: draw.w, d: draw.d }, place: { x: at[0], y: at[1], rot: 0 }, high: isHigh(draw), wallBacked: isWallBacked(draw) };
     const p = placeAt(probe, at[0], at[1], planRooms, { free: e.altKey });
-    const line = newPieceLine(item, p.room, p.place, newId());
-    if (!line) return;
+    const made = newPieceLine(item, p.room, p.place, newId());
+    if (!made) return;
+    const line = prepareNew ? prepareNew(made) : made;
     commit([...boq, line], `${item.name} added${p.room ? ` to ${p.room}` : ''}.`);
     onSel(line.id);
   };
@@ -306,6 +309,17 @@ export default function PlanStage(props: Props) {
     const b = pieceBox(p.fp, p.place);
     overlay.push(<rect key={`f-${p.id}`} x={b.x - 0.06} y={b.y - 0.06} width={b.w + 0.12} height={b.h + 0.12} rx={0.1} fill="rgba(245,158,11,.08)" stroke="#d97706" strokeWidth={px(1.5)} strokeDasharray={`${px(5)} ${px(3)}`} pointerEvents="none" />);
   });
+  /* A line on an older version of a material: the amber mark the mockup puts at the piece's corner. */
+  pieces.forEach(p => {
+    if (p.id === sel || !models.get(p.id)?.stale.length) return;
+    const b = pieceBox(p.fp, p.place);
+    overlay.push(
+      <g key={`s-${p.id}`} pointerEvents="none">
+        <circle cx={b.x + b.w} cy={b.y} r={px(7)} fill="#f59e0b" stroke="#fff" strokeWidth={px(2)} />
+        <text x={b.x + b.w} y={b.y + px(3.5)} fontSize={px(10)} fontWeight={800} fill="#fff" textAnchor="middle">!</text>
+      </g>,
+    );
+  });
   if (selected && !readOnly) {
     const W = selected.size.w, D = Math.max(selected.size.d, 0.12), pad = px(4), hr = px(6);
     const handles = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]].map(([sx, sy]) => {
@@ -342,7 +356,7 @@ export default function PlanStage(props: Props) {
     const amount = liveLine ? selModel.rate * qty : selModel.amount;
     const face = /sq\s*ft|sft|sqft/i.test(selModel.unit);
     float = (
-      <div className="absolute z-10 pointer-events-none -translate-x-1/2" style={{ left: Math.max(90, Math.min(size.w - 90, sx)), top: Math.max(6, sy - 74) }}>
+      <div className="absolute z-30 pointer-events-none -translate-x-1/2" style={{ left: Math.max(90, Math.min(size.w - 90, sx)), top: Math.max(6, sy - 74) }}>
         <div className="rounded-xl bg-slate-800/95 text-white shadow-2xl px-3 py-1.5 text-xs whitespace-nowrap flex items-center gap-2">
           <b className="max-w-[140px] truncate">{selModel.name}</b>
           <span className="text-white/70">{face ? `${ftin(selected.size.w)} × ${ftin(selected.size.h)} = ` : ''}<b className="text-white">{Math.round(qty * 100) / 100} {selModel.unit}</b></span>
@@ -394,7 +408,8 @@ export default function PlanStage(props: Props) {
             return <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="none" stroke="#262626" strokeWidth={0.7} pointerEvents="none" />;
           })()}
           {pieces.map(p => (
-            <PieceNode key={p.id} piece={p} faded={!models.get(p.id)?.billable} readOnly={readOnly} onDown={onPieceDown} />
+            <PieceNode key={p.id} piece={p} faded={!models.get(p.id)?.billable} readOnly={readOnly} onDown={onPieceDown}
+              fill={models.get(p.id)?.art.fill} base={models.get(p.id)?.art.base} top={models.get(p.id)?.art.top} />
           ))}
           <g>{tags}</g>
           <g>{overlay}</g>
@@ -416,8 +431,8 @@ export default function PlanStage(props: Props) {
 
 /* ── one piece ── */
 
-const PieceNode = React.memo(function PieceNode({ piece, faded, readOnly, onDown }: {
-  piece: BoardPiece; faded: boolean; readOnly: boolean;
+const PieceNode = React.memo(function PieceNode({ piece, faded, readOnly, onDown, fill, base, top }: {
+  piece: BoardPiece; faded: boolean; readOnly: boolean; fill?: string; base?: string; top?: string;
   onDown: (e: React.PointerEvent, p: BoardPiece) => void;
 }) {
   stageStats.pieceRenders++;
@@ -425,7 +440,7 @@ const PieceNode = React.memo(function PieceNode({ piece, faded, readOnly, onDown
   return (
     <g data-piece={piece.id} transform={`translate(${place.x} ${place.y}) rotate(${place.rot})`} onPointerDown={e => onDown(e, piece)}
       style={{ cursor: readOnly ? 'pointer' : 'move' }} aria-label={`${piece.item?.name || 'Piece'}, ${ftin(size.w)} wide`}>
-      <PieceArt kind={draw.kind} w={size.w} d={size.d} words={piece.line.specs ?? piece.item?.specs} high={draw.mount === 'high'} faded={faded} />
+      <PieceArt kind={draw.kind} w={size.w} d={size.d} words={piece.line.specs ?? piece.item?.specs} high={draw.mount === 'high'} faded={faded} fill={fill} base={base} top={top} />
     </g>
   );
 });

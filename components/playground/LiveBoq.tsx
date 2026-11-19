@@ -1,17 +1,21 @@
 import React, { useMemo, useState } from 'react';
-import { Receipt as ReceiptIcon, ChevronLeft, ChevronRight, X, Lock, RotateCw, Copy, Trash2, Map as MapIcon, Layers, MapPin, PaintRoller, PenLine } from 'lucide-react';
+import { Receipt as ReceiptIcon, ChevronLeft, ChevronRight, X, Lock, RotateCw, Copy, Trash2, Map as MapIcon, Layers, MapPin, PaintRoller, PenLine, Check } from 'lucide-react';
 import { Button, Chip, Segmented, LABEL } from '../ui/kit';
 import type { BoqItem, Item, PricingRules, Room } from '../../types';
 import { SCOPE_BUCKETS } from '../../lib/scopeBuckets';
 import { ftin, round2 } from '../../lib/playground/geometry';
-import { roomShares, measureRoom, planVsRule, byRoomQty, RULE_WALL, type MeasureContext } from '../../lib/playground/rooms';
+import { roomShares, measureRoom, planVsRule, byRoomQty, measureShare, RULE_WALL, RULE_CEILING, type MeasureContext } from '../../lib/playground/rooms';
+import type { ShareBasis } from '../../types';
+import { currentVersion, versionAt, materialsIn, type MaterialSpecsBank } from '../../lib/materialSpecs';
+import { recipeOf, finishPartOf, withPart, updatedLine, withOwnWords, withRecipeWords, finishDelta } from '../../lib/lineSpecs';
+import { AlertTriangle } from 'lucide-react';
 import { lineAmountsByRoom } from '../../lib/playground/pricing';
 import { unshare, shareIntoRooms, shareBasisFor, isWholeFlatLine } from '../../lib/playground/versions';
 import { resizedTo, turnedLine } from '../../lib/playground/board';
 import { ISSUE_LABEL, type IssueKind } from '../../lib/playground/issues';
 import { basisOfUnit, readSize, parseSize, formatSize, sizeUpdates } from '../../lib/boqSize';
 import { PieceThumb } from './pieceArt';
-import { inr, marginTone, Scrub, withCost, withMarkup, withRate, type LineModel } from './playgroundUi';
+import { inr, lakh, marginTone, Scrub, withCost, withMarkup, withRate, type LineModel } from './playgroundUi';
 
 /*
   The right-hand panel of the BOQ Playground (the approved mockup's inspector).
@@ -23,7 +27,7 @@ import { inr, marginTone, Scrub, withCost, withMarkup, withRate, type LineModel 
 */
 
 const thumbOf = (m: LineModel, cls: string) => (m.draw && m.size
-  ? <PieceThumb kind={m.draw.kind} w={m.size.w} d={m.size.d} words={m.words} className={cls} />
+  ? <PieceThumb kind={m.draw.kind} w={m.size.w} d={m.size.d} words={m.words} {...m.art} className={cls} />
   : <span className={`${cls} grid place-items-center text-slate-300`}><Layers className="w-3.5 h-3.5" aria-hidden /></span>);
 
 export interface ShareRow { model: LineModel; qty: number; amount: number }
@@ -43,7 +47,7 @@ export function useShareRows(models: LineModel[], rooms: Room[], bankMap: Map<st
 
 /* ───────────────────────────── the Live BOQ ───────────────────────────── */
 
-export function Receipt({ models, rooms, roomTotals, shares, workTotal, tierName, sel, onSel, onRoom, hideFigures, hint, onHint, onLens, onHide }: {
+export function Receipt({ models, rooms, roomTotals, shares, workTotal, tierName, sel, onSel, onRoom, hideFigures, hint, onHint, onLens, onHide, onUpdateStale }: {
   models: LineModel[];
   rooms: Room[];
   roomTotals: Map<string, number>;
@@ -58,7 +62,10 @@ export function Receipt({ models, rooms, roomTotals, shares, workTotal, tierName
   onHint: () => void;
   onLens: (l: 'sheet' | 'rooms' | 'plan') => void;
   onHide?: () => void;
+  /** Takes every line on an older version to the current ones (a draft only). */
+  onUpdateStale?: () => void;
 }) {
+  const stale = models.filter(m => m.stale.length);
   const realNames = rooms.map(r => r.name);
   const order = [...realNames, ...SCOPE_BUCKETS, ...models.map(m => m.room)].filter((n, i, a) => a.indexOf(n) === i);
   const groups = order.map(name => ({
@@ -86,6 +93,16 @@ export function Receipt({ models, rooms, roomTotals, shares, workTotal, tierName
         )}
       </div>
       {hint && <HintCard onDone={onHint} onLens={onLens} onFocus={() => { const first = models[0]; if (first) onSel(first.line.id); }} />}
+      {stale.length > 0 && onUpdateStale && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 hud-panel-in">
+          <div className="text-xs font-bold text-amber-800 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" aria-hidden />Newer material specs are out</div>
+          <p className="text-[11px] text-amber-800/80 mt-0.5">{stale.length} line{stale.length === 1 ? '' : 's'} here use{stale.length === 1 ? 's' : ''} an older version. Nothing changes until you update.</p>
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" variant="primary" icon={Check} onClick={onUpdateStale}>Update {stale.length} line{stale.length === 1 ? '' : 's'}</Button>
+            <Button size="sm" onClick={() => onSel(stale[0].line.id)}>Review one by one</Button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-3 space-y-3">
         {groups.map(g => (
@@ -99,7 +116,7 @@ export function Receipt({ models, rooms, roomTotals, shares, workTotal, tierName
                 className={`w-full flex items-start gap-2 px-1 py-1.5 rounded-lg text-left ${sel === m.line.id ? 'bg-[#3D52A0]/[0.08]' : 'hover:bg-slate-50'}`}>
                 <span className="w-7 h-6 shrink-0 mt-0.5">{thumbOf(m, 'w-7 h-6')}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-semibold text-slate-700 truncate">{m.name}</span>
+                  <span className="block text-xs font-semibold text-slate-700 truncate">{m.name}{m.stale.length > 0 && <> <span className="inline-block px-1 rounded bg-amber-100 text-amber-700 text-[10px] font-bold align-middle">new spec</span></>}</span>
                   <span className="block text-[10px] text-slate-500 truncate">{m.words}</span>
                 </span>
                 {!hideFigures && <span className={`text-xs font-black tabular-nums ${m.billable ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{inr(m.amount)}</span>}
@@ -172,7 +189,7 @@ function HintCard({ onDone, onLens, onFocus }: { onDone: () => void; onLens: (l:
 
 /* ───────────────────────────── a line ───────────────────────────── */
 
-export function LineInspector({ m, index, count, issues, rooms, bankMap, rules, readOnly, seesMargins, hideFigures, floor, onReplace, onStep, onClose, onDuplicate, onDelete, onTakeOff, onPlace }: {
+export function LineInspector({ m, index, count, issues, rooms, bankMap, rules, readOnly, seesMargins, hideFigures, floor, specBank, offerUpdates, onOpenRecipe, onReplace, onStep, onClose, onDuplicate, onDelete, onTakeOff, onPlace }: {
   m: LineModel;
   index: number;
   count: number;
@@ -184,6 +201,11 @@ export function LineInspector({ m, index, count, issues, rooms, bankMap, rules, 
   seesMargins: boolean;
   hideFigures: boolean;
   floor: number;
+  /** The Material specs bank (S2): with it, a line built from a recipe shows its parts. */
+  specBank?: MaterialSpecsBank | null;
+  /** This option may take newer versions of its materials (a draft). */
+  offerUpdates?: boolean;
+  onOpenRecipe?: (itemId: string) => void;
   onReplace: (line: BoqItem) => void;
   onStep: (d: number) => void;
   onClose: () => void;
@@ -250,14 +272,11 @@ export function LineInspector({ m, index, count, issues, rooms, bankMap, rules, 
       {measured && !line.place && !line.byRoom && <SizeField line={line} unit={m.unit} readOnly={readOnly} onReplace={onReplace} />}
 
       {line.byRoom && <SplitBlock m={m} rooms={rooms} bankMap={bankMap} rules={rules} readOnly={readOnly} hideFigures={hideFigures} onReplace={onReplace} />}
-      {basis && !readOnly && rooms.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3">
-          <div className="text-xs font-bold text-slate-800">Typed for the whole flat, not split yet</div>
-          <p className="text-[11px] text-slate-600 mt-0.5">{m.qty.toLocaleString('en-IN')} {m.unit} as one figure. Split it by room so each room carries its share, measured from the plan.</p>
-          <div className="mt-2"><Button size="sm" variant="primary" onClick={() => onReplace({ ...shareIntoRooms(line, basis, rooms), roomId: line.roomId || 'Whole flat' })}>Split by room</Button></div>
-        </div>
-      )}
+      {basis && !readOnly && rooms.length > 0 && <SplitOffer m={m} basis={basis} rooms={rooms} hideFigures={hideFigures} onReplace={onReplace} />}
 
+      {specBank && line.materialSpecs && Object.keys(line.materialSpecs).length ? (
+        <SpecBlock m={m} bank={specBank} readOnly={readOnly} offerUpdates={!!offerUpdates} hideFigures={hideFigures} onOpenRecipe={onOpenRecipe} onReplace={onReplace} />
+      ) : (
       <div className={`rounded-xl border p-3 ${m.words && !/imported via excel/i.test(m.words) ? 'border-slate-200' : 'border-amber-200 bg-amber-50/60'}`}>
         <div className="flex items-center justify-between">
           <span className={LABEL}>Spec words</span>
@@ -275,10 +294,11 @@ export function LineInspector({ m, index, count, issues, rooms, bankMap, rules, 
         ) : (
           <>
             <p className="text-xs text-slate-700 mt-1">{m.words || 'None yet'}</p>
-            <p className="text-[11px] text-slate-500 mt-1">{line.specs != null ? 'Typed on this line.' : 'From the Item Bank.'} The client reads these words.</p>
+            <p className="text-[11px] text-slate-500 mt-1">{specBank && m.item && !recipeOf(m.item, specBank) ? 'Typed by hand: this Item Bank item has no recipe yet.' : line.specs != null ? 'Typed on this line.' : 'From the Item Bank.'}</p>
           </>
         )}
       </div>
+      )}
 
       {seesMargins && !hideFigures && (
         <div className="rounded-xl border border-slate-200 p-3 space-y-2">
@@ -340,7 +360,12 @@ function SizeField({ line, unit, readOnly, onReplace }: { line: BoqItem; unit: s
   );
 }
 
-/** A whole-flat line's rooms: on or off, each share measured or typed, and its amount. */
+const BASIS_NAME: Record<ShareBasis, string> = {
+  wallPaint: 'walls from the plan', ceilingPaint: 'ceilings from the plan', paint: 'walls and ceilings',
+  falseCeiling: 'false ceiling area', points: 'points by room', carpetArea: 'floor area',
+};
+
+/** A whole-flat line, room by room (the approved mockup's split block). */
 function SplitBlock({ m, rooms, bankMap, rules, readOnly, hideFigures, onReplace }: {
   m: LineModel; rooms: Room[]; bankMap: Map<string, Item>; rules: PricingRules | null; readOnly: boolean; hideFigures: boolean; onReplace: (l: BoqItem) => void;
 }) {
@@ -349,22 +374,209 @@ function SplitBlock({ m, rooms, bankMap, rules, readOnly, hideFigures, onReplace
   const shares = roomShares(split, rooms);
   const amounts = lineAmountsByRoom(line, bankMap, { rules, rooms });
   const paint = split.basis === 'wallPaint' || split.basis === 'ceilingPaint';
-  const ruleTotal = paint ? rooms.reduce((a, r) => a + (shares.get(r.name) ? planVsRule(split.basis as 'wallPaint' | 'ceilingPaint', r).rule : 0), 0) : 0;
+  const on = rooms.filter(r => (shares.get(r.name) || 0) > 0 || split.rooms?.[r.name]?.on === true);
+  const total = byRoomQty(split, rooms);
+  const unkept = { ...split, keep: undefined };
+  const sumMeasured = round2(Array.from(roomShares(unkept, rooms).values()).reduce((a, b) => a + b, 0));
+  const vs = paint ? on.map(r => planVsRule(split.basis as 'wallPaint' | 'ceilingPaint', r)) : [];
+  const pl = vs.reduce((a, v) => a + v.plan, 0), ru = vs.reduce((a, v) => a + v.rule, 0);
+  const set = (next: NonNullable<BoqItem['byRoom']>) => onReplace(setSplit(line, next, rooms));
+
   return (
     <div className="rounded-xl border border-slate-200 overflow-hidden">
-      <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2 flex-wrap">
-        <span className={LABEL}>By room</span>
-        {!readOnly && <button type="button" onClick={() => onReplace(unshare(line))} className="text-[11px] font-bold text-[#3D52A0] hover:underline">One figure for the flat</button>}
+      <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2">
+        <span className={LABEL}>Room by room</span>
+        <span className="text-[10px] text-slate-500">{on.length} of {rooms.length} rooms · {BASIS_NAME[split.basis]}</span>
       </div>
-      {paint && !readOnly && (
-        <div className="px-3 pt-2">
-          <Segmented<'plan' | 'rule'> size="sm" label={`How ${m.name} is measured`} value={split.rule ? 'rule' : 'plan'}
-            onChange={v => onReplace(setSplit(line, { ...split, rule: v === 'rule' || undefined }, rooms))}
-            options={[{ id: 'plan', label: 'From the plan' }, { id: 'rule', label: `Carpet-area rule · ${Math.round(ruleTotal)}` }]} />
+      {Number(split.keep) > 0 && (
+        <div className="px-3 py-2 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-800">
+          The typed total of {split.keep} {m.unit} is kept and shared in proportion.{' '}
+          {!readOnly && <button type="button" onClick={() => set({ ...split, keep: undefined })} className="font-bold underline">Use the room figures ({sumMeasured})</button>}
+        </div>
+      )}
+      <table className="w-full text-xs">
+        <tbody>
+          {rooms.map(r => {
+            const q = shares.get(r.name) || 0;
+            const s = split.rooms?.[r.name] || {};
+            const isOn = q > 0 || s.on === true;
+            const mq = round2(measureShare(split.basis, r, {}, !!split.rule));
+            const v = paint ? planVsRule(split.basis as 'wallPaint' | 'ceilingPaint', r) : null;
+            const setRoom = (patch: { on?: boolean; qty?: number }) => {
+              const rs = { ...(split.rooms || {}) };
+              const cur: { on?: boolean; qty?: number } = { ...(rs[r.name] || {}), ...patch };
+              if (cur.qty === undefined) delete cur.qty;
+              rs[r.name] = cur;
+              set({ ...split, rooms: rs });
+            };
+            return (
+              <tr key={r.name} className={`border-b border-slate-100 ${isOn ? '' : 'bg-slate-50/60'}`}>
+                <td className="pl-3 py-1.5 w-7 align-top">
+                  <input type="checkbox" checked={isOn} disabled={readOnly} onChange={e => setRoom({ on: e.target.checked })} aria-label={`${r.name} takes a share`} className="mt-0.5 w-3.5 h-3.5 accent-[#3D52A0]" />
+                </td>
+                <td className="py-1.5 pr-1 align-top">
+                  <div className={`font-semibold truncate ${isOn ? 'text-slate-700' : 'text-slate-400'}`}>{r.name}</div>
+                  <div className="text-[10px] text-slate-400">
+                    {!isOn ? 'left out' : v ? <><span className={split.rule ? '' : 'font-bold text-slate-600'}>plan {v.plan}</span> · <span className={split.rule ? 'font-bold text-slate-600' : ''}>carpet rule {v.rule}</span></> : split.basis === 'points' ? `room standard ${mq}` : `measured ${mq}`}
+                  </div>
+                </td>
+                <td className="py-1.5 pr-1 text-right w-[80px] align-top">
+                  <input inputMode="decimal" disabled={readOnly || !isOn} aria-label={`${r.name}: share`}
+                    value={s.qty != null ? String(s.qty) : ''} placeholder={isOn ? String(round2(q)) : '—'}
+                    onChange={e => setRoom({ qty: e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0) })}
+                    className={`w-[72px] px-1.5 py-1 rounded-md border text-right tabular-nums text-xs ${s.qty != null ? 'border-[#3D52A0] bg-[#3D52A0]/5 font-bold text-slate-800' : 'border-slate-200 placeholder:text-slate-400'}`} />
+                </td>
+                {!hideFigures && <td className={`py-1.5 pr-3 text-right tabular-nums font-bold w-[74px] align-top pt-2.5 ${isOn ? 'text-slate-800' : 'text-slate-300'}`}>{inr(amounts.get(r.name) || 0)}</td>}
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr className="bg-slate-50">
+            <td />
+            <td className="py-2 font-bold text-slate-800">Whole flat</td>
+            <td className="py-2 pr-1 text-right font-black tabular-nums">{round2(total).toLocaleString('en-IN')} <span className="font-normal text-slate-500">{m.unit}</span></td>
+            {!hideFigures && <td className="py-2 pr-3 text-right font-black tabular-nums">{inr(m.amount)}</td>}
+          </tr>
+        </tfoot>
+      </table>
+      {paint && (
+        <div className="px-3 py-2.5 border-t border-slate-100">
+          <div className={`${LABEL} mb-1.5`}>Measure from</div>
+          {readOnly ? <p className="text-xs text-slate-700">{split.rule ? 'The carpet-area rule' : 'The plan'}</p> : (
+            <Segmented<'plan' | 'rule'> size="sm" label="Measure from" value={split.rule ? 'rule' : 'plan'}
+              onChange={v => set({ ...split, rule: v === 'rule' || undefined })}
+              options={[{ id: 'plan', label: 'The plan' }, { id: 'rule', label: `Carpet area × ${split.basis === 'wallPaint' ? RULE_WALL : RULE_CEILING}` }]} />
+          )}
+          <p className="text-[11px] text-slate-500 mt-1.5">The plan gives {pl.toLocaleString('en-IN')} {m.unit}; today’s rule gives {ru.toLocaleString('en-IN')} ({ru >= pl ? '+' : '−'}{Math.round((Math.abs(ru - pl) / Math.max(pl, 1)) * 100)}%). The rule is kept for rooms with no dimensions.</p>
+        </div>
+      )}
+      <div className="px-3 py-2 border-t border-slate-100 text-[11px] text-slate-500">
+        A faint figure is {split.basis === 'points' ? 'the room standard' : 'measured from the plan'}. Type over it for one room; clear it to go back. Untick a room to leave it out.
+        {!readOnly && <> <button type="button" onClick={() => onReplace(unshare(line))} className="font-bold text-[#3D52A0] hover:underline">One figure for the flat</button></>}
+      </div>
+      <div className="px-3 py-2.5 border-t border-slate-100">
+        <div className={`${LABEL} mb-1.5`}>The client sees</div>
+        {!readOnly && (
+          <Segmented<'flat' | 'rooms'> size="sm" label="Client view" value={split.client || 'flat'}
+            onChange={v => set({ ...split, client: v })}
+            options={[{ id: 'flat', label: 'One line for the flat' }, { id: 'rooms', label: 'A line in each room' }]} />
+        )}
+        <p className="text-[11px] text-slate-500 mt-1.5">{split.client === 'rooms'
+          ? `The client BOQ prints ${m.name.toLowerCase()} under each room with that room’s quantity. Same rate, same total.`
+          : `The client BOQ prints one line for ${round2(total).toLocaleString('en-IN')} ${m.unit}, as today.`}</p>
+      </div>
+    </div>
+  );
+}
+
+/** A whole-flat line typed as one figure: split it by the room figures, or keep the figure and share it out. */
+function SplitOffer({ m, basis, rooms, hideFigures, onReplace }: { m: LineModel; basis: ShareBasis; rooms: Room[]; hideFigures: boolean; onReplace: (l: BoqItem) => void }) {
+  const line = m.line;
+  const fresh = { basis, rooms: {}, client: 'flat' as const };
+  const shares = roomShares(fresh, rooms);
+  const sum = round2(Array.from(shares.values()).reduce((a, b) => a + b, 0));
+  const d = (sum - m.qty) * m.rate;
+  const split = (keep?: number) => {
+    const s = shareIntoRooms(line, basis, rooms);
+    onReplace({ ...s, roomId: line.roomId || 'Whole flat', ...(keep ? { byRoom: { ...s.byRoom!, keep }, qty: keep } : {}) });
+  };
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+      <div className="text-xs font-bold text-slate-800">Typed as {m.qty.toLocaleString('en-IN')} {m.unit} for the whole flat</div>
+      <p className="text-[11px] text-slate-600">Split it so each room carries its share, and change one room at a time. The room {basis === 'points' ? 'standards' : 'figures'} come to {sum.toLocaleString('en-IN')} {m.unit}:</p>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-slate-600">
+        {rooms.map(r => <span key={r.name} className="flex justify-between gap-2"><span className="truncate">{r.name}</span><b className="tabular-nums">{round2(shares.get(r.name) || 0)}</b></span>)}
+      </div>
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Button size="sm" variant="primary" onClick={() => split()}>Use the room figures{hideFigures ? '' : ` (${d >= 0 ? '+' : '−'}${inr(Math.abs(d))})`}</Button>
+        <Button size="sm" onClick={() => split(m.qty)}>Keep {m.qty.toLocaleString('en-IN')}, share it out</Button>
+      </div>
+    </div>
+  );
+}
+
+/** A line built from a recipe: its parts, their versions, the finish as tiles, and the words they make. */
+function SpecBlock({ m, bank, readOnly, offerUpdates, hideFigures, onOpenRecipe, onReplace }: {
+  m: LineModel; bank: MaterialSpecsBank; readOnly: boolean; offerUpdates: boolean; hideFigures: boolean;
+  onOpenRecipe?: (itemId: string) => void; onReplace: (l: BoqItem) => void;
+}) {
+  const line = m.line;
+  const recipe = m.item ? recipeOf(m.item, bank) : null;
+  const fin = finishPartOf(recipe)?.part;
+  const stale = offerUpdates ? m.stale : [];
+  const [own, setOwn] = useState<string>(line.specs || '');
+  const shortName = (n: string) => n.split(',')[0].replace(' laminate', '').replace('Natural veneer', 'Veneer').replace(' high gloss', '');
+  return (
+    <div className="rounded-xl border border-slate-200 overflow-hidden">
+      <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2">
+        <span className={LABEL}>Material specs</span>
+        {onOpenRecipe && m.item && <button type="button" onClick={() => onOpenRecipe(m.item!.id)} className="text-[11px] font-bold text-[#3D52A0] hover:underline">Item recipe ↗</button>}
+      </div>
+      {stale.length > 0 && !readOnly && (
+        <div className="px-3 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2 text-[11px] text-amber-800">
+          <AlertTriangle className="w-3.5 h-3.5" aria-hidden />
+          <span className="flex-1">Newer spec out for {stale.join(', ').toLowerCase()}.</span>
+          <button type="button" onClick={() => onReplace(updatedLine(bank, line, m.item))} className="px-2 py-1 rounded-lg bg-[#3D52A0] text-white font-bold">Update</button>
         </div>
       )}
       <div className="divide-y divide-slate-100">
-        {rooms.map(r => <React.Fragment key={r.name}><ShareRowEdit line={line} room={r} q={shares.get(r.name) || 0} amount={amounts.get(r.name) || 0} unit={m.unit} readOnly={readOnly} hideFigures={hideFigures} rooms={rooms} onReplace={onReplace} /></React.Fragment>)}
+        {Object.entries(line.materialSpecs || {}).map(([part, s]) => {
+          const mat = bank.materials.find(x => x.id === s.id);
+          const h = versionAt(bank, s.id, s.v);
+          const now = currentVersion(bank, s.id)?.v || s.v;
+          const old = offerUpdates && s.v < now;
+          const isFin = part === fin;
+          return (
+            <div key={part} className="px-3 py-2">
+              <div className="text-[11px] font-bold text-slate-500 mb-1">{part}</div>
+              <div className="flex items-center gap-2">
+                {isFin || !mat ? (
+                  <span className="flex-1 text-xs font-semibold text-slate-800 truncate">{mat?.name || s.id}</span>
+                ) : (
+                  <select aria-label={part} value={s.id} disabled={readOnly} onChange={e => onReplace(withPart(bank, line, m.item, part, e.target.value))}
+                    className="min-w-0 flex-1 px-1.5 py-1 rounded-lg border border-slate-200 text-xs font-semibold bg-white disabled:bg-slate-50">
+                    {materialsIn(bank, mat.fam).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                  </select>
+                )}
+                <span title={h?.at ? new Date(h.at).toLocaleDateString('en-GB') : 'Studio standard'}
+                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${old ? 'bg-amber-100 text-amber-700' : 'bg-[#3D52A0]/10 text-[#3D52A0]'}`}>v{s.v}{old ? ` → v${now}` : ''}</span>
+              </div>
+              {isFin && mat && (
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                  {materialsIn(bank, mat.fam).map(x => {
+                    const d = finishDelta(bank, line, m.item, part, x.id, m.markup, m.qty);
+                    const on = x.id === mat.id;
+                    return (
+                      <button key={x.id} type="button" disabled={readOnly} aria-pressed={on} title={x.name}
+                        onClick={() => !on && onReplace(withPart(bank, line, m.item, part, x.id))}
+                        className={`rounded-lg p-1 border text-left ${on ? 'border-[#3D52A0] ring-2 ring-[#3D52A0]/25' : 'border-slate-200 hover:border-slate-300'}`}>
+                        <svg viewBox="0 0 3 1.4" className="w-full h-6 rounded" aria-hidden focusable="false"><rect width="3" height="1.4" fill={x.swatch ? `url(#${x.swatch})` : '#e2e8f0'} /></svg>
+                        <span className="block text-[10px] font-bold text-slate-600 truncate">{shortName(x.name)}</span>
+                        {!hideFigures && <span className={`block text-[10px] font-bold tabular-nums ${Math.abs(d) < 1 ? 'text-slate-400' : d > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{Math.abs(d) < 1 ? 'now' : `${d > 0 ? '+' : '−'}${lakh(Math.abs(d))}`}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="px-3 py-2.5 bg-[#3D52A0]/[0.04] border-t border-slate-100">
+        <div className="flex items-center justify-between">
+          <span className={LABEL}>What the client reads</span>
+          {!readOnly && (line.specsOwn
+            ? <button type="button" onClick={() => onReplace(withRecipeWords(bank, line))} className="text-[11px] font-bold text-[#3D52A0] hover:underline">Back to the recipe</button>
+            : <button type="button" onClick={() => { setOwn(line.specs || ''); onReplace(withOwnWords(line)); }} className="text-[11px] font-bold text-[#3D52A0] hover:underline">Write my own</button>)}
+        </div>
+        {line.specsOwn && !readOnly ? (
+          <>
+            <textarea aria-label="Own words" rows={3} value={own} onChange={e => setOwn(e.target.value)} onBlur={() => own !== line.specs && onReplace(withOwnWords(line, own))}
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] bg-white" />
+            <p className="text-[11px] text-amber-700 mt-1">Own words do not follow new versions.</p>
+          </>
+        ) : <p className="text-xs text-slate-700 mt-1">{line.specs}</p>}
       </div>
     </div>
   );

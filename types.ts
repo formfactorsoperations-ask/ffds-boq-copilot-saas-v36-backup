@@ -1165,6 +1165,10 @@ export interface Item {
     /** BOQ Playground: how the item looks from above and its default size. Missing: inferred
      *  from the name where it can be (lib/playground/pieces.ts drawOf), else not drawable. */
     draw?: PieceDraw;
+    /** BOQ Playground S2: the recipe (Material specs bank) that builds this item's words, part by
+     *  part, at each option grade. Missing: a suggested recipe for its kind, if any. null: none,
+     *  the words are typed by hand. */
+    recipeId?: string | null;
 }
 
 /** What kind of piece an item draws as. Decides the symbol and how it sits in a room. */
@@ -1316,6 +1320,18 @@ export interface BoqItem {
     finishBase?: number | null;
     /** A whole-flat service shared room by room. Missing: one figure for the flat. */
     byRoom?: ByRoomSplit;
+    /** BOQ Playground S2: the material and version in each part of the line (Carcass, Outer
+     *  finish…), from the item's recipe at the option's grade. `specs` holds the words they make. */
+    materialSpecs?: Record<string, LineMaterialSpec>;
+    /** Words typed by hand: `specs` no longer follows the materials or their versions. */
+    specsOwn?: boolean;
+}
+
+/** One part of a line: which material, at which version. `shade` is picked at Selections (PR M). */
+export interface LineMaterialSpec {
+    id: string;
+    v: number;
+    shade?: string;
 }
 
 export interface FullBoqItem extends Omit<Item, 'name' | 'specs' | 'materials' | 'labor'>, Omit<BoqItem, 'name' | 'specs' | 'materials' | 'labor'> {
@@ -1575,6 +1591,9 @@ export interface ProposalTier {
     pricingRules?: PricingRules;
     /** Which editor made the version. Missing: Classic. */
     boqFormat?: 'playground';
+    /** BOQ Playground S2: which recipe column the option's lines take (E Essential, C Comfort,
+     *  P Premium). Missing: read from the option's name, else Comfort. */
+    specGrade?: 'E' | 'C' | 'P';
 }
 
 export interface ComparisonRow {

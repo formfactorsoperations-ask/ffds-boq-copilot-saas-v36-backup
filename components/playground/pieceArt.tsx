@@ -86,16 +86,21 @@ export interface ArtProps {
   faded?: boolean;
   /** No shadow (thumbnails at small size, room minis). */
   flat?: boolean;
+  /** The finish and countertop from the line's materials (S2), over what the words suggest. */
+  fill?: string;
+  base?: string;
+  top?: string;
 }
 
 const ED = 'rgba(15,23,42,.5)';
 const EW = 0.035;
 
 /** A piece drawn from above, centred on 0,0. */
-export function PieceArt({ kind, w: W, d, words, high, faded, flat }: ArtProps) {
+export function PieceArt({ kind, w: W, d, words, high, faded, flat, fill, base, top: topFill }: ArtProps) {
   const D = Math.max(d, 0.12);
   const x0 = -W / 2, y0 = -D / 2;
-  const F = finishOf(words);
+  const F = fill ? { fill, base: base || '#c9a37a' } : finishOf(words);
+  const topOfLine = (w: string | null | undefined) => topFill || topOf(w);
   const out: React.ReactNode[] = [];
   let k = 0;
   const R = (x: number, y: number, w: number, h: number, fill: string, ex: React.SVGProps<SVGRectElement> = {}) =>
@@ -169,7 +174,7 @@ export function PieceArt({ kind, w: W, d, words, high, faded, flat }: ArtProps) 
       R(-0.55, -0.2, 1.1, 0.75, '#334155', { rx: 0.06 });
       break;
     case 'base': {
-      R(x0, y0, W, D, topOf(words), edge);
+      R(x0, y0, W, D, topOfLine(words), edge);
       R(x0, D / 2 - 0.12, W, 0.12, F.base);
       if (W >= 3) {
         const sx = x0 + Math.min(W * 0.3, W - 1);
@@ -192,7 +197,7 @@ export function PieceArt({ kind, w: W, d, words, high, faded, flat }: ArtProps) 
       break;
     }
     case 'vanity':
-      R(x0, y0, W, D, topOf(words), { ...edge, rx: 0.08 });
+      R(x0, y0, W, D, topOfLine(words), { ...edge, rx: 0.08 });
       out.push(<ellipse key={k++} cx={0} cy={0.05} rx={Math.min(0.7, W * 0.3)} ry={D * 0.3} fill="#fff" stroke="rgba(15,23,42,.3)" strokeWidth={0.03} />);
       break;
     case 'glass':
@@ -210,14 +215,30 @@ export function PieceArt({ kind, w: W, d, words, high, faded, flat }: ArtProps) 
 }
 
 /** A small picture of a piece, for the library, the Live BOQ and the Sheet. */
-export function PieceThumb({ kind, w, d, words, className = 'w-full h-14' }: Omit<ArtProps, 'flat'> & { className?: string }) {
+export function PieceThumb({ kind, w, d, words, fill, base, top, className = 'w-full h-14' }: Omit<ArtProps, 'flat'> & { className?: string }) {
   const D = Math.max(d, 0.12);
   const pad = Math.max(w, D) * 0.1 + 0.35;
   const ex = kind === 'desk' ? 1.5 : kind === 'dtable' ? 0.85 : 0;
-  const top = kind === 'dtable' ? 0.85 : 0;
+  const above = kind === 'dtable' ? 0.85 : 0;
   return (
-    <svg className={className} viewBox={`${-w / 2 - pad} ${-D / 2 - pad - top} ${w + pad * 2} ${D + pad * 2 + ex + top}`} preserveAspectRatio="xMidYMid meet" aria-hidden focusable="false">
-      <PieceArt kind={kind} w={w} d={D} words={words} />
+    <svg className={className} viewBox={`${-w / 2 - pad} ${-D / 2 - pad - above} ${w + pad * 2} ${D + pad * 2 + ex + above}`} preserveAspectRatio="xMidYMid meet" aria-hidden focusable="false">
+      <PieceArt kind={kind} w={w} d={D} words={words} fill={fill} base={base} top={top} />
     </svg>
   );
+}
+
+/** A line's look from its materials: the outer finish's pattern and the countertop's. */
+export function artOfSpecs(
+  specs: Record<string, { id: string }> | null | undefined,
+  materials: { id: string; fam: string; swatch?: string; base?: string }[] | null | undefined,
+): { fill?: string; base?: string; top?: string } {
+  if (!specs || !materials) return {};
+  const out: { fill?: string; base?: string; top?: string } = {};
+  Object.values(specs).forEach(s => {
+    const m = materials.find(x => x.id === s.id);
+    if (!m?.swatch) return;
+    if (m.fam === 'top') out.top = `url(#${m.swatch})`;
+    else if (!out.fill) { out.fill = `url(#${m.swatch})`; out.base = m.base; }
+  });
+  return out;
 }

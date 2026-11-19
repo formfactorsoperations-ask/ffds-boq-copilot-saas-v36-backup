@@ -13,6 +13,8 @@ import BankCategoryGroupedView from './bank/BankCategoryGroupedView';
 import BankBulkActionModal, { BulkActionType } from './bank/BankBulkActionModal';
 import BankItemProjectUsageModal from './bank/BankItemProjectUsageModal';
 import BankItemCard from './BankItemCard';
+import type { MaterialSpecsBank } from '../lib/materialSpecs';
+import { recipeOf } from '../lib/lineSpecs';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, 
@@ -53,6 +55,9 @@ interface BankTabProps {
   highlightedBankItemId: string | null;
   onHighlightClear: () => void;
   projects?: FullProjectData[];
+  /** BOQ Playground S2: the Material specs bank. With it, items show their recipe and the No recipe filter appears. */
+  specs?: MaterialSpecsBank;
+  onOpenRecipe?: (id: string) => void;
 }
 
 const BankTab: React.FC<BankTabProps> = ({
@@ -62,13 +67,16 @@ const BankTab: React.FC<BankTabProps> = ({
   highlightedBankItemId,
   onHighlightClear,
   projects = [],
+  specs,
+  onOpenRecipe,
 }) => {
   const { orgData } = useOrg();
   const { settings, updateSettings } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
   const customBundles = useMemo(() => settings?.customBundles || [], [settings]);
 
   // Main View Mode: 'spreadsheet' | 'grouped' | 'grid' | 'bundles'
-  const [viewMode, setViewMode] = useState<'spreadsheet' | 'grouped' | 'grid' | 'bundles'>('spreadsheet');
+  /* With the BOQ Playground on, the bank opens on its cards, where each item shows its recipe. */
+  const [viewMode, setViewMode] = useState<'spreadsheet' | 'grouped' | 'grid' | 'bundles'>(specs ? 'grid' : 'spreadsheet');
 
   /*
     How many rows are actually put in the document.
@@ -91,7 +99,8 @@ const BankTab: React.FC<BankTabProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('All');
-  const [healthFilter, setHealthFilter] = useState<'all' | 'low-margin' | 'missing-specs' | 'multiplier' | 'in-active-projects'>('all');
+  const [healthFilter, setHealthFilter] = useState<'all' | 'low-margin' | 'missing-specs' | 'multiplier' | 'in-active-projects' | 'no-recipe'>('all');
+  const noRecipeCount = useMemo(() => (specs ? bank.filter((i) => !recipeOf(i, specs)).length : 0), [bank, specs]);
 
   // Multi-Selection State
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -215,6 +224,8 @@ const BankTab: React.FC<BankTabProps> = ({
       // Health Filter
       if (healthFilter === 'low-margin') {
         if ((item.margin || 0) >= 15) return false;
+      } else if (healthFilter === 'no-recipe') {
+        if (!specs || recipeOf(item, specs)) return false;
       } else if (healthFilter === 'missing-specs') {
         if (item.specs && item.specs.trim().length > 0) return false;
       } else if (healthFilter === 'multiplier') {
@@ -226,7 +237,7 @@ const BankTab: React.FC<BankTabProps> = ({
 
       return true;
     });
-  }, [bank, searchTerm, selectedCategory, selectedProjectId, healthFilter, projectItemUsageMap]);
+  }, [bank, searchTerm, selectedCategory, selectedProjectId, healthFilter, projectItemUsageMap, specs]);
 
   // Executive Statistics
   const stats = useMemo(() => {
@@ -802,6 +813,19 @@ const BankTab: React.FC<BankTabProps> = ({
                 Missing Specs
               </button>
 
+              {specs && (
+                <button
+                  onClick={() => setHealthFilter('no-recipe')}
+                  className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors ${
+                    healthFilter === 'no-recipe'
+                      ? 'bg-[#3D52A0] text-white'
+                      : 'bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100'
+                  }`}
+                >
+                  No recipe yet ({noRecipeCount})
+                </button>
+              )}
+
               <button
                 onClick={() => setHealthFilter('multiplier')}
                 className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors ${
@@ -967,6 +991,8 @@ const BankTab: React.FC<BankTabProps> = ({
               viewMode="grid"
               projects={projects}
               onViewProjectUsage={(item) => setUsageModalItem(item)}
+              specBank={specs}
+              onOpenRecipe={onOpenRecipe}
             />
           ))}
         </div>

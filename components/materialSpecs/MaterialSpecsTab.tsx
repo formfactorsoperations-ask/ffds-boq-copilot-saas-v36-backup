@@ -1,248 +1,324 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Layers3, History, Plus, Check, Lock } from 'lucide-react';
-import { Panel, Button, Chip, EmptyState, LABEL, INPUT } from '../ui/kit';
+import { Search, Check, Lock, Info } from 'lucide-react';
+import { Button, Chip, EmptyState, LABEL, INPUT } from '../ui/kit';
 import { useOrg } from '../../contexts/OrgContext';
+import type { Item, FullProjectData } from '../../types';
 import {
-  seedFromPackages, materialsIn, currentVersion, versionsOf, saveNewVersion, newVersionProblem, addMaterial,
-  canEditMaterialSpecs, GRADES, GRADE_TIER, type MaterialSpecsBank, type Material, type Grade,
+  materialsIn, currentVersion, versionsOf, saveNewVersion, newVersionProblem, addMaterial, canEditMaterialSpecs,
+  GRADES, type Material, type Grade, type MaterialSpecsBank,
 } from '../../lib/materialSpecs';
-import { watchMaterialSpecs, saveMaterialSpecs } from '../../services/materialSpecsService';
+import { recipeOf, sentTierIds } from '../../lib/lineSpecs';
+import type { MaterialSpecsState } from './useMaterialSpecs';
+import Swatch from './Swatch';
 
 /*
-  The Material specs bank, in Templates & Bank (BOQ Playground S1).
+  The Material specs bank, in Templates & Bank (the approved mockup's screen).
 
-  Families on the left, their materials on the right: what each one says to a
-  client now, at which option grades it is used, and every version it has had.
-  The Owner saves a new version ("Save as v2"); a saved version is never
-  changed, so a BOQ sent or signed against it keeps its words. Everyone else
-  sees the bank read-only. Until the studio first saves, the bank shows the
-  standard package tables it is seeded from.
+  Families on the left; the family's materials in the middle, each with what it
+  says, its brand, the options it is used at and where it is used; the picked
+  material on the right, where the Owner changes its words or brand and saves
+  them as a new version, with its history and the items built with it.
+
+  A saved version is never changed: lines added from then on take the new
+  version, draft options are offered it, and options already sent, signed or in
+  execution keep theirs.
 */
 
 const GRADE_NAME: Record<Grade, string> = { E: 'Essential', C: 'Comfort', P: 'Premium' };
-const when = (at: number) => (at ? new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Standard');
+const SUFFIX: Record<string, string> = { ply: ' carcass', lam: ' outside', inner: ' inside', top: ' counter' };
+const when = (at: number) => (at ? new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'the studio standard');
 
-export default function MaterialSpecsTab({ onStats }: { onStats?: (s: { families: number; materials: number; saved: boolean }) => void }) {
-  const { orgData, currentRole, currentRoles, currentUserAuth } = useOrg() as any;
-  const tenantId: string | undefined = orgData?.tenantId;
+interface Usage { items: Item[]; lines: number; projects: number }
+
+export default function MaterialSpecsTab({ specs, items = [], projects = [], addSignal = 0, onOpenItem }: {
+  specs: MaterialSpecsState;
+  /** The Item Bank, for the items built with each material. */
+  items?: Item[];
+  /** The studio's projects, for the BOQ lines that name each material. */
+  projects?: FullProjectData[];
+  /** Bumped by the header's New material. */
+  addSignal?: number;
+  onOpenItem?: (item: Item) => void;
+}) {
+  const { currentRole, currentRoles, currentUserAuth } = useOrg() as any;
   const canEdit = canEditMaterialSpecs(currentRole, currentRoles);
   const me = currentUserAuth?.displayName || currentUserAuth?.email || 'Owner';
+  const bank = specs.bank;
 
-  const [stored, setStored] = useState<MaterialSpecsBank | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const seed = useMemo(() => seedFromPackages(), []);
-  const bank = stored || seed;
-
-  const [famId, setFamId] = useState<string>('');
-  const [editing, setEditing] = useState<string | null>(null);
-  const [draft, setDraft] = useState({ words: '', brand: '', note: '', costFactor: '' });
-  const [openHistory, setOpenHistory] = useState<string | null>(null);
+  const [famId, setFamId] = useState<string>(bank.families[0]?.id || '');
+  const [selMat, setSelMat] = useState<string>('');
+  const [q, setQ] = useState('');
+  const [draft, setDraft] = useState<{ id: string; words: string; brand: string; note: string; factor: string } | null>(null);
+  const [saved, setSaved] = useState<{ id: string; v: number } | null>(null);
   const [adding, setAdding] = useState(false);
   const [newMat, setNewMat] = useState({ name: '', words: '', brand: '', grades: [] as Grade[] });
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ tone: 'good' | 'bad'; text: string } | null>(null);
-
-  useEffect(() => watchMaterialSpecs(
-    tenantId,
-    (b) => { setStored(b); setLoaded(true); setLoadError(null); },
-    (e) => { setLoaded(true); setLoadError(e.message); },
-  ), [tenantId]);
-
-  useEffect(() => {
-    onStats?.({ families: bank.families.length, materials: bank.materials.length, saved: !!stored });
-  }, [bank, stored, onStats]);
+  useEffect(() => { if (addSignal) { setAdding(true); setDraft(null); setSaved(null); } }, [addSignal]);
 
   const fam = bank.families.find(f => f.id === famId) || bank.families[0];
-  const mats = fam ? materialsIn(bank, fam.id) : [];
+  const list = (fam ? materialsIn(bank, fam.id) : []).filter(m => !q.trim() || `${m.name} ${currentVersion(bank, m.id)?.words || ''}`.toLowerCase().includes(q.trim().toLowerCase()));
+  const mat = bank.materials.find(m => m.id === selMat && m.fam === fam?.id) || list[0];
 
-  const persist = async (next: MaterialSpecsBank, done: string) => {
-    setSaving(true); setNote(null);
-    try {
-      await saveMaterialSpecs(tenantId, next, stored);
-      setNote({ tone: 'good', text: done });
-      return true;
-    } catch (e: any) {
-      setNote({ tone: 'bad', text: e?.message || String(e) });
-      return false;
-    } finally {
-      setSaving(false);
+  /* Where each material is used: items whose recipe names it, and BOQ lines that do. */
+  const usage = useMemo(() => {
+    const out = new Map<string, Usage>();
+    const get = (id: string) => { let u = out.get(id); if (!u) { u = { items: [], lines: 0, projects: 0 }; out.set(id, u); } return u; };
+    items.forEach(it => {
+      const r = recipeOf(it, bank);
+      const ids = new Set<string>();
+      r?.parts.forEach(p => GRADES.forEach(g => ids.add(p.byGrade[g])));
+      ids.forEach(id => get(id).items.push(it));
+    });
+    projects.forEach(p => {
+      const seen = new Set<string>();
+      (p.tiers || []).forEach(t => (t.boq || []).forEach((l: any) => Object.values(l.materialSpecs || {}).forEach((s: any) => {
+        get(s.id).lines++; seen.add(s.id);
+      })));
+      seen.forEach(id => { get(id).projects++; });
+    });
+    return out;
+  }, [items, projects, bank]);
+  const use = (id: string) => usage.get(id) || { items: [], lines: 0, projects: 0 };
+
+  const persist = async (next: MaterialSpecsBank) => {
+    setBusy(true); setNote(null);
+    try { await specs.save(next); return true; } catch (e: any) { setNote({ tone: 'bad', text: e?.message || String(e) }); return false; } finally { setBusy(false); }
+  };
+
+  if (specs.error) return <EmptyState icon={Lock} title="The Material specs bank could not be read" text={specs.error} />;
+
+  const pick = (m: Material) => { setSelMat(m.id); setDraft(null); setSaved(null); setAdding(false); setNote(null); };
+  const cur = mat ? currentVersion(bank, mat.id) : undefined;
+  const d = draft && mat && draft.id === mat.id ? draft : mat ? { id: mat.id, words: cur?.words || '', brand: cur?.brand || '', note: '', factor: String(cur?.costFactor ?? 1) } : null;
+  const changed = !!(d && cur && (d.words !== cur.words || d.brand !== (cur.brand || '') || (fam?.finish && Number(d.factor) !== Number(cur.costFactor ?? 1))));
+
+  const saveVersion = async () => {
+    if (!mat || !d) return;
+    const next = { words: d.words, brand: d.brand, note: d.note || 'Words or brand changed', ...(fam?.finish ? { costFactor: Number(d.factor) || 1 } : {}) };
+    const problem = newVersionProblem(bank, mat.id, next);
+    if (problem) { setNote({ tone: 'bad', text: problem }); return; }
+    const v = (cur?.v || 0) + 1;
+    if (await persist(saveNewVersion(bank, mat.id, next, me, Date.now()))) {
+      setDraft(null); setSaved({ id: mat.id, v });
+      setNote({ tone: 'good', text: `${mat.name} saved as v${v}. New lines use it from now on.` });
     }
   };
-
-  const startEdit = (m: Material) => {
-    const cur = currentVersion(bank, m.id);
-    setEditing(m.id);
-    setDraft({ words: cur?.words || '', brand: cur?.brand || '', note: '', costFactor: cur?.costFactor != null ? String(cur.costFactor) : '' });
-    setNote(null);
-  };
-
-  const saveVersion = async (m: Material) => {
-    const next = { words: draft.words, brand: draft.brand, note: draft.note, ...(fam?.finish ? { costFactor: Number(draft.costFactor || 1) } : {}) };
-    const problem = newVersionProblem(bank, m.id, next);
-    if (problem) { setNote({ tone: 'bad', text: problem }); return; }
-    const v = (currentVersion(bank, m.id)?.v || 0) + 1;
-    if (await persist(saveNewVersion(bank, m.id, next, me, Date.now()), `${m.name} saved as v${v}. Lines already on BOQs keep the version they have.`)) setEditing(null);
-  };
-
   const saveNewMaterial = async () => {
     if (!fam) return;
     try {
       const next = addMaterial(bank, { fam: fam.id, ...newMat, ...(fam.finish ? { costFactor: 1 } : {}) }, me, Date.now());
-      if (await persist(next, `${newMat.name.trim()} added at v1.`)) { setAdding(false); setNewMat({ name: '', words: '', brand: '', grades: [] }); }
-    } catch (e: any) {
-      setNote({ tone: 'bad', text: e?.message || String(e) });
-    }
+      if (await persist(next)) {
+        const added = next.materials[next.materials.length - 1];
+        setAdding(false); setNewMat({ name: '', words: '', brand: '', grades: [] }); setSelMat(added.id);
+        setNote({ tone: 'good', text: `${added.name} added at v1.` });
+      }
+    } catch (e: any) { setNote({ tone: 'bad', text: e?.message || String(e) }); }
   };
 
-  if (loadError) {
-    return <EmptyState icon={Lock} title="The Material specs bank could not be read" text={loadError} />;
-  }
+  /* After a save: each project that names the material, and whether it moves. */
+  const projectRows = saved && mat && saved.id === mat.id ? projects.map(p => {
+    const sent = sentTierIds(p.context as any);
+    let n = 0, draftOld = 0;
+    (p.tiers || []).forEach(t => (t.boq || []).forEach((l: any) => Object.values(l.materialSpecs || {}).forEach((s: any) => {
+      if (s.id !== mat.id) return;
+      n++;
+      if (!sent.has(t.id) && !p.context?.boqFrozen && s.v < saved.v) draftOld++;
+    })));
+    const status = p.context?.boqFrozen ? 'Frozen' : (p.tiers || []).some(t => sent.has(t.id)) ? 'Proposal sent' : 'Draft';
+    return { id: p.id, name: p.context?.name || 'Project', status, n, canUpdate: draftOld > 0 };
+  }).filter(r => r.n > 0) : [];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6 mt-6">
-      <nav aria-label="Material families" className="space-y-1">
-        {bank.families.map((f, i) => {
+    <div className="grid gap-4 grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_400px] items-start">
+      <nav className="rounded-3xl bg-white border border-slate-200 p-2 flex lg:flex-col gap-1 overflow-x-auto" aria-label="Material families">
+        {bank.families.map(f => {
           const on = f.id === fam?.id;
           return (
-            <button key={f.id} type="button" onClick={() => { setFamId(f.id); setEditing(null); setAdding(false); setOpenHistory(null); }}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-between gap-2 hud-row-in ${on ? 'bg-[#3D52A0] text-white shadow-sm hud-rail-active' : 'text-slate-700 hover:bg-slate-100'}`}
-              style={{ animationDelay: `${i * 30}ms` }} aria-current={on ? 'true' : undefined}>
-              <span className="truncate">{f.name}</span>
-              <span className={`text-[11px] font-bold tabular-nums ${on ? 'text-white' : 'text-slate-400'}`}>{materialsIn(bank, f.id).length}</span>
+            <button key={f.id} type="button" onClick={() => { setFamId(f.id); setSelMat(''); setDraft(null); setSaved(null); setAdding(false); setQ(''); }}
+              aria-current={on ? 'true' : undefined}
+              className={`shrink-0 lg:w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-between gap-3 ${on ? 'bg-[#3D52A0] text-white shadow-sm hud-rail-active' : 'text-slate-700 hover:bg-slate-100'}`}>
+              <span className="whitespace-nowrap">{f.name}</span>
+              <span className={`text-[11px] tabular-nums ${on ? 'text-white/80' : 'text-slate-400'}`}>{materialsIn(bank, f.id).length}</span>
             </button>
           );
         })}
       </nav>
 
       {fam && (
-        <Panel
-          key={fam.id}
-          icon={Layers3}
-          title={fam.name}
-          badge={<>{fam.finish && <Chip tone="brand">Outer finish · has a cost factor</Chip>}{!canEdit && <Chip tone="slate">Read-only</Chip>}</>}
-          blurb={canEdit
-            ? 'Save a new version when what a material is changes. Saved versions never change, so a sent or signed BOQ keeps its words.'
-            : 'Only the Owner saves a new version. Lines on BOQs keep the version they were given.'}
-          aside={canEdit && !adding ? <Button size="sm" icon={Plus} onClick={() => { setAdding(true); setEditing(null); }}>Add a material</Button> : undefined}
-          foot={!stored && loaded ? 'Not saved yet: these are the standard package tables the bank starts from. The Owner’s first save keeps them.' : stored?.updatedAt ? `Last saved ${when(stored.updatedAt)}${stored.updatedBy ? ` by ${stored.updatedBy}` : ''}`.replace(/\.?$/, '.') : undefined}
-        >
-          <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
-            {mats.map((m, i) => {
-              const cur = currentVersion(bank, m.id);
-              const vs = versionsOf(bank, m.id);
-              const isEditing = editing === m.id;
-              const showHistory = openHistory === m.id;
+        <section key={fam.id} className="rounded-3xl bg-white border border-slate-200 p-4 min-w-0 hud-swap">
+          <div className="flex items-center justify-between gap-2 px-1 mb-3 flex-wrap">
+            <div>
+              <h2 className="font-bold text-slate-800">{fam.name}</h2>
+              <p className="text-xs text-slate-500">{materialsIn(bank, fam.id).length} materials · each line in a BOQ names one of these, at a version</p>
+            </div>
+            <div className="relative w-56">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" aria-hidden />
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search materials…" aria-label="Search materials" className={`${INPUT} !pl-8 !py-1.5`} />
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {list.map((m, i) => {
+              const h = currentVersion(bank, m.id);
+              const u = use(m.id);
+              const on = mat?.id === m.id;
+              const factor = Number(h?.costFactor ?? 1);
               return (
-                <div key={m.id} className="px-4 py-3 hud-row-in" style={{ animationDelay: `${i * 30}ms` }}>
-                  <div className="flex flex-wrap items-start gap-3">
+                <button key={m.id} type="button" onClick={() => pick(m)} aria-pressed={on}
+                  className={`hud-row-in text-left rounded-2xl border p-4 transition-colors ${on ? 'border-[#3D52A0] ring-2 ring-[#3D52A0]/20 bg-[#3D52A0]/[0.03]' : 'border-slate-200 hover:border-slate-300'}`}
+                  style={{ animationDelay: `${i * 30}ms` }}>
+                  <div className="flex items-start gap-3">
+                    <Swatch mat={m} className="w-10 h-10 rounded-xl" />
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-800">{m.name}</span>
-                        <Chip tone="slate">v{cur?.v || 1}</Chip>
-                        {GRADES.filter(g => m.grades.includes(g)).map(g => <Chip key={g} tone="brand" title={GRADE_TIER[g]}>{GRADE_NAME[g]}</Chip>)}
-                      </div>
-                      {/* The words, unless they only repeat the name. */}
-                      {(cur?.words !== m.name || cur?.brand || (fam.finish && cur?.costFactor != null)) && (
-                        <p className="text-xs text-slate-500 mt-1">
-                          {[cur?.words !== m.name ? cur?.words : '', cur?.brand, fam.finish && cur?.costFactor != null ? `cost × ${cur.costFactor}` : ''].filter(Boolean).join(' · ')}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button size="sm" variant="quiet" icon={History} onClick={() => setOpenHistory(showHistory ? null : m.id)} aria-expanded={showHistory}>
-                        {vs.length} version{vs.length === 1 ? '' : 's'}
-                      </Button>
-                      {canEdit && !isEditing && <Button size="sm" onClick={() => startEdit(m)}>Save as v{(cur?.v || 0) + 1}</Button>}
+                      <div className="flex items-center gap-2 flex-wrap"><span className="text-sm font-bold text-slate-800">{m.name}</span><Chip tone="brand">v{h?.v || 1}</Chip></div>
+                      <div className="text-xs text-slate-500 mt-0.5">{h?.brand}</div>
                     </div>
                   </div>
-
-                  {showHistory && (
-                    <ol className="mt-3 rounded-xl bg-slate-50 border border-slate-200 divide-y divide-slate-100" aria-label={`${m.name}: versions`}>
-                      {[...vs].reverse().map(v => (
-                        <li key={v.v} className="px-3 py-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
-                          <span className="font-bold text-slate-800 tabular-nums">v{v.v}</span>
-                          <span className="text-slate-700 flex-1 min-w-0">{v.words}{v.brand ? ` · ${v.brand}` : ''}{v.costFactor != null ? ` · cost × ${v.costFactor}` : ''}</span>
-                          <span className="text-[11px] text-slate-500 basis-full sm:basis-auto">{v.note} · {v.by} · {when(v.at)}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-
-                  {isEditing && (
-                    <div className="mt-3 rounded-xl border border-[#3D52A0]/30 bg-[#3D52A0]/[0.04] p-4 hud-row-in">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="md:col-span-2">
-                          <label htmlFor={`ms-words-${m.id}`} className={`${LABEL} block mb-1.5`}>What the client reads</label>
-                          <input id={`ms-words-${m.id}`} className={INPUT} value={draft.words} onChange={e => setDraft({ ...draft, words: e.target.value })} />
-                        </div>
-                        <div>
-                          <label htmlFor={`ms-brand-${m.id}`} className={`${LABEL} block mb-1.5`}>Brand or equivalent</label>
-                          <input id={`ms-brand-${m.id}`} className={INPUT} value={draft.brand} onChange={e => setDraft({ ...draft, brand: e.target.value })} placeholder="e.g. Ebco equivalent" />
-                        </div>
-                        {fam.finish ? (
-                          <div>
-                            <label htmlFor={`ms-factor-${m.id}`} className={`${LABEL} block mb-1.5`}>Cost factor</label>
-                            <input id={`ms-factor-${m.id}`} type="number" step={0.05} min={0.05} max={5} className={INPUT} value={draft.costFactor} onChange={e => setDraft({ ...draft, costFactor: e.target.value })} placeholder="1" />
-                          </div>
-                        ) : <div />}
-                        <div className="md:col-span-2">
-                          <label htmlFor={`ms-note-${m.id}`} className={`${LABEL} block mb-1.5`}>Why a new version</label>
-                          <input id={`ms-note-${m.id}`} className={INPUT} value={draft.note} onChange={e => setDraft({ ...draft, note: e.target.value })} placeholder="e.g. Telescopic channels named" />
-                        </div>
-                      </div>
-                      <div className="mt-3 flex justify-end gap-2">
-                        <Button size="sm" onClick={() => setEditing(null)}>Cancel</Button>
-                        <Button size="sm" variant="primary" icon={Check} onClick={() => saveVersion(m)} disabled={saving}>
-                          {saving ? 'Saving…' : `Save as v${(cur?.v || 0) + 1}`}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  <p className="text-xs text-slate-600 mt-2 line-clamp-2">“{h?.words}”</p>
+                  <div className="mt-3 flex items-center gap-2 flex-wrap">
+                    {GRADES.map(g => <span key={g} className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${m.grades.includes(g) ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}>{GRADE_NAME[g]}</span>)}
+                    {fam.finish && factor !== 1 && <span className="text-[10px] font-bold text-slate-500">{factor > 1 ? '+' : '−'}{Math.round(Math.abs(factor - 1) * 100)}% on cost</span>}
+                    <span className="ml-auto text-[11px] text-slate-500 tabular-nums">{u.items.length} items · {u.lines} lines</span>
+                  </div>
+                </button>
               );
             })}
-            {mats.length === 0 && <p className="px-4 py-3 text-xs text-slate-500">No materials in this family yet.</p>}
+            {list.length === 0 && <p className="text-xs text-slate-500 px-1">No material in this family matches.</p>}
           </div>
+        </section>
+      )}
 
-          {adding && canEdit && (
-            <div className="mt-4 rounded-xl border border-[#3D52A0]/30 bg-[#3D52A0]/[0.04] p-4 hud-row-in">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="ms-new-name" className={`${LABEL} block mb-1.5`}>Material</label>
-                  <input id="ms-new-name" className={INPUT} value={newMat.name} onChange={e => setNewMat({ ...newMat, name: e.target.value })} placeholder="e.g. Hettich soft-close system" />
-                </div>
-                <div>
-                  <label htmlFor="ms-new-brand" className={`${LABEL} block mb-1.5`}>Brand or equivalent</label>
-                  <input id="ms-new-brand" className={INPUT} value={newMat.brand} onChange={e => setNewMat({ ...newMat, brand: e.target.value })} />
-                </div>
-                <div className="md:col-span-2">
-                  <label htmlFor="ms-new-words" className={`${LABEL} block mb-1.5`}>What the client reads</label>
-                  <input id="ms-new-words" className={INPUT} value={newMat.words} onChange={e => setNewMat({ ...newMat, words: e.target.value })} />
-                </div>
-                <fieldset className="md:col-span-2">
-                  <legend className={`${LABEL} mb-1.5`}>Used at</legend>
-                  <div className="flex flex-wrap gap-3">
-                    {GRADES.map(g => (
-                      <label key={g} className="inline-flex items-center gap-2 text-sm text-slate-700">
-                        <input type="checkbox" checked={newMat.grades.includes(g)}
-                          onChange={e => setNewMat({ ...newMat, grades: e.target.checked ? [...newMat.grades, g] : newMat.grades.filter(x => x !== g) })} />
-                        {GRADE_TIER[g]}
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              </div>
-              <div className="mt-3 flex justify-end gap-2">
-                <Button size="sm" onClick={() => setAdding(false)}>Cancel</Button>
-                <Button size="sm" variant="primary" icon={Check} onClick={saveNewMaterial} disabled={saving}>Add at v1</Button>
+      <div className="lg:col-span-2 xl:col-span-1 min-w-0">
+        {adding && canEdit && fam ? (
+          <section className="rounded-3xl bg-white border border-slate-200 p-5 space-y-3 hud-panel-in">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">{fam.name}</div>
+            <h2 className="text-lg font-bold text-slate-800">New material</h2>
+            <div><label htmlFor="nm-name" className={`${LABEL} block mb-1.5`}>Material</label><input id="nm-name" className={INPUT} value={newMat.name} onChange={e => setNewMat({ ...newMat, name: e.target.value })} placeholder="e.g. Hettich soft-close system" /></div>
+            <div><label htmlFor="nm-words" className={`${LABEL} block mb-1.5`}>Words the client reads</label><textarea id="nm-words" rows={3} className={INPUT} value={newMat.words} onChange={e => setNewMat({ ...newMat, words: e.target.value })} /></div>
+            <div><label htmlFor="nm-brand" className={`${LABEL} block mb-1.5`}>Brand or equivalent</label><input id="nm-brand" className={INPUT} value={newMat.brand} onChange={e => setNewMat({ ...newMat, brand: e.target.value })} /></div>
+            <div>
+              <span className={`${LABEL} block mb-1.5`}>Used in options</span>
+              <div className="flex flex-wrap gap-1">
+                {GRADES.map(g => {
+                  const on = newMat.grades.includes(g);
+                  return <button key={g} type="button" aria-pressed={on} onClick={() => setNewMat({ ...newMat, grades: on ? newMat.grades.filter(x => x !== g) : [...newMat.grades, g] })}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-bold ${on ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}>{GRADE_NAME[g]}</button>;
+                })}
               </div>
             </div>
-          )}
+            <div className="flex gap-2"><Button size="sm" variant="primary" icon={Check} onClick={saveNewMaterial} disabled={busy}>Add at v1</Button><Button size="sm" onClick={() => setAdding(false)}>Cancel</Button></div>
+            {note && <p role="status" className={`text-xs ${note.tone === 'bad' ? 'text-rose-700' : 'text-emerald-700'}`}>{note.text}</p>}
+          </section>
+        ) : mat && d && (
+          <section key={mat.id} className="rounded-3xl bg-white border border-slate-200 overflow-hidden xl:sticky xl:top-4 hud-panel-in">
+            <div className="p-5 border-b border-slate-100">
+              <div className="flex items-start gap-3">
+                <Swatch mat={mat} className="w-12 h-12 rounded-xl" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">{fam?.name}</div>
+                  <h2 className="text-lg font-bold text-slate-800">{mat.name}</h2>
+                  <div className="text-xs text-slate-500">Version {cur?.v} · {cur?.at ? `current since ${when(cur.at)}` : 'the studio standard'} · {use(mat.id).items.length} items, {use(mat.id).lines} BOQ lines in {use(mat.id).projects} projects</div>
+                </div>
+              </div>
+            </div>
+            <div className="p-5 space-y-4">
+              {saved && saved.id === mat.id && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 hud-panel-in">
+                  <div className="text-sm font-bold text-emerald-800 flex items-center gap-1.5"><Check className="w-4 h-4" aria-hidden />Saved as version {saved.v}</div>
+                  <p className="text-xs text-emerald-800/80 mt-1">Every line added from today uses v{saved.v}. Draft options can update when you say so. Options already sent to the client, signed or in execution stay on v{saved.v - 1}.</p>
+                  {projectRows.length > 0 && (
+                    <div className="mt-3 rounded-xl bg-white border border-emerald-100 divide-y divide-slate-100">
+                      {projectRows.map(r => (
+                        <div key={r.id} className="px-3 py-2 flex items-center gap-2 text-xs">
+                          <span className="flex-1 min-w-0"><span className="block font-semibold text-slate-800 truncate">{r.name}</span><span className="block text-[11px] text-slate-500">{r.status} · <span className="tabular-nums">{r.n} lines</span></span></span>
+                          {r.canUpdate ? <Chip tone="brand">Update in its BOQ</Chip> : <Chip tone="slate">Stays on v{saved.v - 1}</Chip>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
-          {note && <p role="status" className={`mt-3 text-xs ${note.tone === 'bad' ? 'text-rose-700' : 'text-emerald-700'}`}>{note.text}</p>}
-        </Panel>
-      )}
+              <div>
+                <label htmlFor="ms-words" className={`${LABEL} block mb-1.5`}>Words the client reads</label>
+                <textarea id="ms-words" rows={3} className={INPUT} value={d.words} disabled={!canEdit} onChange={e => { setDraft({ ...d, words: e.target.value }); setSaved(null); }} />
+                <p className="text-[11px] text-slate-500 mt-1">Used inside every line built from this material, e.g. “…{d.words}{SUFFIX[mat.fam] || ''}…”</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label htmlFor="ms-brand" className={`${LABEL} block mb-1.5`}>Brand or equivalent</label><input id="ms-brand" className={INPUT} value={d.brand} disabled={!canEdit} onChange={e => { setDraft({ ...d, brand: e.target.value }); setSaved(null); }} /></div>
+                <div>
+                  <span className={`${LABEL} block mb-1.5`}>Used in options</span>
+                  <div className="flex flex-wrap gap-1">{GRADES.map(g => <span key={g} className={`px-2 py-1.5 rounded-lg text-xs font-bold ${mat.grades.includes(g) ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}>{GRADE_NAME[g]}</span>)}</div>
+                </div>
+              </div>
+              {fam?.finish ? (
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 flex items-center gap-3">
+                  <span className={LABEL}>Cost effect</span>
+                  {canEdit ? (
+                    <span className="flex items-center gap-1">
+                      <input aria-label="Cost factor" inputMode="decimal" value={d.factor} onChange={e => { setDraft({ ...d, factor: e.target.value }); setSaved(null); }}
+                        className="w-16 px-2 py-1 rounded-lg border border-slate-300 text-sm font-black tabular-nums text-right" />
+                      <span className="text-xs text-slate-500">× materials</span>
+                    </span>
+                  ) : (
+                    <span className="text-sm font-black tabular-nums">{Number(cur?.costFactor ?? 1) === 1 ? 'Base' : `${Number(cur?.costFactor) > 1 ? '+' : '−'}${Math.round(Math.abs(Number(cur?.costFactor) - 1) * 100)}% on materials`}</span>
+                  )}
+                  <span className="text-[11px] text-slate-500 ml-auto inline-flex items-center gap-1"><Lock className="w-3 h-3 text-[#3D52A0]" aria-hidden />studio only</span>
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-500 inline-flex items-center gap-1"><Info className="w-3 h-3" aria-hidden />Changes words only. Of all materials, only outer finishes change cost.</p>
+              )}
+
+              {changed && canEdit && (
+                <div className="rounded-2xl border border-[#3D52A0]/25 bg-[#3D52A0]/[0.04] p-4 space-y-3 hud-panel-in">
+                  <div className="text-sm font-bold text-slate-800">This becomes version {(cur?.v || 0) + 1}</div>
+                  <div className="text-xs text-slate-600 space-y-1.5">
+                    <div className="line-through text-slate-400">{cur?.words}</div>
+                    <div className="font-semibold text-slate-800">{d.words}</div>
+                    {d.brand !== (cur?.brand || '') && <div><span className="line-through text-slate-400">{cur?.brand}</span> → <b>{d.brand}</b></div>}
+                  </div>
+                  <ul className="text-[11px] text-slate-600 space-y-1 list-disc pl-4">
+                    <li>New lines use v{(cur?.v || 0) + 1} from the moment you save.</li>
+                    <li>Draft options using v{cur?.v} show “v{(cur?.v || 0) + 1} available” and update when someone presses Update.</li>
+                    <li>Options already sent to the client, signed or in execution stay on v{cur?.v}.</li>
+                  </ul>
+                  <div><label htmlFor="ms-note" className={`${LABEL} block mb-1.5`}>What changed, for the history</label><input id="ms-note" className={INPUT} value={d.note} onChange={e => setDraft({ ...d, note: e.target.value })} placeholder="e.g. Hafele named instead of Ebco" /></div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button size="sm" variant="primary" icon={Check} onClick={saveVersion} disabled={busy}>{busy ? 'Saving…' : `Save as v${(cur?.v || 0) + 1}`}</Button>
+                    <Button size="sm" onClick={() => setDraft(null)}>Discard</Button>
+                    <span className="text-[11px] text-slate-500 inline-flex items-center gap-1"><Lock className="w-3 h-3 text-[#3D52A0]" aria-hidden />Only the studio Owner saves versions</span>
+                  </div>
+                </div>
+              )}
+              {!canEdit && <p className="text-[11px] text-slate-500 inline-flex items-center gap-1"><Lock className="w-3 h-3 text-[#3D52A0]" aria-hidden />Read-only: only the studio Owner saves versions.</p>}
+              {note && <p role="status" className={`text-xs ${note.tone === 'bad' ? 'text-rose-700' : 'text-emerald-700'}`}>{note.text}</p>}
+
+              <div>
+                <div className={`${LABEL} mb-2`}>History</div>
+                <ol className="relative border-l-2 border-slate-200 ml-2 space-y-3" aria-label={`${mat.name}: versions`}>
+                  {[...versionsOf(bank, mat.id)].reverse().map(x => (
+                    <li key={x.v} className="pl-4 relative">
+                      <span className={`absolute -left-[7px] top-1 w-3 h-3 rounded-full ${x.v === cur?.v ? 'bg-[#3D52A0]' : 'bg-slate-300'} ring-2 ring-white`} />
+                      <div className="text-xs font-bold text-slate-800">v{x.v}{x.v === cur?.v ? ' · current' : ''} <span className="font-semibold text-slate-500">· {x.at ? `${when(x.at)} · ${x.by}` : x.by}</span></div>
+                      <div className="text-[11px] text-slate-600">{x.note}</div>
+                      <div className="text-[11px] text-slate-400 italic">“{x.words}”{x.brand ? ` · ${x.brand}` : ''}</div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              <div>
+                <div className={`${LABEL} mb-2`}>Items built with it</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {use(mat.id).items.map(it => (
+                    <button key={it.id} type="button" onClick={() => onOpenItem?.(it)} className="px-2.5 py-1 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:border-[#3D52A0]/40">{it.name}</button>
+                  ))}
+                  {use(mat.id).items.length === 0 && <span className="text-xs text-slate-500">No item uses it yet.</span>}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }

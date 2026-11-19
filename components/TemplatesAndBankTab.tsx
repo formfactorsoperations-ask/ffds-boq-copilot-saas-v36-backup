@@ -22,6 +22,13 @@ import Tabs from './ui/Tabs';
 import { Layers, Boxes, Store } from '@/lib/lucide-shim';
 import { Layers3 } from 'lucide-react';
 import MaterialSpecsTab from './materialSpecs/MaterialSpecsTab';
+import RecipeDrawer from './materialSpecs/RecipeDrawer';
+import { useMaterialSpecs } from './materialSpecs/useMaterialSpecs';
+import { ArtDefs } from './playground/pieceArt';
+import { Plus } from 'lucide-react';
+import { Button } from './ui/kit';
+import { canEditMaterialSpecs } from '../lib/materialSpecs';
+import { recipeOf } from '../lib/lineSpecs';
 import { useOrg } from '../contexts/OrgContext';
 
 type TabId = 'templates' | 'bank' | 'vendors' | 'materials';
@@ -39,18 +46,21 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<any> }[] = [
 ];
 
 /* BOQ Playground S1: shown while the studio's BOQ Playground preview is on. */
-const MATERIALS_TAB = { id: 'materials' as TabId, label: 'Material specs', icon: Layers3 };
+const MATERIALS_TAB = { id: 'materials' as TabId, label: 'Material specs', icon: Layers3, badge: 'New' };
 
 export default function TemplatesAndBankTab({
   bank, setBank, templates, setTemplates, isDraftBankMode, setIsDraftBankMode,
   draftBank, setDraftBank, aiStrategy, highlightedBankItemId, setHighlightedBankItemId, projects = [],
 }: any) {
   const [tab, setTab] = useState<TabId>('bank');
-  const { orgData } = useOrg();
+  const { orgData, currentRole, currentRoles } = useOrg() as any;
   const playground = !!(orgData as any)?.playground;
+  /* BOQ Playground S2: the Material specs bank, read once for both the Material specs tab and the Item bank's recipes. */
+  const specs = useMaterialSpecs(orgData?.tenantId, playground);
+  const canEditSpecs = canEditMaterialSpecs(currentRole, currentRoles);
+  const [recipeItemId, setRecipeItemId] = useState<string | null>(null);
+  const [addMaterialSignal, setAddMaterialSignal] = useState(0);
   const tabs = playground ? [...TABS.slice(0, 1), MATERIALS_TAB, ...TABS.slice(1)] : TABS;
-  const [materialStats, setMaterialStats] = useState({ families: 0, materials: 0, saved: false });
-  const handleMaterialStats = useCallback((s: { families: number; materials: number; saved: boolean }) => setMaterialStats(s), []);
   /*
     Switching tab looked broken because it was slow, not because it was stuck.
 
@@ -76,6 +86,16 @@ export default function TemplatesAndBankTab({
   );
 
   const activeBank = isDraftBankMode ? draftBank : bank;
+  const setActiveBank = isDraftBankMode ? setDraftBank : setBank;
+
+  /* Items whose words come from a recipe: the Material specs gauge. */
+  const recipeStats = useMemo(() => {
+    const items: any[] = Array.isArray(activeBank) ? activeBank : [];
+    const withRecipe = playground ? items.filter((i) => recipeOf(i, specs.bank)).length : 0;
+    return { total: items.length, withRecipe, pct: items.length ? Math.round((withRecipe / items.length) * 100) : 0 };
+  }, [activeBank, specs.bank, playground]);
+  const recipeItem = recipeItemId ? (activeBank || []).find((i: any) => i.id === recipeItemId) : null;
+  const projectsUsing = (id: string) => (projects || []).filter((p: any) => (p.tiers || []).some((t: any) => (t.boq || []).some((l: any) => l.bankId === id))).length;
 
   /*
     An item with no materials and no labour cost prices at zero wherever it is
@@ -108,7 +128,7 @@ export default function TemplatesAndBankTab({
       ariaLabel="Studio library sections"
       value={tab}
       onChange={(id) => setTab(id as TabId)}
-      items={tabs.map((t) => ({ id: t.id, label: t.label, icon: t.icon }))}
+      items={tabs.map((t: any) => ({ id: t.id, label: t.label, icon: t.icon, badge: t.badge }))}
     />
   );
 
@@ -181,9 +201,15 @@ export default function TemplatesAndBankTab({
         <ConsoleHeader
           title="Material specs"
           tabs={libraryTabs}
-          state={materialStats.saved ? `${materialStats.materials} materials` : 'Standard tables'}
-          tone={materialStats.saved ? 'ok' : 'warn'}
-          blurb="The materials every line's specification is built from, with every version each has had."
+          state={`${specs.bank.materials.length} current`}
+          tone="ok"
+          blurb="The words, brands and grades every BOQ line is built from. Change a material here and new lines take the new version; lines already in a BOQ keep theirs until you update them."
+          gauge={{
+            pct: recipeStats.pct,
+            label: 'Items with a recipe',
+            sub: `${recipeStats.withRecipe} of ${recipeStats.total} items are built from materials`,
+          }}
+          actions={canEditSpecs ? <Button size="sm" variant="primary" icon={Plus} onClick={() => setAddMaterialSignal((n) => n + 1)}>New material</Button> : undefined}
         />
       );
     }
@@ -241,7 +267,7 @@ export default function TemplatesAndBankTab({
             />
           )}
           {deferredTab === 'materials' && playground && (
-            <MaterialSpecsTab onStats={handleMaterialStats} />
+            <MaterialSpecsTab specs={specs} items={activeBank || []} projects={projects} addSignal={addMaterialSignal} onOpenItem={(it) => setRecipeItemId(it.id)} />
           )}
           {deferredTab === 'vendors' && (
             <VendorsManager projects={projects} onStats={handleVendorStats} />
@@ -254,9 +280,27 @@ export default function TemplatesAndBankTab({
               highlightedBankItemId={highlightedBankItemId}
               onHighlightClear={() => setHighlightedBankItemId(null)}
               projects={projects}
+              specs={playground ? specs.bank : undefined}
+              onOpenRecipe={playground ? (id: string) => setRecipeItemId(id) : undefined}
             />
           )}
         </div>
+        {playground && <ArtDefs />}
+        {playground && recipeItem && (
+          <RecipeDrawer
+            item={recipeItem}
+            specs={specs.bank}
+            canEditRecipes={canEditSpecs}
+            canEditItem
+            projects={projectsUsing(recipeItem.id)}
+            sharedBy={(rid) => (activeBank || []).filter((i: any) => recipeOf(i, specs.bank)?.id === rid).length}
+            onSave={async ({ recipeId, bank: nextBank }) => {
+              if (nextBank) await specs.save(nextBank);
+              if (recipeId !== undefined) setActiveBank((items: any[]) => items.map((i) => (i.id === recipeItem.id ? { ...i, recipeId } : i)));
+            }}
+            onClose={() => setRecipeItemId(null)}
+          />
+        )}
       </div>
     </div>
   );
