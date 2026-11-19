@@ -837,6 +837,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               specBank={materialSpecs.bank}
               canEditRecipes={canEditMaterialSpecs(currentRole, currentRoles as any)}
               onSaveSpecs={materialSpecs.save}
+              marginFloors={(orgData as any)?.settings?.marginFloors}
               renderFullGrid={() => (
                 <StudioExcelGrid
                   items={fullBoq}

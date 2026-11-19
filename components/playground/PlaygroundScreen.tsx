@@ -20,6 +20,8 @@ import PlanStage from './PlanStage';
 import Catalogue from './Catalogue';
 import RoomsLens from './RoomsLens';
 import SheetLens from './SheetLens';
+import TuneLens from './TuneLens';
+import type { MarginFloors } from '../../lib/playground/issues';
 import { Receipt, LineInspector, RoomInspector, useShareRows } from './LiveBoq';
 import PlanSheetPanel from './PlanSheetPanel';
 import RecipeDrawer from '../materialSpecs/RecipeDrawer';
@@ -87,11 +89,13 @@ interface Props {
   /** The Owner (and Super Admin) may change a recipe from a line's Item recipe drawer. */
   canEditRecipes?: boolean;
   onSaveSpecs?: (bank: MaterialSpecsBank) => Promise<void>;
+  /** Studio settings `marginFloors`: Tune never goes under them, and lines under them are flagged. */
+  marginFloors?: MarginFloors | null;
 }
 
 export default function PlaygroundScreen(props: Props) {
   const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly, currentRoles, tenantId, onBoq, newId,
-    onSelectTier, onMakePlaygroundVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs } = props;
+    onSelectTier, onMakePlaygroundVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors } = props;
   const boq = tier.boq || [];
   const seesMargins = useSeesMargins(currentRoles);
   /* Hide figures hides margins only (lib/figuresPrivacy): prices stay, and seesMargins already reads it. */
@@ -149,7 +153,8 @@ export default function PlaygroundScreen(props: Props) {
   const totals = useMemo(() => playgroundTotals(boq, bankMap, { rules, rooms, measure }), [boq, bankMap, rules, rooms, measure]);
   const margin = totals.sell > 0 ? ((totals.sell - totals.cost) / totals.sell) * 100 : 0;
   const shares = useShareRows(models, rooms, bankMap, rules, measure);
-  const floor = marginFloorFor(undefined, (ctx as any)?.marginFloors);
+  const floors: MarginFloors | null = marginFloors || (ctx as any)?.marginFloors || null;
+  const floor = marginFloorFor(undefined, floors);
   const waiting = useMemo(() => needsPlace(boq, bankMap), [boq, bankMap]);
   const query = useCallback((m: LineModel) => {
     const s = q.trim().toLowerCase();
@@ -272,7 +277,7 @@ export default function PlaygroundScreen(props: Props) {
       m={selModel}
       index={models.findIndex(x => x.line.id === selModel.line.id)}
       count={models.length}
-      issues={lineIssues(selModel.line, { bankMap, pieces, rooms: planRooms, floors: (ctx as any)?.marginFloors, specBank: offer ? specBank : null })}
+      issues={lineIssues(selModel.line, { bankMap, pieces, rooms: planRooms, floors, specBank: offer ? specBank : null })}
       rooms={rooms}
       bankMap={bankMap}
       rules={rules}
@@ -498,8 +503,8 @@ export default function PlaygroundScreen(props: Props) {
                     specBank={specBank} onUpdateLines={offer ? updateLines : undefined} />
                 )}
                 {lens === 'tune' && (
-                  <div className="p-6 max-w-xl"><EmptyState icon={SlidersHorizontal} title="Tune comes next"
-                    text="A fader per room for its markup, a master for the flat, and the client’s number: the faders move to meet it, never under your floor. Until then, drag markups in the Sheet or on a room card." /></div>
+                  <TuneLens boq={boq} bankMap={bankMap} rules={rules} rooms={rooms} floor={floor} floors={floors}
+                    seesMargins={seesMargins} readOnly={readOnly} commit={commit} />
                 )}
                 {lens === 'deal' && (
                   <div className="p-6 max-w-xl"><EmptyState icon={Target} title="Deal comes next"
