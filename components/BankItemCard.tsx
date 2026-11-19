@@ -6,6 +6,9 @@ import { formatCurrency, calculateSellPrice } from '../lib/utils';
 import { DeleteIcon, WandIcon } from './Icons';
 import { UOM_OPTIONS } from '../constants';
 import { Sparkles, Copy, Trash2, Building2 } from '@/lib/lucide-shim';
+import type { MaterialSpecsBank } from '../lib/materialSpecs';
+import { recipeOf, specsFromRecipe, composeWords } from '../lib/lineSpecs';
+import Swatch from './materialSpecs/Swatch';
 
 interface BankItemCardProps {
   item: Item;
@@ -20,6 +23,9 @@ interface BankItemCardProps {
   gridTemplate?: string;
   projects?: FullProjectData[];
   onViewProjectUsage?: (item: Item) => void;
+  /** BOQ Playground S2: the Material specs bank. With it, the card shows the item's recipe and opens its drawer. */
+  specBank?: MaterialSpecsBank;
+  onOpenRecipe?: (id: string) => void;
 }
 
 const FastInput: React.FC<{
@@ -89,7 +95,13 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
   gridTemplate,
   projects = [],
   onViewProjectUsage,
+  specBank,
+  onOpenRecipe,
 }) => {
+  /* The recipe and what it makes at Comfort, as the mockup's card shows them. */
+  const recipe = specBank ? recipeOf(item, specBank) : null;
+  const recipeSpecs = recipe && specBank ? specsFromRecipe(specBank, recipe, 'C') : null;
+  const recipeWords = recipeSpecs && specBank ? composeWords(specBank, recipeSpecs) : '';
   const [isSplitting, setIsSplitting] = useState(false);
 
   const totalCost = useMemo(
@@ -193,6 +205,13 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
             <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-200/60">
               {item.cat || 'General'}
             </span>
+            {specBank && (
+              <button type="button" onClick={() => onOpenRecipe?.(item.id)}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${recipe ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-amber-100 text-amber-700'}`}
+                title={recipe ? `Recipe: ${recipe.name}. Open it` : 'No recipe yet. Open the item to start one'}>
+                {recipe ? 'Recipe' : 'No recipe'}
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -247,14 +266,30 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
           )}
         </div>
 
-        {/* Specs */}
-        <FastInput
-          value={item.specs}
-          multiline
-          onChange={(v) => handleUpdate('specs', v)}
-          className="text-[11px] text-slate-500 mb-1"
-          placeholder="Public Concept Specs (L1/L2 Proposal)"
-        />
+        {/* Specs: from the recipe when it has one (BOQ Playground S2), else typed. */}
+        {recipeSpecs && specBank ? (
+          <button type="button" onClick={() => onOpenRecipe?.(item.id)} className="block w-full text-left mb-2">
+            <span className="mt-2 flex flex-wrap gap-1">
+              {Object.entries(recipeSpecs).slice(0, 4).map(([part, sp]) => {
+                const m = specBank.materials.find(x => x.id === sp.id);
+                return (
+                  <span key={part} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-600">
+                    {m?.swatch && <Swatch mat={m} className="w-3 h-3 rounded-full" />}{part}: {(m?.name || '').split(',')[0]} <span className="text-[#3D52A0]">v{sp.v}</span>
+                  </span>
+                );
+              })}
+            </span>
+            <span className="mt-2 text-xs text-slate-600 line-clamp-2">{recipeWords}</span>
+          </button>
+        ) : (
+          <FastInput
+            value={item.specs}
+            multiline
+            onChange={(v) => handleUpdate('specs', v)}
+            className="text-[11px] text-slate-500 mb-1"
+            placeholder="Public Concept Specs (L1/L2 Proposal)"
+          />
+        )}
 
         {/* Internal Specs */}
         <FastInput

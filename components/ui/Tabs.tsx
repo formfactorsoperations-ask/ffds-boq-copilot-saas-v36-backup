@@ -32,6 +32,8 @@ export interface TabItem {
   count?: number;
   /** Draws the eye without spending the accent — for "3 need you" counts. */
   tone?: 'default' | 'attention';
+  /** A word in the badge's place, e.g. "New" on a section just added. */
+  badge?: string;
 }
 
 interface TabsProps {
@@ -232,6 +234,7 @@ const Tabs: React.FC<TabsProps> = ({
             >
               {Icon && <Icon className="w-3.5 h-3.5" />}
               <span>{t.label}</span>
+              {t.badge && <span className="lgt-count">{t.badge}</span>}
               {!!t.count && t.count > 0 && (
                 <span className={`lgt-count ${t.tone === 'attention' && !active ? 'lgt-count-attention' : ''}`}>
                   {t.count}

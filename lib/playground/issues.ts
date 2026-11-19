@@ -4,6 +4,7 @@
  *   overlap   the piece collides with another, or runs past its room's walls
  *   nospec    the line has no specification words (or only an import stub)
  *   lowmk     the line is priced under the studio's margin floor for its category
+ *   stale     a part of the line is on an older version of its material (S2)
  *
  * "Newer material spec out" joins these with the Material specs bank (PR S2).
  *
@@ -13,12 +14,15 @@
  */
 import type { Item, BoqItem } from '../../types';
 import { isBillable, isAsActuals } from '../boqPricing';
+import type { MaterialSpecsBank } from '../materialSpecs';
+import { staleParts } from '../lineSpecs';
 import { overlaps, runsPastWall, type PlanRoom } from './placing';
 import type { BoardPiece } from './pieces';
 
-export type IssueKind = 'overlap' | 'nospec' | 'lowmk';
+export type IssueKind = 'stale' | 'overlap' | 'nospec' | 'lowmk';
 
 export const ISSUE_LABEL: Record<IssueKind, string> = {
+  stale: 'Newer material spec out',
   overlap: 'Overlaps or runs past a wall',
   nospec: 'No spec words',
   lowmk: 'Under your floor',
@@ -55,12 +59,16 @@ export interface IssueContext {
   /** The drawn pieces and the plan's rooms, for the overlap check. */
   pieces?: BoardPiece[];
   rooms?: PlanRoom[];
+  /** The Material specs bank, for parts on an older version (S2). Only given where the option may take updates. */
+  specBank?: MaterialSpecsBank | null;
 }
 
 /** What needs a look on one line, in a fixed order. */
 export function lineIssues(line: BoqItem, ctx: IssueContext): IssueKind[] {
   const item = ctx.bankMap.get(line.bankId);
   const out: IssueKind[] = [];
+
+  if (ctx.specBank && staleParts(ctx.specBank, line).length) out.push('stale');
 
   const piece = ctx.pieces?.find(p => p.id === line.id);
   if (piece) {

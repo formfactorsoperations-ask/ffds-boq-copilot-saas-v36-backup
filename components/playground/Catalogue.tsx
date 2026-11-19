@@ -26,13 +26,15 @@ const CAT_OF: Record<PieceKind, Cat> = {
 };
 type Tab = 'pieces' | 'kits' | 'client';
 
-export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel }: {
+export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, artOf }: {
   bank: Item[];
   readOnly: boolean;
   onClose: () => void;
   /** The + on a tile: adds the item where the screen says (the selected room). */
   onAdd: (item: Item) => void;
   addLabel: string;
+  /** How an item looks in its recipe's finish at this option's grade (S2). */
+  artOf?: (item: Item) => { fill?: string; base?: string; top?: string };
 }) {
   const [tab, setTab] = useState<Tab>('pieces');
   const [q, setQ] = useState('');
@@ -74,7 +76,7 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel }: 
               onDragStart={e => { e.dataTransfer.setData('text/plain', item.id); e.dataTransfer.effectAllowed = 'copy'; }}
               className={`hud-row-in relative rounded-xl border border-slate-200 bg-white p-2 ${readOnly ? '' : 'cursor-grab hover:border-[#3D52A0]/40 hover:shadow-md'}`}
               style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }} title={readOnly ? item.name : `Drag ${item.name} onto the plan`}>
-              <span className="block"><PieceThumb kind={draw.kind} w={draw.w} d={draw.d} words={item.specs} /></span>
+              <span className="block"><PieceThumb kind={draw.kind} w={draw.w} d={draw.d} words={item.specs} {...(artOf?.(item) || {})} /></span>
               <span className="block text-[11px] font-semibold text-slate-800 leading-tight mt-1 line-clamp-2">{item.name}</span>
               <span className="block text-[10px] font-bold text-slate-500 tabular-nums">{inr(calculateSellPrice(item.materials, item.labor, item.margin))}/{item.unit}</span>
               {!readOnly && (

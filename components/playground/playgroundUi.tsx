@@ -6,6 +6,9 @@ import { drawOf, pieceSize, type PieceSize } from '../../lib/playground/pieces';
 import { lineAmount, lineCost } from '../../lib/playground/pricing';
 import { markupOf, specWordsOf, DEFAULT_MARGIN_FLOOR } from '../../lib/playground/issues';
 import { withByRoomQty, type MeasureContext } from '../../lib/playground/rooms';
+import type { MaterialSpecsBank } from '../../lib/materialSpecs';
+import { staleParts } from '../../lib/lineSpecs';
+import { artOfSpecs } from './pieceArt';
 
 /*
   The small parts the BOQ Playground screen is built from (the approved
@@ -156,11 +159,18 @@ export interface LineModel {
   billable: boolean;
   /** Bought by the client, or paid to the vendor at actuals: shown apart, not in the price. */
   separate: boolean;
+  /** Parts on an older version than the bank's (only on an option that may take updates). */
+  stale: string[];
+  /** How it is drawn, from its materials. */
+  art: { fill?: string; base?: string; top?: string };
 }
+
+/** The Material specs bank, and whether this option is offered newer versions. */
+export interface SpecContext { bank: MaterialSpecsBank; offer: boolean }
 
 const SEPARATE = new Set(['client_procured']);
 
-export function lineModel(line: BoqItem, bankMap: Map<string, Item>, rules: PricingRules | null, rooms: Room[], measure?: MeasureContext): LineModel {
+export function lineModel(line: BoqItem, bankMap: Map<string, Item>, rules: PricingRules | null, rooms: Room[], measure?: MeasureContext, spec?: SpecContext): LineModel {
   const item = bankMap.get(line.bankId);
   const b = rooms.length && line.byRoom ? withByRoomQty(line, rooms, measure) : line;
   const r = resolveBoqLine(b, bankMap);
@@ -188,6 +198,8 @@ export function lineModel(line: BoqItem, bankMap: Map<string, Item>, rules: Pric
     margin: r.rate > 0 ? ((r.rate - unitCost) / r.rate) * 100 : 0,
     billable: r.billable,
     separate,
+    stale: spec?.offer ? staleParts(spec.bank, b) : [],
+    art: spec ? artOfSpecs(b.materialSpecs, spec.bank.materials) : {},
   };
 }
 

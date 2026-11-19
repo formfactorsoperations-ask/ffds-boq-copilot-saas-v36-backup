@@ -7,6 +7,7 @@ import { round2 } from '../../lib/playground/geometry';
 import { PieceThumb } from './pieceArt';
 import { inr, marginTone, Scrub, withCost, withMarkup, withRate, type LineModel } from './playgroundUi';
 import type { ShareRow } from './LiveBoq';
+import { currentVersion, type MaterialSpecsBank } from '../../lib/materialSpecs';
 
 /*
   The Sheet lens (was Excel): every line in a grid, grouped by room, each with
@@ -23,7 +24,7 @@ const STATUS_CHIP: Record<string, [string, 'warn' | 'slate' | 'good']> = {
   pending_finalisation: ['To confirm', 'warn'],
 };
 
-export default function SheetLens({ rooms, models, shares, roomTotals, sel, readOnly, seesMargins, hideFigures, floor, query, onSel, onReplace, onReplaceMany, onDelete, onFullGrid }: {
+export default function SheetLens({ rooms, models, shares, roomTotals, sel, readOnly, seesMargins, hideFigures, floor, query, onSel, onReplace, onReplaceMany, onDelete, onFullGrid, specBank, onUpdateLines }: {
   rooms: Room[];
   models: LineModel[];
   shares: Map<string, ShareRow[]>;
@@ -40,7 +41,29 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
   onDelete: (ids: string[]) => void;
   /** Opens the full grid (statuses, linkage, notes, labour), as the Excel view had it. */
   onFullGrid?: () => void;
+  /** The Material specs bank (S2): each line's parts as chips. */
+  specBank?: MaterialSpecsBank | null;
+  /** Takes these lines to the current versions of their materials. */
+  onUpdateLines?: (ids: string[]) => void;
 }) {
+  /* The mockup's spec chips: the first three parts, their material and version, amber when a newer one is out. */
+  const specChips = (m: LineModel) => {
+    const ms = m.line.materialSpecs;
+    if (!specBank || !ms || !Object.keys(ms).length) {
+      const imported = /imported via excel/i.test(m.words);
+      return <span className={`text-[10px] font-bold ${imported ? 'text-amber-700' : 'text-slate-400'}`}>{imported ? 'No spec words' : 'Typed by hand'}</span>;
+    }
+    return Object.entries(ms).slice(0, 3).map(([part, sp]) => {
+      const mat = specBank.materials.find(x => x.id === sp.id);
+      const old = m.stale.includes(part);
+      return (
+        <span key={part} title={`${part}: ${mat?.name || sp.id}`} className={`inline-flex items-center gap-1 mr-1 mb-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${old ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
+          {mat?.swatch && <svg viewBox="0 0 3 3" className="w-2.5 h-2.5 rounded-full border border-slate-300" aria-hidden><rect width="3" height="3" fill={`url(#${mat.swatch})`} /></svg>}
+          {(mat?.name || sp.id).split(/[ ,]/)[0]} v{sp.v}{old ? `→${currentVersion(specBank, sp.id)?.v}` : ''}
+        </span>
+      );
+    });
+  };
   const [picks, setPicks] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<Set<string>>(new Set());
   const money = seesMargins && !hideFigures;
@@ -69,11 +92,12 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
           <td className="px-2 py-1.5">
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-9 h-7 shrink-0">
-                {m.draw && m.size ? <PieceThumb kind={m.draw.kind} w={m.size.w} d={m.size.d} words={m.words} className="w-9 h-7" /> : <span className="w-9 h-7 grid place-items-center text-slate-300"><Layers className="w-3.5 h-3.5" aria-hidden /></span>}
+                {m.draw && m.size ? <PieceThumb kind={m.draw.kind} w={m.size.w} d={m.size.d} words={m.words} {...m.art} className="w-9 h-7" /> : <span className="w-9 h-7 grid place-items-center text-slate-300"><Layers className="w-3.5 h-3.5" aria-hidden /></span>}
               </span>
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-slate-800 truncate">{m.name}{st && <> <span className="align-middle"><Chip tone={st[1]}>{st[0]}</Chip></span></>}</div>
                 <div className="text-[11px] text-slate-500 truncate">{m.words || 'No words yet'}</div>
+                {specBank && <div className="mt-1 leading-none">{specChips(m)}</div>}
                 {l.byRoom && (
                   <button type="button" onClick={e => { e.stopPropagation(); setOpen(o => toggle(o, l.id)); }} className="mt-1 text-[11px] font-bold text-[#3D52A0] hover:underline">
                     {isOpen ? 'Hide' : 'Show'} the rooms
@@ -180,6 +204,7 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
             <button type="button" onClick={() => onReplaceMany(picked.map(m => withMarkup(m, Math.max(0, m.markup - 1))))} className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">Markup −1%</button>
             <button type="button" onClick={() => onReplaceMany(picked.map(m => withMarkup(m, m.markup + 1)))} className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">Markup +1%</button>
           </>}
+          {onUpdateLines && <button type="button" onClick={() => onUpdateLines(picked.map(m => m.line.id))} className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">Update specs</button>}
           <button type="button" onClick={() => onReplaceMany(picked.map(m => ({ ...m.line, boqStatus: 'client_procured' } as BoqItem)))} className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">Client procured</button>
           <button type="button" onClick={() => { onDelete([...picks]); setPicks(new Set()); }} className="px-2 py-1 rounded-lg bg-rose-500/80 hover:bg-rose-500 text-xs font-bold">Delete</button>
           <button type="button" onClick={() => setPicks(new Set())} className="ml-auto text-xs font-bold text-white/70 hover:text-white">Clear</button>

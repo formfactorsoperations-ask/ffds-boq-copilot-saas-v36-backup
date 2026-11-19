@@ -22,6 +22,10 @@ import RoomsLens from './RoomsLens';
 import SheetLens from './SheetLens';
 import { Receipt, LineInspector, RoomInspector, useShareRows } from './LiveBoq';
 import PlanSheetPanel from './PlanSheetPanel';
+import RecipeDrawer from '../materialSpecs/RecipeDrawer';
+import { artOfSpecs } from './pieceArt';
+import type { MaterialSpecsBank } from '../../lib/materialSpecs';
+import { gradeOf, offersUpdates, withRecipeSpecs, updatedLine, recipeOf, specsFromRecipe } from '../../lib/lineSpecs';
 
 /*
   The BOQ Playground (the approved mockup, v14): the BOQ Editor's one tab.
@@ -78,11 +82,16 @@ interface Props {
   focusLineId?: string | null;
   /** The full grid (the Excel view as it was: statuses, linkage, notes), opened from the Sheet. */
   renderFullGrid?: () => React.ReactNode;
+  /** The Material specs bank (S2): new lines take their recipe's materials, and drafts are offered newer versions. */
+  specBank?: MaterialSpecsBank | null;
+  /** The Owner (and Super Admin) may change a recipe from a line's Item recipe drawer. */
+  canEditRecipes?: boolean;
+  onSaveSpecs?: (bank: MaterialSpecsBank) => Promise<void>;
 }
 
 export default function PlaygroundScreen(props: Props) {
   const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly, currentRoles, tenantId, onBoq, newId,
-    onSelectTier, onMakePlaygroundVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid } = props;
+    onSelectTier, onMakePlaygroundVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs } = props;
   const boq = tier.boq || [];
   const seesMargins = useSeesMargins(currentRoles);
   /* Hide figures hides margins only (lib/figuresPrivacy): prices stay, and seesMargins already reads it. */
@@ -103,6 +112,13 @@ export default function PlaygroundScreen(props: Props) {
   const [planModal, setPlanModal] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [fullGrid, setFullGrid] = useState(false);
+  const [recipeItemId, setRecipeItemId] = useState<string | null>(null);
+  /* S2: the option's grade picks each recipe's column; a draft is offered newer versions. */
+  const grade = gradeOf(tier);
+  const offer = !!specBank && offersUpdates(tier, ctx, readOnly);
+  const spec = useMemo(() => (specBank ? { bank: specBank, offer } : undefined), [specBank, offer]);
+  /* A Classic BOQ stays as it was: its new lines keep the Item Bank's words. */
+  const prepareNew = useCallback((line: BoqItem) => (format === 'playground' ? withRecipeSpecs(line, bankMap.get(line.bankId), specBank, grade) : line), [bankMap, specBank, grade, format]);
   const [hint, setHint] = useState(() => { try { return !localStorage.getItem(HINT_KEY); } catch { return true; } });
   const [wide, setWide] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth >= 1280));
   useEffect(() => {
@@ -126,8 +142,8 @@ export default function PlaygroundScreen(props: Props) {
   const pieces = useMemo(() => boardPieces(boq, bankMap), [boq, bankMap]);
   const measure = useMemo(() => ({ covers: wallCovers(pieces) }), [pieces]);
   const models: LineModel[] = useMemo(
-    () => boq.filter(l => l.boqStatus !== 'deleted' && l.boqStatus !== 'substituted').map(l => lineModel(l, bankMap, rules, rooms, measure)),
-    [boq, bankMap, rules, rooms, measure],
+    () => boq.filter(l => l.boqStatus !== 'deleted' && l.boqStatus !== 'substituted').map(l => lineModel(l, bankMap, rules, rooms, measure, spec)),
+    [boq, bankMap, rules, rooms, measure, spec],
   );
   const byId = useMemo(() => new Map(models.map(m => [m.line.id, m])), [models]);
   const totals = useMemo(() => playgroundTotals(boq, bankMap, { rules, rooms, measure }), [boq, bankMap, rules, rooms, measure]);
@@ -165,10 +181,11 @@ export default function PlaygroundScreen(props: Props) {
     const probe = probeOf(item);
     if (planRoom && probe) {
       const at = autoPlace(probe, planRoom, pieces.filter(p => p.room === roomName));
-      const line = at ? newPieceLine(item, roomName, at, newId()) : null;
+      const made = at ? newPieceLine(item, roomName, at, newId()) : null;
+      const line = made ? prepareNew(made) : null;
       if (line) { commit([...boq, line], `${item.name} added to ${roomName}.`); setSel(line.id); return; }
     }
-    const line: BoqItem = { id: newId(), bankId: item.id, qty: 1, roomId: roomName, baseRate: item.materials };
+    const line: BoqItem = prepareNew({ id: newId(), bankId: item.id, qty: 1, roomId: roomName, baseRate: item.materials });
     commit([...boq, line], probe && planRoom ? `${item.name} added to ${roomName}. No free wall fits it: drag it into place.` : `${item.name} added to ${roomName}.`);
     setSel(line.id);
   };
@@ -196,6 +213,20 @@ export default function PlaygroundScreen(props: Props) {
   const canPaint = !boq.some(l => l.byRoom?.basis === 'wallPaint') && rooms.length > 0 && !!paintingFromPlan(bank, rooms, () => 'probe');
   const addPainting = () => { const p = paintingFromPlan(bank, rooms, newId); if (p) commit([...boq, ...p.lines], 'Painting added from the plan, shared into the rooms.'); };
 
+  /* Lines taken to the current versions of their materials. */
+  const updateLines = (ids: string[]) => {
+    if (!specBank) return;
+    const set = new Set(ids);
+    let n = 0;
+    const next = boq.map(l => {
+      if (!set.has(l.id)) return l;
+      const u = updatedLine(specBank, l, bankMap.get(l.bankId));
+      if (u !== l) n++;
+      return u;
+    });
+    if (n) commit(next, `${n} line${n === 1 ? '' : 's'} updated to the latest specs.`);
+    else setNote('Those lines already use the latest specs.');
+  };
   const pickLine = (id: string | null) => { setSel(id); if (id) setSelRoom(null); };
   const pickRoom = (name: string | null) => { setSelRoom(name); if (name) setSel(null); };
   const step = (d: number) => {
@@ -241,7 +272,7 @@ export default function PlaygroundScreen(props: Props) {
       m={selModel}
       index={models.findIndex(x => x.line.id === selModel.line.id)}
       count={models.length}
-      issues={lineIssues(selModel.line, { bankMap, pieces, rooms: planRooms, floors: (ctx as any)?.marginFloors })}
+      issues={lineIssues(selModel.line, { bankMap, pieces, rooms: planRooms, floors: (ctx as any)?.marginFloors, specBank: offer ? specBank : null })}
       rooms={rooms}
       bankMap={bankMap}
       rules={rules}
@@ -249,6 +280,9 @@ export default function PlaygroundScreen(props: Props) {
       seesMargins={seesMargins}
       hideFigures={hideFigures}
       floor={floor}
+      specBank={specBank}
+      offerUpdates={offer}
+      onOpenRecipe={specBank ? setRecipeItemId : undefined}
       onReplace={l => replace(l)}
       onStep={step}
       onClose={() => setSel(null)}
@@ -291,6 +325,7 @@ export default function PlaygroundScreen(props: Props) {
       onHint={() => { setHint(false); try { localStorage.setItem(HINT_KEY, '1'); } catch { /* private window */ } }}
       onLens={l => { setLens(l); setFitSignal(s => s + 1); }}
       onHide={wide && plan ? () => setInsOpen(false) : undefined}
+      onUpdateStale={offer ? () => updateLines(models.filter(m => m.stale.length).map(m => m.line.id)) : undefined}
     />
   );
 
@@ -428,7 +463,7 @@ export default function PlaygroundScreen(props: Props) {
                 <PlanStage
                   ctx={ctx} rooms={rooms} boq={boq} bank={bank} bankMap={bankMap} models={byId} roomTotals={totals.byRoom}
                   readOnly={readOnly} sel={sel} onSel={pickLine} selRoom={selRoom} onSelRoom={pickRoom}
-                  commit={commit} newId={newId} libOpen={showLib} hideFigures={hideFigures} fitSignal={fitSignal}
+                  commit={commit} newId={newId} libOpen={showLib} hideFigures={hideFigures} fitSignal={fitSignal} prepareNew={prepareNew}
                 />
               ) : (
                 <div className="absolute inset-0 grid place-items-center p-6" style={{ paddingLeft: showLib && wide ? 260 : undefined }}>
@@ -459,7 +494,8 @@ export default function PlaygroundScreen(props: Props) {
                   <SheetLens rooms={rooms} models={models} shares={shares} roomTotals={totals.byRoom} sel={sel} readOnly={readOnly}
                     seesMargins={seesMargins} hideFigures={hideFigures} floor={floor} query={query}
                     onSel={pickLine} onReplace={l => replace(l)} onReplaceMany={replaceMany} onDelete={remove}
-                    onFullGrid={renderFullGrid ? () => setFullGrid(true) : undefined} />
+                    onFullGrid={renderFullGrid ? () => setFullGrid(true) : undefined}
+                    specBank={specBank} onUpdateLines={offer ? updateLines : undefined} />
                 )}
                 {lens === 'tune' && (
                   <div className="p-6 max-w-xl"><EmptyState icon={SlidersHorizontal} title="Tune comes next"
@@ -474,7 +510,8 @@ export default function PlaygroundScreen(props: Props) {
 
             {showLib && (
               <div className="absolute left-2 top-2 bottom-2 z-20 w-[232px] flex hud-panel-in">
-                <Catalogue bank={bank} readOnly={readOnly} onClose={() => setLibOpen(false)} onAdd={it => addToRoom(it, libTarget)} addLabel={`to ${libTarget}`} />
+                <Catalogue bank={bank} readOnly={readOnly} onClose={() => setLibOpen(false)} onAdd={it => addToRoom(it, libTarget)} addLabel={`to ${libTarget}`}
+                  artOf={specBank ? (it => { const r = recipeOf(it, specBank); return r ? artOfSpecs(specsFromRecipe(specBank, r, grade), specBank.materials) : {}; }) : undefined} />
               </div>
             )}
 
@@ -548,6 +585,19 @@ export default function PlaygroundScreen(props: Props) {
           </div>
         )}
       </div>
+
+      {recipeItemId && specBank && bankMap.get(recipeItemId) && (
+        <RecipeDrawer
+          item={bankMap.get(recipeItemId)!}
+          specs={specBank}
+          canEditRecipes={!!canEditRecipes && !!onSaveSpecs}
+          canEditItem={false}
+          projects={0}
+          sharedBy={rid => bank.filter(i => recipeOf(i, specBank)?.id === rid).length}
+          onSave={async ({ bank: next }) => { if (next && onSaveSpecs) await onSaveSpecs(next); }}
+          onClose={() => setRecipeItemId(null)}
+        />
+      )}
 
       {planModal && (
         <div className="fixed inset-0 z-[300] grid place-items-center p-4 phd-scrim" style={{ background: 'rgba(15,23,42,.45)' }} role="dialog" aria-modal="true" aria-label="The plan under this BOQ">

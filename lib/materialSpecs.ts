@@ -13,7 +13,9 @@
  *              new version is added, an old one is never changed or removed,
  *              so a sent or signed BOQ that named v1 can always say what v1
  *              was. The Firestore rule refuses any write that would not.
- *   recipes    which material fills each part of an item at each grade (PR S2)
+ *   recipes    which material fills each part of an item at each grade (PR S2):
+ *              a carpentry recipe says Carcass is MR ply at Essential, BWR at
+ *              Comfort, BWP at Premium, and so on part by part
  *
  * Outer finishes (a family marked `finish`) carry a cost factor on each
  * version: what that finish does to a piece's price (lib/playground/finishes.ts).
@@ -46,6 +48,25 @@ export interface Material {
   name: string;
   /** The grades the material is used at, e.g. ['C', 'P']. */
   grades: Grade[];
+  /** How it is drawn: a pattern on the plan (pg-w-oak) and its base colour. Finishes and tops only. */
+  swatch?: string;
+  base?: string;
+}
+
+/** One part of a recipe: the family it is chosen from and the material at each grade. */
+export interface RecipePart {
+  part: string;
+  fam: string;
+  byGrade: Record<Grade, string>;
+  /** The outer finish: chosen on the piece as a tile, and it prices the piece. */
+  finish?: boolean;
+}
+
+/** Which material fills each part of an item, at each grade. Shared by every item of its kind. */
+export interface Recipe {
+  id: string;
+  name: string;
+  parts: RecipePart[];
 }
 
 export interface MaterialVersion {
@@ -67,8 +88,8 @@ export interface MaterialSpecsBank {
   families: MaterialFamily[];
   materials: Material[];
   versions: MaterialVersion[];
-  /** item recipe id → its parts (PR S2). */
-  recipes: Record<string, unknown>;
+  /** recipe id → the recipe (PR S2). */
+  recipes: Record<string, Recipe>;
   updatedAt?: number;
   updatedBy?: string;
 }
@@ -262,3 +283,137 @@ export function bankFromDoc(data: any): MaterialSpecsBank | null {
 /** Who may save a new version: the Owner, and Super Admin. Everyone else reads. */
 export const canEditMaterialSpecs = (role: string | null | undefined, roles?: string[] | null) =>
   [role, ...(roles || [])].some(r => r === 'Owner' || r === 'Super Admin');
+
+/* ───────────────────────────── the studio standard (PR S2) ───────────────────────────── */
+
+const STD_AT = 0;
+const STD_BY = 'Studio standard';
+type StdMat = [fam: string, id: string, name: string, words: string, brand: string, grades: string, extra?: { swatch?: string; base?: string; factor?: number }];
+
+/** The families a line's parts are chosen from, in the order the screen lists them. */
+export const STANDARD_FAMILIES: MaterialFamily[] = [
+  { id: 'ply', name: 'Plywood & boards' },
+  { id: 'lam', name: 'Outer finishes', finish: true },
+  { id: 'inner', name: 'Inner finishes' },
+  { id: 'hw', name: 'Hardware' },
+  { id: 'handle', name: 'Handles' },
+  { id: 'top', name: 'Countertops' },
+  { id: 'glass', name: 'Glass & mirror' },
+  { id: 'paint', name: 'Paint' },
+  { id: 'ceil', name: 'False ceiling' },
+  { id: 'elec', name: 'Electrical' },
+];
+
+const STANDARD_MATERIALS: StdMat[] = [
+  ['ply', 'ply-mr', 'MR plywood, 18 mm', '18 mm MR-grade plywood', 'Greenply MR equivalent', 'E'],
+  ['ply', 'ply-bwr', 'BWR plywood, 18 mm', '18 mm BWR-grade plywood', 'Century Club equivalent', 'C'],
+  ['ply', 'ply-bwp', 'BWP marine plywood, 18 mm', '18 mm BWP marine plywood', 'Century Sainik 710 equivalent', 'P'],
+  ['ply', 'ply-hdhmr', 'HDHMR board, 18 mm', '18 mm HDHMR board', 'Action Tesa equivalent', ''],
+  ['lam', 'lam-ash', 'Standard laminate, 1 mm', '1 mm standard laminate', 'Merino · Greenlam · Century', 'E', { swatch: 'pg-w-ash', base: '#e2d3bb', factor: 0.85 }],
+  ['lam', 'lam-oak', 'Designer laminate, 1 mm', '1 mm textured designer laminate', 'Merino · Greenlam · Royale Touche', 'C', { swatch: 'pg-w-oak', base: '#c9a37a', factor: 1 }],
+  ['lam', 'ven-walnut', 'Natural veneer, 4 mm', '4 mm natural veneer, PU lacquered', 'Greenlam Decowood · Century Veneers', 'P', { swatch: 'pg-w-walnut', base: '#7a5436', factor: 1.3 }],
+  ['lam', 'lam-graphite', 'Super-matt laminate, 1 mm', '1 mm super-matt anti-fingerprint laminate', 'Greenlam Clads · Merino Ultra-matt', '', { swatch: 'pg-w-graphite', base: '#4b505a', factor: 1.05 }],
+  ['lam', 'acr-ivory', 'Acrylic high gloss', 'high-gloss acrylic', 'Rehau · Merino Acrylic', '', { swatch: 'pg-g-ivory', base: '#efe8da', factor: 1.22 }],
+  ['inner', 'in-white', 'White inner laminate, 0.8 mm', '0.8 mm white laminate', 'Merino equivalent', 'ECP'],
+  ['hw', 'hw-ss', 'Soft-close hinges and channels', 'soft-close stainless steel hinges and telescopic channels', 'Ebco equivalent', 'EC'],
+  ['hw', 'hw-hettich', 'Hettich soft-close system', 'soft-close hinges and tandem drawer runners', 'Hettich', 'P'],
+  ['handle', 'hd-knob', 'Brushed steel knobs', 'brushed steel knobs', 'local make', 'E'],
+  ['handle', 'hd-profile', 'Aluminium profile handles', 'concealed aluminium profile handles', 'Hettich equivalent', 'CP'],
+  ['top', 'top-granite', 'Granite, 18 mm', '18 mm black granite, polished edge', 'local make', 'E', { swatch: 'pg-st-granite', base: '#2d2f33' }],
+  ['top', 'top-quartz', 'Quartz, 20 mm', '20 mm quartz, rounded edge', 'Caesarstone equivalent', 'CP', { swatch: 'pg-st-quartz', base: '#ecebe7' }],
+  ['glass', 'gl-tough', 'Toughened glass, 10 mm', '10 mm toughened glass with SS fittings', 'Saint-Gobain equivalent', 'ECP'],
+  ['paint', 'pt-tractor', 'Tractor emulsion', 'two coats of Tractor emulsion over putty and primer', 'Asian Paints', 'E'],
+  ['paint', 'pt-royale', 'Royale Matt emulsion', 'two coats of Royale Matt emulsion over putty and primer', 'Asian Paints', 'CP'],
+  ['ceil', 'cl-gyproc', 'Gypsum board on GI, 12.5 mm', '12.5 mm gypsum board on GI framing', 'Gyproc equivalent', 'ECP'],
+  ['elec', 'el-gm', 'GM modular switches', 'modular switches with FR copper wiring', 'GM / Polycab equivalent', 'EC'],
+  ['elec', 'el-legrand', 'Legrand Arteor switches', 'Arteor modular switches with FR copper wiring', 'Legrand / Finolex', 'P'],
+];
+
+const P = (part: string, fam: string, E: string, C: string, Pm: string, finish?: boolean): RecipePart =>
+  ({ part, fam, byGrade: { E, C, P: Pm }, ...(finish ? { finish: true } : {}) });
+
+/** The studio's standard recipes, one per kind of item. */
+export const STANDARD_RECIPES: Recipe[] = [
+  { id: 'carp', name: 'Carpentry', parts: [
+    P('Carcass', 'ply', 'ply-mr', 'ply-bwr', 'ply-bwp'),
+    P('Outer finish', 'lam', 'lam-ash', 'lam-oak', 'ven-walnut', true),
+    P('Inner finish', 'inner', 'in-white', 'in-white', 'in-white'),
+    P('Hardware', 'hw', 'hw-ss', 'hw-ss', 'hw-hettich'),
+    P('Handles', 'handle', 'hd-knob', 'hd-profile', 'hd-profile'),
+  ] },
+  { id: 'panel', name: 'Wall panelling', parts: [
+    P('Base board', 'ply', 'ply-mr', 'ply-bwr', 'ply-bwp'),
+    P('Outer finish', 'lam', 'lam-ash', 'lam-oak', 'ven-walnut', true),
+  ] },
+  { id: 'kitchen', name: 'Kitchen base units', parts: [
+    P('Carcass', 'ply', 'ply-bwr', 'ply-bwp', 'ply-bwp'),
+    P('Shutters', 'lam', 'lam-ash', 'acr-ivory', 'acr-ivory', true),
+    P('Countertop', 'top', 'top-granite', 'top-quartz', 'top-quartz'),
+    P('Hardware', 'hw', 'hw-ss', 'hw-ss', 'hw-hettich'),
+  ] },
+  { id: 'wall', name: 'Kitchen wall units', parts: [
+    P('Carcass', 'ply', 'ply-bwr', 'ply-bwp', 'ply-bwp'),
+    P('Shutters', 'lam', 'lam-ash', 'acr-ivory', 'acr-ivory', true),
+    P('Hardware', 'hw', 'hw-ss', 'hw-ss', 'hw-hettich'),
+  ] },
+  { id: 'vanity', name: 'Vanity', parts: [
+    P('Carcass', 'ply', 'ply-bwp', 'ply-bwp', 'ply-bwp'),
+    P('Outer finish', 'lam', 'lam-ash', 'lam-oak', 'ven-walnut', true),
+    P('Countertop', 'top', 'top-granite', 'top-quartz', 'top-quartz'),
+  ] },
+  { id: 'glass', name: 'Glass', parts: [P('Glass', 'glass', 'gl-tough', 'gl-tough', 'gl-tough')] },
+  { id: 'ceil', name: 'False ceiling', parts: [P('Board', 'ceil', 'cl-gyproc', 'cl-gyproc', 'cl-gyproc')] },
+  { id: 'paint', name: 'Painting', parts: [P('Paint', 'paint', 'pt-tractor', 'pt-royale', 'pt-royale')] },
+  { id: 'elec', name: 'Electrical', parts: [P('Switches and wiring', 'elec', 'el-gm', 'el-gm', 'el-legrand')] },
+];
+
+/**
+ * The bank a studio starts from: the families, materials and recipes the
+ * Playground was designed with, each material at version 1.
+ */
+export function studioStandard(): MaterialSpecsBank {
+  const materials: Material[] = STANDARD_MATERIALS.map(([fam, id, name, , , grades, x]) => ({
+    id, fam, name, grades: GRADES.filter(g => grades.includes(g)),
+    ...(x?.swatch ? { swatch: x.swatch } : {}), ...(x?.base ? { base: x.base } : {}),
+  }));
+  const versions: MaterialVersion[] = STANDARD_MATERIALS.map(([fam, id, , words, brand, , x]) => ({
+    mat: id, v: 1, words, brand, note: 'First version', by: STD_BY, at: STD_AT,
+    ...(fam === 'lam' ? { costFactor: x?.factor ?? 1 } : {}),
+  }));
+  const recipes: Record<string, Recipe> = {};
+  STANDARD_RECIPES.forEach(r => { recipes[r.id] = r; });
+  return { families: STANDARD_FAMILIES, materials, versions, recipes, updatedAt: STD_AT, updatedBy: STD_BY };
+}
+
+/**
+ * A saved bank with anything of the studio standard it lacks added after it:
+ * families, materials (at v1) and recipes it does not have. What it has is
+ * kept as it is, and nothing is removed, so a save of the result is append-only.
+ */
+export function withStandard(bank: MaterialSpecsBank | null | undefined): MaterialSpecsBank {
+  const std = studioStandard();
+  if (!bank) return std;
+  const fams = new Set(bank.families.map(f => f.id));
+  const mats = new Set(bank.materials.map(m => m.id));
+  const added = std.materials.filter(m => !mats.has(m.id));
+  const addedIds = new Set(added.map(m => m.id));
+  return {
+    ...bank,
+    families: [...bank.families, ...std.families.filter(f => !fams.has(f.id))],
+    materials: [...bank.materials, ...added],
+    versions: [...bank.versions, ...std.versions.filter(v => addedIds.has(v.mat))],
+    recipes: { ...std.recipes, ...(bank.recipes || {}) },
+  };
+}
+
+/** The recipe with one part's material at one grade changed. */
+export function setRecipePart(bank: MaterialSpecsBank, recipeId: string, part: string, grade: Grade, mat: string, by: string, at: number): MaterialSpecsBank {
+  const r = bank.recipes[recipeId];
+  if (!r) throw new Error('That recipe is not in the bank.');
+  const m = bank.materials.find(x => x.id === mat);
+  const p = r.parts.find(x => x.part === part);
+  if (!p) throw new Error('That part is not in the recipe.');
+  if (!m || m.fam !== p.fam) throw new Error('Pick a material from the part’s own family.');
+  const parts = r.parts.map(x => (x.part !== part ? x : { ...x, byGrade: { ...x.byGrade, [grade]: mat } }));
+  return { ...bank, recipes: { ...bank.recipes, [recipeId]: { ...r, parts } }, updatedAt: at, updatedBy: by };
+}

@@ -11,6 +11,10 @@ import InteractiveBoqEditor from './InteractiveBoqEditor';
 import BulkImportModal from './BulkImportModal';
 import TakeoffPanel from './TakeoffPanel';
 import PlaygroundScreen from './playground/PlaygroundScreen';
+import { useMaterialSpecs } from './materialSpecs/useMaterialSpecs';
+import { canEditMaterialSpecs } from '../lib/materialSpecs';
+import { withRecipeSpecs, gradeOf } from '../lib/lineSpecs';
+import { isPlaygroundTier } from '../lib/playground/pricing';
 import { makePlaygroundVersion } from '../lib/playground/versions';
 import { contextWithTierCopied } from '../lib/specOverrides';
 import NumberField from './NumberField';
@@ -174,6 +178,8 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   */
   const playground = !!(orgData as any)?.playground;
   const mode = viewMode;
+  /* BOQ Playground S2: the Material specs bank, for new lines' materials and the versions offered to drafts. */
+  const materialSpecs = useMaterialSpecs(orgData?.tenantId, playground);
   
   // Versions state
                 
@@ -539,7 +545,11 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
 
       setTiers(prev => prev.map(tier => {
           if (tier.id !== activeTierId) return tier;
-          return { ...tier, boq: [...tier.boq, ...newBoqItems] };
+          /* A Playground version's new lines take their recipe's materials at the option's grade (S2). */
+          const lines = playground && isPlaygroundTier(tier)
+            ? newBoqItems.map(l => withRecipeSpecs(l, bankMap.get(l.bankId), materialSpecs.bank, gradeOf(tier)))
+            : newBoqItems;
+          return { ...tier, boq: [...tier.boq, ...lines] };
       }));
   };
 
@@ -824,6 +834,9 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               onExportPdf={() => handleDownloadPDF()}
               onAddFromBank={handleOpenAddModal}
               focusLineId={focusLines?.ids[0] || null}
+              specBank={materialSpecs.bank}
+              canEditRecipes={canEditMaterialSpecs(currentRole, currentRoles as any)}
+              onSaveSpecs={materialSpecs.save}
               renderFullGrid={() => (
                 <StudioExcelGrid
                   items={fullBoq}
