@@ -10,8 +10,7 @@ import AddItemModal from './AddItemModal';
 import InteractiveBoqEditor from './InteractiveBoqEditor';
 import BulkImportModal from './BulkImportModal';
 import TakeoffPanel from './TakeoffPanel';
-import PlanSheetPanel from './playground/PlanSheetPanel';
-import { PlaygroundHeader, RoomTotals, AcrossTheFlat, type Lens, type RoomsView } from './playground/PlaygroundFrame';
+import PlaygroundScreen from './playground/PlaygroundScreen';
 import { makePlaygroundVersion } from '../lib/playground/versions';
 import { contextWithTierCopied } from '../lib/specOverrides';
 import NumberField from './NumberField';
@@ -169,16 +168,12 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
         const [viewMode, setViewMode] = useState<'cards' | 'excel' | 'interactive' | 'takeoff'>('interactive');
   /*
-    BOQ Playground (studio switch, PR 3a): the four modes become three lenses.
-    Sheet is the Excel grid; Rooms is the room workspace (with its inspector,
-    library and bundles) or the room cards; Plan is the plan with the takeoff.
-    Opened at a line (the slide-over from Pricing & Tiers), it opens on Sheet.
+    BOQ Playground (studio switch): the four modes become one screen with five
+    lenses (components/playground/PlaygroundScreen, the approved mockup).
+    Switched off, the editor is exactly as it was.
   */
   const playground = !!(orgData as any)?.playground;
-  const [lens, setLens] = useState<Lens>(() => (focusLines?.ids.length ? 'sheet' : 'rooms'));
-  const [roomsView, setRoomsView] = useState<RoomsView>('workspace');
-  const mode: 'cards' | 'excel' | 'interactive' | 'takeoff' = !playground ? viewMode
-    : lens === 'sheet' ? 'excel' : lens === 'plan' ? 'takeoff' : roomsView === 'cards' ? 'cards' : 'interactive';
+  const mode = viewMode;
   
   // Versions state
                 
@@ -501,6 +496,11 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
     setLastDeleted(null);
   };
 
+  /* BOQ Playground: the option's BOQ written whole (a gesture on the plan, or its undo). */
+  const handleSetBoq = (next: BoqItem[]) => {
+    setTiers(prev => prev.map(t => t.id !== activeTierId ? t : { ...t, boq: next }));
+  };
+
   /* BOQ Playground: one line replaced whole (a whole-flat line shared into rooms), and lines added. */
   const handleReplaceLine = (itemId: string, next: BoqItem) => {
     setTiers(prev => prev.map(t => t.id !== activeTierId ? t : { ...t, boq: (t.boq || []).map(l => (l.id === itemId ? next : l)) }));
@@ -666,21 +666,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
           {onStartRevision && <button onClick={onStartRevision} className="px-4 py-2.5 rounded-xl bg-[#3D52A0] hover:bg-[#334486] text-white text-[12.5px] font-bold shrink-0 flex items-center gap-1.5"><Plus className="w-4 h-4" /> Start a revision</button>}
         </div>
       )}
-      {!isLocked && (<>
-      {playground && activeTier && (
-        <PlaygroundHeader
-          tier={activeTier}
-          rooms={projectContext.rooms || []}
-          bankMap={bankMap}
-          lens={lens}
-          onLens={setLens}
-          roomsView={roomsView}
-          onRoomsView={setRoomsView}
-          currentRoles={currentRoles}
-          locked={isLocked}
-          onMakePlaygroundVersion={handleMakePlaygroundVersion}
-        />
-      )}
+      {!isLocked && !(playground && activeTier) && (<>
             {/* Unified Compact Toolbar Row */}
       <div className="mb-6 flex flex-col lg:flex-row gap-3 items-center justify-between bg-white border border-slate-200/90 p-2.5 rounded-2xl shadow-sm">
           {/* Smaller Focus Editor / Excel / Cards / Plan Takeoff View Switcher (the Playground's lenses replace it) */}
@@ -815,24 +801,50 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
           {/* Main Editor (Full Width) */}
           {isLocked ? (
             <SignedBoqReadOnly boq={activeTier?.boq || []} bankMap={bankMap} />
+          ) : playground && activeTier ? (
+            <PlaygroundScreen
+              projectContext={projectContext}
+              setProjectContext={setProjectContext}
+              tiers={tiers}
+              setTiers={setTiers}
+              tier={activeTier}
+              bank={bank}
+              bankMap={bankMap}
+              readOnly={!!projectContext.boqFrozen}
+              currentRoles={currentRoles}
+              tenantId={orgData?.tenantId}
+              onBoq={handleSetBoq}
+              newId={generateId}
+              onSelectTier={onSelectTier}
+              onMakePlaygroundVersion={handleMakePlaygroundVersion}
+              onSave={handleManualSave}
+              saveState={saveState}
+              onImport={() => setIsImportModalOpen(true)}
+              onExportExcel={mayExportCosts ? handleExportExcelWithFormulas : undefined}
+              onExportPdf={() => handleDownloadPDF()}
+              onAddFromBank={handleOpenAddModal}
+              focusLineId={focusLines?.ids[0] || null}
+              renderFullGrid={() => (
+                <StudioExcelGrid
+                  items={fullBoq}
+                  rooms={projectContext.rooms}
+                  onUpdate={handleUpdateItem}
+                  onBulkUpdate={handleBulkUpdateItems}
+                  onDelete={handleDeleteItem}
+                  onDeleteMany={handleDeleteItems}
+                  onViewInBank={onViewInBank}
+                  onAddItem={handleOpenAddModal}
+                  isOwner={isOwner}
+                  boqFrozen={projectContext.boqFrozen}
+                  highlightedItemIds={highlightedItemIds}
+                  marginAnalytics={marginAnalytics}
+                  searchQuery={searchQuery}
+                />
+              )}
+            />
           ) : (
           <div className="w-full">
 
-              {playground && lens === 'rooms' && activeTier && (
-                <>
-                  <RoomTotals tier={activeTier} rooms={projectContext.rooms || []} bankMap={bankMap} />
-                  <AcrossTheFlat
-                    tier={activeTier}
-                    rooms={projectContext.rooms || []}
-                    bank={bank}
-                    bankMap={bankMap}
-                    locked={isLocked || !!projectContext.boqFrozen}
-                    onReplaceLine={handleReplaceLine}
-                    onAddLines={handleAddLines}
-                    newId={generateId}
-                  />
-                </>
-              )}
 
               {/* INTERACTIVE WORKSPACE MODE */}
               {mode === 'interactive' && (
@@ -982,20 +994,6 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               {/* PLAN TAKEOFF MODE */}
               {mode === 'takeoff' && (
                   <MotionDiv initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
-                      {/* BOQ Playground preview (studio switch): the plan under the BOQ, its scale and rooms. */}
-                      {(orgData as any)?.playground && (
-                          <div className="mb-6">
-                              <PlanSheetPanel
-                                projectContext={projectContext}
-                                setProjectContext={setProjectContext}
-                                tiers={tiers}
-                                setTiers={setTiers}
-                                activeTierId={activeTierId}
-                                bank={bank}
-                                tenantId={orgData?.tenantId}
-                              />
-                          </div>
-                      )}
                       <TakeoffPanel 
                         projectContext={projectContext}
                         setProjectContext={setProjectContext}
@@ -1009,8 +1007,8 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
           </div>
           )}
           
-          {/* Totals Breakdown */}
-          {(() => {
+          {/* Totals Breakdown (the Playground shows its own, in the Live BOQ) */}
+          {!(playground && activeTier && !isLocked) && (() => {
               let firmTotal = 0;
               let estimateExposure = 0;
               /* Paid by the client to vendors directly: not in FFDS's total (lib/boqPricing). */
