@@ -143,6 +143,19 @@ export interface Room {
     dimSource?: import('./lib/takeoff').DimSource;
     rawDimension?: string;
     irregular?: boolean;
+
+    /** BOQ Playground: where the room sits on the plan, in feet from the plan's top-left.
+     *  A rectangle; an L-shaped room is two rooms. Missing: the room is not on a plan
+     *  (lib/playground/geometry.ts). */
+    plan?: RoomPlanRect;
+}
+
+/** A room's rectangle on the BOQ Playground plan, in feet. */
+export interface RoomPlanRect {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
 }
 
 export interface DesignScope {
@@ -1115,6 +1128,65 @@ export interface Item {
     // Optional derived properties if used in certain contexts
     totalCost?: number;
     areaMultiplierCoefficient?: number;
+    /** BOQ Playground: how the item looks from above and its default size. Missing: inferred
+     *  from the name where it can be (lib/playground/pieces.ts drawOf), else not drawable. */
+    draw?: PieceDraw;
+}
+
+/** What kind of piece an item draws as. Decides the symbol and how it sits in a room. */
+export type PieceKind =
+    | 'wardrobe' | 'cabinet' | 'tv' | 'panel' | 'base' | 'wallunit' | 'loft'
+    | 'vanity' | 'desk' | 'bed' | 'glass' | 'sofa' | 'dtable' | 'generic';
+
+/** floor: stands free in the room. wall: stands on the floor against a wall.
+ *  high: hangs on a wall above the floor, so it never collides with floor pieces. */
+export type PieceMount = 'floor' | 'wall' | 'high';
+
+/** An item's footprint and face, in feet: w along the wall, h tall, d deep. */
+export interface PieceDraw {
+    kind: PieceKind;
+    w: number;
+    h: number;
+    d: number;
+    mount: PieceMount;
+}
+
+/** Where a BOQ line's piece sits on the plan: its centre in feet, turned rot degrees
+ *  (0 faces down the plan, backed onto the top wall). widthFt and heightFt override
+ *  the item's draw size for this piece when the line has no size of its own. */
+export interface PiecePlace {
+    x: number;
+    y: number;
+    rot: number;
+    depthFt: number;
+    widthFt?: number;
+    heightFt?: number;
+}
+
+/** How a whole-flat service is measured in each room (lib/playground/rooms.ts). */
+export type ShareBasis = 'wallPaint' | 'ceilingPaint' | 'paint' | 'falseCeiling' | 'points' | 'carpetArea';
+
+/** A whole-flat line (painting, false ceiling, electrical) shared into rooms. The line's
+ *  qty is the sum of the shares. Rooms are keyed by name, as roomId holds the name. */
+export interface ByRoomSplit {
+    basis: ShareBasis;
+    /** Per room: on = takes a share (default by basis), qty = typed share (default measured). */
+    rooms: { [room: string]: { on?: boolean; qty?: number } };
+    /** A flat total typed for the whole line: the shares are scaled to add up to it. */
+    keep?: number;
+    /** How the client BOQ prints it: one line for the flat, or one per room. */
+    client: 'flat' | 'rooms';
+    /** Measure wall and ceiling painting by the carpet-area rule instead of the plan. */
+    rule?: boolean;
+}
+
+/** How a BOQ version prices its client amounts. A tier without it is Classic:
+ *  exact amounts, and today's design-fee rule (lib/playground/pricing.ts). */
+export interface PricingRules {
+    /** Every client amount is rounded up to this many rupees, line by line. */
+    roundUpTo: number;
+    /** Whether a percentage design fee is charged on the as-actuals estimate too. */
+    feeOnActuals: boolean;
 }
 
 export interface LumpsumBreakdownItem {
@@ -1202,6 +1274,14 @@ export interface BoqItem {
     materials?: number;
     labor?: number;
     areaMultiplierCoefficient?: number;
+
+    /* ── BOQ Playground (lib/playground) ── all optional; a line without them reads as today. */
+    /** Where the piece sits on the plan. Missing: the line is in Sheet and Rooms only. */
+    place?: PiecePlace;
+    /** The materials rate before any finish was applied, so finishes never stack. */
+    finishBase?: number | null;
+    /** A whole-flat service shared room by room. Missing: one figure for the flat. */
+    byRoom?: ByRoomSplit;
 }
 
 export interface FullBoqItem extends Omit<Item, 'name' | 'specs' | 'materials' | 'labor'>, Omit<BoqItem, 'name' | 'specs' | 'materials' | 'labor'> {
@@ -1457,6 +1537,10 @@ export interface ProposalTier {
     assumedMargin?: number; // Used for What-if scenarios and discount headroom
     /** Who made this option the baseline, and when (lib/tierApproval.ts). Missing on options approved before it was recorded. */
     approval?: { at: number; by: string };
+    /** Set when a Playground version is made. Missing: a Classic tier, exact amounts (lib/playground/pricing.ts). */
+    pricingRules?: PricingRules;
+    /** Which editor made the version. Missing: Classic. */
+    boqFormat?: 'playground';
 }
 
 export interface ComparisonRow {
