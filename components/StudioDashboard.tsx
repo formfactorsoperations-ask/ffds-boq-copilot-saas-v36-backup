@@ -11,6 +11,9 @@ import InteractiveBoqEditor from './InteractiveBoqEditor';
 import BulkImportModal from './BulkImportModal';
 import TakeoffPanel from './TakeoffPanel';
 import PlanSheetPanel from './playground/PlanSheetPanel';
+import { PlaygroundHeader, RoomTotals, AcrossTheFlat, type Lens, type RoomsView } from './playground/PlaygroundFrame';
+import { makePlaygroundVersion } from '../lib/playground/versions';
+import { contextWithTierCopied } from '../lib/specOverrides';
 import NumberField from './NumberField';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheckIcon, GridIcon, ListIcon, SaveIcon, CheckIcon, ExportIcon, CalculatorIcon } from './Icons';
@@ -46,6 +49,8 @@ interface StudioDashboardProps {
     onStartRevision?: () => void;
     /** Lines to show and highlight on opening (Pricing & Tiers, "Where the money goes" → a line). */
     focusLines?: { ids: string[]; at: number } | null;
+    /** Makes another option the one being edited (App's setActiveTierId): used by "Make a Playground version". */
+    onSelectTier?: (tierId: string) => void;
 }
 
 // Helper function for applying command actions
@@ -104,7 +109,7 @@ const itemVar = {
     show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100, damping: 12 } }
 };
 
-const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision, focusLines }) => {
+const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision, focusLines, onSelectTier }) => {
   /* Signed scope: the version the client signed is shown but never changed
      here. Every edit path below goes through setTiers, so it is guarded once. */
   const signedTierId = lockedTierId(projectContext);
@@ -163,6 +168,17 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   const [isModalOpen, setIsModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
         const [viewMode, setViewMode] = useState<'cards' | 'excel' | 'interactive' | 'takeoff'>('interactive');
+  /*
+    BOQ Playground (studio switch, PR 3a): the four modes become three lenses.
+    Sheet is the Excel grid; Rooms is the room workspace (with its inspector,
+    library and bundles) or the room cards; Plan is the plan with the takeoff.
+    Opened at a line (the slide-over from Pricing & Tiers), it opens on Sheet.
+  */
+  const playground = !!(orgData as any)?.playground;
+  const [lens, setLens] = useState<Lens>(() => (focusLines?.ids.length ? 'sheet' : 'rooms'));
+  const [roomsView, setRoomsView] = useState<RoomsView>('workspace');
+  const mode: 'cards' | 'excel' | 'interactive' | 'takeoff' = !playground ? viewMode
+    : lens === 'sheet' ? 'excel' : lens === 'plan' ? 'takeoff' : roomsView === 'cards' ? 'cards' : 'interactive';
   
   // Versions state
                 
@@ -174,10 +190,10 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   useEffect(() => {
     if (!focusLines?.ids.length) return;
     setHighlightedItemIds(focusLines.ids);
-    if (viewMode !== 'excel') return;
+    if (mode !== 'excel') return;
     const raf = requestAnimationFrame(() => document.getElementById(`item-${focusLines.ids[0]}`)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' }));
     return () => cancelAnimationFrame(raf);
-  }, [focusLines?.at, viewMode]);
+  }, [focusLines?.at, mode]);
     
     const [marginAnalytics, setMarginAnalytics] = useState<any>(null);
 
@@ -485,6 +501,26 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
     setLastDeleted(null);
   };
 
+  /* BOQ Playground: one line replaced whole (a whole-flat line shared into rooms), and lines added. */
+  const handleReplaceLine = (itemId: string, next: BoqItem) => {
+    setTiers(prev => prev.map(t => t.id !== activeTierId ? t : { ...t, boq: (t.boq || []).map(l => (l.id === itemId ? next : l)) }));
+  };
+  const handleAddLines = (lines: BoqItem[]) => {
+    if (!lines.length) return;
+    setTiers(prev => prev.map(t => t.id !== activeTierId ? t : { ...t, boq: [...(t.boq || []), ...lines] }));
+  };
+
+  /* A Classic option's next version, as a Playground BOQ; the Classic one stays as it was. */
+  const handleMakePlaygroundVersion = () => {
+    const src = tiers.find(t => t.id === activeTierId);
+    if (!src) return;
+    const copy = makePlaygroundVersion(src, generateId(), Date.now(), bankMap);
+    setTiers(prev => [...prev, copy]);
+    setProjectContext(prev => contextWithTierCopied(prev, src, copy.id));
+    onSelectTier?.(copy.id);
+    setEditNotice(`A Playground version of ${src.name} is ready. The Classic version is kept as it was.`);
+  };
+
   const handleOpenAddModal = (roomName: string) => {
       setActiveRoomId(roomName);
       setIsModalOpen(true);
@@ -631,10 +667,24 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
         </div>
       )}
       {!isLocked && (<>
+      {playground && activeTier && (
+        <PlaygroundHeader
+          tier={activeTier}
+          rooms={projectContext.rooms || []}
+          bankMap={bankMap}
+          lens={lens}
+          onLens={setLens}
+          roomsView={roomsView}
+          onRoomsView={setRoomsView}
+          currentRoles={currentRoles}
+          locked={isLocked}
+          onMakePlaygroundVersion={handleMakePlaygroundVersion}
+        />
+      )}
             {/* Unified Compact Toolbar Row */}
       <div className="mb-6 flex flex-col lg:flex-row gap-3 items-center justify-between bg-white border border-slate-200/90 p-2.5 rounded-2xl shadow-sm">
-          {/* Smaller Focus Editor / Excel / Cards / Plan Takeoff View Switcher */}
-          <div className="flex bg-slate-100 p-1 rounded-xl shrink-0 w-full lg:w-auto overflow-x-auto gap-1">
+          {/* Smaller Focus Editor / Excel / Cards / Plan Takeoff View Switcher (the Playground's lenses replace it) */}
+          {!playground && <div className="flex bg-slate-100 p-1 rounded-xl shrink-0 w-full lg:w-auto overflow-x-auto gap-1">
               <button 
                   onClick={() => setViewMode('interactive')}
                   className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'interactive' ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
@@ -659,7 +709,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               >
                   <ListIcon className="w-3.5 h-3.5" /> Plan Takeoff
               </button>
-          </div>
+          </div>}
           
           {/* Search Box */}
           <div className="relative group flex-1 w-full min-w-[200px]">
@@ -767,9 +817,25 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
             <SignedBoqReadOnly boq={activeTier?.boq || []} bankMap={bankMap} />
           ) : (
           <div className="w-full">
-              
+
+              {playground && lens === 'rooms' && activeTier && (
+                <>
+                  <RoomTotals tier={activeTier} rooms={projectContext.rooms || []} bankMap={bankMap} />
+                  <AcrossTheFlat
+                    tier={activeTier}
+                    rooms={projectContext.rooms || []}
+                    bank={bank}
+                    bankMap={bankMap}
+                    locked={isLocked || !!projectContext.boqFrozen}
+                    onReplaceLine={handleReplaceLine}
+                    onAddLines={handleAddLines}
+                    newId={generateId}
+                  />
+                </>
+              )}
+
               {/* INTERACTIVE WORKSPACE MODE */}
-              {viewMode === 'interactive' && (
+              {mode === 'interactive' && (
                   <MotionDiv initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
                       <InteractiveBoqEditor 
                         items={fullBoq} 
@@ -788,7 +854,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               )}
 
               {/* EXCEL MODE */}
-              {viewMode === 'excel' && (
+              {mode === 'excel' && (
                   <MotionDiv initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
                       <StudioExcelGrid 
                         items={fullBoq} 
@@ -831,7 +897,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               )}
 
               {/* CARDS MODE */}
-              {viewMode === 'cards' && (
+              {mode === 'cards' && (
                   <MotionDiv variants={container} initial="hidden" animate="show">
                     {/*
                         Rooms, then project scopes.
@@ -914,7 +980,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               )}
 
               {/* PLAN TAKEOFF MODE */}
-              {viewMode === 'takeoff' && (
+              {mode === 'takeoff' && (
                   <MotionDiv initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
                       {/* BOQ Playground preview (studio switch): the plan under the BOQ, its scale and rooms. */}
                       {(orgData as any)?.playground && (

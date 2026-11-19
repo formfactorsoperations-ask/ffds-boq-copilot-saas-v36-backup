@@ -60,13 +60,14 @@ interface Replan {
 const NEW_ROOM = '__new__';
 
 export default function PlanSheetPanel({ projectContext: ctx, setProjectContext, tiers, setTiers, activeTierId, bank, tenantId, userName }: Props) {
-  const sheet = sheetOf(ctx);
-  const confirmed = !!ctx.planSheet;
-  const briefPdf = !confirmed && isPdfSheet(sheet);
   const rooms: Room[] = useMemo(
     () => (ctx.rooms || []).filter(r => r?.name && !/^(functional|others|general|whole flat)$/i.test(r.name.trim())),
     [ctx.rooms],
   );
+  /* Rooms already placed with no drawing under them read as blocks, rather than as no plan at all. */
+  const sheet = sheetOf(ctx) || (rooms.some(r => r.plan) ? { source: 'blocks' as const } : null);
+  const confirmed = !!ctx.planSheet;
+  const briefPdf = !confirmed && isPdfSheet(sheet);
   const onPlan = rooms.filter(r => r.plan);
   const activeTier = tiers.find(t => t.id === activeTierId) || tiers[0];
   const bankMap = useMemo(() => buildBankMap(bank, ctx.adHocItems), [bank, ctx.adHocItems]);

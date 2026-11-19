@@ -158,6 +158,8 @@ import { nextDefaultProjectName } from "./lib/projectNaming";
 import { sendPortalAccessLink } from "./services/emailService";
 import { verifyApiKey } from "./services/geminiService";
 import { id as generateId, calculateSellPrice, calculateCostFromSell } from "./lib/utils";
+import { isPlaygroundTier } from "./lib/playground/pricing";
+import { playgroundTierSummary } from "./lib/playground/versions";
 import { designFeeFor, isAsActuals } from "./lib/boqPricing";
 import { INITIAL_TEMPLATES } from "./lib/standardPackages";
 import { INITIAL_BANK } from "./constants";
@@ -1194,6 +1196,12 @@ export default function App() {
     }
 
     return tiers.map((tier) => {
+      /* A Playground version is priced by its own rules: client amounts rounded up
+         to ₹100 line by line, no design fee on actuals (lib/playground/pricing.ts).
+         Classic options keep the computation below, unchanged. */
+      if (isPlaygroundTier(tier)) {
+        return { ...tier, summary: playgroundTierSummary(tier, bankMap, projectContext) };
+      }
       let totalSell = 0;
       let totalCost = 0;
       let activeItemCount = 0;
@@ -2855,6 +2863,7 @@ export default function App() {
                           tiers={tiersWithCalculatedSummaries}
                           setTiers={setTiers}
                           activeTierId={activeTierId}
+                          onSelectTier={setActiveTierId}
                           bank={bank}
                           aiStrategy={aiStrategy}
                           onViewInBank={handleViewInBank}

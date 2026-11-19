@@ -15,7 +15,7 @@
 import type { Item, BoqItem, ProposalTier, PricingRules, Room } from '../../types';
 import { resolveBoqLine, designFeeFor } from '../boqPricing';
 import { calculateCostFromSell } from '../utils';
-import { roomShares, storedShares, type MeasureContext } from './rooms';
+import { roomShares, storedShares, withByRoomQty, type MeasureContext } from './rooms';
 
 /** The rules a new Playground version is made with. */
 export const PLAYGROUND_PRICING: PricingRules = { roundUpTo: 100, feeOnActuals: false };
@@ -124,7 +124,9 @@ export interface PlaygroundTotals {
 export function playgroundTotals(boq: BoqItem[], bankMap: Map<string, Item>, opts: LineAmountOptions = {}): PlaygroundTotals {
   let sell = 0, cost = 0, asActuals = 0, itemCount = 0;
   const byRoom = new Map<string, number>();
-  (boq || []).forEach(b => {
+  (boq || []).forEach(line => {
+    // A whole-flat line's quantity follows its rooms, so its cost and its amount agree.
+    const b = opts.rooms?.length && line.byRoom ? withByRoomQty(line, opts.rooms, opts.measure) : line;
     const r = resolveBoqLine(b, bankMap);
     if (!r.billable) return;
     itemCount++;

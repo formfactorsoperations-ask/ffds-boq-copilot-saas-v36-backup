@@ -1,0 +1,144 @@
+/**
+ * BOQ Playground — Classic and Playground versions, and whole-flat services.
+ *
+ * A version made in the Playground carries `boqFormat: 'playground'` and the
+ * Playground's pricing rules (every client amount rounded up to ₹100, no design
+ * fee on actuals). Anything else is a Classic BOQ and is priced exactly as
+ * before. An older project opens as Classic, as it is; "Make a Playground
+ * version" copies its lines, with their rates, into the next version, and the
+ * Classic version stays as it was.
+ *
+ * Whole-flat services — painting, false ceiling, electrical — are one line
+ * each, shared into the rooms (BoqItem.byRoom, lib/playground/rooms.ts). A line
+ * the studio priced for the whole flat can be shared; painting can be added as
+ * a wall line and a ceiling line measured from the plan.
+ */
+import type { Item, BoqItem, ProposalTier, Room, ShareBasis } from '../../types';
+import { inferBasis } from '../takeoff';
+import { PLAYGROUND_PRICING, isPlaygroundTier, playgroundTotals, designFeeForTier } from './pricing';
+import { byRoomQty, withByRoomQty, type MeasureContext } from './rooms';
+import { isScopeBucket } from '../scopeBuckets';
+
+export type BoqFormat = 'playground' | 'classic';
+
+/** Which editor's rules a version follows. */
+export const boqFormatOf = (tier: Pick<ProposalTier, 'boqFormat' | 'pricingRules'> | null | undefined): BoqFormat =>
+  isPlaygroundTier(tier) ? 'playground' : 'classic';
+
+export const BOQ_FORMAT_LABEL: Record<BoqFormat, string> = { playground: 'Playground BOQ', classic: 'Classic BOQ' };
+
+/**
+ * The next version of a Classic option, as a Playground BOQ. Every line keeps
+ * its id, quantity, room and markup; a line priced off the bank today has the
+ * bank's materials rate frozen onto it, so the copy is priced as the original
+ * was. The original is untouched.
+ */
+export function makePlaygroundVersion(src: ProposalTier, newId: string, at: number, bankMap: Map<string, Item>): ProposalTier {
+  const copy: ProposalTier = JSON.parse(JSON.stringify(src));
+  delete (copy as any).approval;
+  return {
+    ...copy,
+    id: newId,
+    timestamp: at,
+    parentTierId: src.id,
+    lifecycleTag: 'Draft',
+    boqFormat: 'playground',
+    pricingRules: { ...PLAYGROUND_PRICING },
+    boq: (copy.boq || []).map(line => {
+      const item = bankMap.get(line.bankId);
+      return line.baseRate === undefined && item ? { ...line, baseRate: item.materials } : line;
+    }),
+  };
+}
+
+/** How a whole-flat service is shared into rooms, read off its item; null when it is not one. */
+export function shareBasisFor(item: Pick<Item, 'name' | 'unit'> | null | undefined): ShareBasis | null {
+  if (!item) return null;
+  switch (inferBasis(item.name, item.unit)) {
+    case 'wallPaint': return /ceiling/i.test(item.name) ? 'ceilingPaint' : 'wallPaint';
+    case 'ceilingPaint': return 'ceilingPaint';
+    case 'falseCeiling': return 'falseCeiling';
+    case 'lightPoint': return 'points';
+    default: return /electrical|wiring|switch/i.test(item.name) ? 'points' : null;
+  }
+}
+
+/** True when a line is priced for the whole flat rather than one room. */
+export const isWholeFlatLine = (line: Pick<BoqItem, 'roomId'>) =>
+  !line.roomId || /^(whole\s*flat|unassigned|general scope)$/i.test(line.roomId.trim()) || isScopeBucket(line.roomId);
+
+/** Lines priced for the whole flat that could be shared into rooms, with the basis each would use. */
+export function wholeFlatCandidates(boq: BoqItem[], bankMap: Map<string, Item>): { line: BoqItem; basis: ShareBasis }[] {
+  const out: { line: BoqItem; basis: ShareBasis }[] = [];
+  (boq || []).forEach(line => {
+    if (line.byRoom || !isWholeFlatLine(line)) return;
+    const basis = shareBasisFor(bankMap.get(line.bankId));
+    if (basis) out.push({ line, basis });
+  });
+  return out;
+}
+
+/** The line shared into the rooms by `basis`; its quantity becomes the sum of the shares. */
+export function shareIntoRooms<T extends BoqItem>(line: T, basis: ShareBasis, rooms: Room[], ctx: MeasureContext = {}): T {
+  const byRoom = { basis, rooms: {}, client: 'flat' as const };
+  return { ...line, byRoom, qty: byRoomQty(byRoom, rooms, ctx) };
+}
+
+/** The line back to one figure for the flat, at the quantity it has now. */
+export function unshare<T extends BoqItem>(line: T): T {
+  const { byRoom: _, ...rest } = line;
+  return rest as T;
+}
+
+/**
+ * Painting as two lines measured from the plan: walls and ceilings, each shared
+ * into the rooms. Uses the bank's wall and ceiling painting items; when the
+ * bank has one painting item only, both lines use it. Null when there is none.
+ */
+export function paintingFromPlan(
+  bank: Item[],
+  rooms: Room[],
+  newId: () => string,
+  ctx: MeasureContext = {},
+): { lines: BoqItem[]; wall: Item; ceiling: Item } | null {
+  const painting = (bank || []).filter(i => inferBasis(i.name, i.unit) === 'wallPaint' || inferBasis(i.name, i.unit) === 'ceilingPaint');
+  const wall = painting.find(i => /wall/i.test(i.name)) || painting.find(i => !/ceiling/i.test(i.name)) || painting[0];
+  const ceiling = painting.find(i => /ceiling/i.test(i.name)) || wall;
+  if (!wall || !ceiling) return null;
+  const line = (item: Item, basis: ShareBasis): BoqItem => shareIntoRooms(
+    { id: newId(), bankId: item.id, qty: 0, roomId: 'Whole flat', baseRate: item.materials, rationale: `${basis === 'wallPaint' ? 'Walls' : 'Ceilings'} measured from the plan` },
+    basis, rooms, ctx,
+  );
+  return { lines: [line(wall, 'wallPaint'), line(ceiling, 'ceilingPaint')], wall, ceiling };
+}
+
+/** Every whole-flat line with its quantity brought in line with the rooms (after the plan changed). */
+export const syncedWholeFlat = (boq: BoqItem[], rooms: Room[], ctx: MeasureContext = {}) =>
+  (boq || []).map(l => (l.byRoom ? withByRoomQty(l, rooms, ctx) : l));
+
+/**
+ * A Playground option's summary, priced by its rules: what App's tier summary
+ * holds for every option. Classic options keep App's own computation.
+ */
+export function playgroundTierSummary(
+  tier: ProposalTier,
+  bankMap: Map<string, Item>,
+  ctx: { designFeeType?: string; designFee?: number; area?: number; rooms?: Room[] } | null | undefined,
+) {
+  const rules = tier.pricingRules || PLAYGROUND_PRICING;
+  const rooms = (ctx?.rooms || []) as Room[];
+  const t = playgroundTotals(tier.boq || [], bankMap, { rules, rooms });
+  const designFee = designFeeForTier(ctx, t.sell, t.asActuals, rules);
+  const totalRevenue = t.sell + designFee;
+  const execProfit = t.sell - t.cost;
+  return {
+    totalSell: t.sell,
+    totalCost: t.cost,
+    totalGm: t.sell > 0 ? (execProfit / t.sell) * 100 : 0,
+    itemCount: t.itemCount,
+    totalRevenue,
+    designFee,
+    blendedGm: totalRevenue > 0 ? ((execProfit + designFee) / totalRevenue) * 100 : 0,
+    asActualsTotal: t.asActuals,
+  };
+}
