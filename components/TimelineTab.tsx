@@ -65,6 +65,7 @@ import { db as firestoreDb } from "../services/firebaseClient";
 import { doc, setDoc, collection, query, onSnapshot } from "firebase/firestore";
 import ScheduleGantt from "./ScheduleGantt";
 import { buildScheduleFromProject, scheduleForEngagement, scheduleMatchesEngagement, previewTemplateProgramme, estimateSiteWorkDays } from "../lib/scheduleBuilder";
+import { projectRoomNames } from "../lib/roomSchedule";
 import { engagementDef, engagementOf } from "../lib/engagement";
 import { buildMarkers } from "../lib/scheduleMarkers";
 import { db } from "../services/dbService";
@@ -268,6 +269,9 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
     load();
     return () => { active = false; };
   }, [safeProjectId]);
+
+  /* Rooms a stage can be split into: the project's room list, then any the BOQ names (lib/roomSchedule). */
+  const roomNames = React.useMemo(() => projectRoomNames(projectContext, boq as any), [projectContext?.rooms, boq]);
 
   const derivedSchedule = React.useMemo(
     () => buildScheduleFromProject(projectContext, boq, { designSteps: phases as any }),
@@ -1083,6 +1087,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
           onReset={handleResetSchedule}
           onRequestStartShift={requestStartShift}
           projectContext={projectContext}
+          rooms={roomNames}
           phases={phases}
           projectId={safeProjectId}
           onUpdateDeliverable={updateDeliverable}

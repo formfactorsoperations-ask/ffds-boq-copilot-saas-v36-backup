@@ -59,10 +59,8 @@ interface Props {
   */
   portalMoney?: PortalMoney;
   /*
-    The dated programme, derived in App where the design phases and the tier's
-    BOQ are both in scope. Sent with the projection so a client whose project
-    has no saved schedule still reads the studio's programme rather than one
-    reconstructed from the BOQ alone. See the note in lib/portalProjection.
+    The programme derived in App. No longer sent: the client gets a programme
+    only once the studio has saved one on its Timeline (services/portalRelease).
   */
   clientSchedule?: ProjectSchedule;
   /*
@@ -181,8 +179,10 @@ export default function PortalPublishControls({ projectContext, setProjectContex
 
   /** What the client would receive if released right now. */
   const preview = useMemo(
-    () => portalViewSummary(buildPortalView(projectId || 'preview', projectContext, undefined, clientBoq, undefined, undefined, portalMoney, clientSchedule)).filter(r => r.count > 0),
-    [projectContext, projectId, clientBoq, portalMoney, clientSchedule]
+    /* The copy a send would store, where it has been built: that one carries
+       the saved programme only. The derived programme is never sent. */
+    () => portalViewSummary(previewView || buildPortalView(projectId || 'preview', projectContext, undefined, clientBoq, undefined, undefined, portalMoney)).filter(r => r.count > 0),
+    [previewView, projectContext, projectId, clientBoq, portalMoney]
   );
 
   const groups = useMemo(

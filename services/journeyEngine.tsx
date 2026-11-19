@@ -5,6 +5,17 @@ import { JOURNEY_STEPS, PHASES, STAGE_LABELS, JourneyStepDef } from '../constant
 import { ProjectContext, CommunicationLogItem, TermsDocket, RevisionAction, ManualJourneyStep } from '../types';
 import { useOrg } from '../contexts/OrgContext';
 import { engagementOf, journeyStepsFor, phasesFor, gateStepIds, PhaseDef } from '../lib/engagement';
+import { isSigned } from './clientApprovalEngine';
+
+/*
+  A document the studio has actually issued: an issue of that kind that was
+  not withdrawn. Used where a step used to tick because the data the document
+  is built from merely existed -- every project has a payment schedule from the
+  day it is created, so "milestones exist" ticked Payment Schedule Sent on all
+  of them.
+*/
+const hasIssued = (ctx: ProjectContext, kind: string): boolean =>
+  ((ctx as any).documents?.issues || []).some((i: any) => i?.kind === kind && !i.withdrawnAt);
 
 /* Steps that Client Comms alone used to complete; they are ticked by hand now (constants/journeyConstants). */
 const RETIRED_COMMS_STEPS = new Set(['exec_start_notified']);
@@ -160,18 +171,23 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
           */
           isPastStage;
         
+      /*
+        Brief Frozen and Space Planning Presented used to tick as soon as the
+        project had rooms (and an area). Every project with a BOQ has rooms, so
+        both were done on the day the BOQ was started -- the Ops Matrix said the
+        brief was frozen and the plans presented when neither had happened, and
+        the client portal read that as the first stage complete.
+      */
       case 'brief_frozen':
         return !!projectContext.briefFrozenAt || 
           isPastStage || 
-          currentStage >= 3 || 
-          ((projectContext.rooms?.length || 0) > 0 && !!projectContext.area && projectContext.name !== 'New Project');
+          currentStage >= 3;
         
       case 'space_planning_presented':
         return commsLog['space_planning_review']?.status === 'sent' || 
           isPastStage || 
           currentStage >= 3 || 
-          (projectContext.designDocuments?.length || 0) > 0 || 
-          (projectContext.rooms?.length || 0) > 0;
+          (projectContext.designDocuments?.length || 0) > 0;
         
       case 'visuals_3d_shared':
         return commsLog['3d_visuals_review']?.status === 'sent' || 
@@ -199,22 +215,32 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
           isPastStage || 
           currentStage >= 4;
         
+      /*
+        Sent means issued or already billed against. Milestones merely
+        existing was the old rule, and every project has them from creation.
+      */
       case 'payment_schedule_sent':
         return commsLog['payment_schedule_sent']?.status === 'sent' || 
-          (projectContext.paymentMilestones?.length || 0) > 0 || 
+          hasIssued(projectContext, 'payment_schedule') ||
+          (projectContext.paymentMilestones || []).some((m) => m.status === 'invoiced' || m.status === 'paid') ||
           isPastStage || 
           currentStage >= 4;
         
+      /*
+        Signed means signed. A "contract sent" mark from Client Comms used to
+        tick this, and the contractSigned gate it then wrote kept it ticked.
+        The gate is written by this engine from this very step, so it is not
+        evidence of anything; the signature records are.
+      */
       case 'agreement_signed':
-        return commsLog['contract_sent']?.status === 'sent' || 
-          !!projectContext.lifecycle?.gates?.contractSigned?.done || 
+        return isSigned(projectContext, 'contract') ||
           (projectContext as any).contractSignoff?.status === 'signed' || 
           isPastStage || 
           currentStage >= 5;
         
+      /* A design fee, not any payment: a paid execution advance is not one. */
       case 'design_fee_received':
         return (projectContext.paymentMilestones || []).some((m) => m.type === 'design' && m.status === 'paid') || 
-          (projectContext.paymentMilestones || []).some((m) => m.status === 'paid') || 
           isPastStage || 
           currentStage >= 5;
         
@@ -473,9 +499,32 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
   const activeSteps = useMemo(() => computedSteps.filter((s) => s.status === 'active'), [computedSteps]);
   const nextStep = useMemo(() => computedSteps.find((s) => s.status === 'pending' || s.status === 'active') || null, [computedSteps]);
 
+  /*
+    The ids of the steps that are done, in matrix order.
+
+    Saved with the summary so the client portal can say which of its six stages
+    are complete from what the studio actually ticked. Before this the portal
+    only had the project status, and a project marked Won showed its first
+    three stages as complete while the Ops Matrix stood at 12%.
+  */
+  const doneSteps = useMemo(
+    () => computedSteps.filter((s) => s.status === 'done').map((s) => s.id),
+    [computedSteps],
+  );
+  const doneKey = doneSteps.join(',');
+
   // Auto-sync between steps and project lifecycle stages & gates
   useEffect(() => {
     if (!projectId || !db || loading || !projectContext) return;
+    const summary = {
+      done: overall.done,
+      total: overall.total,
+      pct: overall.pct,
+      active: activeSteps.length,
+      phaseProgress,
+      doneSteps,
+    };
+    const sameSteps = (prev: ProjectContext) => (prev.journeySummary?.doneSteps || []).join(',') === doneKey;
 
     // Determine the suggested Stage based on step completions
     let suggestedStage = 1;
@@ -601,7 +650,7 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
           const isGateEqual = (g1: any, g2: any) => {
             return (!g1 && !g2) || (!!g1?.done === !!g2?.done && g1?.reference === g2?.reference);
           };
-          const isSummaryEqual = prev.journeySummary?.pct === overall.pct && prev.journeySummary?.done === overall.done;
+          const isSummaryEqual = prev.journeySummary?.pct === overall.pct && prev.journeySummary?.done === overall.done && sameSteps(prev);
           if (
             prevStage === finalStage &&
             isGateEqual(prevGates.proposalAccepted, updatedGates.proposalAccepted) &&
@@ -619,13 +668,7 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
             ...(pinActive && !pinHolds ? { statusPin: null } : {}),
             currentStage: finalStage,
             lifecycle: updatedLifecycle,
-            journeySummary: {
-              done: overall.done,
-              total: overall.total,
-              pct: overall.pct,
-              active: activeSteps.length,
-              phaseProgress,
-            }
+            journeySummary: summary
           };
         });
       }
@@ -637,13 +680,7 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
         'context.status': nextStatus,
         ...(pinActive && !pinHolds ? { 'context.statusPin': null } : {}),
         'context.lifecycle': updatedLifecycle,
-        'context.journeySummary': {
-          done: overall.done,
-          total: overall.total,
-          pct: overall.pct,
-          active: activeSteps.length,
-          phaseProgress,
-        }
+        'context.journeySummary': summary
       };
 
       if (db) {
@@ -661,19 +698,14 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
           if (
             prev.journeySummary?.pct === overall.pct &&
             prev.journeySummary?.done === overall.done &&
-            prev.journeySummary?.total === overall.total
+            prev.journeySummary?.total === overall.total &&
+            sameSteps(prev)
           ) {
             return prev;
           }
           return {
             ...prev,
-            journeySummary: {
-              done: overall.done,
-              total: overall.total,
-              pct: overall.pct,
-              active: activeSteps.length,
-              phaseProgress,
-            }
+            journeySummary: summary
           };
         });
       }
@@ -684,13 +716,7 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
           setDoc(
             doc(db, 'projects', projectId),
             {
-              'context.journeySummary': {
-                done: overall.done,
-                total: overall.total,
-                pct: overall.pct,
-                active: activeSteps.length,
-                phaseProgress,
-              },
+              'context.journeySummary': summary,
             },
             { merge: true }
           ).catch(console.error);
@@ -698,7 +724,7 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
         return () => clearTimeout(handler);
       }
     }
-  }, [overall.done, overall.total, overall.pct, activeSteps.length, projectId, loading, computedSteps, phaseProgress, projectContext?.journeySummary?.pct, projectContext?.journeySummary?.done, setProjectContext, currentUserAuth]);
+  }, [overall.done, overall.total, overall.pct, activeSteps.length, projectId, loading, computedSteps, phaseProgress, doneSteps, doneKey, projectContext?.journeySummary?.pct, projectContext?.journeySummary?.done, setProjectContext, currentUserAuth]);
 
   // Action: Mark Step Done
   const markStepDone = useCallback(async (stepId: string, note?: string) => {

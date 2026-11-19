@@ -301,6 +301,17 @@ export function buildPortalView(
         ? c.clientContacts.map((p: any) => ({ id: p.id, name: p.name, role: p.role || null, email: p.email || null }))
         : undefined,
       status: c.status,
+      /*
+        Where the project stands on the Ops Matrix: the steps ticked and the
+        overall figure. The portal's six stages are read from these
+        (lib/clientStages.ts); without them it had only the status, and a
+        project marked Won printed its first three stages as complete.
+        Step ids and a percentage -- no names, notes or dates.
+      */
+      journeySummary: Array.isArray(c.journeySummary?.doneSteps) ? {
+        pct: c.journeySummary.pct,
+        doneSteps: c.journeySummary.doneSteps,
+      } : undefined,
       /* Turnkey or design only: decides the client's stage names, programme and payment groups (lib/engagement.ts). */
       engagementType: c.engagementType,
       area: ctx.area,
@@ -453,6 +464,13 @@ export function buildPortalView(
       clientBoq: clientBoq && clientBoq.length ? clientBoq : undefined,
       /* Task names, durations and dates -- see clientSafeSchedule for what is left behind. */
       clientSchedule: schedule && schedule.tasks?.length ? clientSafeSchedule(schedule) : undefined,
+      /*
+        Marks a programme the studio saved on its Timeline. A copy sent before
+        this carried a programme derived from the BOQ when nothing had been
+        built, and the client read it as dates the studio had committed to;
+        the portal now draws a programme only when this is set.
+      */
+      clientScheduleSaved: schedule && schedule.tasks?.length ? true : undefined,
       clientBoqBaseline: clientBoqBaseline && clientBoqBaseline.length ? clientBoqBaseline : undefined,
 
       /*

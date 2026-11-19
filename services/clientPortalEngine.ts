@@ -34,6 +34,7 @@ import {
 import { getQueries } from './documentQueryEngine';
 import { agreementKindFor } from './documentIssueEngine';
 import { isDesignCloseout, DESIGN_CLOSEOUT } from '../lib/handoverDocket';
+import { clientStageFromJourney } from '../lib/clientStages';
 
 export type { AgreementStatus, AgreementKind, ApprovalSnapshot } from './clientApprovalEngine';
 
@@ -264,6 +265,15 @@ function declaredStage(context: ProjectContext): number {
  */
 export function getAccurateStageNumber(context: ProjectContext): number {
   if (!context) return 1;
+
+  /*
+    The Ops Matrix first: it is the studio's own record of what has been done,
+    step by step (lib/clientStages.ts). A stage is complete there only when
+    every one of its steps is ticked.
+  */
+  const fromJourney = clientStageFromJourney(context);
+  if (fromJourney) return fromJourney.stage;
+
   const approvals = resolveApprovals(context, 1);
   const derived = deriveStageFromEvidence(context, approvals);
   const declared = declaredStage(context);
@@ -272,12 +282,19 @@ export function getAccurateStageNumber(context: ProjectContext): number {
   if (status === 'lead' || status === 'new_lead' || status === 'draft') {
     return Math.min(2, Math.max(1, declared));
   }
-  
-  if (context.lifecycle?.stage) {
-    return Math.min(6, Math.max(1, context.lifecycle.stage));
-  }
-  
-  return Math.max(derived.stage, declared);
+
+  /*
+    Without the matrix, evidence -- plus a status only where the status is
+    itself evidence. Won used to count as stage 4 here, and lifecycle.stage
+    (which "Won" sets to 4 by hand) likewise, so a project won on the proposal
+    printed its brief, layouts and 3D as complete before any of them happened.
+  */
+  const statusEvidence =
+    status === 'completed' ? 6
+    : status === 'execution' || status === 'work_paused' ? 5
+    : status === 'proposal_sent' || status === 'negotiation' ? 3
+    : 1;
+  return Math.min(6, Math.max(derived.stage, statusEvidence));
 }
 
 // ---------------------------------------------------------------------------
@@ -436,8 +453,13 @@ function activeStageProgress(
   const ctx = context as any;
   const milestones = context.paymentMilestones || [];
 
+  // The Ops Matrix steps that belong to this stage, where the matrix has published them.
+  const reading = clientStageFromJourney(context);
+  const own = reading?.perStage[stageId];
+  if (own && own.total > 0) return Math.round((own.done / own.total) * 100);
+
   // Check if journey phase progress from the ops checklist is available
-  const phase = context.journeySummary?.phaseProgress?.[stageId - 1];
+  const phase = reading ? undefined : context.journeySummary?.phaseProgress?.[stageId - 1];
   if (phase && phase.total > 0) {
     const pct = typeof (phase as any).pct === 'number' ? (phase as any).pct : Math.round((phase.done / phase.total) * 100);
     return Math.min(100, Math.max(0, pct));

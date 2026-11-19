@@ -30,7 +30,7 @@ export interface PortalReleaseInputs {
   clientBoq?: ClientBoqRow[];
   clientBoqBaseline?: ClientBoqRow[];
   portalMoney?: PortalMoney;
-  /** The derived programme, used when no schedule was saved by hand. */
+  /** The derived programme. Not sent: only a schedule saved on the Timeline reaches the client. */
   clientSchedule?: ProjectSchedule;
 }
 
@@ -173,7 +173,7 @@ export function buildReleaseView(ctx: ProjectContext, inputs: PortalReleaseInput
     inputs.clientBoqBaseline,
     gathered.scopeAdditions,
     inputs.portalMoney,
-    gathered.savedSchedule || inputs.clientSchedule,
+    gathered.savedSchedule,
     gathered.designRecord,
   );
 }
@@ -189,7 +189,7 @@ export async function releasePortal(ctx: ProjectContext, inputs: PortalReleaseIn
     inputs.clientBoqBaseline,
     gathered.scopeAdditions,
     inputs.portalMoney,
-    gathered.savedSchedule || inputs.clientSchedule,
+    gathered.savedSchedule,
     gathered.designRecord,
   );
 }
