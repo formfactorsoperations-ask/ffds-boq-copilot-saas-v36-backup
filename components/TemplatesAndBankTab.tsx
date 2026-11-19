@@ -20,8 +20,11 @@ import VendorsManager from './VendorsManager';
 import ConsoleHeader from './ui/ConsoleHeader';
 import Tabs from './ui/Tabs';
 import { Layers, Boxes, Store } from '@/lib/lucide-shim';
+import { Layers3 } from 'lucide-react';
+import MaterialSpecsTab from './materialSpecs/MaterialSpecsTab';
+import { useOrg } from '../contexts/OrgContext';
 
-type TabId = 'templates' | 'bank' | 'vendors';
+type TabId = 'templates' | 'bank' | 'vendors' | 'materials';
 
 /*
   Ordered by how often the studio reaches for them: rates get edited constantly,
@@ -35,11 +38,19 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<any> }[] = [
   { id: 'vendors', label: 'Vendor directory', icon: Store },
 ];
 
+/* BOQ Playground S1: shown while the studio's BOQ Playground preview is on. */
+const MATERIALS_TAB = { id: 'materials' as TabId, label: 'Material specs', icon: Layers3 };
+
 export default function TemplatesAndBankTab({
   bank, setBank, templates, setTemplates, isDraftBankMode, setIsDraftBankMode,
   draftBank, setDraftBank, aiStrategy, highlightedBankItemId, setHighlightedBankItemId, projects = [],
 }: any) {
   const [tab, setTab] = useState<TabId>('bank');
+  const { orgData } = useOrg();
+  const playground = !!(orgData as any)?.playground;
+  const tabs = playground ? [...TABS.slice(0, 1), MATERIALS_TAB, ...TABS.slice(1)] : TABS;
+  const [materialStats, setMaterialStats] = useState({ families: 0, materials: 0, saved: false });
+  const handleMaterialStats = useCallback((s: { families: number; materials: number; saved: boolean }) => setMaterialStats(s), []);
   /*
     Switching tab looked broken because it was slow, not because it was stuck.
 
@@ -97,7 +108,7 @@ export default function TemplatesAndBankTab({
       ariaLabel="Studio library sections"
       value={tab}
       onChange={(id) => setTab(id as TabId)}
-      items={TABS.map((t) => ({ id: t.id, label: t.label, icon: t.icon }))}
+      items={tabs.map((t) => ({ id: t.id, label: t.label, icon: t.icon }))}
     />
   );
 
@@ -165,6 +176,18 @@ export default function TemplatesAndBankTab({
       );
     }
 
+    if (tab === 'materials') {
+      return (
+        <ConsoleHeader
+          title="Material specs"
+          tabs={libraryTabs}
+          state={materialStats.saved ? `${materialStats.materials} materials` : 'Standard tables'}
+          tone={materialStats.saved ? 'ok' : 'warn'}
+          blurb="The materials every line's specification is built from, with every version each has had."
+        />
+      );
+    }
+
     if (tab === 'templates') {
       return (
         <ConsoleHeader
@@ -216,6 +239,9 @@ export default function TemplatesAndBankTab({
               setTemplates={setTemplates}
               aiStrategy={aiStrategy}
             />
+          )}
+          {deferredTab === 'materials' && playground && (
+            <MaterialSpecsTab onStats={handleMaterialStats} />
           )}
           {deferredTab === 'vendors' && (
             <VendorsManager projects={projects} onStats={handleVendorStats} />

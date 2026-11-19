@@ -1256,6 +1256,36 @@ service cloud.firestore {
         (docId == 'templates_' + getUserTenantId()) ||
         isSuperAdmin()
       );
+
+      /*
+        The Material specs bank (BOQ Playground S1, lib/materialSpecs.ts):
+        material_specs_<tenant>, or material_specs for the FFDS studio.
+
+        Everyone in the studio reads it, Designers included (they build BOQs
+        from it); clients and vendors do not. Only the Owner saves to it (Super
+        Admin through the rule above). Its `versions` only ever grow: every
+        version already saved stays exactly as it was, in its place, so a BOQ
+        sent or signed against v1 can always say what v1 was.
+      */
+      allow read: if isAuthenticated() && isMaterialSpecsDoc(docId)
+        && !(getUserData().get('role', '') in ['Client', 'Vendor']);
+      allow create: if isAuthenticated() && isMaterialSpecsDoc(docId)
+        && getUserData().get('role', '') == 'Owner'
+        && request.resource.data.get('versions', []) is list;
+      allow update: if isAuthenticated() && isMaterialSpecsDoc(docId)
+        && getUserData().get('role', '') == 'Owner'
+        && materialVersionsOnlyGrow();
+    }
+
+    function isMaterialSpecsDoc(docId) {
+      let t = getUserData().get('tenantId', null);
+      return t != null && (docId == 'material_specs_' + t || (t == 'demo-tenant-01' && docId == 'material_specs'));
+    }
+
+    function materialVersionsOnlyGrow() {
+      let before = resource.data.get('versions', []);
+      let after = request.resource.data.get('versions', []);
+      return after is list && after.size() >= before.size() && after[0:before.size()] == before;
     }
     
     /*
