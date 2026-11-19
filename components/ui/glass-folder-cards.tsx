@@ -1190,7 +1190,7 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
 .gf-root[data-place="bottom-left"] .gf-label { left: 28px; bottom: 32px; }
 .gf-root[data-place="top-left"] .gf-label { left: 28px; top: 34px; }
 .gf-root[data-place="top-right"] .gf-label { right: 32px; top: 52px; align-items: flex-start; }
-.gf-stickers { display: flex; gap: 6px; width: max-content; margin-bottom: 6px; }
+.gf-stickers { display: flex; align-items: center; gap: 6px; width: max-content; margin-bottom: 6px; }
 .gf-title {
   font-size: 18px;
   font-weight: 500;

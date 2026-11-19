@@ -104,10 +104,10 @@ export default function ProjectFolder(p: ProjectFolderProps) {
           label={p.name}
           meta={p.meta}
           stickers={<>
-            {/* Round frosted-glass stickers on the front glass, above the name, one edge peeling. */}
-            <span className={`pf-sticker kind ${p.kind}`} title={KIND_LABEL[p.kind]}>
-              <span className="pf-st-face"><span className="pf-st-word">{KIND_LABEL[p.kind]}</span></span>
-              <i className="pf-st-peel" aria-hidden />
+            {/* Frosted-glass stickers on the front glass, above the name: a label for Actual / Dummy, a round seal for the BOQ. */}
+            <span className={`pf-sticker rect kind ${p.kind}`} title={KIND_LABEL[p.kind]}>
+              <span className="pf-st-face"><span className="pf-st-text">{KIND_LABEL[p.kind]}</span></span>
+              <i className="pf-st-fold" aria-hidden />
             </span>
             {p.boq && (
               <span className={`pf-sticker boq ${p.boq}`} title={`${BOQ_TAG_LABEL[p.boq]}: how the project's latest BOQ was made. Classic BOQs open as they are; their next version can be a Playground version.`}>

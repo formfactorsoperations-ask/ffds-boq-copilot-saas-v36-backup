@@ -589,15 +589,16 @@ the logic is `lib/projectFolders.ts`.
 - **A folder.** The stage flag on its tab waves (a lost project's hangs grey and still); any blocking or
   due flag sits on its shoulder; the project's next step (`services/nextActionEngine`) is a button on
   the glass, red when blocking and gold when due.
-- **Stickers (owner's call, 19 Nov 2026).** Actual / Dummy / Untagged, and, while the BOQ Playground is
-  on, how the latest BOQ was made, are round stickers pressed onto the front glass just above the name
-  (`.pf-sticker`, through glass-folder-cards' `stickers` slot): 62px discs of frosted, polished glass
-  (a blur behind, a bright crescent of gloss on top, a soft shadow on the folder), the bottom-right edge
-  lifting with its silver back folded over. The kind sticker carries its word in the middle; the BOQ
-  sticker runs the kind round its top like a seal (Playground / Classic / No BOQ) with BOQ (or "yet") in
-  the middle. Playground is brand glass with white type; Dummy is amber-tinted, Untagged rose-tinted.
-  The first is turned −8°, the next 7° and overlapping it. Static: no motion of their own; they lean with
-  the glass.
+- **Stickers (owner's call, 19 Nov 2026).** Two stickers of frosted, polished glass are pressed onto the
+  front glass just above the name (`.pf-sticker`, through glass-folder-cards' `stickers` slot): a blur
+  behind, a gloss along the top, a soft shadow on the folder.
+  - Actual / Dummy / Untagged is a rectangular label (28px tall, 6px corners, turned −3°) with its
+    bottom-right corner folded back to show its silver side. Actual is brand type; Dummy is amber-tinted,
+    Untagged rose-tinted.
+  - While the BOQ Playground is on, how the latest BOQ was made is a round seal (62px, turned 7°) with its
+    bottom-right edge lifting: Playground / Classic / No BOQ runs round its top, BOQ (or "yet") sits in the
+    middle. Playground is brand glass with white type.
+  Static: no motion of their own; they lean with the glass.
 - **One click for everything.** The glass opens the project; hovering fans out the files (each opens its
   screen); the next-step button does the step; ··· holds Open, the files again (for touch screens),
   Change stage, Clone as template, Select and Delete.
