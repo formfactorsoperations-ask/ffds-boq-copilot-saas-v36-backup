@@ -1,6 +1,8 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebaseClient';
 import { TermsSettings, TermsSection, PaymentStructure, ProjectEngagement } from '../types';
+import { FFDS_PAYMENT_STRUCTURE } from '../lib/paymentSchedule';
+import { DEFAULT_WARRANTY_PERIODS } from '../lib/annexure';
 
 export const STANDARD_SECTIONS: TermsSection[] = [
     { n: 1, title: "About {{studioName}}", blocks: [
@@ -81,29 +83,17 @@ export const FFDS_TERMS_DEFAULTS: TermsSettings = {
     gstRate: 18,
     paymentMethods: ["NEFT", "RTGS", "UPI"],
     snagCategories: [ { label: "A", resolveDays: 7 }, { label: "B", resolveDays: 21 } ],
-    warrantyPeriods: [ { trade: "Civil work and carpentry", months: 12 }, { trade: "Painting and electrical", months: 6 } ],
+    warrantyPeriods: DEFAULT_WARRANTY_PERIODS.map(p => ({ ...p })),
     disputeMediationDays: 30,
     disputeJurisdiction: "Thane, Maharashtra",
     signatory: { name: "Ar. Mayuri Kaulgud", title: "Principal Architect" },
+    proposalValidityDays: 15,
     preamble: "This document establishes the framework governing all projects undertaken by Form Factors Design Studio. It is to be read and acknowledged before any design work, proposal, or Discovery Workshop commences. Specific project scope and the advance payment schedule are covered in separate documents.",
     sections: STANDARD_SECTIONS
 };
 
-export const FFDS_PAYMENT_STRUCTURE_DEFAULTS: PaymentStructure = {
-  designStages: [
-    { code: "D1", name: "Sign-up & Concept",  pct: 25, trigger: "On signing", unlocks: "Begins site study, brief freeze, concept direction" },
-    { code: "D2", name: "Design Development", pct: 40, trigger: "On presentation of layouts & 3D for approval", unlocks: "Detailed design + material direction" },
-    { code: "D3", name: "Design Completion",  pct: 35, trigger: "On release of GFC drawings + final BOQ", unlocks: "Construction-ready package; execution may begin" }
-  ],
-  executionStages: [
-    { code: "E1", name: "Material Order Advance", pct: 40, trigger: "Before any vendor orders are placed", unlocks: "Funds procurement, mobilisation, first-fix" },
-    { code: "E2", name: "Structure & First-Fix",  pct: 30, trigger: "Civil, MEP, false-ceiling framework & carcasses in place", unlocks: "Unlocks second-fix & finishing prep" },
-    { code: "E3", name: "Finishing Advance",      pct: 20, trigger: "Before final finishes begin", unlocks: "Laminates, shutters, polish, paint, hardware" },
-    { code: "E4", name: "Completion & Handover",  pct: 10, trigger: "On completion of all work", unlocks: "Releases keys, dossier, warranty certificate" }
-  ],
-  handoverClause: "The Completion & Handover Advance unlocks the formal handover package — keys, dossier and warranty certificate. It is due upon completion of all installation and finishing work and is not conditional upon snag clearance. Snag items are addressed under warranty as per Clause 6.4 of the Terms of Engagement Governing Docket.",
-  validation: { designSumMustEqual: 100, executionSumMustEqual: 100 }
-};
+/* The standard stages live with the schedule they feed (lib/paymentSchedule.ts scheduleFor). */
+export const FFDS_PAYMENT_STRUCTURE_DEFAULTS: PaymentStructure = FFDS_PAYMENT_STRUCTURE;
 
 export const GENERIC_TERMS_DEFAULTS: TermsSettings = {
     docketRefPrefix: "DOC",
@@ -119,6 +109,7 @@ export const GENERIC_TERMS_DEFAULTS: TermsSettings = {
     disputeMediationDays: 30,
     disputeJurisdiction: "Local Jurisdiction",
     signatory: { name: "[Principal Name]", title: "[Principal Title]" },
+    proposalValidityDays: 15,
     preamble: "This document establishes the framework governing all projects. It is to be read and acknowledged before any design work or proposal commences.",
     sections: STANDARD_SECTIONS
 };

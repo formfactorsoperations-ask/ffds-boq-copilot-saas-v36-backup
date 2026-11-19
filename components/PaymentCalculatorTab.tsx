@@ -9,7 +9,7 @@ import { RotateCcw, Coins, CheckCircle, TrendingUp, Info, AlertTriangle, Sparkle
 import Card from './shared/Card';
 import { CalculatorIcon, ShieldCheckIcon, AlertIcon, CheckIcon, PencilIcon, ChevronDownIcon, ChevronUpIcon, DeleteIcon, PlusIcon, ScissorsIcon, ClockIcon, CalendarIcon } from './Icons';
 import { useOrg } from '../contexts/OrgContext';
-import { computeSchedule, outstandingInvoices, resolveFinancials, sameFinancials, billingBase, billingSummary } from '../lib/paymentSchedule';
+import { computeSchedule, outstandingInvoices, resolveFinancials, sameFinancials, billingBase, billingSummary, milestonesFromStructure } from '../lib/paymentSchedule';
 import { engagementOf, isFeeOnly } from '../lib/engagement';
 import { resolveDocumentState } from '../services/documentIssueEngine';
 import { usePageHeader } from '../contexts/PageHeaderContext';
@@ -617,33 +617,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         loadStudioPaymentStructure();
     }, [orgData?.tenantId]);
 
-    const getDefaultMilestones = (customStructure?: any) => {
-        const paymentStr = customStructure || studioPaymentStr || (orgData as any).paymentStructure;
-        const structure = paymentStr?.designStages ? paymentStr : FFDS_PAYMENT_STRUCTURE_DEFAULTS;
-        
-        return [
-            ...structure.designStages.map((s: any, i: number) => ({
-                id: `d${i + 1}`,
-                type: 'design' as const,
-                name: s.name,
-                percentage: s.pct,
-                description: s.code,
-                unlocks: s.unlocks || '',
-                trigger: s.trigger || ''
-            })),
-            // A fee-only project has no execution milestones (lib/engagement.ts).
-            ...(feeOnly ? [] : structure.executionStages).map((s: any, i: number) => ({
-                id: `e${i + 1}`,
-                type: 'execution' as const,
-                name: s.name,
-                percentage: s.pct,
-                description: s.code,
-                unlocks: s.unlocks || '',
-                trigger: s.trigger || '',
-                isHandoverAdvance: s.code === 'E8' || s.name.toLowerCase().includes('handover') || i === structure.executionStages.length - 1
-            }))
-        ];
-    };
+    /* Terms & Payment's stages, else FFDS's: the same mapping the proposal reads (lib/paymentSchedule scheduleFor). */
+    const getDefaultMilestones = (customStructure?: any) =>
+        milestonesFromStructure(customStructure || studioPaymentStr || (orgData as any).paymentStructure, feeOnly);
 
     // Save Current Project Milestones back to Studio level defaults
     const handleSaveAsStudioDefaults = async () => {

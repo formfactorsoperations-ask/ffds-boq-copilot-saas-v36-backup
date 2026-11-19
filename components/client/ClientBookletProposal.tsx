@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import type { ProgrammeSummary } from '../../lib/scheduleBuilder';
-import { ProposalTier, ProjectContext, TimelinePhase, PaymentMilestone, FullBoqItem, ProposalLevel } from '../../types';
+import { ProposalTier, ProjectContext, TimelinePhase, PaymentMilestone, FullBoqItem, ProposalLevel, TermsSettings } from '../../types';
 import { formatCurrency, calculateSellPrice } from '../../lib/utils';
 import { detectAllScopes, findScopeContradictions } from '../../lib/scopeDetect';
 import { groupPhasesIntoStages } from '../../lib/programmeStages';
 import { CheckIcon, XIcon, ShieldCheckIcon, HelpCircleIcon, Pencil, Save } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { proposalOption } from '../../lib/proposalOption';
-import { gstTermsOf, gstOn } from '../../lib/paymentSchedule';
+import { gstTermsOf, gstOn, gstNoteFor, scheduleFor } from '../../lib/paymentSchedule';
+import { annexureOf, fillClause, hasCivilWork, assumptionsFor, validityDaysOf, validitySentence, warrantySentence, STANDARD_INITIATION_FEE, type AnnexClause } from '../../lib/annexure';
 import { specOverride, withSpecOverride } from '../../lib/specOverrides';
 
 /*
@@ -521,6 +522,8 @@ interface ClientBookletProposalProps {
     level: ProposalLevel;
     settings: any;
     paymentStructure?: any;
+    /** Terms & Payment: Annexure A's wording, validity period and warranty (lib/annexure.ts). */
+    termsSettings?: TermsSettings | null;
     onEditSection?: (sectionId: string) => void;
     setProjectContext?: React.Dispatch<React.SetStateAction<ProjectContext>>;
     isClientViewOnly?: boolean;
@@ -538,6 +541,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
     level,
     settings,
     paymentStructure,
+    termsSettings = null,
     onEditSection,
     setProjectContext,
     isClientViewOnly = false,
@@ -797,6 +801,14 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
     const finalExecutionTotal = taxableExecution + chargedGstOnExecution;
     const netTaxableValue = taxableExecution + taxableDesign;
     const totalProposedInvestment = finalDesignTotal + finalExecutionTotal;
+
+    /*
+      The payment schedule: one source with Money and the Classic proposal
+      (lib/paymentSchedule scheduleFor). This page printed fixed 25/40/35 and
+      40/30/20/10 splits and a flat ₹4,999 whatever the project had agreed in
+      Money or the studio had set in Terms & Payment.
+    */
+    const schedule = scheduleFor(projectContext, { tierSummary: activeTier.summary }, { paymentStructure });
 
     /*
       Each option's value, before GST and with it, for the headline range.
@@ -1508,6 +1520,26 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
       clauses, with the studio's edits to them, wherever the client reads them.
       The wording is shared; the look follows the format (ANNEX_LOOK).
     */
+    /*
+      Annexure A's wording comes from Terms & Payment (lib/annexure.ts), with
+      today's wording where the studio has saved none. Each clause keeps its
+      edit key, so wording already changed on this project stays changed.
+    */
+    const annex = annexureOf(termsSettings);
+    const annexCivil = hasCivilWork((activeTier as any).fullBoq || []);
+    const annexTokens = {
+        companyName: settings?.companyName || 'Form Factors Design Studio',
+        gstRate: String(gstRate),
+        designFee: formatINR(taxableDesign),
+        executionValue: formatINR(taxableExecution),
+        initiationFee: formatINR((projectContext?.financials?.initiationFeePaid ?? 0) > 0
+            ? projectContext.financials!.initiationFeePaid : STANDARD_INITIATION_FEE),
+    };
+    const annexItems = (list: AnnexClause[]) => list.map((x) => (
+        <li key={x.id}><Ed k={x.id} ctl={edCtl}>{fillClause(x.text, annexTokens)}</Ed></li>
+    ));
+    const validityDays = validityDaysOf(termsSettings);
+
     const renderAnnexure = (look: AnnexLook) => {
         const T = ANNEX_LOOK[look];
         return (
@@ -1594,19 +1626,15 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
 
                 <div className={T.section}>
                     <h4 className={T.h4}><Ed k="0f056cbb" ctl={edCtl}>3 · TAXES</Ed></h4>
-                    <p><Ed k="5a972bbe" ctl={edCtl}>GST shall be applicable on amounts invoiced by Form Factors Design Studio at the prevailing statutory rate, currently 18%, on both the execution value and the design and coordination fee.</Ed></p>
-                    <p className="mt-2"><Ed k="6277da00" ctl={edCtl}>Where a direct client purchase or a payment to a third-party supplier is specifically agreed and documented in writing, that item shall be invoiced separately by the respective supplier and falls outside the FFDS contracted value.</Ed></p>
-                    <p className="mt-2"><Ed k="951a9977" ctl={edCtl}>Any change in statutory rates or the introduction of any new levy after the date of this proposal shall apply to invoices raised thereafter.</Ed></p>
+                    {annex.taxes.map((x, i) => (
+                        <p key={x.id} className={i ? 'mt-2' : undefined}><Ed k={x.id} ctl={edCtl}>{fillClause(x.text, annexTokens)}</Ed></p>
+                    ))}
                 </div>
 
                 <div className={T.section}>
                     <h4 className={T.h4}><Ed k="d794fc18" ctl={edCtl}>4 · PAYMENT TERMS</Ed></h4>
                     <EdList k="annex.4-payment-terms" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
-                        <li><Ed k="e5896545" ctl={edCtl}>All stage payments are payable in advance of the corresponding stage. Material orders are placed only against cleared funds.</Ed></li>
-                        <li>Design fee shares are percentages of {formatINR(taxableDesign)}; execution shares are percentages of {formatINR(taxableExecution)}. Stage amounts are rounded to the nearest rupee, with Execution 1 carrying the rounding adjustment so that stages sum exactly to the net taxable value.</li>
-                        <li><Ed k="7ed2b5a5" ctl={edCtl}>GST is added on each invoice at the prevailing rate.</Ed></li>
-                        <li><Ed k="12eac516" ctl={edCtl}>The Project Initiation Fee of ₹4,999 is adjusted against the Design 1 invoice and is not additional to the total above.</Ed></li>
-                        <li><Ed k="db32bcf7" ctl={edCtl}>Delays in approvals or payments will proportionately revise the project programme.</Ed></li>
+                        {annexItems(annex.paymentTerms)}
                     </EdList>
                 </div>
 
@@ -1616,19 +1644,13 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                         <div>
                             <strong className="text-slate-800 text-xs block mb-1">Covered by the fee</strong>
                             <EdList k="annex.5-project-initiation-fee" ctl={edCtl} as="ul" className="list-disc pl-4 text-slate-500">
-                                <li><Ed k="c7d19951" ctl={edCtl}>Site measurement</Ed></li>
-                                <li><Ed k="c944f2ce" ctl={edCtl}>Requirement documentation</Ed></li>
-                                <li><Ed k="a2587158" ctl={edCtl}>Preliminary scope validation</Ed></li>
+                                {annexItems(annex.initiationCovered)}
                             </EdList>
                         </div>
                         <div>
                             <strong className="text-slate-800 text-xs block mb-1 font-bold">Not covered by the fee</strong>
                             <EdList k="annex.5-project-initiation-fee.2" ctl={edCtl} as="ul" className="list-disc pl-4 text-slate-400">
-                                <li><Ed k="dcaf0421" ctl={edCtl}>✕ Layouts and space planning</Ed></li>
-                                <li><Ed k="0a39764b" ctl={edCtl}>✕ 3D visualisation</Ed></li>
-                                <li><Ed k="ef057aa4" ctl={edCtl}>✕ GFC and joinery drawings</Ed></li>
-                                <li><Ed k="596fda86" ctl={edCtl}>✕ Schedule of Finishes</Ed></li>
-                                <li><Ed k="ea7bccb7" ctl={edCtl}>✕ Final BOQ</Ed></li>
+                                {annexItems(annex.initiationNotCovered)}
                             </EdList>
                         </div>
                     </div>
@@ -1637,10 +1659,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                 <div className={T.section}>
                     <h4 className={T.h4}><Ed k="ec65632e" ctl={edCtl}>6 · SCOPE, QUANTITIES AND VARIATIONS</Ed></h4>
                     <EdList k="annex.6-scope-quantities-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
-                        <li><Ed k="d0bdccbc" ctl={edCtl}>Only items listed in the proposal booklet are included. Any item not written into the scope is not included.</Ed></li>
-                        <li><Ed k="49611ff2" ctl={edCtl}>Quantities are as presently measured or estimated and are re-verified at site validation. Variation of more than 5% on any line will be notified in writing with the revised value before the affected work is ordered or commenced. Quantities are then adjusted to actual measured quantity at the rates underlying this proposal.</Ed></li>
-                        <li><Ed k="f8a0f6fc" ctl={edCtl}>Any addition, deletion or specification change after design freeze will be quoted as a written variation and becomes payable with the next stage invoice once approved.</Ed></li>
-                        <li><Ed k="844cdbdf" ctl={edCtl}>Items marked as actuals are billed at actual supplier cost against the client's approved selection and are not part of the fixed value. An indicative allowance for electrical fittings will be issued with the Schedule of Finishes for budgeting.</Ed></li>
+                        {annexItems(annex.scope)}
                         {/*
                           This clause used to assert flatly that no carpentry
                           was priced, on every proposal — including ones whose
@@ -1706,10 +1725,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     <h4 className={T.h4}><Ed k="32cbf8a9" ctl={edCtl}>8 · PROGRAMME AND START CONDITIONS</Ed></h4>
                     <p><Ed k="annex.8-programme-intro" ctl={edCtl}>The site programme is {totalDays} {siteUnit}. Design and planning runs for approximately {designDays} {dayWord} before it and is not counted within it. The site programme is calculated from the date on which all four of the following are in place:</Ed></p>
                     <EdList k="annex.8-programme-and-start" ctl={edCtl} as="ul" className="list-disc pl-6 text-slate-600 mt-2">
-                        <li><Ed k="234b3c76" ctl={edCtl}>Design and material selection freeze, with the Schedule of Finishes approved in writing</Ed></li>
-                        <li><Ed k="8ce93c71" ctl={edCtl}>Receipt of the required stage payment</Ed></li>
-                        <li><Ed k="eccf2fa5" ctl={edCtl}>Availability of the site for uninterrupted work, vacant and free of stored goods</Ed></li>
-                        <li><Ed k="74529f93" ctl={edCtl}>Society permissions, work timings and lift or hoist access confirmed</Ed></li>
+                        {annexItems(annex.startConditions)}
                     </EdList>
                 </div>
 
@@ -1718,25 +1734,14 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                     <div className={T.pair}>
                         <div>
                             <span className="font-bold text-slate-800 block mb-1"><Ed k="8b593995" ctl={edCtl}>Assumptions</Ed></span>
-                            <EdList k="annex.9-assumptions-and-client" ctl={edCtl} as="ul" className="list-disc pl-4 space-y-1 text-slate-500">
-                                <li><Ed k="290937c5" ctl={edCtl}>Single continuous mobilisation, flat vacant and available</Ed></li>
-                                <li><Ed k="3fd1e7c5" ctl={edCtl}>Existing walls, slab, flooring and plumbing sound and reusable as-is</Ed></li>
-                                <li><Ed k="1f030dd5" ctl={edCtl}>Existing distribution board adequate for the proposed load</Ed></li>
-                                <li><Ed k="bc0d9cf4" ctl={edCtl}>Normal society working hours, lift or hoist access available</Ed></li>
-                                <li><Ed k="9281477b" ctl={edCtl}>Water and power available at site for construction use</Ed></li>
-                                <li><Ed k="a515cc89" ctl={edCtl}>No structural alteration, waterproofing or slab work required</Ed></li>
+                            <EdList k={annexCivil ? "annex.9-assumptions-renovation" : "annex.9-assumptions-and-client"} ctl={edCtl} as="ul" className="list-disc pl-4 space-y-1 text-slate-500">
+                                {annexItems(assumptionsFor(annex, annexCivil))}
                             </EdList>
                         </div>
                         <div>
                             <span className="font-bold text-slate-800 block mb-1"><Ed k="6f91b73a" ctl={edCtl}>Client responsibilities</Ed></span>
                             <EdList k="annex.9-assumptions-and-client.2" ctl={edCtl} as="ul" className="list-disc pl-4 space-y-1 text-slate-500">
-                                <li><Ed k="98841019" ctl={edCtl}>Timely approval of layouts, 3D views, samples and the Schedule of Finishes</Ed></li>
-                                <li><Ed k="fe404b04" ctl={edCtl}>Society intimation, permissions and any refundable deposits</Ed></li>
-                                <li><Ed k="8b9f6596" ctl={edCtl}>Statutory, municipal and society charges</Ed></li>
-                                <li><Ed k="3ac27417" ctl={edCtl}>Vacant possession of the flat for the execution period</Ed></li>
-                                <li><Ed k="bc982e1e" ctl={edCtl}>Selection of electrical fittings and appliances within the agreed window</Ed></li>
-                                <li><Ed k="bb5a4459" ctl={edCtl}>Stage payments in advance of each stage</Ed></li>
-                                <li><Ed k="454e9d53" ctl={edCtl}>Attendance at the joint snag inspection before handover</Ed></li>
+                                {annexItems(annex.clientResponsibilities)}
                             </EdList>
                         </div>
                     </div>
@@ -1745,21 +1750,18 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                 <div className={T.section}>
                     <h4 className={T.h4}><Ed k="054a2193" ctl={edCtl}>10 · MATERIALS, SAMPLES AND WORKMANSHIP</Ed></h4>
                     <EdList k="annex.10-materials-samples-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
-                        <li><Ed k="012d8dd8" ctl={edCtl}>Final brands, shades and finishes are selected against physical samples during the Schedule of Finishes stage and recorded in writing.</Ed></li>
-                        <li>Where a specified brand is unavailable, {settings?.companyName || 'FFDS'} will propose an equivalent of the same or higher grade for written approval before ordering. No substitution will be made without approval.</li>
-                        <li><Ed k="03e3b121" ctl={edCtl}>Carpentry is built to approved GFC drawings. Exposed surfaces are laminated, edges banded and carcass interiors finished. Electrical points are tested and recorded before ceiling closure.</Ed></li>
+                        {annexItems(annex.materials)}
                     </EdList>
                 </div>
 
                 <div className={T.section}>
                     <h4 className={T.h4}><Ed k="c6725020" ctl={edCtl}>11 · HANDOVER, WARRANTY AND VALIDITY</Ed></h4>
                     <EdList k="annex.11-handover-warranty-and" ctl={edCtl} as="ol" className="list-decimal pl-4 space-y-1 text-slate-600">
-                        <li><Ed k="f5d39714" ctl={edCtl}>Handover follows closure of the joint snag list, deep cleaning of the worked areas, and release of the handover dossier and warranty note.</Ed></li>
-                        <li>{settings?.companyName || 'FFDS'} provides a workmanship warranty of 6 months from handover on carpentry executed under this contract, covering manufacturing and installation defects.</li>
-                        <li><Ed k="27cd97b9" ctl={edCtl}>Manufacturer warranties on hardware, laminates, paint and electrical fittings apply as issued by the respective brand.</Ed></li>
-                        <li><Ed k="992a1058" ctl={edCtl}>Warranty excludes damage arising from misuse, water ingress, alteration by others and normal wear.</Ed></li>
-                        <li>This proposal is valid for 15 days from {today} and supersedes all prior estimates, verbal indications and written communication on this project. Where any earlier document conflicts, the proposal booklet and this Annexure prevail.</li>
-                        <li><Ed k="9dbf30b1" ctl={edCtl}>On confirmation, the turnkey agreement and the final BOQ together form the contract; the proposal booklet forms the basis of scope.</Ed></li>
+                        {annexItems(annex.handover)}
+                        <li>{warrantySentence(annexTokens.companyName, termsSettings?.warrantyPeriods)}</li>
+                        {annexItems(annex.handoverAfter)}
+                        <li>{validitySentence(validityDays, new Date())}</li>
+                        {annexItems(annex.closing)}
                     </EdList>
                 </div>
 
@@ -2612,7 +2614,7 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                                 <th className="py-3">Stage</th>
                                 <th className="py-3">Trigger</th>
                                 <th className="py-3 text-right">Share</th>
-                                <th className="py-3 text-right pl-4">Amount</th>
+                                <th className="py-3 text-right pl-4">With GST</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -2633,68 +2635,50 @@ export const ClientBookletProposal: React.FC<ClientBookletProposalProps> = ({
                             </tr>
                             )}
                             <tr className="bg-slate-50 font-bold">
-                                <td className="py-2.5 px-2 text-xs uppercase text-[#C5A880]" colSpan={2}>DESIGN & COORDINATION FEE — {formatINR(taxableDesign)}</td>
+                                <td className="py-2.5 px-2 text-xs uppercase text-[#C5A880]" colSpan={2}>DESIGN & COORDINATION FEE — {formatINR(schedule.design.taxable)} + GST</td>
                                 <td className="py-2.5 px-2"></td>
-                                <td className="py-2.5 px-2"></td>
+                                <td className="py-2.5 px-2 text-right font-mono text-slate-700">{formatINR(schedule.design.total)}</td>
                             </tr>
-                            <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="f14492d5" ctl={edCtl}>Design 1</Ed></td>
-                                <td className="py-2.5 text-xs text-slate-500"><Ed k="c2b987f2" ctl={edCtl}>Brief freeze, site measurement and commencement of concept</Ed></td>
-                                <td className="py-2.5 text-right font-mono text-slate-600">25%</td>
-                                <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableDesign * 0.25)}</td>
+                            {schedule.design.stages.map((st) => (
+                            <tr key={st.id}>
+                                <td className="py-2.5 pl-6 font-medium text-slate-700">{st.code} · {st.name}</td>
+                                <td className="py-2.5 text-xs text-slate-500">{st.trigger}</td>
+                                <td className="py-2.5 text-right font-mono text-slate-600">{st.fixed ? '—' : `${st.pct}%`}</td>
+                                <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(st.amount)}</td>
                             </tr>
-                            <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="81ede823" ctl={edCtl}>Design 2</Ed></td>
-                                <td className="py-2.5 text-xs text-slate-500"><Ed k="e4232828" ctl={edCtl}>On presentation of layouts and 3D views for approval</Ed></td>
-                                <td className="py-2.5 text-right font-mono text-slate-600">40%</td>
-                                <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableDesign * 0.40)}</td>
-                            </tr>
-                            <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="4eefd70a" ctl={edCtl}>Design 3</Ed></td>
-                                <td className="py-2.5 text-xs text-slate-500"><Ed k="775ec892" ctl={edCtl}>On release of GFC drawings, Schedule of Finishes and final BOQ</Ed></td>
-                                <td className="py-2.5 text-right font-mono text-slate-600">35%</td>
-                                <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableDesign * 0.35)}</td>
-                            </tr>
+                            ))}
+                            {schedule.execution.stages.length > 0 && (
                             <tr className="bg-slate-50 font-bold">
-                                <td className="py-2.5 px-2 text-xs uppercase text-[#C5A880]" colSpan={2}>TURNKEY EXECUTION VALUE — {formatINR(taxableExecution)}</td>
+                                <td className="py-2.5 px-2 text-xs uppercase text-[#C5A880]" colSpan={2}>TURNKEY EXECUTION VALUE — {formatINR(schedule.execution.taxable)} + GST</td>
                                 <td className="py-2.5 px-2"></td>
-                                <td className="py-2.5 px-2"></td>
+                                <td className="py-2.5 px-2 text-right font-mono text-slate-700">{formatINR(schedule.execution.total)}</td>
                             </tr>
-                            <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="8b135a5f" ctl={edCtl}>Execution 1</Ed></td>
-                                <td className="py-2.5 text-xs text-slate-500"><Ed k="909d000c" ctl={edCtl}>Before mobilisation and placement of material orders</Ed></td>
-                                <td className="py-2.5 text-right font-mono text-slate-600">40%</td>
-                                <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableExecution * 0.40)}</td>
+                            )}
+                            {schedule.execution.stages.map((st) => (
+                            <tr key={st.id}>
+                                <td className="py-2.5 pl-6 font-medium text-slate-700">{st.code} · {st.name}</td>
+                                <td className="py-2.5 text-xs text-slate-500">{st.trigger}</td>
+                                <td className="py-2.5 text-right font-mono text-slate-600">{st.fixed ? '—' : `${st.pct}%`}</td>
+                                <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(st.amount)}</td>
                             </tr>
-                            <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="d4e949c7" ctl={edCtl}>Execution 2</Ed></td>
-                                <td className="py-2.5 text-xs text-slate-500"><Ed k="f09a996a" ctl={edCtl}>On completion of civil, services, ceiling framework and carcasses</Ed></td>
-                                <td className="py-2.5 text-right font-mono text-slate-600">30%</td>
-                                <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableExecution * 0.30)}</td>
-                            </tr>
-                            <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="32ffe7f0" ctl={edCtl}>Execution 3</Ed></td>
-                                <td className="py-2.5 text-xs text-slate-500"><Ed k="a5b60cb3" ctl={edCtl}>Before shutters, finishes, hardware and final paint</Ed></td>
-                                <td className="py-2.5 text-right font-mono text-slate-600">20%</td>
-                                <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableExecution * 0.20)}</td>
-                            </tr>
-                            <tr>
-                                <td className="py-2.5 pl-6 font-medium text-slate-700"><Ed k="39e0e0f0" ctl={edCtl}>Execution 4</Ed></td>
-                                <td className="py-2.5 text-xs text-slate-500"><Ed k="98c3d2b7" ctl={edCtl}>Before final handover and key release, following agreed scope & snag list closure</Ed></td>
-                                <td className="py-2.5 text-right font-mono text-slate-600">10%</td>
-                                <td className="py-2.5 text-right font-mono text-slate-700">{formatINR(taxableExecution * 0.10)}</td>
-                            </tr>
+                            ))}
                             <tr className="border-t-2 border-[#0F172A] font-black">
-                                <td className="py-3 text-[#0F172A]"><Ed k="a385af23" ctl={edCtl}>Net taxable value</Ed></td>
+                                <td className="py-3 text-[#0F172A]"><Ed k="pay.together" ctl={edCtl}>Together, with GST</Ed></td>
+                                <td className="py-3 text-xs font-medium text-slate-500">Net taxable value {formatINR(schedule.design.taxable + schedule.execution.taxable)}</td>
+                                <td className="py-3 text-right font-mono"></td>
+                                <td className="py-3 text-right font-mono text-[#0F172A]">{formatINR(schedule.total)}</td>
+                            </tr>
+                            <tr>
+                                <td className="py-3 font-bold text-[#0F172A]">To book</td>
+                                <td className="py-3 text-xs text-slate-500">{schedule.design.stages[0]?.code || 'D1'} with GST{schedule.initiationFee > 0 ? `, less the ${formatINR(schedule.initiationFee)} Project Initiation Fee` : ''}</td>
                                 <td className="py-3"></td>
-                                <td className="py-3 text-right font-mono">100%</td>
-                                <td className="py-3 text-right font-mono text-[#0F172A]">{formatINR(netTaxableValue)}</td>
+                                <td className="py-3 text-right font-mono font-bold text-[#0F172A]">{formatINR(schedule.booking)}</td>
                             </tr>
                         </tbody>
                     </table>
 
                     <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 flex justify-between gap-4">
-                        <span><Ed k="1374c077" ctl={edCtl}>Payable in advance of each stage. GST at 18% is added on every FFDS invoice. The ₹4,999 is adjusted against Design 1 and is not additional to the total.</Ed></span>
+                        <span>Payable in advance of each stage. {gstNoteFor(gstTerms)} {schedule.initiationFee > 0 ? `The ${formatINR(schedule.initiationFee)} Project Initiation Fee is adjusted against ${schedule.design.stages[0]?.code || 'D1'} and is not additional to the total.` : ''}</span>
                         <span className="font-bold shrink-0 text-slate-800"><Ed k="3ce4832e" ctl={edCtl}>FULL TERMS · ANNEXURE A</Ed></span>
                     </div>
                 </div>

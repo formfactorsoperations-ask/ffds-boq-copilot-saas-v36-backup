@@ -4,7 +4,7 @@ import type { ProgrammeSummary } from '../../lib/scheduleBuilder';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import ClientPayments from './ClientTotals';
-import { ProjectContext, FullBoqItem, ProposalTier, AiComparisonResult, MaterialSuggestion, TimelinePhase, PaymentMilestone, ProposalContent, DecisionBrainOutput, LeadProfile, ProposalLevel, ProposalType, ProjectTask } from '../../types';
+import { ProjectContext, FullBoqItem, ProposalTier, AiComparisonResult, MaterialSuggestion, TimelinePhase, PaymentMilestone, ProposalContent, DecisionBrainOutput, LeadProfile, ProposalLevel, ProposalType, ProjectTask, TermsSettings } from '../../types';
 import { formatClientValue, formatCurrency } from '../../lib/utils';
 import { CloseIcon, ListIcon, PencilIcon, ChevronDownIcon, DashboardIcon, ClockIcon, CheckBadgeIcon } from '../Icons';
 import { FFDSLogo } from '../FFDSLogo';
@@ -126,15 +126,22 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
     const { orgData, currentRole } = useOrg();
     const { settings: fetchedSettings, loading: settingsLoading } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
     const [paymentStructure, setPaymentStructure] = useState<any>(null);
+    /* Terms & Payment: Annexure A's wording, validity period and warranty (lib/annexure.ts). */
+    const [termsSettings, setTermsSettings] = useState<TermsSettings | null>(null);
 
     useEffect(() => {
         const loadPaymentStructure = async () => {
-            const { getPaymentStructure } = await import('../../services/engagementService');
+            const { getPaymentStructure, getTermsSettings } = await import('../../services/engagementService');
             try {
                 const fetchedPaymentStructure = await getPaymentStructure(orgData?.tenantId || 'demo-tenant-01');
                 setPaymentStructure(fetchedPaymentStructure);
             } catch (err) {
                 console.error("Error loading payment structure", err);
+            }
+            try {
+                setTermsSettings(await getTermsSettings(orgData?.tenantId || 'demo-tenant-01'));
+            } catch (err) {
+                console.error("Error loading terms settings", err);
             }
         };
         loadPaymentStructure();
@@ -263,6 +270,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                 level={level}
                 settings={settings}
                 paymentStructure={paymentStructure}
+                termsSettings={termsSettings}
                 onEditSection={onEditSection}
                 setProjectContext={setProjectContext}
                 isClientViewOnly={isClientViewOnly}
@@ -403,6 +411,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                         onUpdateSchedule={onUpdatePaymentSchedule}
                                         settings={settings}
                                         paymentStructure={paymentStructure}
+                                        tierSummary={activeTier?.summary}
                                         // Pass generic totals if needed for L1, but usually L1 is range-based
                                     />
                                 </SectionWrapper>
@@ -503,6 +512,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                                         financials={paymentsFinancials}
                                         settings={settings}
                                         paymentStructure={paymentStructure}
+                                        tierSummary={activeTier?.summary}
                                     />
                                 </SectionWrapper>
                             </ScanFirstSection>
@@ -541,6 +551,7 @@ const ClientExportView: React.FC<ClientExportViewProps> = (props) => {
                     level={level}
                     settings={settings}
                     paymentStructure={paymentStructure}
+                    termsSettings={termsSettings}
                     isClientViewOnly
                 />
             </div>

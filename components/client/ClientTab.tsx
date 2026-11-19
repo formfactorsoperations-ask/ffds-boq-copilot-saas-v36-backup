@@ -147,17 +147,9 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
       }
   };
 
-  // Updated Default Payment Milestones - Front-Loaded for Cash Flow
-  const [paymentMilestones] = useState<PaymentMilestone[]>([
-      { id: 'd1', type: 'design', name: 'Sign-up & Concept', percentage: 20, description: 'Retainer & Concept Direction' },
-      { id: 'd2', type: 'design', name: 'Design Development & 3D', percentage: 35, description: 'Layouts, Visuals & Material Selection' },
-      { id: 'd3', type: 'design', name: 'Technical Documentation', percentage: 35, description: 'Detailed GFC Drawings & Services' },
-      { id: 'd4', type: 'design', name: 'Handover & Closeout', percentage: 10, description: 'Final Set Release' },
-      { id: 'e1', type: 'execution', name: 'Material Order Advance', percentage: 10, description: 'Day 1 – Day 5' },
-      { id: 'e2', type: 'execution', name: 'Material Procurement + Structural Works', percentage: 40, description: 'Day 6 – Day 35' },
-      { id: 'e3', type: 'execution', name: 'Mid Execution (Outer Laminate Start)', percentage: 40, description: 'Day 36 – Day 65' },
-      { id: 'e4', type: 'execution', name: 'Completion and Handover', percentage: 10, description: 'Day 66 – Day 90' },
-  ]);
+  /* The payment schedule is the project's own (lib/paymentSchedule scheduleFor); there is no
+     second, hard-coded list here any more. */
+  const paymentMilestones: PaymentMilestone[] = projectContext.paymentMilestones || [];
 
   useEffect(() => {
     const generateComp = () => {

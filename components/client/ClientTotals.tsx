@@ -5,7 +5,7 @@ import { CalendarIcon, PencilIcon, CheckIcon, ScissorsIcon, DeleteIcon, AlertIco
 import { formatCurrency } from '../../lib/utils';
 import { useOrg } from '../../contexts/OrgContext';
 import { FFDS_PAYMENT_STRUCTURE_DEFAULTS } from '../../services/engagementService';
-import { gstTermsOf, gstNoteFor } from '../../lib/paymentSchedule';
+import { gstTermsOf, gstNoteFor, scheduleFor } from '../../lib/paymentSchedule';
 
 interface ClientPaymentsProps {
     paymentMilestones: PaymentMilestone[];
@@ -21,9 +21,11 @@ interface ClientPaymentsProps {
     executionTotal?: number;
     settings?: any; // The combined settings object
     paymentStructure?: any;
+    /** The option being proposed: its values are what the schedule splits (lib/paymentSchedule scheduleFor). */
+    tierSummary?: { totalSell?: number; designFee?: number };
 }
 
-const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, content, mode = 'standard', projectContext, onUpdateSchedule, financials, designTotal, executionTotal, settings, paymentStructure }) => {
+const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, content, mode = 'standard', projectContext, onUpdateSchedule, financials, designTotal, executionTotal, settings, paymentStructure, tierSummary }) => {
     const { orgData, currentRole } = useOrg();
     const [viewMode, setViewMode] = useState<'project' | 'studio_defaults'>('project');
     const isOwner = currentRole === 'Super Admin' || currentRole === 'Admin';
@@ -34,47 +36,33 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
 
     const data = content || { title: "Payment Milestones", subtitle: "Payments are tied to clear progress." };
     
-    // Determine the source of truth for payment schedule
-    const savedSchedules = projectContext?.paymentSchedules || [];
-    const latestSchedule = savedSchedules.length > 0 ? savedSchedules.reduce((latest, current) => {
-        return current.version > latest.version ? current : latest;
-    }, savedSchedules[0]) : null;
+    /*
+      One payment schedule (lib/paymentSchedule scheduleFor): Money's saved
+      schedule for the project, else the studio's stages from Terms & Payment,
+      else FFDS's — the same stages and amounts Money and the booklet show.
+      This used to read the last issued Payment Schedule document, or an older
+      settings list, so the proposal could show stages Money never billed.
+    */
+    const schedule = scheduleFor(projectContext, { tierSummary }, { paymentStructure });
+    /* Level 2 states the amounts; Level 1 is range-based and states the shares. */
+    const showAmounts = !!financials;
+    const fmt = (n: number) => formatCurrency(Math.round(n));
 
     let designAdvances: any[] = [];
     let executionAdvances: any[] = [];
-    let isSplitStructure = false;
-    let oldFormatMilestones: any[] = [];
     let showingStudioDefaults = false;
 
     if (viewMode === 'studio_defaults') {
         const defaultsToUse = paymentStructure || FFDS_PAYMENT_STRUCTURE_DEFAULTS;
-        isSplitStructure = true;
         showingStudioDefaults = true;
         designAdvances = defaultsToUse.designStages || [];
         executionAdvances = defaultsToUse.executionStages || [];
     } else {
-        if (latestSchedule?.advances) {
-            isSplitStructure = true;
-            designAdvances = latestSchedule.advances
-                .filter(a => a.phase === 'design')
-                .sort((a, b) => {
-                    const numA = parseInt((a.advanceCode || a.code || '').replace(/\D/g, '') || '0', 10);
-                    const numB = parseInt((b.advanceCode || b.code || '').replace(/\D/g, '') || '0', 10);
-                    return (numA && numB) ? numA - numB : 0;
-                });
-            executionAdvances = latestSchedule.advances
-                .filter(a => a.phase === 'execution' || a.phase === 'handover' || a.isHandoverAdvance)
-                .sort((a, b) => {
-                    const numA = parseInt((a.advanceCode || a.code || '').replace(/\D/g, '') || '0', 10);
-                    const numB = parseInt((b.advanceCode || b.code || '').replace(/\D/g, '') || '0', 10);
-                    return (numA && numB) ? numA - numB : 0;
-                });
-        } else {
-            oldFormatMilestones = settings?.paymentMilestones?.milestones || [];
-        }
+        designAdvances = schedule.design.stages;
+        executionAdvances = mode === 'design_only' ? [] : schedule.execution.stages;
     }
 
-    const hasMilestones = isSplitStructure ? (designAdvances.length > 0 || executionAdvances.length > 0) : oldFormatMilestones.length > 0;
+    const hasMilestones = designAdvances.length > 0 || executionAdvances.length > 0;
 
     return (
         <section className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 md:p-8 relative group/container break-inside-avoid">
@@ -84,11 +72,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                 <div className="flex-grow">
                     <div className="flex items-center gap-3">
                         <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Commercial Terms</div>
-                        {viewMode === 'project' && savedSchedules.length > 0 && latestSchedule && (
-                            <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                                Version {latestSchedule.version}
-                            </span>
-                        )}
+
                         {showingStudioDefaults && (
                             <span className="bg-sky-100 text-[#334486] text-[10px] px-2 py-0.5 rounded-full font-bold">
                                 Preview
@@ -126,7 +110,7 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                          <p className="text-slate-500 font-bold mb-2">No payment milestones configured.</p>
                          <p className="text-sm text-slate-400">[Studio milestones not configured — go to Studio Settings to configure]</p>
                      </div>
-                ) : isSplitStructure ? (
+                ) : (
                     <div className="space-y-8">
                         {designAdvances.length > 0 && (
                             <div>
@@ -137,16 +121,22 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                                     {designAdvances.map((adv: any, idx: number) => (
                                         <div key={`d-${idx}`} className="flex flex-col sm:flex-row items-stretch sm:items-center p-4 border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow bg-white gap-4">
                                             <div className="bg-sky-50 border border-sky-100 text-[#334486] font-black text-xl rounded-xl w-16 flex justify-center items-center py-3 shrink-0">
-                                                {adv.percentage || adv.pct}%
+                                                {adv.pct ?? adv.percentage}%
                                             </div>
                                             <div className="flex flex-col flex-1 pl-2">
-                                                <h4 className="font-bold text-slate-900">{adv.advanceCode || adv.code} &middot; {adv.label || adv.name}</h4>
+                                                <h4 className="font-bold text-slate-900">{adv.code || adv.advanceCode} &middot; {adv.name || adv.label}</h4>
                                                 <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 mt-1 text-sm">
                                                     <span className="font-semibold text-slate-700">Trigger:</span>
                                                     <span className="text-slate-600">{adv.dueCondition || adv.trigger}</span>
                                                 </div>
                                                 <p className="text-xs text-slate-500 mt-1">{adv.unlocks}</p>
                                             </div>
+                                            {showAmounts && !showingStudioDefaults && typeof adv.amount === 'number' && (
+                                                <div className="text-right shrink-0 pr-2">
+                                                    <div className="font-bold text-slate-900 tabular-nums">{fmt(adv.amount)}</div>
+                                                    <div className="text-[11px] text-slate-500 tabular-nums">{fmt(adv.base)} + GST</div>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -162,41 +152,36 @@ const ClientPayments: React.FC<ClientPaymentsProps> = ({ paymentMilestones, cont
                                     {executionAdvances.map((adv: any, idx: number) => (
                                         <div key={`e-${idx}`} className="flex flex-col sm:flex-row items-stretch sm:items-center p-4 border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow bg-white gap-4">
                                             <div className="bg-sky-50 border border-sky-100 text-[#334486] font-black text-xl rounded-xl w-16 flex justify-center items-center py-3 shrink-0">
-                                                {adv.percentage || adv.pct}%
+                                                {adv.pct ?? adv.percentage}%
                                             </div>
                                             <div className="flex flex-col flex-1 pl-2">
-                                                <h4 className="font-bold text-slate-900">{adv.advanceCode || adv.code} &middot; {adv.label || adv.name}</h4>
+                                                <h4 className="font-bold text-slate-900">{adv.code || adv.advanceCode} &middot; {adv.name || adv.label}</h4>
                                                 <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 mt-1 text-sm">
                                                     <span className="font-semibold text-slate-700">Trigger:</span>
                                                     <span className="text-slate-600">{adv.dueCondition || adv.trigger}</span>
                                                 </div>
                                                 <p className="text-xs text-slate-500 mt-1">{adv.unlocks}</p>
                                             </div>
+                                            {showAmounts && !showingStudioDefaults && typeof adv.amount === 'number' && (
+                                                <div className="text-right shrink-0 pr-2">
+                                                    <div className="font-bold text-slate-900 tabular-nums">{fmt(adv.amount)}</div>
+                                                    <div className="text-[11px] text-slate-500 tabular-nums">{fmt(adv.base)} + GST</div>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        {oldFormatMilestones.map((milestone: any, idx: number) => (
-                            <div key={idx} className="flex flex-col sm:flex-row items-stretch sm:items-center p-4 border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow bg-white gap-4">
-                                <div className="bg-sky-50 border border-sky-100 text-[#334486] font-black text-xl md:text-2xl rounded-xl w-20 flex justify-center items-center py-4 shrink-0">
-                                    {milestone.percent}%
-                                </div>
-                                <div className="flex flex-col flex-1 pl-2">
-                                    <h3 className="font-bold text-slate-900 text-lg">{milestone.label}</h3>
-                                    <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 mt-1 text-sm">
-                                        <span className="font-semibold text-slate-700">Trigger:</span>
-                                        <span className="text-slate-600">{milestone.trigger || milestone.description}</span>
-                                    </div>
-                                    {milestone.trigger && milestone.description && milestone.description !== milestone.trigger && (
-                                        <p className="text-xs text-slate-500 mt-2">{milestone.description}</p>
-                                    )}
-                                </div>
+                        {showAmounts && !showingStudioDefaults && schedule.design.stages.length > 0 && (
+                            <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 p-4 rounded-2xl border border-[#3D52A0]/20 bg-[#3D52A0]/[0.05]">
+                                <span className="text-sm text-slate-700">
+                                    <span className="font-bold text-slate-900">To book:</span> {schedule.design.stages[0].code}, with GST
+                                    {schedule.initiationFee > 0 ? `, less the ${fmt(schedule.initiationFee)} Project Initiation Fee already paid` : ''}
+                                </span>
+                                <span className="font-bold text-slate-900 tabular-nums">{fmt(schedule.booking)}</span>
                             </div>
-                        ))}
+                        )}
                     </div>
                 )}
             </div>
