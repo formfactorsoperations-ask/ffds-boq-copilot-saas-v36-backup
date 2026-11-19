@@ -18,6 +18,8 @@ const TAB_KEY = 'ffds-home-tab';
 interface Props {
   stage: number;
   canSeeMoney: boolean;
+  /** False while figures are hidden for a shared screen: no Cost & margin tab. */
+  canSeeMargin?: boolean;
   drawings: DrawingModel | null;
   sharedDocs: { name: string; ms: number }[];
   payments: PaymentModel;
@@ -43,10 +45,11 @@ export default function InsightsCard(p: Props) {
     // Collections are studio finance, like cost and margin below.
     if (p.canSeeMoney) t.push({ id: 'money', label: 'Payments', icon: Icon.money() });
     t.push({ id: 'prog', label: 'Programme', icon: Icon.bars() });
-    if (p.canSeeMoney) t.push({ id: 'cost', label: 'Cost & margin', icon: Icon.pie(), owner: true });
+    // Not while figures are hidden for a shared screen (lib/figuresPrivacy).
+    if (p.canSeeMoney && p.canSeeMargin !== false) t.push({ id: 'cost', label: 'Cost & margin', icon: Icon.pie(), owner: true });
     t.push({ id: 'act', label: 'Activity', icon: Icon.pulse() });
     return t;
-  }, [p.canSeeMoney]);
+  }, [p.canSeeMoney, p.canSeeMargin]);
 
   // Opens on what the stage calls for, unless the user has chosen before. The
   // default is live, not frozen at mount: the drawings arrive a moment after
@@ -96,7 +99,7 @@ export default function InsightsCard(p: Props) {
       {valid === 'draw' && <DrawingsPanel {...p} />}
       {valid === 'money' && <PaymentsPanel {...p} />}
       {valid === 'prog' && <ProgrammePanel {...p} />}
-      {valid === 'cost' && p.canSeeMoney && <CostPanel {...p} />}
+      {valid === 'cost' && p.canSeeMoney && p.canSeeMargin !== false && <CostPanel {...p} />}
       {valid === 'act' && <ActivityPanel {...p} />}
     </section>
   );

@@ -34,7 +34,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { MarginDeviationIndicator } from './MarginDeviationIndicator';
 import { useOrg } from '../contexts/OrgContext';
-import { seesStudioFinance } from '../lib/roleAccess';
+import { useSeesMargins } from './ui/HideFigures';
 import { SizePanel, sizeLabel } from './BoqSizeField';
 import NumberField from './NumberField';
 import { splitUnitCost } from '../lib/numberInput';
@@ -74,10 +74,11 @@ export const InteractiveBoqEditor: React.FC<InteractiveBoqEditorProps> = ({
   
   // Custom View: Split-Pane Selection State
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  /* Cost rates, margin and profit are studio finance (lib/roleAccess). Other
-     roles still see the client sell price, and still set quantities. */
+  /* Cost rates, margin and profit are studio finance (lib/roleAccess), and
+     go while figures are hidden. Other roles still see the client sell price,
+     and still set quantities. */
   const { currentRole } = useOrg();
-  const finance = seesStudioFinance(currentRole);
+  const finance = useSeesMargins(currentRole);
 
   // Library state (Design Bank)
   const [libSearch, setLibSearch] = useState<string>('');

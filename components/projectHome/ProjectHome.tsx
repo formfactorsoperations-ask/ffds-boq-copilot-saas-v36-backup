@@ -53,6 +53,7 @@ import {
 import { Icon, Ring, UiProvider, useUi, useCountUp, useArmed, tipProps, Glyph, GlyphName } from './bits';
 import InsightsCard, { InsightTab } from './InsightsCard';
 import { seesStudioFinance } from '../../lib/roleAccess';
+import { useSeesMargins, Masked } from '../ui/HideFigures';
 import { publicAppOrigin } from '../../lib/publicUrl';
 import './projectHome.css';
 
@@ -120,8 +121,9 @@ function Home(p: ProjectHomeProps) {
   const ctx: any = p.projectContext || {};
   const go = (route: string) => { if (route) p.setActiveTab(route); };
   // Mirrors ProjectPnlCard, which withholds the P&L from Designers and no one else.
-  // Collections, margin and cost are studio finance (lib/roleAccess).
+  // Collections, margin and cost are studio finance (lib/roleAccess); margin and cost also go while figures are hidden.
   const canSeeMoney = seesStudioFinance(p.currentUserRole);
+  const canSeeMargin = useSeesMargins(p.currentUserRole);
 
   /* ───────────── live records ───────────── */
   const [drawItems, setDrawItems] = useState<DrawingTrackerItem[] | null>(null);
@@ -411,11 +413,12 @@ function Home(p: ProjectHomeProps) {
             </button>
             )}
             {canSeeMoney && (
-              <button className="ph-card ph-kpi ph-tilt ph-rise" style={{ animationDelay: '.09s' }} onClick={() => openInsight('cost')}>
-                <Ring pct={marginNowPct} colour="#3D52A0" label={pnl && pnl.contractedTotal ? `${Math.round(marginNowPct)}%` : '—'} />
+              /* While figures are hidden the card stays, with its figures as dots and nothing to open. */
+              <button className="ph-card ph-kpi ph-tilt ph-rise" style={{ animationDelay: '.09s' }} onClick={() => { if (canSeeMargin) openInsight('cost'); }}>
+                <Ring pct={canSeeMargin ? marginNowPct : 0} colour="#3D52A0" label={!canSeeMargin ? '••' : pnl && pnl.contractedTotal ? `${Math.round(marginNowPct)}%` : '—'} />
                 <div><div className="l">{actualMargin ? 'Actual margin' : 'Potential margin'}</div>
-                  <div className="v ph-num">{pnl && pnl.contractedTotal ? `₹${(marginVal / 1e5).toFixed(2)}L` : '—'}</div>
-                  <div className="s">{marginSub}</div></div>
+                  <div className="v ph-num"><Masked>{pnl && pnl.contractedTotal ? `₹${(marginVal / 1e5).toFixed(2)}L` : '—'}</Masked></div>
+                  <div className="s">{canSeeMargin ? marginSub : 'Hidden while figures are hidden'}</div></div>
               </button>
             )}
             <button className="ph-card ph-kpi ph-tilt ph-rise" style={{ animationDelay: '.12s' }} onClick={() => openInsight('draw')}>
@@ -452,6 +455,7 @@ function Home(p: ProjectHomeProps) {
           <InsightsCard
             stage={p.stage}
             canSeeMoney={canSeeMoney}
+            canSeeMargin={canSeeMargin}
             drawings={drawings}
             sharedDocs={sharedDocs}
             payments={payments}

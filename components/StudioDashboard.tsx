@@ -18,7 +18,7 @@ import { keepLockedTier, lockedTierId, scopeInForce, detailedBoqForTier, detaile
 import { resolveBoqLine, isBillable, isAsActuals } from '../lib/boqPricing';
 import { removeLines, restoreLines, RemovedLine } from '../lib/boqEdits';
 import { useOrg } from '../contexts/OrgContext';
-import { seesStudioFinance } from '../lib/roleAccess';
+import { useSeesMargins } from './ui/HideFigures';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import { db as dbService } from '../services/dbService';
 import { db, functions } from '../services/firebaseClient';
@@ -114,8 +114,8 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
     [setTiersRaw, signedTierId]
   );
   const { orgData, currentRole, currentRoles } = useOrg();
-  /* The formula export carries material and labour cost and Margin %: the studio's side of the money. */
-  const mayExportCosts = seesStudioFinance(currentRoles);
+  /* The formula export carries material and labour cost and Margin %: the studio's side of the money, off while figures are hidden. */
+  const mayExportCosts = useSeesMargins(currentRoles);
   const isOwner = ['Super Admin', 'Admin', 'Ops Director'].includes(currentRole);
   
   const { settings, updateSettings } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');

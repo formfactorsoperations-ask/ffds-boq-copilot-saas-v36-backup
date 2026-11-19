@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useFiguresHidden } from './ui/HideFigures';
 import { createPortal } from 'react-dom';
 import { RefreshCw, Plus, LineChart, Building2 } from '@/lib/lucide-shim';
 import { showSuccessWithNext } from './SuccessWithNextToast';
@@ -50,6 +51,8 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
     const [editingTierName, setEditingTierName] = useState('');
     const [revertOpen, setRevertOpen] = useState(false);
     const [marginShiftAmount, setMarginShiftAmount] = useState<number>(0);
+    /* Hide figures (lib/figuresPrivacy): Tune margin shows margins, so it closes while they are hidden. */
+    const marginsHidden = useFiguresHidden();
 
     /*
       Regenerate the options from the project as it stands now.
@@ -732,7 +735,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             />
 
             {/* Tune margin: the old Systematic Margin Adjuster, for the option it was opened on. */}
-            {tuneOpen && createPortal(
+            {tuneOpen && !marginsHidden && createPortal(
                 <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 no-print" role="dialog" aria-label={`Tune margin: ${activeTier.name}`}>
                     <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={() => setTuneOpen(false)} />
                     <div className="phd-pop relative w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">

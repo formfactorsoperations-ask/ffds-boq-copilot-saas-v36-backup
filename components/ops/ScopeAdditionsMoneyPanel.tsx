@@ -1,5 +1,6 @@
 import React from "react";
 import { formatCurrency } from "../../lib/utils";
+import { useFiguresHidden } from "../ui/HideFigures";
 import { ScopeAdditionSummary } from "../../lib/scopeAdditions";
 import { Layers, ArrowRight, AlertTriangle, Info } from '@/lib/lucide-shim';
 
@@ -62,6 +63,8 @@ const ScopeAdditionsMoneyPanel: React.FC<Props> = ({
 }) => {
   const s = summary;
   const revised = contractedExGst + s.authorisedTotal;
+  /* Hide figures (lib/figuresPrivacy): the additions' value stays; their margin goes. */
+  const marginsHidden = useFiguresHidden();
 
   if (error) {
     return (
@@ -212,7 +215,7 @@ const ScopeAdditionsMoneyPanel: React.FC<Props> = ({
       )}
 
       {/* ── margin on the additions ─────────────────────────────────── */}
-      {!none && s.blendedMarginPct != null && (
+      {!none && s.blendedMarginPct != null && !marginsHidden && (
         <div className="mt-4 pt-4 border-t border-[#EDEFF7] flex items-start gap-2">
           {s.thinCount > 0
             ? <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-[1px]" strokeWidth={2.4} style={{ color: WARN }} />

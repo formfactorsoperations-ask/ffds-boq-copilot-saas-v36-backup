@@ -29,7 +29,7 @@ import DocumentRenderer from '../documents/DocumentRenderer';
 import ScopeRevisionSheet from '../documents/ScopeRevisionSheet';
 import DocumentReadingRoom from '../client/DocumentReadingRoom';
 import { useOrg } from '../../contexts/OrgContext';
-import { seesStudioFinance } from '../../lib/roleAccess';
+import { useSeesMargins } from '../ui/HideFigures';
 import { useMomScopeQueue, MomScopeItem } from '../../hooks/useMomScopeQueue';
 import MeetingScopeInbox from './MeetingScopeInbox';
 import ClientTotalsPicker from './ClientTotalsPicker';
@@ -849,8 +849,8 @@ function RevisionEditor({
   const draft: ScopeDraft = useMemo(() => draftOfRecord(rec, signed, base.boq, bankMap), [rec, signed, base.boq, bankMap]);
   const result = useMemo(() => revisionFromDraft(signed, draft), [signed, draft]);
   const margin = useMemo(() => draftMargin(signed, draft, result), [signed, draft, result]);
-  // The "Studio only" margin panel is studio finance (lib/roleAccess).
-  const finance = seesStudioFinance(useOrg().currentRole);
+  // The "Studio only" margin panel is studio finance (lib/roleAccess), and goes while figures are hidden.
+  const finance = useSeesMargins(useOrg().currentRole);
   const editable = rec.status === 'draft';
   /* Approved either way: in the portal, signed, or agreed and recorded by the studio. */
   const signedByClient = !!(issue?.clientSignature || issue?.recordedApproval);
@@ -1892,8 +1892,8 @@ const ItemPicker: React.FC<{
 }> = ({ bank, rooms, room: initialRoom, replacing, onClose, onBank, onCustom }) => {
   const [q, setQ] = useState(replacing ? '' : '');
   const [room, setRoom] = useState(initialRoom);
-  // A custom line's cost and margin are studio finance (lib/roleAccess).
-  const finance = seesStudioFinance(useOrg().currentRole);
+  // A custom line's cost and margin are studio finance (lib/roleAccess), and go while figures are hidden.
+  const finance = useSeesMargins(useOrg().currentRole);
   const [custom, setCustom] = useState(false);
   const [v, setV] = useState({ name: '', unit: 'nos', qty: '1', rate: '', cost: '', description: '' });
   const hits = useMemo(() => {

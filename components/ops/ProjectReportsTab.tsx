@@ -13,6 +13,7 @@ import { buildProjectRisk, RISK_TONE } from '../../lib/projectRisk';
 import { Gauge, MarginWaterfall, CostSpine, RoomMarginChart, CollectionBar } from './ReportCharts';
 import DocumentMeter from './DocumentMeter';
 import { Panel as KitPanel } from '../ui/kit';
+import { useFiguresHidden, MarginsHidden, Masked } from '../ui/HideFigures';
 import { buildDocumentCompleteness } from '../../lib/documentCompleteness';
 import { engagementOf, isFeeOnly } from '../../lib/engagement';
 
@@ -88,7 +89,14 @@ const ProjectReportsTab: React.FC<Props> = ({
     () => buildProjectPnl(projectContext, boq, pos, activeTier, projectContext?.procurementModes || {}, marginAssumption(projectContext, tiers, bank)),
     [projectContext, boq, pos, activeTier, tiers, bank],
   );
-  const risk = useMemo(() => buildProjectRisk(projectContext, pnl), [projectContext, pnl]);
+  /* Hide figures (lib/figuresPrivacy): value, collections and progress stay; margin and cost go. */
+  const marginsHidden = useFiguresHidden();
+  const risk = useMemo(() => {
+    const r = buildProjectRisk(projectContext, pnl);
+    if (!marginsHidden) return r;
+    const veil = (x: any) => (x.id === 'margin-erosion' ? { ...x, detail: 'Hidden while figures are hidden.' } : x);
+    return { ...r, signals: r.signals.map(veil), active: r.active.map(veil) };
+  }, [projectContext, pnl, marginsHidden]);
   const docs = useMemo(() => buildDocumentCompleteness(projectContext), [projectContext]);
 
   /* Same formulas as StudioReports, one project deep. */
@@ -226,6 +234,7 @@ const ProjectReportsTab: React.FC<Props> = ({
             : (pnl.hasProcurement ? 'Actual: against orders and vendor bills' : 'Potential: from the BOQ margin')}
           icon={<Percent className="w-4 h-4" />}
         >
+          {marginsHidden ? <MarginsHidden /> : (<>
           <div className="flex items-center gap-5">
             <Gauge
               pct={Math.max(0, marginPct)}
@@ -263,6 +272,7 @@ const ProjectReportsTab: React.FC<Props> = ({
           {feeOnly && (
             <p className="text-[11px] text-slate-500 mt-3 leading-relaxed">The studio's own design time is not costed here, and the client pays the contractors directly.</p>
           )}
+          </>)}
         </Panel>
 
         {feeOnly ? (
@@ -276,6 +286,7 @@ const ProjectReportsTab: React.FC<Props> = ({
           </Panel>
         ) : (
         <Panel title="Cost" sub={`${pnl.poCount} purchase order${pnl.poCount === 1 ? '' : 's'} raised`} icon={<Activity className="w-4 h-4" />}>
+          {marginsHidden ? <MarginsHidden what="Costs" /> : (<>
           <CostSpine
             planned={pnl.plannedCost}
             committed={pnl.committedCost}
@@ -290,6 +301,7 @@ const ProjectReportsTab: React.FC<Props> = ({
               foot="of planned cost committed. Below 100%, margin is still partly an estimate."
             />
           </div>
+          </>)}
         </Panel>
         )}
 
@@ -304,7 +316,7 @@ const ProjectReportsTab: React.FC<Props> = ({
             <Stat label="Contract value" value={formatINR(contracted)} foot={feeOnly && (projectContext as any)?.financials?.designGstEnabled === false ? 'no GST on this fee' : 'incl. GST'} />
             <Stat
               label="Net in hand"
-              value={formatINR(pnl.cashPosition)}
+              value={feeOnly ? formatINR(pnl.cashPosition) : <Masked>{formatINR(pnl.cashPosition)}</Masked>}
               foot={feeOnly ? 'the design fee collected so far' : 'collected less paid to vendors'}
               tone={pnl.cashPosition < 0 ? 'text-rose-700' : 'text-emerald-700'}
             />
@@ -351,7 +363,7 @@ const ProjectReportsTab: React.FC<Props> = ({
         {!feeOnly && (
         <div className="lg:col-span-3">
           <Panel title="Margin by room" sub="Where the money is made and lost" icon={<Ruler className="w-4 h-4" />}>
-            {pnl.rooms.filter(r => r.quotedSell > 0).length > 0 ? (
+            {marginsHidden ? <MarginsHidden /> : pnl.rooms.filter(r => r.quotedSell > 0).length > 0 ? (
               <RoomMarginChart rooms={pnl.rooms.filter(r => r.quotedSell > 0)} />
             ) : (
               <p className="text-xs text-slate-400 py-6 text-center">

@@ -146,10 +146,24 @@ For a pitch or a shared screen, the top bar and the project hub's row carry a "H
 (`components/ui/HideFigures.tsx`, rules in `lib/figuresPrivacy.ts`, Alt+Shift+H), shown only to the
 roles that see the studio's money. It is an icon button the size and shape of the bell beside it:
 an open eye while figures show; when they are hidden the eye closes (the icons cross over on a plain
-300ms transition, still under reduced motion), the button takes the brand tint and a brand dot. While it is on, `seesStudioFinance` answers no, so every screen hides what it
-hides from a Designer, and a screen that is wholly about money is covered by one `Panel`-style card
-with "Show figures". Client prices stay. New screens that show margin, cost or collections ask
-`seesStudioFinance`, and so follow the switch with no extra work.
+300ms transition, still under reduced motion), the button takes the brand tint and a brand dot.
+
+It hides **margins only** (changed 19 Nov 2026 at the owner's request): margin and profit, and the
+cost and buy rates they are worked out from. Prices, payment plans, project values and collections
+stay, so a screen shared in a pitch still works. While it is on, `seesMargins` (lib/roleAccess)
+answers no; `seesStudioFinance` does not change.
+
+- A margin figure turns to dots in its own type (`Masked`), so nothing moves.
+- A panel made of nothing but margin or cost shows `MarginsHidden` (the kit's `EmptyState`, with
+  "Show") in place of its contents: Project Reports' Margin, Cost and Margin by room.
+- Tools that only work on margins leave their menus: Tune margin, the Margin view in Pricing &
+  Tiers, the Margin optimizer, the Cost & margin tab on the Hub.
+- Only the two studio screens made of margins end to end, Reports and the item bank
+  (`MARGIN_SCREENS`), are covered whole by one `Panel`-style card with "Show figures". Project
+  screens are never covered.
+
+New screens that show margin, cost or profit ask `seesMargins` (or `useSeesMargins`, which redraws on
+the switch); screens that show values or collections ask `seesStudioFinance`.
 
 Beside it, for everyone, sits **Refresh StudioDesk** (`components/ui/RefreshApp.tsx`, `lib/appVersion.ts`),
 the same icon button. It reloads the app with no cached copy. When a newer deploy is out it takes the brand
@@ -493,7 +507,18 @@ click resets it. Open or icons, width and folded sections are remembered on the 
 it is a drawer opened from the page bar.
 
 Over the page there is one slim bar: where you are (stage / screen), the page's badge and figures,
-what has just changed, and the hide-figures eye. A page's own view switchers and actions keep a slim
+what has just changed, the studio icons and the hide-figures eye. The studio icons
+(`components/projectNav/StudioJump.tsx`, approved 19 Nov 2026) are Design Desk, Ops Desk, People and
+the Item Bank, each an icon button the size of the eye, naming itself on hover or focus with the
+sidebar's tooltip (`psb-tip`), with a hairline rule before the eye. Each is offered only to the roles
+that open that screen (`STUDIO_TAB_ROLES` and the limited roles' allow-lists); a click leaves the
+project for that screen. From `sm` up; with nothing to offer, nothing is drawn.
+
+**The way back** (`components/projectNav/BackToProject.tsx`, approved 19 Nov 2026). Leaving a project
+for a studio screen (a studio icon, Studio home or the sidebar menu) remembers the project and its
+screen. Every studio screen then opens with one slim row above its title: a secondary `Button`,
+"← Back to *project* · *screen*", and a small × that forgets it. The project stays loaded meanwhile,
+so going back reopens it exactly as it was left. Opening any project another way forgets it. A page's own view switchers and actions keep a slim
 row at the top of the page (`PageTitleBlock compact`). The studio's top tabs keep their title row.
 
 **The breadcrumb in that bar** (`components/projectNav/PageCrumbs.tsx`, approved 18 Nov 2026) moves

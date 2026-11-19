@@ -142,7 +142,8 @@ import { readPortalView } from "./services/portalViewService";
 import { syncStudioAccess, portalDoor } from "./services/studioAccess";
 import { publishProjectDirectory } from "./services/projectTeam";
 import { useFiguresHidden, useHideFiguresShortcut, FiguresHiddenCover } from "./components/ui/HideFigures";
-import { seesStudioFinance, holdsFinanceRole, FINANCE_TABS, isLimitedRole, limitedMayOpen, limitedHomeTab, mayOpenStudioTab, STUDIO_TABS, visibleToRole } from "./lib/roleAccess";
+import BackToProject, { type ProjectReturn } from "./components/projectNav/BackToProject";
+import { seesStudioFinance, holdsFinanceRole, FINANCE_TABS, MARGIN_SCREENS, isLimitedRole, limitedMayOpen, limitedHomeTab, mayOpenStudioTab, STUDIO_TABS, visibleToRole } from "./lib/roleAccess";
 import { functions as firebaseFunctions } from "./services/firebaseClient";
 import { httpsCallable } from "firebase/functions";
 import { roleLabel } from "./lib/roles";
@@ -407,6 +408,15 @@ export default function App() {
   const [activeProject, setActiveProject] = useState<ActiveProject | null>(
     null,
   ); // Execution State
+
+  /*
+    The way back into a project (components/projectNav/BackToProject): set when
+    a project is left for a studio screen, with the screen it was on. The
+    project stays loaded meanwhile (activeInternalId and its state are kept),
+    so going back reopens it exactly as it was left, unsaved edits and all.
+    Opening a project any other way forgets it.
+  */
+  const [projectReturn, setProjectReturn] = useState<(ProjectReturn & { activeProject: ActiveProject | null }) | null>(null);
 
   // AI & Auxiliary State
   const [aiStrategy, setAiStrategy] = useState<AIStrategy>("balanced");
@@ -964,7 +974,7 @@ export default function App() {
       setActiveTab(STUDIO_TABS.has(activeTab) ? "projects" : limitedHomeTab(currentRole));
       return;
     }
-    /* By role: while figures are hidden the screen is covered instead (FiguresHiddenCover), so nobody is moved off it. */
+    /* By role only: hiding figures hides margins on a screen (or covers Reports and the item bank), so nobody is moved off it. */
     if (!(FINANCE_TABS.has(activeTab) && !holdsFinanceRole(currentRole))) return;
     const studioWide = ["reports", "admin-templates-bank", "clients", "studio-settings", "saas-dashboard"];
     setActiveTab(studioWide.includes(activeTab) ? "projects" : "dashboard");
@@ -1874,6 +1884,7 @@ export default function App() {
   // --- HANDLERS ---
 
   const handleOpenProject = (project: FullProjectData, targetTab?: string) => {
+    setProjectReturn(null);
     setActiveInternalId(project.id);
     setProjectArchitecture(project.architecture || 'legacy');
     /*
@@ -3237,6 +3248,7 @@ export default function App() {
                   isWizard={activeTab === "dashboard" && (tiers.length === 0 || showWizardOverride)}
                   onStatusChange={(status, note) => handleProjectStatusChange(activeInternalId!, status, note)}
                   onLeaveProject={(targetTab?: string) => {
+                    if (activeInternalId) setProjectReturn({ id: activeInternalId, tab: activeTab, name: projectContext.name || '', activeProject });
                     setActiveProject(null);
                     localStorage.removeItem("ffds_client_project_id");
                     if (targetTab) {
@@ -3255,8 +3267,8 @@ export default function App() {
                     nothing in the console. A CSS entrance (hud-swap) needs no exit.
                   */}
                   <div key={activeTab} className="hud-swap relative">
-                  {/* Hide figures (lib/figuresPrivacy): a screen wholly about money is covered while a screen is shared. */}
-                  {figuresHidden && FINANCE_TABS.has(activeTab) && <FiguresHiddenCover />}
+                  {/* Hide figures (lib/figuresPrivacy): Reports and the item bank are covered; every other screen hides only its margins. */}
+                  {figuresHidden && MARGIN_SCREENS.has(activeTab) && <FiguresHiddenCover />}
                   <Suspense fallback={
                     <div className="p-12 flex flex-col items-center justify-center text-slate-400 space-y-3">
                       <div className="w-6 h-6 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
@@ -3971,6 +3983,18 @@ export default function App() {
               </JourneyProvider>
             ) : (
               <div className={`flex-grow h-full overflow-y-auto ${activeTab === "client" || activeTab === "client-boq-pack" ? "" : "pt-3 pb-8 px-4 lg:px-6"}`}>
+                  {/* Came here from a project: one click back to the screen that was left. */}
+                  {projectReturn && projectReturn.id === activeInternalId && activeTab !== "client" && activeTab !== "client-boq-pack" && (
+                    <BackToProject
+                      to={projectReturn}
+                      onBack={() => {
+                        setActiveProject(projectReturn.activeProject);
+                        setActiveTab(projectReturn.tab);
+                        setProjectReturn(null);
+                      }}
+                      onDismiss={() => setProjectReturn(null)}
+                    />
+                  )}
                   {activeTab !== "client" && activeTab !== "client-boq-pack" && (
                     <PageTitleBlock route={activeTab} />
                   )}
@@ -3981,8 +4005,8 @@ export default function App() {
                     nothing in the console. A CSS entrance (hud-swap) needs no exit.
                   */}
                   <div key={activeTab} className="hud-swap relative">
-                  {/* Hide figures (lib/figuresPrivacy): a screen wholly about money is covered while a screen is shared. */}
-                  {figuresHidden && FINANCE_TABS.has(activeTab) && <FiguresHiddenCover />}
+                  {/* Hide figures (lib/figuresPrivacy): Reports and the item bank are covered; every other screen hides only its margins. */}
+                  {figuresHidden && MARGIN_SCREENS.has(activeTab) && <FiguresHiddenCover />}
                   <Suspense fallback={
                     <div className="p-12 flex flex-col items-center justify-center text-slate-400 space-y-3">
                       <div className="w-6 h-6 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
