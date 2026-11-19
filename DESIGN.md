@@ -512,7 +512,13 @@ what has just changed, the studio icons and the hide-figures eye. The studio ico
 the Item Bank, each an icon button the size of the eye, naming itself on hover or focus with the
 sidebar's tooltip (`psb-tip`), with a hairline rule before the eye. Each is offered only to the roles
 that open that screen (`STUDIO_TAB_ROLES` and the limited roles' allow-lists); a click leaves the
-project for that screen. From `sm` up; with nothing to offer, nothing is drawn. A page's own view switchers and actions keep a slim
+project for that screen. From `sm` up; with nothing to offer, nothing is drawn.
+
+**The way back** (`components/projectNav/BackToProject.tsx`, approved 19 Nov 2026). Leaving a project
+for a studio screen (a studio icon, Studio home or the sidebar menu) remembers the project and its
+screen. Every studio screen then opens with one slim row above its title: a secondary `Button`,
+"← Back to *project* · *screen*", and a small × that forgets it. The project stays loaded meanwhile,
+so going back reopens it exactly as it was left. Opening any project another way forgets it. A page's own view switchers and actions keep a slim
 row at the top of the page (`PageTitleBlock compact`). The studio's top tabs keep their title row.
 
 **The breadcrumb in that bar** (`components/projectNav/PageCrumbs.tsx`, approved 18 Nov 2026) moves
