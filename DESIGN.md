@@ -586,9 +586,19 @@ the logic is `lib/projectFolders.ts`.
 - **The page.** The shell's title row carries search, Assign designer and New project. Under it, the stage
   tabs stand on the desk like cabinet dividers; the desk's edge holds the Needs-you chips, one Filters
   menu (Actual / Dummy, engagement) and the Desk / Shelves switch. No amounts on this screen.
-- **A folder.** The stage flag on its tab waves (a lost project's hangs grey and still); its Actual /
-  Dummy / Untagged tag and any blocking or due flag sit on its shoulder; the project's next step
-  (`services/nextActionEngine`) is a button on the glass, red when blocking and gold when due.
+- **A folder.** The stage flag on its tab waves (a lost project's hangs grey and still); any blocking or
+  due flag sits on its shoulder; the project's next step (`services/nextActionEngine`) is a button on
+  the glass, red when blocking and gold when due.
+- **Stickers (owner's call, 19 Nov 2026).** Two stickers of frosted, polished glass are pressed onto the
+  front glass just above the name (`.pf-sticker`, through glass-folder-cards' `stickers` slot): a blur
+  behind, a gloss along the top, a soft shadow on the folder.
+  - Actual / Dummy / Untagged is a rectangular label (28px tall, 6px corners, turned −3°) with its
+    bottom-right corner folded back to show its silver side. Actual is brand type; Dummy is amber-tinted,
+    Untagged rose-tinted.
+  - While the BOQ Playground is on, how the latest BOQ was made is a round seal (62px, turned 7°) with its
+    bottom-right edge lifting: Playground / Classic / No BOQ runs round its top, BOQ (or "yet") sits in the
+    middle. Playground is brand glass with white type.
+  Static: no motion of their own; they lean with the glass.
 - **One click for everything.** The glass opens the project; hovering fans out the files (each opens its
   screen); the next-step button does the step; ··· holds Open, the files again (for touch screens),
   Change stage, Clone as template, Select and Delete.

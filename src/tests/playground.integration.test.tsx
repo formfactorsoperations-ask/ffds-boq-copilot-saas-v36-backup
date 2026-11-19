@@ -117,8 +117,8 @@ beforeEach(() => { org.playground = true; org.role = 'Super Admin'; specStore.ba
 afterEach(() => { cleanup(); });
 
 describe('one screen, five lenses', () => {
-  it('shows Plan, Rooms, Sheet, Tune and Deal, opens on the Plan, and no mode buttons', () => {
-    render(<Harness />);
+  it('shows Plan, Rooms, Sheet, Tune and Deal, opens a Playground version on the Plan, and no mode buttons', () => {
+    render(<Harness tier={PG} />);
     for (const n of ['Plan', 'Rooms', 'Sheet', 'Tune', 'Deal']) expect(screen.getByRole('radio', { name: new RegExp(`^${n}$`) })).toBeTruthy();
     expect(screen.getByRole('radio', { name: /^Plan$/ }).getAttribute('aria-checked')).toBe('true');
     expect(screen.queryByRole('button', { name: 'Excel' })).toBeNull();
@@ -333,10 +333,15 @@ describe('The bar', () => {
 });
 
 describe('Classic and Playground versions', () => {
-  it('an older option opens as a Classic BOQ, at exact amounts', () => {
+  it('an older option opens as it is: a Classic BOQ, on the Sheet, at exact amounts, with no library', () => {
     render(<Harness />);
-    expect(screen.getByText('A Classic BOQ, priced as it always was')).toBeTruthy();
-    expect(screen.getAllByText(/Classic BOQ · Draft/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Classic BOQ · made before the Playground · Comfort Upgrade is a draft/)).toBeTruthy();
+    expect(screen.getByText(/Nothing is recalculated: amounts keep their exact figures/)).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /^Sheet$/ }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.queryByRole('complementary', { name: 'Studio design library' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Add items/ })).toBeNull();
+    // Exact: 1,400 × 1.2 × 40 = 67,200 and 30 × 1.25 × 300 = 11,250, not rounded up.
+    expect(screen.getAllByText('₹11,250').length).toBeGreaterThan(0);
   });
 
   it('Make a Playground version copies it into the next version and opens it; the Classic one stays', () => {
@@ -430,7 +435,8 @@ describe('Material specs on the lines (S2)', () => {
   it('a Classic BOQ’s new lines keep the Item Bank’s words', () => {
     let latest: any[] = [];
     render(<Harness tier={{ boq: [] }} probe={t => { latest = t; }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add Sliding wardrobe to Bedroom' }));
+    lens('Rooms');
+    fireEvent.drop(document.querySelector('[data-roomcard="Bedroom"]') as HTMLElement, { dataTransfer: { getData: () => 'wardrobe' } });
     expect(latest[0].boq[0].materialSpecs).toBeUndefined();
     expect(latest[0].boq[0].specs).toBeUndefined();
   });

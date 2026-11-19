@@ -11,6 +11,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, ArrowUpRight, MoreHorizontal } from 'lucide-react';
 import GlassFolder from '../ui/glass-folder-cards';
 import { STAGE, toneOf, KIND_LABEL, type FolderStage, type KindTag, type RoutedFile, type FolderNext } from '../../lib/projectFolders';
+import { PenTool } from 'lucide-react';
+import { BOQ_TAG_LABEL, type BoqTag } from '../../lib/playground/versions';
 
 const STEPS = ['Lead', 'Quote', 'Won', 'Site', 'Done'];
 /* The folder is drawn at 340 wide with 54 of headroom above it (glass-folder-cards). */
@@ -26,6 +28,8 @@ export interface ProjectFolderProps {
   designer?: string;
   stage: FolderStage;
   kind: KindTag;
+  /** BOQ Playground: how the latest BOQ was made. Shown while the studio's Playground switch is on. */
+  boq?: BoqTag;
   files: RoutedFile[];
   next: FolderNext | null;
   width: number;
@@ -45,6 +49,7 @@ export default function ProjectFolder(p: ProjectFolderProps) {
   const k = p.width / BASE_W;
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
+  const arcId = React.useId().replace(/:/g, '');
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -71,7 +76,6 @@ export default function ProjectFolder(p: ProjectFolderProps) {
       data-testid={`project-folder-${p.id}`}
     >
       <div className="pf-tags" style={{ top: Math.round(((HEADROOM + 34) * p.width) / BASE_W) - 30, left: Math.round(12 * k) }}>
-        <span className={`pf-kind ${p.kind}`}>{KIND_LABEL[p.kind]}</span>
         {p.next?.flag && p.next.tone !== 'brand' && (
           <span className={`pf-flag ${p.next.tone}`} title={p.next.flag}>{p.next.flag}</span>
         )}
@@ -99,6 +103,27 @@ export default function ProjectFolder(p: ProjectFolderProps) {
         <GlassFolder
           label={p.name}
           meta={p.meta}
+          stickers={<>
+            {/* Frosted-glass stickers on the front glass, above the name: a label for Actual / Dummy, a round seal for the BOQ. */}
+            <span className={`pf-sticker rect kind ${p.kind}`} title={KIND_LABEL[p.kind]}>
+              <span className="pf-st-face"><span className="pf-st-text">{KIND_LABEL[p.kind]}</span></span>
+              <i className="pf-st-fold" aria-hidden />
+            </span>
+            {p.boq && (
+              <span className={`pf-sticker boq ${p.boq}`} title={`${BOQ_TAG_LABEL[p.boq]}: how the project's latest BOQ was made. Classic BOQs open as they are; their next version can be a Playground version.`}>
+                <span className="pf-st-face">
+                  {/* The kind of BOQ runs round the top, like a seal; BOQ sits in the middle. */}
+                  <svg className="pf-st-arc" viewBox="0 0 62 62" aria-hidden>
+                    <defs><path id={`pf-arc-${arcId}`} d="M 8 33 A 23 23 0 0 1 54 33" /></defs>
+                    <text><textPath href={`#pf-arc-${arcId}`} startOffset="50%" textAnchor="middle">{p.boq === 'playground' ? 'Playground' : p.boq === 'classic' ? 'Classic' : 'No BOQ'}</textPath></text>
+                  </svg>
+                  <span className="sr-only">{p.boq === 'playground' ? 'Playground' : p.boq === 'classic' ? 'Classic' : 'No BOQ'}</span>{' '}
+                  <span className="pf-st-mid">{p.boq === 'none' ? 'yet' : 'BOQ'}</span>
+                </span>
+                <i className="pf-st-peel" aria-hidden />
+              </span>
+            )}
+          </>}
           art="none"
           seed={(p.id.split('').reduce((a, ch) => a + ch.charCodeAt(0), 0) % 97) + 1}
           tone={toneOf(p.stage)}
