@@ -18,8 +18,9 @@ vi.mock('firebase/firestore', async (orig) => {
   return { ...real, collection: () => ({}), collectionGroup: () => ({}), doc: () => ({}), query: () => ({}), where: () => ({}),
     getDoc: async () => ({ exists: () => false, data: () => undefined }), getDocs: async () => ({ docs: [], empty: true, size: 0 }), onSnapshot: () => () => {} };
 });
+const orgFlags = { playground: false };
 vi.mock('../../contexts/OrgContext', () => ({
-  useOrg: () => ({ orgData: { tenantId: 't1', team: [] }, currentRole: 'Admin', updateOrgData: async () => {}, teamMembers: [] }),
+  useOrg: () => ({ orgData: { tenantId: 't1', team: [], playground: orgFlags.playground }, currentRole: 'Admin', updateOrgData: async () => {}, teamMembers: [] }),
 }));
 
 afterEach(cleanup);
@@ -163,5 +164,52 @@ describe('the Projects desk', () => {
     fireEvent.click(within(folder).getByRole('button', { name: /More for/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: /Site control room/ }));
     expect(onOpenProject).toHaveBeenCalledWith(expect.objectContaining({ id: '4' }), 'site-ops');
+  });
+});
+
+describe('the BOQ tag (BOQ Playground PR T)', () => {
+  const line = { id: 'l', bankId: 'b', qty: 1 };
+  const projects = [
+    project('pg', 'proposal_sent'),
+    project('cl', 'lead'),
+    project('no', 'lead'),
+  ];
+  projects[0].tiers = [{ id: 't', boq: [line], timestamp: 1 }, { id: 'u', boq: [line], timestamp: 2, boqFormat: 'playground' }] as any;
+  projects[1].tiers = [{ id: 't', boq: [line], timestamp: 1 }] as any;
+  projects[2].tiers = [{ id: 't', boq: [] }] as any;
+  const mount = async () => {
+    const { default: ProjectListTab } = await import('../../components/ProjectListTab');
+    let view: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(<ProjectListTab projects={projects as any} activeProjectId={null} onOpenProject={() => {}}
+        onCreateNew={() => {}} onDeleteProject={() => {}} onDuplicateProject={() => {}} />);
+    });
+    return view!;
+  };
+  afterEach(() => { orgFlags.playground = false; });
+
+  it('sits on each folder’s shoulder beside Actual / Dummy while the Playground is on', async () => {
+    orgFlags.playground = true;
+    const view = await mount();
+    const tag = (id: string) => view.container.querySelector(`[data-testid="project-folder-${id}"] .pf-boq`)?.textContent;
+    expect(tag('pg')).toBe('Playground BOQ');
+    expect(tag('cl')).toBe('Classic BOQ');
+    expect(tag('no')).toBe('No BOQ yet');
+  });
+
+  it('the Filters menu shows one kind of BOQ, with counts', async () => {
+    orgFlags.playground = true;
+    const view = await mount();
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    const classic = screen.getByRole('menuitem', { name: /^Classic/ });
+    expect(classic.textContent).toContain('1');
+    fireEvent.click(classic);
+    expect(view.container.querySelectorAll('[data-testid^="project-folder-"]').length).toBe(1);
+    expect(screen.getByRole('button', { name: /^Filters · 1/ })).toBeTruthy();
+  });
+
+  it('is not there with the Playground off', async () => {
+    const view = await mount();
+    expect(view.container.querySelector('.pf-boq')).toBeNull();
   });
 });

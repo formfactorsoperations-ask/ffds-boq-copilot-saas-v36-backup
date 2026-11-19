@@ -137,3 +137,18 @@ describe('a Playground option’s summary', () => {
     expect(s.totalSell).toBe(9000 + 6000 + 3000);
   });
 });
+
+import { boqTagOf } from '../../lib/playground/versions';
+describe('the BOQ tag on a project folder (PR T)', () => {
+  const line = { id: 'x', bankId: 'b', qty: 1 };
+  it('says how the latest version with lines was made', () => {
+    expect(boqTagOf([])).toBe('none');
+    expect(boqTagOf([{ boq: [] } as any])).toBe('none');
+    expect(boqTagOf([{ boq: [line], timestamp: 1 } as any])).toBe('classic');
+    expect(boqTagOf([{ boq: [line], timestamp: 1 }, { boq: [line], timestamp: 2, boqFormat: 'playground' }] as any)).toBe('playground');
+    expect(boqTagOf([{ boq: [line], timestamp: 3 }, { boq: [line], timestamp: 2, boqFormat: 'playground' }] as any)).toBe('classic');
+  });
+  it('a version whose lines were trimmed from the list still counts by its summary', () => {
+    expect(boqTagOf([{ boq: [], summary: { itemCount: 12 }, pricingRules: { roundUpTo: 100, feeOnActuals: false } } as any])).toBe('playground');
+  });
+});

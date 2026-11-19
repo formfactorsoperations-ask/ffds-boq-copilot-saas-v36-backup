@@ -61,6 +61,10 @@
 .pf-kind.actual { color: #3D52A0; border-color: rgba(61, 82, 160, .25); }
 .pf-kind.dummy { color: #b45309; border-color: #fde68a; background: #fffbeb; }
 .pf-kind.untagged { color: #be123c; border-color: #fecdd3; background: #fff5f6; }
+/* BOQ Playground: how the latest BOQ was made (PR T), beside Actual / Dummy. */
+.pf-boq { height: 24px; display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; background: rgba(255, 255, 255, .95); border: 1px solid #e2e8f0; color: #64748b; }
+.pf-boq.playground { color: #3D52A0; border-color: rgba(61, 82, 160, .3); }
+.pf-boq.none { background: rgba(255, 255, 255, .7); border-style: dashed; border-color: #cbd5e1; color: #94a3b8; }
 .pf-flag.red { color: #be123c; border: 1px solid #fecdd3; background: #fff1f2; }
 .pf-flag.red::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #e11d48; margin-right: 6px; flex: none; animation: pf-blink 1.8s infinite; }
 .pf-flag.gold { color: #b45309; border: 1px solid #fde68a; background: #fffbeb; }

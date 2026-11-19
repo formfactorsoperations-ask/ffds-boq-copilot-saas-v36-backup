@@ -11,6 +11,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, ArrowUpRight, MoreHorizontal } from 'lucide-react';
 import GlassFolder from '../ui/glass-folder-cards';
 import { STAGE, toneOf, KIND_LABEL, type FolderStage, type KindTag, type RoutedFile, type FolderNext } from '../../lib/projectFolders';
+import { PenTool } from 'lucide-react';
+import { BOQ_TAG_LABEL, type BoqTag } from '../../lib/playground/versions';
 
 const STEPS = ['Lead', 'Quote', 'Won', 'Site', 'Done'];
 /* The folder is drawn at 340 wide with 54 of headroom above it (glass-folder-cards). */
@@ -26,6 +28,8 @@ export interface ProjectFolderProps {
   designer?: string;
   stage: FolderStage;
   kind: KindTag;
+  /** BOQ Playground: how the latest BOQ was made. Shown while the studio's Playground switch is on. */
+  boq?: BoqTag;
   files: RoutedFile[];
   next: FolderNext | null;
   width: number;
@@ -72,6 +76,11 @@ export default function ProjectFolder(p: ProjectFolderProps) {
     >
       <div className="pf-tags" style={{ top: Math.round(((HEADROOM + 34) * p.width) / BASE_W) - 30, left: Math.round(12 * k) }}>
         <span className={`pf-kind ${p.kind}`}>{KIND_LABEL[p.kind]}</span>
+        {p.boq && (
+          <span className={`pf-boq ${p.boq}`} title="How the project's latest BOQ was made. Classic BOQs open as they are; their next version can be a Playground version.">
+            {p.boq === 'playground' && <PenTool className="w-3 h-3" aria-hidden />}{BOQ_TAG_LABEL[p.boq]}
+          </span>
+        )}
         {p.next?.flag && p.next.tone !== 'brand' && (
           <span className={`pf-flag ${p.next.tone}`} title={p.next.flag}>{p.next.flag}</span>
         )}

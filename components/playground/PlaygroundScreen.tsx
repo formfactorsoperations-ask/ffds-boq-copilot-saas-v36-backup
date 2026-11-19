@@ -10,7 +10,7 @@ import { realRooms } from '../../lib/scopeBuckets';
 import { boardPieces, drawOf, isHigh, isWallBacked, pieceSize, footprintOf, wallCovers } from '../../lib/playground/pieces';
 import { autoPlace, type PlacedPiece } from '../../lib/playground/placing';
 import { lineIssues, marginFloorFor } from '../../lib/playground/issues';
-import { pricingRulesOf, playgroundTotals } from '../../lib/playground/pricing';
+import { pricingRulesOf, playgroundTotals, isPlaygroundTier } from '../../lib/playground/pricing';
 import { boqFormatOf, BOQ_FORMAT_LABEL, paintingFromPlan } from '../../lib/playground/versions';
 import { sheetOf } from '../../lib/playground/planSheet';
 import { newPieceLine, needsPlace, pushHistory, undoHistory, type History } from '../../lib/playground/board';
@@ -103,7 +103,8 @@ export default function PlaygroundScreen(props: Props) {
   const rules = pricingRulesOf(tier);
   const format = boqFormatOf(tier);
 
-  const [lens, setLens] = useState<Lens>(focusLineId ? 'sheet' : 'plan');
+  /* A Classic BOQ opens as it is, on the Sheet; a Playground version on the plan. */
+  const [lens, setLens] = useState<Lens>(focusLineId || !isPlaygroundTier(tier) ? 'sheet' : 'plan');
   const [sel, setSel] = useState<string | null>(focusLineId || null);
   const [selRoom, setSelRoom] = useState<string | null>(null);
   const [libOpen, setLibOpen] = useState(true);
@@ -131,6 +132,11 @@ export default function PlaygroundScreen(props: Props) {
     return () => window.removeEventListener('resize', on);
   }, []);
   useEffect(() => { if (focusLineId) { setLens('sheet'); setSel(focusLineId); } }, [focusLineId]);
+  const firstTier = useRef(true);
+  useEffect(() => {
+    if (firstTier.current) { firstTier.current = false; return; }
+    setLens(isPlaygroundTier(tier) ? 'plan' : 'sheet'); setSel(null); setSelRoom(null);
+  }, [tier.id]);
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(null), 3200); return () => clearTimeout(t); }, [note]);
   useEffect(() => {
     if (!menu) return;
@@ -264,7 +270,8 @@ export default function PlaygroundScreen(props: Props) {
   /* ── layout ── */
 
   const plan = lens === 'plan';
-  const showLib = libOpen && !readOnly && lens !== 'tune' && lens !== 'deal';
+  const classic = format === 'classic';
+  const showLib = libOpen && !readOnly && !classic && lens !== 'tune' && lens !== 'deal';
   const selModel = sel ? byId.get(sel) : undefined;
   const selRoomObj = selRoom ? rooms.find(r => r.name === selRoom) : undefined;
   const showIns = !wide || !!selModel || !!selRoomObj || (plan && insOpen);
@@ -343,13 +350,13 @@ export default function PlaygroundScreen(props: Props) {
       <ArtDefs />
 
       {format === 'classic' && (
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 flex items-center gap-3 flex-wrap hud-panel-in">
-          <span className="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 grid place-items-center shrink-0"><Lock className="w-4 h-4" aria-hidden /></span>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-slate-800">A Classic BOQ, priced as it always was</div>
-            <p className="text-xs text-slate-500">Exact amounts, line by line. Make a Playground version to price it by the Playground’s rules (every amount rounded up to ₹100); this one stays as it is.</p>
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm px-4 py-3 flex items-start gap-3 hud-panel-in">
+          <span className="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 grid place-items-center shrink-0"><Table2 className="w-4 h-4" aria-hidden /></span>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-slate-800">Classic BOQ · made before the Playground · {tier.name} is {readOnly ? 'frozen' : 'a draft'}</div>
+            <p className="text-xs text-slate-600 mt-0.5">It opens as it is, in Sheet and Rooms, and you edit it as before. Nothing is recalculated: amounts keep their exact figures (no ₹100 rounding), painting stays one line for the flat, and specs keep their typed words. The plan, kits, civil work, ranges and rounding come with a Playground version.</p>
           </div>
-          {!readOnly && onMakePlaygroundVersion && <Button size="sm" variant="primary" icon={Sparkles} onClick={onMakePlaygroundVersion}>Make a Playground version</Button>}
+          {!readOnly && onMakePlaygroundVersion && <div className="shrink-0"><Button size="sm" variant="primary" icon={PenTool} onClick={onMakePlaygroundVersion}>Make a Playground version</Button></div>}
         </div>
       )}
 
@@ -400,7 +407,7 @@ export default function PlaygroundScreen(props: Props) {
           onChange={l => { setLens(l); if (l === 'plan') setFitSignal(s => s + 1); }}
           options={LENSES.map(([id, n, I, tt]) => ({ id, label: <span title={tt} className="inline-flex items-center gap-1.5"><I className="w-3.5 h-3.5" aria-hidden />{n}</span> }))} />
 
-        {lens !== 'tune' && lens !== 'deal' && !readOnly && (
+        {lens !== 'tune' && lens !== 'deal' && !readOnly && !classic && (
           <button type="button" onClick={() => setLibOpen(o => !o)} aria-pressed={libOpen}
             className={`${barBtn} px-3 border ${libOpen ? 'bg-[#3D52A0]/10 border-[#3D52A0]/30 text-[#3D52A0]' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
             <Plus className="w-3.5 h-3.5" aria-hidden /><span className="min-[1400px]:hidden">Add</span><span className="hidden min-[1400px]:inline">Add items</span>
@@ -450,10 +457,10 @@ export default function PlaygroundScreen(props: Props) {
             </div>
           )}
         </div>
-        <button type="button" onClick={() => setNote('The first-proposal PDF comes with the proposal part of the Playground. Export → BOQ as a PDF prints this BOQ today.')}
+        {!classic && <button type="button" onClick={() => setNote('The first-proposal PDF comes with the proposal part of the Playground. Export → BOQ as a PDF prints this BOQ today.')}
           title="First proposal PDF: no drawing until the layout is approved" className={`${barBtn} px-3 bg-slate-800 text-white hover:bg-slate-900`}>
           <FileText className="w-3.5 h-3.5" aria-hidden />Proposal PDF
-        </button>
+        </button>}
         <button type="button" onClick={() => { setFull(f => !f); setFitSignal(s => s + 1); }} aria-label={full ? 'Leave full screen' : 'Full screen'} title={full ? 'Leave full screen' : 'Full screen'} className="p-1.5 rounded-xl border border-slate-200 text-slate-600">
           {full ? <Shrink className="w-4 h-4" aria-hidden /> : <Expand className="w-4 h-4" aria-hidden />}
         </button>

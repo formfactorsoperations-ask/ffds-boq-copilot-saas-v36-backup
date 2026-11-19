@@ -38,6 +38,7 @@ import MarginReveal from "./projects/MarginReveal";
 import { Dot } from "./ui/HudBits";
 import ProjectFolder from "./projects/ProjectFolder";
 import { FOLDER_STAGES, STAGE, stageOf, kindOf, folderFiles, folderNext, type FolderStage } from "../lib/projectFolders";
+import { boqTagOf, type BoqTag } from "../lib/playground/versions";
 import { usePageHeader } from "../contexts/PageHeaderContext";
 import { LayoutGrid, Rows3, Search as SearchIcon, X as XIcon, Check as CheckIcon } from "lucide-react";
 
@@ -293,6 +294,9 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   );
   const [statusFilter, setStatusFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState<"all" | "actual" | "dummy" | "untagged">("all");
+  /* BOQ Playground (PR T): which projects' latest BOQ is a Playground BOQ, a Classic one, or none yet. */
+  const playground = !!(orgData as any)?.playground;
+  const [boqFilter, setBoqFilter] = useState<"all" | BoqTag>("all");
   /* Turnkey, design only, design + PMC (lib/engagement.ts). */
   const [engagementFilter, setEngagementFilter] = useState<"all" | EngagementType>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -435,6 +439,9 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
     return it?.action?.priority === alertFilter;
   };
 
+  const matchesBoq = (proj: FullProjectData, b: "all" | BoqTag = boqFilter) =>
+    !playground || b === "all" || boqTagOf(proj.tiers) === b;
+
   const matchesEngagement = (proj: FullProjectData, e: "all" | EngagementType = engagementFilter) =>
     e === "all" || engagementOf(proj.context) === e;
 
@@ -451,10 +458,11 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
           matchesKind(proj, kindFilter) &&
           matchesPhase(proj, statusFilter) &&
           matchesEngagement(proj) &&
+          matchesBoq(proj) &&
           matchesSearch(proj) &&
           matchesAlert(proj),
       ),
-    [projects, kindFilter, statusFilter, engagementFilter, searchQuery, alertFilter, intel],
+    [projects, kindFilter, statusFilter, engagementFilter, boqFilter, playground, searchQuery, alertFilter, intel],
   );
 
   /*
@@ -937,7 +945,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
               {([{ id: 'all', label: 'All', color: '#3D52A0' }, ...FOLDER_STAGES] as { id: string; label: string; color: string }[]).map((st) => {
                 const live = statusFilter === st.id;
                 const n = projects.filter(
-                  (proj) => matchesKind(proj, kindFilter) && matchesPhase(proj, st.id) && matchesEngagement(proj) && matchesSearch(proj) && matchesAlert(proj),
+                  (proj) => matchesKind(proj, kindFilter) && matchesPhase(proj, st.id) && matchesEngagement(proj) && matchesBoq(proj) && matchesSearch(proj) && matchesAlert(proj),
                 ).length;
                 return (
                   <button
@@ -997,12 +1005,12 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                   <div className="pf-pop">
                     <button
                       type="button"
-                      className={`pf-tool${filtersOpen || kindFilter !== 'all' || engagementFilter !== 'all' ? ' on' : ''}`}
+                      className={`pf-tool${filtersOpen || kindFilter !== 'all' || engagementFilter !== 'all' || boqFilter !== 'all' ? ' on' : ''}`}
                       aria-expanded={filtersOpen}
                       onClick={() => setFiltersOpen((o) => !o)}
                     >
                       <SlidersHorizontal className="w-3.5 h-3.5" />
-                      Filters{(kindFilter !== 'all' ? 1 : 0) + (engagementFilter !== 'all' ? 1 : 0) > 0 ? ` · ${(kindFilter !== 'all' ? 1 : 0) + (engagementFilter !== 'all' ? 1 : 0)}` : ''}
+                      {(() => { const n = (kindFilter !== 'all' ? 1 : 0) + (engagementFilter !== 'all' ? 1 : 0) + (boqFilter !== 'all' ? 1 : 0); return `Filters${n ? ` · ${n}` : ''}`; })()}
                     </button>
                     {filtersOpen && (
                       <div className="pf-menu" role="menu">
@@ -1023,6 +1031,25 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                             </span>
                           </button>
                         ))}
+                        {playground && (
+                          <>
+                            <small>BOQ</small>
+                            {([
+                              { key: 'all', label: 'All' },
+                              { key: 'playground', label: 'Playground' },
+                              { key: 'classic', label: 'Classic' },
+                              { key: 'none', label: 'None yet' },
+                            ] as { key: 'all' | BoqTag; label: string }[]).map((b) => (
+                              <button key={b.key} type="button" role="menuitem" onClick={() => { setBoqFilter(b.key); setFiltersOpen(false); }}>
+                                {b.label}
+                                <span className="flex items-center gap-2">
+                                  {projects.filter((proj) => matchesBoq(proj, b.key)).length}
+                                  {boqFilter === b.key && <CheckIcon className="w-3.5 h-3.5 text-[#3D52A0]" />}
+                                </span>
+                              </button>
+                            ))}
+                          </>
+                        )}
                         {engagementsInUse.length > 1 && (
                           <>
                             <small>Engagement</small>
@@ -1068,7 +1095,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                     <button
                       type="button"
                       className="font-bold text-[#3D52A0]"
-                      onClick={() => { setSearchQuery(''); setAlertFilter(null); setKindFilter('all'); setEngagementFilter('all'); setStatusFilter('all'); }}
+                      onClick={() => { setSearchQuery(''); setAlertFilter(null); setKindFilter('all'); setEngagementFilter('all'); setBoqFilter('all'); setStatusFilter('all'); }}
                     >
                       Clear the filters
                     </button>
@@ -1087,6 +1114,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                         client={c.clientName || 'No client yet'}
                         stage={stageOf(c.status)}
                         kind={kindOf(project)}
+                        boq={playground ? boqTagOf(project.tiers) : undefined}
                         files={folderFiles(project)}
                         next={folderNext(intel.get(project.id)?.action)}
                         width={width}

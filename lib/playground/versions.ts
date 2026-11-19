@@ -27,6 +27,26 @@ export const boqFormatOf = (tier: Pick<ProposalTier, 'boqFormat' | 'pricingRules
 
 export const BOQ_FORMAT_LABEL: Record<BoqFormat, string> = { playground: 'Playground BOQ', classic: 'Classic BOQ' };
 
+/** How a project's latest BOQ was made, for the tag on its folder (PR T). */
+export type BoqTag = BoqFormat | 'none';
+export const BOQ_TAG_LABEL: Record<BoqTag, string> = { ...BOQ_FORMAT_LABEL, none: 'No BOQ yet' };
+
+/**
+ * The project's BOQ tag: the format of its latest version that has lines
+ * (newest by timestamp, else the last listed), or none. A version whose lines
+ * were trimmed from the project list still counts by its summary.
+ */
+export function boqTagOf(tiers: Pick<ProposalTier, 'boq' | 'boqFormat' | 'pricingRules' | 'timestamp' | 'summary'>[] | null | undefined): BoqTag {
+  const withLines = (tiers || []).map((t, i) => ({ t, i })).filter(({ t }) =>
+    (t.boq?.length || 0) > 0 || !!(t as any).boqTrimmed || Number(t.summary?.itemCount) > 0);
+  if (!withLines.length) return 'none';
+  const latest = withLines.reduce((a, b) => {
+    const ta = Number(a.t.timestamp) || 0, tb = Number(b.t.timestamp) || 0;
+    return tb > ta || (tb === ta && b.i > a.i) ? b : a;
+  });
+  return boqFormatOf(latest.t);
+}
+
 /**
  * The next version of a Classic option, as a Playground BOQ. Every line keeps
  * its id, quantity, room and markup; a line priced off the bank today has the
