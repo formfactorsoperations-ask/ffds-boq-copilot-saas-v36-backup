@@ -325,10 +325,8 @@ describe('The bar', () => {
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
-  it('Tune and Deal say what is coming', () => {
+  it('Deal says what is coming', () => {
     render(<Harness />);
-    lens('Tune');
-    expect(screen.getByText('Tune comes next')).toBeTruthy();
     lens('Deal');
     expect(screen.getByText('Deal comes next')).toBeTruthy();
   });
@@ -489,5 +487,44 @@ describe('Material specs on the lines (S2)', () => {
     render(<Sent />);
     expect(screen.queryByText('Newer material specs are out')).toBeNull();
     expect(screen.queryByText('new spec')).toBeNull();
+  });
+});
+
+describe('Tune (PR 4)', () => {
+  it('a fader per room and one for every room; a drag writes the room’s markups, and is one undo', async () => {
+    let latest: any[] = [];
+    render(<Harness tier={PG} probe={t => { latest = t; }} />);
+    lens('Tune');
+    expect(screen.getByRole('button', { name: /^Markup for Bedroom:/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Markup for Every room:/ })).toBeTruthy();
+    const knob = screen.getByRole('button', { name: /^Markup for Kitchen:/ });
+    fireEvent.pointerDown(knob, { clientY: 300, pointerId: 1 });
+    fireEvent.pointerMove(knob, { clientY: 266, pointerId: 1 });
+    fireEvent.pointerMove(knob, { clientY: 232, pointerId: 1 });
+    fireEvent.pointerUp(knob, { clientY: 232, pointerId: 1 });
+    // 68 px of a 170 px track is 20 points of markup: the counter's 10% becomes 30%.
+    expect(latest[0].boq.find((l: any) => l.id === 'l3').marginOverride).toBeCloseTo(30, 0);
+    expect(latest[0].boq.find((l: any) => l.id === 'l1').marginOverride).toBeUndefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(latest[0].boq.find((l: any) => l.id === 'l3').marginOverride).toBeUndefined();
+  });
+
+  it('the client’s number moves the markups to meet it, never under the floor, and says the gap', () => {
+    let latest: any[] = [];
+    render(<Harness tier={PG} probe={t => { latest = t; }} />);
+    lens('Tune');
+    const input = screen.getByLabelText("The client's number");
+    fireEvent.change(input, { target: { value: '70000' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    // Work is ₹1,00,500; at every floor it is still above ₹70,000.
+    expect(screen.getByText(/The floors stop at/)).toBeTruthy();
+    latest[0].boq.forEach((l: any) => { if (l.marginOverride != null) expect(l.marginOverride).toBeGreaterThanOrEqual(17.64); });
+  });
+
+  it('a Designer does not see it', () => {
+    org.role = 'Designer';
+    render(<Harness tier={PG} />);
+    lens('Tune');
+    expect(screen.getByText('Studio figures are hidden')).toBeTruthy();
   });
 });
