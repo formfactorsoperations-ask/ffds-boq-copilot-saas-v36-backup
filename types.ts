@@ -919,6 +919,8 @@ export interface ProjectContext {
         pct: number;
         active: number;
         phaseProgress: { done: number; total: number; pct?: number }[];
+        /** Ids of the Ops Matrix steps that are done. The client portal reads its stages from these. */
+        doneSteps?: string[];
     };
     
     // Status-Driven BOQ Totals (Calculated by Cloud Function)

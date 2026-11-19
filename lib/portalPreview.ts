@@ -155,6 +155,8 @@ const SECTION_LABEL: Record<string, string> = {
   portalMoney: 'payment amounts',
   clientBoq: 'scope',
   clientSchedule: 'programme',
+  clientScheduleSaved: 'programme',
+  journeySummary: 'progress',
   documents: 'documents',
   termsDockets: 'terms',
   scopeAdditions: 'scope additions',

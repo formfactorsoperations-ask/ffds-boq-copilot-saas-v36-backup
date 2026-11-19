@@ -57,7 +57,7 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "space_planning_presented", n: 4, phase: 1, title: "Space Planning Presented",
     description: "2D layouts and structural changes presented to client.",
     illustration: "space_planning_presented", statusSource: "auto",
-    autoRule: 'design documents uploaded OR rooms set (a Client Comms "sent" mark recorded before it was retired still counts)', linkedFeature: "Drawings", linkedTab: "drawing-tracker", prerequisiteIds: ["brief_frozen"]
+    autoRule: 'design documents uploaded (a Client Comms "sent" mark recorded before it was retired still counts)', linkedFeature: "Drawings", linkedTab: "drawing-tracker", prerequisiteIds: ["brief_frozen"]
   },
   {
     id: "space_planning_approved", n: 5, phase: 1, title: "Space Planning Approved",
@@ -118,13 +118,13 @@ export const JOURNEY_STEPS: JourneyStepDef[] = [
     id: "payment_schedule_sent", n: 12, phase: 2, title: "Payment Schedule Sent",
     description: "Schedule of advances generated and issued to client.",
     illustration: "payment_schedule_sent", statusSource: "auto",
-    autoRule: 'communicationLog["payment_schedule_sent"].status === "sent"', linkedFeature: "Client Portal → Payment Schedule", linkedTab: "payment-schedule", prerequisiteIds: ["boq_shared"]
+    autoRule: 'payment schedule issued, or a milestone invoiced or paid (a Client Comms "sent" mark recorded before it was retired still counts)', linkedFeature: "Client Portal → Payment Schedule", linkedTab: "payment-schedule", prerequisiteIds: ["boq_shared"]
   },
   {
     id: "agreement_signed", n: 13, phase: 2, title: "Agreement Signed",
     description: "Main execution contract shared and signed.",
     illustration: "agreement_signed", statusSource: "auto",
-    autoRule: 'communicationLog["contract_sent"].status === "sent"', linkedFeature: "Contracts", linkedTab: "execution-agreement", prerequisiteIds: ["payment_schedule_sent"]
+    autoRule: 'execution agreement signed by the client', linkedFeature: "Contracts", linkedTab: "execution-agreement", prerequisiteIds: ["payment_schedule_sent"]
   },
   {
     id: "design_fee_received", n: 14, phase: 2, title: "Design Fee Received",

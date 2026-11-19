@@ -4,6 +4,8 @@ import MilestoneIcon from './MilestoneIcon';
 import { newSequenceWarnings, SequenceWarning } from '../lib/scheduleBuilder';
 import { ProjectSchedule, ScheduleGate, ScheduleHold, ProjectContext } from '../types';
 import WavyText from './ui/WavyText';
+import RoomWorkField from './schedule/RoomWorkField';
+import { projectRoomNames } from '../lib/roomSchedule';
 import { StepDeliverableChecklist } from './studio/StepDeliverableChecklist';
 import {
   computeSchedule, programmeSpanDays, varianceReport, daysLostByReason, ineffectiveHolds, holdImpact,
@@ -131,6 +133,8 @@ interface Props {
   onRequestStartShift?: (iso: string) => void;
   readOnly?: boolean;
   projectContext?: ProjectContext;
+  /** Room names a stage can be given or split into. Defaults to the project's room list. */
+  rooms?: string[];
   phases?: any[];
   projectId?: string;
   onUpdateDeliverable?: (stepNumber: number, deliverableId: string, updates: any) => void;
@@ -145,6 +149,7 @@ export default function ScheduleGantt({
   onRequestStartShift,
   readOnly = false,
   projectContext,
+  rooms,
   phases,
   projectId,
   onUpdateDeliverable,
@@ -402,6 +407,8 @@ export default function ScheduleGantt({
   const px = (days: number) => days * PX[zoom];
   const left = (day: number) => px(day - span.from);
   const selected = result.tasks.find(t => t.id === selectedId) || null;
+  /* The rooms a stage can be given or split into: the project's own. */
+  const roomNames = useMemo(() => rooms || projectRoomNames(projectContext), [rooms, projectContext?.rooms]);
 
   const selectedDesignStepNum = useMemo(() => {
     if (!selected) return null;
@@ -1540,6 +1547,22 @@ export default function ScheduleGantt({
                         />
                       </div>
                     )}
+
+                    {/* Room-wise work: a room for this stage, or one bar per room (lib/roomSchedule). */}
+                    {onChange && !readOnly && (() => {
+                      const stored = schedule.tasks.find(t => t.id === selected.id);
+                      return stored ? (
+                        <RoomWorkField schedule={schedule} task={stored} rooms={roomNames} onChange={(next) => {
+                          // A split or merge replaces the selected bar; keep a bar of the same stage selected.
+                          if (!next.tasks.some(t => t.id === selected.id)) {
+                            const stage = selected.id.split('~')[0];
+                            const keep = next.tasks.find(t => t.id === stage || t.id.startsWith(stage + '~'));
+                            setSelectedId(keep ? keep.id : null);
+                          }
+                          onChange(next);
+                        }} />
+                      ) : null;
+                    })()}
 
                     {selected.kind !== 'milestone' && (
                       <div>

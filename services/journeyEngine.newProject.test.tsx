@@ -96,6 +96,39 @@ describe('a new project on the Ops Matrix', () => {
     expect(doneIn(2)).toEqual(['terms_docket_acknowledged']);
   });
 
+  it('does not tick steps from data every project has', async () => {
+    await mount(
+      {
+        name: 'Palacia - 3BHK', area: 1450, status: 'won',
+        rooms: [{ id: 'r1', name: 'Kitchen' }, { id: 'r2', name: 'Master Bedroom' }],
+        paymentMilestones: [
+          { id: 'd1', type: 'design', name: 'Booking', status: 'pending' },
+          { id: 'e1', type: 'execution', name: 'Advance', status: 'paid' },
+        ],
+      } as unknown as ProjectContext,
+      ['discovery_scheduled', 'discovery_completed'],
+    );
+    const status = (id: string) => steps.find((s) => s.id === id)?.status;
+    // Rooms come with every BOQ: they are not a frozen brief or a presented plan.
+    expect(status('brief_frozen')).not.toBe('done');
+    expect(status('space_planning_presented')).not.toBe('done');
+    // A paid execution advance is not a design fee.
+    expect(status('design_fee_received')).not.toBe('done');
+    expect(latest.journeySummary?.doneSteps).toEqual(['discovery_scheduled', 'discovery_completed']);
+  });
+
+  it.each([
+    ['exists', {}, false],
+    ['is issued', { documents: { issues: [{ kind: 'payment_schedule', version: 1 }] } }, true],
+  ])('ticks Payment Schedule Sent only once the schedule is issued: when it %s', async (_l, over, expected) => {
+    await mount({
+      name: 'Sea Breeze', rooms: [], status: 'lead',
+      paymentMilestones: [{ id: 'd1', type: 'design', name: 'Booking', status: 'pending' }],
+      ...over,
+    } as unknown as ProjectContext, ['boq_shared']);
+    expect(steps.find((s) => s.id === 'payment_schedule_sent')?.status === 'done').toBe(expected);
+  });
+
   it('still fills in the earlier steps of a project set past Contracting', async () => {
     await mount({
       name: 'Sea Breeze', rooms: [], status: 'won',

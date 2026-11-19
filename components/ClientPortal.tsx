@@ -18,7 +18,6 @@ import {
 import { calculateSellPrice, formatINR } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useOrg } from '../contexts/OrgContext';
-import { useTimelinePhases } from '../hooks/useTimelinePhases';
 import { useStepProgress } from '../hooks/useStepProgress';
 import { usePaymentRequests, usePaymentOverdueCheck } from '../hooks/usePaymentRequests';
 import { db, functions } from '../services/firebaseClient';
@@ -155,7 +154,7 @@ import {
 } from '@/lib/lucide-shim';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import ScheduleGantt from './ScheduleGantt';
-import { buildScheduleFromProject, scheduleForEngagement } from '../lib/scheduleBuilder';
+import { scheduleForEngagement } from '../lib/scheduleBuilder';
 import { engagementOf, isFeeOnly } from '../lib/engagement';
 import { isDesignCloseout, DESIGN_CLOSEOUT } from '../lib/handoverDocket';
 import { db as storageDb } from '../services/dbService';
@@ -324,15 +323,6 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
 
     const { steps: stepProgressSteps } = useStepProgress(projectData.id, studioId);
 
-    /**
-     * The project's own design phases — the same Firestore collection the
-     * studio's Timeline tab reads. Without these the portal was calling
-     * `buildScheduleFromProject` with no `designSteps`, which falls back to a
-     * generic five-step template anchored to today; that is why the portal drew
-     * a programme starting this month while the studio's Gantt showed the real
-     * anchor of 27 Jul 2026.
-     */
-    const { phases: designPhases } = useTimelinePhases(projectData.id, studioId);
     usePaymentOverdueCheck(projectData.id, housekeepingStudioId);
     
     // Active Tab State.
@@ -791,21 +781,23 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
          them -- deriving here would drop every design step and invent a
          programme out of the BOQ, while the studio's preview of this same
          screen kept its phases and drew a different one.
-      3. Otherwise derive, which is what a studio preview does on a project that
-         has never been released and has no saved schedule.
+      3. Otherwise nothing. This used to derive a programme from the BOQ, and
+         a copy sent before the studio had built its Timeline carried that
+         derived programme too: the client was shown dates nobody had set, with
+         stages marked complete against them. A programme now reaches the
+         client only once the studio has saved one on its Timeline, and the
+         portal says so until then.
     */
-    const storedSchedule = (context as any).clientSchedule as ProjectSchedule | undefined;
+    const storedSchedule = (context as any).clientScheduleSaved
+        ? (context as any).clientSchedule as ProjectSchedule | undefined
+        : undefined;
 
-    const clientSchedule = useMemo(() => {
+    const clientSchedule = useMemo<ProjectSchedule | null>(() => {
         // A design-only project has no site programme, even in a schedule saved before it became one.
         if (customSchedule) return scheduleForEngagement(customSchedule, projectData.context);
         if (storedSchedule?.tasks?.length) return scheduleForEngagement(storedSchedule, projectData.context);
-        // Same arguments the studio's Timeline passes, so both derive the
-        // identical schedule rather than two different ones.
-        return buildScheduleFromProject(projectData.context, displayBoq, {
-            designSteps: designPhases as any,
-        });
-    }, [customSchedule, storedSchedule, projectData.context, displayBoq, designPhases]);
+        return null;
+    }, [customSchedule, storedSchedule, projectData.context]);
 
     // --- BOQ CATEGORIZATION & REVISIONS ---
     const boqRevisions = context.boqRevisions || [];
@@ -1644,11 +1636,10 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
         () => buildProgramme(
             clientSchedule,
             lifecycleInfo,
-            // A published programme counts as the studio's own, the same as a
-            // saved schedule or dated design phases.
-            !!customSchedule || !!storedSchedule?.tasks?.length || designPhases.length > 0,
+            // Only a schedule the studio saved reaches here, so it is always the studio's own.
+            !!clientSchedule,
         ),
-        [clientSchedule, customSchedule, storedSchedule, designPhases, lifecycleInfo],
+        [clientSchedule, lifecycleInfo],
     );
 
     /**
@@ -2924,11 +2915,17 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                                             </div>
 
                                             {/* Client-Safe ReadOnly Schedule Gantt Component */}
-                                            <ScheduleGantt 
-                                                schedule={clientSchedule} 
-                                                readOnly={true} 
-                                                projectContext={projectData.context} 
-                                            />
+                                            {clientSchedule ? (
+                                                <ScheduleGantt 
+                                                    schedule={clientSchedule} 
+                                                    readOnly={true} 
+                                                    projectContext={projectData.context} 
+                                                />
+                                            ) : (
+                                                <p className="text-sm text-slate-500 py-6 text-center">
+                                                    Your studio has not published a schedule for this project yet.
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 ) : (

@@ -1056,7 +1056,12 @@ export const submitClientAction = onCall({ cors: true }, async (request) => {
                   here dropped it, so the first thing a client confirmed swapped
                   the studio's dates for an estimate derived from the BOQ.
                 */
-                previous.clientSchedule,
+                /*
+                  Only a programme the studio saved. A copy sent before the
+                  flag existed may carry one derived from the BOQ, which the
+                  client read as committed dates.
+                */
+                previous.clientScheduleSaved ? previous.clientSchedule : undefined,
                 /* The design meetings, kept current by the designMeeting function. */
                 (viewSnap.data() as any)?.designRecord,
             );
