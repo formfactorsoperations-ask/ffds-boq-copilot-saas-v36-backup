@@ -586,9 +586,14 @@ the logic is `lib/projectFolders.ts`.
 - **The page.** The shell's title row carries search, Assign designer and New project. Under it, the stage
   tabs stand on the desk like cabinet dividers; the desk's edge holds the Needs-you chips, one Filters
   menu (Actual / Dummy, engagement) and the Desk / Shelves switch. No amounts on this screen.
-- **A folder.** The stage flag on its tab waves (a lost project's hangs grey and still); its Actual /
-  Dummy / Untagged tag and any blocking or due flag sit on its shoulder; the project's next step
-  (`services/nextActionEngine`) is a button on the glass, red when blocking and gold when due.
+- **A folder.** The stage flag on its tab waves (a lost project's hangs grey and still); any blocking or
+  due flag sits on its shoulder; the project's next step (`services/nextActionEngine`) is a button on
+  the glass, red when blocking and gold when due.
+- **Stickers (owner's call, 19 Nov 2026).** Actual / Dummy / Untagged, and, while the BOQ Playground is
+  on, how the latest BOQ was made (Playground BOQ in brand, Classic BOQ, No BOQ yet), are paper
+  stickers pressed onto the front glass just above the name (`.pf-sticker`, through glass-folder-cards'
+  `stickers` slot): white or tinted paper, 4px corners, a soft shadow, one folded corner, the first
+  turned −2° and the next 1.5°. Static: no motion of their own; they lean with the glass.
 - **One click for everything.** The glass opens the project; hovering fans out the files (each opens its
   screen); the next-step button does the step; ··· holds Open, the files again (for touch screens),
   Change stage, Clone as template, Select and Delete.

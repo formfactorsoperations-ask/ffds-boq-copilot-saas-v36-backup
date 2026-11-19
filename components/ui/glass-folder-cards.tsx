@@ -88,6 +88,8 @@ export type GlassFolderProps = {
   onFilesChange?: (files: FolderFile[]) => void
   /** Items for the `more` menu. An Open / Close item is always first. */
   menu?: FolderMenuItem[]
+  /** Labels stuck on the front glass, just above the name (they lean with the glass). */
+  stickers?: React.ReactNode
   /** Where the label sits on the front panel. */
   labelPlacement?: "bottom-left" | "top-left" | "top-right"
   open?: boolean
@@ -540,6 +542,7 @@ export default function GlassFolder({
   onFilesChange,
   menu = [],
   labelPlacement = "bottom-left",
+  stickers,
   open: openProp,
   defaultOpen = false,
   onOpenChange,
@@ -767,6 +770,7 @@ export default function GlassFolder({
               }}
             />
             <div className="gf-label">
+              {stickers ? <span className="gf-stickers">{stickers}</span> : null}
               <span className="gf-title">{label}</span>
               <span className="gf-meta" key={metaLine}>
                 {metaLine}
@@ -1186,6 +1190,7 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
 .gf-root[data-place="bottom-left"] .gf-label { left: 28px; bottom: 32px; }
 .gf-root[data-place="top-left"] .gf-label { left: 28px; top: 34px; }
 .gf-root[data-place="top-right"] .gf-label { right: 32px; top: 52px; align-items: flex-start; }
+.gf-stickers { display: flex; gap: 6px; width: max-content; margin-bottom: 6px; }
 .gf-title {
   font-size: 18px;
   font-weight: 500;

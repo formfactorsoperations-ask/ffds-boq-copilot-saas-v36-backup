@@ -75,12 +75,6 @@ export default function ProjectFolder(p: ProjectFolderProps) {
       data-testid={`project-folder-${p.id}`}
     >
       <div className="pf-tags" style={{ top: Math.round(((HEADROOM + 34) * p.width) / BASE_W) - 30, left: Math.round(12 * k) }}>
-        <span className={`pf-kind ${p.kind}`}>{KIND_LABEL[p.kind]}</span>
-        {p.boq && (
-          <span className={`pf-boq ${p.boq}`} title="How the project's latest BOQ was made. Classic BOQs open as they are; their next version can be a Playground version.">
-            {p.boq === 'playground' && <PenTool className="w-3 h-3" aria-hidden />}{BOQ_TAG_LABEL[p.boq]}
-          </span>
-        )}
         {p.next?.flag && p.next.tone !== 'brand' && (
           <span className={`pf-flag ${p.next.tone}`} title={p.next.flag}>{p.next.flag}</span>
         )}
@@ -108,6 +102,15 @@ export default function ProjectFolder(p: ProjectFolderProps) {
         <GlassFolder
           label={p.name}
           meta={p.meta}
+          stickers={<>
+            {/* Stuck on the front glass, above the name: Actual / Dummy, and how its latest BOQ was made. */}
+            <span className={`pf-sticker kind ${p.kind}`}>{KIND_LABEL[p.kind]}</span>
+            {p.boq && (
+              <span className={`pf-sticker boq ${p.boq}`} title="How the project's latest BOQ was made. Classic BOQs open as they are; their next version can be a Playground version.">
+                {p.boq === 'playground' && <PenTool className="w-3 h-3" aria-hidden />}{BOQ_TAG_LABEL[p.boq]}
+              </span>
+            )}
+          </>}
           art="none"
           seed={(p.id.split('').reduce((a, ch) => a + ch.charCodeAt(0), 0) % 97) + 1}
           tone={toneOf(p.stage)}

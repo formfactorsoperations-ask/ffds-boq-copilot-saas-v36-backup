@@ -188,10 +188,10 @@ describe('the BOQ tag (BOQ Playground PR T)', () => {
   };
   afterEach(() => { orgFlags.playground = false; });
 
-  it('sits on each folder’s shoulder beside Actual / Dummy while the Playground is on', async () => {
+  it('is a sticker on each folder’s front glass, beside the Actual / Dummy sticker, while the Playground is on', async () => {
     orgFlags.playground = true;
     const view = await mount();
-    const tag = (id: string) => view.container.querySelector(`[data-testid="project-folder-${id}"] .pf-boq`)?.textContent;
+    const tag = (id: string) => view.container.querySelector(`[data-testid="project-folder-${id}"] .pf-sticker.boq`)?.textContent;
     expect(tag('pg')).toBe('Playground BOQ');
     expect(tag('cl')).toBe('Classic BOQ');
     expect(tag('no')).toBe('No BOQ yet');
@@ -210,6 +210,6 @@ describe('the BOQ tag (BOQ Playground PR T)', () => {
 
   it('is not there with the Playground off', async () => {
     const view = await mount();
-    expect(view.container.querySelector('.pf-boq')).toBeNull();
+    expect(view.container.querySelector('.pf-sticker.boq')).toBeNull();
   });
 });

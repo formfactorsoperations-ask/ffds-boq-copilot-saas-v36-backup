@@ -56,15 +56,21 @@
 .pf-item.is-selected .pf-fold { outline: 2px solid #3D52A0; outline-offset: 6px; border-radius: 26px; }
 .pf-tags { position: absolute; z-index: 2; display: flex; gap: 6px; pointer-events: none; transition: opacity .2s; }
 .pf-item:hover .pf-tags { opacity: 0; }
-.pf-kind, .pf-flag { height: 24px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
-.pf-kind { background: rgba(255, 255, 255, .92); border: 1px solid #e2e8f0; color: #64748b; }
-.pf-kind.actual { color: #3D52A0; border-color: rgba(61, 82, 160, .25); }
-.pf-kind.dummy { color: #b45309; border-color: #fde68a; background: #fffbeb; }
-.pf-kind.untagged { color: #be123c; border-color: #fecdd3; background: #fff5f6; }
-/* BOQ Playground: how the latest BOQ was made (PR T), beside Actual / Dummy. */
-.pf-boq { height: 24px; display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; background: rgba(255, 255, 255, .95); border: 1px solid #e2e8f0; color: #64748b; }
-.pf-boq.playground { color: #3D52A0; border-color: rgba(61, 82, 160, .3); }
-.pf-boq.none { background: rgba(255, 255, 255, .7); border-style: dashed; border-color: #cbd5e1; color: #94a3b8; }
+.pf-flag { height: 24px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+/*
+  Stickers on the front glass, above the name (owner's call, 19 Nov 2026):
+  Actual / Dummy / Untagged, and how the latest BOQ was made. Paper labels
+  pressed onto the glass: a little crooked, a soft shadow, one folded corner.
+*/
+.pf-sticker { position: relative; height: 22px; display: inline-flex; align-items: center; gap: 4px; padding: 0 9px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: .01em; white-space: nowrap; background: #fff; color: #475569; box-shadow: 0 1px 2px rgba(15, 23, 42, .22), 0 3px 8px rgba(15, 23, 42, .12); transform: rotate(-2deg); }
+.pf-sticker + .pf-sticker { transform: rotate(1.5deg); }
+.pf-sticker::after { content: ""; position: absolute; right: 0; top: 0; width: 7px; height: 7px; border-radius: 0 4px 0 2px; background: linear-gradient(225deg, rgba(15, 23, 42, .08) 50%, rgba(255, 255, 255, 0) 50%); }
+.pf-sticker.kind.actual { color: #3D52A0; }
+.pf-sticker.kind.dummy { color: #b45309; background: #fffbeb; }
+.pf-sticker.kind.untagged { color: #be123c; background: #fff5f6; }
+.pf-sticker.boq.playground { color: #fff; background: #3D52A0; }
+.pf-sticker.boq.classic { color: #475569; background: #f1f5f9; }
+.pf-sticker.boq.none { color: #94a3b8; background: rgba(255, 255, 255, .85); box-shadow: 0 1px 2px rgba(15, 23, 42, .12); }
 .pf-flag.red { color: #be123c; border: 1px solid #fecdd3; background: #fff1f2; }
 .pf-flag.red::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #e11d48; margin-right: 6px; flex: none; animation: pf-blink 1.8s infinite; }
 .pf-flag.gold { color: #b45309; border: 1px solid #fde68a; background: #fffbeb; }
