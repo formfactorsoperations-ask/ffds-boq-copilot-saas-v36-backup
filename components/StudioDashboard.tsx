@@ -10,6 +10,7 @@ import AddItemModal from './AddItemModal';
 import InteractiveBoqEditor from './InteractiveBoqEditor';
 import BulkImportModal from './BulkImportModal';
 import TakeoffPanel from './TakeoffPanel';
+import PlanSheetPanel from './playground/PlanSheetPanel';
 import NumberField from './NumberField';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheckIcon, GridIcon, ListIcon, SaveIcon, CheckIcon, ExportIcon, CalculatorIcon } from './Icons';
@@ -915,6 +916,20 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               {/* PLAN TAKEOFF MODE */}
               {viewMode === 'takeoff' && (
                   <MotionDiv initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
+                      {/* BOQ Playground preview (studio switch): the plan under the BOQ, its scale and rooms. */}
+                      {(orgData as any)?.playground && (
+                          <div className="mb-6">
+                              <PlanSheetPanel
+                                projectContext={projectContext}
+                                setProjectContext={setProjectContext}
+                                tiers={tiers}
+                                setTiers={setTiers}
+                                activeTierId={activeTierId}
+                                bank={bank}
+                                tenantId={orgData?.tenantId}
+                              />
+                          </div>
+                      )}
                       <TakeoffPanel 
                         projectContext={projectContext}
                         setProjectContext={setProjectContext}

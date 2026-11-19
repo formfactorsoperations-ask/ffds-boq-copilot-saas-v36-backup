@@ -258,6 +258,7 @@ If no dimension is printed, estimate from the drawing scale and set dimensionPri
 - dimensionPrinted: true only if you read an actual printed dimension.
 - doors, windows: count the door and window symbols on that room's walls.
 - irregular: true if the room is L-shaped or not a simple rectangle.
+- box: where the room is drawn, as fractions of the whole image from its top-left corner: x and y of the room's top-left inner corner, w and h its width and height, each between 0 and 1. Trace the inside face of the walls.
 
 Total carpet area on record is ${area || 0} sq ft — use it as a sanity check, but report what the drawing says.
 Do NOT invent rooms. Do NOT merge rooms. Return JSON array only.`;
@@ -279,7 +280,14 @@ Do NOT invent rooms. Do NOT merge rooms. Return JSON array only.`;
               dimensionPrinted: { type: "BOOLEAN" },
               doors: { type: "NUMBER" },
               windows: { type: "NUMBER" },
-              irregular: { type: "BOOLEAN" }
+              irregular: { type: "BOOLEAN" },
+              box: {
+                type: "OBJECT",
+                properties: {
+                  x: { type: "NUMBER" }, y: { type: "NUMBER" },
+                  w: { type: "NUMBER" }, h: { type: "NUMBER" }
+                }
+              }
             },
             required: ["name", "lengthFt", "widthFt"]
           }
@@ -311,7 +319,23 @@ Do NOT invent rooms. Do NOT merge rooms. Return JSON array only.`;
       };
     }).filter((r: any) => r.size > 0);
 
-    return reply(200, { success: true, rooms });
+    /*
+      Where each room is drawn, for the BOQ Playground's plan (lib/playground/planSheet.ts).
+      Returned beside `rooms`, never inside them, so every existing caller reads
+      the same rooms it always has. A box outside the image is left out.
+    */
+    const inUnit = (v: any) => typeof v === 'number' && isFinite(v) && v >= -0.01 && v <= 1.01;
+    const boxes = (Array.isArray(rawRooms) ? rawRooms : [])
+      .filter((r: any) => r?.box && ['x', 'y', 'w', 'h'].every(k => inUnit(r.box[k])) && r.box.w > 0 && r.box.h > 0)
+      .map((r: any) => ({
+        name: String(r.name || 'Room'),
+        box: { x: r.box.x, y: r.box.y, w: r.box.w, h: r.box.h },
+        lengthFt: Number(r.lengthFt) || undefined,
+        widthFt: Number(r.widthFt) || undefined,
+        dimensionPrinted: !!r.dimensionPrinted,
+      }));
+
+    return reply(200, { success: true, rooms, boxes });
   } catch (error: any) {
     console.error("Floor plan analysis error:", error);
     return reply(500, { error: error.message || "Failed to analyze floor plan" });

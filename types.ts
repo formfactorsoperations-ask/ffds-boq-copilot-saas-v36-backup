@@ -2,6 +2,8 @@
 export interface OrganizationContext {
     tenantId: string;
     orgName: string;
+    /** BOQ Playground preview: the new plan-based BOQ tools for this studio. Off unless switched on. */
+    playground?: boolean;
     /** The engagements this studio takes on (lib/engagement.ts). Absent: turnkey and design only. */
     engagementTypesOffered?: import('./lib/engagement').EngagementType[];
     /** Pre-fills the fee, in rupees per sq ft, when a project is set up as design only. */
@@ -148,6 +150,34 @@ export interface Room {
      *  A rectangle; an L-shaped room is two rooms. Missing: the room is not on a plan
      *  (lib/playground/geometry.ts). */
     plan?: RoomPlanRect;
+}
+
+/** Where the plan under a BOQ came from, and how its pixels map to feet. */
+export interface PlanSheet {
+    /** brief: the plan given with the brief. upload: one uploaded here. blocks: rooms laid out from their sizes. sketch: a tidied sketch. */
+    source: 'brief' | 'upload' | 'blocks' | 'sketch';
+    /** The image (or PDF) in Storage. Missing for blocks. */
+    imageUrl?: string;
+    /** For a PDF, the page drawn (1 = the first). */
+    page?: number;
+    /** The image's natural size in pixels; every pixel position below is in it. */
+    imagePx?: { w: number; h: number };
+    /** Feet per image pixel. Missing until the scale is set. */
+    ftPerPx?: number;
+    /** The image pixel at the plan's 0, 0 (feet). Missing: the image's top-left. */
+    origin?: { x: number; y: number };
+    /** The wall measured to set the scale: two image points and its length in feet. */
+    calibration?: { a: [number, number]; b: [number, number]; feet: number };
+    /** When rooms were last read off it. */
+    readAt?: number;
+}
+
+export interface PlanHistoryEntry {
+    sheet: PlanSheet;
+    /** Where each room was on that plan. */
+    rooms: { name: string; plan?: RoomPlanRect }[];
+    replacedAt: number;
+    by?: string;
 }
 
 /** A room's rectangle on the BOQ Playground plan, in feet. */
@@ -878,6 +908,10 @@ export interface ProjectContext {
     floorplanImage?: string;
     /** Storage URL of the floor plan. Roughly a hundred bytes in the document. */
     floorplanImageUrl?: string;
+    /** BOQ Playground: the plan under the BOQ and its scale (lib/playground/planSheet.ts). */
+    planSheet?: PlanSheet;
+    /** Plans replaced before the current one, newest first, with where each room was on them. */
+    planHistory?: PlanHistoryEntry[];
     paymentMilestones?: PaymentMilestone[];
     designPaymentStages?: {
         stage1?: any;
