@@ -11,6 +11,7 @@ import InteractiveBoqEditor from './InteractiveBoqEditor';
 import BulkImportModal from './BulkImportModal';
 import TakeoffPanel from './TakeoffPanel';
 import PlanSheetPanel from './playground/PlanSheetPanel';
+import PlanBoard from './playground/PlanBoard';
 import { PlaygroundHeader, RoomTotals, AcrossTheFlat, type Lens, type RoomsView } from './playground/PlaygroundFrame';
 import { makePlaygroundVersion } from '../lib/playground/versions';
 import { contextWithTierCopied } from '../lib/specOverrides';
@@ -501,6 +502,11 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
     setLastDeleted(null);
   };
 
+  /* BOQ Playground: the option's BOQ written whole (a gesture on the plan, or its undo). */
+  const handleSetBoq = (next: BoqItem[]) => {
+    setTiers(prev => prev.map(t => t.id !== activeTierId ? t : { ...t, boq: next }));
+  };
+
   /* BOQ Playground: one line replaced whole (a whole-flat line shared into rooms), and lines added. */
   const handleReplaceLine = (itemId: string, next: BoqItem) => {
     setTiers(prev => prev.map(t => t.id !== activeTierId ? t : { ...t, boq: (t.boq || []).map(l => (l.id === itemId ? next : l)) }));
@@ -983,6 +989,18 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               {mode === 'takeoff' && (
                   <MotionDiv initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
                       {/* BOQ Playground preview (studio switch): the plan under the BOQ, its scale and rooms. */}
+                      {/* BOQ Playground PR 3b: drawing pieces on the plan, with the Live BOQ. */}
+                      {playground && activeTier && (
+                          <PlanBoard
+                            projectContext={projectContext}
+                            tier={activeTier}
+                            bank={bank}
+                            bankMap={bankMap}
+                            readOnly={isLocked || !!projectContext.boqFrozen}
+                            onBoq={handleSetBoq}
+                            newId={generateId}
+                          />
+                      )}
                       {(orgData as any)?.playground && (
                           <div className="mb-6">
                               <PlanSheetPanel
