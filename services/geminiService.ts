@@ -492,6 +492,28 @@ export async function analyzeFloorPlan(imageBase64: string, area: number): Promi
     return data.rooms || [];
 }
 
+/**
+ * The same reading, with where each room is drawn: its box as a share of the
+ * image, for the BOQ Playground's plan (lib/playground/planSheet.ts).
+ */
+export async function readPlanBoxes(imageBase64: string, area: number): Promise<{ rooms: Room[]; boxes: import('../lib/playground/planSheet').PlanBox[] }> {
+    const response = await apiFetch('/api/analyze-floorplan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64, area })
+    });
+    if (!response.ok) {
+        let detail = `HTTP ${response.status}`;
+        try {
+            const body = await response.json();
+            if (body?.error) detail = String(body.error);
+        } catch { /* not JSON; the status is all there is */ }
+        throw new Error(detail);
+    }
+    const data = await response.json();
+    return { rooms: data.rooms || [], boxes: data.boxes || [] };
+}
+
 export async function generateBoqPackage(projectContext: ProjectContext, theme: string, bank: Item[]): Promise<AIGeneratedBoqItem[]> {
     if (!isAiAvailable()) return [];
     const ai = getAi();
