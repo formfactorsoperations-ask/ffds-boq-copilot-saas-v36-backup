@@ -3,6 +3,7 @@ import { useOrg } from '../../contexts/OrgContext';
 import { getTermsSettings, setTermsSettings, getPaymentStructure, setPaymentStructure, seedEngagementDefaults, restoreFFDSDefaults, FFDS_PAYMENT_STRUCTURE_DEFAULTS, GENERIC_PAYMENT_STRUCTURE_DEFAULTS } from '../../services/engagementService';
 import { TermsSettings, PaymentStructure, PaymentStructureStage } from '../../types';
 import { Plus, Trash2, CheckCircle2 } from 'lucide-react';
+import AnnexureEditor from './AnnexureEditor';
 
 export default function TermsAndPaymentTab() {
     const { orgData } = useOrg();
@@ -380,6 +381,9 @@ export default function TermsAndPaymentTab() {
 
                 </div>
             </div>
+
+            {/* --- ANNEXURE A: the proposal's commercial terms and validity (lib/annexure.ts) --- */}
+            <AnnexureEditor terms={terms} onChange={setTerms} />
 
             {/* --- PAYMENT STRUCTURE EDITOR --- */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">

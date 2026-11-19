@@ -1,6 +1,7 @@
 import { lockedTierId } from './scopeFlow';
 import { designFeeFor } from './boqPricing';
 import { engagementOf, isFeeOnly } from './engagement';
+import type { PaymentStructure, PaymentMilestone } from '../types';
 
 /**
  * What every milestone on a project is worth, worked out once.
@@ -433,17 +434,18 @@ export function computeSchedule(args: {
       .filter((m) => !m.isFixedAmount)
       .reduce((s, m) => s + (Number(m.percentage) || 0), 0);
 
-    items.forEach((m, i) => {
+    const rows = items.map((m) => {
       const clearedRow = isCleared(m);
       let base: number;
       let lockBase: number;
+      const fixedRow = !clearedRow && m.isFixedAmount && m.fixedAmount !== undefined;
 
       if (clearedRow) {
         base = (m.isFixedAmount && m.fixedAmount !== undefined)
           ? m.fixedAmount
           : (m.lockedTaxableBase ?? originalBase) * (m.percentage / 100);
         lockBase = m.lockedTaxableBase ?? originalBase;
-      } else if (m.isFixedAmount && m.fixedAmount !== undefined) {
+      } else if (fixedRow) {
         base = m.fixedAmount;
         lockBase = taxableBase;
       } else {
@@ -451,7 +453,6 @@ export function computeSchedule(args: {
         lockBase = m.percentage > 0 ? base / (m.percentage / 100) : taxableBase;
       }
 
-      base = R(base);
       /*
         A milestone already invoiced keeps the split and GST rate it was billed
         at. Changing the split afterwards used to re-price invoices that had
@@ -461,14 +462,44 @@ export function computeSchedule(args: {
       */
       const lockedSplit = clearedRow && typeof m.lockedBillablePercent === 'number';
       const share = lockedSplit ? m.lockedBillablePercent : (isExec ? bp : dbp);
-      const billable = R(base * (share / 100));
-      const cash = R(base - billable);
       const rate = clearedRow && typeof m.lockedGstRate === 'number'
         ? m.lockedGstRate
         : isExec
           ? (financials.executionGstEnabled ? gstRate : 0)
           : (financials.designGstEnabled ? gstRate : 0);
-      const gst = R(billable * (rate / 100));
+      base = R(base);
+      const billable = R(base * (share / 100));
+      return { m, clearedRow, lockBase, share, rate, base, billable, gst: R(billable * (rate / 100)), byPct: !clearedRow && !fixedRow };
+    });
+
+    /*
+      The first stage carries the rounding.
+
+      Each stage is rounded to the rupee on its own, so four stages of a
+      contract could add up to a rupee or two more or less than the contract,
+      and the proposal's stages to a different total from its summary. The
+      stages still to be billed by percentage now add up exactly to what is
+      left of the contract, and with GST to that remainder with its GST; the
+      first of them takes the difference. Stages already invoiced or paid, and
+      fixed amounts, are never touched.
+    */
+    const byPct = rows.filter((r) => r.byPct);
+    if (byPct.length && unpaidPct > 0) {
+      const first = byPct[0];
+      const share = first.share;
+      const rate = first.rate;
+      const sum = (f: (r: typeof first) => number) => byPct.reduce((s, r) => s + f(r), 0);
+      first.base = Math.max(0, first.base + R(remainingForPct) - sum((r) => r.base));
+      first.billable = R(first.base * (share / 100));
+      first.billable = Math.max(0, first.billable + R(remainingForPct * (share / 100)) - sum((r) => r.billable));
+      first.gst = R(first.billable * (rate / 100));
+      const totalWithGst = R(remainingForPct * (1 + (share / 100) * (rate / 100)));
+      first.gst = Math.max(0, first.gst + totalWithGst - R(remainingForPct) - sum((r) => r.gst));
+    }
+
+    rows.forEach((row, i) => {
+      const { m, clearedRow, lockBase, base, billable, gst } = row;
+      const cash = R(base - billable);
       let invoiceTotal = R(billable + gst);
 
       /* The retainer already collected comes off the first design invoice. */
@@ -579,4 +610,172 @@ export function outstandingInvoices(result: ScheduleResult, context: any) {
       invoicedAt: m.invoiceDate || null,
       invoiceNumber: m.invoiceNumber || null,
     }));
+}
+
+/* ───────────────────────── one payment schedule ───────────────────────── */
+
+/*
+  The studio's standard stages, when it has saved none in Terms & Payment.
+  services/engagementService.ts re-exports this as FFDS_PAYMENT_STRUCTURE_DEFAULTS.
+*/
+export const FFDS_PAYMENT_STRUCTURE: PaymentStructure = {
+  designStages: [
+    { code: 'D1', name: 'Sign-up & Concept', pct: 25, trigger: 'On signing', unlocks: 'Begins site study, brief freeze, concept direction' },
+    { code: 'D2', name: 'Design Development', pct: 40, trigger: 'On presentation of layouts & 3D for approval', unlocks: 'Detailed design + material direction' },
+    { code: 'D3', name: 'Design Completion', pct: 35, trigger: 'On release of GFC drawings + final BOQ', unlocks: 'Construction-ready package; execution may begin' },
+  ],
+  executionStages: [
+    { code: 'E1', name: 'Material Order Advance', pct: 40, trigger: 'Before any vendor orders are placed', unlocks: 'Funds procurement, mobilisation, first-fix' },
+    { code: 'E2', name: 'Structure & First-Fix', pct: 30, trigger: 'Civil, MEP, false-ceiling framework & carcasses in place', unlocks: 'Unlocks second-fix & finishing prep' },
+    { code: 'E3', name: 'Finishing Advance', pct: 20, trigger: 'Before final finishes begin', unlocks: 'Laminates, shutters, polish, paint, hardware' },
+    { code: 'E4', name: 'Completion & Handover', pct: 10, trigger: 'On completion of all work', unlocks: 'Releases keys, dossier, warranty certificate' },
+  ],
+  handoverClause: 'The Completion & Handover Advance unlocks the formal handover package — keys, dossier and warranty certificate. It is due upon completion of all installation and finishing work and is not conditional upon snag clearance. Snag items are addressed under warranty as per Clause 6.4 of the Terms of Engagement Governing Docket.',
+  validation: { designSumMustEqual: 100, executionSumMustEqual: 100 },
+};
+
+const usableStructure = (s: PaymentStructure | null | undefined): s is PaymentStructure =>
+  !!s && Array.isArray(s.designStages) && s.designStages.length > 0;
+
+/**
+ * The milestones Money starts a project with: the studio's stages from Terms &
+ * Payment, else FFDS's. A fee-only project gets no execution milestones.
+ * (PaymentCalculatorTab writes these when a project has none.)
+ */
+export function milestonesFromStructure(structure: PaymentStructure | null | undefined, feeOnly = false): PaymentMilestone[] {
+  const s = usableStructure(structure) ? structure : FFDS_PAYMENT_STRUCTURE;
+  const exec = feeOnly ? [] : (s.executionStages || []);
+  return [
+    ...s.designStages.map((st, i) => ({
+      id: `d${i + 1}`, type: 'design' as const, name: st.name, percentage: st.pct,
+      description: st.code, unlocks: st.unlocks || '', trigger: st.trigger || '',
+    })),
+    ...exec.map((st, i) => ({
+      id: `e${i + 1}`, type: 'execution' as const, name: st.name, percentage: st.pct,
+      description: st.code, unlocks: st.unlocks || '', trigger: st.trigger || '',
+      isHandoverAdvance: st.code === 'E8' || (st.name || '').toLowerCase().includes('handover') || i === exec.length - 1,
+    })),
+  ] as PaymentMilestone[];
+}
+
+export type ScheduleSource = 'money' | 'studio' | 'defaults';
+
+export interface ScheduleStage {
+  id: string;
+  /** D1, D2… E1, E2…: the stage's own code where it has one, else by position. */
+  code: string;
+  name: string;
+  trigger: string;
+  unlocks: string;
+  /** The stage's share of its track, as the schedule states it. */
+  pct: number;
+  /** A fixed sum rather than a share. */
+  fixed: boolean;
+  /** Ex-GST value. */
+  base: number;
+  gst: number;
+  /** What the client pays at this stage: base + GST (any cash share included). */
+  amount: number;
+  /** Already invoiced or paid. */
+  cleared: boolean;
+}
+
+export interface ScheduleTrack {
+  stages: ScheduleStage[];
+  /** The track's value after discounts, ex-GST. */
+  taxable: number;
+  gst: number;
+  /** The sum of the stages: taxable + GST, exactly. */
+  total: number;
+}
+
+export interface OneSchedule {
+  source: ScheduleSource;
+  design: ScheduleTrack;
+  /** Empty for a design-only or design + PMC project. */
+  execution: ScheduleTrack;
+  /** Both tracks together. */
+  total: number;
+  gstRate: number;
+  /** The Project Initiation Fee already collected, adjusted against D1. */
+  initiationFee: number;
+  /** What the client pays to book: D1 with GST, less the initiation fee. */
+  booking: number;
+  /** The underlying Money computation, for screens that need more. */
+  result: ScheduleResult;
+}
+
+const STAGE_CODE = /^[DE]\d+[A-Z]?$/i;
+
+/**
+ * THE payment schedule for a project: one source for the proposal (Classic and
+ * the booklet), the agreement and Money.
+ *
+ *   1. Money's saved schedule for the project (`paymentMilestones`), as it is.
+ *   2. Else the studio's stages from Terms & Payment (`paymentStructure`).
+ *   3. Else FFDS's standard stages.
+ *
+ * The amounts are Money's own (computeSchedule): design fee and the work as two
+ * schedules, GST as Money bills it, the first stage carrying the rounding so
+ * each track adds up exactly, and the booking amount D1 less the Project
+ * Initiation Fee.
+ *
+ * `deal.tierSummary` is the option being proposed; it is what is billed until a
+ * contract is in force (lib/paymentSchedule.ts billingBase).
+ */
+export function scheduleFor(
+  ctx: any,
+  deal: { tierSummary?: { totalSell?: number; designFee?: number } } = {},
+  studio: { paymentStructure?: PaymentStructure | null } = {},
+): OneSchedule {
+  const feeOnly = isFeeOnly(engagementOf(ctx));
+  const saved: any[] = Array.isArray(ctx?.paymentMilestones) ? ctx.paymentMilestones : [];
+  const source: ScheduleSource = saved.length ? 'money' : usableStructure(studio.paymentStructure) ? 'studio' : 'defaults';
+  const milestones = saved.length ? saved : milestonesFromStructure(studio.paymentStructure, feeOnly);
+  const result = computeSchedule({ context: { ...(ctx || {}), paymentMilestones: milestones }, tierSummary: deal.tierSummary });
+
+  const track = (type: 'design' | 'execution'): ScheduleTrack => {
+    const ms = milestones.filter((m) => m.type === type && result.byId[m.id]);
+    const stages = ms.map((m, i): ScheduleStage => {
+      const a = result.byId[m.id];
+      const own = String(m.description || m.code || '').trim();
+      return {
+        id: m.id,
+        code: STAGE_CODE.test(own) ? own.toUpperCase() : `${type === 'design' ? 'D' : 'E'}${i + 1}`,
+        name: m.name || '',
+        trigger: m.trigger || m.dueCondition || '',
+        unlocks: m.unlocks || '',
+        pct: Number(m.percentage) || 0,
+        fixed: !!(m.isFixedAmount && m.fixedAmount !== undefined),
+        base: a.base,
+        gst: a.gst,
+        amount: a.base + a.gst,
+        cleared: a.cleared,
+      };
+    });
+    const t = result.totals;
+    const taxable = type === 'design' ? t.taxableDesign : t.taxableExecution;
+    const gst = stages.reduce((s, x) => s + x.gst, 0);
+    return { stages, taxable, gst, total: stages.reduce((s, x) => s + x.amount, 0) };
+  };
+
+  const design = track('design');
+  const execution = track('execution');
+  const initiationFee = Math.max(0, Number(result.financials.initiationFeePaid) || 0);
+  const d1 = design.stages[0]?.amount || 0;
+  return {
+    source, design, execution,
+    total: design.total + execution.total,
+    gstRate: result.gstRate,
+    initiationFee,
+    booking: Math.max(0, d1 - initiationFee),
+    result,
+  };
+}
+
+/** Where the schedule came from, in words, for the studio's own screens. */
+export function scheduleSourceLabel(source: ScheduleSource): string {
+  return source === 'money' ? 'This project’s schedule, from Money'
+    : source === 'studio' ? 'The studio’s standard stages, from Terms & Payment'
+    : 'The standard FFDS stages';
 }

@@ -295,7 +295,7 @@
   "components/client/ClientBookletProposal.tsx": {
     "tinyPx": 12,
     "offPalette": 24,
-    "mono": 82
+    "mono": 75
   },
   "components/client/ClientDecisionCard.tsx": {
     "halfPx": 2,
@@ -361,7 +361,7 @@
     "mono": 4
   },
   "components/client/ClientTotals.tsx": {
-    "offPalette": 7
+    "offPalette": 5
   },
   "components/client/ClientWhyUs.tsx": {
     "offPalette": 1

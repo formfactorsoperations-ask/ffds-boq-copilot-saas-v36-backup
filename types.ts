@@ -2248,6 +2248,10 @@ export interface TermsSettings {
   signatory: { name: string; title: string };
   preamble: string;
   sections: TermsSection[];
+  /** Days a proposal holds from the day it is issued (lib/annexure.ts). Missing: 15. */
+  proposalValidityDays?: number;
+  /** Annexure A's wording, list by list. A list not saved prints today's wording (lib/annexure.ts ANNEXURE_DEFAULTS). */
+  annexure?: Partial<import('./lib/annexure').AnnexureClauses>;
 }
 
 export interface PaymentStructureStage {
