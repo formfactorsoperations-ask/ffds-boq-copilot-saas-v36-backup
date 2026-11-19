@@ -27,7 +27,7 @@ const extractUniqueKeywords = (text: string, keywords: string[]): string[] => {
 };
 
 // Predefined Specs for Standard Tiers (Verbatim as per requirement)
-const PREDEFINED_SPECS: Record<string, Record<string, string>> = {
+export const PREDEFINED_SPECS: Record<string, Record<string, string>> = {
     "Essential Elegance": {
         "Plywood (Kitchen & Bath)": "BWP Grade (Economy)",
         "Plywood (Rest of House)": "MR Grade – ₹70–75/sqft",
