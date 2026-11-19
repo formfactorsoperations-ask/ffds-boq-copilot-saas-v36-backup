@@ -507,11 +507,12 @@ click resets it. Open or icons, width and folded sections are remembered on the 
 it is a drawer opened from the page bar.
 
 Over the page there is one slim bar: where you are (stage / screen), the page's badge and figures,
-what has just changed, **Studio ▾** and the hide-figures eye. Studio ▾
-(`components/projectNav/StudioJump.tsx`, approved 19 Nov 2026) opens a `phd-pop` list of Design Desk,
-Ops Desk, People and the Item Bank, each row an `IconChip`, name and one line, offered only to the
-roles that open that screen (`STUDIO_TAB_ROLES` and the limited roles' allow-lists). A pick leaves
-the project for that screen. With nothing to offer, no button is drawn. A page's own view switchers and actions keep a slim
+what has just changed, the studio icons and the hide-figures eye. The studio icons
+(`components/projectNav/StudioJump.tsx`, approved 19 Nov 2026) are Design Desk, Ops Desk, People and
+the Item Bank, each an icon button the size of the eye, naming itself on hover or focus with the
+sidebar's tooltip (`psb-tip`), with a hairline rule before the eye. Each is offered only to the roles
+that open that screen (`STUDIO_TAB_ROLES` and the limited roles' allow-lists); a click leaves the
+project for that screen. From `sm` up; with nothing to offer, nothing is drawn. A page's own view switchers and actions keep a slim
 row at the top of the page (`PageTitleBlock compact`). The studio's top tabs keep their title row.
 
 **The breadcrumb in that bar** (`components/projectNav/PageCrumbs.tsx`, approved 18 Nov 2026) moves

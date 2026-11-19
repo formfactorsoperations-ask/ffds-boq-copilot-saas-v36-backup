@@ -1,25 +1,25 @@
 /*
   The studio's desks from inside a project (DESIGN.md "Project sidebar", page bar).
 
-  "Studio ▾" at the right of the project page bar, before the hide-figures eye.
-  It opens a short list (`phd-pop`) of the studio screens people reach for
-  while they work on a project -- Design Desk, Ops Desk, People and the Item
-  Bank -- so they no longer have to leave through Studio home and find them in
-  the top bar. A pick leaves the project for that screen, the same way the
-  sidebar's own menu leaves for Projects or Clients.
+  A row of icon buttons at the right of the project page bar, before the
+  hide-figures eye: Design Desk, Ops Desk, People and the Item Bank, the
+  studio screens people reach for while they work on a project, so they no
+  longer leave through Studio home to find them. Each is the size and shape of
+  the eye beside it, and names itself on hover or focus with the sidebar's own
+  tooltip (`psb-tip`). A click leaves the project for that screen, the same way
+  the sidebar's menu leaves for Projects or Clients.
 
-  Each row is offered only to the roles that open that screen
+  Each icon is offered only to the roles that open that screen
   (`studioJumpItems`, from STUDIO_TAB_ROLES and the limited roles' allow-lists
   in lib/roleAccess), so a Designer sees Design Desk and People and nothing
-  they would be turned away from. With nothing to offer, no button is drawn.
+  they would be turned away from. With nothing to offer, nothing is drawn.
 */
-import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, LayoutGrid, PenTool, Inbox, UserCheck, Library } from '@/lib/lucide-shim';
+import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { PenTool, Inbox, UserCheck, Library } from '@/lib/lucide-shim';
 import { mayOpenStudioTab, isLimitedRole, limitedMayOpen } from '../../lib/roleAccess';
 import type { RoleSet } from '../../lib/roles';
-import { IconChip } from '../ui/kit';
-
-const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
+import './projectSidebar.css';
 
 export interface StudioJumpItem { route: string; label: string; sub: string; icon: React.ElementType }
 
@@ -38,61 +38,36 @@ export function studioJumpItems(role?: RoleSet): StudioJumpItem[] {
 
 export default function StudioJump({ role, onGo }: { role?: RoleSet; onGo: (route: string) => void }) {
   const items = studioJumpItems(role);
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  const btn = useRef<HTMLButtonElement>(null);
-  const list = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', away);
-    list.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
-    return () => document.removeEventListener('mousedown', away);
-  }, [open]);
-
+  const [tip, setTip] = useState<null | { x: number; y: number; item: StudioJumpItem }>(null);
   if (items.length === 0) return null;
 
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') { e.preventDefault(); setOpen(false); btn.current?.focus(); return; }
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    e.preventDefault();
-    const rows: HTMLButtonElement[] = list.current ? Array.from(list.current.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')) : [];
-    const i = rows.indexOf(document.activeElement as HTMLButtonElement);
-    rows[(i + (e.key === 'ArrowDown' ? 1 : rows.length - 1)) % rows.length]?.focus();
+  const show = (item: StudioJumpItem) => (e: React.SyntheticEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setTip({ x: r.left + r.width / 2, y: r.bottom + 8, item });
   };
+  const hide = () => setTip(null);
 
   return (
-    <div ref={box} className="relative shrink-0" onKeyDown={onKey}>
-      <button ref={btn} type="button" aria-haspopup="menu" aria-expanded={open} aria-label="Studio screens"
-        title="Design Desk, Ops Desk, People and the Item Bank"
-        onClick={() => setOpen((o) => !o)}
-        className={cx(
-          'h-10 px-2.5 inline-flex items-center gap-1.5 rounded-xl text-sm font-semibold transition-colors outline-none',
-          'focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30',
-          open ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800',
-        )}>
-        <LayoutGrid className="w-[18px] h-[18px]" aria-hidden="true" />
-        <span className="hidden sm:inline">Studio</span>
-        <ChevronDown className={cx('w-3.5 h-3.5 text-slate-400 transition-transform', open && 'rotate-180')} aria-hidden="true" />
-      </button>
-      {open && (
-        <div ref={list} role="menu" aria-label="Studio screens" style={{ transformOrigin: 'top right' }}
-          className="phd-pop absolute right-0 top-full mt-2 z-40 w-80 max-w-[86vw] p-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl">
-          <div className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Studio</div>
-          {items.map((i) => (
-            <button key={i.route} type="button" role="menuitem"
-              onClick={() => { setOpen(false); onGo(i.route); }}
-              className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left outline-none hover:bg-slate-50 focus:bg-slate-50">
-              <IconChip icon={i.icon} />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-slate-800 truncate">{i.label}</span>
-                <span className="block text-xs text-slate-500 truncate">{i.sub}</span>
-              </span>
-            </button>
-          ))}
-        </div>
+    <nav aria-label="Studio screens" className="hidden sm:flex items-center gap-1 shrink-0">
+      {items.map((i) => {
+        const Icon = i.icon;
+        return (
+          <button key={i.route} type="button" aria-label={i.label}
+            onClick={() => { hide(); onGo(i.route); }}
+            onMouseEnter={show(i)} onMouseLeave={hide} onFocus={show(i)} onBlur={hide}
+            className="w-10 h-10 shrink-0 grid place-items-center rounded-xl text-slate-500 transition-colors outline-none hover:bg-slate-100 hover:text-[#3D52A0] focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30">
+            <Icon className="w-[18px] h-[18px]" aria-hidden="true" />
+          </button>
+        );
+      })}
+      {/* Apart from the eye and the page's own controls. */}
+      <span className="w-px h-6 bg-slate-200 mx-1" aria-hidden="true" />
+      {tip && createPortal(
+        <div role="tooltip" className="fixed z-[320] pointer-events-none -translate-x-1/2" style={{ left: tip.x, top: tip.y }}>
+          <div className="psb-tip" style={{ position: 'static' }}>{tip.item.label}<small>{tip.item.sub}</small></div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </nav>
   );
 }

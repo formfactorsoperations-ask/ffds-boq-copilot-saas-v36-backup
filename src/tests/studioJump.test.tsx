@@ -1,5 +1,5 @@
 /*
-  The "Studio ▾" menu in a project's page bar (components/projectNav/StudioJump):
+  The studio icons in a project's page bar (components/projectNav/StudioJump):
   Design Desk, Ops Desk, People and the Item Bank, each only for the roles that
   open it, and a pick leaves the project for that screen.
 */
@@ -24,22 +24,23 @@ describe('Studio menu in the project page bar', () => {
     expect(labels(['Admin', 'Design Head'])).toEqual(['Design Desk', 'Ops Desk', 'People', 'Item Bank']);
   });
 
-  it('opens a list and leaves the project for the desk picked', () => {
+  it('shows one icon per desk, each naming itself, and leaves the project for the one clicked', () => {
     const onGo = vi.fn();
     render(<StudioJump role="Owner" onGo={onGo} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Studio screens' }));
-    const menu = screen.getByRole('menu', { name: 'Studio screens' });
-    expect(within(menu).getAllByRole('menuitem')).toHaveLength(4);
-    fireEvent.click(within(menu).getByRole('menuitem', { name: /Item Bank/ }));
+    const nav = screen.getByRole('navigation', { name: 'Studio screens' });
+    expect(within(nav).getAllByRole('button').map((b) => b.getAttribute('aria-label')))
+      .toEqual(['Design Desk', 'Ops Desk', 'People', 'Item Bank']);
+    fireEvent.mouseEnter(within(nav).getByRole('button', { name: 'Item Bank' }));
+    expect(screen.getByRole('tooltip').textContent).toContain('Catalogue items, rates and packages');
+    fireEvent.click(within(nav).getByRole('button', { name: 'Item Bank' }));
     expect(onGo).toHaveBeenCalledWith('admin-templates-bank');
-    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 
-  it('closes on Escape', () => {
-    render(<StudioJump role="Owner" onGo={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Studio screens' }));
-    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
-    expect(screen.queryByRole('menu')).toBeNull();
+  it('shows a Designer only the desks they open', () => {
+    render(<StudioJump role="Designer" onGo={() => {}} />);
+    const nav = screen.getByRole('navigation', { name: 'Studio screens' });
+    expect(within(nav).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Design Desk', 'People']);
   });
 
   it('draws nothing for a role with no desk to open', () => {
