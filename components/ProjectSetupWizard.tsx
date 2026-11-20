@@ -262,7 +262,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       console.error(e);
       // The reason, not a shrug. "Gemini API Key missing on server" is
       // actionable; "please try manual setup" sent people round in circles.
-      alert(`Could not read the floor plan: ${e instanceof Error ? e.message : String(e)}\n\nYou can still set the rooms by hand, or use Auto-Map Rooms.`);
+      alert(`Could not read the floor plan: ${e instanceof Error ? e.message : String(e)}\n\nYou can still set the rooms by hand, or use Map rooms.`);
     } finally {
       setIsLoading(false);
     }
