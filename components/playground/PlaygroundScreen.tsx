@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PenTool, Map as MapIcon, LayoutGrid, Table2, SlidersHorizontal, Target, Plus, Search, Check, Undo2, Upload, Download,
-  ChevronDown, FileText, Expand, Shrink, Receipt as ReceiptIcon, Lock, Sparkles, MapPin, X,
+  ChevronDown, FileText, Expand, Shrink, Receipt as ReceiptIcon, Lock, Sparkles, MapPin, X, PenLine, Zap,
 } from 'lucide-react';
 import { Button, EmptyState, LABEL, Segmented } from '../ui/kit';
 import { useSeesMargins } from '../ui/HideFigures';
@@ -11,7 +11,14 @@ import { boardPieces, drawOf, isHigh, isWallBacked, pieceSize, footprintOf, wall
 import { autoPlace, type PlacedPiece } from '../../lib/playground/placing';
 import { lineIssues, marginFloorFor } from '../../lib/playground/issues';
 import { pricingRulesOf, playgroundTotals, isPlaygroundTier } from '../../lib/playground/pricing';
-import { boqFormatOf, BOQ_FORMAT_LABEL, paintingFromPlan } from '../../lib/playground/versions';
+import { boqFormatOf, BOQ_FORMAT_LABEL, paintingFromPlan, syncedWholeFlat } from '../../lib/playground/versions';
+import { withNewPlan, sketchRects, sketchFromRooms, mergeRooms, type TidyResult } from '../../lib/playground/sketch';
+import { quickBuild, standardLines, sizeOf, type RoomStandards } from '../../lib/playground/quickBuild';
+import { inferBasis } from '../../lib/takeoff';
+import { lockedTierId } from '../../lib/scopeFlow';
+import { ftin } from '../../lib/playground/geometry';
+import SketchModal from './SketchModal';
+import QuickBuildModal, { type QuickBuildChoice } from './QuickBuildModal';
 import { sheetOf } from '../../lib/playground/planSheet';
 import { newPieceLine, needsPlace, pushHistory, undoHistory, type History } from '../../lib/playground/board';
 import { ArtDefs } from './pieceArt';
@@ -91,11 +98,15 @@ interface Props {
   onSaveSpecs?: (bank: MaterialSpecsBank) => Promise<void>;
   /** Studio settings `marginFloors`: Tune never goes under them, and lines under them are flagged. */
   marginFloors?: MarginFloors | null;
+  /** Studio settings `roomStandards`: each room kind's standard pieces, for the quick build (PR 5). */
+  roomStandards?: RoomStandards | null;
+  /** Who is working, for the plan history. */
+  userName?: string;
 }
 
 export default function PlaygroundScreen(props: Props) {
   const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly, currentRoles, tenantId, onBoq, newId,
-    onSelectTier, onMakePlaygroundVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors } = props;
+    onSelectTier, onMakePlaygroundVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName } = props;
   const boq = tier.boq || [];
   const seesMargins = useSeesMargins(currentRoles);
   /* Hide figures hides margins only (lib/figuresPrivacy): prices stay, and seesMargins already reads it. */
@@ -115,6 +126,8 @@ export default function PlaygroundScreen(props: Props) {
   const [full, setFull] = useState(false);
   const [menu, setMenu] = useState<'ver' | 'export' | 'plan' | null>(null);
   const [planModal, setPlanModal] = useState(false);
+  const [sketching, setSketching] = useState(false);
+  const [building, setBuilding] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [fullGrid, setFullGrid] = useState(false);
   const [recipeItemId, setRecipeItemId] = useState<string | null>(null);
@@ -223,6 +236,54 @@ export default function PlaygroundScreen(props: Props) {
   };
   const canPaint = !boq.some(l => l.byRoom?.basis === 'wallPaint') && rooms.length > 0 && !!paintingFromPlan(bank, rooms, () => 'probe');
   const addPainting = () => { const p = paintingFromPlan(bank, rooms, newId); if (p) commit([...boq, ...p.lines], 'Painting added from the plan, shared into the rooms.'); };
+
+  /* ── no plan yet (PR 5): a tidied sketch, a quick build, a room pulled to size ── */
+
+  /** The project on a new plan: rooms, the plan sheet and its history; each option's pieces moved with their rooms. */
+  const applyPlan = (rects: ReturnType<typeof sketchRects>, source: 'sketch' | 'blocks', extra?: (active: BoqItem[], nextRooms: Room[]) => { lines: BoqItem[]; specGrade?: ProposalTier['specGrade'] }) => {
+    const np = withNewPlan({ ctx, tiers, activeTierId: tier.id, lockedTierId: lockedTierId(ctx), bankMap, rects, sheet: { source }, at: Date.now(), by: userName });
+    const nextRooms = realRooms(np.rooms);
+    const moved = np.tiers.find(t => t.id === tier.id)?.boq || boq;
+    const more = extra ? extra(moved, nextRooms) : { lines: [] };
+    setTiers(ts => ts.map(t => {
+      const n = np.tiers.find(x => x.id === t.id) || t;
+      if (t.id !== tier.id) return n;
+      return { ...n, boq: syncedWholeFlat([...(n.boq || []), ...more.lines], nextRooms, measure), ...(more.specGrade ? { specGrade: more.specGrade } : {}) };
+    }));
+    setProjectContext(p => ({ ...p, rooms: np.rooms, planSheet: np.planSheet, ...(np.planHistory ? { planHistory: np.planHistory } : {}) }));
+    setHist({ past: [], future: [] });
+    setSel(null); setSelRoom(null); setLens('plan'); setFitSignal(s => s + 1);
+    return np;
+  };
+  const useSketch = (t: TidyResult) => {
+    const np = applyPlan(sketchRects(t.rooms), 'sketch');
+    setSketching(false);
+    setNote(`Saved as the project’s plan (source: sketch). Room sizes feed the takeoff; site measurement replaces them later.${np.needsPlace ? ` ${np.needsPlace} piece${np.needsPlace === 1 ? '' : 's'} no longer fit and wait under Needs a place.` : ''}`);
+  };
+  const runQuickBuild = (c: QuickBuildChoice) => {
+    const qb = quickBuild({ size: c.size, carpet: c.carpet, own: rooms, bank, boq, standards: roomStandards, newId: () => '' });
+    let placed = 0, waiting = 0;
+    applyPlan(qb.rects, 'blocks', (active, nextRooms) => {
+      const std = standardLines({ rooms: nextRooms.filter(r => r.plan), bank, boq: active, standards: roomStandards, newId });
+      placed = std.placed; waiting = std.waiting.length;
+      const paint = active.some(l => l.byRoom?.basis === 'wallPaint' || inferBasis(bankMap.get(l.bankId)?.name || '', bankMap.get(l.bankId)?.unit) === 'wallPaint')
+        ? null : paintingFromPlan(bank, nextRooms, newId);
+      const lines = [...std.lines, ...(paint?.lines || [])]
+        .map(l => (format === 'playground' ? withRecipeSpecs(l, bankMap.get(l.bankId), specBank, c.grade) : l));
+      return { lines, ...(c.grade !== gradeOf(tier) ? { specGrade: c.grade } : {}) };
+    });
+    setProjectContext(p => ({ ...p, ...(!(Number(p.area) > 0) ? { area: c.carpet } : {}), ...(!p.config ? { config: c.size } : {}) }));
+    setBuilding(false);
+    setNote(`Built: ${qb.rects.length} rooms, ${placed} pieces placed${waiting ? `, ${waiting} waiting under Needs a place` : ''}. Replace the blocks with the real plan from the plan menu.`);
+  };
+  const resizeRooms = (next: Room[], nextBoq: BoqItem[], changed: string[]) => {
+    const all = mergeRooms(ctx.rooms || [], next.filter(r => changed.includes(r.name)));
+    setProjectContext(p => ({ ...p, rooms: mergeRooms(p.rooms || [], next.filter(r => changed.includes(r.name))) }));
+    const synced = syncedWholeFlat(nextBoq, realRooms(all), measure);
+    if (synced.some((l, i) => l !== boq[i])) commit(synced);
+    const r = next.find(x => x.name === changed[0]);
+    if (r?.plan) setNote(`${r.name} is now ${ftin(r.plan.w)} × ${ftin(r.plan.h)}, ${Math.round(r.plan.w * r.plan.h)} sq ft.${changed.length > 1 ? ` ${changed.slice(1).join(', ')} gave the same.` : ''}`);
+  };
 
   /* Lines taken to the current versions of their materials. */
   const updateLines = (ids: string[]) => {
@@ -476,13 +537,20 @@ export default function PlaygroundScreen(props: Props) {
                   ctx={ctx} rooms={rooms} boq={boq} bank={bank} bankMap={bankMap} models={byId} roomTotals={totals.byRoom}
                   readOnly={readOnly} sel={sel} onSel={pickLine} selRoom={selRoom} onSelRoom={pickRoom}
                   commit={commit} newId={newId} libOpen={showLib} hideFigures={hideFigures} fitSignal={fitSignal} prepareNew={prepareNew}
+                  onRooms={resizeRooms}
                 />
               ) : (
                 <div className="absolute inset-0 grid place-items-center p-6" style={{ paddingLeft: showLib && wide ? 260 : undefined }}>
                   <div className="max-w-md w-full bg-white rounded-2xl p-4 shadow-sm">
-                    <EmptyState icon={MapIcon} title="No rooms on the plan yet"
-                      text="Read the rooms off the brief’s plan, upload one, or lay the rooms out as blocks from their sizes. Then draw the furniture here."
-                      action={<Button size="sm" variant="primary" onClick={() => setPlanModal(true)}>Set up the plan</Button>} />
+                    <EmptyState icon={MapIcon} title="No plan yet"
+                      text="Sketch the rooms roughly and tidy them into a plan, build the BOQ from the flat’s size in one step, or read the rooms off the brief’s plan. Then draw the furniture here."
+                      action={readOnly
+                        ? <Button size="sm" onClick={() => setPlanModal(true)}>See the plan</Button>
+                        : <div className="flex flex-wrap gap-2">
+                          <Button size="sm" onClick={() => setPlanModal(true)}>Set up the plan</Button>
+                          <Button size="sm" icon={Zap} onClick={() => setBuilding(true)}>Quick build</Button>
+                          <Button size="sm" variant="primary" icon={PenLine} onClick={() => setSketching(true)}>Sketch a rough plan</Button>
+                        </div>} />
                   </div>
                 </div>
               )
@@ -541,11 +609,12 @@ export default function PlaygroundScreen(props: Props) {
                       <div className={`${LABEL} px-3 pt-1.5 pb-1`}>The plan under this BOQ</div>
                       {([
                         [Upload, 'Replace with a new plan', 'Upload a PDF or photo. Rooms are matched by name; pieces move with their room'],
+                        [PenLine, 'Sketch a rough plan', 'No plan? Draw rough boxes and the app tidies them into a plan'],
                         [MapPin, 'Read or trace the rooms', 'Rooms off the drawing, or traced by hand, or laid out as blocks'],
                         [Target, 'Set the scale again', 'Measure one wall you know'],
                         [FileText, 'Back to the brief’s plan', 'The plan the client gave with the brief'],
-                      ] as [React.ElementType, string, string][]).map(([I, t, d]) => (
-                        <button key={t} type="button" onClick={() => { setMenu(null); setPlanModal(true); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 flex items-start gap-2">
+                      ] as [React.ElementType, string, string][]).filter(([, t]) => !readOnly || t !== 'Sketch a rough plan').map(([I, t, d]) => (
+                        <button key={t} type="button" onClick={() => { setMenu(null); if (t === 'Sketch a rough plan') setSketching(true); else setPlanModal(true); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 flex items-start gap-2">
                           <span className="mt-0.5 text-[#3D52A0]"><I className="w-4 h-4" aria-hidden /></span>
                           <span><span className="block text-sm font-semibold text-slate-800">{t}</span><span className="block text-[11px] text-slate-500">{d}</span></span>
                         </button>
@@ -611,6 +680,16 @@ export default function PlaygroundScreen(props: Props) {
         />
       )}
 
+      {sketching && (
+        <SketchModal project={(ctx.name || 'Project').split(/[(]/)[0].trim()} initial={sketchFromRooms(rooms)} carpet={Number(ctx.area) || 0}
+          onUse={useSketch} onClose={() => setSketching(false)} />
+      )}
+      {building && (
+        <QuickBuildModal project={(ctx.name || 'Project').split(/[(]/)[0].trim()} size={sizeOf(ctx.config)} carpet={Number(ctx.area) || 0} grade={gradeOf(tier)}
+          own={rooms} bank={bank} boq={boq} standards={roomStandards}
+          paints={!boq.some(l => l.byRoom?.basis === 'wallPaint') && !!paintingFromPlan(bank, rooms.length ? rooms : [{ name: 'x', size: 100, unit: 'sq ft' }], () => 'probe')}
+          onBuild={runQuickBuild} onClose={() => setBuilding(false)} />
+      )}
       {planModal && (
         <div className="fixed inset-0 z-[300] grid place-items-center p-4 phd-scrim" style={{ background: 'rgba(15,23,42,.45)' }} role="dialog" aria-modal="true" aria-label="The plan under this BOQ">
           <div className="phd-pop w-full max-w-[1100px] max-h-[90vh] overflow-auto rounded-3xl bg-slate-50 shadow-2xl p-4">

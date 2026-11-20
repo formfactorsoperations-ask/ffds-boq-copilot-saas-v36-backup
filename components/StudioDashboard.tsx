@@ -122,7 +122,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
     action => setTiersRaw(prev => keepLockedTier(prev, typeof action === 'function' ? (action as (p: ProposalTier[]) => ProposalTier[])(prev) : action, signedTierId)),
     [setTiersRaw, signedTierId]
   );
-  const { orgData, currentRole, currentRoles } = useOrg();
+  const { orgData, currentRole, currentRoles, currentUserAuth } = useOrg();
   /* The formula export carries material and labour cost and Margin %: the studio's side of the money, off while figures are hidden. */
   const mayExportCosts = useSeesMargins(currentRoles);
   const isOwner = ['Super Admin', 'Admin', 'Ops Director'].includes(currentRole);
@@ -838,6 +838,8 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               canEditRecipes={canEditMaterialSpecs(currentRole, currentRoles as any)}
               onSaveSpecs={materialSpecs.save}
               marginFloors={(orgData as any)?.settings?.marginFloors}
+              roomStandards={(orgData as any)?.settings?.roomStandards}
+              userName={currentUserAuth?.displayName || undefined}
               renderFullGrid={() => (
                 <StudioExcelGrid
                   items={fullBoq}

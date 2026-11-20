@@ -8,6 +8,7 @@ import {
   placeRooms, withRect, blocksLayout, replacePlan, replanPreview, withHistory, parseFeet, type ReplanRow,
 } from '../../lib/playground/planSheet';
 import { ftin, roundTo3in, boundsOf, type Point } from '../../lib/playground/geometry';
+import { mergeRooms } from '../../lib/playground/sketch';
 import { pricingRulesOf } from '../../lib/playground/pricing';
 import { buildBankMap } from '../../lib/boqPricing';
 import { lockedTierId } from '../../lib/scopeFlow';
@@ -440,14 +441,6 @@ export default function PlanSheetPanel({ projectContext: ctx, setProjectContext,
       )}
     </>
   );
-}
-
-/** Replaces each named room with its updated copy and appends the new ones. */
-function mergeRooms(all: Room[], next: Room[]): Room[] {
-  const byName = new Map(next.map(r => [r.name, r]));
-  const out = all.map(r => byName.get(r.name) || r);
-  next.forEach(r => { if (!all.some(a => a.name === r.name)) out.push(r); });
-  return out;
 }
 
 function ReplanModal({ replan, onCancel, onApply }: { replan: Replan; onCancel: () => void; onApply: () => void }) {

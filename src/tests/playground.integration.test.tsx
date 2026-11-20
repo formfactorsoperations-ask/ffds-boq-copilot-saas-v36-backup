@@ -61,10 +61,11 @@ const baseBoq = () => [
 ];
 const placedWardrobe = { id: 'p1', bankId: 'wardrobe', qty: 42, roomId: 'Bedroom', calcLength: 6, calcWidth: 7, sizeUnit: 'ft', place: { x: 3.12, y: 1.12, rot: 0, depthFt: 2 } };
 
-function Harness({ tier = {}, focus = null, onSave = vi.fn(async () => undefined), probe, onSelect = vi.fn() }: { tier?: any; focus?: any; onSave?: any; probe?: (tiers: any[], active: string) => void; onSelect?: any }) {
+function Harness({ tier = {}, focus = null, onSave = vi.fn(async () => undefined), probe, onSelect = vi.fn(), ctx0, probeCtx }: { tier?: any; focus?: any; onSave?: any; probe?: (tiers: any[], active: string) => void; onSelect?: any; ctx0?: any; probeCtx?: (ctx: any) => void }) {
   const [tiers, setTiers] = useState<any[]>([{ id: 't1', name: 'Comfort Upgrade', timestamp: 1, boq: baseBoq(), ...tier }]);
   const [active, setActive] = useState('t1');
-  const [ctx, setCtx] = useState<any>({ name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10 });
+  const [ctx, setCtx] = useState<any>(ctx0 || { name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10 });
+  probeCtx?.(ctx);
   const calculated = useMemo(() => tiers.map(t => ({ ...t, summary: { totalSell: 0, totalCost: 0, totalGm: 0, itemCount: t.boq.length, designFee: 0, totalRevenue: 0, blendedGm: 0 } })), [tiers]);
   probe?.(tiers, active);
   return (
@@ -551,5 +552,84 @@ describe('Tune (PR 4)', () => {
     render(<Harness tier={PG} />);
     lens('Tune');
     expect(screen.getByText('Studio figures are hidden')).toBeTruthy();
+  });
+});
+
+describe('no plan yet (PR 5)', () => {
+  const noPlan = { name: 'Joshi – 2BHK', area: 650, config: '2BHK', rooms: [], designFeeType: 'percentage', designFee: 10 };
+
+  it('a rough sketch becomes the project’s plan in one step', async () => {
+    let c: any = null;
+    render(<Harness ctx0={noPlan} tier={{ ...PG, boq: [] }} probeCtx={x => { c = x; }} />);
+    expect(screen.getByText('No plan yet')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Sketch a rough plan' }));
+    const dlg = screen.getByRole('dialog', { name: 'Sketch a rough plan' });
+    expect(within(dlg).getByText('No plan yet · Joshi – 2BHK')).toBeTruthy();
+    const svg = within(dlg).getByRole('application', { name: 'Sketch area' });
+    // 42 × 32 ft drawn 420 × 320 px: 10 px a foot, the grid's 0, 0 at 10, 10.
+    (svg as any).getBoundingClientRect = () => ({ left: 0, top: 0, width: 420, height: 320, right: 420, bottom: 320, x: 0, y: 0 });
+    const px = (x: number, y: number) => ({ clientX: (x + 1) * 10, clientY: (y + 1) * 10, pointerId: 1 });
+    const box = (x: number, y: number, w: number, h: number, kind: string) => {
+      fireEvent.pointerDown(svg, px(x, y));
+      fireEvent.pointerMove(svg, px(x + w, y + h));
+      fireEvent.pointerUp(svg, px(x + w, y + h));
+      fireEvent.click(within(dlg).getByRole('button', { name: kind }));
+    };
+    box(0.3, 0.2, 13.4, 13.6, 'Living');
+    box(14.1, 0.6, 8.6, 7.7, 'Kitchen');
+    box(0, 14.5, 12.6, 12.4, 'Bedroom');
+    box(13, 14.2, 9, 12.4, 'Bedroom');
+    expect(within(dlg).getByText('4 rooms. Rough is fine: gaps, overlaps and crooked sizes are tidied for you.')).toBeTruthy();
+    expect(within(dlg).getByText('Bedroom 2')).toBeTruthy();
+    expect((within(dlg).getByRole('button', { name: 'Use as the plan' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Tidy into a plan' }));
+    expect(within(dlg).getByText(/so the rooms add up to 650 sq ft/)).toBeTruthy();
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Use as the plan' }));
+    expect(screen.queryByRole('dialog', { name: 'Sketch a rough plan' })).toBeNull();
+    expect(c.planSheet).toEqual({ source: 'sketch' });
+    const placed = c.rooms.filter((r: any) => r.plan);
+    expect(placed.map((r: any) => r.name)).toEqual(['Living', 'Kitchen', 'Bedroom', 'Bedroom 2']);
+    expect(Math.abs(placed.reduce((a: number, r: any) => a + r.plan.w * r.plan.h, 0) - 650) / 650).toBeLessThan(0.01);
+    expect(screen.getByText(/Saved as the project’s plan \(source: sketch\)/)).toBeTruthy();
+    expect(document.querySelector('[data-room="Kitchen"]')).toBeTruthy();
+  });
+
+  it('a quick build makes the rooms, their plan and each room’s standard pieces in one step', () => {
+    let c: any = null, latest: any[] = [];
+    render(<Harness ctx0={noPlan} tier={{ ...PG, boq: [] }} probeCtx={x => { c = x; }} probe={t => { latest = t; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Quick build' }));
+    const dlg = screen.getByRole('dialog', { name: 'Quick build' });
+    fireEvent.click(within(dlg).getByRole('radio', { name: '3-BHK' }));
+    fireEvent.click(within(dlg).getByRole('radio', { name: 'Premium' }));
+    expect(within(dlg).getByText(/8 rooms, a standard 3-BHK/)).toBeTruthy();
+    expect(within(dlg).getByText(/Not in your Item Bank, so left out:/)).toBeTruthy();
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Build the BOQ' }));
+    expect(c.planSheet).toEqual({ source: 'blocks' });
+    const placed = c.rooms.filter((r: any) => r.plan);
+    expect(placed).toHaveLength(8);
+    expect(Math.abs(placed.reduce((a: number, r: any) => a + r.plan.w * r.plan.h, 0) - 650) / 650).toBeLessThan(0.01);
+    const boq = latest[0].boq;
+    // Three bedrooms: a wardrobe and a bed each, every one on the plan or waiting under Needs a place.
+    expect(boq.filter((l: any) => l.bankId === 'wardrobe').map((l: any) => l.roomId).sort()).toEqual(['Guest Bedroom', 'Kids Bedroom', 'Master Bedroom']);
+    expect(boq.filter((l: any) => l.bankId === 'bed')).toHaveLength(3);
+    // Painting, shared into the rooms from the plan.
+    expect(boq.some((l: any) => l.bankId === 'paint' && l.byRoom?.basis === 'wallPaint')).toBe(true);
+    expect(latest[0].specGrade).toBe('P');
+    expect(screen.getByText(/^Built: 8 rooms, \d+ pieces placed/)).toBeTruthy();
+  });
+
+  it('a room is sized by the handle on its wall; the room across a shared wall gives the same', async () => {
+    let c: any = null;
+    render(<Harness tier={{ ...PG, boq: [placedWardrobe] }} probeCtx={x => { c = x; }} />);
+    const bedroom = document.querySelector('[data-room="Bedroom"]') as Element;
+    fireEvent.pointerDown(bedroom, { ...at(6, 8), pointerId: 1 });
+    fireEvent.pointerUp(stage(), { ...at(6, 8), pointerId: 1 });
+    const handle = document.querySelector('[data-room-edge="right"]') as Element;
+    expect(handle.getAttribute('aria-label')).toBe('Move the right wall of Bedroom');
+    await drag(handle, [12, 5], [13, 5]);
+    expect(c.rooms.find((r: any) => r.name === 'Bedroom').plan).toEqual({ x: 0, y: 0, w: 13, h: 10 });
+    expect(c.rooms.find((r: any) => r.name === 'Bedroom').size).toBe(130);
+    expect(c.rooms.find((r: any) => r.name === 'Kitchen').plan).toEqual({ x: 13, y: 0, w: 9, h: 8 });
+    expect(screen.getByText('Bedroom is now 13′ × 10′, 130 sq ft. Kitchen gave the same.')).toBeTruthy();
   });
 });
