@@ -257,7 +257,9 @@ export function approvedOption(ctx: any, tiers: any[] | undefined, bank: any[] =
   }
   const map = buildBankMap(bank, ctx?.adHocItems);
   const work = boqTotal(tier.boq || [], map);
-  return { id: tier.id, name: tier.name || '', execution: work, design: designFeeFor(ctx, work, asActualsTotal(tier.boq || [], map)) };
+  // A Playground version charges no fee on actuals (PR X); a Classic one keeps today's rule.
+  const onActuals = !tier.pricingRules || tier.pricingRules.feeOnActuals;
+  return { id: tier.id, name: tier.name || '', execution: work, design: designFeeFor(ctx, work, onActuals ? asActualsTotal(tier.boq || [], map) : 0) };
 }
 
 /**

@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Sparkles, X, Search, Plus, Users } from 'lucide-react';
-import { EmptyState, INPUT } from '../ui/kit';
+import { Sparkles, X, Search, Plus } from 'lucide-react';
+import { INPUT } from '../ui/kit';
 import type { Item, PieceKind } from '../../types';
 import { calculateSellPrice } from '../../lib/utils';
 import { drawableItems } from '../../lib/playground/board';
 import { PieceThumb } from './pieceArt';
 import { inr } from './playgroundUi';
 import { KitLibrary } from './KitParts';
+import { SupplyLibrary } from './SupplyParts';
+import { suppliedItems } from '../../lib/playground/supply';
 import type { Kit } from '../../lib/playground/kits';
 
 /*
@@ -14,7 +16,7 @@ import type { Kit } from '../../lib/playground/kits';
   the stage. Every Item Bank item that draws, as a picture with its price per
   unit: drag one onto the plan or a room card, or press + to add it to the room
   you are in. The Kits tab holds the Item Bank's bundles as room kits (PR K);
-  the client's own items come in a later part of the Playground and say so.
+  By client, the items bought by the client or at actuals (PR X).
 */
 
 const CATS = ['All', 'Storage', 'Living', 'Bedroom', 'Kitchen', 'Bath'] as const;
@@ -28,7 +30,7 @@ const CAT_OF: Record<PieceKind, Cat> = {
 };
 type Tab = 'pieces' | 'kits' | 'client';
 
-export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, artOf, kits = [], bankMap, hideFigures = false, kitEstimate, onKit }: {
+export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, artOf, kits = [], bankMap, hideFigures = false, kitEstimate, onKit, places = [], onAddSupplied }: {
   bank: Item[];
   readOnly: boolean;
   onClose: () => void;
@@ -44,7 +46,12 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
   kitEstimate?: (k: Kit) => { room: string; amount: number } | null;
   /** A kit's Apply: opens its preview. */
   onKit?: (kitId: string) => void;
+  /** Where a By client item can go: the rooms, then the whole flat (PR X). */
+  places?: string[];
+  onAddSupplied?: (item: Item, room: string) => void;
 }) {
+  const [dest, setDest] = useState('Whole flat');
+  const supplied = useMemo(() => suppliedItems(bank), [bank]);
   const [tab, setTab] = useState<Tab>('pieces');
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<Cat>('All');
@@ -103,9 +110,8 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
         <KitLibrary kits={kits} bankMap={bankMap || new Map(bank.map(i => [i.id, i]))} readOnly={readOnly} hideFigures={hideFigures}
           estimate={k => kitEstimate?.(k) ?? null} onApply={id => onKit?.(id)} />
       ) : (
-        <div className="flex-1 overflow-auto p-3">
-          <EmptyState icon={Users} title="The client’s own items come next" text="Things the client buys or already owns, drawn on the plan and kept out of the price. Arrives with the by-client part of the Playground." />
-        </div>
+        <SupplyLibrary items={supplied} rooms={places.length ? places : ['Whole flat']} dest={places.includes(dest) ? dest : (places[places.length - 1] || 'Whole flat')}
+          readOnly={readOnly} hideFigures={hideFigures} onDest={setDest} onAdd={it => onAddSupplied?.(it, places.includes(dest) ? dest : (places[places.length - 1] || 'Whole flat'))} />
       )}
     </aside>
   );

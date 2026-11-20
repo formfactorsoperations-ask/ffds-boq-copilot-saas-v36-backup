@@ -9,7 +9,8 @@ import { generateStandardPackages, TemplateData, INITIAL_TEMPLATES } from '../li
 import { resolveCivilScope, describeCivilScope } from '../lib/civilScope';
 import { realRooms } from '../lib/scopeBuckets';
 import { isScopeFlowOn, lockedTierId } from '../lib/scopeFlow';
-import { buildBankMap, designFeeFor, isAsActuals } from '../lib/boqPricing';
+import { buildBankMap, isAsActuals } from '../lib/boqPricing';
+import { designFeeForTier } from '../lib/playground/pricing';
 import { compareTiers, optionPrice } from '../lib/tierComparison';
 import { builtInSpecsName } from '../lib/comparison';
 import { otherBenchmarks, medianGm, closestInSize } from '../lib/tierBenchmarks';
@@ -199,7 +200,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
 
     /* A percentage fee is charged on the as-actuals as well, which a margin shift does not move. */
     const simulatedDesignFee = useMemo(
-        () => designFeeFor(projectContext, simulatedSellValue, activeTier?.summary.asActualsTotal || 0),
+        () => designFeeForTier(projectContext, simulatedSellValue, activeTier?.summary.asActualsTotal || 0, activeTier?.pricingRules),
         [projectContext, simulatedSellValue, activeTier]);
 
     const simulatedTotalRevenue = simulatedSellValue + simulatedDesignFee;
@@ -241,7 +242,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         });
 
         // Design Fee Calc: a percentage is charged on the as-actuals too.
-        const newDesignFee = designFeeFor(projectContext, newTotalSell, newAsActuals);
+        const newDesignFee = designFeeForTier(projectContext, newTotalSell, newAsActuals, activeTier.pricingRules);
 
         const newTotalRevenue = newTotalSell + newDesignFee;
         const newBlendedGm = newTotalRevenue > 0 ? (((newTotalSell - newTotalCost) + newDesignFee) / newTotalRevenue) * 100 : 0;

@@ -76,6 +76,7 @@ export function Receipt({ models, rooms, roomTotals, shares, workTotal, tierName
   })).filter(g => g.ms.length || (g.real && (roomTotals.get(g.name) || 0) > 0));
   const shared = models.filter(m => m.line.byRoom && !m.separate);
   const separate = models.filter(m => m.separate);
+  const actualsEst = separate.filter(m => m.line.boqStatus !== 'client_procured').reduce((a, m) => a + Math.round(m.rate * m.qty), 0);
   const groupTotal = (g: { name: string; ms: LineModel[]; real: boolean }) =>
     roomTotals.get(g.name) ?? g.ms.filter(m => m.billable).reduce((a, m) => a + m.amount, 0);
 
@@ -153,10 +154,13 @@ export function Receipt({ models, rooms, roomTotals, shares, workTotal, tierName
                 <span className="block text-xs font-semibold text-slate-700 truncate">{m.name}</span>
                 <span className="block text-[10px] text-slate-500">{m.room} · {m.line.boqStatus === 'client_procured' ? 'Bought by the client' : 'At actuals, paid to the vendor'}</span>
               </span>
-              {!hideFigures && <span className="text-[11px] font-bold tabular-nums text-slate-500">{m.line.boqStatus === 'client_procured' ? '—' : `≈ ${inr(m.rate * m.qty)}`}</span>}
+              {!hideFigures && <span className="text-[11px] font-bold tabular-nums text-slate-500">{m.line.boqStatus === 'client_procured' ? '—' : `≈ ${inr(Math.round(m.rate * m.qty))}`}</span>}
             </button>
           ))}
-          <p className="text-[10px] text-slate-500 px-1 mt-1">On their own page for the client. No effect on the price, the fee, GST or the payment schedule.</p>
+          {!hideFigures && actualsEst > 0 && (
+            <div className="px-1 pt-1 flex justify-between text-[11px] text-slate-500"><span>Actuals, estimated</span><b className="tabular-nums">≈ {inr(actualsEst)}</b></div>
+          )}
+          <p className="text-[10px] text-slate-500 px-1 mt-1">On their own page for the client. No effect on the price, offers, fee, GST or the payment schedule.</p>
         </div>
       )}
     </div>

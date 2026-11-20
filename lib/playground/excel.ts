@@ -149,9 +149,9 @@ export function studioRows(boq: BoqItem[], ctx: ExcelContext): StudioRow[] {
 export interface ClientRow { n: number; item: string; words: string; qty: number; unit: string; rate: number; amount: number }
 export interface ClientGroup { room: string; rows: ClientRow[]; total: number }
 
-/** The client copy: billable lines by room, no costs, with each room's total and the work total. */
+/** The client copy: billable lines by room, no costs, with each room's total and the work total. Items at actuals are on their own sheet (PR X). */
 export function clientGroups(boq: BoqItem[], ctx: ExcelContext): { groups: ClientGroup[]; total: number } {
-  const rows = studioRows((boq || []).filter(l => resolveBoqLine(l, ctx.bankMap).billable), ctx);
+  const rows = studioRows((boq || []).filter(l => { const r = resolveBoqLine(l, ctx.bankMap); return r.billable && !r.asActuals; }), ctx);
   const order = [...(ctx.rooms || []).map(r => r.name), ...rows.map(r => r.room)].filter((n, i, a) => a.indexOf(n) === i);
   let n = 0;
   const groups = order.map(room => {
