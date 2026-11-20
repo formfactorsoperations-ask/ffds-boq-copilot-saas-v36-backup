@@ -7,6 +7,7 @@ import { boundsOf, ftin, normRot, pieceBox } from '../../lib/playground/geometry
 import { lineIssues } from '../../lib/playground/issues';
 import { sheetOf, isPdfSheet } from '../../lib/playground/planSheet';
 import { newPieceLine, movedLine, resizedFromEdge, type Edge } from '../../lib/playground/board';
+import { resizeRoom, edgeAt, type RoomEdge, type RoomResize } from '../../lib/playground/roomEdges';
 import { PieceArt } from './pieceArt';
 import { inr, lakh, type LineModel } from './playgroundUi';
 
@@ -19,6 +20,8 @@ import { inr, lakh, type LineModel } from './playgroundUi';
   there; drag a piece to move it (magnets pull it onto walls and its neighbours;
   Alt places it freely), pull a handle to resize it (its quantity follows), the
   round handle to turn it. Drag the ground to pan; the wheel and the buttons zoom.
+  Pick a room and pull the handle on one of its walls to size it (PR 5): the
+  room across a shared wall gives the same, and the pieces against it move.
 
   One drag is one write of the BOQ, so one undo. Only the piece being dragged
   redraws while it moves.
@@ -51,19 +54,22 @@ interface Props {
   fitSignal?: number;
   /** A new line from the library, given its recipe's materials (S2). */
   prepareNew?: (line: BoqItem) => BoqItem;
+  /** A room pulled to a new size by its wall handle (PR 5): the rooms that changed, and the BOQ with the pieces moved. */
+  onRooms?: (rooms: Room[], boq: BoqItem[], changed: string[]) => void;
 }
 
 type Drag =
   | { kind: 'move'; id: string; offset: [number, number]; start: BoqItem; live: BoqItem; room: string | null; guides: SnapGuide[] }
   | { kind: 'resize'; id: string; sx: number; sy: number; from: [number, number]; start: BoqItem; live: BoqItem }
   | { kind: 'turn'; id: string; start: BoqItem; live: BoqItem }
-  | { kind: 'pan'; from: [number, number]; view: View; room: string | null };
+  | { kind: 'pan'; from: [number, number]; view: View; room: string | null }
+  | { kind: 'room'; name: string; edge: RoomEdge; live: RoomResize | null };
 
 /** Counts piece redraws, so a test can hold a drag to one piece per frame. */
 export const stageStats = { pieceRenders: 0 };
 
 export default function PlanStage(props: Props) {
-  const { ctx, rooms, boq, bank, bankMap, models, roomTotals, readOnly, sel, onSel, selRoom, onSelRoom, commit, newId, libOpen, hideFigures, fitSignal, prepareNew } = props;
+  const { ctx, bank, bankMap, models, roomTotals, readOnly, sel, onSel, selRoom, onSelRoom, commit, newId, libOpen, hideFigures, fitSignal, prepareNew, onRooms } = props;
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const [view, setView] = useState<View>({ k: 20, tx: 40, ty: 60 });
@@ -71,6 +77,10 @@ export default function PlanStage(props: Props) {
   const frame = useRef<number | null>(null);
   const panMoved = useRef(false);
   const last = useRef<{ at: [number, number]; alt: boolean; shift: boolean } | null>(null);
+  /* While a room's wall is pulled, the plan shows the rooms and pieces as they would be. */
+  const pulled = drag?.kind === 'room' ? drag.live : null;
+  const rooms = pulled ? pulled.rooms : props.rooms;
+  const boq = pulled ? pulled.boq : props.boq;
 
   const planRooms: PlanRoom[] = useMemo(() => rooms.filter(r => r.plan).map(r => ({ name: r.name, plan: r.plan })), [rooms]);
   const sheet = sheetOf(ctx);
@@ -78,7 +88,7 @@ export default function PlanStage(props: Props) {
 
   /* The pieces from the BOQ; while dragging only the dragged one is swapped in. */
   const basePieces = useMemo(() => boardPieces(boq, bankMap), [boq, bankMap]);
-  const livePiece = useMemo(() => (drag && drag.kind !== 'pan' ? boardPieces([drag.live], bankMap)[0] : undefined), [drag, bankMap]);
+  const livePiece = useMemo(() => (drag && drag.kind !== 'pan' && drag.kind !== 'room' ? boardPieces([drag.live], bankMap)[0] : undefined), [drag, bankMap]);
   const pieces = useMemo(() => {
     const ps = livePiece ? basePieces.map(p => (p.id === livePiece.id ? livePiece : p)) : basePieces;
     return [...ps].sort((a, b) => Number(a.high) - Number(b.high));
@@ -198,6 +208,12 @@ export default function PlanStage(props: Props) {
     wrapRef.current?.setPointerCapture?.(e.pointerId);
     setDrag({ kind: 'turn', id: p.id, start: p.line, live: p.line });
   };
+  const startRoom = (e: React.PointerEvent, name: string, edge: RoomEdge) => {
+    e.stopPropagation();
+    if (readOnly || !onRooms) return;
+    wrapRef.current?.setPointerCapture?.(e.pointerId);
+    setDrag({ kind: 'room', name, edge, live: null });
+  };
   const startPan = (e: React.PointerEvent, room: string | null) => {
     panMoved.current = false;
     wrapRef.current?.setPointerCapture?.(e.pointerId);
@@ -206,6 +222,10 @@ export default function PlanStage(props: Props) {
 
   const liveFor = (d: Drag, at: [number, number], alt: boolean, shift: boolean): Drag => {
     if (d.kind === 'pan') return d;
+    if (d.kind === 'room') {
+      const to = d.edge === 'left' || d.edge === 'right' ? at[0] : at[1];
+      return { ...d, live: resizeRoom({ rooms: props.rooms, boq: props.boq, bankMap, name: d.name, edge: d.edge, to }) };
+    }
     if (d.kind === 'move') {
       const me = asPlaced(d.start)!;
       const s = softSnap(me, at[0] - d.offset[0], at[1] - d.offset[1], planRooms, basePieces.filter(p => p.id !== d.id), { thresholdFt: 9 / view.k, free: alt });
@@ -257,6 +277,10 @@ export default function PlanStage(props: Props) {
     setDrag(null);
     if (d.kind === 'pan') {
       if (!panMoved.current) { onSel(null); onSelRoom(d.room); }
+      return;
+    }
+    if (d.kind === 'room') {
+      if (d.live && onRooms) onRooms(d.live.rooms, d.live.boq, d.live.changed);
       return;
     }
     if (d.live === d.start) return;
@@ -320,6 +344,22 @@ export default function PlanStage(props: Props) {
       </g>,
     );
   });
+  /* The picked room's walls: a handle on each, to pull the room to size. */
+  const pickedRoom = !selected && selRoom && onRooms && !readOnly ? planRooms.find(r => r.name === selRoom) : undefined;
+  if (pickedRoom?.plan) {
+    const p = pickedRoom.plan;
+    (['left', 'right', 'top', 'bottom'] as RoomEdge[]).forEach(e => {
+      const across = e === 'left' || e === 'right';
+      const at = edgeAt(p, e);
+      const cx = across ? at : p.x + p.w / 2, cy = across ? p.y + p.h / 2 : at;
+      const long = px(26), thin = px(9);
+      overlay.push(
+        <rect key={`rh-${e}`} data-room-edge={e} x={cx - (across ? thin : long) / 2} y={cy - (across ? long : thin) / 2} width={across ? thin : long} height={across ? long : thin}
+          rx={thin / 2} fill={BRAND} stroke="#fff" strokeWidth={px(2)} style={{ cursor: across ? 'ew-resize' : 'ns-resize' }}
+          onPointerDown={ev => startRoom(ev, pickedRoom.name, e)} aria-label={`Move the ${e} wall of ${pickedRoom.name}`} />,
+      );
+    });
+  }
   if (selected && !readOnly) {
     const W = selected.size.w, D = Math.max(selected.size.d, 0.12), pad = px(4), hr = px(6);
     const handles = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]].map(([sx, sy]) => {
@@ -351,7 +391,7 @@ export default function PlanStage(props: Props) {
   if (selected && selModel) {
     const b = pieceBox(selected.fp, selected.place);
     const [sx, sy] = toScreen(selected.place.x, b.y);
-    const liveLine = drag && drag.kind !== 'pan' && drag.id === selected.id ? drag.live : null;
+    const liveLine = drag && drag.kind !== 'pan' && drag.kind !== 'room' && drag.id === selected.id ? drag.live : null;
     const qty = liveLine ? Number(liveLine.qty) || 0 : selModel.qty;
     const amount = liveLine ? selModel.rate * qty : selModel.amount;
     const face = /sq\s*ft|sft|sqft/i.test(selModel.unit);
@@ -365,6 +405,21 @@ export default function PlanStage(props: Props) {
         </div>
       </div>
     );
+  }
+
+  if (pulled && drag?.kind === 'room') {
+    const r = rooms.find(x => x.name === drag.name);
+    if (r?.plan) {
+      const [sx, sy] = toScreen(r.plan.x + r.plan.w / 2, r.plan.y);
+      float = (
+        <div className="absolute z-30 pointer-events-none -translate-x-1/2" style={{ left: Math.max(90, Math.min(size.w - 90, sx)), top: Math.max(6, sy - 44) }}>
+          <div className="rounded-xl bg-slate-800/95 text-white shadow-2xl px-3 py-1.5 text-xs whitespace-nowrap flex items-center gap-2">
+            <b>{r.name}</b>
+            <span className="text-white/70">{ftin(r.plan.w)} × {ftin(r.plan.h)} = <b className="text-white">{Math.round(r.plan.w * r.plan.h)} sq ft</b></span>
+          </div>
+        </div>
+      );
+    }
   }
 
   const ground = { x: bounds.x - 200, y: bounds.y - 200, w: bounds.w + 400, h: bounds.h + 400 };
