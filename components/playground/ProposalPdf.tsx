@@ -16,6 +16,7 @@ import {
   type PdfRoom, type PdfRow, type PdfAnnexSection, type PageKey,
 } from '../../lib/playground/proposal';
 import { buildProposalPdf } from '../../lib/proposalPdf';
+import { proposalTimeline, civilDaysOf, briefHome, answersTo, othersDecide, roomIncludes } from '../../lib/playground/brief';
 import { inr } from './playgroundUi';
 
 /*
@@ -29,6 +30,7 @@ import { inr } from './playgroundUi';
 
 const LABEL_SM = 'text-[10px] font-bold uppercase tracking-wider text-slate-500';
 const dateOf = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const shortDate = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 const qtyOf = (q: number) => (Math.round(q * 100) / 100).toLocaleString('en-IN');
 
 const Kicker = ({ children }: { children: React.ReactNode }) => <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#3D52A0]">{children}</div>;
@@ -159,6 +161,10 @@ export interface ProposalPdfProps {
   concern?: string | null;
   /** The client has booked: the portal is open. */
   booked?: boolean;
+  /** Who else decides, from the lead profile: anyone but "None" adds the one-page summary (PR B). */
+  decisionMakers?: string | null;
+  /** The project Timeline's programme (useProjectProgramme): the timeline's design and site days. */
+  programme?: { designWorkDays?: number; siteWorkDays?: number } | null;
   /** How much price the client sees: every line, room totals, or a package (proposal.priceDetail). */
   priceDetail?: PriceDetail;
   /** Records the proposal as sent, on this version, shaped for this concern, at this price detail. */
@@ -168,7 +174,7 @@ export interface ProposalPdfProps {
   onClose: () => void;
 }
 
-export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, termsSettings, paymentStructure, studioName, userName, concern: concern0, booked, priceDetail, onSent, onPublish, onClose }: ProposalPdfProps) {
+export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, termsSettings, paymentStructure, studioName, userName, concern: concern0, booked, decisionMakers, programme, priceDetail, onSent, onPublish, onClose }: ProposalPdfProps) {
   const detail: PriceDetail = priceDetail || ctx.proposal?.priceDetail || 'lines';
   const [concern, setConcern] = useState<string>(ctx.proposal?.shapedFor || concern0 || 'Itemized Costs');
   const [busy, setBusy] = useState<null | 'download' | 'send'>(null);
@@ -184,23 +190,28 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
     const terms = gstTermsOf(ctx);
     const deal = dealFor(summary, discounts, terms);
     const schedule = scheduleFor(ctx, { tierSummary: summary }, { paymentStructure });
-    const validity = proposalValidity(ctx, termsSettings);
+    const validity = proposalValidity(ctx, termsSettings, Date.now(), tier.id);
     const free = complimentaryKeys(discounts.filter(d => d.basis?.tierId === tier.id));
     const items = itemsOf({ boq, bankMap, pricing, rooms: ctx.rooms || [], free, specBank });
     const options = optionChains(tiers).map(latestOf).map(t => (t.id === tier.id ? tier : t));
     const optionRows = options.map(t => ({ t, split: scopeSplit(t, bankMap, splitPricingOf(t, ctx.rooms, bankMap)), work: summaryOf(t)?.totalSell || 0 }));
     const offers = discounts.map(d => ({ name: d.name, value: d.type === 'percentage' ? (d.target === 'design' ? deal.fee : deal.sell) * (d.value / 100) : d.value }));
+    const civil = hasCivilWork(boq.map(l => ({ ...l, name: bankMap.get(l.bankId)?.name, cat: bankMap.get(l.bankId)?.cat })));
+    /* From booking (the day the proposal holds until) to the keys (PR B). */
+    const timeline = proposalTimeline({ start: validity.until, programme, config: ctx.config, civil, civilDays: civilDaysOf(termsSettings), target: (ctx as any).targetHandoverDate });
     return {
-      summary, deal, schedule, validity, items, options: optionRows, offers,
+      summary, deal, schedule, validity, items, options: optionRows, offers, civil, timeline,
       separate: separatePage(boq, bankMap),
       materials: materialsPage(specBank, options, tier.id),
-      civil: hasCivilWork(boq.map(l => ({ ...l, name: bankMap.get(l.bankId)?.name, cat: bankMap.get(l.bankId)?.cat }))),
+      home: briefHome(ctx),
+      answers: answersTo(ctx.clientBrief, boq, bankMap, ctx.rooms || []),
       annex: annexOf({
         terms: termsSettings, studioName, gstRate: terms.rate, after: Math.max(0, deal.sell - deal.execOff), fee: deal.fee - deal.designOff, gst: deal.gst, total: deal.clientPays,
         initiationFee: schedule.initiationFee, boq, bankMap, validDays: validity.days, issued: validity.from,
+        programme: { siteDays: timeline.siteDays, designDays: timeline.designDays, civilDays: timeline.civilDays },
       }),
     };
-  }, [tier, tiers, ctx, bankMap, specBank, termsSettings, paymentStructure, studioName]);
+  }, [tier, tiers, ctx, bankMap, specBank, termsSettings, paymentStructure, studioName, programme]);
 
   const { deal, schedule: sc, validity: v, items } = m;
   const project = ctx.name || 'Your home';
@@ -226,6 +237,115 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
       </div>
     </div>
   )];
+  /* The brief (PR B): the client's words, how the proposal answers them, their home, what design includes, and the timeline. */
+  const T = m.timeline;
+  const timelineBlock = (
+    <div className="mt-4" data-pdf-timeline>
+      <div className={LABEL_SM}>Your timeline</div>
+      <div className="mt-2 space-y-1.5">
+        {T.rows.map(r => (
+          <div key={r.name} className="grid items-center gap-2 text-[11px]" style={{ gridTemplateColumns: '168px 104px minmax(0,1fr)' }}>
+            <span className="text-slate-700 font-semibold">{r.name}</span>
+            <span className="text-slate-500 tabular-nums">{shortDate(r.start)} – {shortDate(r.end)}</span>
+            <span className="relative h-3 rounded bg-slate-100"><span className="absolute inset-y-0 rounded bg-[#3D52A0]" style={{ left: `${(r.offset / T.total) * 100}%`, width: `${(r.days / T.total) * 100}%` }} /></span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[12px] text-slate-700">
+        Book by <b>{dateOf(v.until)}</b> and your home is handed back by <b>{dateOf(T.handover)}</b>
+        {T.target && T.weeksLate !== null ? (T.weeksLate <= 0 ? `, in time for your ${dateOf(T.target)} target` : `, about ${T.weeksLate} week${T.weeksLate > 1 ? 's' : ''} after your ${dateOf(T.target)} target`) : ''}.
+        {T.civil && T.civilDays > 0 ? ` Civil work adds ${T.civilDays} working days: the bathrooms are rebuilt and waterproofed before carpentry goes in.` : ''}
+        {' '}Durations are working days, Sundays off, {T.fromTimeline ? 'from the project Timeline' : 'from our standard programme'}.
+      </p>
+    </div>
+  );
+  const H = m.home;
+  const timelineFirst = concern === 'Timeline';
+  pages.brief = [(
+    <React.Fragment key="brief">
+      <Kicker>Your brief</Kicker><H2>What you told us</H2>
+      {ctx.clientBrief?.trim() && (
+        <blockquote className="mt-3 border-l-4 border-[#3D52A0] pl-4 text-[14px] text-slate-700 italic leading-relaxed" data-pdf-quote>
+          “{ctx.clientBrief.trim()}”
+          <span className="block not-italic text-[11px] text-slate-500 mt-1">{ctx.clientName || 'You'}, at our first meeting</span>
+        </blockquote>
+      )}
+      {timelineFirst && timelineBlock}
+      {m.answers.length > 0 && (
+        <div className="mt-4">
+          <div className={LABEL_SM}>How this proposal answers it</div>
+          <div className="mt-1.5 space-y-1.5">
+            {m.answers.map(a => <div key={a.topic} className="flex gap-2 text-[12px]"><span className="text-emerald-700 font-bold">✓</span><span><b className="text-slate-800">{a.topic}.</b> <span className="text-slate-600">{a.text}</span></span></div>)}
+          </div>
+        </div>
+      )}
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-lg border border-slate-200 p-3">
+          <div className={LABEL_SM}>Your home</div>
+          {H.line && <div className="text-[13px] font-semibold text-slate-800 mt-1">{H.line}</div>}
+          {H.status && <div className="text-[12px] text-slate-600">{H.status}</div>}
+          <div className="mt-2 flex flex-wrap gap-1">{H.scope.map(s => <span key={s.label} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${s.on ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-slate-100 text-slate-400 line-through'}`}>{s.label}</span>)}</div>
+        </div>
+        <div className="rounded-lg border border-slate-200 p-3">
+          <div className={LABEL_SM}>Your style</div>
+          <div className="text-[13px] font-semibold text-slate-800 mt-1">{H.style || 'To be set with you at the first design meeting'}</div>
+        </div>
+      </div>
+      {H.deliver.length > 0 && (
+        <div className="mt-4">
+          <div className={LABEL_SM}>What design includes</div>
+          <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">{H.deliver.map(d => <span key={d.label} className={d.on ? 'text-slate-700' : 'text-slate-400'}>{d.on ? '✓' : '—'} {d.label}{d.on ? '' : ', not in this scope'}</span>)}</div>
+        </div>
+      )}
+      {!timelineFirst && timelineBlock}
+    </React.Fragment>
+  )];
+  /* The proposal on one page, for everyone in the family who decides (PR B). */
+  if (othersDecide(decisionMakers)) {
+    const saved = deal.execOff + deal.designOff;
+    pages.sum = [(
+      <React.Fragment key="sum">
+        <Kicker>On one page</Kicker><H2>The proposal in a minute</H2>
+        <p className="text-[12px] text-slate-500 mt-1">For everyone in the family who decides with you. The pages after this one list every item.</p>
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          {([['Your investment', inr(deal.clientPays), `${tier.name}, all in with GST`], ['You save', inr(saved), `offers valid until ${dateOf(v.until)}`], ['To book', inr(sc.booking), `${sc.design.stages[0]?.code || 'D1'} of the design fee, with GST`]] as [string, string, string][]).map(([a, b, c], i) => (
+            <div key={a} className={`rounded-lg p-3 ${i ? 'border border-slate-200' : 'bg-[#3D52A0] text-white'}`}>
+              <div className={`text-[10px] font-bold uppercase tracking-wider ${i ? 'text-slate-500' : 'text-white/80'}`}>{a}</div>
+              <div className="text-xl font-black tabular-nums mt-1" data-pdf-sum={a}>{b}</div>
+              <div className={`text-[10px] ${i ? 'text-slate-500' : 'text-white/80'}`}>{c}</div>
+            </div>
+          ))}
+        </div>
+        <table className="mt-5 w-full text-[12px]" style={{ tableLayout: 'fixed' }}>
+          <colgroup><col style={{ width: 130 }} /><col />{detail !== 'package' && <col style={{ width: 96 }} />}</colgroup>
+          <thead><tr className={`text-left ${LABEL_SM}`}><th className="py-1">Room</th><th className="py-1">What it includes</th>{detail !== 'package' && <th className="py-1 text-right">Amount</th>}</tr></thead>
+          <tbody>
+            {items.rooms.map(r => (
+              <tr key={r.name} className="border-t border-slate-100 align-top">
+                <td className="py-1.5 pr-2 font-semibold text-slate-800">{r.name}</td>
+                <td className="py-1.5 pr-2 text-slate-600">{roomIncludes(tier.boq || [], bankMap, r.name)}</td>
+                {detail !== 'package' && <td className="py-1.5 text-right tabular-nums font-semibold">{inr(r.total)}</td>}
+              </tr>
+            ))}
+            {items.flat && (
+              <tr className="border-t border-slate-100 align-top">
+                <td className="py-1.5 font-semibold text-slate-800">Across the flat</td>
+                <td className="py-1.5 pr-2 text-slate-600">{[...new Set(items.flat.rows.map(x => x.name))].join(', ')}</td>
+                {detail !== 'package' && <td className="py-1.5 text-right tabular-nums font-semibold">{inr(items.flat.total)}</td>}
+              </tr>
+            )}
+            {detail !== 'package' && <tr className="border-t-2 border-slate-300"><td colSpan={2} className="py-1.5 font-bold text-slate-800">The work, {tier.name}</td><td className="py-1.5 text-right tabular-nums font-black">{inr(items.work)}</td></tr>}
+          </tbody>
+        </table>
+        {m.options.length > 1 && detail !== 'package' && (
+          <div className="mt-4 grid gap-2 text-[11px]" style={{ gridTemplateColumns: `repeat(${m.options.length}, minmax(0, 1fr))` }}>
+            {m.options.map(o => <div key={o.t.id} className={`rounded-md border px-2 py-1.5 ${o.t.id === tier.id ? 'border-[#3D52A0]' : 'border-slate-200'}`}><b className="text-slate-800">{o.t.name}</b><div className="tabular-nums text-slate-600">{inr(o.work)}, the work</div></div>)}
+          </div>
+        )}
+        <p className="mt-4 text-[12px] text-slate-700">Book by <b>{dateOf(v.until)}</b>; your home is handed back by <b>{dateOf(T.handover)}</b>.</p>
+      </React.Fragment>
+    )];
+  }
   pages.how = [(
     <React.Fragment key="h">
       <Kicker>How we work</Kicker><H2>From this proposal to your keys</H2>
@@ -364,8 +484,8 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
     </React.Fragment>,
   ];
 
-  /* The one-page summary and the brief come with PR B; until then the order skips them. */
-  const order = pageOrder(concern, false);
+  /* The one-page summary only when others decide too; the brief always (PR B). */
+  const order = pageOrder(concern, othersDecide(decisionMakers));
   const sheets = order.flatMap(k => pages[k] || []);
 
   const build = async () => {
@@ -414,6 +534,7 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
             {CONCERNS.map(o => <option key={o}>{o}</option>)}
           </select>
         </label>
+        {othersDecide(decisionMakers) && <Chip tone="brand">{decisionMakers} also decide: one-page summary added</Chip>}
         {v.issued && <Chip tone={v.expired ? 'warn' : 'good'}>{v.expired ? `Expired ${dateOf(v.until)}` : `Sent ${dateOf(v.from)}`}</Chip>}
         <div className="ml-auto flex items-center gap-2 flex-wrap">
           {/* The first proposal never draws the plan with pieces, whatever the layout's state: the builder's plan only. */}

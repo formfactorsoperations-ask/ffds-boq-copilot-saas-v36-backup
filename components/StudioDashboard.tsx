@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useRef, useContext } from 'react';
 import { JourneyContext } from '../services/journeyEngine';
 import { journeyOf } from '../lib/playground/meeting';
 import { useStudioTerms } from './playground/useStudioTerms';
+import { useProjectProgramme } from '../hooks/useProjectProgramme';
 import { ProjectContext, Item, BoqItem, Room, AIStrategy, FullBoqItem, CommandAction, ProposalTier, AuditResult } from '../types';
 import { id as generateId, calculateSellPrice } from '../lib/utils';
 import RoomCard from './RoomCard';
@@ -61,6 +62,8 @@ interface StudioDashboardProps {
     onReleasePortal?: (ctx: ProjectContext) => Promise<any>;
     /** The lead profile's main concern: the order of the first proposal's pages (PR P). */
     leadConcern?: string | null;
+    /** Who else decides, from the lead profile: the proposal's one-page summary (PR B). */
+    decisionMakers?: string | null;
     /** Lines to show and highlight on opening (Pricing & Tiers, "Where the money goes" → a line). */
     focusLines?: { ids: string[]; at: number } | null;
     /** Makes another option the one being edited (App's setActiveTierId): used by "Make a Playground version". */
@@ -123,7 +126,7 @@ const itemVar = {
     show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100, damping: 12 } }
 };
 
-const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision, focusLines, onSelectTier, onReleasePortal, leadConcern }) => {
+const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision, focusLines, onSelectTier, onReleasePortal, leadConcern, decisionMakers }) => {
   /* Signed scope: the version the client signed is shown but never changed
      here. Every edit path below goes through setTiers, so it is guarded once. */
   const signedTierId = lockedTierId(projectContext);
@@ -370,6 +373,8 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
         };
     });
   }, [activeTier, bankMap]);
+  /* The project Timeline's programme, for the proposal's timeline (PR B). */
+  const programme = useProjectProgramme(projectId, projectContext, fullBoq);
 
   const groupedItems = useMemo(() => {
     const grouped: { [key: string]: FullBoqItem[] } = {};
@@ -938,6 +943,8 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               paymentStructure={terms.paymentStructure}
               termsSettings={terms.termsSettings}
               leadConcern={leadConcern}
+              decisionMakers={decisionMakers}
+              programme={programme}
               journey={journey}
               onSaveKit={async bundle => { await updateSettings('customBundles', [...(settings?.customBundles || []), bundle]); }}
               renderFullGrid={() => (

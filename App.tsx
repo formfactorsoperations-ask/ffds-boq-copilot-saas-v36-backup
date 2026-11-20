@@ -2870,6 +2870,7 @@ export default function App() {
                           onStartRevision={() => setActiveTab("revision-studio")}
                           onReleasePortal={releasePortalNow}
                           leadConcern={leadProfile?.primaryFrictionPoint}
+                          decisionMakers={leadProfile?.hiddenDecisionMakers}
                           focusLines={boqDrawerOpen ? boqFocus : null}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}

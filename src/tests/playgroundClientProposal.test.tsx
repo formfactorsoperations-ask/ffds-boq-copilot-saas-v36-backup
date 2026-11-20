@@ -46,10 +46,10 @@ const boq = () => [
 const PG = { boqFormat: 'playground', pricingRules: PLAYGROUND_PRICING };
 const tier = (): any => ({ id: 't1', name: 'Comfort Upgrade', timestamp: 1, boq: boq(), ...PG, summary: { totalSell: 1, designFee: 0 } });
 
-function Harness({ probe, booked, onRelease }: { probe?: (ctx: any) => void; booked?: boolean; onRelease?: any }) {
-  const [ctx, setCtx] = useState<any>({ name: 'Palacia', rooms, designFeeType: 'percentage', designFee: 10 });
+function Harness({ probe, booked, onRelease, extra, lead }: { probe?: (ctx: any) => void; booked?: boolean; onRelease?: any; extra?: any; lead?: any }) {
+  const [ctx, setCtx] = useState<any>({ name: 'Palacia', rooms, designFeeType: 'percentage', designFee: 10, ...extra });
   probe?.(ctx);
-  const tab = <ClientTab tiers={[tier()]} bank={bank} materialSuggestions={[]} timelinePhases={[]} setTimelinePhases={() => undefined} projectContext={ctx} setProjectContext={setCtx} onReleasePortal={onRelease} userName="Priya Shah" />;
+  const tab = <ClientTab tiers={[tier()]} bank={bank} materialSuggestions={[]} timelinePhases={[]} setTimelinePhases={() => undefined} projectContext={ctx} setProjectContext={setCtx} onReleasePortal={onRelease} userName="Priya Shah" leadProfile={lead} />;
   return booked ? <JourneyContext.Provider value={{ steps: [{ id: 'design_fee_received', status: 'done' }] } as any}>{tab}</JourneyContext.Provider> : tab;
 }
 const panel = () => screen.getByRole('region', { name: 'Client proposal, built from the Playground' });
@@ -94,6 +94,27 @@ describe('the Client Proposal of a Playground option', () => {
     expect(pdf().parentElement).toBe(document.body);
     expect(pdf().closest('.no-print')).toBeNull();
     expect(panel().contains(pdf())).toBe(false);
+  });
+
+  it('the brief in the client’s words; the one-page summary when others decide too (PR B)', () => {
+    const extra = { clientName: 'Meera Shah', clientBrief: 'We want lots of closed storage.', config: '2-BHK', targetHandoverDate: '2030-01-01' };
+    render(<Harness extra={extra} lead={{ hiddenDecisionMakers: 'None', primaryFrictionPoint: 'Itemized Costs' }} />);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' }));
+    let d = pdf();
+    const pages = () => [...d.querySelectorAll('[data-pdf-page]')].map(p => p.textContent || '');
+    expect(pages()[1]).toMatch(/What you told us/);
+    expect(d.querySelector('[data-pdf-quote]')!.textContent).toMatch(/“We want lots of closed storage\.”Meera Shah, at our first meeting/);
+    expect(pages()[1]).toMatch(/Closed storage\. 1 storage unit with about 40 sq ft of shutters\./);
+    expect(d.querySelector('[data-pdf-timeline]')!.textContent).toMatch(/in time for your .* target/);
+    expect(pages().some(p => /The proposal in a minute/.test(p))).toBe(false);
+    fireEvent.click(within(d).getByRole('button', { name: 'Close' }));
+    cleanup();
+    render(<Harness extra={extra} lead={{ hiddenDecisionMakers: 'Spouse', primaryFrictionPoint: 'Itemized Costs' }} />);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' }));
+    d = pdf();
+    expect(within(d).getByText('Spouse also decide: one-page summary added')).toBeTruthy();
+    expect(pages()[1]).toMatch(/The proposal in a minute/);
+    expect(d.querySelector('[data-pdf-sum="Your investment"]')!.textContent).toBe(d.querySelector('[data-pdf-pays]')!.textContent);
   });
 
   it('once the client has booked, Publish to the portal writes their copy', async () => {

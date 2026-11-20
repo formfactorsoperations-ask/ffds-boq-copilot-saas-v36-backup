@@ -1,3 +1,4 @@
+import { civilDaysOf } from '../../lib/playground/brief';
 import React, { useState } from 'react';
 import { FileText, Plus, Trash2, RotateCcw } from 'lucide-react';
 import { Panel, Button, Chip, LABEL, INPUT } from '../ui/kit';
@@ -56,7 +57,21 @@ export default function AnnexureEditor({ terms, onChange }: { terms: TermsSettin
             From the day the proposal is issued. Clause 11 states it: {validityDaysOf(terms)} days.
           </p>
         </div>
-        <div className="md:col-span-2">
+        <div>
+          <label htmlFor="annex-civil-days" className={`${LABEL} block mb-1.5`}>Civil work adds (working days)</label>
+          <input
+            id="annex-civil-days"
+            type="number"
+            min={0}
+            value={civilDaysOf(terms)}
+            onChange={(e) => onChange({ ...terms, civilWorkingDays: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+            className={INPUT}
+          />
+          <p className="text-[11px] text-slate-500 mt-1.5">
+            On a proposal&rsquo;s timeline when the project has no Timeline yet: bathrooms rebuilt and floors relaid before carpentry.
+          </p>
+        </div>
+        <div>
           <label htmlFor="annex-section" className={`${LABEL} block mb-1.5`}>Clauses</label>
           <select id="annex-section" value={section} onChange={(e) => setSection(e.target.value as AnnexureKey)} className={INPUT}>
             {ANNEXURE_SECTIONS.map((s) => (
