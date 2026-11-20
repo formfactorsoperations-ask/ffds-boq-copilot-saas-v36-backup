@@ -497,6 +497,37 @@ still checks in straight from the card.
   checking in (`lib/peopleDesk.ts`, 18 Nov 2026): the card and the lamp say the
   correction is waiting, in an amber note, and offer Check in as usual.
 
+### People: the lanyard rail (asked for 20 Nov 2026)
+
+The owner asked for the team to hang as ID badges on a rail, with check-in and
+check-out times. "Who's in today" on People → Today (approvers only, as before)
+opens on it (`components/ui/team-lanyard-rail.tsx`, badges from `lanyardsFor` in
+`components/people/Arrivals.tsx`); a `Glide` switch beside the chips, "Lanyards" /
+"Faces", goes back to the orbit and coins, and the choice is remembered on that device.
+
+- A steel rail, a woven strap, a reel and a clip per person; the badge hangs from it.
+  Point at a badge and it turns to face you and lifts; click it or press Enter and it
+  turns over; Esc turns it back; the arrow keys walk the rail. Dragging along the rail
+  jostles the badges, pulling one down stretches its cord and it springs back. When the
+  badges do not fit (more people, a laptop, a phone) the rail becomes a carousel with dots
+  and a swipe. With nobody touching it, it turns each badge over in turn until the first
+  touch.
+- Colour says how the day started, in the state colours only: emerald in on time, amber
+  late, brand working from home, slate not in yet or away. The front has initials (no
+  photos), name, title and a chip ("In 9:42 AM", "Late 11:48 AM", "Left 6:10 PM",
+  "Away", "Not yet"). The back has In, Out ("Still in"), Worked or So far, and Where
+  (Office, the site, From home); for someone not in, when the day starts. Leave is
+  "Away", never why. The barcode and QR are decoration.
+- Text is on the scale, 10px and up: badges stay 120 to 150px wide so it never shrinks
+  under that. Palette only, no font of its own (the guard keeps the file at zero).
+- The motion is a small spring simulation on `requestAnimationFrame`, no keyframes.
+  Under `prefers-reduced-motion` nothing swings or sways: badges snap to their place
+  and turn over at once.
+- Only on Who's in today (owner, 20 Nov 2026): the Office guide and Home's Team today pin
+  were tried with the rail and taken back off; they keep their own views.
+- When the badges do not fill the carousel enough to wrap round, the row keeps to its edges,
+  so there is no gap beside the first or last badge.
+
 ### Ops Desk motion (approved 21 Oct 2026)
 
 The owner asked for the Ops Desk to stop looking static and to work for a team

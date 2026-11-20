@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { DoorOpen, Moon, TreePalm, House, Sparkles, X } from '@/lib/lucide-shim';
+import { DoorOpen, Moon, TreePalm, House, Sparkles, X, IdCard, Orbit } from '@/lib/lucide-shim';
 import { clock12, isLate, type Attendance, type Person, type Snapshot } from '../../lib/peopleDesk';
-import { awayOn, todayOf } from '../../lib/peopleView';
+import { awayOn, duration, minutesWorked, todayOf } from '../../lib/peopleView';
 import { CountUp, Dot } from '../ui/HudBits';
-import { Avatar, Coin, Confetti, IconTile, MODE_ICON, Ring, initials, EASE } from './PeopleBits';
+import { TeamLanyardRail, type LanyardFact, type LanyardMember } from '../ui/team-lanyard-rail';
+import { Avatar, Coin, Confetti, Glide, IconTile, MODE_ICON, Ring, initials, EASE } from './PeopleBits';
 
 /*
   WHO'S IN (for those who approve: managers, Ops and admins).
@@ -14,6 +15,11 @@ import { Avatar, Coin, Confetti, IconTile, MODE_ICON, Ring, initials, EASE } fro
   in, and a note that swings in, door first, whenever someone new arrives
   while People is open. Built from the snapshot alone; People refreshes it
   every minute while it is open.
+
+  Since 20 Nov 2026 the board opens on the lanyard rail (DESIGN.md → "People:
+  the lanyard rail"): everyone's ID badge hanging from a rail, coloured by how
+  their day started, with their check-in, check-out and hours on the back.
+  "Faces" switches back to the orbit and coins.
 */
 
 export interface Arrival { person: Person; session: Attendance; late: boolean }
@@ -43,10 +49,66 @@ export function useToday(s: Snapshot): Today {
 
 const firstName = (name: string) => name.split(/\s+/)[0];
 
+/* ── The lanyard rail ─────────────────────────────────────────────────────── */
+
+const where = (a: Attendance) => (a.mode === 'WFH' ? 'From home' : a.mode === 'Site' ? (a.site || 'At a site') : 'Office');
+
+/**
+ * One badge per person: green when in on time, amber when late, brand when
+ * working from home, slate until they check in. The front says when they came
+ * in (or left); the back has in, out, hours worked so far and where. Leave
+ * shows as "Away", never why.
+ */
+export function lanyardsFor(s: Snapshot, { scope, arrivals, away }: Pick<Today, 'scope' | 'arrivals' | 'away'>): LanyardMember[] {
+  const tz = s.policy.timezone;
+  const here = new Map(arrivals.map((a) => [a.person.id, a]));
+  return scope.map((p) => {
+    const a = here.get(p.id);
+    const off = away.get(p.id);
+    const you = p.id === s.me.id;
+    if (a) {
+      const t = a.session;
+      const tone = a.late ? 'warn' : t.mode === 'WFH' ? 'brand' : 'ok';
+      const facts: LanyardFact[] = [
+        { label: 'In', value: clock12(t.checkIn, tz), tone: a.late ? 'warn' : 'slate' },
+        { label: 'Out', value: t.checkOut ? clock12(t.checkOut, tz) : 'Still in', tone: t.checkOut ? 'slate' : 'ok' },
+        { label: t.checkOut ? 'Worked' : 'So far', value: duration(minutesWorked(t, s.serverTime)) },
+        { label: 'Where', value: where(t), tone: t.mode === 'WFH' ? 'brand' : 'slate' },
+      ];
+      return {
+        id: p.id, name: p.name, role: p.title || 'Team', team: you ? 'You' : where(t), tone,
+        status: t.checkOut ? `Left ${clock12(t.checkOut, tz)}` : `${a.late ? 'Late' : 'In'} ${clock12(t.checkIn, tz)}`,
+        facts,
+      } satisfies LanyardMember;
+    }
+    const status = off ? (off.mode === 'WFH' ? 'From home' : off.pending ? 'Asked off' : 'Away') : 'Not yet';
+    return {
+      id: p.id, name: p.name, role: p.title || 'Team', team: you ? 'You' : undefined,
+      tone: off?.mode === 'WFH' ? 'brand' : 'slate', status,
+      facts: [
+        { label: 'In', value: off?.mode === 'Away' ? 'Away today' : off?.mode === 'WFH' ? 'From home' : 'Not yet' },
+        ...(off ? [] : [{ label: 'Starts', value: clock12(s.policy.start, tz) }]),
+      ],
+    } satisfies LanyardMember;
+  });
+}
+
+type PulseView = 'lanyards' | 'faces';
+const VIEW_KEY = 'pp-pulse-view';
+const readView = (): PulseView => {
+  try { return window.localStorage.getItem(VIEW_KEY) === 'faces' ? 'faces' : 'lanyards'; } catch { return 'lanyards'; }
+};
+
 /* ── The board on Today ──────────────────────────────────────────────────── */
 
 export function StudioPulse({ s }: { s: Snapshot }) {
   const { scope, arrivals, away } = useToday(s);
+  const [view, setView] = useState<PulseView>(readView);
+  const pick = (v: PulseView) => {
+    setView(v);
+    try { window.localStorage.setItem(VIEW_KEY, v); } catch { /* private window: the choice is not kept */ }
+  };
+  const badges = useMemo(() => lanyardsFor(s, { scope, arrivals, away }), [s, scope, arrivals, away]);
   const tz = s.policy.timezone;
   const now = Date.parse(s.serverTime);
   const here = new Map(arrivals.map((a) => [a.person.id, a]));
@@ -61,15 +123,24 @@ export function StudioPulse({ s }: { s: Snapshot }) {
         <IconTile icon={DoorOpen} />
         <div className="min-w-0 flex-1">
           <h2 className="font-bold text-slate-800 flex items-center gap-2">Who's in today <Dot tone="ok" live /></h2>
-          <p className="text-xs text-slate-500 mt-0.5">{s.me.accessRole === 'manager' ? 'You and the people who report to you.' : 'Everyone in the studio.'} Each face turns over as they check in.</p>
+          <p className="text-xs text-slate-500 mt-0.5">{s.me.accessRole === 'manager' ? 'You and the people who report to you.' : 'Everyone in the studio.'} {view === 'lanyards' ? 'Turn a badge over for their times.' : 'Each face turns over as they check in.'}</p>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {([['On time', onTime, 'bg-emerald-100 text-emerald-700'], ['Late', late, 'bg-amber-100 text-amber-700'], ['From home', home, 'bg-[#3D52A0]/10 text-[#3D52A0]'], ['Away', awayN, 'bg-slate-100 text-slate-600']] as [string, number, string][])
             .map(([k, n, tint]) => <span key={k} className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${tint}`}>{k} {n}</span>)}
+          <Glide id="pulse-view" label="Show the team as" value={view} onChange={pick}
+            options={[{ id: 'lanyards', label: 'Lanyards', icon: IdCard }, { id: 'faces', label: 'Faces', icon: Orbit }]} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[256px_1fr] gap-6 items-center">
+      {view === 'lanyards' ? (
+        <div key="lanyards" className="hud-swap -mx-6 -mb-2">
+          <TeamLanyardRail items={badges} aria-label="Who's in today" autoplay
+            caption={`${arrivals.length} of ${scope.length} in. Point at a badge to bring it forward; click it to see their times.`}
+            labels={{ flip: 'Click or press Enter to see their times', back: 'Click again or press Esc to turn it back', show: 'Show' }} />
+        </div>
+      ) : (
+      <div key="faces" className="hud-swap grid grid-cols-1 lg:grid-cols-[256px_1fr] gap-6 items-center">
         {/* The orbit: everyone in, circling the count. */}
         <div className="relative mx-auto w-[236px] h-[236px] pp-3d" aria-hidden>
           <div className="pp-orbit">
@@ -125,6 +196,7 @@ export function StudioPulse({ s }: { s: Snapshot }) {
           })}
         </div>
       </div>
+      )}
     </section>
   );
 }
