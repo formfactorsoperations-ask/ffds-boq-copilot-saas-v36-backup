@@ -10,6 +10,7 @@ import { applySpecs, buildSpecSheetWorkbook, specSheetName } from '../lib/bankSp
 import { downloadWorkbook } from '../lib/scopeWorkbook';
 import { buildBankUsageExport, bankUsageFileName } from '../lib/bankUsageExport';
 import { Button } from './ui/kit';
+import PriceLockModal from './bank/PriceLockModal';
 import BankSpreadsheetTable from './bank/BankSpreadsheetTable';
 import BankCategoryGroupedView from './bank/BankCategoryGroupedView';
 import BankBulkActionModal, { BulkActionType } from './bank/BankBulkActionModal';
@@ -47,7 +48,8 @@ import {
   SlidersHorizontal,
   PackagePlus,
   Building2,
-  Filter
+  Filter,
+  Lock
 } from '@/lib/lucide-shim';
 
 interface BankTabProps {
@@ -62,6 +64,8 @@ interface BankTabProps {
   onOpenRecipe?: (id: string) => void;
   /** The bank shown is the draft sandbox, not the live bank. Noted in the usage export. */
   isDraftBank?: boolean;
+  /** Lock prices (lib/priceLock.ts). Given to the owner on the live bank; without it the button is not drawn. */
+  priceLock?: { read: (stored?: boolean) => Promise<FullProjectData[]>; save: (project: FullProjectData) => Promise<void> };
 }
 
 const BankTab: React.FC<BankTabProps> = ({
@@ -74,6 +78,7 @@ const BankTab: React.FC<BankTabProps> = ({
   specs,
   onOpenRecipe,
   isDraftBank = false,
+  priceLock,
 }) => {
   const { orgData } = useOrg();
   const { settings, updateSettings } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
@@ -402,6 +407,8 @@ const BankTab: React.FC<BankTabProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const [isPriceLockOpen, setIsPriceLockOpen] = useState(false);
+
   /* Which project line uses which item, at what price (lib/bankUsageExport.ts). Reads only. */
   const handleExportUsage = () => {
     try {
@@ -690,6 +697,17 @@ const BankTab: React.FC<BankTabProps> = ({
             >
               Export usage
             </Button>
+
+            {priceLock && (
+              <Button
+                size="sm"
+                icon={Lock}
+                onClick={() => setIsPriceLockOpen(true)}
+                title="Make projects keep the prices they use today, so a change in the Item Bank no longer re-prices them. Shows every total before anything is saved."
+              >
+                Lock prices
+              </Button>
+            )}
 
             <button
               onClick={handleAiSynthesis}
@@ -1481,6 +1499,16 @@ const BankTab: React.FC<BankTabProps> = ({
             setIsSpecImportOpen(false);
             alert(`Specifications updated on ${updates.size} item${updates.size === 1 ? '' : 's'}.`);
           }}
+        />
+      )}
+
+      {isPriceLockOpen && priceLock && (
+        <PriceLockModal
+          bank={bank}
+          studio={orgData?.orgName || 'Studio'}
+          read={priceLock.read}
+          save={priceLock.save}
+          onClose={() => setIsPriceLockOpen(false)}
         />
       )}
 

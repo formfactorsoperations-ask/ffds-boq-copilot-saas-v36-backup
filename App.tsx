@@ -2043,6 +2043,30 @@ export default function App() {
    * Minting a new token invalidates the previous link, which is what you want
    * if a client forwards one by mistake — reissuing is also the revoke button.
    */
+  /*
+    Item Bank → Lock prices (lib/priceLock.ts).
+
+    The projects as they are stored now, not as this session last saw them, each
+    with every option's lines loaded: a project too big for one document keeps
+    some options' lines aside until it is opened, and saving it without them
+    would write empty options over full ones. The open project is the copy on
+    screen when that is the newer one. `stored` skips that, to check a save.
+  */
+  const projectLibraryRef = useRef(projectLibrary);
+  projectLibraryRef.current = projectLibrary;
+  const readProjectsForLock = async (stored = false): Promise<FullProjectData[]> => {
+    const fetched = await db.getProjects();
+    const list = stored ? fetched : withOpenProject(projectLibraryRef.current, fetched);
+    return Promise.all(list.map((p) => ((p as any)?._failedHydration ? p : hydrateProjectDetail(p))));
+  };
+  const saveLockedProject = async (project: FullProjectData) => {
+    const updated: FullProjectData = { ...project, lastModified: Date.now() };
+    await db.saveProject(updated);
+    // The open project is saved from the screen: its lines there must be the locked ones too.
+    if (updated.id === activeIdRef.current) setTiers(updated.tiers);
+    setProjectLibrary((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+  };
+
   const handleRequestPortalLink = async (project: FullProjectData) => {
     const access = issuePortalAccess(project.id, project.context?.clientEmail);
     const updated: FullProjectData = {
@@ -3396,6 +3420,8 @@ export default function App() {
                       highlightedBankItemId={highlightedBankItemId}
                       setHighlightedBankItemId={setHighlightedBankItemId}
                       projects={visibleProjects}
+                      onReadProjects={readProjectsForLock}
+                      onSaveProject={saveLockedProject}
                       // ACTIVE_ADMIN_TEMPLATES_BANK
                     />
                   )}
@@ -4118,6 +4144,8 @@ export default function App() {
                       highlightedBankItemId={highlightedBankItemId}
                       setHighlightedBankItemId={setHighlightedBankItemId}
                       projects={visibleProjects}
+                      onReadProjects={readProjectsForLock}
+                      onSaveProject={saveLockedProject}
                     />
                   )}
 

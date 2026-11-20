@@ -24,6 +24,26 @@ const projects: any[] = [{
 
 afterEach(() => vi.restoreAllMocks());
 
+describe('Item Bank: Lock prices', () => {
+  const props = { bank, setBank: vi.fn(), aiStrategy: 'balanced' as any, highlightedBankItemId: null, onHighlightClear: vi.fn(), projects };
+
+  it('is not drawn unless the owner is given it', () => {
+    render(<BankTab {...props} />);
+    expect(screen.queryByRole('button', { name: 'Lock prices' })).toBeNull();
+  });
+
+  it('opens the window, which reads the projects and saves nothing', async () => {
+    const read = vi.fn(async () => JSON.parse(JSON.stringify(projects)));
+    const save = vi.fn(async () => {});
+    render(<BankTab {...props} priceLock={{ read, save }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Lock prices' }));
+    expect(await screen.findByText('Lock prices on projects')).toBeTruthy();
+    expect(await screen.findByText('Totals unchanged')).toBeTruthy();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(save).not.toHaveBeenCalled();
+  });
+});
+
 describe('Item Bank: Export usage', () => {
   it('downloads the usage file and leaves the bank alone', async () => {
     let blob: Blob | null = null;

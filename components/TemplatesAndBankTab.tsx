@@ -28,6 +28,7 @@ import { ArtDefs } from './playground/pieceArt';
 import { Plus } from 'lucide-react';
 import { Button } from './ui/kit';
 import { canEditMaterialSpecs } from '../lib/materialSpecs';
+import { canLockPrices } from '../lib/priceLock';
 import { recipeOf } from '../lib/lineSpecs';
 import { useOrg } from '../contexts/OrgContext';
 
@@ -51,12 +52,20 @@ const MATERIALS_TAB = { id: 'materials' as TabId, label: 'Material specs', icon:
 export default function TemplatesAndBankTab({
   bank, setBank, templates, setTemplates, isDraftBankMode, setIsDraftBankMode,
   draftBank, setDraftBank, aiStrategy, highlightedBankItemId, setHighlightedBankItemId, projects = [],
+  onReadProjects, onSaveProject,
 }: any) {
   const [tab, setTab] = useState<TabId>('bank');
   const { orgData, currentRole, currentRoles } = useOrg() as any;
   /* BOQ Playground S2: the Material specs bank, read once for both the Material specs tab and the Item bank's recipes. */
   const specs = useMaterialSpecs(orgData?.tenantId, true);
   const canEditSpecs = canEditMaterialSpecs(currentRole, currentRoles);
+  /* Lock prices (lib/priceLock.ts): the owner's, and on the live bank only, never the draft sandbox. */
+  const priceLock = useMemo(
+    () => (canLockPrices(currentRoles?.length ? currentRoles : currentRole) && !isDraftBankMode && onReadProjects && onSaveProject
+      ? { read: onReadProjects, save: onSaveProject }
+      : undefined),
+    [currentRole, currentRoles, isDraftBankMode, onReadProjects, onSaveProject],
+  );
   const [recipeItemId, setRecipeItemId] = useState<string | null>(null);
   const [addMaterialSignal, setAddMaterialSignal] = useState(0);
   const tabs = [...TABS.slice(0, 1), MATERIALS_TAB, ...TABS.slice(1)];
@@ -280,6 +289,7 @@ export default function TemplatesAndBankTab({
               onHighlightClear={() => setHighlightedBankItemId(null)}
               projects={projects}
               isDraftBank={isDraftBankMode}
+              priceLock={priceLock}
               specs={specs.bank}
               onOpenRecipe={(id: string) => setRecipeItemId(id)}
             />
