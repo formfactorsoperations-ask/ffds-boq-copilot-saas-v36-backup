@@ -21,6 +21,7 @@ import { contextWithApproved, tiersWithApproved, describeApproval, contextWithou
 import { useOrg } from '../contexts/OrgContext';
 import { contextWithTierRenamed, contextWithTierCopied } from '../lib/specOverrides';
 import { SparklesIcon } from './Icons';
+import { withDiscounts } from '../lib/playground/deal';
 
 interface TierManagerProps {
     tiers: ProposalTier[];
@@ -731,7 +732,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                     tuneMargin: (tid) => { setActiveTierId(tid); setMarginShiftAmount(0); setTuneOpen(true); },
                     startRevision: () => setActiveTab('revision-studio'),
                     offers: (tid) => { setActiveTierId(tid); setActiveTab('analytics'); },
-                    saveDiscounts: (next) => setProjectContext(prev => ({ ...prev, financials: { ...(prev.financials as any), discounts: next } })),
+                    saveDiscounts: (next) => setProjectContext(prev => withDiscounts(prev, next as any)),
                 }}
             />
 

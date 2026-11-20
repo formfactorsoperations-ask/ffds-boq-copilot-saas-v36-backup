@@ -194,10 +194,12 @@ function HintCard({ onDone, onLens, onFocus }: { onDone: () => void; onLens: (l:
 
 /* ───────────────────────────── a line ───────────────────────────── */
 
-export function LineInspector({ m, index, count, issues, rooms, bankMap, rules, readOnly, seesMargins, hideFigures, floor, specBank, offerUpdates, onOpenRecipe, onReplace, onStep, onClose, onDuplicate, onDelete, onTakeOff, onPlace }: {
+export function LineInspector({ m, index, count, issues, rooms, measure, bankMap, rules, readOnly, seesMargins, hideFigures, floor, specBank, offerUpdates, onOpenRecipe, onReplace, onStep, onClose, onDuplicate, onDelete, onTakeOff, onPlace }: {
   m: LineModel;
   index: number;
   count: number;
+  /** The plan's measurements, so a shared line's rooms read as its amount does. */
+  measure?: MeasureContext;
   issues: IssueKind[];
   rooms: Room[];
   bankMap: Map<string, Item>;
@@ -278,7 +280,7 @@ export function LineInspector({ m, index, count, issues, rooms, bankMap, rules, 
       {civil && <CivilBlock line={line} room={rooms.find(r => r.name === line.roomId)} unit={m.unit} readOnly={readOnly} onReplace={onReplace} />}
       {measured && !line.place && !line.byRoom && !civil && <SizeField line={line} unit={m.unit} readOnly={readOnly} onReplace={onReplace} />}
 
-      {line.byRoom && <SplitBlock m={m} rooms={rooms} bankMap={bankMap} rules={rules} readOnly={readOnly} hideFigures={hideFigures} onReplace={onReplace} />}
+      {line.byRoom && <SplitBlock m={m} rooms={rooms} measure={measure} bankMap={bankMap} rules={rules} readOnly={readOnly} hideFigures={hideFigures} onReplace={onReplace} />}
       {basis && !readOnly && rooms.length > 0 && <SplitOffer m={m} basis={basis} rooms={rooms} hideFigures={hideFigures} onReplace={onReplace} />}
 
       {specBank && line.materialSpecs && Object.keys(line.materialSpecs).length ? (
@@ -373,18 +375,18 @@ const BASIS_NAME: Record<ShareBasis, string> = {
 };
 
 /** A whole-flat line, room by room (the approved mockup's split block). */
-function SplitBlock({ m, rooms, bankMap, rules, readOnly, hideFigures, onReplace }: {
-  m: LineModel; rooms: Room[]; bankMap: Map<string, Item>; rules: PricingRules | null; readOnly: boolean; hideFigures: boolean; onReplace: (l: BoqItem) => void;
+function SplitBlock({ m, rooms, measure, bankMap, rules, readOnly, hideFigures, onReplace }: {
+  m: LineModel; rooms: Room[]; measure?: MeasureContext; bankMap: Map<string, Item>; rules: PricingRules | null; readOnly: boolean; hideFigures: boolean; onReplace: (l: BoqItem) => void;
 }) {
   const line = m.line;
   const split = line.byRoom!;
-  const shares = roomShares(split, rooms);
-  const amounts = lineAmountsByRoom(line, bankMap, { rules, rooms });
+  const shares = roomShares(split, rooms, measure);
+  const amounts = lineAmountsByRoom(line, bankMap, { rules, rooms, measure });
   const paint = split.basis === 'wallPaint' || split.basis === 'ceilingPaint';
   const on = rooms.filter(r => (shares.get(r.name) || 0) > 0 || split.rooms?.[r.name]?.on === true);
-  const total = byRoomQty(split, rooms);
+  const total = byRoomQty(split, rooms, measure);
   const unkept = { ...split, keep: undefined };
-  const sumMeasured = round2(Array.from(roomShares(unkept, rooms).values()).reduce((a, b) => a + b, 0));
+  const sumMeasured = round2(Array.from(roomShares(unkept, rooms, measure).values()).reduce((a, b) => a + b, 0));
   const vs = paint ? on.map(r => planVsRule(split.basis as 'wallPaint' | 'ceilingPaint', r)) : [];
   const pl = vs.reduce((a, v) => a + v.plan, 0), ru = vs.reduce((a, v) => a + v.rule, 0);
   const set = (next: NonNullable<BoqItem['byRoom']>) => onReplace(setSplit(line, next, rooms));

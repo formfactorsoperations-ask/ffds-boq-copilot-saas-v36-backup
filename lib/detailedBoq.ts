@@ -210,7 +210,7 @@ export function buildDetailedBoqSnapshot(input: BuildDetailedBoqInput): Detailed
   const byRoom = new Map<string, DetailedBoqRoom>();
   const notInScope: DetailedBoqSnapshot['notInScope'] = [];
 
-  const pricing = docPricingOf(tier, context.rooms);
+  const pricing = docPricingOf(tier, context.rooms, bankMap);
   (tier.boq || []).forEach((b: any, idx: number) => {
     const doc = docLine(b, bankMap, pricing);
     const resolved = { ...doc.r, qty: doc.qty, total: doc.amount };

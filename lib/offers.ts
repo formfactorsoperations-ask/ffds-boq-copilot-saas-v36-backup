@@ -3,6 +3,8 @@ import { CIVIL_TRADE, type CivilType } from './playground/civil';
 import { resolveBoqLine } from './boqPricing';
 import { gstOn, type GstTerms } from './paymentSchedule';
 import { asScopeBucket, bucketForItem } from './scopeBuckets';
+import { withPlanQty, lineAmount, lineAmountsByRoom, isPlaygroundTier, PLAYGROUND_PRICING, planPricing, type LineAmountOptions } from './playground/pricing';
+import type { Room } from '../types';
 
 // ============================================================================
 // Offers: what an option is made of, and what the studio gives away on it.
@@ -105,28 +107,49 @@ export interface ScopeSplit {
   parts: Record<ScopePart, { value: number; lines: SplitLine[]; trades: { trade: string; value: number; lines: number }[] }>;
   /** Lines the client pays vendors for directly: shown, never in the price. */
   asActuals: number;
+  /** The work by room name, a whole-flat line's shares in their rooms: what an offer off one room reads. */
+  byRoom: Record<string, number>;
+}
+
+/**
+ * How an option's lines are priced for its offers: a Playground version by its
+ * rules and the project's rooms, exactly as App's tier summary reads it
+ * (lib/playground/versions playgroundTierSummary), so offers, Money and the
+ * proposal agree to the rupee. Null for a Classic option: exact amounts.
+ */
+export function splitPricingOf(
+  tier: Pick<ProposalTier, 'boqFormat' | 'pricingRules' | 'boq'> | null | undefined,
+  rooms: Room[] | null | undefined,
+  bankMap: Map<string, Item>,
+): LineAmountOptions | null {
+  return isPlaygroundTier(tier) ? planPricing(tier!.pricingRules || PLAYGROUND_PRICING, tier!.boq, rooms || [], bankMap) : null;
 }
 
 /** An option's work value, part by part and trade by trade, priced line for line as its summary is. */
-export function scopeSplit(tier: Pick<ProposalTier, 'boq'> | undefined, bankMap: Map<string, Item>): ScopeSplit {
+export function scopeSplit(tier: Pick<ProposalTier, 'boq'> | undefined, bankMap: Map<string, Item>, pricing?: LineAmountOptions | null): ScopeSplit {
   const parts = Object.fromEntries(SCOPE_PARTS.map((p) => [p.id, { value: 0, lines: [] as SplitLine[], trades: [] as { trade: string; value: number; lines: number }[] }])) as ScopeSplit['parts'];
   let total = 0;
   let asActuals = 0;
-  (tier?.boq || []).forEach((line: any, i: number) => {
+  const byRoom: Record<string, number> = {};
+  (tier?.boq || []).forEach((raw: any, i: number) => {
+    /* A Playground line: its quantity from the plan, its amount rounded up (lib/playground/pricing). */
+    const line = pricing ? withPlanQty(raw, bankMap, pricing) : raw;
     const priced = resolveBoqLine(line, bankMap);
     if (!priced.billable) return;
-    if (priced.asActuals) { asActuals += priced.total; return; }
+    const amount = pricing ? lineAmount(line, bankMap, pricing) : priced.total;
+    if (priced.asActuals) { asActuals += amount; return; }
     const item = bankMap.get(line.bankId);
     const room = line.roomId || priced.room;
     let { part, trade } = tradeOfLine(room, lineLook(line, item));
-    // A line on the plan's Civil layer is the Civil part, whatever its item's category (PR C).
     if (line.civil?.type) { part = 'civil'; trade = CIVIL_TRADE[line.civil.type as CivilType] || trade; }
     /* A line with no bank item whose category says nothing of its part keeps the part its room gives it. */
     if (!item && part === 'others') part = tradeOfLine(room, undefined).part;
     const key = String(line.id || `${priced.key}#${i}`);
-    parts[part].value += priced.total;
-    parts[part].lines.push({ key, name: priced.name, room: priced.room, trade, total: priced.total, qty: priced.qty, unit: priced.unit });
-    total += priced.total;
+    parts[part].value += amount;
+    parts[part].lines.push({ key, name: priced.name, room: priced.room, trade, total: amount, qty: priced.qty, unit: priced.unit });
+    total += amount;
+    if (pricing) lineAmountsByRoom(line, bankMap, pricing).forEach((v, r) => { byRoom[r] = (byRoom[r] || 0) + v; });
+    else byRoom[priced.room] = (byRoom[priced.room] || 0) + amount;
   });
   SCOPE_PARTS.forEach((p) => {
     const part = parts[p.id];
@@ -139,35 +162,92 @@ export function scopeSplit(tier: Pick<ProposalTier, 'boq'> | undefined, bankMap:
     });
     part.trades = Array.from(byTrade.values()).sort((a, b) => b.value - a.value);
   });
-  return { total, parts, asActuals };
+  return { total, parts, asActuals, byRoom };
 }
+
+/** Every line of the split, whatever its part. */
+export const splitLines = (split: ScopeSplit): SplitLine[] => SCOPE_PARTS.flatMap((p) => split.parts[p.id].lines);
 
 /** How an offer was worked out, kept on its discount. */
 export type OfferBasis =
   | { kind: 'part-percent'; part: ScopePart; percent: number; tierId: string }
-  | { kind: 'complimentary'; part: ScopePart; lines: { key: string; name: string }[]; tierId: string };
+  | { kind: 'complimentary'; part: ScopePart; lines: { key: string; name: string }[]; tierId: string }
+  /** A percentage off one room's work (a whole-flat line's share in it included). */
+  | { kind: 'room-percent'; room: string; percent: number; tierId: string }
+  /** What the client should pay, all in: the difference is one offer off the work. */
+  | { kind: 'special'; target: number; tierId: string };
 
 export type OfferDiscount = ProjectDiscount & { basis?: OfferBasis };
 
-/** What the offer is worth on this option's BOQ as it now stands. */
-export function offerValue(basis: OfferBasis, split: ScopeSplit): number {
-  const part = split.parts[basis.part];
-  if (basis.kind === 'part-percent') return Math.round(part.value * (basis.percent / 100));
+/** The rest of the deal a special price is worked out against. */
+export interface SpecialContext {
+  summary: { totalSell?: number; designFee?: number; totalCost?: number } | undefined;
+  /** The project's other discounts: the special price comes last. */
+  others: ProjectDiscount[];
+  terms: GstTerms;
+}
+
+/**
+ * The offer off the work that brings what the client pays, all in, to `target`:
+ * GST on the work is linear in it, so it is exact (kept to the paisa, so the
+ * rupee figure lands on the target). Null when the target is not below what the
+ * client pays now, or would take the work below nothing.
+ */
+export function specialAmount(target: number, c: SpecialContext): number | null {
+  const now = dealFor(c.summary, c.others, c.terms);
+  const t = Number(target) || 0;
+  if (!(t > 0) || t >= now.clientPays) return null;
+  const ge = c.terms.executionGst ? (c.terms.rate / 100) * (c.terms.billablePercent / 100) : 0;
+  const x = (now.clientPays - t) / (1 + ge);
+  if (x > Math.max(0, now.sell - now.execOff) + 1e-6) return null;
+  return Math.round(x * 100) / 100;
+}
+
+/** What the offer is worth on this option's BOQ as it now stands. A special price needs the rest of the deal. */
+export function offerValue(basis: OfferBasis, split: ScopeSplit, special?: SpecialContext): number {
+  if (basis.kind === 'special') return special ? specialAmount(basis.target, special) ?? 0 : 0;
+  if (basis.kind === 'room-percent') return Math.round((split.byRoom[basis.room] || 0) * (basis.percent / 100));
+  if (basis.kind === 'part-percent') return Math.round(split.parts[basis.part].value * (basis.percent / 100));
+  /* A complimentary line is found wherever it is now: a line moved to another part is still given. */
   const keys = new Set(basis.lines.map((l) => l.key));
-  return Math.round(part.lines.filter((l) => keys.has(l.key)).reduce((s, l) => s + l.total, 0));
+  return Math.round(splitLines(split).filter((l) => keys.has(l.key)).reduce((s, l) => s + l.total, 0));
 }
 
 /** The name an offer goes by on the proposal, Money and the agreement. */
 export function offerName(basis: OfferBasis): string {
   if (basis.kind === 'part-percent') return `${basis.percent}% off ${partLabel(basis.part).toLowerCase()}`;
+  if (basis.kind === 'room-percent') return `${basis.percent}% off the ${basis.room}`;
+  if (basis.kind === 'special') return 'Special price';
   const names = basis.lines.map((l) => l.name);
   const shown = names.slice(0, 2).join(', ') + (names.length > 2 ? ` and ${names.length - 2} more` : '');
   return `Complimentary: ${shown}`;
 }
 
+const inrOf = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+
+/** How the offer is worked out, in words, under its name in the Deal lens. */
+export function offerWhy(basis: OfferBasis, split: ScopeSplit): string {
+  if (basis.kind === 'part-percent') return `${basis.percent}% of ${inrOf(split.parts[basis.part].value)} of ${partLabel(basis.part).toLowerCase()}`;
+  if (basis.kind === 'room-percent') return `${basis.percent}% of the room’s ${inrOf(split.byRoom[basis.room] || 0)}`;
+  if (basis.kind === 'special') return `Rounds what the client pays to ${inrOf(basis.target)}`;
+  return `${basis.lines.length} line${basis.lines.length === 1 ? '' : 's'} at no charge`;
+}
+
+/** What an offer is made against, for a list of offers: "Carpentry", "Master Bedroom", "Special price". */
+export function offerScope(basis: OfferBasis): string {
+  if (basis.kind === 'room-percent') return basis.room;
+  if (basis.kind === 'special') return 'Special price';
+  return partLabel(basis.part);
+}
+
 /** The discount an offer is saved as: a fixed amount off execution, with its basis. */
-export function offerDiscount(id: string, basis: OfferBasis, split: ScopeSplit): OfferDiscount {
-  return { id, name: offerName(basis), type: 'fixed', target: 'execution', value: offerValue(basis, split), basis };
+export function offerDiscount(id: string, basis: OfferBasis, split: ScopeSplit, special?: SpecialContext): OfferDiscount {
+  return { id, name: offerName(basis), type: 'fixed', target: 'execution', value: offerValue(basis, split, special), basis };
+}
+
+/** The keys of the lines given at no charge, across the offers on this option. */
+export function complimentaryKeys(discounts: OfferDiscount[]): Set<string> {
+  return new Set(discounts.flatMap((d) => (d.basis?.kind === 'complimentary' ? d.basis.lines.map((l) => l.key) : [])));
 }
 
 /**
@@ -179,10 +259,14 @@ export function offerDiscount(id: string, basis: OfferBasis, split: ScopeSplit):
  * (lib/optionChains). An offer priced on v1 then follows the option: on v2 it
  * is always reported with v2's figure, so one Update moves it onto v2.
  */
-export function staleOffer(d: OfferDiscount, tierId: string, split: ScopeSplit, sameOption?: (a: string, b: string) => boolean): number | null {
+export function staleOffer(d: OfferDiscount, tierId: string, split: ScopeSplit, sameOption?: (a: string, b: string) => boolean, special?: SpecialContext): number | null {
   if (!d.basis) return null;
-  const now = offerValue(d.basis, split);
+  /* A special price is checked against the rest of the deal; without it, it is taken as it stands. */
+  if (d.basis.kind === 'special' && !special) return null;
+  const ctx = special && { ...special, others: special.others.filter((x) => x.id !== d.id) };
+  const now = offerValue(d.basis, split, ctx);
   if (d.basis.tierId !== tierId) return sameOption?.(d.basis.tierId, tierId) ? now : null;
+  if (d.basis.kind === 'special') return Math.abs(now - d.value) >= 0.5 ? now : null;
   return now !== Math.round(d.value) ? now : null;
 }
 

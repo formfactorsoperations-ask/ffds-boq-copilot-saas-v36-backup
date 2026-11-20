@@ -3,12 +3,13 @@ import { useFiguresHidden } from '../ui/HideFigures';
 import { Gift, Percent, Wallet, Trash2, AlertTriangle, Layers } from '@/lib/lucide-shim';
 import { Item, ProjectContext, ProposalTier } from '../../types';
 import { buildBankMap } from '../../lib/boqPricing';
+import { withDiscounts } from '../../lib/playground/deal';
 import { formatINR as formatCurrency, id as newId } from '../../lib/utils';
 import { computeSchedule, contractInForce, gstTermsOf } from '../../lib/paymentSchedule';
 import { otherBenchmarks, medianGm } from '../../lib/tierBenchmarks';
 import { optionChains, latestOf, chainOf, sameOption, versionNo } from '../../lib/optionChains';
 import {
-  SCOPE_PARTS, partLabel, scopeSplit, offerDiscount, offerValue, offerName, staleOffer, refreshedOffer, marginWith, dealFor,
+  SCOPE_PARTS, partLabel, scopeSplit, splitPricingOf, offerScope, offerDiscount, offerValue, offerName, staleOffer, refreshedOffer, marginWith, dealFor,
   type ScopePart, type OfferBasis, type OfferDiscount,
 } from '../../lib/offers';
 
@@ -73,7 +74,8 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
   };
 
   const bankMap = useMemo(() => buildBankMap(bank || [], ctx.adHocItems), [bank, ctx.adHocItems]);
-  const split = useMemo(() => scopeSplit(tier, bankMap), [tier, bankMap]);
+  /* A Playground option's lines at their rounded amounts, as its summary has them (lib/offers splitPricingOf). */
+  const split = useMemo(() => scopeSplit(tier, bankMap, splitPricingOf(tier, ctx.rooms, bankMap)), [tier, bankMap, ctx.rooms]);
   const discounts: OfferDiscount[] = (ctx.financials?.discounts || []) as OfferDiscount[];
 
   const benchmarks = useMemo(() => otherBenchmarks(projects, { id: projectId, name: projectId ? undefined : ctx.name }), [projects, projectId, ctx.name]);
@@ -97,10 +99,8 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
   const draftOnExecution = adding === 'other' ? (other.target === 'execution' ? draftValue : 0) : draftValue;
   const draftOk = adding === 'other' ? other.name.trim() && other.value > 0 : draftValue > 0;
 
-  const save = (next: OfferDiscount[]) => setProjectContext((prev: any) => ({
-    ...prev,
-    financials: { ...(prev.financials || {}), discounts: next },
-  }));
+  /* Through lib/playground/deal withDiscounts: the first offer on a project with no financials record keeps its GST on. */
+  const save = (next: OfferDiscount[]) => setProjectContext((prev: any) => withDiscounts(prev, next));
 
   const add = () => {
     if (!draftOk || !tier) return;
@@ -209,7 +209,7 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
             {discounts.length > 0 && (
               <ul className="mt-5 divide-y divide-slate-100 rounded-xl border border-slate-200">
                 {discounts.map((d) => {
-                  const stale = staleOffer(d, tier.id, split, same);
+                  const stale = staleOffer(d, tier.id, split, same, { summary: tier.summary, others: discounts, terms });
                   const earlier = !!d.basis && d.basis.tierId !== tier.id && same(d.basis.tierId, tier.id);
                   const elsewhere = d.basis && d.basis.tierId !== tier.id && !earlier ? tiers.find((t) => t.id === d.basis!.tierId)?.name : null;
                   return (
@@ -217,7 +217,7 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-slate-800">{d.name}</p>
                         <p className="text-[11px] text-slate-500">
-                          {d.basis ? `${partLabel(d.basis.part)} · ` : ''}{d.target === 'design' ? 'Off the design fee' : 'Off execution'}
+                          {d.basis ? `${offerScope(d.basis)} · ` : ''}{d.target === 'design' ? 'Off the design fee' : 'Off execution'}
                           {elsewhere ? ` · priced on ${elsewhere}` : ''}
                         </p>
                         {stale !== null && (

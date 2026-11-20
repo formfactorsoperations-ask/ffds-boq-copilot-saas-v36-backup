@@ -18,6 +18,7 @@
 import type { BoqItem, Item, PricingRules, Room } from '../../types';
 import { resolveBoqLine } from '../boqPricing';
 import { playgroundTotals } from './pricing';
+import type { MeasureContext } from './rooms';
 import { marginFloorFor, markupForMargin, markupOf, type MarginFloors } from './issues';
 
 export interface TuneContext {
@@ -25,6 +26,8 @@ export interface TuneContext {
   rules?: PricingRules | null;
   rooms?: Room[];
   floors?: MarginFloors | null;
+  /** The plan's measurements (lib/playground/pricing measureOfBoq), so Tune's work is the screen's. */
+  measure?: MeasureContext;
 }
 
 /** The highest markup Tune will set on a line, %. */
@@ -65,7 +68,7 @@ export function scaledMarkups(lines: BoqItem[], k: number, ctx: TuneContext): Bo
 
 /** What the client pays for the work, under the version's rules. */
 export const workTotal = (lines: BoqItem[], ctx: TuneContext) =>
-  playgroundTotals(lines, ctx.bankMap, { rules: ctx.rules, rooms: ctx.rooms }).sell;
+  playgroundTotals(lines, ctx.bankMap, { rules: ctx.rules, rooms: ctx.rooms, measure: ctx.measure }).sell;
 
 export interface FitResult {
   lines: BoqItem[];

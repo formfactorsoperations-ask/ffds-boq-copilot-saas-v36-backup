@@ -330,10 +330,124 @@ describe('The bar', () => {
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
-  it('Deal says what is coming', () => {
-    render(<Harness />);
+});
+
+describe('Deal (PR P)', () => {
+  const pays = () => document.querySelector('[data-deal-pays]')!.textContent;
+  const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+  const deal = () => screen.getByRole('region', { name: 'Deal' });
+
+  it('offers off a part, off a room and complimentary lines: saved as the project’s offers, and Money shows the same client pays', async () => {
+    let ctx: any = null;
+    render(<Harness tier={PG} probeCtx={c => { ctx = c; }} />);
     lens('Deal');
-    expect(screen.getByText('Deal comes next')).toBeTruthy();
+    const before = pays();
+    fireEvent.click(screen.getByRole('button', { name: 'Add the offer off a part' }));
+    fireEvent.change(screen.getByLabelText('Room'), { target: { value: 'Kitchen' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add the offer off a room' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pick lines' }));
+    fireEvent.click(screen.getByLabelText('Wall paint in Bedroom, complimentary'));
+    expect(within(deal()).getByText('5% off carpentry')).toBeTruthy();
+    expect(within(deal()).getByText('10% off the Kitchen')).toBeTruthy();
+    expect(within(deal()).getByText('Complimentary: Wall paint')).toBeTruthy();
+    expect(pays()).not.toBe(before);
+    expect(ctx.financials.discounts.map((d: any) => d.basis.kind)).toEqual(['part-percent', 'room-percent', 'complimentary']);
+
+    /* Money & Offers reads the same list against the option as App prices it. */
+    const { default: MoneyOffersTab } = await import('../../components/money/MoneyOffersTab');
+    const { playgroundTierSummary } = await import('../../lib/playground/versions');
+    const map = new Map(bank.map(b => [b.id, b]));
+    const t: any = { id: 't1', name: 'Comfort Upgrade', timestamp: 1, boq: baseBoq(), ...PG };
+    const shown = pays();
+    cleanup();
+    render(<MoneyOffersTab tiers={[{ ...t, summary: playgroundTierSummary(t, map, ctx) }]} bank={bank} projectContext={ctx} setProjectContext={() => undefined} />);
+    expect(screen.getByText('Client pays').nextElementSibling!.textContent).toBe(shown);
+  });
+
+  it('a special price lands on its target; another replaces it; the payment schedule adds up to it', () => {
+    let ctx: any = null;
+    render(<Harness tier={PG} probeCtx={c => { ctx = c; }} />);
+    lens('Deal');
+    const now = Number(pays()!.replace(/[^0-9]/g, ''));
+    const target = Math.floor(now / 1000) * 1000 - 2000;
+    fireEvent.change(screen.getByLabelText('Client pays'), { target: { value: target.toLocaleString('en-IN') } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set the special price' }));
+    // The first offer creates the financials record, and the GST on the work stays as it was.
+    expect(ctx.financials.executionGstEnabled).toBe(true);
+    expect(pays()).toBe(inr(target));
+    expect(within(deal()).getByText(`Rounds what the client pays to ${inr(target)}`)).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Payment schedule' })).getByText(inr(target))).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Client pays'), { target: { value: String(target - 5000) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set the special price' }));
+    expect(pays()).toBe(inr(target - 5000));
+    expect(within(deal()).getAllByText('Special price')).toHaveLength(2); // the offer, and its card
+    // At or above what the client pays, it is refused.
+    fireEvent.change(screen.getByLabelText('Client pays'), { target: { value: String(now * 2) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set the special price' }));
+    expect(pays()).toBe(inr(target - 5000));
+    expect(screen.getByRole('status').textContent).toMatch(/below/);
+  });
+
+  it('the offers follow the BOQ: a changed line re-prices them, and the special price still meets its target', () => {
+    render(<Harness tier={PG} />);
+    lens('Deal');
+    fireEvent.click(screen.getByRole('button', { name: 'Add the offer off a part' }));
+    const target = Math.floor(Number(pays()!.replace(/[^0-9]/g, '')) / 1000) * 1000;
+    fireEvent.change(screen.getByLabelText('Client pays'), { target: { value: String(target) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set the special price' }));
+    const part = () => document.querySelector('[data-offer] b')!.textContent;
+    const was = part();
+    lens('Sheet');
+    fireEvent.click(screen.getAllByText('Sliding wardrobe')[0]);
+    const size = within(inspector()).getByRole('textbox', { name: 'Size' });
+    fireEvent.change(size, { target: { value: '7 x 9' } });
+    fireEvent.blur(size);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    lens('Deal');
+    expect(part()).not.toBe(was);
+    expect(pays()).toBe(inr(target));
+  });
+
+  it('the design fee, how long the proposal holds, and the initiation fee against the booking', () => {
+    let ctx: any = null;
+    render(<Harness tier={PG} probeCtx={c => { ctx = c; }} />);
+    lens('Deal');
+    const fee = screen.getByLabelText(/Design fee/);
+    fireEvent.change(fee, { target: { value: '12' } });
+    fireEvent.blur(fee);
+    expect(ctx.designFee).toBe(12);
+    const days = screen.getByLabelText('Proposal valid for');
+    fireEvent.change(days, { target: { value: '21' } });
+    fireEvent.blur(days);
+    expect(ctx.proposal).toEqual({ validDays: 21 });
+    const until = new Date(); until.setDate(until.getDate() + 21);
+    expect(within(deal()).getByText(until.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))).toBeTruthy();
+    const booking = () => Number(document.querySelector('[data-deal-booking]')!.textContent!.replace(/[^0-9]/g, ''));
+    const b0 = booking();
+    const ret = screen.getByLabelText('Initiation fee paid');
+    fireEvent.change(ret, { target: { value: '1,000' } });
+    fireEvent.blur(ret);
+    expect(ctx.financials).toMatchObject({ initiationFeePaid: 1000, executionGstEnabled: true });
+    expect(booking()).toBe(b0 - 1000);
+    expect(within(screen.getByRole('region', { name: 'Payment schedule' })).getByText(/less the ₹1,000 initiation fee/)).toBeTruthy();
+  });
+
+  it('an issued proposal past its date shows as expired', () => {
+    const issuedAt = Date.now() - 20 * 864e5;
+    render(<Harness tier={PG} ctx0={{ name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10, proposal: { issuedAt, validDays: 15, validUntil: issuedAt + 15 * 864e5 } }} />);
+    lens('Deal');
+    expect(within(deal()).getByText(/^Expired on/)).toBeTruthy();
+    expect(screen.queryByLabelText('Proposal valid for')).toBeNull();
+  });
+
+  it('a Designer sees the deal but cannot change it, and never the margin', () => {
+    org.role = 'Designer';
+    render(<Harness tier={PG} />);
+    lens('Deal');
+    expect(pays()).toMatch(/^₹/);
+    expect(screen.queryByText(/Margin on the work/)).toBeNull();
+    expect((screen.getByLabelText(/Design fee/) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByRole('region', { name: 'Give an offer' }).className).toMatch(/pointer-events-none/);
   });
 });
 

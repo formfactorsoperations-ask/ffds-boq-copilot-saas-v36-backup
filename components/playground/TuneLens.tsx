@@ -7,6 +7,7 @@ import { lineAmount, lineCost } from '../../lib/playground/pricing';
 import { markupForMargin, markupOf, type MarginFloors } from '../../lib/playground/issues';
 import { fitToNumber, tunable, workTotal } from '../../lib/playground/tune';
 import { inr, lakh } from './playgroundUi';
+import type { MeasureContext } from '../../lib/playground/rooms';
 
 /*
   The Tune lens (BOQ Playground PR 4, the approved mockup's mixing desk).
@@ -25,11 +26,13 @@ const MAX = 50;
 
 interface Group { id: string; name: string; lines: BoqItem[] }
 
-export default function TuneLens({ boq, bankMap, rules, rooms, floor, floors, seesMargins, readOnly, commit }: {
+export default function TuneLens({ boq, bankMap, rules, rooms, measure, floor, floors, seesMargins, readOnly, commit }: {
   boq: BoqItem[];
   bankMap: Map<string, Item>;
   rules: PricingRules | null;
   rooms: Room[];
+  /** The plan's measurements: wall painting behind carpentry left out, as on screen. */
+  measure?: MeasureContext;
   /** The studio's default margin floor, %. */
   floor: number;
   floors?: MarginFloors | null;
@@ -43,7 +46,7 @@ export default function TuneLens({ boq, bankMap, rules, rooms, floor, floors, se
   const [preview, setPreview] = useState<BoqItem[] | null>(null);
   const drag = useRef<{ ids: Set<string>; y0: number; v0: number } | null>(null);
   const lines = preview || boq;
-  const ctx = useMemo(() => ({ bankMap, rules, rooms, floors }), [bankMap, rules, rooms, floors]);
+  const ctx = useMemo(() => ({ bankMap, rules, rooms, floors, measure }), [bankMap, rules, rooms, floors, measure]);
   const floorMk = markupForMargin(floor);
 
   /* Each room's tunable lines, in the rooms' order, then the scopes. */
@@ -58,7 +61,7 @@ export default function TuneLens({ boq, bankMap, rules, rooms, floor, floors, se
     let sell = 0, cost = 0, w = 0, wm = 0;
     ls.forEach(l => {
       const c = lineCost(l, bankMap);
-      sell += lineAmount(l, bankMap, { rules, rooms });
+      sell += lineAmount(l, bankMap, { rules, rooms, measure });
       cost += c; w += c; wm += c * markupOf(l, bankMap.get(l.bankId));
     });
     return { sell, markup: w ? wm / w : 0, margin: sell > 0 ? ((sell - cost) / sell) * 100 : 0 };

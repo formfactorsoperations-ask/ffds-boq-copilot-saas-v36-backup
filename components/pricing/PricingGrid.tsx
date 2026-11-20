@@ -12,7 +12,7 @@ import { buildBankMap } from '../../lib/boqPricing';
 import { optionPrice, type compareTiers } from '../../lib/tierComparison';
 import { formatCurrency } from '../../lib/utils';
 import { computeSchedule, contractInForce, gstTermsOf } from '../../lib/paymentSchedule';
-import { SCOPE_PARTS, scopeSplit, dealFor, lowMarginLines, staleOffer, refreshedOffer, type OfferDiscount, type ScopePart, type SplitLine } from '../../lib/offers';
+import { SCOPE_PARTS, scopeSplit, splitPricingOf, dealFor, lowMarginLines, staleOffer, refreshedOffer, type OfferDiscount, type ScopePart, type SplitLine } from '../../lib/offers';
 import { buildRevisionIndex, diffTiers } from '../../lib/boqVersions';
 import { versionNo, sameOption, optionChains, type OptionChain } from '../../lib/optionChains';
 import { IconTile, Ring, Tilt, DoneTick, Confetti, EASE, listV, rowV } from '../people/PeopleBits';
@@ -227,7 +227,7 @@ export default function PricingGrid(props: Props) {
   const cols = useMemo(() => columns.map((c) => {
     const t = c.tier;
     const price = optionPrice(t);
-    const split = scopeSplit(t, bankMap);
+    const split = scopeSplit(t, bankMap, splitPricingOf(t, ctx.rooms, bankMap));
     const deal = dealFor(t.summary, discounts, terms);
     const offers = discounts.filter((d) => !d.basis || sameOption(chains, d.basis.tierId, t.id));
     const milestones = signed ? [] : computeSchedule({ context: ctx, tierSummary: t.summary }).amounts;
@@ -470,7 +470,7 @@ export default function PricingGrid(props: Props) {
         ? <span className="text-slate-400">None yet</span>
         : <ul className="space-y-1.5">
             {c.offers.map((d: OfferDiscount) => {
-              const stale = staleOffer(d, c.tier.id, c.split, (a, b) => sameOption(chains, a, b));
+              const stale = staleOffer(d, c.tier.id, c.split, (a, b) => sameOption(chains, a, b), { summary: c.tier.summary, others: discounts, terms });
               const earlier = !!d.basis && d.basis.tierId !== c.tier.id;
               return (
                 <li key={d.id}>

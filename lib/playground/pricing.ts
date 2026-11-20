@@ -17,6 +17,8 @@ import { resolveBoqLine, designFeeFor } from '../boqPricing';
 import { calculateCostFromSell } from '../utils';
 import { roomShares, storedShares, withByRoomQty, type MeasureContext } from './rooms';
 import { withCivilQty } from './civil';
+import { boardPieces, wallCovers } from './pieces';
+import { realRooms } from '../scopeBuckets';
 
 /** The rules a new Playground version is made with. */
 export const PLAYGROUND_PRICING: PricingRules = { roundUpTo: 100, feeOnActuals: false };
@@ -176,9 +178,31 @@ export function designFeeForTier(
  * reads it (`playgroundTierSummary`), so the document, Money and a revision
  * agree to the rupee. Null for a Classic version: exact amounts, as today.
  */
-export function docPricingOf(tier: { pricingRules?: PricingRules | null } | null | undefined, rooms: Room[] | undefined): LineAmountOptions | null {
+export function docPricingOf(
+  tier: { pricingRules?: PricingRules | null; boq?: BoqItem[] } | null | undefined,
+  rooms: Room[] | undefined,
+  bankMap?: Map<string, Item>,
+): LineAmountOptions | null {
   const rules = tier?.pricingRules && Number(tier.pricingRules.roundUpTo) > 0 ? tier.pricingRules : null;
-  return rules ? { rules, rooms: rooms || [] } : null;
+  return rules ? planPricing(rules, tier?.boq, rooms, bankMap) : null;
+}
+
+/**
+ * What the plan tells a BOQ's measured lines: the carpentry drawn against the
+ * walls, so the wall painting behind it is left out, exactly as the Playground
+ * measures it on screen.
+ */
+export const measureOfBoq = (boq: BoqItem[] | undefined, bankMap: Map<string, Item>): MeasureContext =>
+  ({ covers: wallCovers(boardPieces(boq || [], bankMap)) });
+
+/**
+ * A Playground BOQ priced as the Playground shows it: its rules, the project's
+ * rooms (the scope buckets are not rooms, lib/scopeBuckets realRooms), and the
+ * plan's measurements of this BOQ. Money's summary, the documents, offers and
+ * the Playground all price through this, so they agree to the rupee.
+ */
+export function planPricing(rules: PricingRules, boq: BoqItem[] | undefined, rooms: Room[] | undefined, bankMap?: Map<string, Item>): LineAmountOptions {
+  return { rules, rooms: realRooms(rooms || []), ...(bankMap ? { measure: measureOfBoq(boq, bankMap) } : {}) };
 }
 
 /**

@@ -15,7 +15,7 @@
  */
 import type { Item, BoqItem, ProposalTier, Room, ShareBasis } from '../../types';
 import { inferBasis } from '../takeoff';
-import { PLAYGROUND_PRICING, isPlaygroundTier, playgroundTotals, designFeeForTier } from './pricing';
+import { PLAYGROUND_PRICING, isPlaygroundTier, playgroundTotals, designFeeForTier, planPricing } from './pricing';
 import { byRoomQty, withByRoomQty, type MeasureContext } from './rooms';
 import { withCivilQty } from './civil';
 import { isScopeBucket } from '../scopeBuckets';
@@ -149,7 +149,7 @@ export function playgroundTierSummary(
 ) {
   const rules = tier.pricingRules || PLAYGROUND_PRICING;
   const rooms = (ctx?.rooms || []) as Room[];
-  const t = playgroundTotals(tier.boq || [], bankMap, { rules, rooms });
+  const t = playgroundTotals(tier.boq || [], bankMap, planPricing(rules, tier.boq, rooms, bankMap));
   const designFee = designFeeForTier(ctx, t.sell, t.asActuals, rules);
   const totalRevenue = t.sell + designFee;
   const execProfit = t.sell - t.cost;

@@ -389,6 +389,22 @@ export interface PaymentMilestone {
     isHandoverAdvance?: boolean;
 }
 
+/** The first proposal's validity and price detail (PR P). Every field is optional. */
+export interface ProposalRecord {
+    /** When it was sent (ms). */
+    issuedAt?: number;
+    /** How many days it holds from the issue date; the studio default when absent. */
+    validDays?: number;
+    /** The last day it holds (ms): issuedAt + validDays. The offers lapse with it. */
+    validUntil?: number;
+    /** How much price the client sees: a package total, room totals, or every line. */
+    priceDetail?: 'package' | 'rooms' | 'lines';
+    /** The lead profile's main concern the page order was shaped for. */
+    shapedFor?: string;
+    /** The option version it was issued on. */
+    tierId?: string;
+}
+
 export interface ProjectDiscount {
     id: string;
     name: string;
@@ -1073,6 +1089,12 @@ export interface ProjectContext {
     };
     /** Every scope revision prepared on this project, drafts included. */
     scopeRevisions?: import('./lib/scopeRevision').ScopeRevisionRecord[];
+    /**
+     * The first proposal as it stands (BOQ Playground PR P): how long it holds,
+     * and, once issued, when it went out. Absent: the studio's validity period
+     * from Terms & Payment, not yet issued.
+     */
+    proposal?: ProposalRecord;
     /** Set on a rehearsal copy: which project it was copied from, and when. */
     rehearsalOf?: { projectId: string; projectName: string; copiedAt: number };
 }

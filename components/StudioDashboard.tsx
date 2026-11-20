@@ -186,6 +186,23 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   const mode = viewMode;
   /* BOQ Playground S2: the Material specs bank, for new lines' materials and the versions offered to drafts. */
   const materialSpecs = useMaterialSpecs(orgData?.tenantId, playground);
+  /* Terms & Payment, for the Deal lens (PR P): the stages when Money has no schedule saved, and the proposal's validity. */
+  const [terms, setTerms] = useState<{ paymentStructure: any; termsSettings: any }>({ paymentStructure: null, termsSettings: null });
+  useEffect(() => {
+    if (!playground || !orgData?.tenantId) return;
+    let live = true;
+    (async () => {
+      try {
+        const { getPaymentStructure, getTermsSettings } = await import('../services/engagementService');
+        const [paymentStructure, termsSettings] = await Promise.all([
+          getPaymentStructure(orgData.tenantId).catch(() => null),
+          getTermsSettings(orgData.tenantId).catch(() => null),
+        ]);
+        if (live) setTerms({ paymentStructure, termsSettings });
+      } catch { /* the defaults stand */ }
+    })();
+    return () => { live = false; };
+  }, [playground, orgData?.tenantId]);
   
   // Versions state
                 
@@ -924,6 +941,8 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               isOwner={canEditMaterialSpecs(currentRole, currentRoles as any)}
               userName={currentUserAuth?.displayName || undefined}
               kits={settings?.customBundles}
+              paymentStructure={terms.paymentStructure}
+              termsSettings={terms.termsSettings}
               onSaveKit={async bundle => { await updateSettings('customBundles', [...(settings?.customBundles || []), bundle]); }}
               renderFullGrid={() => (
                 <StudioExcelGrid
