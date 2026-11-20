@@ -523,6 +523,19 @@ opens on it (`components/ui/team-lanyard-rail.tsx`, badges from `lanyardsFor` in
 - The motion is a small spring simulation on `requestAnimationFrame`, no keyframes.
   Under `prefers-reduced-motion` nothing swings or sways: badges snap to their place
   and turn over at once.
+- **Office guide** (owner, 20 Nov 2026): a third view beside Table and Cards, "Lanyards"
+  (`guideLanyards` in `OfficeGuide.tsx`). The back has desk, extension, office mobile and
+  birthday, with Call and Email to tap; under the rail, "Open Priya's contact card" opens the
+  contact card for the badge in front. Colour as on Who's in today, and brand where People
+  does not say (an employee sees only their own times).
+- **Home, Team today** (owner, 20 Nov 2026): the pin's faces give way to the rail, for
+  everyone who sees the pin (`teamLanyards` in `Arrivals.tsx`). Everyone active, you
+  first. Times only for those the person looks after (admins and Ops: everyone; a manager:
+  their reports); anyone else not away reads "Working today" in the brand, with desk and
+  extension on the back, never "Not yet". Shorter straps, no turning on its own, and not on
+  a day the studio is closed. The figure and the next-holiday countdown stay.
+- When the badges do not fill the carousel enough to wrap round, the row keeps to its edges,
+  so there is no gap beside the first or last badge.
 
 ### Ops Desk motion (approved 21 Oct 2026)
 

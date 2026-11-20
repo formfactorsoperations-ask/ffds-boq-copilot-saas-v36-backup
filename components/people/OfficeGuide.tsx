@@ -4,12 +4,13 @@ import '../projectHeader/projectHeader.css';
 import {
   BookUser, Search, Monitor, Cake, Phone, Mail, Pencil, ShieldCheck, Download, X, Star, Hash, KeyRound, Armchair, Check, RefreshCw,
 } from '@/lib/lucide-shim';
-import { clock12, type Snapshot } from '../../lib/peopleDesk';
+import { clock12, isLate, type Snapshot } from '../../lib/peopleDesk';
 import { awayOn, todayOf } from '../../lib/peopleView';
 import type { GuideEntry, GuideView, Occasion } from '../../lib/peopleGuide';
 import { runGuide } from '../../services/peopleGuideService';
 import { Sheet, Label, input, btnPri, btnSec } from '../opsDesk/OpsDeskPanels';
 import { Glide, Notice, Panel, Empty, Ring, Skeleton, IconTile, listV, rowV, EASE } from './PeopleBits';
+import { TeamLanyardRail, type LanyardFact, type LanyardMember, type LanyardTone } from '../ui/team-lanyard-rail';
 import { CopyButton, Face, TEAM_LABEL, MONTH_NAMES, chip, monthDay, longDate, fromNow, telHref, firstName, niceDay } from './GuideBits';
 
 /*
@@ -22,7 +23,8 @@ import { CopyButton, Face, TEAM_LABEL, MONTH_NAMES, chip, monthDay, longDate, fr
   kept here.
 */
 
-type Today = { label: string; tint: string; dot: string; here: boolean; live: boolean } | null;
+/* `short` and `tone` are for a badge on the lanyard rail: "In 9:42 AM", emerald. */
+type Today = { label: string; tint: string; dot: string; here: boolean; live: boolean; short: string; tone: LanyardTone } | null;
 
 /** What the People snapshot says about each person today: in, away or at home. Only what this person may see. */
 function useTodayStatus(s: Snapshot) {
@@ -31,17 +33,51 @@ function useTodayStatus(s: Snapshot) {
     const out = new Map<string, Today>();
     for (const a of awayOn(s, today)) {
       out.set(a.personId, a.mode === 'WFH'
-        ? { label: 'From home', tint: 'bg-[#3D52A0]/10 text-[#3D52A0]', dot: 'bg-[#3D52A0]', here: false, live: false }
-        : { label: a.portion === 'Full day' ? 'Away today' : `Away · ${a.portion.toLowerCase()}`, tint: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500', here: false, live: false });
+        ? { label: 'From home', tint: 'bg-[#3D52A0]/10 text-[#3D52A0]', dot: 'bg-[#3D52A0]', here: false, live: false, short: 'From home', tone: 'brand' }
+        : { label: a.portion === 'Full day' ? 'Away today' : `Away · ${a.portion.toLowerCase()}`, tint: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500', here: false, live: false, short: a.pending ? 'Asked off' : 'Away', tone: 'slate' });
     }
     for (const a of s.attendance.filter((x) => x.date === today)) {
       const where = a.mode === 'Site' ? 'On site' : a.mode === 'WFH' ? 'From home' : 'In';
+      const tz = s.policy.timezone;
+      const late = isLate(a, s.policy);
       out.set(a.employeeId, a.checkOut
-        ? { label: `${where} · left ${clock12(a.checkOut, s.policy.timezone)}`, tint: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', here: false, live: false }
-        : { label: `${where} since ${clock12(a.checkIn, s.policy.timezone)}`, tint: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500', here: a.mode !== 'WFH', live: true });
+        ? { label: `${where} · left ${clock12(a.checkOut, tz)}`, tint: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', here: false, live: false, short: `Left ${clock12(a.checkOut, tz)}`, tone: 'slate' }
+        : { label: `${where} since ${clock12(a.checkIn, tz)}`, tint: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500', here: a.mode !== 'WFH', live: true,
+          short: `${late ? 'Late' : a.mode === 'Site' ? 'Site' : a.mode === 'WFH' ? 'Home' : 'In'} ${clock12(a.checkIn, tz)}`, tone: late ? 'warn' : a.mode === 'WFH' ? 'brand' : 'ok' });
     }
     return out;
   }, [s]);
+}
+
+/**
+ * The guide as badges on the lanyard rail (DESIGN.md → "People: the lanyard
+ * rail"): coloured by today, as on Who's in today (brand when People does not
+ * say), with desk, extension, office mobile and birthday on the back, and
+ * Call and Email to tap.
+ */
+export function guideLanyards(rows: GuideEntry[], status: Map<string, Today>, meId: string): LanyardMember[] {
+  return rows.map((e) => {
+    const t = status.get(e.id) || null;
+    const facts: LanyardFact[] = [
+      ...(e.desk ? [{ label: 'Desk', value: e.desk }] : []),
+      ...(e.ext ? [{ label: 'Ext.', value: e.ext }] : []),
+      ...(e.mobile ? [{ label: 'Mobile', value: e.mobile }] : []),
+      ...(e.birthday ? [{ label: 'Birthday', value: monthDay(e.birthday) }] : []),
+      ...(e.computer ? [{ label: 'PC', value: e.computer }] : []),
+    ];
+    return {
+      id: e.id,
+      name: e.name,
+      role: `${e.title || TEAM_LABEL[e.teamId] || 'Studio'}${e.id === meId ? ' (you)' : ''}`,
+      tone: t?.tone ?? 'brand',
+      status: t?.short,
+      facts: facts.slice(0, 4),
+      links: [
+        ...(e.mobile ? [{ label: 'Call', href: telHref(e.mobile) }] : []),
+        ...(e.email ? [{ label: 'Email', href: `mailto:${e.email}` }] : []),
+      ],
+    };
+  });
 }
 
 const head = 'text-left px-2 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap';
@@ -51,7 +87,7 @@ export function OfficeGuideSection({ s, view, loading, error, onRefresh }: { s: 
   const [team, setTeam] = useState('all');
   const [sort, setSort] = useState<'name' | 'birthday'>('name');
   /* On a phone the cards read better than a table that scrolls sideways. */
-  const [mode, setMode] = useState<'table' | 'cards'>(() => (typeof window !== 'undefined' && window.innerWidth < 640 ? 'cards' : 'table'));
+  const [mode, setMode] = useState<'table' | 'cards' | 'lanyards'>(() => (typeof window !== 'undefined' && window.innerWidth < 640 ? 'cards' : 'table'));
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<GuideEntry | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -115,7 +151,7 @@ export function OfficeGuideSection({ s, view, loading, error, onRefresh }: { s: 
             options={[{ id: 'all', label: `All ${view.entries.length}` }, ...teams.map((t) => ({ id: t, label: `${TEAM_LABEL[t] || 'Studio'} ${view.entries.filter((e) => e.teamId === t).length}` }))]} />
           <div className="ml-auto flex flex-wrap gap-2">
             <Glide id="guide-sort" label="Sort" value={sort} onChange={setSort} options={[{ id: 'name', label: 'A to Z' }, { id: 'birthday', label: 'Next birthday' }]} />
-            <Glide id="guide-view" label="View" value={mode} onChange={setMode} options={[{ id: 'table', label: 'Table' }, { id: 'cards', label: 'Cards' }]} />
+            <Glide id="guide-view" label="View" value={mode} onChange={setMode} options={[{ id: 'table', label: 'Table' }, { id: 'cards', label: 'Cards' }, { id: 'lanyards', label: 'Lanyards' }]} />
           </div>
         </div>
 
@@ -196,6 +232,8 @@ export function OfficeGuideSection({ s, view, loading, error, onRefresh }: { s: 
               </motion.tbody>
             </table>
           </div>
+        ) : mode === 'lanyards' ? (
+          <GuideRail key={`${team}|${sort}|${needle}`} rows={rows} status={status} meId={s.me.id} onOpen={setOpenId} />
         ) : (
           <motion.div key={`${team}|${sort}|${needle}`} variants={listV} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mt-4">
             {rows.map((e) => <FlipCard key={e.id} e={e} today={status.get(e.id) || null} you={e.id === s.me.id} onOpen={() => setOpenId(e.id)} />)}
@@ -224,6 +262,24 @@ function daysToMonthDay(today: string, md: string): number {
   const next = at(y) >= now ? at(y) : at(y + 1);
   return Math.round((next - now) / 86400000);
 }
+
+/* ── The guide on a lanyard rail ─────────────────────────────────────────── */
+
+const GuideRail: React.FC<{ rows: GuideEntry[]; status: Map<string, Today>; meId: string; onOpen: (id: string) => void }> = ({ rows, status, meId, onOpen }) => {
+  const badges = useMemo(() => guideLanyards(rows, status, meId), [rows, status, meId]);
+  const [active, setActive] = useState<number | null>(null);
+  const [flipped, setFlipped] = useState<number | null>(null);
+  const pick = (flipped ?? active) !== null ? rows[(flipped ?? active) as number] : null;
+  return (
+    <div className="hud-swap -mx-6 mt-2">
+      <TeamLanyardRail items={badges} aria-label="Office guide"
+        active={active} onActiveChange={setActive} flipped={flipped} onFlippedChange={setFlipped}
+        caption="Point at a badge to bring it forward; click it for their desk, extension and number."
+        labels={{ flip: 'Click or press Enter to turn it over', back: 'Click again or press Esc to turn it back', show: 'Show' }}
+        action={pick ? <button type="button" className={btnSec} onClick={() => onOpen(pick.id)}><BookUser className="w-4 h-4" />Open {firstName(pick.name)}'s contact card</button> : null} />
+    </div>
+  );
+};
 
 /* ── A card that turns over to show how to reach them ────────────────────── */
 

@@ -2,7 +2,9 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { DEFAULT_POLICY, type Attendance, type Snapshot } from '../../lib/peopleDesk';
-import { lanyardsFor } from '../../components/people/Arrivals';
+import { lanyardsFor, teamLanyards } from '../../components/people/Arrivals';
+import { guideLanyards } from '../../components/people/OfficeGuide';
+import type { GuideEntry } from '../../lib/peopleGuide';
 import { TeamLanyardRail } from '../../components/ui/team-lanyard-rail';
 
 /*
@@ -61,7 +63,8 @@ describe('the badges', () => {
   });
 
   it('says leave is "Away", never why, and when the day starts for those not in yet', () => {
-    expect(badges[3].facts?.map((f) => f.value)).toEqual(['Away today', '10:30 AM']);
+    expect(badges[3].facts?.map((f) => f.value)).toEqual(['Away today']);
+    expect(badges[2].facts?.map((f) => f.value)).toEqual(['From home']);
     expect(badges[4].facts?.map((f) => f.value)).toEqual(['Not yet', '10:30 AM']);
     expect(JSON.stringify(badges)).not.toMatch(/sick|casual|planned/i);
   });
@@ -69,6 +72,43 @@ describe('the badges', () => {
   it('marks your own badge', () => {
     expect(badges[0].team).toBe('You');
     expect(badges[1].team).toBe('Harmony 704');
+  });
+});
+
+describe('Home: Team today', () => {
+  const entry = (id: string, over: Partial<GuideEntry> = {}): GuideEntry => ({ id, name: `${id.toUpperCase()} Person`, title: 'Designer', teamId: 'design', email: `${id}@studio.in`, desk: '', computer: '', mobile: '', ext: '', birthday: '', showBirthday: true, joinedOn: '', ...over });
+  const people = [s.me, late, home, person('peer', { managerId: 'boss' }), person('gone', { active: false })];
+  const snap = (role: string): Snapshot => ({
+    ...s, me: { ...s.me, accessRole: role as any }, people: people.map((p) => (p.id === 'me' ? { ...p, accessRole: role as any } : p)),
+    attendance: [mine, theirs, session({ employeeId: 'peer' })],
+    availability: [{ id: 'av', employeeId: 'home', start: '2026-10-07', end: '2026-10-07', mode: 'WFH', portion: 'Full day', status: 'Approved' } as any],
+  });
+
+  it('shows everyone active, you first, with times only for those you look after', () => {
+    const b = teamLanyards(snap('manager'), [entry('peer', { desk: 'D-04', ext: '214' })]);
+    expect(b.map((x) => x.id)).toEqual(['me', 'home', 'late', 'peer']);
+    expect(b.find((x) => x.id === 'late')?.status).toBe('Left 6:15 PM');
+    /* Not one of this manager's reports: no times, and never "Not yet". */
+    expect(b.find((x) => x.id === 'peer')).toMatchObject({ tone: 'brand', status: 'Working today', facts: [{ label: 'Today', value: 'Working' }, { label: 'Desk', value: 'D-04' }, { label: 'Ext.', value: '214' }] });
+    expect(b.find((x) => x.id === 'home')).toMatchObject({ tone: 'brand', status: 'From home' });
+  });
+
+  it('gives admins everyone\'s times', () => {
+    expect(teamLanyards(snap('admin')).find((x) => x.id === 'peer')?.status).toBe('In 10:30 AM');
+  });
+});
+
+describe('Office guide: lanyards', () => {
+  const e: GuideEntry = { id: 'p', name: 'Priya Shah', title: 'Senior Designer', teamId: 'design', email: 'priya@studio.in', desk: 'D-04', computer: 'FF-PC-07', mobile: '+91 98200 11223', ext: '214', birthday: '10-22', showBirthday: true, joinedOn: '' };
+  it('puts desk, extension, mobile and birthday on the back, with Call and Email', () => {
+    const [b] = guideLanyards([e], new Map([['p', { label: 'In since 9:42 AM', tint: '', dot: '', here: true, live: true, short: 'In 9:42 AM', tone: 'ok' as const }]]), 'me');
+    expect(b).toMatchObject({ tone: 'ok', status: 'In 9:42 AM', role: 'Senior Designer' });
+    expect(b.facts?.map((f) => `${f.label} ${f.value}`)).toEqual(['Desk D-04', 'Ext. 214', 'Mobile +91 98200 11223', 'Birthday 22 Oct']);
+    expect(b.links).toEqual([{ label: 'Call', href: 'tel:+919820011223' }, { label: 'Email', href: 'mailto:priya@studio.in' }]);
+  });
+  it('stays in the brand with no chip when People does not say', () => {
+    const [b] = guideLanyards([{ ...e, mobile: '', email: '' }], new Map(), 'p');
+    expect(b).toMatchObject({ tone: 'brand', status: undefined, role: 'Senior Designer (you)', links: [] });
   });
 });
 

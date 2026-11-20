@@ -249,6 +249,13 @@ function layoutTargets(width: number, W: number, carousel: boolean, center: numb
   const total = pitch * count;
   const cyclic = count > 2 && total >= width + W * 2;
   const c = center ?? 0;
+  if (!cyclic) {
+    /* Too few to wrap round: keep the row against the edges rather than leave a gap beside the first or last badge. */
+    const span = (count - 1) * pitch;
+    const edge = W / 2 + 16;
+    const x0 = span <= width - 2 * edge ? width / 2 - span / 2 : clamp(width / 2 - c * pitch, width - edge - span, edge);
+    return { xs: Array.from({ length: count }, (_, i) => x0 + i * pitch), total: 0 };
+  }
   const xs = Array.from({ length: count }, (_, i) => {
     let k = i - c;
     if (cyclic) {
@@ -326,6 +333,13 @@ function LinkIcon({ label }: { label: string }) {
       </svg>
     );
   }
+  if (/call|phone|tel/i.test(label)) {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 16 16" className="size-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+        <path d="M3.2 2.5h2.6l1.2 3-1.6 1a7.5 7.5 0 0 0 4.1 4.1l1-1.6 3 1.2v2.6a1.2 1.2 0 0 1-1.3 1.2A11.3 11.3 0 0 1 2 3.8a1.2 1.2 0 0 1 1.2-1.3z" />
+      </svg>
+    );
+  }
   return (
     <svg aria-hidden="true" viewBox="0 0 16 16" className="size-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <path d="M5 11 11 5M6.2 5H11v4.8" />
@@ -399,10 +413,11 @@ const BadgeFaces = React.memo(function BadgeFaces({ item, tone }: { item: Lanyar
       <span data-face="back" className="absolute inset-0 overflow-hidden rounded-[0.85em] border border-slate-200 bg-white text-slate-800 [backface-visibility:hidden]" style={{ transform: "rotateY(180deg) translateZ(1px)" }}>
         <Band tone={band} />
         <Hole />
-        <span className="absolute inset-x-[0.8em] bottom-[4.2em] top-[2.55em] flex flex-col overflow-hidden">
+        <span className="absolute inset-x-[0.8em] bottom-[4.2em] top-[2.55em] flex flex-col overflow-hidden [&>*]:shrink-0">
           <span className="block truncate text-xs font-bold leading-tight text-slate-800">{item.name}</span>
           <span className="block truncate text-[11px] leading-snug text-slate-500">{item.role}</span>
-          {item.team && <span className="block truncate text-[10px] font-bold uppercase tracking-wider text-slate-400">{item.team}</span>}
+          {/* Four facts fill the back of a small badge: the team line gives way to them. */}
+          {item.team && facts.length < 4 && <span className="block truncate text-[10px] font-bold uppercase tracking-wider text-slate-400">{item.team}</span>}
           {facts.length > 0 ? (
             <span className="mt-1.5 flex flex-col gap-0.5 border-t border-dashed border-slate-200 pt-1.5">
               {facts.map((f) => (

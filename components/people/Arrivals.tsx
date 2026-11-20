@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { DoorOpen, Moon, TreePalm, House, Sparkles, X, IdCard, Orbit } from '@/lib/lucide-shim';
 import { clock12, isLate, type Attendance, type Person, type Snapshot } from '../../lib/peopleDesk';
+import type { GuideEntry } from '../../lib/peopleGuide';
 import { awayOn, duration, minutesWorked, todayOf } from '../../lib/peopleView';
 import { CountUp, Dot } from '../ui/HudBits';
 import { TeamLanyardRail, type LanyardFact, type LanyardMember } from '../ui/team-lanyard-rail';
@@ -53,15 +54,30 @@ const firstName = (name: string) => name.split(/\s+/)[0];
 
 const where = (a: Attendance) => (a.mode === 'WFH' ? 'From home' : a.mode === 'Site' ? (a.site || 'At a site') : 'Office');
 
+/** Where to find someone in the office, from the office guide: their desk and extension. */
+function deskFacts(e?: Pick<GuideEntry, 'desk' | 'ext'> | null): LanyardFact[] {
+  return [
+    ...(e?.desk ? [{ label: 'Desk', value: e.desk }] : []),
+    ...(e?.ext ? [{ label: 'Ext.', value: e.ext }] : []),
+  ];
+}
+
 /**
  * One badge per person: green when in on time, amber when late, brand when
  * working from home, slate until they check in. The front says when they came
  * in (or left); the back has in, out, hours worked so far and where. Leave
  * shows as "Away", never why.
+ *
+ * `known` is whose times this person may see (People only sends those). Anyone
+ * else who is not away shows as "Working today" in the brand, never "Not yet":
+ * we cannot tell. `entries` (the office guide) puts their desk and extension on
+ * the back.
  */
-export function lanyardsFor(s: Snapshot, { scope, arrivals, away }: Pick<Today, 'scope' | 'arrivals' | 'away'>): LanyardMember[] {
+export function lanyardsFor(s: Snapshot, { scope, arrivals, away }: Pick<Today, 'scope' | 'arrivals' | 'away'>,
+  { known, entries }: { known?: Set<string>; entries?: GuideEntry[] | null } = {}): LanyardMember[] {
   const tz = s.policy.timezone;
   const here = new Map(arrivals.map((a) => [a.person.id, a]));
+  const guide = new Map((entries || []).map((e) => [e.id, e]));
   return scope.map((p) => {
     const a = here.get(p.id);
     const off = away.get(p.id);
@@ -81,16 +97,44 @@ export function lanyardsFor(s: Snapshot, { scope, arrivals, away }: Pick<Today, 
         facts,
       } satisfies LanyardMember;
     }
+    const desk = deskFacts(guide.get(p.id));
+    if (!off && known && !known.has(p.id)) {
+      return {
+        id: p.id, name: p.name, role: p.title || 'Team', tone: 'brand', status: 'Working today',
+        facts: [{ label: 'Today', value: 'Working' }, ...desk],
+      } satisfies LanyardMember;
+    }
     const status = off ? (off.mode === 'WFH' ? 'From home' : off.pending ? 'Asked off' : 'Away') : 'Not yet';
     return {
       id: p.id, name: p.name, role: p.title || 'Team', team: you ? 'You' : undefined,
       tone: off?.mode === 'WFH' ? 'brand' : 'slate', status,
       facts: [
-        { label: 'In', value: off?.mode === 'Away' ? 'Away today' : 'Not yet' },
-        { label: 'Starts', value: clock12(s.policy.start, tz) },
-      ],
+        { label: 'In', value: off?.mode === 'Away' ? 'Away today' : off?.mode === 'WFH' ? 'From home' : 'Not yet' },
+        ...(off ? [] : [{ label: 'Starts', value: clock12(s.policy.start, tz) }]),
+        ...desk,
+      ].slice(0, 4),
     } satisfies LanyardMember;
   });
+}
+
+/**
+ * The whole team for Home's "Team today" pin: you first, then everyone active
+ * by name. Times only for those this person looks after (admins and Ops:
+ * everyone; a manager: their reports); the rest show as away, from home or
+ * working today.
+ */
+export function teamLanyards(s: Snapshot, entries?: GuideEntry[] | null): LanyardMember[] {
+  const today = todayOf(s);
+  const all = s.me.accessRole === 'admin' || s.me.accessRole === 'ops';
+  const others = s.people.filter((p) => p.active && p.id !== s.me.id).sort((a, b) => a.name.localeCompare(b.name));
+  const scope = [s.me, ...others];
+  const known = new Set(scope.filter((p) => p.id === s.me.id || all || p.managerId === s.me.id).map((p) => p.id));
+  const arrivals = s.attendance
+    .filter((a) => a.date === today && known.has(a.employeeId))
+    .map((a) => ({ person: scope.find((p) => p.id === a.employeeId)!, session: a, late: isLate(a, s.policy) }))
+    .filter((a) => a.person);
+  const away = new Map(awayOn(s, today).map((a) => [a.personId, { mode: a.mode, pending: a.pending }]));
+  return lanyardsFor(s, { scope, arrivals, away }, { known, entries });
 }
 
 type PulseView = 'lanyards' | 'faces';

@@ -13,6 +13,7 @@ import { likersOf, likedLine, type GuideView } from '../../lib/peopleGuide';
 import type { ImportantDates } from './calendarData';
 import { CountUp, Dot } from '../ui/HudBits';
 import { Confetti, IconTile, Tilt, initials, EASE } from '../people/PeopleBits';
+import { TeamLanyardRail, type LanyardMember } from '../ui/team-lanyard-rail';
 
 /*
   HOME WIDGETS (lib/homeWidgets.ts): live cards, one for each thing a team
@@ -373,8 +374,12 @@ const Faces: React.FC<{ list: { personId: string; name: string }[]; icon: React.
   </div>
 );
 
-export function TeamWidget({ t, onAll, index, span, compact }: { t: TeamToday; onAll: () => void; index: number; span?: string; compact?: boolean }) {
+/* Shorter straps on Home, so the pin is not taller than it needs to be. */
+const HOME_DROPS = [0, 8, 3, 10, 5, 1, 7, 4];
+
+export function TeamWidget({ t, onAll, index, span, compact, badges }: { t: TeamToday; onAll: () => void; index: number; span?: string; compact?: boolean; badges?: LanyardMember[] | null }) {
   const out = t.away.length + t.home.length;
+  const hung = useMemo(() => badges?.map((b, i) => ({ ...b, drop: HOME_DROPS[i % HOME_DROPS.length] })), [badges]);
   return (
     <Widget index={index} icon={Users} eyebrow="Team today" action={{ label: 'People', onClick: onAll }} span={span}>
       {/* A holiday or an off day: nobody is "working today", and nobody is "in". */}
@@ -387,7 +392,14 @@ export function TeamWidget({ t, onAll, index, span, compact }: { t: TeamToday; o
           </div>
         </div>
       ) : <Figure value={Math.max(0, t.team - t.away.length)} label="working today" small={`of ${t.team} on the team`} />}
-      {!t.closed && <div className={`${compact ? 'mt-3' : 'mt-4'} flex flex-col gap-2.5`}>
+      {/* The team on a lanyard rail (DESIGN.md → "People: the lanyard rail"), in place of the faces. */}
+      {!t.closed && hung && hung.length > 0 ? (
+        <div className={`${compact ? 'mt-3' : 'mt-4'} -mx-1 rounded-xl border border-slate-200/70 bg-white overflow-hidden`}>
+          <TeamLanyardRail items={hung} aria-label="Team today"
+            caption={out ? `${t.away.length} away, ${t.home.length} from home. Turn a badge over for more.` : 'Everyone is in today. Turn a badge over for more.'}
+            labels={{ flip: 'Click or press Enter to turn it over', back: 'Click again or press Esc to turn it back', show: 'Show' }} />
+        </div>
+      ) : !t.closed && <div className={`${compact ? 'mt-3' : 'mt-4'} flex flex-col gap-2.5`}>
         {t.away.length > 0 && <Faces list={t.away} icon={TreePalm} tint="bg-amber-100 text-amber-700" label="on leave" delay={0.3} />}
         {t.home.length > 0 && <Faces list={t.home} icon={House} tint="bg-[#3D52A0]/10 text-[#3D52A0]" label="from home" delay={0.4} />}
         {t.asked.length > 0 && <Faces list={t.asked} icon={Hourglass} tint="bg-slate-100 text-slate-600" label="asked off" delay={0.5} />}
