@@ -46,8 +46,17 @@ function Page({ n, foot, children }: { n: number; foot: string; children: React.
 }
 
 const COLS = (
-  <colgroup><col /><col style={{ width: 56 }} /><col style={{ width: 40 }} /><col style={{ width: 66 }} /><col style={{ width: 84 }} /></colgroup>
+  <colgroup><col /><col style={{ width: 92 }} /><col style={{ width: 40 }} /><col style={{ width: 66 }} /><col style={{ width: 84 }} /></colgroup>
 );
+/* The quantity, with the size it is for above it: "6′ × 7′" over "42". */
+function QtyCell({ r }: { r: PdfRow }) {
+  return (
+    <td className="py-1.5 px-1 text-right tabular-nums text-[12px] text-slate-600 whitespace-nowrap" data-pdf-qty>
+      {r.size && <div className="text-slate-800 font-semibold">{r.size}</div>}
+      <div className={r.size ? 'text-[11px] text-slate-400' : ''}>{qtyOf(r.qty)}</div>
+    </td>
+  );
+}
 const HEAD = (
   <thead><tr className={`text-left ${LABEL_SM}`}><th className="py-1 pr-2">Item</th><th className="py-1 px-1 text-right">Qty</th><th className="py-1 px-1">Unit</th><th className="py-1 px-1 text-right">Rate</th><th className="py-1 pl-1 text-right">Amount</th></tr></thead>
 );
@@ -59,7 +68,7 @@ function RowLine({ r }: { r: PdfRow }) {
         <div className="text-[12px] text-slate-800 font-semibold">{r.name}{r.free && <span className="text-emerald-700 text-[11px] font-semibold"> complimentary</span>}</div>
         {r.sub && <div className="text-[11px] text-slate-400 leading-snug">{r.sub}</div>}
       </td>
-      <td className="py-1.5 px-1 text-right tabular-nums text-[12px] text-slate-600 whitespace-nowrap">{qtyOf(r.qty)}</td>
+      <QtyCell r={r} />
       <td className="py-1.5 px-1 text-[11px] text-slate-400">{r.unit}</td>
       <td className="py-1.5 px-1 text-right tabular-nums text-[12px] text-slate-600 whitespace-nowrap">{inr(r.rate)}</td>
       <td className="py-1.5 pl-1 text-right tabular-nums text-[12px] font-semibold whitespace-nowrap text-slate-800">
@@ -76,13 +85,13 @@ function RoomTable({ b, detail }: { b: PdfRoom; detail: PriceDetail }) {
     <div className="mt-4" data-pdf-room={b.name}>
       <div className="flex items-baseline justify-between"><h3 className="text-[15px] font-bold text-slate-800">{b.name}</h3>{b.size && <span className="text-[11px] text-slate-400">{b.size} from the brief</span>}</div>
       <table className="w-full mt-1" style={{ tableLayout: 'fixed' }}>
-        {lines ? COLS : <colgroup><col /><col style={{ width: 56 }} /><col style={{ width: 40 }} /></colgroup>}
+        {lines ? COLS : <colgroup><col /><col style={{ width: 92 }} /><col style={{ width: 40 }} /></colgroup>}
         {lines ? HEAD : <thead><tr className={`text-left ${LABEL_SM}`}><th className="py-1 pr-2">Item</th><th className="py-1 px-1 text-right">Qty</th><th className="py-1 px-1">Unit</th></tr></thead>}
         <tbody>
           {b.rows.map(r => <React.Fragment key={r.id}>{lines ? <RowLine r={r} /> : (
             <tr className="border-t border-slate-100 align-top">
               <td className="py-1.5 pr-2"><div className="text-[12px] text-slate-800 font-semibold">{r.name}{r.free && <span className="text-emerald-700 text-[11px] font-semibold"> complimentary</span>}</div>{r.sub && <div className="text-[11px] text-slate-400 leading-snug">{r.sub}</div>}</td>
-              <td className="py-1.5 px-1 text-right tabular-nums text-[12px] text-slate-600 whitespace-nowrap">{qtyOf(r.qty)}</td>
+              <QtyCell r={r} />
               <td className="py-1.5 px-1 text-[11px] text-slate-400">{r.unit}</td>
             </tr>
           )}</React.Fragment>)}

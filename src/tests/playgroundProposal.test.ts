@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  pageOrder, itemsOf, paginateRooms, separatePage, materialsPage, annexOf, issueProposal, sentProposalTier, allowanceOf, exclusionsOf,
+  pageOrder, itemsOf, paginateRooms, separatePage, materialsPage, annexOf, issueProposal, sentProposalTier, allowanceOf, sizeOfLine, exclusionsOf,
 } from '../../lib/playground/proposal';
 import { PLAYGROUND_PRICING } from '../../lib/playground/pricing';
 import { playgroundTierSummary } from '../../lib/playground/versions';
@@ -56,7 +56,9 @@ describe('room by room', () => {
     // The painting is shared into each room, measured from it; items at actuals and bought by the client are left out.
     expect(living.rows.map(r => r.name)).toEqual(['TV unit', 'Wall painting, two coats']);
     expect(living.rows[1].sub).toMatch(/measured from the room/);
-    expect(living.rows[0]).toMatchObject({ free: true, sub: 'up to 3′6″ × 2′3″ · TV unit words' });
+    // The size is shown with the quantity, width × height; the materials under the name.
+    expect(living.rows[0]).toMatchObject({ free: true, size: '3′6″ × 2′3″', sub: 'TV unit words' });
+    expect(living.rows[1].size).toBeUndefined();
     it0.rooms.flatMap(r => r.rows).forEach(r => expect(r.amount % 100).toBe(0));
     expect(it0.flat!.rows.map(r => r.name)).toEqual(['Debris removal']);
     expect(it0.rooms.reduce((a, r) => a + r.total, 0) + it0.flat!.total).toBe(it0.work);
@@ -64,6 +66,7 @@ describe('room by room', () => {
 
   it('a drawn piece is allowed for at its drawn size', () => {
     expect(allowanceOf(boq[0], bankMap)).toBe('up to 5′11″ × 7′');
+    expect(sizeOfLine(boq[0], bankMap)).toBe('5′11″ × 7′');
     expect(allowanceOf({ id: 'x', bankId: 'w', qty: 5 } as any, bankMap)).toBe('');
   });
 

@@ -1364,6 +1364,8 @@ describe('The first proposal (PR P)', () => {
     expect(num(d.querySelector('[data-pdf-work]')!.textContent)).toBe(playgroundTierSummary(t, new Map(bank.map(b => [b.id, b])), ctx).totalSell);
     expect(d.querySelector('[data-pdf-pays]')!.textContent).toBe(pays);
     expect(within(d).getByText('5% off carpentry')).toBeTruthy();
+    // The drawn wardrobe's quantity carries its size, width × height.
+    expect([...d.querySelectorAll('[data-pdf-qty]')].map(c => c.textContent)).toContain('6′ × 7′42');
     expect(d.querySelectorAll('[data-pdf-page]').length).toBeGreaterThanOrEqual(7);
     expect(d.textContent).not.toMatch(/markup|margin/i);
     // The drawing gate: no piece and no plan drawing on any page.

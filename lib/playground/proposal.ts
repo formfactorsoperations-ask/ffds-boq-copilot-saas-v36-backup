@@ -59,8 +59,10 @@ export function pageOrder(concern: string | null | undefined, summary: boolean):
 export interface PdfRow {
   id: string;
   name: string;
-  /** The size it is allowed for and its materials, shortly. */
+  /** Its materials, shortly (and, for a shared line, that it is measured from the room). */
   sub: string;
+  /** Its size, shown with the quantity: "6′ × 7′", "8′ long". */
+  size?: string;
   qty: number;
   unit: string;
   rate: number;
@@ -88,8 +90,13 @@ export interface PdfItems {
 const LIVE = (l: BoqItem) => l.boqStatus !== 'deleted' && l.boqStatus !== 'substituted';
 const PLAIN = /imported via excel/i;
 
-/** The size a line is allowed for, as the client reads it: "up to 6′ × 7′", "about 8′ run". */
-export function allowanceOf(line: BoqItem, bankMap: Map<string, Item>): string {
+/**
+ * A line's size, width × height ("6′ × 7′") for a piece priced by area, its
+ * run ("8′ long") for one priced by length; from its drawing when it is on the
+ * plan, else from its typed size. Empty when it has none, or is measured from
+ * the room (a shared or civil line).
+ */
+export function sizeOfLine(line: BoqItem, bankMap: Map<string, Item>): string {
   if (line.civil || line.byRoom) return '';
   const r = resolveBoqLine(line, bankMap);
   const unit = r.unit || bankMap.get(line.bankId)?.unit || '';
@@ -99,14 +106,21 @@ export function allowanceOf(line: BoqItem, bankMap: Map<string, Item>): string {
   const draw = line.place ? drawOf(pieceItem) : null;
   if (draw) {
     const s = pieceSize(line, pieceItem, draw);
-    return basis === 'area' ? `up to ${ftin(s.w)} × ${ftin(s.h)}` : `about ${ftin(s.w)} run`;
+    return basis === 'area' ? `${ftin(s.w)} × ${ftin(s.h)}` : `${ftin(s.w)} long`;
   }
   const s = readSize({ ...line, unit });
   if (!s) return '';
   const dims = [s.a, s.b].filter((d): d is number => !!d && d > 0);
   if (!dims.length) return '';
-  if (s.unit === 'ft') return basis === 'length' && dims.length === 1 ? `about ${ftin(dims[0])} run` : `up to ${dims.map(ftin).join(' × ')}`;
+  if (s.unit === 'ft') return basis === 'length' && dims.length === 1 ? `${ftin(dims[0])} long` : dims.map(ftin).join(' × ');
   return formatSize(s);
+}
+
+/** The size a line is allowed for, as the client reads it: "up to 6′ × 7′", "about 8′ run". */
+export function allowanceOf(line: BoqItem, bankMap: Map<string, Item>): string {
+  const s = sizeOfLine(line, bankMap);
+  if (!s) return '';
+  return /long$/.test(s) ? `about ${s.replace(/ long$/, '')} run` : /×/.test(s) ? `up to ${s}` : s;
 }
 
 /** A line's materials, shortly: three material names, else its words cut to a line. */
@@ -165,7 +179,8 @@ export function itemsOf(args: {
       return;
     }
     const amount = pricing ? lineAmount(line, bankMap, pricing) : r.total;
-    push(r.room, { id, name: r.name, sub: [allowanceOf(line, bankMap), spec].filter(Boolean).join(' · '), qty: r.qty, unit: r.unit, rate: r.rate, amount, free: free.has(id) || undefined });
+    const size = sizeOfLine(line, bankMap);
+    push(r.room, { id, name: r.name, sub: spec, ...(size ? { size } : {}), qty: r.qty, unit: r.unit, rate: r.rate, amount, free: free.has(id) || undefined });
   });
   const total = (rows: PdfRow[]) => rows.reduce((a, x) => a + x.amount, 0);
   const out = rooms.filter(r => byRoom.has(r.name)).map(r => ({ name: r.name, size: roomSize(r), rows: byRoom.get(r.name)!, total: total(byRoom.get(r.name)!) }));
@@ -179,7 +194,7 @@ export function itemsOf(args: {
  * a page goes on a page of its own.
  */
 export function paginateRooms(blocks: PdfRoom[], first = 700, rest = 800): PdfRoom[][] {
-  const h = (b: PdfRoom) => 72 + b.rows.reduce((a, r) => a + (r.sub ? 46 : 30), 0);
+  const h = (b: PdfRoom) => 72 + b.rows.reduce((a, r) => a + (r.sub || r.size ? 46 : 30), 0);
   const pages: PdfRoom[][] = [];
   let cur: PdfRoom[] = [];
   let used = 0;
