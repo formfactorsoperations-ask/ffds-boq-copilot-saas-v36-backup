@@ -167,3 +167,28 @@ export function designFeeForTier(
   const onActuals = !rules || rules.feeOnActuals;
   return designFeeFor(ctx, work, onActuals ? asActuals : 0);
 }
+
+/* ───────────────────────────── documents (PR R) ───────────────────────────── */
+
+/**
+ * How a tier's documents (the Detailed BOQ, a Scope Revision) price its lines:
+ * a Playground version by its rules and the project's rooms, exactly as Money
+ * reads it (`playgroundTierSummary`), so the document, Money and a revision
+ * agree to the rupee. Null for a Classic version: exact amounts, as today.
+ */
+export function docPricingOf(tier: { pricingRules?: PricingRules | null } | null | undefined, rooms: Room[] | undefined): LineAmountOptions | null {
+  const rules = tier?.pricingRules && Number(tier.pricingRules.roundUpTo) > 0 ? tier.pricingRules : null;
+  return rules ? { rules, rooms: rooms || [] } : null;
+}
+
+/**
+ * A line as a document reads it: its quantity (from the plan for a line shared
+ * into rooms or measured as civil work), its unit rate as it is, and its
+ * amount (rounded up for a Playground version; rate × qty otherwise).
+ */
+export function docLine(b: BoqItem, bankMap: Map<string, Item>, pricing: LineAmountOptions | null) {
+  if (!pricing) { const r = resolveBoqLine(b, bankMap); return { r, qty: r.qty, amount: r.total }; }
+  const p = withPlanQty(b, bankMap, pricing);
+  const r = resolveBoqLine(p, bankMap);
+  return { r, qty: r.qty, amount: lineAmount(p, bankMap, pricing) };
+}

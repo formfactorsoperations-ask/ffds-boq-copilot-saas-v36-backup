@@ -6,6 +6,7 @@ import {
 } from '@/lib/lucide-shim';
 import { DocumentIssue, FinancialConfig, Item, ProjectContext, ProposalTier } from '../../types';
 import { buildBankMap, boqTotal } from '../../lib/boqPricing';
+import { docPricingOf } from '../../lib/playground/pricing';
 import {
   buildDetailedBoqSnapshot, detailedBoqReference, displayName, freezeBoqLines, isFrozen, normaliseUnit, pricingDrift, recordReadiness,
 } from '../../lib/detailedBoq';
@@ -24,6 +25,8 @@ import { issueDocument, signIssue, resolveDocumentState } from '../../services/d
 import { buildMaterialSections } from '../../services/documentReleaseEngine';
 import { isVisibleToClient, publish } from '../../lib/clientVisibility';
 import { scheduleForRevision, withRevisedSchedule } from '../../lib/paymentScheduleRevision';
+import { appliedTier, appliedContext } from '../../lib/scopeApply';
+import { planRevisionResult, signedPlanRevision } from '../../lib/playground/revision';
 import { id as generateId } from '../../lib/utils';
 import DocumentRenderer from '../documents/DocumentRenderer';
 import ScopeRevisionSheet from '../documents/ScopeRevisionSheet';
@@ -420,7 +423,7 @@ export default function ScopeWorkspace({
 
   const startRevision = () => {
     if (!baseTier || !v1Approved) return;
-    const signed = signedLinesFrom(baseTier.boq, bankMap);
+    const signed = signedLinesFrom(baseTier.boq, bankMap, docPricingOf(baseTier, ctx.rooms));
     const draft = startDraft(signed, baseTier.boq, bankMap);
     const now = Date.now();
     saveRecord({
@@ -443,10 +446,14 @@ export default function ScopeWorkspace({
     const base = tiers.find(t => t.id === rec.baseTierId);
     if (!(issue?.clientSignature || issue?.recordedApproval) || !base || !setTiers) return;
     const at = Date.now();
-    const signed = signedLinesFrom(base.boq, bankMap);
+    const signed = signedLinesFrom(base.boq, bankMap, docPricingOf(base, ctx.rooms));
     let result: RevisionResult;
     let revisedBoq: any[];
-    if (rec.draft) {
+    if (rec.playground) {
+      /* Drawn on the plan: it applies as drawn, so the new version keeps its pieces, civil work and shares. */
+      result = planRevisionResult(rec, base, bankMap, ctx.rooms).result;
+      revisedBoq = signedPlanRevision(rec, base, bankMap, ctx.rooms).revisedBoq;
+    } else if (rec.draft) {
       result = revisionFromDraft(signed, rec.draft);
       revisedBoq = buildBoqFromDraft(base.boq, signed, rec.draft, bankMap, rec.number, at);
     } else {
@@ -454,76 +461,19 @@ export default function ScopeWorkspace({
       revisedBoq = buildRevisedBoq(result, base.boq, bankMap, rec.settings, rec.number, at, rec.internalCosts || {});
     }
     const signedTotal = issue.snapshot?.v2?.total ?? 0;
-    const priced = boqTotal(revisedBoq, bankMap);
+    const priced = rec.playground ? result.v2Total : boqTotal(revisedBoq, bankMap);
     if (Math.abs(priced - signedTotal) > 0.01) {
       flash('block', `The signed revision totals ${inr2(signedTotal)}, but rebuilding it now gives ${inr2(priced)} — the signed BOQ has been edited since. Nothing was applied.`);
       return;
     }
     const tierId = rec.v2TierId || `tier_${at.toString(36)}`;
-    const newTier: ProposalTier = {
-      id: tierId,
-      name: `Detailed BOQ v${issue.snapshot.v2.version} · Scope Revision ${rec.number}`,
-      timestamp: at,
-      parentTierId: base.id,
-      lifecycleTag: 'Current contract',
-      projectContext: { ...ctx },
-      boq: revisedBoq,
-      summary: { ...base.summary, totalSell: priced, itemCount: revisedBoq.filter((b: any) => b.qty > 0).length },
-    };
-    const v2Snapshot = { ...issue.snapshot.v2, tierId, approval: { mode: 'via_revision', revisionReference: issue.reference } };
+    const applyInput = { rec, issue, base, revisedBoq, priced, v1Total: result.v1Total, ctx, by: currentUser, at, tierId,
+      ...(rec.playground ? { extra: { boqFormat: base.boqFormat, pricingRules: base.pricingRules, ...(base.specGrade ? { specGrade: base.specGrade } : {}) } } : {}) };
+    const newTier = appliedTier(applyInput);
+    const v2Snapshot = { ...issue.snapshot.v2 };
 
     setTiers(prev => prev.map(t => (t.id === base.id ? { ...t, lifecycleTag: 'Superseded' as const } : t)).concat(newTier));
-    setProjectContext(prev => {
-      const withBoq = issueDocument('detailed_boq', v2Snapshot, { issuedBy: currentUser, reference: v2Snapshot.reference, materialSections: [] })(prev);
-      const issues = withBoq.documents!.issues;
-      const created = issues[issues.length - 1];
-      const stamped = issues.map(i => (i.id === created.id ? { ...i, signedVia: issue.id, clientVisibility: publish(currentUser) } : i));
-      const fin: FinancialConfig = (prev.financials || {}) as FinancialConfig;
-      const snapshots = fin.paymentSnapshots || [];
-      /* The client's schedule was issued on the old value: stage the next
-         version on the new one, for the studio to release as usual. */
-      const designValue = fin.approvedDesignValue ?? (prev as any).engagement?.designFee ?? 0;
-      const nextSchedule = scheduleForRevision(prev, {
-        executionValue: priced,
-        designValue,
-        note: `Re-issued for Scope Revision ${rec.number} (${issue.reference}): execution scope ₹${Math.round(fin.approvedExecutionValue ?? result.v1Total).toLocaleString('en-IN')} → ₹${Math.round(priced).toLocaleString('en-IN')}.`,
-        issuedBy: currentUser,
-        id: `ps_sr${rec.number}_${at.toString(36)}`,
-        at,
-      });
-      return {
-        ...withBoq,
-        ...(nextSchedule ? { paymentSchedules: withRevisedSchedule(prev, nextSchedule) } : {}),
-        documents: { ...withBoq.documents!, issues: stamped },
-        approvedTierId: tierId,
-        financials: {
-          ...fin,
-          approvedExecutionValue: priced,
-          paymentSnapshots: snapshots.some(s => s.tierId === base.id) ? snapshots : [...snapshots, {
-            tierId: base.id,
-            tierName: base.name,
-            timestamp: at,
-            approvedExecutionValue: fin.approvedExecutionValue ?? result.v1Total,
-            approvedDesignValue: fin.approvedDesignValue ?? 0,
-            milestones: prev.paymentMilestones || [],
-            billablePercent: fin.billablePercent,
-            executionGstEnabled: fin.executionGstEnabled,
-          } as any],
-          paymentRevisions: [...(fin.paymentRevisions || []), {
-            id: `sr-${rec.number}-${at}`,
-            date: new Date(at).toISOString(),
-            previousExecutionValue: fin.approvedExecutionValue ?? result.v1Total,
-            newExecutionValue: priced,
-            previousDesignValue: fin.approvedDesignValue ?? 0,
-            newDesignValue: fin.approvedDesignValue ?? 0,
-            reason: `Scope Revision ${rec.number} signed (${issue.reference})`,
-          } as any],
-        },
-        scopeRevisions: (prev.scopeRevisions || []).map(r => (r.id === rec.id
-          ? { ...r, status: 'applied', appliedAt: at, appliedBy: currentUser, appliedTierId: tierId, detailedIssueId: created.id, updatedAt: at }
-          : r)),
-      };
-    });
+    setProjectContext(appliedContext(applyInput));
     setActiveTierId?.(tierId);
     flash('ok', `Scope Revision ${rec.number} applied. ${v2Snapshot.reference} is the scope in force at ${inr2(priced)}. The next Payment Schedule version is staged as a draft — release it from Documents for the client to confirm.`);
   };
@@ -845,13 +795,14 @@ function RevisionEditor({
   const [issueError, setIssueError] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [previewXl, setPreviewXl] = useState(false);
-  const signed: SignedLine[] = useMemo(() => signedLinesFrom(base.boq, bankMap), [base.boq, bankMap]);
+  const signed: SignedLine[] = useMemo(() => signedLinesFrom(base.boq, bankMap, docPricingOf(base, ctx.rooms)), [base, bankMap, ctx.rooms]);
   const draft: ScopeDraft = useMemo(() => draftOfRecord(rec, signed, base.boq, bankMap), [rec, signed, base.boq, bankMap]);
   const result = useMemo(() => revisionFromDraft(signed, draft), [signed, draft]);
   const margin = useMemo(() => draftMargin(signed, draft, result), [signed, draft, result]);
   // The "Studio only" margin panel is studio finance (lib/roleAccess), and goes while figures are hidden.
   const finance = useSeesMargins(useOrg().currentRole);
-  const editable = rec.status === 'draft';
+  /* A revision made on the BOQ Playground's plan is changed there: its draft follows the plan, so it is not edited here. */
+  const editable = rec.status === 'draft' && !rec.playground;
   /* Approved either way: in the portal, signed, or agreed and recorded by the studio. */
   const signedByClient = !!(issue?.clientSignature || issue?.recordedApproval);
   const approval = approvalOf(issue);
@@ -1062,6 +1013,11 @@ function RevisionEditor({
 
   return (
     <div className="space-y-4">
+      {rec.playground && rec.status === 'draft' && (
+        <div className="rounded-2xl border border-[#3D52A0]/20 bg-[#3D52A0]/[0.04] px-4 py-3 text-[13px] text-slate-700">
+          Scope Revision {rec.number} is drawn on the BOQ Playground’s plan. Change it, give each change its reason and issue it from the BOQ Editor; this screen shows it as it stands.
+        </div>
+      )}
       {momQueue && (
         <MeetingScopeInbox
           items={momQueue.items}

@@ -10,18 +10,22 @@ import AddItemModal from './AddItemModal';
 import InteractiveBoqEditor from './InteractiveBoqEditor';
 import BulkImportModal from './BulkImportModal';
 import TakeoffPanel from './TakeoffPanel';
-import PlaygroundScreen from './playground/PlaygroundScreen';
+import PlaygroundScreen, { type SignedPlayground } from './playground/PlaygroundScreen';
 import { useMaterialSpecs } from './materialSpecs/useMaterialSpecs';
 import { canEditMaterialSpecs } from '../lib/materialSpecs';
 import { withRecipeSpecs, gradeOf } from '../lib/lineSpecs';
 import { isPlaygroundTier } from '../lib/playground/pricing';
-import { makePlaygroundVersion, nextVersionOf, versionPlace } from '../lib/playground/versions';
+import { makePlaygroundVersion, nextVersionOf, versionPlace, boqFormatOf } from '../lib/playground/versions';
+import { startPlanRevision, withPlanBoq, planRevisionResult, issuePlanRevision, withdrawPlanRevision, signedPlanRevision } from '../lib/playground/revision';
+import { appliedTier, appliedContext } from '../lib/scopeApply';
+import { scopeRevisionReference } from '../lib/scopeDocuments';
+import type { ScopeRevisionRecord } from '../lib/scopeRevision';
 import { contextWithTierCopied } from '../lib/specOverrides';
 import NumberField from './NumberField';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheckIcon, GridIcon, ListIcon, SaveIcon, CheckIcon, ExportIcon, CalculatorIcon } from './Icons';
 import { Search, X, CheckCircle2, AlertCircle, Sparkles, Lock, Plus } from 'lucide-react';
-import { keepLockedTier, lockedTierId, scopeInForce, detailedBoqForTier, detailedBoqVersion } from '../lib/scopeFlow';
+import { keepLockedTier, lockedTierId, scopeInForce, detailedBoqForTier, detailedBoqVersion, isApprovedIssue } from '../lib/scopeFlow';
 import { resolveBoqLine, isBillable, isAsActuals } from '../lib/boqPricing';
 import { removeLines, restoreLines, RemovedLine } from '../lib/boqEdits';
 import { useOrg } from '../contexts/OrgContext';
@@ -50,6 +54,8 @@ interface StudioDashboardProps {
     onUpgradeArchitecture?: () => void;
     /** Opens the Revision Studio, where a signed scope is changed. */
     onStartRevision?: () => void;
+    /** Puts the project's documents in the client's portal (a revision issued from the BOQ Playground, PR R2). */
+    onReleasePortal?: (ctx: ProjectContext) => Promise<any>;
     /** Lines to show and highlight on opening (Pricing & Tiers, "Where the money goes" → a line). */
     focusLines?: { ids: string[]; at: number } | null;
     /** Makes another option the one being edited (App's setActiveTierId): used by "Make a Playground version". */
@@ -112,7 +118,7 @@ const itemVar = {
     show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100, damping: 12 } }
 };
 
-const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision, focusLines, onSelectTier }) => {
+const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision, focusLines, onSelectTier, onReleasePortal }) => {
   /* Signed scope: the version the client signed is shown but never changed
      here. Every edit path below goes through setTiers, so it is guarded once. */
   const signedTierId = lockedTierId(projectContext);
@@ -539,6 +545,67 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
     setEditNotice(`v${n} of ${src.name} is ready to edit. v${n - 1} is kept as it was.`);
   };
 
+  /* ── A signed Playground BOQ, revised on the plan (PR R2): today's Scope Revision flow, drawn. ── */
+  const signedPlayground: SignedPlayground | null = useMemo(() => {
+    if (!isLocked || !playground || !activeTier || boqFormatOf(activeTier) !== 'playground') return null;
+    const v1 = signedIssue;
+    const issues = projectContext.documents?.issues || [];
+    const all = projectContext.scopeRevisions || [];
+    const open = [...all].reverse().find(r => r.baseTierId === activeTier.id && ['draft', 'issued', 'signed'].includes(r.status)) || null;
+    const rec = open?.playground ? open : null;
+    const issue = rec?.issueId ? issues.find(i => i.id === rec.issueId) || null : null;
+    const nextNumber = all.reduce((m, r) => Math.max(m, r.number || 0), 0) + 1;
+    const fmt = (t?: number | string | null) => (t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+    const signedAt = (v1 as any)?.clientSignature?.signedAt || (v1 as any)?.recordedApproval?.approvedAt || v1?.issuedAt;
+    const by = currentUserAuth?.displayName || currentUserAuth?.email || 'Studio';
+    const updateRec = (fn: (r: ScopeRevisionRecord, prev: ProjectContext) => ScopeRevisionRecord) =>
+      setProjectContext(prev => ({ ...prev, scopeRevisions: (prev.scopeRevisions || []).map(r => (rec && r.id === rec.id ? fn(r, prev) : r)) }));
+    return {
+      at: fmt(signedAt),
+      rec,
+      revState: !rec ? undefined : rec.status === 'draft' ? 'draft' : (issue?.clientSignature || (issue as any)?.recordedApproval) ? 'signed' : 'issued',
+      sentAt: fmt((issue as any)?.sentAt || issue?.issuedAt),
+      elsewhere: open && !open.playground ? open.number : null,
+      nextNumber,
+      reference: v1 ? scopeRevisionReference(projectContext, v1.reference, rec?.number ?? nextNumber) : '',
+      result: rec ? planRevisionResult(rec, activeTier, bankMap, projectContext.rooms).result : null,
+      onStart: () => {
+        if (!v1 || !isApprovedIssue(v1)) { setEditNotice('The signed Detailed BOQ is not approved yet, so it cannot be revised.'); return; }
+        const r = startPlanRevision({ base: activeTier, number: nextNumber, id: `srev-${generateId()}`, by, at: Date.now(), bankMap, rooms: projectContext.rooms });
+        setProjectContext(prev => ({ ...prev, scopeRevisions: [...(prev.scopeRevisions || []), r] }));
+        setEditNotice(`Revision ${nextNumber} started. Change it on the plan, in Rooms or in Sheet: each change lands in the panel with its price. The signed BOQ stays the contract until the client signs.`);
+      },
+      onBoq: next => updateRec((r, prev) => withPlanBoq(r, { boq: next }, activeTier, bankMap, prev.rooms)),
+      onReasons: reasons => updateRec((r, prev) => withPlanBoq(r, { reasons }, activeTier, bankMap, prev.rooms)),
+      onIssue: async () => {
+        if (!rec || !v1) return 'There is no revision to issue.';
+        const out = issuePlanRevision({ ctx: projectContext, rec, base: activeTier, v1, bankMap, by, orgName: (orgData as any)?.orgName, v2TierId: rec.v2TierId || `tier_${generateId()}` });
+        if ('problem' in out) return out.problem;
+        const next = out.update(projectContext);
+        setProjectContext(out.update);
+        if (onReleasePortal) {
+          try { await onReleasePortal(next); } catch (e: any) { return `${out.reference} is issued, but the client’s portal was not updated: ${e?.message || e}. Send it from Revision Studio.`; }
+        }
+        return null;
+      },
+      onWithdraw: () => { if (rec) setProjectContext(withdrawPlanRevision(rec)); },
+      onApply: () => {
+        if (!rec || !(issue?.clientSignature || (issue as any)?.recordedApproval)) return;
+        const s = signedPlanRevision(rec, activeTier, bankMap, projectContext.rooms);
+        const signedTotal = issue.snapshot?.v2?.total ?? 0;
+        if (Math.abs(s.priced - signedTotal) > 0.01) { setEditNotice(`The signed revision totals ₹${Math.round(signedTotal).toLocaleString('en-IN')}, but it prices to ₹${Math.round(s.priced).toLocaleString('en-IN')} now. Nothing was applied.`); return; }
+        const at = Date.now();
+        const tierId = rec.v2TierId || `tier_${at.toString(36)}`;
+        const input = { rec, issue, base: activeTier, revisedBoq: s.revisedBoq, priced: s.priced, v1Total: s.v1Total, ctx: projectContext, by, at, tierId,
+          extra: { boqFormat: activeTier.boqFormat, pricingRules: activeTier.pricingRules, ...(activeTier.specGrade ? { specGrade: activeTier.specGrade } : {}) } };
+        setTiersRaw(prev => prev.map(t => (t.id === activeTier.id ? { ...t, lifecycleTag: 'Superseded' as const } : t)).concat(appliedTier(input)));
+        setProjectContext(appliedContext(input));
+        onSelectTier?.(tierId);
+        setEditNotice(`Revision ${rec.number} applied: it is the contract in force at ₹${Math.round(s.priced).toLocaleString('en-IN')}. The next Payment Schedule version is staged as a draft; release it from Documents for the client to confirm.`);
+      },
+    };
+  }, [isLocked, playground, activeTier, signedIssue, projectContext, bankMap, currentUserAuth, orgData, onReleasePortal, onSelectTier]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleOpenAddModal = (roomName: string) => {
       setActiveRoomId(roomName);
       setIsModalOpen(true);
@@ -676,7 +743,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
           </div>
       </div>
 
-      {isLocked && (
+      {isLocked && !signedPlayground && (
         <div className="flex flex-col md:flex-row md:items-center gap-4 rounded-3xl border border-[#3D52A0]/20 bg-[#3D52A0]/[0.04] px-5 py-4 print:hidden">
           <span className="w-10 h-10 rounded-xl grid place-items-center bg-white border border-[#3D52A0]/20 text-[#3D52A0] shrink-0"><Lock className="w-4.5 h-4.5" /></span>
           <div className="flex-1 min-w-0">
@@ -821,7 +888,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
       <div className="space-y-8">
           
           {/* Main Editor (Full Width) */}
-          {isLocked ? (
+          {isLocked && !signedPlayground ? (
             <SignedBoqReadOnly boq={activeTier?.boq || []} bankMap={bankMap} />
           ) : playground && activeTier ? (
             <PlaygroundScreen
@@ -840,6 +907,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               onSelectTier={onSelectTier}
               onMakePlaygroundVersion={handleMakePlaygroundVersion}
               onNewVersion={handleNewPlaygroundVersion}
+              signed={signedPlayground}
               onSave={handleManualSave}
               saveState={saveState}
               onImport={() => setIsImportModalOpen(true)}

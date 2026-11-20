@@ -25,7 +25,25 @@ export function Delta({ d, className = '' }: { d: number; className?: string }) 
   return <b className={`tabular-nums ${d > 0 ? 'text-rose-600' : d < 0 ? 'text-emerald-600' : 'text-slate-400'} ${className}`}>{Math.abs(d) < 1 ? '₹0' : `${d > 0 ? '+' : '−'}${inr(Math.abs(d))}`}</b>;
 }
 
-export function ChangesPanel({ changes, cur, baseName, sub, bankMap, opts, hideFigures, readOnly, onSel, onRestore, onHide, materialName }: {
+/** A revision of a signed BOQ (PR R2): its reasons and its actions, in the Changes panel. */
+export interface RevisionPanel {
+  /** "Revision 1" */
+  title: string;
+  /** The parts, as the Scope Revision document will have them. */
+  parts: [string, number][];
+  /** Changes that need a reason (by line id), and the reasons given. */
+  need: Set<string>;
+  reasons: Record<string, string>;
+  /** Reasons can be changed: a draft. */
+  editing: boolean;
+  onReason: (id: string, reason: string) => void;
+  /** Below the figures: the status and the revision's buttons. */
+  actions: React.ReactNode;
+}
+
+export const REASON_OPTIONS = ['Client request', 'Design upgrade', 'Site condition', 'Value engineering', 'Correction'];
+
+export function ChangesPanel({ changes, cur, baseName, sub, bankMap, opts, hideFigures, readOnly, onSel, onRestore, onHide, materialName, revision }: {
   changes: Changes;
   cur: BoqItem[];
   /** "v1" */
@@ -40,6 +58,7 @@ export function ChangesPanel({ changes, cur, baseName, sub, bankMap, opts, hideF
   onRestore: (line: BoqItem) => void;
   onHide?: () => void;
   materialName?: (id: string) => string | undefined;
+  revision?: RevisionPanel;
 }) {
   const ch = scopeChanges(changes);
   const moved = changes.out.size - ch.length;
@@ -52,13 +71,13 @@ export function ChangesPanel({ changes, cur, baseName, sub, bankMap, opts, hideF
     byRoom.get(room)!.push([id, e, l]);
   });
   const dd = changes.after - changes.before;
-  const segs = PART_LABELS.map(([k, n]) => [n, changes.parts[k]] as [string, number]).filter(([, v]) => Math.abs(v) >= 1);
+  const segs = (revision ? revision.parts : PART_LABELS.map(([k, n]) => [n, changes.parts[k]] as [string, number])).filter(([, v]) => Math.abs(v) >= 1);
   return (
     <div className="p-4 space-y-3 hud-swap" aria-label="Changes" role="region">
       <div className="flex items-center gap-2">
-        <span className="w-8 h-8 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><History className="w-4 h-4" aria-hidden /></span>
+        <span className={`w-8 h-8 rounded-xl grid place-items-center shrink-0 ${revision ? 'bg-amber-100 text-amber-700' : 'bg-[#3D52A0]/10 text-[#3D52A0]'}`}><History className="w-4 h-4" aria-hidden /></span>
         <div className="min-w-0">
-          <h2 className="font-bold text-slate-800 leading-tight">Changes since {baseName}</h2>
+          <h2 className="font-bold text-slate-800 leading-tight">{revision ? revision.title : `Changes since ${baseName}`}</h2>
           <p className="text-[11px] text-slate-500">{sub}</p>
         </div>
         {onHide && (
@@ -69,16 +88,17 @@ export function ChangesPanel({ changes, cur, baseName, sub, bankMap, opts, hideF
       </div>
       {!hideFigures && (
         <div className="rounded-xl border border-slate-200 p-3 text-xs">
-          <div className="flex items-baseline justify-between"><span className="text-slate-500">{baseName}</span><b className="tabular-nums">{inr(changes.before)}</b></div>
+          <div className="flex items-baseline justify-between"><span className="text-slate-500">{revision ? 'Signed' : baseName}</span><b className="tabular-nums">{inr(changes.before)}</b></div>
           {segs.map(([n, v]) => (
             <div key={n} className="flex items-baseline justify-between mt-1"><span className="text-slate-600">{n}</span><Delta d={v} /></div>
           ))}
-          <div className="flex items-baseline justify-between text-sm mt-2 pt-2 border-t border-dashed border-slate-300"><span className="font-bold text-slate-800">This version</span><b className="font-black tabular-nums">{inr(changes.after)}</b></div>
+          <div className="flex items-baseline justify-between text-sm mt-2 pt-2 border-t border-dashed border-slate-300"><span className="font-bold text-slate-800">{revision ? 'Revised' : 'This version'}</span><b className="font-black tabular-nums">{inr(changes.after)}</b></div>
           <div className={`text-right text-[11px] font-bold mt-0.5 ${dd > 0 ? 'text-rose-600' : dd < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
             {Math.abs(dd) < 1 ? 'No change in price' : `${dd > 0 ? '+' : '−'}${inr(Math.abs(dd))} · the parts add up exactly`}
           </div>
         </div>
       )}
+      {revision?.actions}
       <div>
         {[...byRoom].map(([room, list]) => (
           <div key={room} className="mt-2">
@@ -95,11 +115,20 @@ export function ChangesPanel({ changes, cur, baseName, sub, bankMap, opts, hideF
                   {changeWhy(e, l, bankMap, { ...opts, materialName, studio: !hideFigures })}
                   {e.gone && !readOnly && <> · <button type="button" onClick={() => onRestore(e.was!)} className="font-bold text-[#3D52A0] hover:underline">Restore</button></>}
                 </div>
+                {revision && revision.need.has(id) && (revision.editing ? (
+                  <>
+                    <label className="sr-only" htmlFor={`rs-${id}`}>Why it changed</label>
+                    <select id={`rs-${id}`} value={revision.reasons[id] || ''} onChange={ev => revision.onReason(id, ev.target.value)}
+                      className={`mt-1.5 w-full px-2 py-1 rounded-lg border text-[11px] font-semibold ${revision.reasons[id] ? 'border-slate-200 bg-white text-slate-700' : 'border-amber-300 bg-amber-50 text-amber-800'}`}>
+                      {['', ...REASON_OPTIONS].map(r => <option key={r} value={r}>{r || 'Why did it change?'}</option>)}
+                    </select>
+                  </>
+                ) : revision.reasons[id] ? <div className="text-[11px] text-slate-500 mt-0.5">Why: {revision.reasons[id]}</div> : null)}
               </div>
             ))}
           </div>
         ))}
-        {byRoom.size === 0 && <p className="text-xs text-slate-500">This version matches {baseName}.</p>}
+        {byRoom.size === 0 && <p className="text-xs text-slate-500">{revision ? 'Change anything on the plan, in Rooms or in Sheet: each change lands here with its price.' : `This version matches ${baseName}.`}</p>}
       </div>
       {moved > 0 && <p className="text-[11px] text-slate-400">{moved} piece{moved > 1 ? 's' : ''} moved with no price change. A move is not a scope change.</p>}
     </div>

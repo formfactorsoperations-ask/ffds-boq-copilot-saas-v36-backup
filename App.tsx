@@ -2857,6 +2857,7 @@ export default function App() {
   const renderBoqEditor = () => (
                         <StudioDashboard
                           onStartRevision={() => setActiveTab("revision-studio")}
+                          onReleasePortal={releasePortalNow}
                           focusLines={boqDrawerOpen ? boqFocus : null}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}

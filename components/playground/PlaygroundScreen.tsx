@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PenTool, Map as MapIcon, LayoutGrid, Table2, SlidersHorizontal, Target, Plus, Search, Check, Undo2, Upload, Download,
-  ChevronDown, FileText, Expand, Shrink, Receipt as ReceiptIcon, Lock, Sparkles, MapPin, X, PenLine, Zap,
+  ChevronDown, FileText, Expand, Shrink, Receipt as ReceiptIcon, Lock, Sparkles, MapPin, X, PenLine, Zap, ChevronRight, AlertTriangle,
 } from 'lucide-react';
 import { Button, EmptyState, LABEL, Segmented } from '../ui/kit';
 import { useSeesMargins } from '../ui/HideFigures';
@@ -49,6 +49,9 @@ import { ADDON_BUNDLES } from '../../lib/standardPackages';
 import { lineAmount } from '../../lib/playground/pricing';
 import { KitModal, KIT_DRAG } from './KitParts';
 import { ChangesPanel } from './ChangesParts';
+import { RevisionIssueModal } from './RevisionParts';
+import { needingReason } from '../../lib/playground/revision';
+import type { ScopeRevisionRecord, RevisionResult } from '../../lib/scopeRevision';
 import { optionChains, latestOf } from '../../lib/optionChains';
 import { changesBetween } from '../../lib/playground/changes';
 import { withSupply, supplyLine, supplyOf, SUPPLY_WORDS } from '../../lib/playground/supply';
@@ -80,6 +83,31 @@ const LENSES: [Lens, string, React.ElementType, string][] = [
 ];
 const HINT_KEY = 'ffds.playground.hintDone';
 
+/** A signed version, revised on the plan (PR R2): read-only, with its revision if one is open. */
+export interface SignedPlayground {
+  /** When the client signed it: "12 Nov 2026". */
+  at: string;
+  /** The revision open on the plan: a draft, with the client, or signed by them and waiting to be applied. */
+  rec: ScopeRevisionRecord | null;
+  revState?: 'draft' | 'issued' | 'signed';
+  /** When it went to the client. */
+  sentAt?: string;
+  /** A revision drafted in Revision Studio instead (its number): the plan stays read-only. */
+  elsewhere?: number | null;
+  nextNumber: number;
+  /** The revision's reference, as the document will carry it. */
+  reference: string;
+  /** What the revision comes to against the signed BOQ, as the document has it. */
+  result: RevisionResult | null;
+  onStart: () => void;
+  onBoq: (next: BoqItem[]) => void;
+  onReasons: (reasons: Record<string, string>) => void;
+  /** Issues it; resolves to a problem in words, or null. */
+  onIssue: () => Promise<string | null>;
+  onWithdraw: () => void;
+  onApply: () => void;
+}
+
 interface Props {
   projectContext: ProjectContext;
   setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
@@ -99,6 +127,8 @@ interface Props {
   onMakePlaygroundVersion?: () => void;
   /** The option's next version: this one is kept as it was, the copy opens to edit (PR R). */
   onNewVersion?: () => void;
+  /** The signed version and its revision (PR R2). */
+  signed?: SignedPlayground | null;
   onSave: () => void;
   saveState: 'idle' | 'saving' | 'saved' | 'error';
   onImport: () => void;
@@ -132,13 +162,18 @@ interface Props {
 }
 
 export default function PlaygroundScreen(props: Props) {
-  const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly: readOnlyProp, currentRoles, tenantId, onBoq, newId,
-    onSelectTier, onMakePlaygroundVersion, onNewVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit } = props;
-  const boq = tier.boq || [];
+  const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly: readOnlyProp, currentRoles, tenantId, onBoq: onBoqProp, newId,
+    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit } = props;
+  /* A signed version (PR R2) is read-only; a revision of it is drawn and edited here, against it. */
+  const revRec = signed?.rec || null;
+  const revDraft = !!revRec && signed?.revState === 'draft';
+  const boq = (revRec ? revRec.playground?.boq : tier.boq) || [];
+  const onBoq = revDraft ? signed!.onBoq : onBoqProp;
   /* Versions (PR R): an option's earlier version is kept as it was; only the newest is edited. */
   const vplace = useMemo(() => versionPlace(tiers, tier.id), [tiers, tier.id]);
   const superseded = !!vplace?.superseded;
-  const readOnly = readOnlyProp || superseded;
+  /* A frozen BOQ is changed only through a revision: a revision's draft is edited even when the BOQ is frozen. */
+  const readOnly = revDraft ? false : readOnlyProp || superseded || !!signed;
   const seesMargins = useSeesMargins(currentRoles);
   /* Hide figures hides margins only (lib/figuresPrivacy): prices stay, and seesMargins already reads it. */
   const hideFigures = false;
@@ -218,7 +253,26 @@ export default function PlaygroundScreen(props: Props) {
     const baseMeasure = { covers: wallCovers(boardPieces(prev.boq || [], bankMap)) };
     return { base: { rules: pricingRulesOf(prev), rooms, measure: baseMeasure }, cur: { rules, rooms, measure } };
   }, [prev, bankMap, rooms, rules, measure]);
-  const changes = useMemo(() => (cmp && prev && changeOpts ? changesBetween(prev.boq || [], boq, bankMap, changeOpts) : null), [cmp, prev, changeOpts, boq, bankMap]);
+  /* A revision is set against the signed BOQ, priced as its documents are (the rules and rooms, as Money reads them). */
+  const revOpts = useMemo(() => (revRec ? { base: { rules, rooms }, cur: { rules, rooms } } : null), [revRec, rules, rooms]);
+  const changes = useMemo(() => (revRec && revOpts ? changesBetween(tier.boq || [], boq, bankMap, revOpts)
+    : cmp && prev && changeOpts ? changesBetween(prev.boq || [], boq, bankMap, changeOpts) : null), [revRec, revOpts, tier.boq, cmp, prev, changeOpts, boq, bankMap]);
+  const revNeed = useMemo(() => new Set((signed?.result ? needingReason(signed.result, {}) : []).map(id => id.replace(/^removed:/, ''))), [signed?.result]);
+  const reasons = revRec?.playground?.reasons || {};
+  const missingReasons = [...revNeed].filter(id => !(reasons[id] || '').trim()).length;
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [issuing, setIssuing] = useState(false);
+  const [issueError, setIssueError] = useState<string | null>(null);
+  const doIssue = async () => {
+    if (!signed) return;
+    setIssuing(true); setIssueError(null);
+    try {
+      const problem = await signed.onIssue();
+      if (problem) { setIssueError(problem); return; }
+      setIssueOpen(false);
+      setNote(`${signed.reference} is in the client’s portal to sign. The signed BOQ stays the contract until they do.`);
+    } finally { setIssuing(false); }
+  };
   const materialName = (id: string) => specBank?.materials.find(m => m.id === id)?.name;
   const when = (t?: number) => (t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
   const shares = useShareRows(models, rooms, bankMap, rules, measure);
@@ -511,7 +565,7 @@ export default function PlaygroundScreen(props: Props) {
   const showIns = !wide || !!selModel || !!selRoomObj || (plan && insOpen);
   const sheet = sheetOf(ctx);
   const planLabel = `${(ctx.name || 'Project').split(/[–—-]/)[0].trim()} plan · ${sheet?.source === 'upload' ? 'uploaded' : sheet?.source === 'blocks' || (!sheet && planRooms.length) ? 'blocks' : sheet?.source === 'sketch' ? 'sketched' : 'from Brief'}`;
-  const verDot = readOnly ? 'bg-slate-400' : format === 'playground' ? 'bg-[#3D52A0]' : 'bg-slate-400';
+  const verDot = revRec ? 'bg-amber-500' : signed ? 'bg-emerald-500' : readOnly ? 'bg-slate-400' : format === 'playground' ? 'bg-[#3D52A0]' : 'bg-slate-400';
 
   const inspector = selModel ? (
     <React.Fragment key={selModel.line.id}><LineInspector
@@ -558,6 +612,37 @@ export default function PlaygroundScreen(props: Props) {
       onCivil={format === 'playground' ? (t => civilRoom(selRoomObj.name, t)) : undefined}
       onSaveKit={format === 'playground' && onSaveKit ? () => saveRoomAsKit(selRoomObj) : undefined}
     /></React.Fragment>
+  ) : changes && revRec && revOpts && signed ? (
+    <ChangesPanel changes={changes} cur={boq} baseName="the signed BOQ"
+      sub={signed.revState === 'draft' ? 'Draft · against the signed BOQ' : signed.revState === 'issued' ? 'With the client to sign' : 'Signed by the client'}
+      bankMap={bankMap} opts={revOpts} hideFigures={hideFigures} readOnly={readOnly} materialName={materialName}
+      onSel={pickLine} onRestore={l => { commit([...boq, l], `${bankMap.get(l.bankId)?.name || 'The line'} restored as it was signed.`); setSel(l.id); }}
+      onHide={wide && plan ? () => setInsOpen(false) : undefined}
+      revision={{
+        title: `Revision ${revRec.number}`,
+        parts: signed.result ? [['New', signed.result.bridge.new], ['Size and quantity', signed.result.bridge.qty], ['Rate and finish', signed.result.bridge.rate], ['Redesigned', signed.result.bridge.redesign], ['Compared by section', signed.result.bridge.section], ['Removed', signed.result.bridge.removed]] : [],
+        need: revNeed, reasons, editing: revDraft,
+        onReason: (id, r) => signed.onReasons({ ...reasons, [id]: r }),
+        actions: signed.revState === 'draft' ? (
+          <>
+            <div className={`rounded-xl px-3 py-2 text-xs flex items-center gap-2 ${missingReasons ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'}`} role="status">
+              {missingReasons ? <AlertTriangle className="w-3.5 h-3.5" aria-hidden /> : <Check className="w-3.5 h-3.5" aria-hidden />}
+              <span className="flex-1">{!revNeed.size ? 'No changes yet' : missingReasons ? `${missingReasons} of ${revNeed.size} changes need a reason` : 'Every change has a reason'}</span>
+            </div>
+            {revNeed.size > 0 && <Button variant="primary" icon={ChevronRight} onClick={() => { setIssueError(null); setIssueOpen(true); }}>Review and issue</Button>}
+          </>
+        ) : signed.revState === 'issued' ? (
+          <>
+            <div className="rounded-xl bg-[#3D52A0]/[0.05] border border-[#3D52A0]/20 p-3 text-xs text-slate-600">Sent{signed.sentAt ? ` on ${signed.sentAt}` : ''}. The signed BOQ stays the contract until the client signs; then this revision becomes the scope.</div>
+            <Button size="sm" onClick={signed.onWithdraw}>Withdraw to edit</Button>
+          </>
+        ) : (
+          <>
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">Signed by the client. Apply it to make it the contract in force: the next Detailed BOQ is issued and the payment schedule follows.</div>
+            <Button variant="primary" icon={Check} onClick={signed.onApply}>Apply revision {revRec.number}</Button>
+          </>
+        ),
+      }} />
   ) : changes && changeOpts ? (
     <ChangesPanel changes={changes} cur={boq} baseName={prevName} sub={`${prevName} · ${when(prev?.timestamp) || 'the version before'} · kept as it was`}
       bankMap={bankMap} opts={changeOpts} hideFigures={hideFigures} readOnly={readOnly} materialName={materialName}
@@ -618,7 +703,7 @@ export default function PlaygroundScreen(props: Props) {
             <span className={`w-2 h-2 rounded-full ${verDot}`} />
             <span className="leading-tight">
               <span className="block text-xs font-bold text-slate-800 whitespace-nowrap max-w-[160px] truncate">{tier.name}{vplace && vplace.versions.length > 1 ? ` · v${vplace.n}` : ''}</span>
-              <span className="block text-[10px] text-slate-500 whitespace-nowrap">{BOQ_FORMAT_LABEL[format]} · {readOnlyProp ? 'Frozen' : superseded ? 'Kept as it was' : 'Draft'}</span>
+              <span className="block text-[10px] text-slate-500 whitespace-nowrap">{revRec ? `Revision ${revRec.number} · ${signed!.revState === 'draft' ? 'Draft' : signed!.revState === 'issued' ? 'With the client' : 'Signed by the client'}` : signed ? `Signed · ${signed.at}` : `${BOQ_FORMAT_LABEL[format]} · ${readOnlyProp ? 'Frozen' : superseded ? 'Kept as it was' : 'Draft'}`}</span>
             </span>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" aria-hidden />
           </button>
@@ -681,6 +766,11 @@ export default function PlaygroundScreen(props: Props) {
             </div>
           )}
         </div>
+
+        {signed && !revRec && !signed.elsewhere && !superseded && (
+          <Button size="sm" variant="primary" icon={PenLine} onClick={signed.onStart}>Start revision {signed.nextNumber}</Button>
+        )}
+        {revDraft && revNeed.size > 0 && <Button size="sm" variant="primary" icon={ChevronRight} onClick={() => { setIssueError(null); setIssueOpen(true); }}>Review and issue</Button>}
 
         <Segmented<Lens> size="sm" label="Lens" value={lens}
           onChange={l => { setLens(l); if (l === 'plan') setFitSignal(s => s + 1); }}
@@ -857,7 +947,7 @@ export default function PlaygroundScreen(props: Props) {
                     </div>
                   )}
                 </span>
-                {readOnly && <span className="ml-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-bold text-slate-600" title={superseded ? `v${vplace!.n} is kept as it was. Switch to v${vplace!.versions.length} to edit.` : undefined}><Lock className="w-3.5 h-3.5 text-[#3D52A0]" aria-hidden />{superseded ? `v${vplace!.n} · kept as it was` : 'Read-only'}</span>}
+                {readOnly && <span className="ml-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-bold text-slate-600" title={superseded ? `v${vplace!.n} is kept as it was. Switch to v${vplace!.versions.length} to edit.` : undefined}><Lock className="w-3.5 h-3.5 text-[#3D52A0]" aria-hidden />{superseded ? `v${vplace!.n} · kept as it was` : signed?.elsewhere ? `Revision ${signed.elsewhere} is being drafted in Revision Studio` : signed ? (revRec ? `Revision ${revRec.number} · ${signed.revState === 'issued' ? 'with the client' : 'signed by the client'}` : 'Signed · read-only') : 'Read-only'}</span>}
                 <span className="ml-1.5 inline-flex p-0.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm" role="radiogroup" aria-label="Plan layer">
                   {([['int', 'Interiors'], ['civ', 'Civil']] as const).map(([k, n]) => (
                     <button key={k} type="button" role="radio" aria-checked={layer === k} onClick={() => pickLayer(k)}
@@ -888,9 +978,9 @@ export default function PlaygroundScreen(props: Props) {
                   <div className="text-right">
                     <div className={LABEL}>Client pays · work</div>
                     <div className="text-base font-black text-slate-800 tabular-nums leading-tight">{hideFigures ? '••••' : inr(totals.sell)}</div>
-                    {changes && !hideFigures && Math.abs(changes.after - changes.before) >= 1 && (
-                      <div className={`text-[10px] font-bold tabular-nums ${changes.after > changes.before ? 'text-rose-600' : 'text-emerald-600'}`}>{changes.after > changes.before ? '+' : '−'}{inr(Math.abs(changes.after - changes.before))} vs {prevName}</div>
-                    )}
+                    {changes && !hideFigures && (Math.abs(changes.after - changes.before) >= 1 ? (
+                      <div className={`text-[10px] font-bold tabular-nums ${changes.after > changes.before ? 'text-rose-600' : 'text-emerald-600'}`}>{changes.after > changes.before ? '+' : '−'}{inr(Math.abs(changes.after - changes.before))} vs {revRec ? 'signed' : prevName}</div>
+                    ) : revRec ? <div className="text-[10px] font-bold text-slate-400">same as signed</div> : null)}
                   </div>
                 </div>
                 {!showIns && (
@@ -942,6 +1032,10 @@ export default function PlaygroundScreen(props: Props) {
           own={rooms} bank={bank} boq={boq} standards={roomStandards}
           paints={!boq.some(l => l.byRoom?.basis === 'wallPaint') && !!paintingFromPlan(bank, rooms.length ? rooms : [{ name: 'x', size: 100, unit: 'sq ft' }], () => 'probe')}
           onBuild={runQuickBuild} onClose={() => setBuilding(false)} />
+      )}
+      {issueOpen && signed?.result && revRec && revOpts && changes && (
+        <RevisionIssueModal number={revRec.number} reference={signed.reference} result={signed.result} changes={changes} cur={boq} bankMap={bankMap} opts={revOpts}
+          need={revNeed} reasons={reasons} issuing={issuing} error={issueError} onClose={() => setIssueOpen(false)} onIssue={doIssue} />
       )}
       {kitUi && kitOpen && (
         <KitModal kit={kitOpen} rooms={kitRooms} picked={kitUi.rooms} off={kitUi.off} boq={boq} bankMap={bankMap} amount={amountOf} hideFigures={hideFigures}

@@ -26,6 +26,8 @@ export interface ScopeChangeLine {
   a1: number;
   a2: number;
   change: number;
+  /** Why it changed, as the studio gave it (a revision made on the BOQ Playground's plan). Absent on older revisions. */
+  reason?: string;
 }
 
 export interface ScopeChangeRoom {
@@ -115,10 +117,13 @@ export interface BuildScopeRevisionInput {
   org?: DetailedBoqSnapshot['org'];
   /** The signed lines, for rooms compared as a whole. */
   signed: SignedLine[];
+  /** Why each line changed, by its line id (a removed line by the id it was signed under). */
+  reasons?: Record<string, string>;
 }
 
 export function buildScopeRevisionSnapshot(input: BuildScopeRevisionInput): ScopeRevisionSnapshot {
   const { result, settings } = input;
+  const reasonOf = (id: string) => (input.reasons?.[id] || input.reasons?.[id.replace(/^removed:/, '')] || '').trim();
 
   const rooms: ScopeChangeRoom[] = result.rooms.map(r => {
     const base: ScopeChangeRoom = {
@@ -158,6 +163,7 @@ export function buildScopeRevisionSnapshot(input: BuildScopeRevisionInput): Scop
           a1,
           a2: l.asActuals ? 0 : l.amount2,
           change: (l.asActuals ? 0 : l.amount2) - a1,
+          ...(reasonOf(l.id) ? { reason: reasonOf(l.id) } : {}),
         };
       });
     return base;

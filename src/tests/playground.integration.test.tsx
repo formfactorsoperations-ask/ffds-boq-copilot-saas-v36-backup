@@ -44,6 +44,9 @@ import { setFiguresHidden } from '../../lib/figuresPrivacy';
 import { PLAYGROUND_PRICING, ceilTo } from '../../lib/playground/pricing';
 import { studioStandard, saveNewVersion } from '../../lib/materialSpecs';
 import { withRecipeSpecs } from '../../lib/lineSpecs';
+import { buildDetailedBoqSnapshot } from '../../lib/detailedBoq';
+import { issueDocument, signIssue } from '../../services/documentIssueEngine';
+import { startPlanRevision, withPlanBoq, issuePlanRevision } from '../../lib/playground/revision';
 
 const bank: any[] = [
   { id: 'wardrobe', name: 'Sliding wardrobe', cat: 'Carpentry', unit: 'sq ft', specs: 'Walnut laminate', materials: 1000, labor: 400, margin: 20 },
@@ -1121,5 +1124,87 @@ describe('the Sheet shows a sized line’s width and height', () => {
     expect((document.querySelector('[data-size="p1"]') as HTMLElement).textContent).toBe('6′ × 7′');
     expect((document.querySelector('[data-size="l3"]') as HTMLElement).textContent).toBe('10′ long');
     expect(document.querySelector('[data-size="b1"]')).toBeNull();
+  });
+});
+
+describe('a signed BOQ revised on the plan (PR R2)', () => {
+  const tier1 = () => ({ ...PG, id: 't1', name: 'Comfort Upgrade', timestamp: 1, boq: baseBoq(), summary: {} });
+  /* The project as signing a Playground version leaves it: Detailed BOQ v1, signed in the portal. */
+  const signedCtx = () => {
+    const ctx0: any = { name: 'Test flat', clientName: 'Meera Shah', area: 465, rooms, designFeeType: 'percentage', designFee: 10, scopeFlow: { enabled: true }, approvedTierId: 't1' };
+    const snap = buildDetailedBoqSnapshot({ context: ctx0, tier: tier1(), bankMap: new Map(bank.map(b => [b.id, b])), version: 1, reference: 'PB-DB-2026-TF-01', approval: { mode: 'portal' } as any });
+    let ctx = issueDocument('detailed_boq', snap, { issuedBy: 'Studio', reference: 'PB-DB-2026-TF-01' })(ctx0);
+    ctx = signIssue(ctx.documents!.issues[0].id, { name: 'Meera Shah', signedAt: Date.UTC(2026, 10, 12) })(ctx);
+    return ctx;
+  };
+
+  it('opens read-only on the plan; Start revision; each change needs a reason; Review and issue puts it in the client’s portal', async () => {
+    let c: any = null; let latest: any[] = [];
+    render(<Harness ctx0={signedCtx()} tiersIn={[tier1()]} activeIn="t1" probeCtx={x => { c = x; }} probe={t => { latest = t; }} />);
+    expect(screen.getByText('Signed · 12 Nov 2026')).toBeTruthy();
+    expect(screen.getByText('Signed · read-only')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Add items/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Start revision 1' }));
+    expect(c.scopeRevisions).toHaveLength(1);
+    expect(c.scopeRevisions[0]).toMatchObject({ number: 1, status: 'draft', baseTierId: 't1' });
+    const panel = () => screen.getByRole('region', { name: 'Changes' });
+    expect(within(panel()).getByText('Revision 1')).toBeTruthy();
+    expect(within(panel()).getByText('Draft · against the signed BOQ')).toBeTruthy();
+    expect(within(panel()).getByText('No changes yet')).toBeTruthy();
+    // Changed on the plan: a wardrobe dropped in the bedroom. The signed version is untouched.
+    fireEvent.drop(stage(), { ...at(6, 5), dataTransfer: { getData: () => 'wardrobe' } });
+    fireEvent.keyDown(stage(), { key: 'Escape' });
+    expect(latest[0].boq).toEqual(baseBoq());
+    const added = c.scopeRevisions[0].playground.boq.find((l: any) => !baseBoq().some(b => b.id === l.id));
+    expect(added).toMatchObject({ bankId: 'wardrobe', roomId: 'Bedroom' });
+    expect(within(panel()).getByText('1 of 1 changes need a reason')).toBeTruthy();
+    const row = panel().querySelector(`[data-change="${added.id}"]`) as HTMLElement;
+    expect(within(row).getByText('NEW')).toBeTruthy();
+    fireEvent.change(within(row).getByLabelText('Why it changed'), { target: { value: 'Client request' } });
+    expect(c.scopeRevisions[0].playground.reasons[added.id]).toBe('Client request');
+    expect(within(panel()).getByText('Every change has a reason')).toBeTruthy();
+    // Review and issue: the change six ways, and what the client reads.
+    fireEvent.click(within(panel()).getByRole('button', { name: /Review and issue/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Issue it to the client' });
+    expect(within(dialog).getByText(/Scope revision 1 · PB-DB-2026-TF-01-REV-01/)).toBeTruthy();
+    const six = dialog.querySelector('[data-six]') as HTMLElement;
+    ['New items', 'Quantity', 'Rate', 'Redesigned', 'Compared by section', 'Removed', 'Adds up to'].forEach(t => expect(within(six).getByText(t)).toBeTruthy());
+    expect(within(dialog).getByText('Client request')).toBeTruthy();
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: 'Issue to the client' })); });
+    {
+      const issue = c.documents.issues.find((i: any) => i.kind === 'scope_revision');
+      expect(issue).toMatchObject({ reference: 'PB-DB-2026-TF-01-REV-01' });
+      expect(issue.clientVisibility.state).toBe('published');
+      expect(issue.snapshot.rooms.flatMap((r: any) => r.lines).map((l: any) => [l.tag, l.reason])).toEqual([['NEW', 'Client request']]);
+      expect(c.scopeRevisions[0].status).toBe('issued');
+      expect(within(panel()).getByText('With the client to sign')).toBeTruthy();
+      // Withdrawn: a draft again.
+      fireEvent.click(within(panel()).getByRole('button', { name: 'Withdraw to edit' }));
+      expect(c.scopeRevisions[0].status).toBe('draft');
+    }
+  });
+
+  it('signed by the client in the portal, it applies as the next version, drawn as revised, the contract in force', () => {
+    let c: any = null; let latest: any[] = []; let active = '';
+    let ctx = signedCtx();
+    const t1 = tier1();
+    const bm = new Map(bank.map(b => [b.id, b]));
+    let rec = startPlanRevision({ base: t1 as any, number: 1, id: 'srev-1', by: 'Priya', at: 1, bankMap: bm, rooms: ctx.rooms });
+    rec = withPlanBoq(rec, { boq: [...baseBoq(), placedWardrobe] as any[], reasons: { p1: 'Client request' } }, t1 as any, bm, ctx.rooms);
+    const out = issuePlanRevision({ ctx: { ...ctx, scopeRevisions: [rec] }, rec, base: t1 as any, v1: ctx.documents!.issues[0], bankMap: bm, by: 'Priya', v2TierId: 'tv2' });
+    if ('problem' in out) throw new Error(out.problem);
+    ctx = out.update({ ...ctx, scopeRevisions: [rec] });
+    ctx = signIssue(ctx.documents!.issues.find(i => i.kind === 'scope_revision')!.id, { name: 'Meera Shah', signedAt: 20 })(ctx);
+    render(<Harness ctx0={ctx} tiersIn={[t1]} activeIn="t1" probeCtx={x => { c = x; }} probe={(t, a) => { latest = t; active = a; }} />);
+    const panel = screen.getByRole('region', { name: 'Changes' });
+    expect(within(panel).getByText('Signed by the client')).toBeTruthy();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Apply revision 1' }));
+    expect(latest.map(t => [t.id, t.lifecycleTag])).toEqual([['t1', 'Superseded'], ['tv2', 'Current contract']]);
+    expect(latest[1]).toMatchObject({ boqFormat: 'playground', parentTierId: 't1' });
+    expect(latest[1].boq.find((l: any) => l.id === 'p1').place).toEqual(placedWardrobe.place);
+    expect(active).toBe('tv2');
+    expect(c.approvedTierId).toBe('tv2');
+    expect(c.scopeRevisions[0].status).toBe('applied');
+    expect(screen.getByText(/Revision 1 applied: it is the contract in force/)).toBeTruthy();
   });
 });

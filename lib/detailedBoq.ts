@@ -1,5 +1,6 @@
 import { Item, ProjectContext } from '../types';
 import { resolveBoqLine, isBillable } from './boqPricing';
+import { docPricingOf, docLine } from './playground/pricing';
 
 /**
  * THE DETAILED BOQ — the scope as a document the client can read, sign and keep.
@@ -183,7 +184,8 @@ export function detailedBoqReference(context: ProjectContext, version: number, y
 
 export interface BuildDetailedBoqInput {
   context: ProjectContext;
-  tier: { id: string; boq: any[] };
+  /** With `pricingRules` (a Playground version), each line's amount is rounded as the client sees it (lib/playground/pricing docLine). */
+  tier: { id: string; boq: any[]; pricingRules?: any };
   bankMap: Map<string, Item>;
   version: number;
   reference: string;
@@ -208,8 +210,10 @@ export function buildDetailedBoqSnapshot(input: BuildDetailedBoqInput): Detailed
   const byRoom = new Map<string, DetailedBoqRoom>();
   const notInScope: DetailedBoqSnapshot['notInScope'] = [];
 
+  const pricing = docPricingOf(tier, context.rooms);
   (tier.boq || []).forEach((b: any, idx: number) => {
-    const resolved = resolveBoqLine(b, bankMap);
+    const doc = docLine(b, bankMap, pricing);
+    const resolved = { ...doc.r, qty: doc.qty, total: doc.amount };
     const name = displayName(resolved.name);
     if (!isBillable(b)) {
       notInScope.push({ name, room: resolved.room, reason: REASON[b.boqStatus] || 'Not in scope' });
