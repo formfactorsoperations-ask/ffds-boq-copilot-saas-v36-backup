@@ -177,13 +177,17 @@ interface Props {
   termsSettings?: TermsSettings | null;
   /** The lead profile's main concern: the order of the proposal's pages. */
   leadConcern?: string | null;
+  /** Who else decides, from the lead profile: the proposal's one-page summary (PR B). */
+  decisionMakers?: string | null;
+  /** The project Timeline's programme: the proposal's timeline (PR B). */
+  programme?: { designWorkDays?: number; siteWorkDays?: number } | null;
   /** Where the client is: booked, and the layout approved (lib/playground/meeting journeyOf). */
   journey?: Journey | null;
 }
 
 export default function PlaygroundScreen(props: Props) {
   const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly: readOnlyProp, currentRoles, tenantId, onBoq: onBoqProp, newId,
-    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit, paymentStructure, termsSettings, leadConcern, journey } = props;
+    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit, paymentStructure, termsSettings, leadConcern, journey, decisionMakers, programme } = props;
   /* A signed version (PR R2) is read-only; a revision of it is drawn and edited here, against it. */
   const revRec = signed?.rec || null;
   const revDraft = !!revRec && signed?.revState === 'draft';
@@ -1118,7 +1122,7 @@ export default function PlaygroundScreen(props: Props) {
       )}
       {pdfOpen && (
         <ProposalPdf ctx={ctx} tier={{ ...tier, boq }} tiers={tiers} bankMap={bankMap} specBank={specBank} termsSettings={termsSettings} paymentStructure={paymentStructure}
-          studioName={studioName || 'The studio'} userName={userName} concern={leadConcern} booked={!!journey?.booked}
+          studioName={studioName || 'The studio'} userName={userName} concern={leadConcern} decisionMakers={decisionMakers} programme={programme} booked={!!journey?.booked}
           onSent={(via, shapedFor, priceDetail) => {
             setProjectContext(prev => issueProposal(prev, { tierId: tier.id, at: Date.now(), via, days: validity.days, shapedFor, priceDetail, by: userName }));
             setNote(`Sent. ${tier.name} is kept as it went; make a new version to change it.`);

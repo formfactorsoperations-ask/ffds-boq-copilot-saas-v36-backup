@@ -2350,6 +2350,8 @@ export interface TermsSettings {
   sections: TermsSection[];
   /** Days a proposal holds from the day it is issued (lib/annexure.ts). Missing: 15. */
   proposalValidityDays?: number;
+  /** Working days civil work adds on site, for a proposal's timeline when the project has no Timeline (lib/playground/brief.ts). Missing: 12. */
+  civilWorkingDays?: number;
   /** Annexure A's wording, list by list. A list not saved prints today's wording (lib/annexure.ts ANNEXURE_DEFAULTS). */
   annexure?: Partial<import('./lib/annexure').AnnexureClauses>;
 }

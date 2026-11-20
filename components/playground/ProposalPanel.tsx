@@ -41,13 +41,17 @@ export interface ProposalPanelProps {
   studioName: string;
   userName?: string;
   leadConcern?: string | null;
+  /** Who else decides, from the lead profile (PR B). */
+  decisionMakers?: string | null;
+  /** The project Timeline's programme (PR B). */
+  programme?: { designWorkDays?: number; siteWorkDays?: number } | null;
   /** Writes the client's portal copy (services/portalRelease, as today). */
   onPublish?: (ctx: ProjectContext) => Promise<unknown>;
   /** Opens the option in the BOQ Editor. */
   onOpenBoq?: () => void;
 }
 
-export default function ProposalPanel({ ctx, setCtx, tier, tiers, bankMap, specBank, termsSettings, paymentStructure, journey, studioName, userName, leadConcern, onPublish, onOpenBoq }: ProposalPanelProps) {
+export default function ProposalPanel({ ctx, setCtx, tier, tiers, bankMap, specBank, termsSettings, paymentStructure, journey, studioName, userName, leadConcern, decisionMakers, programme, onPublish, onOpenBoq }: ProposalPanelProps) {
   const [pdf, setPdf] = useState(false);
   const [meeting, setMeeting] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; t: string } | null>(null);
@@ -160,7 +164,7 @@ export default function ProposalPanel({ ctx, setCtx, tier, tiers, bankMap, specB
 
       {pdf && (
         <ProposalPdf ctx={ctx} tier={tier} tiers={tiers} bankMap={bankMap} specBank={specBank} termsSettings={termsSettings} paymentStructure={paymentStructure}
-          studioName={studioName} userName={userName} concern={leadConcern} booked={journey.booked} priceDetail={detail}
+          studioName={studioName} userName={userName} concern={leadConcern} decisionMakers={decisionMakers} programme={programme} booked={journey.booked} priceDetail={detail}
           onSent={(via, shapedFor, priceDetail) => setCtx(prev => issueProposal(prev, { tierId: tier.id, at: Date.now(), via, days: validity.days, shapedFor, priceDetail, by: userName }))}
           onPublish={publish ? async () => { await publish(); } : undefined}
           onClose={() => setPdf(false)} />

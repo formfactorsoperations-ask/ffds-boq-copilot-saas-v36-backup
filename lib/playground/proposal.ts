@@ -280,6 +280,8 @@ export interface AnnexInput {
   bankMap: Map<string, Item>;
   validDays: number;
   issued: Date;
+  /** The programme the proposal's timeline states (lib/playground/brief proposalTimeline): clause 8 states the same days. */
+  programme?: { siteDays: number; designDays: number; civilDays: number };
 }
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -325,7 +327,9 @@ export function annexOf(a: AnnexInput): PdfAnnexSection[] {
       ...(actuals ? ['Items listed under “Bought by you, and at actuals” are not in the total. Items at actuals are paid by you to the vendor at actual cost; their figures are estimates.'] : []),
     ] },
     { n: 7, title: 'Exclusions', items: exclusionsOf(a.boq, a.bankMap) },
-    { n: 8, title: 'Programme and start conditions', text: 'The site programme starts once all of the following are in place:', items: fill(x.startConditions) },
+    { n: 8, title: 'Programme and start conditions', text: a.programme
+      ? `The site programme is ${a.programme.siteDays} working days${a.programme.civilDays ? `, including ${a.programme.civilDays} for civil work` : ''}. Design runs for about ${a.programme.designDays} working days before it and is not counted in it. The site programme starts once all of the following are in place:`
+      : 'The site programme starts once all of the following are in place:', items: fill(x.startConditions) },
     { n: 9, title: 'Assumptions and your responsibilities', pair: { a: ['Assumptions', fill(assumptionsFor(x, civil))], b: ['Your responsibilities', fill(x.clientResponsibilities)] } },
     { n: 10, title: 'Materials, samples and workmanship', ordered: true, items: fill(x.materials) },
     { n: 11, title: 'Handover, warranty and validity', ordered: true, items: [

@@ -570,7 +570,7 @@ const MODEL_SWITCHER = [
                 <ProposalPanel ctx={projectContext} setCtx={setProjectContext} tier={playgroundTier} tiers={validTiers} bankMap={bankMap}
                     specBank={playgroundSpecs.bank} termsSettings={playgroundTerms.termsSettings} paymentStructure={playgroundTerms.paymentStructure}
                     journey={playgroundJourney} studioName={(orgData as any)?.orgName || 'The studio'} userName={props.userName}
-                    leadConcern={props.leadProfile?.primaryFrictionPoint} onPublish={props.onReleasePortal} />
+                    leadConcern={props.leadProfile?.primaryFrictionPoint} decisionMakers={props.leadProfile?.hiddenDecisionMakers} programme={programme} onPublish={props.onReleasePortal} />
                 <div className="mt-3 flex justify-end">
                     <button type="button" onClick={() => setShowClassic(v => !v)} aria-expanded={showClassic} className="text-xs font-bold text-slate-500 hover:text-[#3D52A0]">
                         {showClassic ? 'Hide the classic proposal' : 'Show the classic proposal'}

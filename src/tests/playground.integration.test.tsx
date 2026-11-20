@@ -1376,14 +1376,15 @@ describe('The first proposal (PR P)', () => {
     expect(pages.at(-1)!.textContent).toMatch(/This proposal is valid for 15 days/);
   });
 
-  it('shaped for the overall budget, the investment comes straight after the cover', () => {
+  it('the brief follows the cover; shaped for the overall budget, the investment comes straight after it', () => {
     render(<Harness tier={PG} />);
     fireEvent.click(screen.getByRole('button', { name: /Proposal PDF/ }));
-    const second = () => dialog().querySelectorAll('[data-pdf-page]')[1].textContent;
-    expect(second()).toMatch(/From this proposal to your keys/);
+    const page = (i: number) => dialog().querySelectorAll('[data-pdf-page]')[i].textContent;
+    expect(page(1)).toMatch(/What you told us/);
+    expect(page(2)).toMatch(/From this proposal to your keys/);
     fireEvent.change(within(dialog()).getByLabelText(/Shaped for/), { target: { value: 'Overall Budget' } });
-    expect(second()).toMatch(/Your investment/i);
-    expect(second()).toMatch(/Your investment₹/);
+    expect(page(1)).toMatch(/What you told us/);
+    expect(page(2)).toMatch(/Your investment₹/);
   });
 
   it('Send on WhatsApp records the proposal on the project, and the sent version is kept as it went', async () => {
