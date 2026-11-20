@@ -21,7 +21,6 @@ import { resolveBoqLine } from '../boqPricing';
 import { withPlanQty, lineAmount, lineAmountsByRoom, sharesOf, type LineAmountOptions } from './pricing';
 import { drawOf, pieceItemOf, pieceSize } from './pieces';
 import { basisOfUnit, readSize, formatSize } from '../boqSize';
-import { ftin } from './geometry';
 import { realRooms } from '../scopeBuckets';
 import { clientDescription } from '../detailedBoq';
 import { separateOf, type SeparateRow } from './supply';
@@ -61,7 +60,7 @@ export interface PdfRow {
   name: string;
   /** Its materials, shortly (and, for a shared line, that it is measured from the room). */
   sub: string;
-  /** Its size, shown with the quantity: "6′ × 7′", "8′ long". */
+  /** Its size, shown with the quantity: "6.2 ft × 5.5 ft", "8 ft long". */
   size?: string;
   qty: number;
   unit: string;
@@ -91,7 +90,14 @@ const LIVE = (l: BoqItem) => l.boqStatus !== 'deleted' && l.boqStatus !== 'subst
 const PLAIN = /imported via excel/i;
 
 /**
- * A line's size, width × height ("6′ × 7′") for a piece priced by area, its
+ * Feet in plain words for the client: "6.2 ft", "7 ft", "2.25 ft". No
+ * feet-and-inches marks; a second decimal only where the size has one, so the
+ * width times the height is the quantity beside it.
+ */
+export const feet = (n: number) => `${(Math.round(n * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })} ft`;
+
+/**
+ * A line's size, width × height ("6.2 ft × 5.5 ft") for a piece priced by area, its
  * run ("8′ long") for one priced by length; from its drawing when it is on the
  * plan, else from its typed size. Empty when it has none, or is measured from
  * the room (a shared or civil line).
@@ -106,17 +112,17 @@ export function sizeOfLine(line: BoqItem, bankMap: Map<string, Item>): string {
   const draw = line.place ? drawOf(pieceItem) : null;
   if (draw) {
     const s = pieceSize(line, pieceItem, draw);
-    return basis === 'area' ? `${ftin(s.w)} × ${ftin(s.h)}` : `${ftin(s.w)} long`;
+    return basis === 'area' ? `${feet(s.w)} × ${feet(s.h)}` : `${feet(s.w)} long`;
   }
   const s = readSize({ ...line, unit });
   if (!s) return '';
   const dims = [s.a, s.b].filter((d): d is number => !!d && d > 0);
   if (!dims.length) return '';
-  if (s.unit === 'ft') return basis === 'length' && dims.length === 1 ? `${ftin(dims[0])} long` : dims.map(ftin).join(' × ');
+  if (s.unit === 'ft') return basis === 'length' && dims.length === 1 ? `${feet(dims[0])} long` : dims.map(feet).join(' × ');
   return formatSize(s);
 }
 
-/** The size a line is allowed for, as the client reads it: "up to 6′ × 7′", "about 8′ run". */
+/** The size a line is allowed for, as the client reads it: "up to 6.2 ft × 5.5 ft", "about 8 ft run". */
 export function allowanceOf(line: BoqItem, bankMap: Map<string, Item>): string {
   const s = sizeOfLine(line, bankMap);
   if (!s) return '';
@@ -137,7 +143,7 @@ export function shortSpec(line: BoqItem, item: Item | undefined, specBank?: Mate
   return t.length > 70 ? `${t.slice(0, 69).trimEnd()}…` : t;
 }
 
-const roomSize = (r: Room) => (r.plan ? `${ftin(r.plan.w)} × ${ftin(r.plan.h)}` : Number(r.size) ? `${Math.round(Number(r.size))} sq ft` : '');
+const roomSize = (r: Room) => (r.plan ? `${feet(r.plan.w)} × ${feet(r.plan.h)}` : Number(r.size) ? `${Math.round(Number(r.size))} sq ft` : '');
 
 /**
  * Every item of the option, room by room: the lines bought by the client and

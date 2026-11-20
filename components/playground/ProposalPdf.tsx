@@ -48,7 +48,7 @@ function Page({ n, foot, children }: { n: number; foot: string; children: React.
 const COLS = (
   <colgroup><col /><col style={{ width: 92 }} /><col style={{ width: 40 }} /><col style={{ width: 66 }} /><col style={{ width: 84 }} /></colgroup>
 );
-/* The quantity, with the size it is for above it: "6′ × 7′" over "42". */
+/* The quantity, with the size it is for above it: "6.2 ft × 5.5 ft" over "34.1". */
 function QtyCell({ r }: { r: PdfRow }) {
   return (
     <td className="py-1.5 px-1 text-right tabular-nums text-[12px] text-slate-600 whitespace-nowrap" data-pdf-qty>

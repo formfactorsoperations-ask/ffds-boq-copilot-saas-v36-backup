@@ -57,7 +57,7 @@ describe('room by room', () => {
     expect(living.rows.map(r => r.name)).toEqual(['TV unit', 'Wall painting, two coats']);
     expect(living.rows[1].sub).toMatch(/measured from the room/);
     // The size is shown with the quantity, width × height; the materials under the name.
-    expect(living.rows[0]).toMatchObject({ free: true, size: '3′6″ × 2′3″', sub: 'TV unit words' });
+    expect(living.rows[0]).toMatchObject({ free: true, size: '3.5 ft × 2.25 ft', sub: 'TV unit words' });
     expect(living.rows[1].size).toBeUndefined();
     it0.rooms.flatMap(r => r.rows).forEach(r => expect(r.amount % 100).toBe(0));
     expect(it0.flat!.rows.map(r => r.name)).toEqual(['Debris removal']);
@@ -65,8 +65,10 @@ describe('room by room', () => {
   });
 
   it('a drawn piece is allowed for at its drawn size', () => {
-    expect(allowanceOf(boq[0], bankMap)).toBe('up to 5′11″ × 7′');
-    expect(sizeOfLine(boq[0], bankMap)).toBe('5′11″ × 7′');
+    // In plain feet: "5.9 ft", a second decimal only where the size has one.
+    expect(allowanceOf(boq[0], bankMap)).toBe('up to 5.9 ft × 7 ft');
+    expect(sizeOfLine(boq[0], bankMap)).toBe('5.9 ft × 7 ft');
+    expect(sizeOfLine({ id: 'r', bankId: 'w', qty: 12, unit: 'r ft', calcLength: 8.25, sizeUnit: 'ft' } as any, new Map([['w', { ...bankMap.get('w'), unit: 'r ft' }]]))).toBe('8.25 ft long');
     expect(allowanceOf({ id: 'x', bankId: 'w', qty: 5 } as any, bankMap)).toBe('');
   });
 
