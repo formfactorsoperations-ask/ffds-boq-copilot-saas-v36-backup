@@ -5,7 +5,8 @@ import { boardPieces, drawOf, isHigh, isWallBacked, pieceSize, footprintOf, piec
 import { placeAt, softSnap, type PlacedPiece, type SnapGuide, type PlanRoom } from '../../lib/playground/placing';
 import { boundsOf, ftin, normRot, pieceBox } from '../../lib/playground/geometry';
 import { lineIssues } from '../../lib/playground/issues';
-import { sheetOf, isPdfSheet } from '../../lib/playground/planSheet';
+import { sheetOf } from '../../lib/playground/planSheet';
+import { LinePlanRooms, drawingOf } from './linePlan';
 import { newPieceLine, movedLine, resizedFromEdge, type Edge } from '../../lib/playground/board';
 import { resizeRoom, edgeAt, type RoomEdge, type RoomResize } from '../../lib/playground/roomEdges';
 import { segmentFor, segLength, toolOf, type CivilTool, type Segment } from '../../lib/playground/civil';
@@ -81,6 +82,8 @@ interface Props {
   changes?: Changes | null;
   /** What the last edit did (PR 7): pieces drop in, the room glows, the price change floats up. */
   fresh?: FreshState | null;
+  /** The client's drawing under the rooms; otherwise a plan read off it is drawn as a line plan. */
+  showDrawing?: boolean;
 }
 
 type Drag =
@@ -111,7 +114,13 @@ export default function PlanStage(props: Props) {
 
   const planRooms: PlanRoom[] = useMemo(() => rooms.filter(r => r.plan).map(r => ({ name: r.name, plan: r.plan })), [rooms]);
   const sheet = sheetOf(ctx);
-  const underlay = sheet?.imageUrl && Number(sheet.ftPerPx) > 0 && sheet.imagePx && !isPdfSheet(sheet) ? sheet : null;
+  /*
+    The client's drawing is under the rooms only when asked for (showDrawing);
+    otherwise a plan read off a drawing is drawn as a line plan (linePlan.tsx).
+  */
+  const drawing = drawingOf(sheet);
+  const underlay = props.showDrawing ? drawing : null;
+  const traced = !!drawing && !props.showDrawing;
 
   /* The pieces from the BOQ; while dragging only the dragged one is swapped in. */
   const basePieces = useMemo(() => boardPieces(boq, bankMap), [boq, bankMap]);
@@ -615,11 +624,12 @@ export default function PlanStage(props: Props) {
             <image href={underlay.imageUrl} x={-(underlay.origin?.x || 0) * underlay.ftPerPx!} y={-(underlay.origin?.y || 0) * underlay.ftPerPx!}
               width={underlay.imagePx!.w * underlay.ftPerPx!} height={underlay.imagePx!.h * underlay.ftPerPx!} preserveAspectRatio="none" />
           )}
+          {traced && <LinePlanRooms rooms={planRooms} />}
           {planRooms.map(r => {
             const a = 0.02 + 0.12 * ((roomTotals.get(r.name) || 0) / maxRoom);
             return (
               <g key={r.name}>
-                {!underlay && <rect x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h} fill="#f7f6f2" />}
+                {!underlay && !traced && <rect x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h} fill="#f7f6f2" />}
                 <rect data-room={r.name} x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h} fill={`rgba(61,82,160,${a})`}
                   onPointerDown={e => { e.stopPropagation(); startPan(e, r.name); }} />
                 {fresh?.glow === r.name && <rect key={`glow-${fresh.key}`} className="pg-glow" data-glow={r.name} x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h} fill={BRAND} opacity={0} pointerEvents="none" />}
@@ -629,10 +639,10 @@ export default function PlanStage(props: Props) {
           })}
           {kitOver && (() => { const r = planRooms.find(x => x.name === kitOver); return r ? <rect x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h} fill={BRAND} fillOpacity={0.12} stroke={BRAND} strokeWidth={px(2.5)} pointerEvents="none" data-kit-over={r.name} /> : null; })()}
           {/* No drawing under the plan: the rooms' walls, drawn as a plan would draw them. */}
-          {!underlay && planRooms.map(r => (
+          {!underlay && !traced && planRooms.map(r => (
             <rect key={`w-${r.name}`} x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h} fill="none" stroke="#262626" strokeWidth={0.38} pointerEvents="none" />
           ))}
-          {!underlay && bounds && planRooms.length > 0 && (() => {
+          {!underlay && !traced && bounds && planRooms.length > 0 && (() => {
             const b = boundsOf(planRooms.map(r => r.plan!))!;
             return <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="none" stroke="#262626" strokeWidth={0.7} pointerEvents="none" />;
           })()}

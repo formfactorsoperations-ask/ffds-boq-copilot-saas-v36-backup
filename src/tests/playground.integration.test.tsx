@@ -706,6 +706,24 @@ describe('Tune (PR 4)', () => {
   });
 });
 
+describe('the line plan', () => {
+  it('draws a plan read off the client’s drawing as a line plan, and shows the drawing only when asked', () => {
+    const sheet = { source: 'brief', imageUrl: 'https://x/o/plan.jpg?alt=media', imagePx: { w: 1000, h: 700 }, ftPerPx: 0.05, page: 1 };
+    render(<Harness tier={PG} ctx0={{ name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10, planSheet: sheet }} />);
+    const stageSvg = screen.getByRole('application', { name: /The flat/ });
+    expect(stageSvg.querySelector('[data-line-plan]')).toBeTruthy();
+    expect(stageSvg.querySelector('image')).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'Drawing' }));
+    expect(stageSvg.querySelector('image')?.getAttribute('href')).toBe(sheet.imageUrl);
+    expect(stageSvg.querySelector('[data-line-plan]')).toBeNull();
+  });
+
+  it('offers no switch when there is no drawing under the plan', () => {
+    render(<Harness tier={PG} />);
+    expect(screen.queryByRole('radio', { name: 'Drawing' })).toBeNull();
+  });
+});
+
 describe('no plan yet (PR 5)', () => {
   const noPlan = { name: 'Joshi – 2BHK', area: 650, config: '2BHK', rooms: [], designFeeType: 'percentage', designFee: 10 };
 

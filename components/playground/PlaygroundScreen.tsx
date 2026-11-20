@@ -30,6 +30,7 @@ import { downloadWorkbook } from '../../lib/scopeWorkbook';
 import QuickBuildModal, { type QuickBuildChoice } from './QuickBuildModal';
 import { sheetOf } from '../../lib/playground/planSheet';
 import { placeWaitingLines } from '../../lib/playground/placeAll';
+import { drawingOf } from './linePlan';
 import { newPieceLine, needsPlace, pushHistory, undoHistory, type History } from '../../lib/playground/board';
 import { ArtDefs } from './pieceArt';
 import { inr, Ring, lineModel, type LineModel, FreshContext, type FreshState } from './playgroundUi';
@@ -225,6 +226,8 @@ export default function PlaygroundScreen(props: Props) {
   const [planModal, setPlanModal] = useState(false);
   const [sketching, setSketching] = useState(false);
   const [building, setBuilding] = useState(false);
+  /* The client's drawing under the rooms, for checking them against it; off by default. */
+  const [showDrawing, setShowDrawing] = useState(false);
   const [importing, setImporting] = useState(false);
   /* The plan's layer (PR C): Interiors, the furniture; Civil, the civil work and its tools. */
   const [layer, setLayer] = useState<'int' | 'civ'>('int');
@@ -962,6 +965,7 @@ export default function PlaygroundScreen(props: Props) {
             {plan ? (
               planRooms.length ? (
                 <PlanStage
+                  showDrawing={showDrawing}
                   ctx={ctx} rooms={rooms} boq={boq} bank={bank} bankMap={bankMap} models={byId} roomTotals={totals.byRoom}
                   readOnly={readOnly} sel={sel} onSel={pickLine} selRoom={selRoom} onSelRoom={pickRoom}
                   commit={commit} newId={newId} libOpen={showLib} hideFigures={hideFigures} fitSignal={fitSignal} prepareNew={prepareNew}
@@ -1052,7 +1056,7 @@ export default function PlaygroundScreen(props: Props) {
             )}
 
             {plan && (
-              <div className="absolute top-2.5 z-10 flex items-center" style={{ left: showLib ? 248 : 10 }}>
+              <div className="absolute top-2.5 z-10 flex flex-wrap items-center gap-y-1.5" style={{ left: showLib ? 248 : 10, right: 200 }}>
                 <span className="relative inline-block" data-pg-menu>
                   <button type="button" onClick={() => setMenu(m => (m === 'plan' ? null : 'plan'))} aria-expanded={menu === 'plan'}
                     className="inline-flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-xl bg-white/95 border border-slate-200 shadow-sm hover:border-[#3D52A0]/40">
@@ -1079,6 +1083,18 @@ export default function PlaygroundScreen(props: Props) {
                   )}
                 </span>
                 {readOnly && <span className="ml-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-bold text-slate-600" title={superseded ? `v${vplace!.n} is kept as it was. Switch to v${vplace!.versions.length} to edit.` : undefined}><Lock className="w-3.5 h-3.5 text-[#3D52A0]" aria-hidden />{superseded ? `v${vplace!.n} · kept as it was` : sentHere ? `Sent ${when(ctx.proposal?.issuedAt)} · kept as it went` : signed?.elsewhere ? `Revision ${signed.elsewhere} is being drafted in Revision Studio` : signed ? (revRec ? `Revision ${revRec.number} · ${signed.revState === 'issued' ? 'with the client' : 'signed by the client'}` : 'Signed · read-only') : 'Read-only'}</span>}
+                {/* The client's drawing, or the line plan redrawn from it (linePlan.tsx). The line plan is the default: rendered furniture and flooring stay out from under the BOQ's pieces. */}
+                {drawingOf(sheet) && planRooms.length > 0 && (
+                  <span className="ml-1.5 inline-flex p-0.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm" role="radiogroup" aria-label="What the plan shows">
+                    {([[false, 'Line plan'], [true, 'Drawing']] as const).map(([v, n]) => (
+                      <button key={n} type="button" role="radio" aria-checked={showDrawing === v} onClick={() => setShowDrawing(v)}
+                        title={v ? 'The client’s plan as they gave it, under the rooms' : 'The rooms redrawn as a clean plan'}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold ${showDrawing === v ? 'bg-[#3D52A0] text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+                        {n}
+                      </button>
+                    ))}
+                  </span>
+                )}
                 <span className="ml-1.5 inline-flex p-0.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm" role="radiogroup" aria-label="Plan layer">
                   {([['int', 'Interiors'], ['civ', 'Civil']] as const).map(([k, n]) => (
                     <button key={k} type="button" role="radio" aria-checked={layer === k} onClick={() => pickLayer(k)}
