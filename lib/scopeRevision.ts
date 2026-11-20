@@ -2,6 +2,7 @@ import { Item } from '../types';
 import { resolveBoqLine, isBillable } from './boqPricing';
 import { displayName, normaliseUnit } from './detailedBoq';
 import { cleanSpec } from './specText';
+import { docLine, type LineAmountOptions } from './playground/pricing';
 
 /**
  * SCOPE REVISION — how a revised BOQ becomes the client's scope.
@@ -197,6 +198,12 @@ export interface ScopeRevisionRecord {
    * `imported` and `settings` instead.
    */
   draft?: import('./scopeDraft').ScopeDraft;
+  /**
+   * A revision made on the BOQ Playground's plan (PR R): the revised BOQ as drawn
+   * (pieces, civil work, shares), and why each line changed. `draft` is kept in
+   * step from it, so Revision Studio, Money and the documents read it as before.
+   */
+  playground?: { boq: any[]; reasons: Record<string, string> };
   /** Filled on issue. */
   issueId?: string | null;
   reference?: string | null;
@@ -499,10 +506,15 @@ export function internalCostsFor(client: ParsedSheet, costing: ParsedSheet | nul
 // The signed side
 // ---------------------------------------------------------------------------
 
-/** The signed tier as lines, priced by the app's own pricing. Zero-qty lines are not scope. */
-export function signedLinesFrom(boq: any[], bankMap: Map<string, Item>): SignedLine[] {
+/**
+ * The signed tier as lines, priced by the app's own pricing. Zero-qty lines are
+ * not scope. With `pricing` (a Playground version, lib/playground/pricing
+ * docPricingOf) each line is its rounded amount at its plan quantity, the rate
+ * that amount over the quantity, so the revision adds up as the Detailed BOQ did.
+ */
+export function signedLinesFrom(boq: any[], bankMap: Map<string, Item>, pricing?: LineAmountOptions | null): SignedLine[] {
   return (boq || [])
-    .map((b: any, i: number) => ({ b, r: resolveBoqLine(b, bankMap), i }))
+    .map((b: any, i: number) => { const d = docLine(b, bankMap, pricing || null); return { b, r: { ...d.r, qty: d.qty, total: d.amount }, i }; })
     .filter(({ b, r }) => isBillable(b) && r.qty > 0)
     .map(({ b, r, i }) => ({
       lineId: String(b.id || `line-${i}`),
@@ -511,7 +523,7 @@ export function signedLinesFrom(boq: any[], bankMap: Map<string, Item>): SignedL
       name: r.name,
       unit: normaliseUnit(r.unit),
       qty: r.qty,
-      rate: r.rate,
+      rate: pricing ? r.total / r.qty : r.rate,
       amount: r.total,
       ...(r.asActuals ? { asActuals: true } : {}),
     }));

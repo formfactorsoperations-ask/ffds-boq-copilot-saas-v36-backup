@@ -196,6 +196,7 @@ const ScopeRevisionSheet: React.FC<Props> = ({ snapshot: s, studioName, contentH
                       <span className="nm">{l.name}</span>
                       <span className={`tag ${l.tag === 'REMOVED' ? 'rm' : l.tag === 'NEW' ? 'nw2' : ''}`}>{l.tag.toLowerCase()}</span>
                       {l.was && <small>Signed: {l.was} · Revised: {l.now}</small>}
+                      {l.reason && <small>Why: {l.reason}</small>}
                     </td>
                     <td className="num nw">{qtyText(l.q1)} → {qtyText(l.q2)}{l.unit ? ` ${l.unit}` : ''}</td>
                     <td className="num">{l.a1 ? amt(l.a1) : '—'}</td>
