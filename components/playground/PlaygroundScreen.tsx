@@ -305,7 +305,7 @@ export default function PlaygroundScreen(props: Props) {
   }, [rooms, bankMap]);  // eslint-disable-line react-hooks/exhaustive-deps
 
 
-  const civilCtx = { bank, bankMap, rooms, newId };
+  const civilCtx = { bank, bankMap, rooms, newId, site: ctx?.propertyStatus };
   const civilLinesNow = boq.filter(l => l.civil && l.boqStatus !== 'deleted' && l.boqStatus !== 'substituted');
   const civilModels = models.filter(m => m.line.civil || (m.line.roomId === 'Whole flat' && /\bdebris\b/i.test(m.name)));
   const applyCivil = (r: CivilResult, selectLast = false) => {
@@ -747,7 +747,7 @@ export default function PlaygroundScreen(props: Props) {
             {plan && layer === 'civ' && planRooms.length > 0 && (
               <CivilPanel left={showLib ? 248 : 10} tool={civilTool} site={ctx.propertyStatus ? SITE_LABEL[ctx.propertyStatus] : undefined}
                 ask={briefCivilAsk(ctx, rooms)} lines={civilModels.length} total={civilModels.reduce((a, m) => a + (m.billable ? m.amount : 0), 0)}
-                hideFigures={hideFigures} readOnly={readOnly || classic} items={civilItems(bank)} isOwner={!!isOwner}
+                hideFigures={hideFigures} readOnly={readOnly || classic} items={civilItems(bank)} bank={bank} siteStatus={ctx.propertyStatus} isOwner={!!isOwner}
                 onTool={pickTool} onBrief={civilBrief} onAddItems={addCivilItems} />
             )}
 

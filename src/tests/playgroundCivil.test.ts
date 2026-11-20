@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   civilItems, civilQty, civilDerivation, segmentFor, withSegmentLength, toggleRoomCivil, addWallCivil, fromBrief,
-  syncedCivil, missingStandardItems, briefCivilAsk, civilLine, BREAK_NOTE, isWet, type CivilContext,
+  syncedCivil, missingStandardItems, briefCivilAsk, briefFloorRooms, canRefloor, civilLine, BREAK_NOTE, isWet, type CivilContext,
 } from '../../lib/playground/civil';
 import { resizeRoom } from '../../lib/playground/roomEdges';
 import { replacePlan } from '../../lib/playground/planSheet';
@@ -97,15 +97,17 @@ describe('the Item Bank’s civil items', () => {
   it('finds each by its name and unit', () => {
     const c = civilItems(bank);
     expect(Object.fromEntries(Object.entries(c.items).map(([k, v]) => [k, v!.id]))).toEqual({
-      break: 'b50', build: 'b51', floorRemove: 'b52', floor: 'b53', walls7: 'b54', waterproof: 'b55', debris: 'b56',
+      break: 'b50', build: 'b51', floorRemove: 'b52', floor: 'b53', floorWet: 'b53', walls7: 'b54', waterproof: 'b55', debris: 'b56',
     });
-    expect(c.floorDoesBoth).toBe(false);
   });
 
-  it('reads the studio’s default bank: one floor item lifts and lays, a lump-sum bathroom package is not measured', () => {
+  it('reads the studio’s default bank: a lift-and-lay floor item and laminate are not a new floor, anti-skid tiles are for bathrooms', () => {
     const c = civilItems(INITIAL_BANK as any);
-    expect(c.items.floor!.name).toBe('DEMOLISH AND INSTALL - FLOORING TILES');
-    expect(c.floorDoesBoth).toBe(true);
+    // Re-flooring is two lines, the old floor out and the new one in: "Demolish and install" is neither.
+    expect(c.items.floor).toBeUndefined();
+    expect(c.items.floorRemove).toBeUndefined();
+    expect(c.items.floorWet!.name).toBe('ANTI-SKID FLOOR TILES');
+    expect(canRefloor(c)).toBe(false);
     expect(c.items.walls7!.name).toBe('DEMOLISH AND INSTALL - WALL TILES');
     expect(c.items.debris!.name).toBe('DEBRIS REMOVAL');
     expect(c.items.break).toBeUndefined();
@@ -113,9 +115,39 @@ describe('the Item Bank’s civil items', () => {
     // The Owner can add the missing standard items; nothing it already has.
     let k = 0;
     const add = missingStandardItems(INITIAL_BANK as any, () => `s${++k}`);
-    expect(add.map(i => i.name)).toEqual(['Wall demolition, brick', 'New wall, 4.5″ brick', 'Waterproofing, floor and upstand']);
+    expect(add.map(i => i.name)).toEqual(['Wall demolition, brick', 'New wall, 4.5″ brick', 'Remove existing floor tiles', 'Floor tiles, laid', 'Waterproofing, floor and upstand']);
     // Starting rates at a 25% markup: ₹45 a sq ft for the wall demolition.
     expect(Math.round((add[0].materials + add[0].labor) * 1.25)).toBe(45);
+    // With them in, a room re-floors in the mockup's two lines; a bathroom lays the bank's anti-skid tiles.
+    const full = [...(INITIAL_BANK as any[]), ...add];
+    const after = civilItems(full);
+    expect(canRefloor(after)).toBe(true);
+    expect(missingStandardItems(full, () => 'x')).toEqual([]);
+    const fctx: CivilContext = { bank: full, bankMap: new Map(full.map(b => [b.id, b])), rooms, newId: () => `f${++n}` };
+    const dry = toggleRoomCivil([], rooms[1], 'floor', fctx);
+    if ('problem' in dry) throw new Error(dry.problem);
+    expect(dry.added.filter(l => l.civil).map(l => [fctx.bankMap.get(l.bankId)!.name, l.qty])).toEqual([['Remove existing floor tiles', 120], ['Floor tiles, laid', 120]]);
+    const wet = toggleRoomCivil([], bath, 'floor', fctx);
+    if ('problem' in wet) throw new Error(wet.problem);
+    expect(wet.added.filter(l => l.civil).map(l => fctx.bankMap.get(l.bankId)!.name)).toEqual(['Remove existing floor tiles', 'ANTI-SKID FLOOR TILES']);
+    // A kitchen takes the ordinary floor.
+    const kit = toggleRoomCivil([], rooms[2], 'floor', fctx);
+    if ('problem' in kit) throw new Error(kit.problem);
+    expect(kit.added.filter(l => l.civil).map(l => fctx.bankMap.get(l.bankId)!.name)).toEqual(['Remove existing floor tiles', 'Floor tiles, laid']);
+  });
+
+  it('re-flooring needs both items: without one it says which to add', () => {
+    const noRemove = { ...ctx, bank: bank.filter(b => b.id !== 'b52') };
+    const r = toggleRoomCivil([], rooms[1], 'floor', noRemove);
+    expect(r).toEqual({ problem: 'No item in the Item Bank to take up the old floor: add one such as “Remove existing floor tiles”, priced per sq ft.' });
+    expect(canRefloor(civilItems(noRemove.bank))).toBe(false);
+    // A raw shell has no old floor: only the new one goes in.
+    expect(canRefloor(civilItems(noRemove.bank), 'raw_shell')).toBe(true);
+    const raw = toggleRoomCivil([], rooms[1], 'floor', { ...noRemove, site: 'raw_shell' });
+    if ('problem' in raw) throw new Error(raw.problem);
+    expect(raw.added.filter(l => l.civil).map(l => l.civil!.type)).toEqual(['floor']);
+    const noLay = toggleRoomCivil([], rooms[1], 'floor', { ...ctx, bank: bank.filter(b => b.id !== 'b53') });
+    expect('problem' in noLay && noLay.problem).toBe('No item in the Item Bank for the new floor: add one such as “Floor tiles, laid”, priced per sq ft.');
   });
 });
 
@@ -160,17 +192,19 @@ describe('Start from the brief', () => {
   const project: any = { propertyStatus: 'finished', civilScope: { bathrooms: true, flooring: true } };
 
   it('lays out the bathrooms and the flooring in one step, each line measured, debris once', () => {
-    expect(briefCivilAsk(project, rooms)).toBe('the bathroom redone and new flooring');
+    // The brief names no rooms for the flooring: the living and dining rooms, as in the mockup.
+    expect(briefCivilAsk(project, rooms)).toBe('the bathroom redone and new flooring in the living room');
     const r = fromBrief([], { ...ctx, project });
     if ('problem' in r) throw new Error(r.problem);
     const civil = r.added.filter(l => l.civil);
-    // The bathroom: waterproofing, old floor out, new floor, wall tiles. Every other room: old floor out, new floor.
+    // The bathroom: waterproofing, old floor out, new floor, wall tiles. The living room: old floor out, new floor.
     expect(civil.filter(l => l.roomId === 'Bath 2').map(l => l.civil!.type)).toEqual(['waterproof', 'floorRemove', 'floor', 'walls7']);
     expect(civil.filter(l => l.roomId === 'Living Room').map(l => [l.civil!.type, l.qty])).toEqual([['floorRemove', 224], ['floor', 224]]);
-    expect(civil).toHaveLength(4 + 2 * 3);
+    expect(civil.filter(l => l.roomId === 'Bedroom 2' || l.roomId === 'Kitchen')).toEqual([]);
+    expect(civil).toHaveLength(4 + 2);
     expect(civil.every(l => l.qty > 0)).toBe(true);
     expect(r.added.filter(l => l.bankId === 'b56')).toHaveLength(1);
-    expect(r.message).toBe('From the brief: 10 civil lines for the bathroom redone and new flooring, measured from the plan.');
+    expect(r.message).toBe('From the brief: 6 civil lines for the bathroom redone and new flooring in the living room, measured from the plan.');
     // Again: nothing more to add.
     const again = fromBrief(r.boq, { ...ctx, project });
     expect(again).toEqual({ problem: 'The brief’s civil work is already on the plan.' });
@@ -181,6 +215,43 @@ describe('Start from the brief', () => {
     const k = fromBrief([], { ...ctx, project: { propertyStatus: 'finished', civilScope: { kitchenCivil: true } } });
     if ('problem' in k) throw new Error(k.problem);
     expect(k.added.filter(l => l.civil).map(l => [l.roomId, l.civil!.type])).toEqual([['Kitchen', 'walls7']]);
+  });
+});
+
+describe('Replace flooring, room by room', () => {
+  const on = (clientBrief?: string, propertyStatus = 'finished'): any => ({ propertyStatus, clientBrief, civilScope: { flooring: true } });
+  const floored = (p: any) => briefFloorRooms(p, rooms).rooms.map(r => r.name);
+
+  it('re-floors the rooms the brief names', () => {
+    expect(floored(on('Replace the flooring in bedroom 2 and the kitchen. Modern look.'))).toEqual(['Bedroom 2', 'Kitchen']);
+    expect(briefCivilAsk(on('Replace the flooring in bedroom 2 and the kitchen.'), rooms)).toBe('new flooring in the bedroom 2 and the kitchen');
+    expect(floored(on('Vitrified tiles for the living room floor'))).toEqual(['Living Room']);
+    expect(floored(on('New flooring in all bedrooms'))).toEqual(['Bedroom 2', 'Kitchen', 'Living Room']);
+    // A clause that keeps a floor is not a re-floor; the next one is.
+    expect(floored(on('Keep existing flooring in the bedrooms. New flooring in the kitchen.'))).toEqual(['Kitchen']);
+  });
+
+  it('the whole flat when the brief says so, or the site is a raw shell; otherwise the living and dining rooms', () => {
+    expect(briefFloorRooms(on('Civil refresh to the entire flooring'), rooms)).toMatchObject({ throughout: true });
+    expect(floored(on('Civil refresh to the entire flooring'))).toEqual(['Bedroom 2', 'Kitchen', 'Living Room']);
+    expect(briefCivilAsk(on('Civil refresh to the entire flooring'), rooms)).toBe('new flooring throughout');
+    expect(floored(on(undefined, 'raw_shell'))).toEqual(['Bedroom 2', 'Kitchen', 'Living Room']);
+    expect(floored(on('Warm minimal, lots of storage'))).toEqual(['Living Room']);
+    // The mockup's flat: the living and dining rooms, in its words.
+    const flat: any[] = [{ name: 'Living' }, { name: 'Dining' }, { name: 'Master Bedroom' }, { name: 'Bath 1' }, { name: 'Bath 2' }];
+    expect(briefCivilAsk({ propertyStatus: 'finished', civilScope: { bathrooms: true, flooring: true } }, flat))
+      .toBe('both bathrooms redone and new flooring in the living and dining rooms');
+    expect(briefCivilAsk(on(), [{ name: 'Living / Dining' }, { name: 'Kitchen' }] as any)).toBe('new flooring in the living and dining room');
+    expect(briefCivilAsk(on(), [{ name: 'Living Rm.' }, { name: 'Dining Room' }, { name: 'Kitchen' }] as any)).toBe('new flooring in the living and dining rooms');
+    // A flat with neither: every room.
+    expect(briefCivilAsk(on(), [{ name: 'Bedroom' }, { name: 'Kitchen' }] as any)).toBe('new flooring throughout');
+  });
+
+  it('a raw shell lays the new floor only: there is no old floor to take up', () => {
+    const r = fromBrief([], { ...ctx, project: on(undefined, 'raw_shell') });
+    if ('problem' in r) throw new Error(r.problem);
+    const floors = r.added.filter(l => l.civil && (l.civil.type === 'floor' || l.civil.type === 'floorRemove'));
+    expect(floors.map(l => [l.roomId, l.civil!.type])).toEqual([['Bath 2', 'floor'], ['Bedroom 2', 'floor'], ['Kitchen', 'floor'], ['Living Room', 'floor']]);
   });
 });
 

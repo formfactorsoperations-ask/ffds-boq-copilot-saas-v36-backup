@@ -13,10 +13,12 @@
  *
  * A break and a new wall are drawn as a segment on the plan (a break snaps to
  * the nearest wall of the room); the others are whole rooms, toggled on and
- * off. Re-flooring is two lines, the old floor out and the new one in, unless
- * the Item Bank's floor item does both. Debris removal is added once, across
- * the flat, with the first civil line. "Start from the brief" lays out what the
- * project's civil scope asks for (lib/civilScope) in one step.
+ * off. Re-flooring is two lines, as in the mockup: the old floor out and the
+ * new one in (a raw shell has no old floor, so only the new one). Debris
+ * removal is added once, across the flat, with the first civil line. "Start
+ * from the brief" lays out what the project's civil scope asks for
+ * (lib/civilScope) in one step, flooring room by room: the rooms the brief
+ * names, else the living and dining rooms.
  *
  * Each line is priced from an Item Bank item found by name (the studio's own
  * names: "Wall demolition", "Floor tiles, laid", "Waterproofing"…). When the
@@ -63,20 +65,27 @@ export const isWet = (room: Pick<Room, 'name' | 'kind'>) => WET.includes(kindOf(
 /* ───────────────────────────── the Item Bank's civil items ───────────────────────────── */
 
 const ACTUALS = /as\s*actuals?|\(actuals?\)/i;
-const TESTS: Record<CivilType | 'debris', (n: string) => boolean> = {
+/** Takes the old floor up: "Demolish and install", "Removal of…". */
+const LIFTS = /\b(demoli\w*|remov\w*|hack\w*|dismantl\w*)\b/;
+/** A floor laid on a bed, the new floor of a re-flooring: tiles, stone. Laminate, vinyl and carpet go over a floor, not in place of it. */
+const FLOOR_LAID = (n: string) => /\b(floor\w*|vitrified)\b/.test(n) && !/\b(wall\s*til\w*|dado|skirting|false\s*ceiling|polish\w*|cleaning|protection|laminate|vinyl|carpet|wooden|engineered|spc|upstand)\b|water\s*proof/.test(n) && !LIFTS.test(n);
+/** A floor for wet rooms only. */
+const WET_FLOOR = /\banti[\s-]*skid|\bwet\s*areas?\b|\bnon[\s-]*slip/;
+type CivilKey = CivilType | 'floorWet' | 'debris';
+const TESTS: Record<CivilKey, (n: string) => boolean> = {
   break: n => /\b(demoli\w*|break\w*|dismantl\w*|hack\w*)\b/.test(n) && /\bwalls?\b/.test(n) && !/\btil|niche/.test(n),
   build: n => (/\b(new|brick|block|aac|partition)\b.*\bwalls?\b|\bwalls?\b.*\b(construction|masonry|brick|block)\b|\bmasonry\b/.test(n)) && !/niche|glass|panel|paper|til|paint|demoli|break/.test(n),
   floorRemove: n => /\b(remov\w*|hack\w*|dismantl\w*|demoli\w*)\b/.test(n) && /\b(floor\w*|tiles?)\b/.test(n) && !/\b(install\w*|laying|laid|lay|new|relay\w*)\b/.test(n) && !/wall\s*til|dado/.test(n),
-  floor: n => /\b(floor\w*|vitrified)\b/.test(n) && !/\b(wall\s*til\w*|dado|skirting|false\s*ceiling|polish\w*|cleaning|protection)\b/.test(n) && !(/\b(remov\w*|hack\w*|dismantl\w*)\b/.test(n) && !/\b(install\w*|laying|laid|relay\w*)\b/.test(n)),
+  floor: n => FLOOR_LAID(n) && !WET_FLOOR.test(n),
+  floorWet: n => FLOOR_LAID(n),
   walls7: n => /\bwall\s*til\w*|\bdado\b/.test(n),
   waterproof: n => /\bwater\s*proof\w*|\bwaterproof\w*/.test(n),
   debris: n => /\bdebris\b/.test(n),
 };
 
 export interface CivilItems {
-  items: Partial<Record<CivilType | 'debris', Item>>;
-  /** The floor item lifts the old floor too ("Demolish and install – flooring tiles"): no separate line for it. */
-  floorDoesBoth: boolean;
+  /** floor: the new floor of most rooms; floorWet: of a bathroom, utility or balcony (an anti-skid tile when the bank has one). */
+  items: Partial<Record<CivilKey, Item>>;
 }
 
 /**
@@ -88,7 +97,7 @@ export interface CivilItems {
 export function civilItems(bank: Item[]): CivilItems {
   const out: CivilItems['items'] = {};
   const norm = (i: Item) => `${i.name} ${i.cat || ''}`.toLowerCase();
-  (Object.keys(TESTS) as (CivilType | 'debris')[]).forEach(t => {
+  (Object.keys(TESTS) as CivilKey[]).forEach(t => {
     const fits = bank.filter(i => {
       const n = norm(i);
       if (!TESTS[t](n) || ACTUALS.test(n)) return false;
@@ -100,16 +109,21 @@ export function civilItems(bank: Item[]): CivilItems {
       const n = norm(i);
       return (basisOfUnit(i.unit) === 'area' ? 4 : 0)
         + (/civil|floor|tiling|demolition|waterproof/i.test(i.cat || '') ? 2 : 0)
-        + (t === 'floor' && /\btil|vitrified/.test(n) ? 3 : 0)
-        // Re-flooring is old tiles out, new in: an item that does both is the one.
-        + (t === 'floor' && /\b(demoli\w*|remov\w*)\b/.test(n) && /\b(install\w*|lay\w*|laid)\b/.test(n) ? 2 : 0);
+        + ((t === 'floor' || t === 'floorWet') && /\btil|vitrified/.test(n) ? 3 : 0)
+        + (t === 'floorWet' && WET_FLOOR.test(n) ? 3 : 0);
     };
     const best = [...fits].sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name))[0];
     if (best) out[t] = best;
   });
-  const f = out.floor;
-  return { items: out, floorDoesBoth: !!f && /\b(demoli\w*|remov\w*|hack\w*)\b/i.test(f.name) };
+  return { items: out };
 }
+
+/** The rooms that take an anti-skid floor: bathrooms, the utility, balconies (a kitchen takes the ordinary floor). */
+const SLIP_ROOMS: RoomKind[] = ['toilet', 'utility', 'balcony'];
+/** The new floor's item for a room: a bathroom's own (anti-skid) floor, else the floor. */
+export const floorItemFor = (c: CivilItems, room: Pick<Room, 'name' | 'kind'>) => (SLIP_ROOMS.includes(kindOf(room)) ? c.items.floorWet || c.items.floor : c.items.floor);
+/** Whether re-flooring can be priced at all: a new floor, and the old floor out unless the site is a raw shell. */
+export const canRefloor = (c: CivilItems, site?: PropertyStatus) => !!(c.items.floor || c.items.floorWet) && (site === 'raw_shell' || !!c.items.floorRemove);
 
 /** The standard civil items, for an Item Bank that has none: names, units and starting rates (the Owner sets their own). */
 export const STANDARD_CIVIL_ITEMS: { key: CivilType | 'debris'; name: string; cat: string; unit: string; rate: number; specs: string }[] = [
@@ -129,7 +143,7 @@ export const STANDARD_CIVIL_ITEMS: { key: CivilType | 'debris'; name: string; ca
 export function missingStandardItems(bank: Item[], newId: () => string): Item[] {
   const have = civilItems(bank);
   return STANDARD_CIVIL_ITEMS
-    .filter(s => !have.items[s.key] && !(s.key === 'floorRemove' && have.floorDoesBoth))
+    .filter(s => !have.items[s.key])
     .map(s => {
       const cost = s.rate / 1.25;
       return { id: newId(), name: s.name, cat: s.cat, unit: s.unit, specs: s.specs, materials: Math.round(cost * 0.6), labor: Math.round(cost * 0.4), margin: 25 } as Item;
@@ -250,6 +264,8 @@ export interface CivilContext {
   bankMap: Map<string, Item>;
   rooms: Room[];
   newId: () => string;
+  /** The site's state: a raw shell has no old floor to take up. */
+  site?: PropertyStatus;
 }
 
 /** The room every line across the flat sits in. */
@@ -290,13 +306,16 @@ const unitWord = (item: Item) => String(item.unit || '').trim();
 
 /** The lines a room tool adds (or would add) to a room. */
 function roomLines(tool: 'floor' | 'walls7' | 'waterproof', room: Room, ctx: CivilContext): BoqItem[] | { problem: string } {
-  const { items, floorDoesBoth } = civilItems(ctx.bank);
+  const c = civilItems(ctx.bank);
+  const { items } = c;
   const label = toolOf(tool).label;
   if (tool === 'floor') {
-    if (!items.floor) return { problem: `No item in the Item Bank for ${label.toLowerCase()}: add one such as “Floor tiles, laid”, priced per sq ft.` };
-    const out = [civilLine('floor', room, items.floor, ctx.newId)];
-    if (!floorDoesBoth && items.floorRemove) out.unshift(civilLine('floorRemove', room, items.floorRemove, ctx.newId));
-    return out;
+    // Two lines, as in the mockup: the old floor out, the new one in. A raw shell has no old floor.
+    const lay = floorItemFor(c, room);
+    if (!lay) return { problem: 'No item in the Item Bank for the new floor: add one such as “Floor tiles, laid”, priced per sq ft.' };
+    if (ctx.site === 'raw_shell') return [civilLine('floor', room, lay, ctx.newId)];
+    if (!items.floorRemove) return { problem: 'No item in the Item Bank to take up the old floor: add one such as “Remove existing floor tiles”, priced per sq ft.' };
+    return [civilLine('floorRemove', room, items.floorRemove, ctx.newId), civilLine('floor', room, lay, ctx.newId)];
   }
   const item = items[tool];
   if (!item) return { problem: `No item in the Item Bank for ${label.toLowerCase()}: add one such as “${STANDARD_CIVIL_ITEMS.find(s => s.key === tool)!.name}”, priced per sq ft.` };
@@ -343,31 +362,97 @@ export function addWallCivil(boq: BoqItem[], tool: 'break' | 'build', room: Room
 /** "Renovation" for a finished flat; what the panel's chip says of the site. */
 export const SITE_LABEL: Record<PropertyStatus, string> = { finished: 'Renovation', semi_finished: 'Semi-finished', raw_shell: 'Raw shell' };
 
-/** What the brief's civil scope asks the plan for, in words: "both bathrooms redone and new flooring". */
+/* Which rooms "Replace flooring" means, read from the brief's own words. */
+const WHOLE_FLAT = /\b(entire|whole|all|every|throughout|house|flat|home|apartment)\b/;
+const KIND_WORDS: Partial<Record<RoomKind, RegExp>> = {
+  living: /\b(living|drawing|lounge|hall)\b/, dining: /\bdin(ing|e)\b/, bedroom: /\b(bed\s*rooms?|bedrooms?|master)\b/,
+  kitchen: /\bkitchens?\b/, foyer: /\b(foyer|entrance|entry|lobby)\b/, passage: /\b(passages?|corridors?)\b/,
+  balcony: /\bbalcon(y|ies)\b/, utility: /\butility\b/,
+};
+const FLOOR_CUE = /\bfloor(ing|s)?\b|\bvitrified\b|\bre-?tile\b|\b(wooden|laminate|marble)\s+floor/;
+const NOT = /\b(no|not|without|exclude[sd]?|excluding|skip|retain|keep\s+existing|as[- ]is|untouched|unchanged|intact)\b/;
+
+/**
+ * The rooms "Replace flooring" re-floors, room by room. A raw shell is floored
+ * throughout. Otherwise the brief says where ("new flooring in the living and
+ * dining rooms", "re-floor bedroom 2", "flooring throughout"); a brief that
+ * does not say re-floors the living and dining rooms, as the mockup does, or
+ * every room when the plan has neither. Bathrooms are the bathroom overhaul's.
+ */
+export function briefFloorRooms(project: Partial<ProjectContext> | null | undefined, rooms: Room[]): { rooms: Room[]; throughout: boolean } {
+  const scope = resolveCivilScope(project || undefined);
+  const dry = rooms.filter(r => kindOf(r) !== 'toilet');
+  if (!scope.flooring || !dry.length) return { rooms: [], throughout: false };
+  if (project?.propertyStatus === 'raw_shell') return { rooms: dry, throughout: true };
+  const clauses = String(project?.clientBrief || '').toLowerCase().split(/[.;\n]+/).filter(c => FLOOR_CUE.test(c) && !NOT.test(c));
+  const named = new Set<Room>();
+  let throughout = false;
+  clauses.forEach(c => {
+    if (WHOLE_FLAT.test(c)) { throughout = true; return; }
+    (Object.keys(KIND_WORDS) as RoomKind[]).forEach(k => {
+      const ofKind = dry.filter(r => kindOf(r) === k);
+      // A room named in full ("bedroom 2") is that room; the kind's word alone ("bedrooms") is every room of the kind.
+      const byName = ofKind.filter(r => r.name.trim() && c.includes(r.name.trim().toLowerCase()) && /\d|master|guest|kids?|parents?|\w+\s+\w+/.test(r.name.trim().toLowerCase()));
+      if (byName.length) byName.forEach(r => named.add(r));
+      else if (KIND_WORDS[k]!.test(c)) ofKind.forEach(r => named.add(r));
+    });
+    dry.filter(r => kindOf(r) === 'other' && r.name.trim() && c.includes(r.name.trim().toLowerCase())).forEach(r => named.add(r));
+  });
+  if (throughout) return { rooms: dry, throughout: true };
+  if (named.size) return { rooms: dry.filter(r => named.has(r)), throughout: named.size === dry.length && dry.length > 1 };
+  const common = dry.filter(r => kindOf(r) === 'living' || kindOf(r) === 'dining');
+  return common.length ? { rooms: common, throughout: false } : { rooms: dry, throughout: true };
+}
+
+/** The rooms in words: "the living and dining rooms", "the master bedroom and the kitchen". */
+const SAYS_ROOM = new Set(['living', 'dining', 'drawing', 'family', 'guest', 'puja', 'pooja', 'store', 'powder']);
+function roomsInWords(rooms: Room[]): string {
+  const adj: string[] = [];
+  const nouns: string[] = [];
+  rooms.forEach(r => {
+    const n = r.name.trim().toLowerCase().replace(/\s+(room|rm)\.?$/, '');
+    const parts = n.split(/\s*(?:\/|&|\band\b|\+)\s*/).filter(Boolean);
+    if (parts.length && parts.every(p => SAYS_ROOM.has(p))) adj.push(parts.join(' and ') + (parts.length > 1 ? ' room' : ''));
+    else nouns.push(`the ${r.name.trim().toLowerCase().replace(/\brm\.?$/, 'room')}`);
+  });
+  const said: string[] = [];
+  // Plain adjectives share "rooms": "the living and dining rooms"; a combined one keeps its own.
+  const plain = adj.filter(a => !a.endsWith(' room'));
+  if (plain.length) said.push(`the ${plain.length > 1 ? `${plain.slice(0, -1).join(', ')} and ${plain[plain.length - 1]} rooms` : `${plain[0]} room`}`);
+  adj.filter(a => a.endsWith(' room')).forEach(a => said.push(`the ${a}`));
+  said.push(...nouns);
+  return said.length > 1 ? `${said.slice(0, -1).join(', ')} and ${said[said.length - 1]}` : said[0] || '';
+}
+
+/** What the brief's civil scope asks the plan for, in words: "both bathrooms redone and new flooring in the living and dining rooms". */
 export function briefCivilAsk(ctx: Partial<ProjectContext> | null | undefined, rooms: Room[]): string {
   const s = resolveCivilScope(ctx || undefined);
   const baths = rooms.filter(r => kindOf(r) === 'toilet').length;
   const parts: string[] = [];
   if (s.bathrooms) parts.push(`${baths === 2 ? 'both bathrooms' : baths === 1 ? 'the bathroom' : baths > 2 ? `all ${baths} bathrooms` : 'the bathrooms'} redone`);
-  if (s.flooring) parts.push('new flooring');
+  if (s.flooring) {
+    const f = briefFloorRooms(ctx, rooms);
+    parts.push(f.throughout || !f.rooms.length ? 'new flooring throughout' : `new flooring in ${roomsInWords(f.rooms)}`);
+  }
   if (s.kitchenCivil) parts.push('the kitchen’s dado tiles');
   return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0] || '';
 }
 
 /**
  * What "Start from the brief" lays out: each bathroom waterproofed, re-floored
- * and tiled to 7′ (bathrooms); every other room re-floored (flooring); the
- * kitchen's walls tiled (kitchen civil). What a room already has is skipped;
- * debris comes in once.
+ * and tiled to 7′ (bathrooms); the rooms the brief re-floors, room by room
+ * (flooring, see briefFloorRooms); the kitchen's walls tiled (kitchen civil).
+ * What a room already has is skipped; debris comes in once.
  */
 export function fromBrief(boq: BoqItem[], ctx: CivilContext & { project: Partial<ProjectContext> | null | undefined }): CivilResult {
   const scope = resolveCivilScope(ctx.project || undefined);
   const planned = ctx.rooms.filter(r => roomRect(r));
+  const floors = new Set(briefFloorRooms(ctx.project, ctx.rooms).rooms.map(r => r.name));
   const wants: [Room, 'floor' | 'walls7' | 'waterproof'][] = [];
   planned.forEach(r => {
     const k = kindOf(r);
     if (scope.bathrooms && k === 'toilet') wants.push([r, 'waterproof'], [r, 'floor'], [r, 'walls7']);
-    if (scope.flooring && k !== 'toilet') wants.push([r, 'floor']);
+    if (scope.flooring && floors.has(r.name)) wants.push([r, 'floor']);
     if (scope.kitchenCivil && k === 'kitchen') wants.push([r, 'walls7']);
   });
   if (!wants.length) return { problem: 'The brief asks for no civil work on these rooms. Draw what the site needs with the tools.' };
@@ -376,7 +461,7 @@ export function fromBrief(boq: BoqItem[], ctx: CivilContext & { project: Partial
   wants.forEach(([room, tool]) => {
     const already = [...boq, ...added].some(l => live(l) && l.civil && l.roomId === room.name && toolOfType(l.civil.type) === tool);
     if (already) return;
-    const lines = roomLines(tool, room, ctx);
+    const lines = roomLines(tool, room, { ...ctx, site: ctx.site ?? ctx.project?.propertyStatus });
     if ('problem' in lines) { missing.add(toolOf(tool).label); return; }
     added.push(...lines);
   });

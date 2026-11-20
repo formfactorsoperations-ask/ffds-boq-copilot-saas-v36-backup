@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Sparkles, PackagePlus } from 'lucide-react';
 import { Button, Chip, LABEL } from '../ui/kit';
-import type { BoqItem, Room } from '../../types';
+import type { BoqItem, Item, PropertyStatus, Room } from '../../types';
 import {
-  CIVIL_TOOLS, civilDerivation, segLength, withSegmentLength, civilQty, isWet, toolOf, type CivilTool, type CivilItems,
+  CIVIL_TOOLS, civilDerivation, segLength, withSegmentLength, civilQty, isWet, toolOf, canRefloor, missingStandardItems, type CivilTool, type CivilItems,
 } from '../../lib/playground/civil';
 import { round2 } from '../../lib/playground/geometry';
 import { inr, type LineModel } from './playgroundUi';
@@ -20,11 +20,13 @@ import { inr, type LineModel } from './playgroundUi';
                toggled for the room, and its civil lines
 */
 
-export function CivilPanel({ left, tool, site, ask, lines, total, hideFigures, readOnly, items, isOwner, onTool, onBrief, onAddItems }: {
+export function CivilPanel({ left, tool, site, siteStatus, ask, lines, total, hideFigures, readOnly, items, bank, isOwner, onTool, onBrief, onAddItems }: {
   left: number;
   tool: CivilTool | null;
   /** The site, as the chip says it: Renovation, Semi-finished, Raw shell. */
   site?: string;
+  /** The site's state: a raw shell re-floors without taking an old floor up. */
+  siteStatus?: PropertyStatus;
   /** What the brief asks for, in words; empty when it asks for no civil work. */
   ask: string;
   lines: number;
@@ -33,14 +35,17 @@ export function CivilPanel({ left, tool, site, ask, lines, total, hideFigures, r
   readOnly: boolean;
   /** The Item Bank's civil items: a tool with none says so. */
   items: CivilItems;
+  /** The Item Bank, for the standard civil items it lacks. */
+  bank: Item[];
   isOwner: boolean;
   onTool: (t: CivilTool) => void;
   onBrief: () => void;
   /** The Owner adds the standard civil items the bank lacks. */
   onAddItems: () => void;
 }) {
-  const has = (t: CivilTool) => (t === 'floor' ? !!items.items.floor : !!items.items[t]);
-  const missing = CIVIL_TOOLS.filter(t => !has(t.tool));
+  const has = (t: CivilTool) => (t === 'floor' ? canRefloor(items, siteStatus) : !!items.items[t]);
+  // The Owner's button shows while the bank lacks any standard civil item (re-flooring's two lines need both of theirs).
+  const missing = missingStandardItems(bank, () => '');
   return (
     <div className="absolute z-10 w-[214px] rounded-2xl bg-white/95 border border-slate-200 shadow-md p-2 hud-panel-in" style={{ left, top: 52 }} aria-label="Civil work" role="region">
       <div className="px-1 flex items-center justify-between gap-2"><span className={LABEL}>Civil work</span>{site && <Chip tone="warn">{site}</Chip>}</div>

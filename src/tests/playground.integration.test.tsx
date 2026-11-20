@@ -769,7 +769,7 @@ describe('the Civil layer (PR C)', () => {
     civilOn();
     expect(screen.getByText('Civil layer: the furniture fades back. Pick a tool and draw, or start from the brief.')).toBeTruthy();
     expect(within(panel()).getByText('Renovation')).toBeTruthy();
-    expect(within(panel()).getByText(/The brief asks for new flooring\. Quantities come from the plan\./)).toBeTruthy();
+    expect(within(panel()).getByText(/The brief asks for new flooring throughout\. Quantities come from the plan\./)).toBeTruthy();
     ['Break a wall', 'Build a wall', 'Re-floor a room', 'Wall tiles to 7′', 'Waterproofing'].forEach(t => expect(within(panel()).getByRole('button', { name: new RegExp(t) })).toBeTruthy());
     // No item for a new wall in this bank: the tool says so.
     expect(within(within(panel()).getByRole('button', { name: /Build a wall/ })).getByText('Not in the Item Bank yet')).toBeTruthy();
@@ -780,11 +780,26 @@ describe('the Civil layer (PR C)', () => {
       ['Bedroom', 'floorRemove', 120], ['Bedroom', 'floor', 120], ['Kitchen', 'floorRemove', 80], ['Kitchen', 'floor', 80],
     ]);
     expect(latest[0].boq.filter((l: any) => l.bankId === 'b56')).toHaveLength(1);
-    expect(screen.getByText(/^From the brief: 4 civil lines for new flooring, measured from the plan\. Debris removal added once, across the flat\./)).toBeTruthy();
+    expect(screen.getByText(/^From the brief: 4 civil lines for new flooring throughout, measured from the plan\. Debris removal added once, across the flat\./)).toBeTruthy();
     expect(screen.getByRole('radio', { name: /^Civil/ }).textContent).toBe('Civil 4');
     // One undo takes it all back.
     fireEvent.click(screen.getByRole('button', { name: /Undo/ }));
     expect(latest[0].boq.filter((l: any) => l.civil)).toHaveLength(0);
+  });
+
+  it('Replace flooring is room by room: the rooms the brief names, each in two lines', () => {
+    let latest: any[] = [];
+    render(<Harness ctx0={{ ...renovation, clientBrief: 'Modular kitchen. Replace the flooring in the kitchen only.' }} bankIn={civilBank} tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} />);
+    civilOn();
+    expect(within(panel()).getByText(/The brief asks for new flooring in the kitchen\. Quantities come from the plan\./)).toBeTruthy();
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Start from the brief' }));
+    expect(latest[0].boq.filter((l: any) => l.civil).map((l: any) => [l.roomId, l.civil.type, l.bankId, l.qty])).toEqual([
+      ['Kitchen', 'floorRemove', 'b52', 80], ['Kitchen', 'floor', 'b53', 80],
+    ]);
+    // Any other room is re-floored by hand with the tool, when the site needs it.
+    fireEvent.click(within(panel()).getByRole('button', { name: /Re-floor a room/ }));
+    fireEvent.pointerDown(room('Bedroom'), { ...at(6, 5), pointerId: 1 });
+    expect(latest[0].boq.filter((l: any) => l.civil && l.roomId === 'Bedroom').map((l: any) => l.civil.type)).toEqual(['floorRemove', 'floor']);
   });
 
   it('a room tool clicked on a room puts its civil work in, and again takes it out; waterproofing is for wet rooms', () => {
@@ -849,7 +864,7 @@ describe('the Civil layer (PR C)', () => {
     civilOn();
     fireEvent.click(within(panel()).getByRole('button', { name: /Re-floor a room/ }));
     fireEvent.pointerDown(room('Kitchen'), { ...at(16, 4), pointerId: 1 });
-    expect(screen.getByText(/No item in the Item Bank for re-floor a room: add one such as “Floor tiles, laid”/)).toBeTruthy();
+    expect(screen.getByText('No item in the Item Bank for the new floor: add one such as “Floor tiles, laid”, priced per sq ft.')).toBeTruthy();
     fireEvent.click(within(panel()).getByRole('button', { name: 'Add the standard civil items' }));
     expect(c.adHocItems.map((i: any) => i.name)).toEqual([
       'Wall demolition, brick', 'New wall, 4.5″ brick', 'Remove existing floor tiles', 'Floor tiles, laid', 'Wall tiles to 7 ft, laid', 'Waterproofing, floor and upstand', 'Debris removal',
