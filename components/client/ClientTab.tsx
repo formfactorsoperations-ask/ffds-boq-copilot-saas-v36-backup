@@ -1,6 +1,13 @@
 
 import ProposalAcceptanceCard from '../ops/ProposalAcceptanceCard';
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useContext } from 'react';
+import ProposalPanel from '../playground/ProposalPanel';
+import { useStudioTerms } from '../playground/useStudioTerms';
+import { useMaterialSpecs } from '../materialSpecs/useMaterialSpecs';
+import { JourneyContext } from '../../services/journeyEngine';
+import { journeyOf } from '../../lib/playground/meeting';
+import { isPlaygroundTier } from '../../lib/playground/pricing';
+import { optionChains, chainOf, latestOf } from '../../lib/optionChains';
 import { ProjectContext, FullBoqItem, ProposalTier, Item, AiComparisonResult, MaterialSuggestion, TimelinePhase, PaymentMilestone, ProposalContent, DecisionBrainOutput, LeadProfile, ProposalLevel, ProposalType } from '../../types';
 import ClientExportView from './ClientExportView';
 import ProposalSectionEditor from './ProposalSectionEditor';
@@ -63,6 +70,10 @@ interface ClientTabProps {
   /** The project, and the BOQ its Timeline is built from: the proposal quotes the Timeline's programme. */
   projectId?: string;
   programmeBoq?: FullBoqItem[];
+  /** Writes the client's portal copy (PR P: Publish to the portal). */
+  onReleasePortal?: (ctx: ProjectContext) => Promise<unknown>;
+  /** Who is working, for the proposal's "Prepared by". */
+  userName?: string;
 }
 
 const ClientTab: React.FC<ClientTabProps> = (props) => {
@@ -135,6 +146,26 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
 
   /* The option the Level 2 proposal is written for; the approved one until the studio picks another. */
   const l2Option = proposalOption(validTiers, projectContext);
+
+  /*
+    A Playground proposal (PR P): the option's newest version, when it is a
+    Playground version, is proposed through its own pages (the first-proposal
+    PDF, the meeting view, the portal). The classic proposal stays one click
+    away until PR 7 retires it.
+  */
+  const playgroundTier = useMemo(() => {
+    const picked = l2Option.tier;
+    const chain = picked ? chainOf(optionChains(validTiers), picked.id) : null;
+    const t = (chain ? latestOf(chain) : picked) as ProposalTier | undefined;
+    return t && isPlaygroundTier(t) ? t : null;
+  }, [validTiers, l2Option]);
+  const [showClassic, setShowClassic] = useState(false);
+  /* Studio-side only: a client's view never reads the studio's specs or terms. */
+  const studioSide = !!playgroundTier && !isClientViewOnly;
+  const playgroundSpecs = useMaterialSpecs(orgData?.tenantId, studioSide);
+  const playgroundTerms = useStudioTerms(orgData?.tenantId, studioSide);
+  const journeyCtx = useContext(JourneyContext);
+  const playgroundJourney = useMemo(() => journeyOf(journeyCtx?.steps), [journeyCtx?.steps]);
   const setProposalOption = (tierId: string) => {
       if (setProjectContext) {
           setProjectContext(prev => ({ ...prev, proposalOptionId: tierId }));
@@ -533,6 +564,21 @@ const MODEL_SWITCHER = [
 
   return (
     <div className={`transition-all ${isClientViewOnly ? '' : 'p-4 bg-slate-200/50 pattern-bg rounded-2xl print:p-0 print:bg-white print:rounded-none'}`}>
+        {/* A Playground proposal (PR P): its own pages, the meeting view and the portal, built from the BOQ. */}
+        {!isClientViewOnly && setProjectContext && playgroundTier && (
+            <div className="mb-6">
+                <ProposalPanel ctx={projectContext} setCtx={setProjectContext} tier={playgroundTier} tiers={validTiers} bankMap={bankMap}
+                    specBank={playgroundSpecs.bank} termsSettings={playgroundTerms.termsSettings} paymentStructure={playgroundTerms.paymentStructure}
+                    journey={playgroundJourney} studioName={(orgData as any)?.orgName || 'The studio'} userName={props.userName}
+                    leadConcern={props.leadProfile?.primaryFrictionPoint} onPublish={props.onReleasePortal} />
+                <div className="mt-3 flex justify-end">
+                    <button type="button" onClick={() => setShowClassic(v => !v)} aria-expanded={showClassic} className="text-xs font-bold text-slate-500 hover:text-[#3D52A0]">
+                        {showClassic ? 'Hide the classic proposal' : 'Show the classic proposal'}
+                    </button>
+                </div>
+            </div>
+        )}
+        {(!playgroundTier || showClassic || isClientViewOnly) && (<>
         {!isClientViewOnly && setProjectContext && (
             <div className="flex flex-col gap-4 mb-6 no-print">
                  {/* The client's acceptance of these commercials — studio-side
@@ -699,6 +745,7 @@ const MODEL_SWITCHER = [
                 onVisibilityChange={handleVisibilityChange} // NEW PROP
             />
         </div>
+        </>)}
 
         <ProposalSectionEditor
             sectionId={editingSection}

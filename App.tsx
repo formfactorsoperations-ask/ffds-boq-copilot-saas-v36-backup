@@ -158,7 +158,7 @@ import { nextDefaultProjectName } from "./lib/projectNaming";
 import { sendPortalAccessLink } from "./services/emailService";
 import { verifyApiKey } from "./services/geminiService";
 import { id as generateId, calculateSellPrice, calculateCostFromSell } from "./lib/utils";
-import { isPlaygroundTier } from "./lib/playground/pricing";
+import { isPlaygroundTier, docPricingOf } from "./lib/playground/pricing";
 import { playgroundTierSummary } from "./lib/playground/versions";
 import { designFeeFor, isAsActuals } from "./lib/boqPricing";
 import { INITIAL_TEMPLATES } from "./lib/standardPackages";
@@ -1721,6 +1721,14 @@ export default function App() {
     Built without the revision log — those entries belong to the current
     version, and applying them to an ancestor would compare it against itself.
   */
+  /* A Playground version reaches the portal priced as Money and the proposal read it (PR P): plan quantities, amounts rounded. */
+  const clientBoqPricing = useCallback((tier: any) => {
+    if (!tier || !isPlaygroundTier(tier)) return null;
+    const map = new Map<string, Item>(bank.map((i) => [i.id, i]));
+    (projectContext?.adHocItems || []).forEach((i: Item) => map.set(i.id, i));
+    return docPricingOf(tier, projectContext?.rooms, map);
+  }, [bank, projectContext?.adHocItems, projectContext?.rooms]);
+
   const clientBoqBaseline = useMemo((): ClientBoqRow[] | undefined => {
     const tier: any = activeCalculatedTier;
     if (!tier) return storedBoqBaseline || undefined;
@@ -1738,14 +1746,16 @@ export default function App() {
       return cursor === tier ? undefined : cursor;
     })();
 
-    const source = rootTier?.fullBoq || rootTier?.boq || [];
+    const pricing = clientBoqPricing(rootTier);
+    const source = (pricing ? rootTier?.boq : rootTier?.fullBoq || rootTier?.boq) || [];
     if (!source.length) return storedBoqBaseline || undefined;
-    return buildClientBoqRows({ boq: source, bank, rooms: clientBoqRooms, revisions: [] });
-  }, [storedBoqBaseline, activeCalculatedTier, tiersWithCalculatedSummaries, bank, clientBoqRooms]);
+    return buildClientBoqRows({ boq: source, bank, rooms: clientBoqRooms, revisions: [], pricing });
+  }, [storedBoqBaseline, activeCalculatedTier, tiersWithCalculatedSummaries, bank, clientBoqRooms, clientBoqPricing]);
 
   const clientBoqRows = useMemo(() => {
     const tier: any = activeCalculatedTier;
-    const source = tier?.fullBoq || tier?.boq || [];
+    const pricing = clientBoqPricing(tier);
+    const source = (pricing ? tier?.boq : tier?.fullBoq || tier?.boq) || [];
     if (!source.length) return [];
 
     return buildClientBoqRows({
@@ -1754,8 +1764,9 @@ export default function App() {
       rooms: clientBoqRooms,
       revisions: (projectContext as any)?.boqRevisions,
       previous: clientBoqBaseline,
+      pricing,
     });
-  }, [activeCalculatedTier, bank, clientBoqRooms, projectContext, clientBoqBaseline]);
+  }, [activeCalculatedTier, bank, clientBoqRooms, projectContext, clientBoqBaseline, clientBoqPricing]);
 
   /*
     The client's money, worked out here and sent with the projection.
@@ -3843,6 +3854,8 @@ export default function App() {
                           leadProfile={leadProfile}
                           setProjectContext={setProjectContext}
                           onExportHtml={handleExportHtml}
+                          onReleasePortal={releasePortalNow}
+                          userName={currentUserAuth?.displayName || undefined}
                         />
                       )}
                       {activeTab === "revision-studio" && (
@@ -4564,6 +4577,8 @@ export default function App() {
                           leadProfile={leadProfile}
                           setProjectContext={setProjectContext}
                           onExportHtml={handleExportHtml}
+                          onReleasePortal={releasePortalNow}
+                          userName={currentUserAuth?.displayName || undefined}
                         />
                       )}
                       {activeTab === "revision-studio" && (

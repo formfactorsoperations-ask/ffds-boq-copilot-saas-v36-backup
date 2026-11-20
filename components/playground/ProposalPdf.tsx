@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { FileText, Download, Send, X } from 'lucide-react';
+import { FileText, Download, Send, X, Globe } from 'lucide-react';
 import { Button, Chip } from '../ui/kit';
 import type { BoqItem, Item, ProjectContext, ProposalTier, TermsSettings, PaymentStructure } from '../../types';
 import { scopeSplit, splitPricingOf, dealFor, complimentaryKeys, type OfferDiscount } from '../../lib/offers';
@@ -68,20 +68,31 @@ function RowLine({ r }: { r: PdfRow }) {
   );
 }
 
-function RoomTable({ b }: { b: PdfRoom }) {
+function RoomTable({ b, detail }: { b: PdfRoom; detail: PriceDetail }) {
+  /* Every line: rate and amount. Room totals: the items, and the room's total. A package: the items only. */
+  const lines = detail === 'lines';
   return (
     <div className="mt-4" data-pdf-room={b.name}>
       <div className="flex items-baseline justify-between"><h3 className="text-[15px] font-bold text-slate-800">{b.name}</h3>{b.size && <span className="text-[11px] text-slate-400">{b.size} from the brief</span>}</div>
       <table className="w-full mt-1" style={{ tableLayout: 'fixed' }}>
-        {COLS}{HEAD}
+        {lines ? COLS : <colgroup><col /><col style={{ width: 56 }} /><col style={{ width: 40 }} /></colgroup>}
+        {lines ? HEAD : <thead><tr className={`text-left ${LABEL_SM}`}><th className="py-1 pr-2">Item</th><th className="py-1 px-1 text-right">Qty</th><th className="py-1 px-1">Unit</th></tr></thead>}
         <tbody>
-          {b.rows.map(r => <React.Fragment key={r.id}><RowLine r={r} /></React.Fragment>)}
-          <tr className="border-t-2 border-slate-200"><td colSpan={4} className="py-1.5 text-[12px] font-bold text-slate-800">{b.name} total</td><td className="py-1.5 text-right tabular-nums text-[13px] font-black">{inr(b.total)}</td></tr>
+          {b.rows.map(r => <React.Fragment key={r.id}>{lines ? <RowLine r={r} /> : (
+            <tr className="border-t border-slate-100 align-top">
+              <td className="py-1.5 pr-2"><div className="text-[12px] text-slate-800 font-semibold">{r.name}{r.free && <span className="text-emerald-700 text-[11px] font-semibold"> complimentary</span>}</div>{r.sub && <div className="text-[11px] text-slate-400 leading-snug">{r.sub}</div>}</td>
+              <td className="py-1.5 px-1 text-right tabular-nums text-[12px] text-slate-600 whitespace-nowrap">{qtyOf(r.qty)}</td>
+              <td className="py-1.5 px-1 text-[11px] text-slate-400">{r.unit}</td>
+            </tr>
+          )}</React.Fragment>)}
+          {detail !== 'package' && <tr className="border-t-2 border-slate-200"><td colSpan={lines ? 4 : 2} className="py-1.5 text-[12px] font-bold text-slate-800">{b.name} total</td><td className="py-1.5 text-right tabular-nums text-[13px] font-black">{inr(b.total)}</td></tr>}
         </tbody>
       </table>
     </div>
   );
 }
+
+export type PriceDetail = 'package' | 'rooms' | 'lines';
 
 function StageTable({ title, figures, stages }: { title: string; figures: string; stages: ScheduleStage[] }) {
   return (
@@ -138,12 +149,17 @@ export interface ProposalPdfProps {
   concern?: string | null;
   /** The client has booked: the portal is open. */
   booked?: boolean;
-  /** Records the proposal as sent, on this version, shaped for this concern. */
-  onSent: (via: 'whatsapp', shapedFor: string) => void;
+  /** How much price the client sees: every line, room totals, or a package (proposal.priceDetail). */
+  priceDetail?: PriceDetail;
+  /** Records the proposal as sent, on this version, shaped for this concern, at this price detail. */
+  onSent: (via: 'whatsapp', shapedFor: string, priceDetail: PriceDetail) => void;
+  /** Puts the client's copy in their portal (after booking). */
+  onPublish?: () => Promise<void>;
   onClose: () => void;
 }
 
-export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, termsSettings, paymentStructure, studioName, userName, concern: concern0, booked, onSent, onClose }: ProposalPdfProps) {
+export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, termsSettings, paymentStructure, studioName, userName, concern: concern0, booked, priceDetail, onSent, onPublish, onClose }: ProposalPdfProps) {
+  const detail: PriceDetail = priceDetail || ctx.proposal?.priceDetail || 'lines';
   const [concern, setConcern] = useState<string>(ctx.proposal?.shapedFor || concern0 || 'Itemized Costs');
   const [busy, setBusy] = useState<null | 'download' | 'send'>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -226,9 +242,9 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
   pages.items = paginateRooms(blocks).map((grp, i, all) => (
     <React.Fragment key={`i${i}`}>
       <Kicker>Item by item</Kicker><H2>{i ? 'Room by room, continued' : 'Room by room'}</H2>
-      {!i && <p className="text-[12px] text-slate-500 mt-1">{tier.name}, the recommended option. Sizes and quantities are allowances from the brief; the final ones follow site measurement and the approved design. Offers are applied on the investment page. Each amount is rounded up to the nearest ₹100.</p>}
-      {grp.map(b => <React.Fragment key={b.name}><RoomTable b={b} /></React.Fragment>)}
-      {i === all.length - 1 && <div className="mt-4 pt-3 border-t-2 border-slate-800 flex items-baseline justify-between"><span className="font-bold text-slate-800">The work, {tier.name}</span><b className="tabular-nums text-lg" data-pdf-work>{inr(items.work)}</b></div>}
+      {!i && <p className="text-[12px] text-slate-500 mt-1">{tier.name}, the recommended option. Sizes and quantities are allowances from the brief; the final ones follow site measurement and the approved design.{detail === 'package' ? ' The price is the package, on the investment page.' : ` Offers are applied on the investment page.${detail === 'lines' ? ' Each amount is rounded up to the nearest ₹100.' : ''}`}</p>}
+      {grp.map(b => <React.Fragment key={b.name}><RoomTable b={b} detail={detail} /></React.Fragment>)}
+      {i === all.length - 1 && detail !== 'package' && <div className="mt-4 pt-3 border-t-2 border-slate-800 flex items-baseline justify-between"><span className="font-bold text-slate-800">The work, {tier.name}</span><b className="tabular-nums text-lg" data-pdf-work>{inr(items.work)}</b></div>}
     </React.Fragment>
   ));
   if (m.separate) {
@@ -280,7 +296,7 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
   pages.inv = [(
     <React.Fragment key="inv">
       <Kicker>Your investment</Kicker><H2>{m.options.length > 1 ? `${m.options.length === 3 ? 'Three' : m.options.length} options, one recommended` : 'What it comes to'}</H2>
-      {m.options.length > 1 && (
+      {m.options.length > 1 && detail !== 'package' && (
         <>
           <div className="mt-4 grid gap-3" style={{ gridTemplateColumns: `repeat(${m.options.length}, minmax(0, 1fr))` }}>{m.options.map(o => (
             <div key={o.t.id} className={`rounded-lg border-2 p-3 ${o.t.id === tier.id ? 'border-[#3D52A0]' : 'border-slate-200'}`}><div className="text-[12px] font-bold text-slate-800">{o.t.name}</div><div className="text-lg font-black tabular-nums mt-1">{inr(o.work)}</div><div className="text-[10px] text-slate-500">the work, before offers and GST</div></div>
@@ -360,7 +376,7 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
       const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean };
       if (nav.canShare?.({ files: [file] }) && nav.share) await nav.share({ files: [file], title: name, text });
       else { pdf.save(name); window.open(`https://wa.me/?text=${encodeURIComponent(`${text} The PDF is attached.`)}`, '_blank', 'noopener'); }
-      onSent('whatsapp', concern);
+      onSent('whatsapp', concern, detail);
     } catch (e: any) {
       if (e?.name !== 'AbortError') setProblem(`It was not sent: ${e?.message || e}`);
     } finally { setBusy(null); }
@@ -372,7 +388,7 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
         <span className="w-9 h-9 rounded-xl bg-[#3D52A0] text-white grid place-items-center"><FileText className="w-4 h-4" aria-hidden /></span>
         <div className="leading-tight">
           <div className="text-sm font-bold text-slate-800">First proposal · PDF</div>
-          <div className="text-[11px] text-slate-500">{tier.name} · {sheets.length} pages · valid {v.days} days · Annexure A from Terms & Payment{m.civil ? ' · renovation terms' : ''}</div>
+          <div className="text-[11px] text-slate-500">{tier.name} · {sheets.length} pages · {detail === 'lines' ? 'every line priced' : detail === 'rooms' ? 'room totals' : 'a package price'} · valid {v.days} days · Annexure A from Terms & Payment{m.civil ? ' · renovation terms' : ''}</div>
         </div>
         <label className="flex items-center gap-1.5 text-[11px] text-slate-500" title="The lead profile’s main concern. It changes the page order.">Shaped for
           <select value={concern} onChange={e => setConcern(e.target.value)} className="px-1.5 py-1 rounded-lg border border-slate-300 text-xs font-semibold bg-white text-slate-700">
@@ -385,7 +401,9 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
           <Chip tone="slate" title="The builder’s plan, unmarked. Drawings reach the client only after the layout is approved.">No drawing: the builder’s plan only</Chip>
           <Button size="sm" icon={Download} onClick={download} disabled={!!busy}>{busy === 'download' ? 'Making the PDF…' : 'Download PDF'}</Button>
           <Button size="sm" icon={Send} onClick={send} disabled={!!busy}>{busy === 'send' ? 'Making the PDF…' : 'Send on WhatsApp'}</Button>
-          {!booked && <span className="text-[11px] text-slate-400 max-w-[180px] leading-tight">Portal: after the client books</span>}
+          {booked && onPublish
+            ? <Button size="sm" icon={Globe} onClick={async () => { setBusy('send'); setProblem(null); try { await onPublish(); } catch (e: any) { setProblem(`The portal was not updated: ${e?.message || e}`); } finally { setBusy(null); } }} disabled={!!busy}>Put in the portal</Button>
+            : !booked && <span className="text-[11px] text-slate-400 max-w-[180px] leading-tight">Portal: after the client books</span>}
           <Button size="sm" icon={X} onClick={onClose}>Close</Button>
         </div>
       </header>

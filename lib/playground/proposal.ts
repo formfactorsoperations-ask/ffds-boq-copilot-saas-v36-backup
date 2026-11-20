@@ -25,8 +25,8 @@ import { ftin } from './geometry';
 import { realRooms } from '../scopeBuckets';
 import { clientDescription } from '../detailedBoq';
 import { separateOf, type SeparateRow } from './supply';
-import { currentVersion, type MaterialSpecsBank, type Grade } from '../materialSpecs';
-import { gradeOf } from '../lineSpecs';
+import { currentVersion, versionAt, GRADE_TIER, type MaterialSpecsBank, type Grade } from '../materialSpecs';
+import { gradeOf, recipeOf, specsFromRecipe, staleParts } from '../lineSpecs';
 import {
   annexureOf, fillClause, hasCivilWork, assumptionsFor, warrantySentence, validitySentence, STANDARD_INITIATION_FEE,
 } from '../annexure';
@@ -347,7 +347,7 @@ export function issueProposal(prev: ProjectContext, s: { tierId: string; at: num
     validDays: days,
     validUntil: until.getTime(),
     tierId: s.tierId,
-    priceDetail: s.priceDetail || was.priceDetail || 'rooms',
+    priceDetail: s.priceDetail || was.priceDetail || 'lines',
     ...(s.shapedFor ? { shapedFor: s.shapedFor } : {}),
     sends: [...(was.sends || []), { at: s.at, via: s.via, tierId: s.tierId, validUntil: until.getTime(), ...(s.by ? { by: s.by } : {}) }],
   };
@@ -366,3 +366,56 @@ export function proposalFileName(project: string, at: Date): string {
 
 /** The rooms the plan page lists: every real room, with its size from the brief. */
 export const homeRooms = (rooms: Room[]) => realRooms(rooms).map(r => ({ name: r.name, size: roomSize(r) }));
+
+/* ───────────────────────────── the Client Proposal's material specifications ───────────────────────────── */
+
+export interface SpecCell { mat: string; words: string; brand: string; versions: number[]; current: number; lines: number; /** A finish's colour, for its swatch. */ swatch?: string }
+export interface SpecTable {
+  grades: { grade: Grade; name: string; fromBoq: boolean }[];
+  rows: { fam: string; name: string; cells: SpecCell[][] }[];
+  /** Lines of the option on an older version of a material than the bank's. */
+  stale: number;
+}
+
+/**
+ * The material specifications, built from the BOQ (the mockup's Client
+ * Proposal, section 4): for the option's own grade, the materials its lines
+ * use, with the versions they are on; for the other grades, the materials the
+ * same items' recipes would give. Lines with their own words have no materials
+ * and are left out, as are items with no recipe.
+ */
+export function specTable(bank: MaterialSpecsBank | null | undefined, tier: Pick<ProposalTier, 'boq' | 'name' | 'specGrade'>, bankMap: Map<string, Item>, names: Partial<Record<Grade, string>> = {}): SpecTable | null {
+  if (!bank) return null;
+  const own = gradeOf(tier);
+  const lines = (tier.boq || []).filter(l => LIVE(l) && resolveBoqLine(l, bankMap).billable);
+  const GR: Grade[] = ['E', 'C', 'P'];
+  const forGrade = (g: Grade, fam: string): SpecCell[] => {
+    const used = new Map<string, SpecCell>();
+    lines.forEach(l => {
+      const item = bankMap.get(l.bankId);
+      const recipe = item ? recipeOf(item, bank) : null;
+      if (!recipe) return;
+      const specs = g === own ? l.materialSpecs : specsFromRecipe(bank, recipe, g);
+      Object.values(specs || {}).forEach(s => {
+        const m = bank.materials.find(x => x.id === s.id);
+        if (!m || m.fam !== fam) return;
+        const cur = currentVersion(bank, m.id)?.v || s.v;
+        const e = used.get(m.id) || { mat: m.id, words: '', brand: currentVersion(bank, m.id)?.brand || '', versions: [], current: cur, lines: 0, ...(m.base ? { swatch: m.base } : {}) };
+        e.lines++;
+        if (!e.versions.includes(s.v)) e.versions.push(s.v);
+        used.set(m.id, e);
+      });
+    });
+    return [...used.values()].map(e => {
+      e.versions.sort((a, b) => a - b);
+      const h = versionAt(bank, e.mat, e.versions[e.versions.length - 1]);
+      return { ...e, words: cap(h?.words || '') };
+    }).sort((a, b) => b.lines - a.lines);
+  };
+  const rows = bank.families.map(f => ({ fam: f.id, name: f.name, cells: GR.map(g => forGrade(g, f.id)) })).filter(r => r.cells.some(c => c.length));
+  return {
+    grades: GR.map(g => ({ grade: g, name: names[g] || GRADE_TIER[g], fromBoq: g === own })),
+    rows,
+    stale: lines.filter(l => staleParts(bank, l).length > 0).length,
+  };
+}

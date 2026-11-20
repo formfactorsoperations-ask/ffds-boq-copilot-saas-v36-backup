@@ -1102,7 +1102,7 @@ export default function PlaygroundScreen(props: Props) {
       {meeting && (
         <MeetingView ctx={ctx} tier={{ ...tier, boq }} tiers={tiers} bankMap={bankMap} specBank={specBank} paymentStructure={paymentStructure}
           studioName={studioName || 'The studio'} userName={userName}
-          priceDetail={ctx.proposal?.priceDetail || 'rooms'}
+          priceDetail={ctx.proposal?.priceDetail || 'lines'}
           onPriceDetail={p => setProjectContext(prev => ({ ...prev, proposal: { ...(prev.proposal || {}), priceDetail: p } }))}
           approved={ctx.approvedTierId === tier.id}
           onApprove={() => {
@@ -1119,8 +1119,8 @@ export default function PlaygroundScreen(props: Props) {
       {pdfOpen && (
         <ProposalPdf ctx={ctx} tier={{ ...tier, boq }} tiers={tiers} bankMap={bankMap} specBank={specBank} termsSettings={termsSettings} paymentStructure={paymentStructure}
           studioName={studioName || 'The studio'} userName={userName} concern={leadConcern} booked={!!journey?.booked}
-          onSent={(via, shapedFor) => {
-            setProjectContext(prev => issueProposal(prev, { tierId: tier.id, at: Date.now(), via, days: validity.days, shapedFor, by: userName }));
+          onSent={(via, shapedFor, priceDetail) => {
+            setProjectContext(prev => issueProposal(prev, { tierId: tier.id, at: Date.now(), via, days: validity.days, shapedFor, priceDetail, by: userName }));
             setNote(`Sent. ${tier.name} is kept as it went; make a new version to change it.`);
           }}
           onClose={() => setPdfOpen(false)} />

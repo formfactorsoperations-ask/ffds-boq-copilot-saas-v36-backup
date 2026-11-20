@@ -122,7 +122,7 @@ describe('sending it', () => {
   it('records the issue on the version, holds it for its days, and keeps each send', () => {
     const at = Date.UTC(2026, 10, 20, 6);
     let c = issueProposal(ctx, { tierId: 't1', at, via: 'whatsapp', days: 15, shapedFor: 'Trust', by: 'Anish' });
-    expect(c.proposal).toMatchObject({ issuedAt: at, validDays: 15, validUntil: at + 15 * 864e5, tierId: 't1', shapedFor: 'Trust', priceDetail: 'rooms' });
+    expect(c.proposal).toMatchObject({ issuedAt: at, validDays: 15, validUntil: at + 15 * 864e5, tierId: 't1', shapedFor: 'Trust', priceDetail: 'lines' });
     expect(sentProposalTier(c)).toBe('t1');
     expect(sentTierIds(c).has('t1')).toBe(true);
     expect(proposalValidity(c, null, at, 't1').issued).toBe(true);

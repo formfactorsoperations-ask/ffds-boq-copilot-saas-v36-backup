@@ -87,7 +87,8 @@ export interface MeetingViewProps {
   onPriceDetail: (p: PriceDetail) => void;
   /** The option is the client's approved one. */
   approved: boolean;
-  onApprove: () => void;
+  /** Makes the option the client's approved one; absent where it cannot be done from. */
+  onApprove?: () => void;
   /** The option's next version, with the client's asks made. */
   onNewVersion?: (boq: BoqItem[]) => void;
   /** The same pages, as the PDF. */
@@ -346,7 +347,7 @@ export default function MeetingView({ ctx, tier, tiers, bankMap, specBank, payme
             </div>
           )}
           <div className="mt-5 flex flex-wrap gap-2">
-            {approved ? <Chip tone="good">Approved by the client</Chip> : <Button variant="primary" icon={Check} onClick={onApprove}>The client approves {tier.name}</Button>}
+            {approved ? <Chip tone="good">Approved by the client</Chip> : onApprove ? <Button variant="primary" icon={Check} onClick={onApprove}>The client approves {tier.name}</Button> : null}
             {nAsks > 0 && onNewVersion && <Button icon={Copy} onClick={() => onNewVersion(withAsks(boq, asks, specBank, bankMap))}>Make a new version with {nAsks} change{nAsks > 1 ? 's' : ''}</Button>}
           </div>
         </div>
