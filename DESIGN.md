@@ -124,7 +124,10 @@ The owner asked for the BOQ Playground's design library (`components/playground/
 ## BOQ Playground (approved mockup v14, recorded 20 Nov 2026)
 
 The BOQ Editor's one screen (`components/playground/`), built to the approved mockup. Read this before
-changing any part of it; new Playground parts follow the same rules.
+changing any part of it; new Playground parts follow the same rules. It is every studio's BOQ Editor:
+the four old modes (Focus Editor, Excel, Cards, Plan Takeoff) and the studio's switch are gone (PR 7b).
+Their actions live on in the lenses; the Excel view's grid stays as the Sheet's **full grid** (statuses,
+linkage, notes, change orders on a frozen BOQ). Do not add a mode or a switch back.
 
 ### The screen
 
@@ -683,7 +686,7 @@ the logic is `lib/projectFolders.ts`.
   - Actual / Dummy / Untagged is a rectangular label (28px tall, 6px corners, turned −3°) with its
     bottom-right corner folded back to show its silver side. Actual is brand type; Dummy is amber-tinted,
     Untagged rose-tinted.
-  - While the BOQ Playground is on, how the latest BOQ was made is a round seal (62px, turned 7°) with its
+  - How the latest BOQ was made is a round seal (62px, turned 7°) with its
     bottom-right edge lifting: Playground / Classic / No BOQ runs round its top, BOQ (or "yet") sits in the
     middle. Playground is brand glass with white type.
   Static: no motion of their own; they lean with the glass.

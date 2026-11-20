@@ -295,7 +295,6 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   const [statusFilter, setStatusFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState<"all" | "actual" | "dummy" | "untagged">("all");
   /* BOQ Playground (PR T): which projects' latest BOQ is a Playground BOQ, a Classic one, or none yet. */
-  const playground = !!(orgData as any)?.playground;
   const [boqFilter, setBoqFilter] = useState<"all" | BoqTag>("all");
   /* Turnkey, design only, design + PMC (lib/engagement.ts). */
   const [engagementFilter, setEngagementFilter] = useState<"all" | EngagementType>("all");
@@ -440,7 +439,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   };
 
   const matchesBoq = (proj: FullProjectData, b: "all" | BoqTag = boqFilter) =>
-    !playground || b === "all" || boqTagOf(proj.tiers) === b;
+    b === "all" || boqTagOf(proj.tiers) === b;
 
   const matchesEngagement = (proj: FullProjectData, e: "all" | EngagementType = engagementFilter) =>
     e === "all" || engagementOf(proj.context) === e;
@@ -462,7 +461,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
           matchesSearch(proj) &&
           matchesAlert(proj),
       ),
-    [projects, kindFilter, statusFilter, engagementFilter, boqFilter, playground, searchQuery, alertFilter, intel],
+    [projects, kindFilter, statusFilter, engagementFilter, boqFilter, searchQuery, alertFilter, intel],
   );
 
   /*
@@ -1031,25 +1030,21 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                             </span>
                           </button>
                         ))}
-                        {playground && (
-                          <>
-                            <small>BOQ</small>
-                            {([
-                              { key: 'all', label: 'All' },
-                              { key: 'playground', label: 'Playground' },
-                              { key: 'classic', label: 'Classic' },
-                              { key: 'none', label: 'None yet' },
-                            ] as { key: 'all' | BoqTag; label: string }[]).map((b) => (
-                              <button key={b.key} type="button" role="menuitem" onClick={() => { setBoqFilter(b.key); setFiltersOpen(false); }}>
-                                {b.label}
-                                <span className="flex items-center gap-2">
-                                  {projects.filter((proj) => matchesBoq(proj, b.key)).length}
-                                  {boqFilter === b.key && <CheckIcon className="w-3.5 h-3.5 text-[#3D52A0]" />}
-                                </span>
-                              </button>
-                            ))}
-                          </>
-                        )}
+                        <small>BOQ</small>
+                        {([
+                          { key: 'all', label: 'All' },
+                          { key: 'playground', label: 'Playground' },
+                          { key: 'classic', label: 'Classic' },
+                          { key: 'none', label: 'None yet' },
+                        ] as { key: 'all' | BoqTag; label: string }[]).map((b) => (
+                          <button key={b.key} type="button" role="menuitem" onClick={() => { setBoqFilter(b.key); setFiltersOpen(false); }}>
+                            {b.label}
+                            <span className="flex items-center gap-2">
+                              {projects.filter((proj) => matchesBoq(proj, b.key)).length}
+                              {boqFilter === b.key && <CheckIcon className="w-3.5 h-3.5 text-[#3D52A0]" />}
+                            </span>
+                          </button>
+                        ))}
                         {engagementsInUse.length > 1 && (
                           <>
                             <small>Engagement</small>
@@ -1114,7 +1109,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                         client={c.clientName || 'No client yet'}
                         stage={stageOf(c.status)}
                         kind={kindOf(project)}
-                        boq={playground ? boqTagOf(project.tiers) : undefined}
+                        boq={boqTagOf(project.tiers)}
                         files={folderFiles(project)}
                         next={folderNext(intel.get(project.id)?.action)}
                         width={width}

@@ -54,13 +54,12 @@ export default function TemplatesAndBankTab({
 }: any) {
   const [tab, setTab] = useState<TabId>('bank');
   const { orgData, currentRole, currentRoles } = useOrg() as any;
-  const playground = !!(orgData as any)?.playground;
   /* BOQ Playground S2: the Material specs bank, read once for both the Material specs tab and the Item bank's recipes. */
-  const specs = useMaterialSpecs(orgData?.tenantId, playground);
+  const specs = useMaterialSpecs(orgData?.tenantId, true);
   const canEditSpecs = canEditMaterialSpecs(currentRole, currentRoles);
   const [recipeItemId, setRecipeItemId] = useState<string | null>(null);
   const [addMaterialSignal, setAddMaterialSignal] = useState(0);
-  const tabs = playground ? [...TABS.slice(0, 1), MATERIALS_TAB, ...TABS.slice(1)] : TABS;
+  const tabs = [...TABS.slice(0, 1), MATERIALS_TAB, ...TABS.slice(1)];
   /*
     Switching tab looked broken because it was slow, not because it was stuck.
 
@@ -91,9 +90,9 @@ export default function TemplatesAndBankTab({
   /* Items whose words come from a recipe: the Material specs gauge. */
   const recipeStats = useMemo(() => {
     const items: any[] = Array.isArray(activeBank) ? activeBank : [];
-    const withRecipe = playground ? items.filter((i) => recipeOf(i, specs.bank)).length : 0;
+    const withRecipe = items.filter((i) => recipeOf(i, specs.bank)).length;
     return { total: items.length, withRecipe, pct: items.length ? Math.round((withRecipe / items.length) * 100) : 0 };
-  }, [activeBank, specs.bank, playground]);
+  }, [activeBank, specs.bank]);
   const recipeItem = recipeItemId ? (activeBank || []).find((i: any) => i.id === recipeItemId) : null;
   const projectsUsing = (id: string) => (projects || []).filter((p: any) => (p.tiers || []).some((t: any) => (t.boq || []).some((l: any) => l.bankId === id))).length;
 
@@ -266,7 +265,7 @@ export default function TemplatesAndBankTab({
               aiStrategy={aiStrategy}
             />
           )}
-          {deferredTab === 'materials' && playground && (
+          {deferredTab === 'materials' && (
             <MaterialSpecsTab specs={specs} items={activeBank || []} projects={projects} addSignal={addMaterialSignal} onOpenItem={(it) => setRecipeItemId(it.id)} />
           )}
           {deferredTab === 'vendors' && (
@@ -280,13 +279,13 @@ export default function TemplatesAndBankTab({
               highlightedBankItemId={highlightedBankItemId}
               onHighlightClear={() => setHighlightedBankItemId(null)}
               projects={projects}
-              specs={playground ? specs.bank : undefined}
-              onOpenRecipe={playground ? (id: string) => setRecipeItemId(id) : undefined}
+              specs={specs.bank}
+              onOpenRecipe={(id: string) => setRecipeItemId(id)}
             />
           )}
         </div>
-        {playground && <ArtDefs />}
-        {playground && recipeItem && (
+        <ArtDefs />
+        {recipeItem && (
           <RecipeDrawer
             item={recipeItem}
             specs={specs.bank}

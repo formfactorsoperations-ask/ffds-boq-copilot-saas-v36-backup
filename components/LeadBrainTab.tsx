@@ -4,8 +4,8 @@ import { ProjectContext, LeadProfile, AIStrategy } from "../types";
 import ProjectContextCard from "./ProjectContextCard";
 
 /**
- * Brief & Site. One screen, so no view switcher in the header: the plan takeoff
- * lives in the BOQ editor (Plan Takeoff view), not here.
+ * Brief & Site. One screen, so no view switcher in the header: the BOQ is drawn
+ * on the plan in the BOQ Editor's Plan lens, not here.
  */
 interface LeadBrainTabProps {
   projectContext: ProjectContext;

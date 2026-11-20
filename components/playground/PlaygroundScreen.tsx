@@ -145,6 +145,8 @@ interface Props {
   signed?: SignedPlayground | null;
   onSave: () => void;
   saveState: 'idle' | 'saving' | 'saved' | 'error';
+  /** When Save last wrote the project (the bar says so). */
+  lastSaved?: Date | null;
   onImport: () => void;
   onExportExcel?: () => void;
   onExportPdf: () => void;
@@ -189,7 +191,7 @@ interface Props {
 
 export default function PlaygroundScreen(props: Props) {
   const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly: readOnlyProp, currentRoles, tenantId, onBoq: onBoqProp, newId,
-    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit, paymentStructure, termsSettings, leadConcern, journey, decisionMakers, programme } = props;
+    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, lastSaved, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit, paymentStructure, termsSettings, leadConcern, journey, decisionMakers, programme } = props;
   /* A signed version (PR R2) is read-only; a revision of it is drawn and edited here, against it. */
   const revRec = signed?.rec || null;
   const revDraft = !!revRec && signed?.revState === 'draft';
@@ -887,6 +889,10 @@ export default function PlaygroundScreen(props: Props) {
           className={`${barBtn} px-3 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60`}>
           <Check className="w-3.5 h-3.5" aria-hidden /><span className="min-[1400px]:hidden">{saveState === 'saving' ? 'Saving…' : 'Save'}</span><span className="hidden min-[1400px]:inline">{saveState === 'saving' ? 'Saving…' : 'Save changes'}</span>
         </button>
+        {saveState === 'saved' && lastSaved && (
+          <span className="text-[11px] text-slate-500 whitespace-nowrap" data-saved>Saved {lastSaved.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+        )}
+        {saveState === 'error' && <span role="alert" className="text-[11px] font-semibold text-rose-600 whitespace-nowrap">Couldn’t save. Try again.</span>}
         <button type="button" onClick={undo} disabled={!hist.past.length} aria-label="Undo" title="Undo (Ctrl+Z)" className="p-1.5 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30">
           <Undo2 className="w-4 h-4" aria-hidden />
         </button>

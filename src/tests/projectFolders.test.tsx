@@ -18,9 +18,8 @@ vi.mock('firebase/firestore', async (orig) => {
   return { ...real, collection: () => ({}), collectionGroup: () => ({}), doc: () => ({}), query: () => ({}), where: () => ({}),
     getDoc: async () => ({ exists: () => false, data: () => undefined }), getDocs: async () => ({ docs: [], empty: true, size: 0 }), onSnapshot: () => () => {} };
 });
-const orgFlags = { playground: false };
 vi.mock('../../contexts/OrgContext', () => ({
-  useOrg: () => ({ orgData: { tenantId: 't1', team: [], playground: orgFlags.playground }, currentRole: 'Admin', updateOrgData: async () => {}, teamMembers: [] }),
+  useOrg: () => ({ orgData: { tenantId: 't1', team: [] }, currentRole: 'Admin', updateOrgData: async () => {}, teamMembers: [] }),
 }));
 
 afterEach(cleanup);
@@ -186,10 +185,7 @@ describe('the BOQ tag (BOQ Playground PR T)', () => {
     });
     return view!;
   };
-  afterEach(() => { orgFlags.playground = false; });
-
-  it('is a sticker on each folder’s front glass, beside the Actual / Dummy sticker, while the Playground is on', async () => {
-    orgFlags.playground = true;
+  it('is a sticker on each folder’s front glass, beside the Actual / Dummy sticker', async () => {
     const view = await mount();
     const tag = (id: string) => view.container.querySelector(`[data-testid="project-folder-${id}"] .pf-sticker.boq`)?.getAttribute('title')?.split(':')[0];
     expect(tag('pg')).toBe('Playground BOQ');
@@ -198,7 +194,6 @@ describe('the BOQ tag (BOQ Playground PR T)', () => {
   });
 
   it('the Filters menu shows one kind of BOQ, with counts', async () => {
-    orgFlags.playground = true;
     const view = await mount();
     fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
     const classic = screen.getByRole('menuitem', { name: /^Classic/ });
@@ -208,8 +203,8 @@ describe('the BOQ tag (BOQ Playground PR T)', () => {
     expect(screen.getByRole('button', { name: /^Filters · 1/ })).toBeTruthy();
   });
 
-  it('is not there with the Playground off', async () => {
+  it('is on every studio’s folders: there is no switch for it (PR 7b)', async () => {
     const view = await mount();
-    expect(view.container.querySelector('.pf-sticker.boq')).toBeNull();
+    expect(view.container.querySelectorAll('.pf-sticker.boq').length).toBe(3);
   });
 });

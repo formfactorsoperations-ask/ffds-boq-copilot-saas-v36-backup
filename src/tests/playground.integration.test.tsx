@@ -1,10 +1,10 @@
 /*
-  The BOQ Playground in the BOQ Editor, with the studio's switch on: the
-  approved mockup's one screen, with five lenses (Plan, Rooms, Sheet, Tune,
-  Deal), the studio design library and the Live BOQ.
+  The BOQ Playground: the BOQ Editor for every studio, the approved mockup's one
+  screen, with five lenses (Plan, Rooms, Sheet, Tune, Deal), the studio design
+  library and the Live BOQ.
 
   Each test drives one thing the four old modes did, from its new home, the way
-  a person would; and the switch off brings the four modes back as they were.
+  a person would. The four modes and the studio's switch are gone (PR 7b).
 
     Focus Editor  → click any line: the inspector on the right
     Excel         → Sheet (and its full grid, for status, linkage and notes)
@@ -18,7 +18,7 @@ import React, { useMemo, useState } from 'react';
 import { render, screen, fireEvent, within, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const org = { playground: true, role: 'Super Admin' };
+const org = { playground: true as boolean | undefined, role: 'Super Admin' };
 vi.mock('../../contexts/OrgContext', () => ({
   useOrg: () => ({ orgData: { tenantId: 'test-tenant', playground: org.playground }, currentRole: org.role, currentRoles: [org.role], currentUserAuth: { displayName: 'Priya Shah', email: 'priya@example.com' } }),
 }));
@@ -139,14 +139,23 @@ describe('one screen, five lenses', () => {
     expect(screen.getByRole('complementary', { name: 'Studio design library' })).toBeTruthy();
   });
 
-  it('with the switch off, the four modes are back', () => {
-    org.playground = false;
+  it('is every studio’s BOQ Editor: no switch brings the four modes back (PR 7b)', () => {
+    for (const flag of [undefined, false]) {
+      org.playground = flag;
+      render(<Harness tier={PG} />);
+      expect(screen.getByRole('radio', { name: /^Plan$/ })).toBeTruthy();
+      for (const mode of ['Excel', 'Cards', 'Focus Editor', 'Plan Takeoff']) expect(screen.queryByRole('button', { name: mode })).toBeNull();
+      expect(screen.getByRole('complementary', { name: 'Studio design library' })).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it('an older project opens as a Classic BOQ, with the Sheet, for a studio that never had the switch', () => {
+    org.playground = undefined;
     render(<Harness />);
-    expect(screen.getByRole('button', { name: 'Excel' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Cards' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Focus Editor/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Plan Takeoff/ })).toBeTruthy();
-    expect(screen.queryByText('BOQ Playground')).toBeNull();
+    expect(screen.getByRole('radio', { name: /^Sheet$/ }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText(/Classic BOQ · made before the Playground/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Make a Playground version' })).toBeTruthy();
   });
 
   it('opened at a line (the slide-over), it opens on the Sheet with the line in the inspector', () => {

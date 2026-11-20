@@ -2,9 +2,14 @@
   The BOQ editor and Pricing & Tiers, rendered with live state.
 
   These are the four things the studio reported, driven the way a person
-  drives them: delete a row in the Excel view (and undo it), type a size and
+  drives them: delete a row in the full grid (and undo it), type a size and
   watch the quantity follow, press Save and get a save rather than a download,
   and read the same price for an option everywhere on Pricing & Tiers.
+
+  The BOQ Editor is the BOQ Playground (PR 7b). The Excel view's grid lives on
+  as the Sheet's full grid, so its tests open it from there. The Focus Editor,
+  Cards and the global margin box are gone; their actions are tested in their
+  new homes in playground.integration.test.tsx (the inspector, Rooms, Tune).
 */
 import React, { useMemo, useState } from 'react';
 import { render, screen, fireEvent, within, act, cleanup } from '@testing-library/react';
@@ -74,9 +79,10 @@ function EditorHarness({ frozen = false, onSave = vi.fn(async () => undefined), 
   );
 }
 
-const openExcel = () => fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
-/** The line in the Focus Editor deck (the catalog on the right lists the same names). */
-const clickLine = (name: string) => fireEvent.click(screen.getAllByText(name)[0]);
+/** A Classic BOQ opens on the Sheet; the Excel view's grid is one click away. */
+const openExcel = () => fireEvent.click(screen.getByRole('button', { name: 'Open the full grid' }));
+/** The delete toast (the Playground's own notes are a status too). */
+const toast = () => screen.getAllByRole('status').find(e => /Deleted|frozen/.test(e.textContent || ''))!;
 const lineIds = (tiers: any[]) => tiers[0].boq.map((l: any) => l.id);
 
 beforeEach(() => {
@@ -84,7 +90,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
-describe('Excel view: deleting a row', () => {
+describe('The full grid (was Excel): deleting a row', () => {
   it('deletes the row and undoes it back into the same place', () => {
     let latest: any[] = [];
     render(<EditorHarness probe={t => { latest = t; }} />);
@@ -93,11 +99,11 @@ describe('Excel view: deleting a row', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete Wall paint' }));
     expect(lineIds(latest)).toEqual(['l1', 'l3']);
     expect(screen.queryByText('Wall paint')).toBeNull();
-    expect(screen.getByRole('status').textContent).toContain('Deleted 1 line');
+    expect(toast().textContent).toContain('Deleted 1 line');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    fireEvent.click(within(toast()).getByRole('button', { name: 'Undo' }));
     expect(lineIds(latest)).toEqual(['l1', 'l2', 'l3']);
-    expect(screen.getByText('Wall paint')).toBeTruthy();
+    expect(screen.getAllByText('Wall paint').length).toBeGreaterThan(0);
   });
 
   it('deletes several selected rows from the selection bar', () => {
@@ -110,7 +116,7 @@ describe('Excel view: deleting a row', () => {
     fireEvent.click(boxes[2]);
     fireEvent.click(screen.getByRole('button', { name: 'Delete 2' }));
     expect(lineIds(latest)).toEqual(['l3']);
-    expect(screen.getByRole('status').textContent).toContain('Deleted 2 lines');
+    expect(toast().textContent).toContain('Deleted 2 lines');
   });
 
   it('Set Linkage on a selection links every selected line', () => {
@@ -147,7 +153,7 @@ describe('Excel view: deleting a row', () => {
 });
 
 describe('Size works out the quantity', () => {
-  it('Excel: typing 7 x 8 on a sq ft line sets qty 56', () => {
+  it('Full grid: typing 7 x 8 on a sq ft line sets qty 56', () => {
     let latest: any[] = [];
     render(<EditorHarness probe={t => { latest = t; }} />);
     openExcel();
@@ -159,7 +165,7 @@ describe('Size works out the quantity', () => {
     expect(wardrobe).toMatchObject({ qty: 56, calcLength: 7, calcWidth: 8, sizeUnit: 'ft' });
   });
 
-  it('Excel: millimetres off a drawing convert', () => {
+  it('Full grid: millimetres off a drawing convert', () => {
     let latest: any[] = [];
     render(<EditorHarness probe={t => { latest = t; }} />);
     openExcel();
@@ -172,7 +178,7 @@ describe('Size works out the quantity', () => {
     expect(latest[0].boq[0].qty).toBeCloseTo(54.25, 2);
   });
 
-  it('Excel: a size it cannot read is flagged and changes nothing', () => {
+  it('Full grid: a size it cannot read is flagged and changes nothing', () => {
     let latest: any[] = [];
     render(<EditorHarness probe={t => { latest = t; }} />);
     openExcel();
@@ -184,28 +190,6 @@ describe('Size works out the quantity', () => {
     expect(latest[0].boq[0].qty).toBe(40);
   });
 
-  it('Focus Editor: width and height on the selected line set the quantity', () => {
-    let latest: any[] = [];
-    render(<EditorHarness probe={t => { latest = t; }} />);
-    clickLine('Wardrobe');
-    const panel = screen.getByTestId('size-panel');
-    fireEvent.change(within(panel).getByLabelText('Width (ft)'), { target: { value: '7' } });
-    fireEvent.change(within(panel).getByLabelText('Height (ft)'), { target: { value: '8' } });
-    expect(latest[0].boq[0]).toMatchObject({ qty: 56, calcLength: 7, calcWidth: 8 });
-    expect(within(panel).getByTestId('size-working').textContent).toContain('7 × 8 ft = 56 sq ft');
-  });
-
-  it('Focus Editor: a running-foot item asks for a length only', () => {
-    let latest: any[] = [];
-    render(<EditorHarness probe={t => { latest = t; }} />);
-    fireEvent.click(screen.getByText('All Rooms combined'));
-    clickLine('Kitchen counter');
-    const panel = screen.getByTestId('size-panel');
-    expect(within(panel).queryByLabelText(/Height/)).toBeNull();
-    fireEvent.click(within(panel).getByRole('button', { name: 'mm' }));
-    fireEvent.change(within(panel).getByLabelText('Length (mm)'), { target: { value: '3048' } });
-    expect(latest[0].boq.find((l: any) => l.id === 'l3').qty).toBeCloseTo(10, 2);
-  });
 });
 
 describe('Save changes', () => {
@@ -225,17 +209,16 @@ describe('Save changes', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     render(<EditorHarness onSave={onSave} />);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Save changes/ })); });
-    expect(screen.getByRole('alert').textContent).toContain("Couldn't save");
+    expect(screen.getByRole('alert').textContent).toMatch(/Couldn.t save/);
   });
 });
 
 describe('BOQ editor total matches Pricing & Tiers', () => {
-  it('shows the tier total with the design fee, split out', () => {
+  it('the Sheet’s total is the work Pricing & Tiers prices, to the rupee (a Classic BOQ keeps exact amounts)', () => {
     render(<EditorHarness />);
     const work = boqTotal(baseBoq(), buildBankMap(bank));
-    const total = Math.round(work * 1.1);
-    expect(screen.getByTestId('boq-grand-total').textContent).toContain(total.toLocaleString('en-IN'));
-    expect(screen.getByTestId('boq-total-split').textContent).toContain('design fee');
+    const foot = document.querySelector('tfoot')!;
+    expect(foot.textContent).toContain(`₹${Math.round(work).toLocaleString('en-IN')}`);
   });
 });
 
@@ -516,29 +499,9 @@ describe('Pricing & Tiers: Regenerate can be undone', () => {
   });
 });
 
-describe('Cards view on a frozen BOQ', () => {
-  it('the card delete is switched off and says why', () => {
-    render(<EditorHarness frozen />);
-    fireEvent.click(screen.getByRole('button', { name: 'Cards' }));
-    const del = screen.getByRole('button', { name: 'Delete Wardrobe' }) as HTMLButtonElement;
-    expect(del.disabled).toBe(true);
-    expect(del.title).toContain('change order');
-  });
-
-  it('on a live BOQ the card delete removes the line, with undo', () => {
-    let latest: any[] = [];
-    render(<EditorHarness probe={t => { latest = t; }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Cards' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Wardrobe' }));
-    expect(lineIds(latest)).toEqual(['l2', 'l3']);
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    expect(lineIds(latest)).toEqual(['l1', 'l2', 'l3']);
-  });
-});
-
 /*
   Every number box in the editor, typed the way a keyboard types: clear the
-  box, then each key appends to what it shows. The Excel view's Cost used to
+  box, then each key appends to what it shows. The full grid's Cost used to
   show the labour once cleared, so typing 3200 wrote ₹40,02,800 of material.
 */
 const typeInto = (el: HTMLInputElement, text: string) => {
@@ -550,7 +513,7 @@ const typeInto = (el: HTMLInputElement, text: string) => {
 const unitCost = (l: any) => Math.round(((l.baseRate ?? 0) + (l.labor ?? 400)) * 100) / 100;
 
 describe('Number boxes keep what is typed', () => {
-  it('Excel Cost: clearing and typing 3200 sets the unit cost to 3200, split as before', () => {
+  it('Full grid Cost: clearing and typing 3200 sets the unit cost to 3200, split as before', () => {
     let latest: any[] = [];
     render(<EditorHarness probe={t => { latest = t; }} />);
     openExcel();
@@ -565,7 +528,7 @@ describe('Number boxes keep what is typed', () => {
     expect(cost.value).toBe('3200');
   });
 
-  it('Excel Cost below the labour is taken as typed, not raised to the labour', () => {
+  it('Full grid Cost below the labour is taken as typed, not raised to the labour', () => {
     let latest: any[] = [];
     render(<EditorHarness probe={t => { latest = t; }} />);
     openExcel();
@@ -573,7 +536,7 @@ describe('Number boxes keep what is typed', () => {
     expect(unitCost(latest[0].boq[0])).toBe(300);
   });
 
-  it('Excel Cost reads "3,200"', () => {
+  it('Full grid Cost reads "3,200"', () => {
     let latest: any[] = [];
     render(<EditorHarness probe={t => { latest = t; }} />);
     openExcel();
@@ -581,7 +544,7 @@ describe('Number boxes keep what is typed', () => {
     expect(unitCost(latest[0].boq[0])).toBe(3200);
   });
 
-  it('Excel Qty and Margin take decimals with no stray 0', () => {
+  it('Full grid Qty and Margin take decimals with no stray 0', () => {
     let latest: any[] = [];
     render(<EditorHarness probe={t => { latest = t; }} />);
     openExcel();
@@ -594,66 +557,9 @@ describe('Number boxes keep what is typed', () => {
     expect(latest[0].boq[0]).toMatchObject({ qty: 2.5, marginOverride: 12.5 });
   });
 
-  it('Focus Editor: quantity, total unit cost, material and labour', () => {
-    let latest: any[] = [];
-    render(<EditorHarness probe={t => { latest = t; }} />);
-    clickLine('Wardrobe');
-    typeInto(screen.getByLabelText('Quantity') as HTMLInputElement, '7.5');
-    expect(latest[0].boq[0].qty).toBe(7.5);
-    // Decimals used to round away: 3200.5 became 3201.
-    typeInto(screen.getByLabelText('Total unit cost') as HTMLInputElement, '3200.5');
-    expect(unitCost(latest[0].boq[0])).toBe(3200.5);
-    typeInto(screen.getByLabelText('Material rate') as HTMLInputElement, '1999.5');
-    expect(latest[0].boq[0].baseRate).toBe(1999.5);
-    typeInto(screen.getByLabelText('Labour rate') as HTMLInputElement, '750');
-    expect(latest[0].boq[0].labor).toBe(750);
-  });
-
-  it('Focus Editor: the deck quantity', () => {
-    let latest: any[] = [];
-    render(<EditorHarness probe={t => { latest = t; }} />);
-    typeInto(screen.getByLabelText('Quantity of Wardrobe') as HTMLInputElement, '0.5');
-    expect(latest[0].boq[0].qty).toBe(0.5);
-  });
-
-  it('Size panel: a dimension under 1 keeps its 0', () => {
-    let latest: any[] = [];
-    render(<EditorHarness probe={t => { latest = t; }} />);
-    clickLine('Wardrobe');
-    const panel = screen.getByTestId('size-panel');
-    fireEvent.click(within(panel).getByRole('button', { name: 'm' }));
-    const w = within(panel).getByLabelText('Width (m)') as HTMLInputElement;
-    typeInto(w, '0.6');
-    expect(w.value).toBe('0.6');
-    typeInto(within(panel).getByLabelText('Height (m)') as HTMLInputElement, '0.9');
-    expect(latest[0].boq[0].qty).toBeCloseTo(5.81, 2);
-  });
-
-  it("Cards: the material cost box changes the line's price (it wrote a field nothing reads)", () => {
-    let latest: any[] = [];
-    render(<EditorHarness probe={t => { latest = t; }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Cards' }));
-    fireEvent.click(screen.getAllByTitle('Advanced Settings')[0]);
-    fireEvent.click(screen.getByText('1000'));
-    const box = document.activeElement as HTMLInputElement;
-    for (const k of '1250') fireEvent.change(box, { target: { value: (box.value === '1000' ? '' : box.value) + k } });
-    fireEvent.keyDown(box, { key: 'Enter' });
-    const w = latest[0].boq.find((l: any) => l.id === 'l1');
-    expect(w.baseRate).toBe(1250);
-    expect(boqTotal([w], buildBankMap(bank))).toBeCloseTo(calculateSellPrice(1250, 400, 20) * 40, 6);
-  });
-
-  it('The global margin box can be cleared and retyped', () => {
-    let latest: any[] = [];
-    render(<EditorHarness probe={t => { latest = t; }} />);
-    fireEvent.click(screen.getByTitle('Set Global Margin'));
-    typeInto(screen.getByLabelText('Margin % for all items') as HTMLInputElement, '18');
-    fireEvent.click(screen.getByRole('button', { name: 'Apply All' }));
-    expect(latest[0].boq.every((l: any) => l.marginOverride === 18)).toBe(true);
-  });
 });
 
-describe('Keys inside an Excel cell belong to the cell', () => {
+describe('Keys inside a full-grid cell belong to the cell', () => {
   it('Enter in a cell saves it without ticking the row; Space is not swallowed', () => {
     render(<EditorHarness />);
     openExcel();

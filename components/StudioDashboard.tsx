@@ -4,16 +4,11 @@ import { JourneyContext } from '../services/journeyEngine';
 import { journeyOf } from '../lib/playground/meeting';
 import { useStudioTerms } from './playground/useStudioTerms';
 import { useProjectProgramme } from '../hooks/useProjectProgramme';
-import { ProjectContext, Item, BoqItem, Room, AIStrategy, FullBoqItem, CommandAction, ProposalTier, AuditResult } from '../types';
+import { ProjectContext, Item, BoqItem, Room, AIStrategy, FullBoqItem, ProposalTier } from '../types';
 import { id as generateId, calculateSellPrice } from '../lib/utils';
-import RoomCard from './RoomCard';
-import { SCOPE_BUCKETS, SCOPE_BUCKET_META, realRooms, isScopeBucket, asScopeBucket } from '../lib/scopeBuckets';
-import { planScopeMigration, applyScopeMigration, resolvedRoomId } from '../lib/scopeMigration';
 import StudioExcelGrid from './StudioExcelGrid';
 import AddItemModal from './AddItemModal';
-import InteractiveBoqEditor from './InteractiveBoqEditor';
 import BulkImportModal from './BulkImportModal';
-import TakeoffPanel from './TakeoffPanel';
 import PlaygroundScreen, { type SignedPlayground } from './playground/PlaygroundScreen';
 import { useMaterialSpecs } from './materialSpecs/useMaterialSpecs';
 import { canEditMaterialSpecs } from '../lib/materialSpecs';
@@ -25,10 +20,7 @@ import { appliedTier, appliedContext } from '../lib/scopeApply';
 import { scopeRevisionReference } from '../lib/scopeDocuments';
 import type { ScopeRevisionRecord } from '../lib/scopeRevision';
 import { contextWithTierCopied } from '../lib/specOverrides';
-import NumberField from './NumberField';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheckIcon, GridIcon, ListIcon, SaveIcon, CheckIcon, ExportIcon, CalculatorIcon } from './Icons';
-import { Search, X, CheckCircle2, AlertCircle, Sparkles, Lock, Plus } from 'lucide-react';
+import { X, Lock, Plus } from 'lucide-react';
 import { keepLockedTier, lockedTierId, scopeInForce, detailedBoqForTier, detailedBoqVersion, isApprovedIssue } from '../lib/scopeFlow';
 import { resolveBoqLine, isBillable, isAsActuals } from '../lib/boqPricing';
 import { removeLines, restoreLines, RemovedLine } from '../lib/boqEdits';
@@ -70,61 +62,7 @@ interface StudioDashboardProps {
     onSelectTier?: (tierId: string) => void;
 }
 
-// Helper function for applying command actions
 import { INITIAL_BANK } from '../constants';
-
-const applyCommandAction = (boq: BoqItem[], action: CommandAction, bank: Item[]): BoqItem[] => {
-    const bankMap = new Map(bank.map(item => [item.id, item]));
-
-    const filterItem = (item: BoqItem): boolean => {
-        const bankItem = bankMap.get(item.bankId);
-        if (!bankItem) return false;
-
-        const { roomIds, categories, itemIds } = action.filters;
-        if (roomIds && !roomIds.includes(item.roomId || '')) return false;
-        if (categories && !categories.includes(bankItem.cat)) return false;
-        if (itemIds && !itemIds.includes(item.id)) return false;
-        return true;
-    };
-
-    if (action.action === 'delete') {
-        return boq.filter(item => !filterItem(item));
-    }
-
-    if (action.action === 'update') {
-        return boq.map(item => {
-            if (filterItem(item)) {
-                let updatedItem = { ...item };
-                if (action.changes.margin) {
-                    const bankItem = bankMap.get(item.bankId)!;
-                    const currentMargin = item.marginOverride ?? bankItem.margin;
-                    const change = action.changes.margin;
-                    updatedItem.marginOverride = change.type === 'absolute' ? change.value : currentMargin * (1 + change.value / 100);
-                }
-                if (action.changes.qty) {
-                    const change = action.changes.qty;
-                    updatedItem.qty = change.type === 'absolute' ? change.value : item.qty * (1 + change.value / 100);
-                }
-                return updatedItem;
-            }
-            return item;
-        });
-    }
-    return boq;
-};
-
-const container = {
-  show: {
-    transition: {
-      staggerChildren: 0.15
-    }
-  }
-};
-
-const itemVar = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100, damping: 12 } }
-};
 
 const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision, focusLines, onSelectTier, onReleasePortal, leadConcern, decisionMakers }) => {
   /* Signed scope: the version the client signed is shown but never changed
@@ -142,78 +80,33 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   const isOwner = ['Super Admin', 'Admin', 'Ops Director'].includes(currentRole);
   
   const { settings, updateSettings } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
-  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
-
-  const handleSelectItemToggle = (itemId: string) => {
-      setSelectedItemIds(prev => {
-          const newSet = new Set(prev);
-          if (newSet.has(itemId)) {
-              newSet.delete(itemId);
-          } else {
-              newSet.add(itemId);
-          }
-          return newSet;
-      });
-  };
-
-  const handleSaveAsBundle = async (itemIds: string[], defaultName?: string) => {
-      const bundleName = window.prompt("Enter a name for this custom bundle:", defaultName || "Custom Bundle");
-      if (!bundleName) return;
-
-      const bundleDesc = window.prompt("Enter a short description for this bundle:", `Custom bundle containing ${itemIds.length} items.`);
-      
-      const newBundle = {
-          id: `custom-bundle-${Date.now()}`,
-          name: bundleName,
-          description: bundleDesc || '',
-          itemIds: itemIds
-      };
-
-      const existingBundles = settings?.customBundles || [];
-      const updatedBundles = [...existingBundles, newBundle];
-
-      try {
-          await updateSettings('customBundles', updatedBundles);
-          alert(`Successfully saved "${bundleName}" as a Custom Bundle! It is now instantly reusable across all projects.`);
-      } catch (err) {
-          console.error("Error saving bundle", err);
-          alert("Failed to save custom bundle. Please try again.");
-      }
-  };
-
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // For AddItemModal
   const [isModalOpen, setIsModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-        const [viewMode, setViewMode] = useState<'cards' | 'excel' | 'interactive' | 'takeoff'>('interactive');
   /*
-    BOQ Playground (studio switch): the four modes become one screen with five
-    lenses (components/playground/PlaygroundScreen, the approved mockup).
-    Switched off, the editor is exactly as it was.
+    The BOQ Playground is the BOQ Editor (PR 7b): one screen with five lenses
+    (components/playground/PlaygroundScreen, the approved mockup). The four old
+    modes (Focus Editor, Excel, Cards, Plan Takeoff) and the studio's switch are
+    gone; an older project opens as a Classic BOQ, as it is.
   */
-  const playground = !!(orgData as any)?.playground;
-  const mode = viewMode;
   /* BOQ Playground S2: the Material specs bank, for new lines' materials and the versions offered to drafts. */
-  const materialSpecs = useMaterialSpecs(orgData?.tenantId, playground);
+  const materialSpecs = useMaterialSpecs(orgData?.tenantId, true);
   /* Where the client is (PR P): booked, and the layout approved. The journey is advisory; without it, neither. */
   const journeyCtx = useContext(JourneyContext);
   const journey = useMemo(() => journeyOf(journeyCtx?.steps), [journeyCtx?.steps]);
   /* Terms & Payment, for the Deal lens (PR P): the stages when Money has no schedule saved, and the proposal's validity. */
-  const terms = useStudioTerms(orgData?.tenantId, playground);
+  const terms = useStudioTerms(orgData?.tenantId, true);
   
   // Versions state
                 
 
   const [highlightedItemIds, setHighlightedItemIds] = useState<string[]>([]);
 
-  /* Opened at a line: it is highlighted in the Excel view and scrolled to (the
-     interactive view selects it itself, InteractiveBoqEditor `focus`). */
+  /* Opened at a line: the Playground opens it in the Sheet's inspector, and the full grid highlights it. */
   useEffect(() => {
     if (!focusLines?.ids.length) return;
     setHighlightedItemIds(focusLines.ids);
-    if (mode !== 'excel') return;
-    const raf = requestAnimationFrame(() => document.getElementById(`item-${focusLines.ids[0]}`)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' }));
-    return () => cancelAnimationFrame(raf);
-  }, [focusLines?.at, mode]);
+  }, [focusLines?.at]);  // eslint-disable-line react-hooks/exhaustive-deps
     
     const [marginAnalytics, setMarginAnalytics] = useState<any>(null);
 
@@ -263,10 +156,6 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
 
   
   
-  // Search State
-  const [searchQuery, setSearchQuery] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
   /*
     Save state.
 
@@ -280,17 +169,6 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const mounted = useRef(true);
   useEffect(() => () => { mounted.current = false; }, []);
-
-  useEffect(() => {
-      const handleKeyDown = (e: KeyboardEvent) => {
-          if (((e.metaKey || e.ctrlKey) && e.key === 'f') || (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA')) {
-              e.preventDefault();
-              searchInputRef.current?.focus();
-          }
-      };
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   const activeTier = tiers.find(t => t.id === activeTierId);
   const rooms = projectContext?.rooms || [];
@@ -376,40 +254,6 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   /* The project Timeline's programme, for the proposal's timeline (PR B). */
   const programme = useProjectProgramme(projectId, projectContext, fullBoq);
 
-  const groupedItems = useMemo(() => {
-    const grouped: { [key: string]: FullBoqItem[] } = {};
-    const unassigned: FullBoqItem[] = [];
-    const validRoomNames = new Set(realRooms(projectContext.rooms).map(r => r.name));
-
-    fullBoq.forEach(item => {
-      /*
-        Resolved, not just read.
-
-        A legacy project reads correctly the moment it is opened, whether or not
-        anyone has run the migration: a line whose room no longer exists, or
-        which was written as "General Scope" or "FUNCTIONAL", is shown under the
-        scope it belongs to. Display and storage are allowed to disagree here —
-        a reader seeing "Unassigned" against work that is plainly debris removal
-        is not.
-
-        A line sitting in a real room is never re-homed, in display or on disk.
-      */
-      const home = resolvedRoomId(item, item as any, validRoomNames);
-      if (!grouped[home]) grouped[home] = [];
-      grouped[home].push(item);
-    });
-    
-    // Sort items by category within each room for cleaner display
-    Object.keys(grouped).forEach(room => {
-        grouped[room].sort((a, b) => a.cat.localeCompare(b.cat));
-    });
-
-    return { grouped, unassigned };
-  }, [fullBoq, projectContext.rooms]);
-
-    const [isGlobalMarkupOpen, setIsGlobalMarkupOpen] = useState(false);
-    const [globalMarkupValue, setGlobalMarkupValue] = useState(20);
-
   // UPDATED: Supports both single field update AND partial object update
   const handleUpdateItem = (itemId: string, fieldOrUpdates: keyof BoqItem | Partial<BoqItem>, value?: any) => {
     setTiers(prev => prev.map(tier => {
@@ -431,27 +275,6 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
     }));
   };
 
-  /*
-    Lines whose stored scope disagrees with where they are shown.
-
-    The editor already displays them in the right place, so this is not about
-    making the screen correct — it is about the file. Until it is written, every
-    export, proposal and client BOQ built straight off `tier.boq` still carries
-    the old assignment, and the two would quietly say different things.
-
-    Offered rather than applied: a priced BOQ is not something to rewrite on
-    someone's behalf while they are looking at another screen.
-  */
-  const scopePlan = useMemo(
-    () => planScopeMigration(activeTier?.boq, bank, projectContext.rooms),
-    [activeTier?.boq, bank, projectContext.rooms],
-  );
-
-  const applyScopePlan = () => {
-    if (!scopePlan.length) return;
-    handleBulkUpdateItems(scopePlan.map(a => ({ itemId: a.itemId, updates: { roomId: a.to } })));
-  };
-
   const handleBulkUpdateItems = (updates: {itemId: string, updates: Partial<BoqItem>}[]) => {
       setTiers(prev => prev.map(tier => {
           if (tier.id !== activeTierId) return tier;
@@ -469,26 +292,10 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
       }));
   };
 
-  const handleApplyGlobalMarkup = () => {
-      const updates: { itemId: string, updates: Partial<BoqItem> }[] = [];
-      fullBoq.forEach(item => {
-          if (!item.materials && !item.labor) return; // skip items without cost
-          updates.push({
-              itemId: item.id,
-              updates: { marginOverride: globalMarkupValue }
-          });
-      });
-
-      if (updates.length > 0) {
-          handleBulkUpdateItems(updates);
-      }
-      setIsGlobalMarkupOpen(false);
-  };
-
   /*
     Deleting lines — one path for every view, with an undo.
 
-    A frozen BOQ never loses a line this way: the Excel view marks it Deleted
+    A frozen BOQ never loses a line this way: the full grid (Sheet → Open the full grid) marks it Deleted
     against a change order instead, so the signed scope keeps the record.
   */
   const [lastDeleted, setLastDeleted] = useState<{ tierId: string; lines: RemovedLine<BoqItem>[] } | null>(null);
@@ -503,7 +310,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   const handleDeleteItems = (itemIds: string[]) => {
     if (!activeTierId || !itemIds.length) return;
     if (projectContext.boqFrozen) {
-        setEditNotice('The BOQ is frozen. Mark the line Deleted with a change order in the Excel view.');
+        setEditNotice('The BOQ is frozen. Mark the line Deleted with a change order in the full grid: Sheet → Open the full grid.');
         return;
     }
     const tier = tiers.find(t => t.id === activeTierId);
@@ -526,15 +333,6 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   /* BOQ Playground: the option's BOQ written whole (a gesture on the plan, or its undo). */
   const handleSetBoq = (next: BoqItem[]) => {
     setTiers(prev => prev.map(t => t.id !== activeTierId ? t : { ...t, boq: next }));
-  };
-
-  /* BOQ Playground: one line replaced whole (a whole-flat line shared into rooms), and lines added. */
-  const handleReplaceLine = (itemId: string, next: BoqItem) => {
-    setTiers(prev => prev.map(t => t.id !== activeTierId ? t : { ...t, boq: (t.boq || []).map(l => (l.id === itemId ? next : l)) }));
-  };
-  const handleAddLines = (lines: BoqItem[]) => {
-    if (!lines.length) return;
-    setTiers(prev => prev.map(t => t.id !== activeTierId ? t : { ...t, boq: [...(t.boq || []), ...lines] }));
   };
 
   /* A Classic option's next version, as a Playground BOQ; the Classic one stays as it was. */
@@ -563,7 +361,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
 
   /* ── A signed Playground BOQ, revised on the plan (PR R2): today's Scope Revision flow, drawn. ── */
   const signedPlayground: SignedPlayground | null = useMemo(() => {
-    if (!isLocked || !playground || !activeTier || boqFormatOf(activeTier) !== 'playground') return null;
+    if (!isLocked || !activeTier || boqFormatOf(activeTier) !== 'playground') return null;
     const v1 = signedIssue;
     const issues = projectContext.documents?.issues || [];
     const all = projectContext.scopeRevisions || [];
@@ -620,7 +418,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
         setEditNotice(`Revision ${rec.number} applied: it is the contract in force at ₹${Math.round(s.priced).toLocaleString('en-IN')}. The next Payment Schedule version is staged as a draft; release it from Documents for the client to confirm.`);
       },
     };
-  }, [isLocked, playground, activeTier, signedIssue, projectContext, bankMap, currentUserAuth, orgData, onReleasePortal, onSelectTier]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isLocked, activeTier, signedIssue, projectContext, bankMap, currentUserAuth, orgData, onReleasePortal, onSelectTier]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpenAddModal = (roomName: string) => {
       setActiveRoomId(roomName);
@@ -641,7 +439,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
       setTiers(prev => prev.map(tier => {
           if (tier.id !== activeTierId) return tier;
           /* A Playground version's new lines take their recipe's materials at the option's grade (S2). */
-          const lines = playground && isPlaygroundTier(tier)
+          const lines = isPlaygroundTier(tier)
             ? newBoqItems.map(l => withRecipeSpecs(l, bankMap.get(l.bankId), materialSpecs.bank, gradeOf(tier)))
             : newBoqItems;
           return { ...tier, boq: [...tier.boq, ...lines] };
@@ -727,8 +525,6 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
         document.body.removeChild(link);
   };
 
-  const MotionDiv = motion.div as any;
-
   usePageHeader({
     badge: activeTier?.name || '',
     vitals: [
@@ -771,142 +567,12 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
           {onStartRevision && <button onClick={onStartRevision} className="px-4 py-2.5 rounded-xl bg-[#3D52A0] hover:bg-[#334486] text-white text-[12.5px] font-bold shrink-0 flex items-center gap-1.5"><Plus className="w-4 h-4" /> Start a revision</button>}
         </div>
       )}
-      {!isLocked && !(playground && activeTier) && (<>
-            {/* Unified Compact Toolbar Row */}
-      <div className="mb-6 flex flex-col lg:flex-row gap-3 items-center justify-between bg-white border border-slate-200/90 p-2.5 rounded-2xl shadow-sm">
-          {/* Smaller Focus Editor / Excel / Cards / Plan Takeoff View Switcher (the Playground's lenses replace it) */}
-          {!playground && <div className="flex bg-slate-100 p-1 rounded-xl shrink-0 w-full lg:w-auto overflow-x-auto gap-1">
-              <button 
-                  onClick={() => setViewMode('interactive')}
-                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'interactive' ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                  <Sparkles className="w-3.5 h-3.5" /> Focus Editor
-              </button>
-              <button 
-                  onClick={() => setViewMode('excel')}
-                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'excel' ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                  <ListIcon className="w-3.5 h-3.5" /> Excel
-              </button>
-              <button 
-                  onClick={() => setViewMode('cards')}
-                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'cards' ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                  <GridIcon className="w-3.5 h-3.5" /> Cards
-              </button>
-              <button
-                  onClick={() => setViewMode('takeoff')}
-                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'takeoff' ? 'bg-[#3D52A0] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                  <ListIcon className="w-3.5 h-3.5" /> Plan Takeoff
-              </button>
-          </div>}
-          
-          {/* Search Box */}
-          <div className="relative group flex-1 w-full min-w-[200px]">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#3D52A0] transition-colors" />
-              <input 
-                  ref={searchInputRef}
-                  type="text" 
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search items by name, description, or category... (Cmd/Ctrl+F)"
-                  className="w-full pl-9 pr-9 py-1.5 bg-slate-50/70 border border-slate-200/80 rounded-xl focus:bg-white focus:outline-none focus:border-[#3D52A0] focus:ring-2 focus:ring-[#3D52A0]/10 transition-all text-xs font-medium text-slate-700"
-              />
-              {searchQuery && (
-                  <button 
-                     onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
-                     className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-md transition-colors"
-                  >
-                      <X className="w-3.5 h-3.5" />
-                  </button>
-              )}
-          </div>
-
-          {/* Action Buttons: Save Changes, Global Margin, Import Excel, Export CSV */}
-          <div className="flex items-center gap-2 shrink-0 w-full lg:w-auto justify-end">
-              {saveState === 'saved' && lastSaved && (
-                  <span className="text-[11px] text-slate-500 whitespace-nowrap" role="status">
-                      Saved {lastSaved.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-              )}
-              {saveState === 'error' && (
-                  <span className="text-[11px] font-semibold text-rose-600 whitespace-nowrap" role="alert">Couldn't save. Try again.</span>
-              )}
-              <button 
-                  onClick={handleManualSave}
-                  disabled={saveState === 'saving'}
-                  className={`px-3 py-1.5 text-xs border font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 ${saveState === 'saving' ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'}`}
-                  title="Edits save on their own a moment after you stop. This saves to the cloud now."
-              >
-                  {saveState === 'saving' ? (
-                      <>
-                          <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-white rounded-full animate-spin"></div>
-                          <span>Saving...</span>
-                      </>
-                  ) : (
-                      <>
-                          <CheckIcon className="w-3.5 h-3.5" />
-                          <span>Save changes</span>
-                      </>
-                  )}
-              </button>
-
-              <div className="relative">
-                  <button
-                      onClick={() => setIsGlobalMarkupOpen(!isGlobalMarkupOpen)}
-                      className={`p-1.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:text-[#3D52A0] hover:border-sky-200 hover:shadow-sm transition-all ${isGlobalMarkupOpen ? 'ring-2 ring-sky-200 border-sky-300 text-[#3D52A0]' : ''}`}
-                      title="Set Global Margin"
-                  >
-                      <CalculatorIcon className="w-4 h-4" />
-                  </button>
-                  {isGlobalMarkupOpen && (
-                      <div className="absolute top-full right-0 mt-2 p-4 bg-white rounded-xl shadow-xl border border-slate-200 z-50 w-64 origin-top-right animate-in fade-in zoom-in duration-200">
-                          <label className="block text-xs font-bold text-slate-700 mb-2 whitespace-normal break-words">Set global margin % for ALL items</label>
-                          <NumberField
-                              min={0}
-                              value={globalMarkupValue}
-                              onCommit={v => setGlobalMarkupValue(v ?? 0)}
-                              aria-label="Margin % for all items"
-                              className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 focus:outline-none focus:border-[#3D52A0]" 
-                          />
-                          <div className="flex justify-end gap-2 text-xs">
-                              <button onClick={() => setIsGlobalMarkupOpen(false)} className="px-3 py-1.5 text-slate-500 hover:text-slate-700 font-medium">Cancel</button>
-                              <button onClick={handleApplyGlobalMarkup} className="px-3 py-1.5 bg-[#3D52A0] text-white rounded-lg hover:bg-[#334486] font-bold shadow-sm">Apply All</button>
-                          </div>
-                      </div>
-                  )}
-              </div>
-
-              <button 
-                  onClick={() => setIsImportModalOpen(true)}
-                  className="px-3 py-1.5 bg-sky-50 border border-sky-200 text-[#334486] font-bold rounded-xl hover:bg-sky-100 transition-all text-xs flex items-center gap-1.5"
-                  title="Paste or upload items from Excel"
-              >
-                  <ListIcon className="w-3.5 h-3.5" />
-                  <span>Import Excel</span>
-              </button>
-
-              {mayExportCosts && <button 
-                  onClick={handleExportExcelWithFormulas}
-                  className="p-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl hover:bg-emerald-100 transition-all"
-                  title="Export Excel with Live Formulas"
-              >
-                  <ExportIcon className="w-4 h-4" />
-              </button>}
-          </div>
-      </div>
-
-      
-      
-
-      </>)}
       <div className="space-y-8">
           
           {/* Main Editor (Full Width) */}
           {isLocked && !signedPlayground ? (
             <SignedBoqReadOnly boq={activeTier?.boq || []} bankMap={bankMap} />
-          ) : playground && activeTier ? (
+          ) : (
             <PlaygroundScreen
               projectContext={projectContext}
               setProjectContext={setProjectContext}
@@ -926,6 +592,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               signed={signedPlayground}
               onSave={handleManualSave}
               saveState={saveState}
+              lastSaved={lastSaved}
               onImport={() => setIsImportModalOpen(true)}
               onExportExcel={mayExportCosts ? handleExportExcelWithFormulas : undefined}
               onExportPdf={() => handleDownloadPDF()}
@@ -961,177 +628,14 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
                   boqFrozen={projectContext.boqFrozen}
                   highlightedItemIds={highlightedItemIds}
                   marginAnalytics={marginAnalytics}
-                  searchQuery={searchQuery}
+                  searchQuery=""
                 />
               )}
             />
-          ) : (
-          <div className="w-full">
-
-
-              {/* INTERACTIVE WORKSPACE MODE */}
-              {mode === 'interactive' && (
-                  <MotionDiv initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
-                      <InteractiveBoqEditor 
-                        items={fullBoq} 
-                        rooms={projectContext.rooms}
-                        bank={bank}
-                        customBundles={settings?.customBundles}
-                        onUpdate={handleUpdateItem}
-                        onBulkUpdate={handleBulkUpdateItems}
-                        onDelete={handleDeleteItem}
-                        setTiers={setTiers}
-                        activeTierId={activeTierId}
-                        boqFrozen={projectContext.boqFrozen}
-                        focus={focusLines}
-                      />
-                  </MotionDiv>
-              )}
-
-              {/* EXCEL MODE */}
-              {mode === 'excel' && (
-                  <MotionDiv initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
-                      <StudioExcelGrid 
-                        items={fullBoq} 
-                        rooms={projectContext.rooms}
-                        onUpdate={handleUpdateItem}
-                        onBulkUpdate={handleBulkUpdateItems}
-                        onDelete={handleDeleteItem}
-                        onDeleteMany={handleDeleteItems}
-                        onViewInBank={onViewInBank}
-                        onAddItem={handleOpenAddModal}
-                        isOwner={isOwner}
-                        boqFrozen={projectContext.boqFrozen}
-                        highlightedItemIds={highlightedItemIds}
-                        
-                        marginAnalytics={marginAnalytics}
-                        searchQuery={searchQuery}
-                      />
-                  </MotionDiv>
-              )}
-
-              {scopePlan.length > 0 && (
-                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 flex items-start justify-between gap-4 flex-wrap">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-amber-900">
-                      {scopePlan.length} {scopePlan.length === 1 ? 'line is' : 'lines are'} shown in a scope they are not saved to
-                    </p>
-                    <p className="text-[11px] text-amber-800/80 mt-1 leading-relaxed">
-                      Shown correctly here, but exports and the client BOQ read the saved value.
-                      {' '}
-                      {Array.from(new Set(scopePlan.map(a => a.reason))).slice(0, 3).join('; ')}.
-                    </p>
-                  </div>
-                  <button
-                    onClick={applyScopePlan}
-                    className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors shrink-0"
-                  >
-                    Move {scopePlan.length} into scopes
-                  </button>
-                </div>
-              )}
-
-              {/* CARDS MODE */}
-              {mode === 'cards' && (
-                  <MotionDiv variants={container} initial="hidden" animate="show">
-                    {/*
-                        Rooms, then project scopes.
-
-                        Civil, Functional and Others used to sit in this list as
-                        rooms — each one carrying the whole flat's area, which is
-                        what made an eight-room 904 sq ft project measure 2,710.
-                        They are scopes: no dimensions, nothing measured from
-                        them, and they always appear so a reader can see what the
-                        job carries beyond the rooms.
-                    */}
-                    {realRooms(projectContext.rooms).map(room => (
-                        <MotionDiv key={room.name} variants={itemVar}>
-                            <RoomCard
-                                room={room}
-                                items={groupedItems.grouped[room.name] || []}
-                                allRooms={projectContext.rooms || []}
-                                searchQuery={searchQuery}
-                                onUpdate={handleUpdateItem}
-                                onBulkUpdate={handleBulkUpdateItems}
-                                onDelete={handleDeleteItem}
-                                boqFrozen={projectContext.boqFrozen}
-                                onAddItem={() => handleOpenAddModal(room.name)}
-                                onViewInBank={onViewInBank}
-                                selectedItemIds={selectedItemIds}
-                                onSelectItemToggle={handleSelectItemToggle}
-                                onSaveAsBundle={handleSaveAsBundle}
-                            />
-                        </MotionDiv>
-                    ))}
-                    
-                    {SCOPE_BUCKETS.map(bucket => {
-                        const items = groupedItems.grouped[bucket] || [];
-                        /* An empty scope is still worth showing while the
-                           project has any BOQ at all — its absence is a fact
-                           about the job, not a rendering decision. */
-                        if (items.length === 0 && fullBoq.length === 0) return null;
-                        return (
-                            <MotionDiv key={bucket} variants={itemVar}>
-                                <RoomCard
-                                    room={{ name: bucket, size: 0, unit: 'sq ft' }}
-                                    items={items}
-                                    allRooms={projectContext.rooms || []}
-                                    searchQuery={searchQuery}
-                                    onUpdate={handleUpdateItem}
-                                    onBulkUpdate={handleBulkUpdateItems}
-                                    onDelete={handleDeleteItem}
-                                    boqFrozen={projectContext.boqFrozen}
-                                    onAddItem={() => handleOpenAddModal(bucket)}
-                                    onViewInBank={onViewInBank}
-                                    selectedItemIds={selectedItemIds}
-                                    onSelectItemToggle={handleSelectItemToggle}
-                                    onSaveAsBundle={handleSaveAsBundle}
-                                />
-                            </MotionDiv>
-                        );
-                    })}
-
-                    {/* Unassigned Items */}
-                    {groupedItems.unassigned.length > 0 && (
-                        <MotionDiv variants={itemVar}>
-                            <RoomCard
-                                room={{ name: 'Unassigned', size: 0, unit: 'sq ft' }}
-                                items={groupedItems.unassigned}
-                                allRooms={projectContext.rooms}
-                                searchQuery={searchQuery}
-                                onUpdate={handleUpdateItem}
-                                onBulkUpdate={handleBulkUpdateItems}
-                                onDelete={handleDeleteItem}
-                                boqFrozen={projectContext.boqFrozen}
-                                onAddItem={() => handleOpenAddModal('Unassigned')}
-                                onViewInBank={onViewInBank}
-                                selectedItemIds={selectedItemIds}
-                                onSelectItemToggle={handleSelectItemToggle}
-                                onSaveAsBundle={handleSaveAsBundle}
-                            />
-                        </MotionDiv>
-                    )}
-                  </MotionDiv>
-              )}
-
-              {/* PLAN TAKEOFF MODE */}
-              {mode === 'takeoff' && (
-                  <MotionDiv initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
-                      <TakeoffPanel 
-                        projectContext={projectContext}
-                        setProjectContext={setProjectContext}
-                        tiers={tiers}
-                        setTiers={setTiers}
-                        activeTierId={activeTierId}
-                        bank={bank}
-                      />
-                  </MotionDiv>
-              )}
-          </div>
           )}
           
-          {/* Totals Breakdown (the Playground shows its own, in the Live BOQ) */}
-          {!(playground && activeTier && !isLocked) && (() => {
+          {/* Totals Breakdown, for a signed version (an editable one shows its own, in the Playground's Live BOQ) */}
+          {isLocked && (() => {
               let firmTotal = 0;
               let estimateExposure = 0;
               /* Paid by the client to vendors directly: not in FFDS's total (lib/boqPricing). */
@@ -1300,104 +804,6 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
         </div>
       )}
 
-      {/* Floating Action Bar for Selected Items */}
-      <AnimatePresence>
-          {selectedItemIds.size > 0 && (
-              <motion.div 
-                  initial={{ opacity: 0, y: 50, x: "-50%" }}
-                  animate={{ opacity: 1, y: 0, x: "-50%" }}
-                  exit={{ opacity: 0, y: 50, x: "-50%" }}
-                  className="fixed bottom-6 left-1/2 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl z-50 flex flex-col sm:flex-row items-center gap-4 sm:gap-6 border border-slate-800 backdrop-blur-md max-w-4xl w-[calc(100%-2rem)] sm:w-auto"
-              >
-                  <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 bg-[#3D52A0] rounded-full flex items-center justify-center text-xs font-bold shadow-inner">
-                          {selectedItemIds.size}
-                      </span>
-                      <span className="text-sm font-semibold text-slate-200">items selected</span>
-                  </div>
-
-                  <div className="hidden sm:block h-6 w-[1px] bg-slate-800" />
-
-                  <div className="flex flex-wrap items-center justify-center gap-3 w-full sm:w-auto">
-                      <button 
-                          onClick={() => {
-                              const selectedBoqItems = fullBoq.filter(i => selectedItemIds.has(i.id));
-                              const bankIds = selectedBoqItems.map(i => i.bankId);
-                              if (bankIds.length > 0) {
-                                  handleSaveAsBundle(bankIds);
-                                  setSelectedItemIds(new Set());
-                              }
-                          }}
-                          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold rounded-xl text-xs hover:from-amber-400 hover:to-amber-500 transition-all shadow-md flex items-center gap-1.5"
-                      >
-                          📦 Save as Custom Bundle
-                      </button>
-
-                      <button 
-                          onClick={() => {
-                              const promptMargin = window.prompt("Enter margin % to apply to all selected items:", "20");
-                              if (promptMargin !== null) {
-                                  const marginValue = parseFloat(promptMargin);
-                                  if (!isNaN(marginValue)) {
-                                      const updates: { itemId: string; updates: Partial<BoqItem> }[] = Array.from(selectedItemIds).map((id) => ({
-                                          itemId: id as string,
-                                          updates: { marginOverride: marginValue }
-                                      }));
-                                      handleBulkUpdateItems(updates);
-                                      setSelectedItemIds(new Set());
-                                      alert(`Successfully updated margin to ${marginValue}% for ${updates.length} items!`);
-                                  }
-                              }
-                          }}
-                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold rounded-xl text-xs border border-slate-700 hover:border-slate-600 transition-all flex items-center gap-1.5"
-                      >
-                          ⚡ Set Margin %
-                      </button>
-
-                      <button 
-                          onClick={() => {
-                              const findStr = window.prompt("Enter text to find in specifications (e.g. Commercial):");
-                              if (!findStr) return;
-                              const replaceStr = window.prompt(`Replace "${findStr}" with (e.g. Marine Grade):`);
-                              if (replaceStr === null) return;
-
-                              const updates: any[] = [];
-                              Array.from(selectedItemIds).forEach(id => {
-                                  const item = fullBoq.find(i => i.id === id);
-                                  if (item) {
-                                      const oldSpecs = item.specs || '';
-                                      const regex = new RegExp(findStr, 'gi');
-                                      if (regex.test(oldSpecs)) {
-                                          const newSpecs = oldSpecs.replace(regex, replaceStr);
-                                          updates.push({ itemId: id, updates: { specs: newSpecs } });
-                                      }
-                                  }
-                              });
-
-                              if (updates.length > 0) {
-                                  handleBulkUpdateItems(updates);
-                                  setSelectedItemIds(new Set());
-                                  alert(`Successfully replaced specs in ${updates.length} items!`);
-                              } else {
-                                  alert(`No matching text "${findStr}" found in selected items' specifications.`);
-                              }
-                          }}
-                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold rounded-xl text-xs border border-slate-700 hover:border-slate-600 transition-all flex items-center gap-1.5"
-                      >
-                          ✏️ Bulk Spec Swap
-                      </button>
-                      
-                      <button 
-                          onClick={() => setSelectedItemIds(new Set())}
-                          className="text-xs text-slate-400 hover:text-white font-bold hover:underline px-2 py-1"
-                      >
-                          Clear
-                      </button>
-                  </div>
-              </motion.div>
-          )}
-      </AnimatePresence>
-      
     </div>
   );
 };
