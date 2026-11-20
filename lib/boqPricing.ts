@@ -65,6 +65,24 @@ export interface ResolvedBoqLine {
 }
 
 /**
+ * The sell rate of a line whose item is known: the line's own figures first,
+ * the item's for whatever the line does not hold.
+ *
+ * Every screen that prices such a line goes through this. Revision Studio and
+ * the proposal's options comparison each had their own reading that took
+ * labour (and, in the comparison, materials) from the bank whatever the line
+ * held, so they showed a rate the BOQ did not: ₹1,619 beside the BOQ's ₹1,750
+ * for one panelling line. It also meant a line whose price had been locked
+ * (lib/priceLock.ts) still moved there when the bank did.
+ */
+export function lineSellRate(b: any, item: Pick<Item, 'materials' | 'labor' | 'margin'>): number {
+  const effectiveMaterials = b.baseRate !== undefined ? b.baseRate : item.materials;
+  const effectiveLabor = b.labor !== undefined ? b.labor : item.labor;
+  const margin = b.marginOverride ?? item.margin;
+  return calculateSellPrice(effectiveMaterials, effectiveLabor, margin);
+}
+
+/**
  * One line, priced exactly as the studio prices it.
  *
  * `bankMap` must include the project's own `adHocItems`, or lines added outside
@@ -76,10 +94,7 @@ export function resolveBoqLine(b: any, bankMap: Map<string, Item>): ResolvedBoqL
 
   let rate = 0;
   if (item) {
-    const effectiveMaterials = b.baseRate !== undefined ? b.baseRate : item.materials;
-    const effectiveLabor = b.labor !== undefined ? b.labor : item.labor;
-    const margin = b.marginOverride ?? item.margin;
-    rate = calculateSellPrice(effectiveMaterials, effectiveLabor, margin);
+    rate = lineSellRate(b, item);
   } else {
     // Not in the bank: price off whatever the line itself carries.
     const margin = b.marginOverride ?? 0;

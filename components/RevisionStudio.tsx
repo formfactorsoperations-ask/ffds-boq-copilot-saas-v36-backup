@@ -63,6 +63,7 @@ import MeetingScopeInbox from "./scope/MeetingScopeInbox";
 import { useMomScopeQueue, MomScopeItem } from "../hooks/useMomScopeQueue";
 import { isScopeFlowOn } from "../lib/scopeFlow";
 import { addToBank, syncRevisionItems } from "../lib/bankMatch";
+import { lineSellRate } from "../lib/boqPricing";
 import { db } from "../services/dbService";
 
 interface RevisionStudioProps {
@@ -439,11 +440,8 @@ export default function RevisionStudio({
       if (boqItem.selectedRate !== undefined && Number(boqItem.selectedRate) > 0) {
         rate = Number(boqItem.selectedRate);
       } else if (bankItem) {
-        rate = calculateSellPrice(
-          boqItem.baseRate !== undefined ? boqItem.baseRate : bankItem.materials,
-          bankItem.labor,
-          boqItem.marginOverride ?? bankItem.margin,
-        );
+        // The line's own labour too, as the BOQ reads it (lib/boqPricing.ts lineSellRate).
+        rate = lineSellRate(boqItem, bankItem);
       } else if ((boqItem as any).rate !== undefined && Number((boqItem as any).rate) > 0) {
         rate = Number((boqItem as any).rate);
       } else if ((boqItem as any).sellPrice !== undefined && Number((boqItem as any).sellPrice) > 0) {

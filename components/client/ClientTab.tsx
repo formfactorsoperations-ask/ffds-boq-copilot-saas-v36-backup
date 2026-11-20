@@ -18,6 +18,7 @@ import { Download } from '@/lib/lucide-shim';
 import { UI_STYLES, UI_CONSTANTS } from '../../lib/UIConstants';
  
 import { calculateSellPrice, generateDeterministicSchedule, formatINR } from '../../lib/utils';
+import { lineSellRate } from '../../lib/boqPricing';
 import { buildProposalPdf, PdfTimeoutError, withTimeout, type PageOrientation, type PdfProgress } from '../../lib/proposalPdf';
 import { onDownloadIntent } from '../../lib/downloadIntent';
 import { generateLocalComparison } from '../../lib/comparison';
@@ -254,7 +255,7 @@ const ClientTab: React.FC<ClientTabProps> = (props) => {
       const rate = boqItem.selectedRate !== undefined && Number(boqItem.selectedRate) > 0
         ? Number(boqItem.selectedRate)
         : bankItem
-        ? calculateSellPrice(bankItem.materials, bankItem.labor, boqItem.marginOverride ?? bankItem.margin)
+        ? lineSellRate(boqItem, bankItem)
         : Number((boqItem as any).rate || (boqItem as any).baseRate || 0);
 
       return {
