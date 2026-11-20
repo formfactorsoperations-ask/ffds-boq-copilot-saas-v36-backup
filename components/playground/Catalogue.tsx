@@ -1,18 +1,20 @@
 import React, { useMemo, useState } from 'react';
-import { Sparkles, X, Search, Plus, Boxes, Users } from 'lucide-react';
+import { Sparkles, X, Search, Plus, Users } from 'lucide-react';
 import { EmptyState, INPUT } from '../ui/kit';
 import type { Item, PieceKind } from '../../types';
 import { calculateSellPrice } from '../../lib/utils';
 import { drawableItems } from '../../lib/playground/board';
 import { PieceThumb } from './pieceArt';
 import { inr } from './playgroundUi';
+import { KitLibrary } from './KitParts';
+import type { Kit } from '../../lib/playground/kits';
 
 /*
   The studio design library (the approved mockup's catalogue), over the left of
   the stage. Every Item Bank item that draws, as a picture with its price per
   unit: drag one onto the plan or a room card, or press + to add it to the room
-  you are in. Room kits and the client's own items come in later parts of the
-  Playground and say so.
+  you are in. The Kits tab holds the Item Bank's bundles as room kits (PR K);
+  the client's own items come in a later part of the Playground and say so.
 */
 
 const CATS = ['All', 'Storage', 'Living', 'Bedroom', 'Kitchen', 'Bath'] as const;
@@ -26,7 +28,7 @@ const CAT_OF: Record<PieceKind, Cat> = {
 };
 type Tab = 'pieces' | 'kits' | 'client';
 
-export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, artOf }: {
+export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, artOf, kits = [], bankMap, hideFigures = false, kitEstimate, onKit }: {
   bank: Item[];
   readOnly: boolean;
   onClose: () => void;
@@ -35,6 +37,13 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
   addLabel: string;
   /** How an item looks in its recipe's finish at this option's grade (S2). */
   artOf?: (item: Item) => { fill?: string; base?: string; top?: string };
+  /** Room kits, from the Item Bank's bundles (PR K). */
+  kits?: Kit[];
+  bankMap?: Map<string, Item>;
+  hideFigures?: boolean;
+  kitEstimate?: (k: Kit) => { room: string; amount: number } | null;
+  /** A kit's Apply: opens its preview. */
+  onKit?: (kitId: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>('pieces');
   const [q, setQ] = useState('');
@@ -55,6 +64,7 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
               className={`py-1 rounded-lg text-[11px] font-bold ${tab === k ? 'bg-white text-[#3D52A0] shadow-sm' : 'text-slate-600'}`}>{n}</button>
           ))}
         </div>
+        {tab === 'kits' && <div className="text-[11px] text-slate-500 mt-1.5">From the Item Bank’s bundles. Drop a kit on a room: every line is sized from that room.</div>}
         {tab === 'pieces' && <>
           <div className="text-[11px] text-slate-500 mt-1.5">Drag onto the plan or a room card. Each comes with its words from the Item Bank.</div>
           <div className="relative mt-2">
@@ -89,11 +99,12 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
           ))}
           {list.length === 0 && <p className="col-span-2 text-xs text-slate-500 px-1">No item in the bank draws by that name.</p>}
         </div>
+      ) : tab === 'kits' ? (
+        <KitLibrary kits={kits} bankMap={bankMap || new Map(bank.map(i => [i.id, i]))} readOnly={readOnly} hideFigures={hideFigures}
+          estimate={k => kitEstimate?.(k) ?? null} onApply={id => onKit?.(id)} />
       ) : (
         <div className="flex-1 overflow-auto p-3">
-          {tab === 'kits'
-            ? <EmptyState icon={Boxes} title="Room kits come next" text="A saved room (its pieces and their sizes) dropped onto another room in one go. Arrives with the kits part of the Playground." />
-            : <EmptyState icon={Users} title="The client’s own items come next" text="Things the client buys or already owns, drawn on the plan and kept out of the price. Arrives with the by-client part of the Playground." />}
+          <EmptyState icon={Users} title="The client’s own items come next" text="Things the client buys or already owns, drawn on the plan and kept out of the price. Arrives with the by-client part of the Playground." />
         </div>
       )}
     </aside>

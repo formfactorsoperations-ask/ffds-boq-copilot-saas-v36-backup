@@ -46,7 +46,7 @@ const D = (kind: PieceKind, w: number, h: number, d: number, mount?: PieceMount)
 const DEFAULTS: [RegExp, PieceDraw][] = [
   [/\b(loft)\b/i, D('loft', 6, 2, 2)],
   [/\b(overhead|wall\s*unit|upper\s*cabinet|wall\s*cabinet)/i, D('wallunit', 6, 2.5, 1.17)],
-  [/\b(base\s*unit|base\s*cabinet|kitchen\s*base|lower\s*cabinet)/i, D('base', 6, 2.83, 2)],
+  [/\b(base\s*unit|base\s*cabinet|kitchen\s*base|lower\s*cabinet|below\s*(the\s*)?counter)/i, D('base', 6, 2.83, 2)],
   [/\b(tall\s*unit|pantry)/i, D('cabinet', 2, 7, 2)],
   [/\bwardrobe/i, D('wardrobe', 6, 7, 2)],
   [/\b(tv\s*unit|tv\s*console|entertainment\s*unit|media\s*unit)/i, D('tv', 5, 2.25, 1.5)],

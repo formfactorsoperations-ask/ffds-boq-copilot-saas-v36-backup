@@ -10,7 +10,10 @@ export interface CustomBundle {
   name: string;
   description?: string;
   itemIds: string[];
-  items?: import('../types').Item[];
+  /** Room kits (BOQ Playground PR K): each item and how it is sized in the room it lands in. Without it, `itemIds` read as before. */
+  items?: import('../types').KitItem[];
+  /** The kinds of room the kit is for ("toilet", "bedroom"…); none means any room. */
+  kinds?: string[];
 }
 
 export interface StudioSettings {

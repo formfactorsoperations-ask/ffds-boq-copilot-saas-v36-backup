@@ -1331,6 +1331,15 @@ export interface BoqItem {
 }
 
 /** What a civil line is. `segment` is the wall broken or built, [x1, y1, x2, y2] in feet on the plan. */
+/**
+ * How an item in a room kit is sized when the kit lands in a room (BOQ Playground PR K):
+ * piece: drawn and placed on a free wall at its own size; floor, floorRemove, walls7,
+ * waterproof: measured from the room as civil work; fixed: a quantity, the kit's or
+ * the Item Bank's rule for the room.
+ */
+export type KitFit = 'piece' | 'floor' | 'floorRemove' | 'walls7' | 'waterproof' | 'fixed';
+export interface KitItem { itemId: string; fit?: KitFit; qty?: number }
+
 export interface BoqCivil {
     type: 'break' | 'build' | 'floor' | 'floorRemove' | 'walls7' | 'waterproof';
     segment?: [number, number, number, number];

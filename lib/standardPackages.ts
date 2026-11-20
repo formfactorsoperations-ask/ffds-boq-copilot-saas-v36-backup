@@ -1,5 +1,5 @@
 
-import { Item, BoqItem, ProjectContext, ProposalTier, Room, CivilScope } from '../types';
+import { Item, BoqItem, ProjectContext, ProposalTier, Room, CivilScope, KitItem } from '../types';
 import { resolveCivilScope, describeCivilScope } from './civilScope';
 import { realRooms, bucketForItem, ensureScopeRooms, uniqueRoomNames, ScopeBucket } from './scopeBuckets';
 import { computeTakeoff, classifyRoom, defaultCeiling, DEFAULT_CONVENTIONS, RoomGeometry, TakeoffTotals } from './takeoff';
@@ -27,21 +27,49 @@ export const ADDON_BUNDLES = [
             'gen-068', // Sanitary Material
             'gen-069', // CP Material
             'gen-026'  // Debris
-        ]
+        ],
+        // As a room kit (BOQ Playground PR K): how each is sized in the bathroom it lands in.
+        kinds: ['toilet'],
+        items: [
+            { itemId: 'gen-060', fit: 'fixed' },
+            { itemId: 'gen-061', fit: 'floor' },
+            { itemId: 'gen-062', fit: 'walls7' },
+            { itemId: 'gen-063', fit: 'fixed' },
+            { itemId: 'gen-064', fit: 'fixed' },
+            { itemId: 'gen-065', fit: 'fixed' },
+            { itemId: 'gen-066', fit: 'fixed' },
+            { itemId: 'gen-067', fit: 'fixed' },
+            { itemId: 'gen-068', fit: 'fixed' },
+            { itemId: 'gen-069', fit: 'fixed' },
+            { itemId: 'gen-026', fit: 'fixed' },
+        ] as KitItem[],
     },
     {
         id: 'kitchen_essentials',
         name: 'Kitchen Essentials',
         icon: '🍳',
         description: 'Standard modular setup: Base units, Wall units, Loft & Sink plumbing.',
-        itemIds: ['gen-010', 'gen-011', 'gen-012', 'gen-039', 'gen-062']
+        itemIds: ['gen-010', 'gen-011', 'gen-012', 'gen-039', 'gen-062'],
+        kinds: ['kitchen'],
+        items: [
+            { itemId: 'gen-010', fit: 'piece' },
+            { itemId: 'gen-011', fit: 'piece' },
+            { itemId: 'gen-012', fit: 'piece' },
+            { itemId: 'gen-039', fit: 'fixed' },
+            { itemId: 'gen-062', fit: 'walls7' },
+        ] as KitItem[],
     },
     {
         id: 'electrical_rewiring',
         name: 'Electrical Rewiring',
         icon: '⚡',
         description: 'Full electrical overhaul: Chasing, Point wiring & Installation.',
-        itemIds: ['gen-024', 'gen-025', 'gen-046']
+        itemIds: ['gen-024', 'gen-025', 'gen-046'],
+        items: [
+            { itemId: 'gen-024', fit: 'fixed' },
+            { itemId: 'gen-025', fit: 'fixed' },
+            { itemId: 'gen-046', fit: 'fixed' },
+        ] as KitItem[],
     }
 ];
 

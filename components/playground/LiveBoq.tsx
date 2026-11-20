@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Receipt as ReceiptIcon, ChevronLeft, ChevronRight, X, Lock, RotateCw, Copy, Trash2, Map as MapIcon, Layers, MapPin, PaintRoller, PenLine, Check } from 'lucide-react';
+import { Receipt as ReceiptIcon, ChevronLeft, ChevronRight, X, Lock, RotateCw, Copy, Trash2, Map as MapIcon, Layers, MapPin, PaintRoller, PenLine, Check, Boxes } from 'lucide-react';
 import { Button, Chip, Segmented, LABEL } from '../ui/kit';
 import type { BoqItem, Item, PricingRules, Room } from '../../types';
 import { SCOPE_BUCKETS } from '../../lib/scopeBuckets';
@@ -642,7 +642,7 @@ function ShareRowEdit({ line, room, q, amount, unit, readOnly, hideFigures, room
 
 /* ───────────────────────────── a room ───────────────────────────── */
 
-export function RoomInspector({ room, models, shares, total, rooms, bankMap, rules, measure, readOnly, hideFigures, canPaint, onAddPainting, onSel, onClose, onReplace, civilShown, onCivil }: {
+export function RoomInspector({ room, models, shares, total, rooms, bankMap, rules, measure, readOnly, hideFigures, canPaint, onAddPainting, onSel, onClose, onReplace, civilShown, onCivil, onSaveKit }: {
   room: Room;
   models: LineModel[];
   shares: ShareRow[];
@@ -662,6 +662,8 @@ export function RoomInspector({ room, models, shares, total, rooms, bankMap, rul
   civilShown?: boolean;
   /** A room tool toggled for the room: re-flooring, wall tiles, waterproofing. */
   onCivil?: (tool: 'floor' | 'walls7' | 'waterproof') => void;
+  /** The room saved to the Item Bank as a kit (PR K). */
+  onSaveKit?: () => void;
 }) {
   const p = room.plan;
   const civilLines = models.filter(m => m.line.civil);
@@ -729,7 +731,8 @@ export function RoomInspector({ room, models, shares, total, rooms, bankMap, rul
             {!hideFigures && <span className="text-xs font-bold tabular-nums">{inr(m.amount)}</span>}
           </button>
         ))}
-        {models.length === 0 && <p className="text-xs text-slate-500">No items yet. Drag from the library onto the room.</p>}
+        {models.length === 0 && <p className="text-xs text-slate-500">No items yet. Drag from the library, or drop a room kit.</p>}
+        {models.length > 0 && onSaveKit && <div className="mt-2"><Button size="sm" icon={Boxes} onClick={onSaveKit}>Save this room as a kit</Button></div>}
       </div>
 
       {!hideFigures && (
