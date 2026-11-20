@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  pageOrder, itemsOf, paginateRooms, separatePage, materialsPage, annexOf, issueProposal, sentProposalTier, allowanceOf, exclusionsOf,
+  pageOrder, itemsOf, paginateRooms, separatePage, materialsPage, annexOf, issueProposal, sentProposalTier, allowanceOf, sizeOfLine, exclusionsOf,
 } from '../../lib/playground/proposal';
 import { PLAYGROUND_PRICING } from '../../lib/playground/pricing';
 import { playgroundTierSummary } from '../../lib/playground/versions';
@@ -56,14 +56,19 @@ describe('room by room', () => {
     // The painting is shared into each room, measured from it; items at actuals and bought by the client are left out.
     expect(living.rows.map(r => r.name)).toEqual(['TV unit', 'Wall painting, two coats']);
     expect(living.rows[1].sub).toMatch(/measured from the room/);
-    expect(living.rows[0]).toMatchObject({ free: true, sub: 'up to 3′6″ × 2′3″ · TV unit words' });
+    // The size is shown with the quantity, width × height; the materials under the name.
+    expect(living.rows[0]).toMatchObject({ free: true, size: '3.5 ft × 2.25 ft', sub: 'TV unit words' });
+    expect(living.rows[1].size).toBeUndefined();
     it0.rooms.flatMap(r => r.rows).forEach(r => expect(r.amount % 100).toBe(0));
     expect(it0.flat!.rows.map(r => r.name)).toEqual(['Debris removal']);
     expect(it0.rooms.reduce((a, r) => a + r.total, 0) + it0.flat!.total).toBe(it0.work);
   });
 
   it('a drawn piece is allowed for at its drawn size', () => {
-    expect(allowanceOf(boq[0], bankMap)).toBe('up to 5′11″ × 7′');
+    // In plain feet: "5.9 ft", a second decimal only where the size has one.
+    expect(allowanceOf(boq[0], bankMap)).toBe('up to 5.9 ft × 7 ft');
+    expect(sizeOfLine(boq[0], bankMap)).toBe('5.9 ft × 7 ft');
+    expect(sizeOfLine({ id: 'r', bankId: 'w', qty: 12, unit: 'r ft', calcLength: 8.25, sizeUnit: 'ft' } as any, new Map([['w', { ...bankMap.get('w'), unit: 'r ft' }]]))).toBe('8.25 ft long');
     expect(allowanceOf({ id: 'x', bankId: 'w', qty: 5 } as any, bankMap)).toBe('');
   });
 
@@ -122,7 +127,7 @@ describe('sending it', () => {
   it('records the issue on the version, holds it for its days, and keeps each send', () => {
     const at = Date.UTC(2026, 10, 20, 6);
     let c = issueProposal(ctx, { tierId: 't1', at, via: 'whatsapp', days: 15, shapedFor: 'Trust', by: 'Anish' });
-    expect(c.proposal).toMatchObject({ issuedAt: at, validDays: 15, validUntil: at + 15 * 864e5, tierId: 't1', shapedFor: 'Trust', priceDetail: 'rooms' });
+    expect(c.proposal).toMatchObject({ issuedAt: at, validDays: 15, validUntil: at + 15 * 864e5, tierId: 't1', shapedFor: 'Trust', priceDetail: 'lines' });
     expect(sentProposalTier(c)).toBe('t1');
     expect(sentTierIds(c).has('t1')).toBe(true);
     expect(proposalValidity(c, null, at, 't1').issued).toBe(true);

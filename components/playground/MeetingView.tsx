@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, Check, Copy, Download } from 'lucide-react';
 import { Button, Chip, Segmented, LABEL } from '../ui/kit';
 import type { BoqItem, Item, ProjectContext, ProposalTier, PaymentStructure, Room, PlanSheet } from '../../types';
@@ -87,7 +88,8 @@ export interface MeetingViewProps {
   onPriceDetail: (p: PriceDetail) => void;
   /** The option is the client's approved one. */
   approved: boolean;
-  onApprove: () => void;
+  /** Makes the option the client's approved one; absent where it cannot be done from. */
+  onApprove?: () => void;
   /** The option's next version, with the client's asks made. */
   onNewVersion?: (boq: BoqItem[]) => void;
   /** The same pages, as the PDF. */
@@ -346,7 +348,7 @@ export default function MeetingView({ ctx, tier, tiers, bankMap, specBank, payme
             </div>
           )}
           <div className="mt-5 flex flex-wrap gap-2">
-            {approved ? <Chip tone="good">Approved by the client</Chip> : <Button variant="primary" icon={Check} onClick={onApprove}>The client approves {tier.name}</Button>}
+            {approved ? <Chip tone="good">Approved by the client</Chip> : onApprove ? <Button variant="primary" icon={Check} onClick={onApprove}>The client approves {tier.name}</Button> : null}
             {nAsks > 0 && onNewVersion && <Button icon={Copy} onClick={() => onNewVersion(withAsks(boq, asks, specBank, bankMap))}>Make a new version with {nAsks} change{nAsks > 1 ? 's' : ''}</Button>}
           </div>
         </div>
@@ -362,7 +364,12 @@ export default function MeetingView({ ctx, tier, tiers, bankMap, specBank, payme
   const body = cur.key === 'welcome' ? welcome : cur.key === 'home' ? home : cur.room ? roomChapter(cur.room) : cur.key === 'materials' ? materials : cur.key === 'options' ? options : cur.key === 'invest' ? invest : next;
   const last = ch >= chapters.length - 1;
 
-  return (
+  /*
+    Over the whole page, at the top of the document: nothing it sits inside
+    (a panel marked no-print, a transformed or scrolled container) can hide
+    or move what is shown and captured.
+  */
+  return createPortal(
     <div className="fixed inset-0 z-[350] flex flex-col phd-scrim bg-slate-50" role="dialog" aria-modal="true" aria-label="Presenting the proposal">
       <header className="shrink-0 px-4 py-2.5 flex items-center gap-3 flex-wrap bg-white border-b border-slate-200">
         <span className="px-2 py-1 rounded-md border border-slate-300 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600 leading-tight max-w-[120px]">{studioName.split(/\s+/).slice(0, 2).join(' ')}</span>
@@ -394,6 +401,7 @@ export default function MeetingView({ ctx, tier, tiers, bankMap, specBank, payme
         <span className="text-xs text-slate-500 tabular-nums">{ch + 1} of {chapters.length} · {cur.title}</span>
         <Button size="sm" variant="primary" icon={ChevronRight} onClick={() => (last ? onClose() : setCh(c => c + 1))}>{last ? 'Done' : 'Next'}</Button>
       </footer>
-    </div>
+    </div>,
+    document.body,
   );
 }

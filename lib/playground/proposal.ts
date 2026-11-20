@@ -21,12 +21,11 @@ import { resolveBoqLine } from '../boqPricing';
 import { withPlanQty, lineAmount, lineAmountsByRoom, sharesOf, type LineAmountOptions } from './pricing';
 import { drawOf, pieceItemOf, pieceSize } from './pieces';
 import { basisOfUnit, readSize, formatSize } from '../boqSize';
-import { ftin } from './geometry';
 import { realRooms } from '../scopeBuckets';
 import { clientDescription } from '../detailedBoq';
 import { separateOf, type SeparateRow } from './supply';
-import { currentVersion, type MaterialSpecsBank, type Grade } from '../materialSpecs';
-import { gradeOf } from '../lineSpecs';
+import { currentVersion, versionAt, GRADE_TIER, type MaterialSpecsBank, type Grade } from '../materialSpecs';
+import { gradeOf, recipeOf, specsFromRecipe, staleParts } from '../lineSpecs';
 import {
   annexureOf, fillClause, hasCivilWork, assumptionsFor, warrantySentence, validitySentence, STANDARD_INITIATION_FEE,
 } from '../annexure';
@@ -59,8 +58,10 @@ export function pageOrder(concern: string | null | undefined, summary: boolean):
 export interface PdfRow {
   id: string;
   name: string;
-  /** The size it is allowed for and its materials, shortly. */
+  /** Its materials, shortly (and, for a shared line, that it is measured from the room). */
   sub: string;
+  /** Its size, shown with the quantity: "6.2 ft × 5.5 ft", "8 ft long". */
+  size?: string;
   qty: number;
   unit: string;
   rate: number;
@@ -88,8 +89,20 @@ export interface PdfItems {
 const LIVE = (l: BoqItem) => l.boqStatus !== 'deleted' && l.boqStatus !== 'substituted';
 const PLAIN = /imported via excel/i;
 
-/** The size a line is allowed for, as the client reads it: "up to 6′ × 7′", "about 8′ run". */
-export function allowanceOf(line: BoqItem, bankMap: Map<string, Item>): string {
+/**
+ * Feet in plain words for the client: "6.2 ft", "7 ft", "2.25 ft". No
+ * feet-and-inches marks; a second decimal only where the size has one, so the
+ * width times the height is the quantity beside it.
+ */
+export const feet = (n: number) => `${(Math.round(n * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })} ft`;
+
+/**
+ * A line's size, width × height ("6.2 ft × 5.5 ft") for a piece priced by area, its
+ * run ("8′ long") for one priced by length; from its drawing when it is on the
+ * plan, else from its typed size. Empty when it has none, or is measured from
+ * the room (a shared or civil line).
+ */
+export function sizeOfLine(line: BoqItem, bankMap: Map<string, Item>): string {
   if (line.civil || line.byRoom) return '';
   const r = resolveBoqLine(line, bankMap);
   const unit = r.unit || bankMap.get(line.bankId)?.unit || '';
@@ -99,14 +112,21 @@ export function allowanceOf(line: BoqItem, bankMap: Map<string, Item>): string {
   const draw = line.place ? drawOf(pieceItem) : null;
   if (draw) {
     const s = pieceSize(line, pieceItem, draw);
-    return basis === 'area' ? `up to ${ftin(s.w)} × ${ftin(s.h)}` : `about ${ftin(s.w)} run`;
+    return basis === 'area' ? `${feet(s.w)} × ${feet(s.h)}` : `${feet(s.w)} long`;
   }
   const s = readSize({ ...line, unit });
   if (!s) return '';
   const dims = [s.a, s.b].filter((d): d is number => !!d && d > 0);
   if (!dims.length) return '';
-  if (s.unit === 'ft') return basis === 'length' && dims.length === 1 ? `about ${ftin(dims[0])} run` : `up to ${dims.map(ftin).join(' × ')}`;
+  if (s.unit === 'ft') return basis === 'length' && dims.length === 1 ? `${feet(dims[0])} long` : dims.map(feet).join(' × ');
   return formatSize(s);
+}
+
+/** The size a line is allowed for, as the client reads it: "up to 6.2 ft × 5.5 ft", "about 8 ft run". */
+export function allowanceOf(line: BoqItem, bankMap: Map<string, Item>): string {
+  const s = sizeOfLine(line, bankMap);
+  if (!s) return '';
+  return /long$/.test(s) ? `about ${s.replace(/ long$/, '')} run` : /×/.test(s) ? `up to ${s}` : s;
 }
 
 /** A line's materials, shortly: three material names, else its words cut to a line. */
@@ -123,7 +143,7 @@ export function shortSpec(line: BoqItem, item: Item | undefined, specBank?: Mate
   return t.length > 70 ? `${t.slice(0, 69).trimEnd()}…` : t;
 }
 
-const roomSize = (r: Room) => (r.plan ? `${ftin(r.plan.w)} × ${ftin(r.plan.h)}` : Number(r.size) ? `${Math.round(Number(r.size))} sq ft` : '');
+const roomSize = (r: Room) => (r.plan ? `${feet(r.plan.w)} × ${feet(r.plan.h)}` : Number(r.size) ? `${Math.round(Number(r.size))} sq ft` : '');
 
 /**
  * Every item of the option, room by room: the lines bought by the client and
@@ -165,7 +185,8 @@ export function itemsOf(args: {
       return;
     }
     const amount = pricing ? lineAmount(line, bankMap, pricing) : r.total;
-    push(r.room, { id, name: r.name, sub: [allowanceOf(line, bankMap), spec].filter(Boolean).join(' · '), qty: r.qty, unit: r.unit, rate: r.rate, amount, free: free.has(id) || undefined });
+    const size = sizeOfLine(line, bankMap);
+    push(r.room, { id, name: r.name, sub: spec, ...(size ? { size } : {}), qty: r.qty, unit: r.unit, rate: r.rate, amount, free: free.has(id) || undefined });
   });
   const total = (rows: PdfRow[]) => rows.reduce((a, x) => a + x.amount, 0);
   const out = rooms.filter(r => byRoom.has(r.name)).map(r => ({ name: r.name, size: roomSize(r), rows: byRoom.get(r.name)!, total: total(byRoom.get(r.name)!) }));
@@ -179,7 +200,7 @@ export function itemsOf(args: {
  * a page goes on a page of its own.
  */
 export function paginateRooms(blocks: PdfRoom[], first = 700, rest = 800): PdfRoom[][] {
-  const h = (b: PdfRoom) => 72 + b.rows.reduce((a, r) => a + (r.sub ? 46 : 30), 0);
+  const h = (b: PdfRoom) => 72 + b.rows.reduce((a, r) => a + (r.sub || r.size ? 46 : 30), 0);
   const pages: PdfRoom[][] = [];
   let cur: PdfRoom[] = [];
   let used = 0;
@@ -347,7 +368,7 @@ export function issueProposal(prev: ProjectContext, s: { tierId: string; at: num
     validDays: days,
     validUntil: until.getTime(),
     tierId: s.tierId,
-    priceDetail: s.priceDetail || was.priceDetail || 'rooms',
+    priceDetail: s.priceDetail || was.priceDetail || 'lines',
     ...(s.shapedFor ? { shapedFor: s.shapedFor } : {}),
     sends: [...(was.sends || []), { at: s.at, via: s.via, tierId: s.tierId, validUntil: until.getTime(), ...(s.by ? { by: s.by } : {}) }],
   };
@@ -366,3 +387,56 @@ export function proposalFileName(project: string, at: Date): string {
 
 /** The rooms the plan page lists: every real room, with its size from the brief. */
 export const homeRooms = (rooms: Room[]) => realRooms(rooms).map(r => ({ name: r.name, size: roomSize(r) }));
+
+/* ───────────────────────────── the Client Proposal's material specifications ───────────────────────────── */
+
+export interface SpecCell { mat: string; words: string; brand: string; versions: number[]; current: number; lines: number; /** A finish's colour, for its swatch. */ swatch?: string }
+export interface SpecTable {
+  grades: { grade: Grade; name: string; fromBoq: boolean }[];
+  rows: { fam: string; name: string; cells: SpecCell[][] }[];
+  /** Lines of the option on an older version of a material than the bank's. */
+  stale: number;
+}
+
+/**
+ * The material specifications, built from the BOQ (the mockup's Client
+ * Proposal, section 4): for the option's own grade, the materials its lines
+ * use, with the versions they are on; for the other grades, the materials the
+ * same items' recipes would give. Lines with their own words have no materials
+ * and are left out, as are items with no recipe.
+ */
+export function specTable(bank: MaterialSpecsBank | null | undefined, tier: Pick<ProposalTier, 'boq' | 'name' | 'specGrade'>, bankMap: Map<string, Item>, names: Partial<Record<Grade, string>> = {}): SpecTable | null {
+  if (!bank) return null;
+  const own = gradeOf(tier);
+  const lines = (tier.boq || []).filter(l => LIVE(l) && resolveBoqLine(l, bankMap).billable);
+  const GR: Grade[] = ['E', 'C', 'P'];
+  const forGrade = (g: Grade, fam: string): SpecCell[] => {
+    const used = new Map<string, SpecCell>();
+    lines.forEach(l => {
+      const item = bankMap.get(l.bankId);
+      const recipe = item ? recipeOf(item, bank) : null;
+      if (!recipe) return;
+      const specs = g === own ? l.materialSpecs : specsFromRecipe(bank, recipe, g);
+      Object.values(specs || {}).forEach(s => {
+        const m = bank.materials.find(x => x.id === s.id);
+        if (!m || m.fam !== fam) return;
+        const cur = currentVersion(bank, m.id)?.v || s.v;
+        const e = used.get(m.id) || { mat: m.id, words: '', brand: currentVersion(bank, m.id)?.brand || '', versions: [], current: cur, lines: 0, ...(m.base ? { swatch: m.base } : {}) };
+        e.lines++;
+        if (!e.versions.includes(s.v)) e.versions.push(s.v);
+        used.set(m.id, e);
+      });
+    });
+    return [...used.values()].map(e => {
+      e.versions.sort((a, b) => a - b);
+      const h = versionAt(bank, e.mat, e.versions[e.versions.length - 1]);
+      return { ...e, words: cap(h?.words || '') };
+    }).sort((a, b) => b.lines - a.lines);
+  };
+  const rows = bank.families.map(f => ({ fam: f.id, name: f.name, cells: GR.map(g => forGrade(g, f.id)) })).filter(r => r.cells.some(c => c.length));
+  return {
+    grades: GR.map(g => ({ grade: g, name: names[g] || GRADE_TIER[g], fromBoq: g === own })),
+    rows,
+    stale: lines.filter(l => staleParts(bank, l).length > 0).length,
+  };
+}

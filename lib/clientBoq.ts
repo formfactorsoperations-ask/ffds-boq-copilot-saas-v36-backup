@@ -1,4 +1,5 @@
 import { calculateSellPrice } from './utils';
+import { docLine, type LineAmountOptions } from './playground/pricing';
 
 /**
  * The scope, as the client is allowed to see it.
@@ -96,6 +97,12 @@ interface BuildParams {
   rooms?: { name?: string }[];
   /** context.boqRevisions — additions, removals and quantity changes. */
   revisions?: any[];
+  /**
+   * A Playground version's pricing (lib/playground/pricing docPricingOf): each
+   * line at its plan quantity and its amount rounded as Money reads it, so the
+   * portal's scope agrees with the proposal and Money. Absent: as today.
+   */
+  pricing?: LineAmountOptions | null;
   /*
     The same rows built from the BOQ the client originally approved — the root
     of the tier.parentTierId chain, not just the version this one supersedes.
@@ -125,7 +132,7 @@ interface BuildParams {
  * than dropped, so a client comparing against an earlier version can see that
  * something went away instead of wondering whether they misremembered.
  */
-export function buildClientBoqRows({ boq, bank, rooms, revisions, previous }: BuildParams): ClientBoqRow[] {
+export function buildClientBoqRows({ boq, bank, rooms, revisions, previous, pricing }: BuildParams): ClientBoqRow[] {
   const validRoomNames = new Set((rooms || []).map(r => r?.name).filter(Boolean) as string[]);
   const bankMap = new Map<string, any>((bank || []).map(b => [b.id, b]));
 
@@ -215,7 +222,15 @@ export function buildClientBoqRows({ boq, bank, rooms, revisions, previous }: Bu
       sellPrice = Number(item.total) / itemQty;
     }
 
-    const totalVal = item.total !== undefined ? Number(item.total) : sellPrice * itemQty;
+    let totalVal = item.total !== undefined ? Number(item.total) : sellPrice * itemQty;
+    let rowQty = itemQty;
+    if (pricing) {
+      /* The rate as it is; the quantity from the plan; the amount rounded up, as Money and the proposal read it. */
+      const d = docLine(item, bankMap as Map<string, any>, pricing);
+      rowQty = d.qty;
+      sellPrice = d.r.rate;
+      totalVal = d.amount;
+    }
 
     const groupKey =
       item.roomId && validRoomNames.has(item.roomId)
@@ -230,7 +245,7 @@ export function buildClientBoqRows({ boq, bank, rooms, revisions, previous }: Bu
       item: itemTitle,
       cat: itemCat,
       unit: itemUnit,
-      qty: itemQty,
+      qty: rowQty,
       rate: sellPrice,
       total: totalVal,
       description: itemSpecs,

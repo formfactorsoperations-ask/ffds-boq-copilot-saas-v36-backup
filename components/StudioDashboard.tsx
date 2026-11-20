@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef, useContext } from 'react';
 import { JourneyContext } from '../services/journeyEngine';
 import { journeyOf } from '../lib/playground/meeting';
+import { useStudioTerms } from './playground/useStudioTerms';
 import { ProjectContext, Item, BoqItem, Room, AIStrategy, FullBoqItem, CommandAction, ProposalTier, AuditResult } from '../types';
 import { id as generateId, calculateSellPrice } from '../lib/utils';
 import RoomCard from './RoomCard';
@@ -194,22 +195,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   const journeyCtx = useContext(JourneyContext);
   const journey = useMemo(() => journeyOf(journeyCtx?.steps), [journeyCtx?.steps]);
   /* Terms & Payment, for the Deal lens (PR P): the stages when Money has no schedule saved, and the proposal's validity. */
-  const [terms, setTerms] = useState<{ paymentStructure: any; termsSettings: any }>({ paymentStructure: null, termsSettings: null });
-  useEffect(() => {
-    if (!playground || !orgData?.tenantId) return;
-    let live = true;
-    (async () => {
-      try {
-        const { getPaymentStructure, getTermsSettings } = await import('../services/engagementService');
-        const [paymentStructure, termsSettings] = await Promise.all([
-          getPaymentStructure(orgData.tenantId).catch(() => null),
-          getTermsSettings(orgData.tenantId).catch(() => null),
-        ]);
-        if (live) setTerms({ paymentStructure, termsSettings });
-      } catch { /* the defaults stand */ }
-    })();
-    return () => { live = false; };
-  }, [playground, orgData?.tenantId]);
+  const terms = useStudioTerms(orgData?.tenantId, playground);
   
   // Versions state
                 
