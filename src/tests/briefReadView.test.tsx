@@ -19,9 +19,10 @@ vi.mock('../../lib/imageDownscale', () => ({ downscalePlanToBase64: vi.fn(async 
 vi.mock('../../services/planImage', () => ({ planImageFromFile: vi.fn(async () => '/9j/IMG'), planImageFromUrl: vi.fn(async () => '/9j/URL') }));
 const readPlan = vi.fn(async () => ({
   rooms: [{ name: 'Master Bedroom', size: 120, unit: 'sq ft' }, { name: 'Bedroom 2', size: 77, unit: 'sq ft' }, { name: 'Living & Dining', size: 220, unit: 'sq ft' }, { name: 'Civil', size: 0, unit: 'sq ft' }],
-  area: 417, config: '2-BHK', read: 3,
+  area: 417, config: '2-BHK', read: 3, onPlan: 3,
+  sheet: { source: 'brief', imageUrl: 'https://x/o/studios%2Ft1%2Fplans%2F1.jpg?alt=media', imagePx: { w: 1000, h: 700 }, ftPerPx: 0.04, page: 1 },
 }));
-vi.mock('../../services/planRooms', () => ({ readRoomsFromPlan: (...a: any[]) => (readPlan as any)(...a) }));
+vi.mock('../../services/planRooms', () => ({ readPlanOntoSheet: (...a: any[]) => (readPlan as any)(...a) }));
 
 import BriefReadView from '../../components/brief/BriefReadView';
 
@@ -89,10 +90,13 @@ describe('Brief & Site, read first', () => {
     await act(async () => { fireEvent.change(input, { target: { files: [new File(['x'], 'plan.pdf', { type: 'application/pdf' })] } }); });
     expect(readPlan).toHaveBeenCalledTimes(1);
     expect((readPlan.mock.calls[0] as any[])[0]).toBe('/9j/IMG');
+    // A PDF's own URL cannot be drawn under the BOQ; its page 1 is stored as an image by the reading.
+    expect((readPlan.mock.calls[0] as any[])[2]).toEqual({ tenantId: 't1', imageUrl: null });
+    expect(c.planSheet).toMatchObject({ source: 'brief', ftPerPx: 0.04 });
     expect(c.rooms.map((r: any) => r.name)).toContain('Master Bedroom');
     expect(c.area).toBe(417);
     expect(c.config).toBe('2-BHK');
-    expect(screen.getByText(/Read 3 rooms off the plan/)).toBeTruthy();
+    expect(screen.getByText(/Read 3 rooms off the plan.*3 of them are on the plan in the BOQ Editor/)).toBeTruthy();
   });
 
   it('asks before replacing rooms that are already there', async () => {
@@ -103,6 +107,7 @@ describe('Brief & Site, read first', () => {
     expect(screen.getByText(/This replaces the 1 room in the list/)).toBeTruthy();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Replace with the plan’s rooms' })); });
     expect((readPlan.mock.calls[0] as any[])[0]).toBe('/9j/URL');
+    expect((readPlan.mock.calls[0] as any[])[2]).toEqual({ tenantId: 't1', imageUrl: 'https://x/o/p.jpg?alt=media' });
     expect(c.rooms.length).toBe(4);
   });
 });

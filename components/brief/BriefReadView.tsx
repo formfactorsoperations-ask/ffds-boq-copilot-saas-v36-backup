@@ -14,7 +14,7 @@ import { engagementDef, engagementOf } from '../../lib/engagement';
 import { downscalePlanToBase64 } from '../../lib/imageDownscale';
 import { uploadPlanImage } from '../../services/planStorage';
 import { planImageFromFile, planImageFromUrl } from '../../services/planImage';
-import { readRoomsFromPlan } from '../../services/planRooms';
+import { readPlanOntoSheet } from '../../services/planRooms';
 
 /*
   Brief & Site, read first (the owner chose option C of the brief redesign,
@@ -85,6 +85,8 @@ export default function BriefReadView({ projectContext: ctx, setProjectContext, 
 
   const [reading, setReading] = useState(false);
   const [confirmRead, setConfirmRead] = useState(false);
+  /* A plan just uploaded, kept for the reading the studio confirms. */
+  const [pendingImage, setPendingImage] = useState<{ image: string; url: string | null } | null>(null);
 
   /*
     The form used to map the rooms from the configuration on opening; the read
@@ -132,20 +134,33 @@ export default function BriefReadView({ projectContext: ctx, setProjectContext, 
   /*
     The rooms off the plan, as the setup wizard's "Analyse the plan" reads them
     (services/planRooms): the rooms and their sizes, the typology's top-up, the
-    area they add up to and the BHK the plan shows. It replaces the room list,
-    so with rooms already there it asks first (confirmRead).
+    area they add up to and the BHK the plan shows. The same reading puts the
+    plan under the BOQ: its scale from the printed sizes, each room where it is
+    drawn, so the BOQ Editor opens on the client's plan. It replaces the room
+    list, so with rooms already there it asks first (confirmRead).
   */
-  const readRooms = async (image?: string) => {
+  const readRooms = async (image?: string, imageUrl?: string | null) => {
     setConfirmRead(false); setReading(true); setPlanNote(null);
     try {
       const target = clientPlanOf(ctx);
       const b64 = image || (target ? await planImageFromUrl(target.url) : '');
       if (!b64) throw new Error('There is no floor plan to read.');
-      const read = await readRoomsFromPlan(b64, ctx);
+      /* The plan image already in Storage can be drawn as it is; a PDF's page 1 is stored as an image. */
+      const url = image ? imageUrl : (target && !target.pdf ? target.url : null);
+      const read = await readPlanOntoSheet(b64, ctx, { tenantId: orgData?.tenantId, imageUrl: url });
       if (!realRooms(read.rooms).length) throw new Error('No rooms could be read off this plan.');
-      setProjectContext(p => ({ ...p, rooms: read.rooms, area: read.area || p.area, config: read.config || p.config }));
+      setProjectContext(p => ({
+        ...p,
+        rooms: read.rooms,
+        area: read.area || p.area,
+        config: read.config || p.config,
+        ...(read.sheet ? { planSheet: read.sheet } : {}),
+      }));
       const n = realRooms(read.rooms).length;
-      setPlanNote({ tone: 'good', text: `Read ${read.read} room${read.read === 1 ? '' : 's'} off the plan${n > read.read ? `, and added ${n - read.read} the ${read.config || ctx.config || 'flat'} usually has` : ''}${read.area ? `: ${nf.format(Math.round(read.area))} sq ft` : ''}${read.config ? `, ${read.config}` : ''}. Check them under Rooms.` });
+      const where = read.sheet
+        ? ` ${read.onPlan} of them are on the plan in the BOQ Editor.`
+        : ' The plan prints no room sizes, so its scale is not known: set it in the BOQ Editor’s plan to put the rooms on it.';
+      setPlanNote({ tone: 'good', text: `Read ${read.read} room${read.read === 1 ? '' : 's'} off the plan${n > read.read ? `, and added ${n - read.read} the ${read.config || ctx.config || 'flat'} usually has` : ''}${read.area ? `: ${nf.format(Math.round(read.area))} sq ft` : ''}${read.config ? `, ${read.config}` : ''}.${where}` });
     } catch (e: any) {
       setPlanNote({ tone: 'bad', text: `The rooms could not be read: ${e?.message || e}. Add them by hand under Rooms, or try again.` });
     } finally {
@@ -157,10 +172,19 @@ export default function BriefReadView({ projectContext: ctx, setProjectContext, 
     if (!file) return;
     setPlanBusy(true); setPlanNote(null); setConfirmRead(false);
     let image = '';
+    let url = '';
+    const pdf = file.type === 'application/pdf';
     try {
       const base64 = await downscalePlanToBase64(file);
-      const url = await uploadPlanImage(orgData?.tenantId, base64);
-      setProjectContext(p => ({ ...p, floorplanImageUrl: url, floorplanImage: undefined }));
+      url = await uploadPlanImage(orgData?.tenantId, base64);
+      /*
+        A plan sheet made from the previous brief plan no longer matches it; one
+        made in the BOQ Editor (uploaded, sketched, blocks) is the studio's and stays.
+      */
+      setProjectContext(p => ({
+        ...p, floorplanImageUrl: url, floorplanImage: undefined,
+        ...(p.planSheet?.source === 'brief' ? { planSheet: undefined } : {}),
+      }));
       setPlanNote({ tone: 'good', text: 'The client’s floor plan is saved with the project.' });
       /* What the AI reads: the image itself, or page 1 of a PDF drawn as one. */
       image = await planImageFromFile(file).catch(() => '');
@@ -170,8 +194,8 @@ export default function BriefReadView({ projectContext: ctx, setProjectContext, 
       setPlanBusy(false);
     }
     /* A first plan on a project with no rooms reads them straight away, as the wizard did. */
-    if (image && realRooms(ctx.rooms).length === 0) await readRooms(image);
-    else if (image) setConfirmRead(true);
+    if (image && realRooms(ctx.rooms).length === 0) await readRooms(image, pdf ? null : url);
+    else if (image) { setPendingImage({ image, url: pdf ? null : url }); setConfirmRead(true); }
   };
 
   /*
@@ -335,8 +359,8 @@ export default function BriefReadView({ projectContext: ctx, setProjectContext, 
                     <p className="text-xs text-slate-600 flex-1 min-w-[220px]">
                       This replaces the {rooms.length} room{rooms.length === 1 ? '' : 's'} in the list with the ones on the plan. A BOQ line keeps its room only where the name stays the same.
                     </p>
-                    <Button size="sm" onClick={() => setConfirmRead(false)}>Keep my rooms</Button>
-                    <Button size="sm" variant="primary" icon={ScanSearch} onClick={() => readRooms()}>Replace with the plan’s rooms</Button>
+                    <Button size="sm" onClick={() => { setConfirmRead(false); setPendingImage(null); }}>Keep my rooms</Button>
+                    <Button size="sm" variant="primary" icon={ScanSearch} onClick={() => { const p = pendingImage; setPendingImage(null); readRooms(p?.image, p?.url); }}>Replace with the plan’s rooms</Button>
                   </>
                 ) : (
                   <>

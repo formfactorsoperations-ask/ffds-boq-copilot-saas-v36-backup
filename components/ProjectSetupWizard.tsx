@@ -7,7 +7,10 @@ import { Item, ProjectContext, ProposalTier, AIStrategy, MaterialSuggestion, Tim
 import { generateStandardPackages, TemplateData } from '../lib/standardPackages';
 import ProjectContextCard from './ProjectContextCard';
 import { isAiAvailable, generateProjectTimeline, generateMaterialMoodBoard, generateTieredBoqPackages } from '../services/geminiService';
-import { readRoomsFromPlan } from '../services/planRooms';
+import { readPlanOntoSheet } from '../services/planRooms';
+import { placeWaitingLines } from '../lib/playground/placeAll';
+import { buildBankMap } from '../lib/boqPricing';
+import { PLAYGROUND_PRICING } from '../lib/playground/pricing';
 import { id as generateId } from '../lib/utils';
 import { AI_STRATEGIES } from '../constants';
 import { FullBoqItem, BoqItem } from '../types'; // Import necessary types
@@ -122,13 +125,15 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
         the area from the drawing, the studio's room names) lives in
         services/planRooms, so Brief & Site reads a plan the same way.
       */
-      const read = await readRoomsFromPlan(planForAnalysis, projectContext);
+      const read = await readPlanOntoSheet(planForAnalysis, projectContext, { tenantId: orgData?.tenantId, imageUrl: projectContext.floorplanImageUrl });
       setProjectContext(p => ({
           ...p,
           rooms: read.rooms,
           area: read.area,
           /* The drawing counted the bedrooms; it wins. A studio who disagrees edits the field. */
           config: read.config || p.config,
+          /* The plan under the BOQ, its rooms where they are drawn (BOQ Editor's Plan). */
+          ...(read.sheet ? { planSheet: read.sheet } : {}),
       }));
       showSuccessWithNext("Project area is calculated. Check the rooms.", {
           label: "Review Rooms",
@@ -168,6 +173,13 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
           id: generateId(),
           name: "Standard Proposal",
           timestamp: Date.now(),
+          /*
+            A Playground BOQ: it starts empty, so there is nothing to carry over,
+            and only a Playground version opens the design library on the plan,
+            which is how items are added by hand to the client's plan.
+          */
+          boqFormat: 'playground',
+          pricingRules: { ...PLAYGROUND_PRICING },
           boq: [],
           projectContext: { ...projectContext, theme },
           summary: { totalSell: 0, totalCost: 0, totalGm: 0, itemCount: 0, totalRevenue: 0, designFee: 0, blendedGm: 0 }
@@ -179,7 +191,15 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       if (onComplete) onComplete('manual');
   }
 
-  const finalizeGeneration = async (newTiers: ProposalTier[]) => {
+  const finalizeGeneration = async (generated: ProposalTier[]) => {
+      /*
+        The furniture on the plan. With the rooms on the client's plan, each
+        option's lines that draw are placed in their rooms (lib/playground/placeAll),
+        so the BOQ Editor opens with the pieces drawn rather than waiting under
+        Needs a place. A manual BOQ starts empty and needs none of this.
+      */
+      const bankMap = buildBankMap(bank, projectContext.adHocItems);
+      const newTiers = generated.map(t => ({ ...t, boq: placeWaitingLines(t.boq || [], projectContext.rooms || [], bankMap).boq }));
       setTiers(newTiers);
       if (onComplete) onComplete('options');
       const premiumTier = newTiers.find(t => t.name === "Comfort Upgrade") || newTiers[0];

@@ -29,6 +29,7 @@ import { unitCostOf } from '../../lib/playground/excel';
 import { downloadWorkbook } from '../../lib/scopeWorkbook';
 import QuickBuildModal, { type QuickBuildChoice } from './QuickBuildModal';
 import { sheetOf } from '../../lib/playground/planSheet';
+import { placeWaitingLines } from '../../lib/playground/placeAll';
 import { newPieceLine, needsPlace, pushHistory, undoHistory, type History } from '../../lib/playground/board';
 import { ArtDefs } from './pieceArt';
 import { inr, Ring, lineModel, type LineModel, FreshContext, type FreshState } from './playgroundUi';
@@ -469,6 +470,13 @@ export default function PlaygroundScreen(props: Props) {
     setBuilding(false);
     setNote(`Built: ${qb.rects.length} rooms, ${placed} pieces placed${waiting ? `, ${waiting} waiting under Needs a place` : ''}. Replace the blocks with the real plan from the plan menu.`);
   };
+  /* Needs a place, emptied: each waiting piece on a free wall or floor of its own room. */
+  const placeWaiting = () => {
+    const r = placeWaitingLines(boq, rooms, bankMap);
+    if (!r.placed) { setNote('No room on the plan has space for the waiting pieces, or their rooms are not on it. Drag them in from the Rooms lens.'); return; }
+    commit(r.boq, `Placed ${r.placed} piece${r.placed === 1 ? '' : 's'} in their rooms.${r.waiting ? ` ${r.waiting} still need a place: their room is not on the plan or has no space.` : ''} Undo takes it back.`);
+  };
+
   /* ── the Civil layer (PR C): tools on the plan, a room's civil work, the brief ── */
 
   /* A civil line's stored quantity follows its room whatever changed it (a new scale, a traced room), so the
@@ -1082,6 +1090,12 @@ export default function PlaygroundScreen(props: Props) {
                 {waiting.length > 0 && (
                   <button type="button" onClick={() => pickLine(waiting[0].id)} className="ml-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 border border-amber-200 shadow-sm text-xs font-bold text-amber-700">
                     <MapPin className="w-3.5 h-3.5" aria-hidden />{waiting.length} need a place
+                  </button>
+                )}
+                {/* Every waiting piece put in its own room in one go (lib/playground/placeAll); undo takes it back. */}
+                {waiting.length > 0 && !readOnly && planRooms.length > 0 && (
+                  <button type="button" onClick={placeWaiting} className="ml-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#3D52A0] text-white shadow-sm text-xs font-bold hover:bg-[#334486]">
+                    Place them
                   </button>
                 )}
               </div>
