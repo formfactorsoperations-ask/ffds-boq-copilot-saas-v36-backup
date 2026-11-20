@@ -3,11 +3,11 @@ import React, { useState } from 'react';
 import { downscalePlanToBase64 } from '../lib/imageDownscale';
 import { uploadPlanImage } from '../services/planStorage';
 import { showSuccessWithNext } from './SuccessWithNextToast';
-import { Item, ProjectContext, ProposalTier, AIStrategy, MaterialSuggestion, TimelinePhase, LeadProfile, DecisionBrainOutput, Room } from '../types';
-import { generateStandardPackages, TemplateData, resolveActiveTemplate, ensureRoomsExistForTemplate, detectRoomType, roomFamily } from '../lib/standardPackages';
-import { ensureScopeRooms, uniqueRoomNames, polishRoomNames } from '../lib/scopeBuckets';
+import { Item, ProjectContext, ProposalTier, AIStrategy, MaterialSuggestion, TimelinePhase, LeadProfile, DecisionBrainOutput } from '../types';
+import { generateStandardPackages, TemplateData } from '../lib/standardPackages';
 import ProjectContextCard from './ProjectContextCard';
-import { analyzeFloorPlan, isAiAvailable, generateProjectTimeline, generateMaterialMoodBoard, generateTieredBoqPackages, estimateRoomSizes } from '../services/geminiService';
+import { isAiAvailable, generateProjectTimeline, generateMaterialMoodBoard, generateTieredBoqPackages } from '../services/geminiService';
+import { readRoomsFromPlan } from '../services/planRooms';
 import { id as generateId } from '../lib/utils';
 import { AI_STRATEGIES } from '../constants';
 import { FullBoqItem, BoqItem } from '../types'; // Import necessary types
@@ -107,80 +107,6 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
     }
   };
 
-  /**
-   * The BHK the plan actually shows.
-   *
-   * The studio was typing this in after the AI had just counted the bedrooms
-   * for them, and a wrong or empty config silently changes everything
-   * downstream — it picks the template, the room distribution, and therefore
-   * every quantity in the BOQ. Bedrooms are counted by room type rather than by
-   * name, so "Bed 1" and "Master Bedroom" both count once.
-   *
-   * Returns null when the plan yielded no bedrooms at all; a guess would be
-   * worse than leaving the field for a human.
-   */
-  const configFromRooms = (rooms: Room[]): string | null => {
-    const bedrooms = rooms.filter(r => detectRoomType(r.name).includes('bedroom')).length;
-    if (bedrooms < 1) return null;
-    return `${Math.min(bedrooms, 4)}-BHK`;
-  };
-
-  /**
-   * Top up a plan-derived room list with whatever the typology expects.
-   *
-   * Matched on room *type* rather than name, so "Bed 1" from a plan and
-   * "Master Bedroom" from the distribution are not both added. Returns the
-   * detected rooms first, in the order the plan gave them.
-   */
-  const autoMapMissingRooms = async (detected: Room[], area: number): Promise<Room[]> => {
-    const config = projectContext.config;
-    if (!config || !area) return detected;
-
-    let expected: Room[] = [];
-    try {
-      if (isAiAvailable() && detected.length === 0) {
-        expected = await estimateRoomSizes(area, config);
-      }
-    } catch { /* falls through to the distribution below */ }
-
-    if (expected.length === 0) {
-      const { activeTemplate, configKey } = resolveActiveTemplate(undefined, config);
-      expected = ensureRoomsExistForTemplate({ ...projectContext, rooms: [], area } as any, activeTemplate, configKey);
-    }
-
-    if (detected.length === 0) return expected;
-
-    /* The plan's own labels repeat — "Toilet" three times is normal draughting.
-       Counting by type below is unaffected; the names are separated when the
-       list is written, by ensureScopeRooms. */
-
-    /*
-      One slot per room FAMILY, not per exact type.
-
-      A plan labels its rooms "Bedroom" and "Toilet"; the typology calls the same
-      rooms "Master Bedroom" and "Common Bathroom". Matching on the exact type
-      meant none of them ever paired up, so a plan that already showed three
-      bedrooms and three toilets was topped up with a master bedroom, a guest
-      bedroom, a master bathroom and a common bathroom — a second set of rooms,
-      with no dimensions, inflating the flat.
-    */
-    const seen = new Map<string, number>();
-    detected.forEach(r => {
-      const k = roomFamily(r.name);
-      seen.set(k, (seen.get(k) || 0) + 1);
-    });
-
-    const additions: Room[] = [];
-    expected.forEach(r => {
-      const k = roomFamily(r.name);
-      const remaining = seen.get(k) || 0;
-      if (remaining > 0) { seen.set(k, remaining - 1); return; }
-      additions.push(r);
-    });
-
-    return [...detected, ...additions];
-  };
-
   const handleAnalyzeFloorplan = async () => {
     // Freshly uploaded bytes, or a legacy project whose plan is still inline.
     const planForAnalysis = planBase64 || projectContext.floorplanImage;
@@ -191,63 +117,18 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
     setIsLoading(true);
     setLoadingMessage('Analyzing floor plan...');
     try {
-      const rooms = await analyzeFloorPlan(planForAnalysis, projectContext.area);
-      const totalAreaFromAI = rooms.reduce((sum, room) => sum + (room.size || 0), 0);
-      const areaAfterPlan = totalAreaFromAI > 0 ? Number(totalAreaFromAI.toFixed(2)) : projectContext.area;
-
       /*
-        Auto-map anything the plan did not yield.
-
-        Plan analysis reads what is drawn, and a plan that is partial, low
-        resolution or cropped comes back with two rooms for a 3-BHK — or none
-        at all. The BOQ generator prices per room, so a short room list is a
-        short bill, which is most of why a generated BOQ read as thin.
-
-        Detected rooms are never overwritten: this only tops up the rooms the
-        typology expects and the plan did not give, so a real plan always beats
-        a ratio.
+        The reading itself (rooms, the typology's top-up, the configuration and
+        the area from the drawing, the studio's room names) lives in
+        services/planRooms, so Brief & Site reads a plan the same way.
       */
-      setLoadingMessage('Auto-mapping rooms...');
-      const mapped = await autoMapMissingRooms(rooms, areaAfterPlan);
-
-      /*
-        The plan sets the configuration too.
-
-        It has just counted the bedrooms; asking the studio to type "3-BHK"
-        afterwards is asking them to repeat the answer. The config picks the
-        template and the room distribution, so getting it from the drawing
-        rather than from memory is worth more than it looks — an empty config
-        falls back to whichever template happens to be first.
-
-        Only filled in, never overwritten: a studio that has already set it
-        knows something about the flat that the drawing does not say.
-      */
-      const detectedConfig = configFromRooms(mapped);
-
-      /*
-        Named the way a studio names them, once, at creation.
-
-        A drawing says "Toilet"; a BOQ a client reads should say "Common
-        Bathroom". This runs here and nowhere else: the name is the identity a
-        BOQ line carries, so polishing it later would orphan every line already
-        priced against the old name.
-      */
-      const named = ensureScopeRooms(polishRoomNames(mapped, roomFamily));
-
+      const read = await readRoomsFromPlan(planForAnalysis, projectContext);
       setProjectContext(p => ({
           ...p,
-          rooms: named,
-          area: areaAfterPlan,
-          /*
-            The plan sets the configuration outright.
-
-            `p.config || detected` never fired: a new project is created with
-            "2-BHK" already filled in, so there was no empty value for the
-            detection to fall into and a three-bedroom plan stayed 2-BHK. The
-            drawing counted the bedrooms; it wins. A studio who disagrees edits
-            the field, and analysis does not run again unless they ask for it.
-          */
-          config: detectedConfig || p.config,
+          rooms: read.rooms,
+          area: read.area,
+          /* The drawing counted the bedrooms; it wins. A studio who disagrees edits the field. */
+          config: read.config || p.config,
       }));
       showSuccessWithNext("Project area is calculated. Check the rooms.", {
           label: "Review Rooms",

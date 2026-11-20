@@ -92,10 +92,13 @@ function distributionRoomsFor(projectContext: ProjectContext): Room[] {
 export function useAutoMapRooms(
   projectContext: ProjectContext,
   setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>,
+  /** Off while the client's floor plan is here: its rooms are read off it instead. */
+  enabled = true,
 ) {
   const mappedFor = React.useRef<string | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     const key = `${projectContext.name}|${projectContext.config}|${projectContext.area}`;
     if (mappedFor.current === key) return;
     if (realRooms(projectContext.rooms).length > 0) return;
@@ -109,7 +112,7 @@ export function useAutoMapRooms(
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectContext.name, projectContext.config, projectContext.area, projectContext.rooms]);
+  }, [enabled, projectContext.name, projectContext.config, projectContext.area, projectContext.rooms]);
 }
 
 const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ 
@@ -264,14 +267,16 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
   */
   const distributionRooms = (): Room[] => distributionRoomsFor(projectContext);
 
-  /* Rooms map themselves (useAutoMapRooms below). */
-  useAutoMapRooms(projectContext, setProjectContext);
+  /* Rooms map themselves (useAutoMapRooms above). One part on its own leaves it to the read view around it. */
+  useAutoMapRooms(projectContext, setProjectContext, !only);
+  const [roomsNote, setRoomsNote] = useState<string | null>(null);
 
   const handleEstimateRooms = async () => {
     if (!projectContext.area || !projectContext.config) {
-      alert("Please provide total area and configuration to map rooms.");
+      setRoomsNote(`Add the ${!projectContext.area ? 'area' : 'configuration'} first, under The home${(projectContext as any).floorplanImageUrl ? ', or read the rooms off the floor plan' : ''}.`);
       return;
     }
+    setRoomsNote(null);
     setIsEstimating(true);
     try {
       if (isAiAvailable()) {
@@ -936,6 +941,7 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
 
   const roomsBody = (
         <div>
+          {roomsNote && <p role="status" className="mb-3 text-xs text-amber-700">{roomsNote}</p>}
           {plannerTab === 'takeoff' ? (
             <TakeoffPanel projectContext={projectContext} setProjectContext={setProjectContext} />
           ) : plannerRooms.length === 0 ? (
@@ -1093,6 +1099,11 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
       classification: classificationPart,
       home: (
         <div className="space-y-6">
+          <div className="max-w-xs">
+            <label htmlFor="brief-area" className={`${LABEL} block mb-1.5`}>Total area (sq ft)</label>
+            <input id="brief-area" type="number" value={projectContext.area || ''} onChange={e => handleContextChange('area', Number(e.target.value))}
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]" placeholder="e.g. 1100" />
+          </div>
           <div className="space-y-2"><p className={LABEL}>Configuration</p>{configPart}</div>
           <div className="space-y-2"><p className={LABEL}>Style</p>{stylePart}</div>
         </div>

@@ -16,6 +16,12 @@ vi.mock('../../services/geminiService', () => ({ isAiAvailable: () => false, est
 const upload = vi.fn(async () => 'https://x/o/studios%2Ft1%2Fplans%2F1.jpg?alt=media');
 vi.mock('../../services/planStorage', () => ({ uploadPlanImage: (...a: any[]) => (upload as any)(...a) }));
 vi.mock('../../lib/imageDownscale', () => ({ downscalePlanToBase64: vi.fn(async () => '/9j/AAAA') }));
+vi.mock('../../services/planImage', () => ({ planImageFromFile: vi.fn(async () => '/9j/IMG'), planImageFromUrl: vi.fn(async () => '/9j/URL') }));
+const readPlan = vi.fn(async () => ({
+  rooms: [{ name: 'Master Bedroom', size: 120, unit: 'sq ft' }, { name: 'Bedroom 2', size: 77, unit: 'sq ft' }, { name: 'Living & Dining', size: 220, unit: 'sq ft' }, { name: 'Civil', size: 0, unit: 'sq ft' }],
+  area: 417, config: '2-BHK', read: 3,
+}));
+vi.mock('../../services/planRooms', () => ({ readRoomsFromPlan: (...a: any[]) => (readPlan as any)(...a) }));
 
 import BriefReadView from '../../components/brief/BriefReadView';
 
@@ -32,7 +38,7 @@ function Harness({ ctx0, probe }: { ctx0: any; probe?: (c: any) => void }) {
   return <BriefReadView projectContext={ctx} setProjectContext={setCtx} projectId="p1" />;
 }
 
-afterEach(() => { cleanup(); upload.mockClear(); });
+afterEach(() => { cleanup(); upload.mockClear(); readPlan.mockClear(); });
 
 describe('Brief & Site, read first', () => {
   it('reads the client’s words back and says how each switch was read', () => {
@@ -74,5 +80,29 @@ describe('Brief & Site, read first', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(document.querySelector('textarea')).toBeNull();
     expect(screen.getByText('“Only the kitchen.”')).toBeTruthy();
+  });
+
+  it('reads the rooms off a first plan straight away, and sets the area and the BHK', async () => {
+    let c: any = null;
+    render(<Harness ctx0={{ ...base, rooms: [], area: 0, config: '' }} probe={x => { c = x; }} />);
+    const input = screen.getByLabelText('Upload the client’s floor plan') as HTMLInputElement;
+    await act(async () => { fireEvent.change(input, { target: { files: [new File(['x'], 'plan.pdf', { type: 'application/pdf' })] } }); });
+    expect(readPlan).toHaveBeenCalledTimes(1);
+    expect((readPlan.mock.calls[0] as any[])[0]).toBe('/9j/IMG');
+    expect(c.rooms.map((r: any) => r.name)).toContain('Master Bedroom');
+    expect(c.area).toBe(417);
+    expect(c.config).toBe('2-BHK');
+    expect(screen.getByText(/Read 3 rooms off the plan/)).toBeTruthy();
+  });
+
+  it('asks before replacing rooms that are already there', async () => {
+    let c: any = null;
+    render(<Harness ctx0={{ ...base, floorplanImageUrl: 'https://x/o/p.jpg?alt=media' }} probe={x => { c = x; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Read the rooms again' }));
+    expect(readPlan).not.toHaveBeenCalled();
+    expect(screen.getByText(/This replaces the 1 room in the list/)).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Replace with the plan’s rooms' })); });
+    expect((readPlan.mock.calls[0] as any[])[0]).toBe('/9j/URL');
+    expect(c.rooms.length).toBe(4);
   });
 });

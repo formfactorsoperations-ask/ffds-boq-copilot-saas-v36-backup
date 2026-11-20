@@ -57,7 +57,7 @@ export function briefGaps(ctx: Partial<ProjectContext>): BriefGap[] {
     [!!clientPlanOf(ctx), { key: 'plan', label: 'Floor plan', part: 'plan', required: true }],
     [filled(c.clientName), { key: 'clientName', label: 'Client name', part: 'client', required: true }],
     [filled(c.clientPhone), { key: 'clientPhone', label: 'Phone', part: 'client', required: true }],
-    [Number(c.area) > 0, { key: 'area', label: 'Area', part: 'client', required: true }],
+    [Number(c.area) > 0, { key: 'area', label: 'Area', part: 'home', required: true }],
     [filled(c.config), { key: 'config', label: 'Configuration', part: 'home', required: true }],
     [String(c.clientBrief || '').trim().length >= 8, { key: 'brief', label: 'The client’s requirement', part: 'brief', required: true }],
     [filled(c.clientEmail), { key: 'clientEmail', label: 'Email', part: 'client', required: false }],

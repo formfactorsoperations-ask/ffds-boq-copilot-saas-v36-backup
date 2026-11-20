@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
-  FileText, Map as MapIcon, Upload, ExternalLink, Pencil, Check, User, Home, Wallet, List, Plus, Minus, ListChecks,
+  FileText, Map as MapIcon, Upload, ExternalLink, Pencil, Check, User, Home, Wallet, List, Plus, Minus, ListChecks, ScanSearch,
 } from '@/lib/lucide-shim';
 import type { ProjectContext } from '../../types';
 import { Panel, Button, Chip, EmptyState, LABEL } from '../ui/kit';
@@ -13,6 +13,8 @@ import { realRooms } from '../../lib/scopeBuckets';
 import { engagementDef, engagementOf } from '../../lib/engagement';
 import { downscalePlanToBase64 } from '../../lib/imageDownscale';
 import { uploadPlanImage } from '../../services/planStorage';
+import { planImageFromFile, planImageFromUrl } from '../../services/planImage';
+import { readRoomsFromPlan } from '../../services/planRooms';
 
 /*
   Brief & Site, read first (the owner chose option C of the brief redesign,
@@ -81,8 +83,15 @@ export default function BriefReadView({ projectContext: ctx, setProjectContext, 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const planRef = useRef<HTMLDivElement | null>(null);
 
-  /* The form used to map the rooms on opening; the read view keeps doing it. */
-  useAutoMapRooms(ctx, setProjectContext);
+  const [reading, setReading] = useState(false);
+  const [confirmRead, setConfirmRead] = useState(false);
+
+  /*
+    The form used to map the rooms from the configuration on opening; the read
+    view keeps doing it, except when the client's plan is here: the plan is the
+    better source, and its rooms are read off it instead.
+  */
+  useAutoMapRooms(ctx, setProjectContext, !clientPlanOf(ctx));
 
   const gaps = briefGaps(ctx);
   const done = briefCompleteness(ctx);
@@ -120,19 +129,49 @@ export default function BriefReadView({ projectContext: ctx, setProjectContext, 
     ? <Button size="sm" variant="primary" icon={Check} onClick={() => setEditing(null)}>Done</Button>
     : <Button size="sm" variant="quiet" icon={Pencil} onClick={() => open(part)}>{label}</Button>;
 
+  /*
+    The rooms off the plan, as the setup wizard's "Analyse the plan" reads them
+    (services/planRooms): the rooms and their sizes, the typology's top-up, the
+    area they add up to and the BHK the plan shows. It replaces the room list,
+    so with rooms already there it asks first (confirmRead).
+  */
+  const readRooms = async (image?: string) => {
+    setConfirmRead(false); setReading(true); setPlanNote(null);
+    try {
+      const target = clientPlanOf(ctx);
+      const b64 = image || (target ? await planImageFromUrl(target.url) : '');
+      if (!b64) throw new Error('There is no floor plan to read.');
+      const read = await readRoomsFromPlan(b64, ctx);
+      if (!realRooms(read.rooms).length) throw new Error('No rooms could be read off this plan.');
+      setProjectContext(p => ({ ...p, rooms: read.rooms, area: read.area || p.area, config: read.config || p.config }));
+      const n = realRooms(read.rooms).length;
+      setPlanNote({ tone: 'good', text: `Read ${read.read} room${read.read === 1 ? '' : 's'} off the plan${n > read.read ? `, and added ${n - read.read} the ${read.config || ctx.config || 'flat'} usually has` : ''}${read.area ? `: ${nf.format(Math.round(read.area))} sq ft` : ''}${read.config ? `, ${read.config}` : ''}. Check them under Rooms.` });
+    } catch (e: any) {
+      setPlanNote({ tone: 'bad', text: `The rooms could not be read: ${e?.message || e}. Add them by hand under Rooms, or try again.` });
+    } finally {
+      setReading(false);
+    }
+  };
+
   const onPlanFile = async (file: File | undefined) => {
     if (!file) return;
-    setPlanBusy(true); setPlanNote(null);
+    setPlanBusy(true); setPlanNote(null); setConfirmRead(false);
+    let image = '';
     try {
       const base64 = await downscalePlanToBase64(file);
       const url = await uploadPlanImage(orgData?.tenantId, base64);
       setProjectContext(p => ({ ...p, floorplanImageUrl: url, floorplanImage: undefined }));
-      setPlanNote({ tone: 'good', text: 'The client’s floor plan is saved with the project. Read the rooms off it in the BOQ Editor’s plan.' });
+      setPlanNote({ tone: 'good', text: 'The client’s floor plan is saved with the project.' });
+      /* What the AI reads: the image itself, or page 1 of a PDF drawn as one. */
+      image = await planImageFromFile(file).catch(() => '');
     } catch (e: any) {
       setPlanNote({ tone: 'bad', text: `The plan could not be saved: ${e?.message || e}. Try again.` });
     } finally {
       setPlanBusy(false);
     }
+    /* A first plan on a project with no rooms reads them straight away, as the wizard did. */
+    if (image && realRooms(ctx.rooms).length === 0) await readRooms(image);
+    else if (image) setConfirmRead(true);
   };
 
   /*
@@ -289,6 +328,27 @@ export default function BriefReadView({ projectContext: ctx, setProjectContext, 
               <EmptyState icon={MapIcon} title="No floor plan from the client yet"
                 text="Ask the client for it. The studio does not go ahead without the client’s floor plan. An image or a PDF." />
             )}
+            {plan && (
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                {confirmRead ? (
+                  <>
+                    <p className="text-xs text-slate-600 flex-1 min-w-[220px]">
+                      This replaces the {rooms.length} room{rooms.length === 1 ? '' : 's'} in the list with the ones on the plan. A BOQ line keeps its room only where the name stays the same.
+                    </p>
+                    <Button size="sm" onClick={() => setConfirmRead(false)}>Keep my rooms</Button>
+                    <Button size="sm" variant="primary" icon={ScanSearch} onClick={() => readRooms()}>Replace with the plan’s rooms</Button>
+                  </>
+                ) : (
+                  <>
+                    <Button size="sm" variant={rooms.length ? 'secondary' : 'primary'} icon={ScanSearch} disabled={reading || planBusy}
+                      onClick={() => (rooms.length ? setConfirmRead(true) : readRooms())}>
+                      {reading ? 'Reading the rooms…' : rooms.length ? 'Read the rooms again' : 'Read the rooms off the plan'}
+                    </Button>
+                    <span className="text-[11px] text-slate-500">The AI reads each room and its size, then sets the area and the BHK.</span>
+                  </>
+                )}
+              </div>
+            )}
             {planNote && <p role="status" className={`mt-3 text-xs ${planNote.tone === 'bad' ? 'text-rose-700' : 'text-emerald-700'}`}>{planNote.text}</p>}
           </Panel>
         </div>
@@ -333,7 +393,8 @@ export default function BriefReadView({ projectContext: ctx, setProjectContext, 
         blurb={area.count ? `${area.count} rooms · ${nf.format(area.sqft)} of ${nf.format(area.area)} sq ft` : 'No rooms yet'}
         aside={editButton('rooms')}>
         {editing === 'rooms' ? editor('rooms') : area.count === 0 ? (
-          <EmptyState icon={List} title="No rooms yet" text="They are read off the floor plan, mapped from the configuration and area, or added by hand." />
+          <EmptyState icon={List} title="No rooms yet" text="They are read off the floor plan, mapped from the configuration and area, or added by hand."
+            action={plan ? <Button size="sm" variant="primary" icon={ScanSearch} onClick={() => readRooms()} disabled={reading}>{reading ? 'Reading…' : 'Read them off the plan'}</Button> : undefined} />
         ) : (
           <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
             {rooms.map((r, i) => (
