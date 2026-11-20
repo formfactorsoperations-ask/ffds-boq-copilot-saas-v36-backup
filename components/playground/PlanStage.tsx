@@ -11,6 +11,7 @@ import { resizeRoom, edgeAt, type RoomEdge, type RoomResize } from '../../lib/pl
 import { segmentFor, segLength, toolOf, type CivilTool, type Segment } from '../../lib/playground/civil';
 import { PieceArt } from './pieceArt';
 import { KIT_DRAG, KIT_TYPE } from './KitParts';
+import { TAG_COLOUR, shortInr, type Changes } from '../../lib/playground/changes';
 import { inr, lakh, type LineModel } from './playgroundUi';
 
 /*
@@ -76,6 +77,8 @@ interface Props {
   onNote?: (msg: string) => void;
   /** A room kit dropped on a room (PR K): its preview opens for that room. */
   onDropKit?: (kitId: string, room: string) => void;
+  /** Show changes since the version before (PR R): each changed piece outlined and tagged, the ones taken out drawn faint. */
+  changes?: Changes | null;
 }
 
 type Drag =
@@ -90,7 +93,7 @@ type Drag =
 export const stageStats = { pieceRenders: 0 };
 
 export default function PlanStage(props: Props) {
-  const { ctx, bank, bankMap, models, roomTotals, readOnly, sel, onSel, selRoom, onSelRoom, commit, newId, libOpen, hideFigures, fitSignal, prepareNew, onRooms, layer = 'int', civilTool, onCivilRoom, onCivilWall, onNote, onDropKit } = props;
+  const { ctx, bank, bankMap, models, roomTotals, readOnly, sel, onSel, selRoom, onSelRoom, commit, newId, libOpen, hideFigures, fitSignal, prepareNew, onRooms, layer = 'int', civilTool, onCivilRoom, onCivilWall, onNote, onDropKit, changes } = props;
   const civ = layer === 'civ';
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
@@ -410,6 +413,46 @@ export default function PlanStage(props: Props) {
       </g>,
     );
   });
+  /* Changes since the version before (PR R, the mockup's): an outline and a tag on each changed piece, a dashed
+     line from where a moved one was, and the pieces taken out drawn faint where they stood. */
+  const ghosts: React.ReactNode[] = [];
+  if (changes && !civ) {
+    const byId = new Map<string, BoardPiece>(pieces.map(p => [p.id, p] as [string, BoardPiece]));
+    changes.out.forEach((e, id) => {
+      const colour = TAG_COLOUR[e.tag];
+      if (e.gone) {
+        const g = e.was?.place ? boardPieces([e.was], bankMap)[0] : undefined;
+        if (!g) return;
+        const b = pieceBox(g.fp, g.place);
+        ghosts.push(
+          <g key={`gh-${id}`} data-ghost={id} pointerEvents="none">
+            <g opacity={0.4} transform={`translate(${g.place.x} ${g.place.y}) rotate(${g.place.rot})`}><PieceArt kind={g.draw.kind} w={g.size.w} d={g.size.d} words={g.line.specs} high={g.draw.mount === 'high'} /></g>
+            <rect x={b.x - 0.08} y={b.y - 0.08} width={b.w + 0.16} height={b.h + 0.16} rx={0.1} fill="rgba(225,29,72,.07)" stroke={colour} strokeWidth={px(1.6)} strokeDasharray={`${px(5)} ${px(3)}`} />
+          </g>,
+        );
+        overlay.push(changeTag(`gt-${id}`, b, e.tag, e.d, colour));
+        return;
+      }
+      const p = byId.get(id);
+      if (!p) return;
+      const b = pieceBox(p.fp, p.place);
+      if (e.tag !== 'MOVED') overlay.push(<rect key={`co-${id}`} data-changed={id} x={b.x - 0.1} y={b.y - 0.1} width={b.w + 0.2} height={b.h + 0.2} rx={0.12} fill="none" stroke={colour} strokeWidth={px(2.2)} pointerEvents="none" />);
+      if (e.moved && e.was?.place) overlay.push(<line key={`cm-${id}`} x1={e.was.place.x} y1={e.was.place.y} x2={p.place.x} y2={p.place.y} stroke={colour} strokeWidth={px(1.5)} strokeDasharray={`${px(4)} ${px(3)}`} pointerEvents="none" />);
+      overlay.push(changeTag(`ct-${id}`, b, e.tag, e.d, colour));
+    });
+  }
+  function changeTag(key: string, b: { x: number; y: number }, tag: string, d: number, colour: string) {
+    const txt = tag === 'MOVED' ? 'MOVED' : `${tag}${hideFigures || Math.abs(d) < 1 ? '' : ` ${d > 0 ? '+' : '−'}₹${shortInr(d)}`}`;
+    const fs = px(9.5), w = txt.length * fs * 0.64 + px(10), h = fs + px(7);
+    const ty = b.y - h - px(3);
+    return (
+      <g key={key} pointerEvents="none">
+        <rect x={b.x} y={ty} width={w} height={h} rx={px(4)} fill={colour} />
+        <text x={b.x + px(5)} y={ty + h - px(4.5)} fontSize={fs} fontWeight={800} fill="#fff">{txt}</text>
+      </g>
+    );
+  }
+
   /* The picked room's walls: a handle on each, to pull the room to size (not while a civil tool is drawing). */
   const pickedRoom = !selected && selRoom && onRooms && !readOnly && !(civ && civilTool) ? planRooms.find(r => r.name === selRoom) : undefined;
   if (pickedRoom?.plan) {
@@ -598,6 +641,7 @@ export default function PlanStage(props: Props) {
             ))}
           </g>
           {civ && <g>{civilG}</g>}
+          {ghosts.length > 0 && <g>{ghosts}</g>}
           <g>{tags}</g>
           {civ && <g>{civilLabels}</g>}
           <g>{overlay}</g>

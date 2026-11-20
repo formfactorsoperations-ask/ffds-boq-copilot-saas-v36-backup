@@ -62,9 +62,9 @@ const baseBoq = () => [
 ];
 const placedWardrobe = { id: 'p1', bankId: 'wardrobe', qty: 42, roomId: 'Bedroom', calcLength: 6, calcWidth: 7, sizeUnit: 'ft', place: { x: 3.12, y: 1.12, rot: 0, depthFt: 2 } };
 
-function Harness({ tier = {}, focus = null, onSave = vi.fn(async () => undefined), probe, onSelect = vi.fn(), ctx0, probeCtx, bankIn }: { tier?: any; focus?: any; onSave?: any; probe?: (tiers: any[], active: string) => void; onSelect?: any; ctx0?: any; probeCtx?: (ctx: any) => void; bankIn?: any[] }) {
-  const [tiers, setTiers] = useState<any[]>([{ id: 't1', name: 'Comfort Upgrade', timestamp: 1, boq: baseBoq(), ...tier }]);
-  const [active, setActive] = useState('t1');
+function Harness({ tier = {}, focus = null, onSave = vi.fn(async () => undefined), probe, onSelect = vi.fn(), ctx0, probeCtx, bankIn, tiersIn, activeIn }: { tier?: any; focus?: any; onSave?: any; probe?: (tiers: any[], active: string) => void; onSelect?: any; ctx0?: any; probeCtx?: (ctx: any) => void; bankIn?: any[]; tiersIn?: any[]; activeIn?: string }) {
+  const [tiers, setTiers] = useState<any[]>(tiersIn || [{ id: 't1', name: 'Comfort Upgrade', timestamp: 1, boq: baseBoq(), ...tier }]);
+  const [active, setActive] = useState(activeIn || 't1');
   const [ctx, setCtx] = useState<any>(ctx0 || { name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10 });
   probeCtx?.(ctx);
   const calculated = useMemo(() => tiers.map(t => ({ ...t, summary: { totalSell: 0, totalCost: 0, totalGm: 0, itemCount: t.boq.length, designFee: 0, totalRevenue: 0, blendedGm: 0 } })), [tiers]);
@@ -1040,5 +1040,76 @@ describe('bought by the client, and at actuals (PR X)', () => {
     fireEvent.drop(stage(), { ...at(6, 5), dataTransfer: { getData: () => 'sofa' } });
     expect(latest[0].boq[0]).toMatchObject({ bankId: 'sofa', roomId: 'Bedroom', boqStatus: 'client_procured' });
     expect(screen.getByText('Client pays · work').nextElementSibling!.textContent).toBe('₹0');
+  });
+});
+
+describe('versions (PR R)', () => {
+  const v1boq = () => [
+    { ...placedWardrobe },
+    { id: 'l2', bankId: 'paint', qty: 300, roomId: 'Bedroom' },
+    { id: 'l3', bankId: 'counter', qty: 10, roomId: 'Kitchen' },
+    { id: 'bed1', bankId: 'bed', qty: 1, roomId: 'Bedroom', place: { x: 6, y: 5, rot: 0 } },
+  ];
+  const v2boq = () => [
+    { ...placedWardrobe, qty: 56, calcLength: 8 },
+    { id: 'l2', bankId: 'paint', qty: 300, roomId: 'Bedroom' },
+    { id: 'l3', bankId: 'counter', qty: 10, roomId: 'Kitchen', marginOverride: 20 },
+    { id: 'n1', bankId: 'counter', qty: 4, roomId: 'Kitchen' },
+  ];
+  const t1 = { ...PG, id: 't1', name: 'Comfort Upgrade', timestamp: Date.UTC(2026, 10, 12), boq: v1boq() };
+  const t2 = { ...PG, id: 't2', name: 'Comfort Upgrade', timestamp: Date.UTC(2026, 10, 15), parentTierId: 't1', boq: v2boq() };
+  const verMenu = () => fireEvent.click(screen.getByRole('button', { name: /Comfort Upgrade · v2|Comfort Upgrade · v1|Comfort Upgrade · v3/ }));
+
+  it('the version menu lists the option’s versions; Show changes since v1 marks every lens, and the parts add up', () => {
+    let latest: any[] = [];
+    render(<Harness tiersIn={[t1, t2]} activeIn="t2" probe={t => { latest = t; }} />);
+    verMenu();
+    expect(screen.getByText('Versions of Comfort Upgrade')).toBeTruthy();
+    expect(screen.getByText('v2 · Draft')).toBeTruthy();
+    expect(screen.getByText('Editing now')).toBeTruthy();
+    expect(screen.getByText('v1 · Kept as it was')).toBeTruthy();
+    expect(screen.getByText('12 Nov 2026 · read-only')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Show changes since v1'));
+    const panel = screen.getByRole('region', { name: 'Changes' });
+    expect(within(panel).getByText('Changes since v1')).toBeTruthy();
+    // Each changed line, by room, tagged.
+    const row = (id: string) => panel.querySelector(`[data-change="${id}"]`) as HTMLElement;
+    expect(within(row('p1')).getByText('SIZE')).toBeTruthy();
+    expect(within(row('p1')).getByText(/6′ × 7′ = 42 sq ft → 8′ × 7′ = 56 sq ft/)).toBeTruthy();
+    expect(within(row('l3')).getByText('RATE')).toBeTruthy();
+    expect(within(row('l3')).getByText('Markup 10.0% → 20.0%')).toBeTruthy();
+    expect(within(row('n1')).getByText('NEW')).toBeTruthy();
+    expect(within(row('bed1')).getByText('REMOVED')).toBeTruthy();
+    expect(within(panel).getByText(/the parts add up exactly/)).toBeTruthy();
+    // The plan: an outline on the changed pieces, the bed taken out drawn faint; Client pays says by how much.
+    expect(document.querySelector('[data-changed="p1"]')).toBeTruthy();
+    expect(document.querySelector('[data-ghost="bed1"]')).toBeTruthy();
+    expect(screen.getByText(/vs v1$/)).toBeTruthy();
+    // The Sheet: tags beside the names, and the line taken out struck through in its room.
+    lens('Sheet');
+    expect(document.querySelector('[data-gone="bed1"]')).toBeTruthy();
+    // Rooms: what each room changed by.
+    lens('Rooms');
+    expect(within(document.querySelector('[data-roomcard="Kitchen"]') as HTMLElement).getByText(/vs v1$/)).toBeTruthy();
+    // Restore puts the line back as it was.
+    fireEvent.click(within(row('bed1')).getByRole('button', { name: 'Restore' }));
+    expect(latest.find(t => t.id === 't2').boq.find((l: any) => l.id === 'bed1')).toMatchObject({ bankId: 'bed', place: { x: 6, y: 5 } });
+  });
+
+  it('an earlier version is kept as it was: read-only; New version keeps this one and opens the next', () => {
+    let latest: any[] = []; let active = '';
+    const { unmount } = render(<Harness tiersIn={[t1, t2]} activeIn="t1" />);
+    expect(screen.getByText('v1 · kept as it was')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Add items/ })).toBeNull();
+    unmount();
+    render(<Harness tiersIn={[t1, t2]} activeIn="t2" probe={(t, a) => { latest = t; active = a; }} />);
+    verMenu();
+    fireEvent.click(screen.getByRole('button', { name: /New version/ }));
+    expect(latest).toHaveLength(3);
+    const v3 = latest[2];
+    expect(v3).toMatchObject({ parentTierId: 't2', name: 'Comfort Upgrade', lifecycleTag: 'Draft', boqFormat: 'playground' });
+    expect(v3.boq).toEqual(latest[1].boq);
+    expect(active).toBe(v3.id);
+    expect(screen.getByText('v3 of Comfort Upgrade is ready to edit. v2 is kept as it was.')).toBeTruthy();
   });
 });

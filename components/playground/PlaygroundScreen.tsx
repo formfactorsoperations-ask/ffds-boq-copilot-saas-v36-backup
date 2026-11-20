@@ -11,7 +11,7 @@ import { boardPieces, drawOf, isHigh, isWallBacked, pieceSize, footprintOf, wall
 import { autoPlace, type PlacedPiece } from '../../lib/playground/placing';
 import { lineIssues, marginFloorFor } from '../../lib/playground/issues';
 import { pricingRulesOf, playgroundTotals, isPlaygroundTier } from '../../lib/playground/pricing';
-import { boqFormatOf, BOQ_FORMAT_LABEL, paintingFromPlan, syncedWholeFlat } from '../../lib/playground/versions';
+import { boqFormatOf, BOQ_FORMAT_LABEL, paintingFromPlan, syncedWholeFlat, versionPlace } from '../../lib/playground/versions';
 import { withNewPlan, sketchRects, sketchFromRooms, mergeRooms, type TidyResult } from '../../lib/playground/sketch';
 import { quickBuild, standardLines, sizeOf, type RoomStandards } from '../../lib/playground/quickBuild';
 import { inferBasis } from '../../lib/takeoff';
@@ -48,6 +48,9 @@ import { kitsOf, kitStartRooms, kitApply, kitAddsDebris, kitEstimate, kitFits, r
 import { ADDON_BUNDLES } from '../../lib/standardPackages';
 import { lineAmount } from '../../lib/playground/pricing';
 import { KitModal, KIT_DRAG } from './KitParts';
+import { ChangesPanel } from './ChangesParts';
+import { optionChains, latestOf } from '../../lib/optionChains';
+import { changesBetween } from '../../lib/playground/changes';
 import { withSupply, supplyLine, supplyOf, SUPPLY_WORDS } from '../../lib/playground/supply';
 
 /*
@@ -94,6 +97,8 @@ interface Props {
   newId: () => string;
   onSelectTier?: (id: string) => void;
   onMakePlaygroundVersion?: () => void;
+  /** The option's next version: this one is kept as it was, the copy opens to edit (PR R). */
+  onNewVersion?: () => void;
   onSave: () => void;
   saveState: 'idle' | 'saving' | 'saved' | 'error';
   onImport: () => void;
@@ -127,9 +132,13 @@ interface Props {
 }
 
 export default function PlaygroundScreen(props: Props) {
-  const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly, currentRoles, tenantId, onBoq, newId,
-    onSelectTier, onMakePlaygroundVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit } = props;
+  const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly: readOnlyProp, currentRoles, tenantId, onBoq, newId,
+    onSelectTier, onMakePlaygroundVersion, onNewVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit } = props;
   const boq = tier.boq || [];
+  /* Versions (PR R): an option's earlier version is kept as it was; only the newest is edited. */
+  const vplace = useMemo(() => versionPlace(tiers, tier.id), [tiers, tier.id]);
+  const superseded = !!vplace?.superseded;
+  const readOnly = readOnlyProp || superseded;
   const seesMargins = useSeesMargins(currentRoles);
   /* Hide figures hides margins only (lib/figuresPrivacy): prices stay, and seesMargins already reads it. */
   const hideFigures = false;
@@ -198,6 +207,20 @@ export default function PlaygroundScreen(props: Props) {
   const byId = useMemo(() => new Map(models.map(m => [m.line.id, m])), [models]);
   const totals = useMemo(() => playgroundTotals(boq, bankMap, { rules, rooms, measure }), [boq, bankMap, rules, rooms, measure]);
   const margin = totals.sell > 0 ? ((totals.sell - totals.cost) / totals.sell) * 100 : 0;
+
+  /* ── Show changes since the version before (PR R) ── */
+  const [cmp, setCmp] = useState(false);
+  useEffect(() => { setCmp(false); }, [tier.id]);
+  const prev = vplace?.previous;
+  const prevName = prev ? `v${vplace!.n - 1}` : '';
+  const changeOpts = useMemo(() => {
+    if (!prev) return null;
+    const baseMeasure = { covers: wallCovers(boardPieces(prev.boq || [], bankMap)) };
+    return { base: { rules: pricingRulesOf(prev), rooms, measure: baseMeasure }, cur: { rules, rooms, measure } };
+  }, [prev, bankMap, rooms, rules, measure]);
+  const changes = useMemo(() => (cmp && prev && changeOpts ? changesBetween(prev.boq || [], boq, bankMap, changeOpts) : null), [cmp, prev, changeOpts, boq, bankMap]);
+  const materialName = (id: string) => specBank?.materials.find(m => m.id === id)?.name;
+  const when = (t?: number) => (t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
   const shares = useShareRows(models, rooms, bankMap, rules, measure);
   const floors: MarginFloors | null = marginFloors || (ctx as any)?.marginFloors || null;
   const floor = marginFloorFor(undefined, floors);
@@ -535,6 +558,11 @@ export default function PlaygroundScreen(props: Props) {
       onCivil={format === 'playground' ? (t => civilRoom(selRoomObj.name, t)) : undefined}
       onSaveKit={format === 'playground' && onSaveKit ? () => saveRoomAsKit(selRoomObj) : undefined}
     /></React.Fragment>
+  ) : changes && changeOpts ? (
+    <ChangesPanel changes={changes} cur={boq} baseName={prevName} sub={`${prevName} · ${when(prev?.timestamp) || 'the version before'} · kept as it was`}
+      bankMap={bankMap} opts={changeOpts} hideFigures={hideFigures} readOnly={readOnly} materialName={materialName}
+      onSel={pickLine} onRestore={l => { commit([...boq, l], `${bankMap.get(l.bankId)?.name || (l as { name?: string }).name || "The line"} restored as it was in ${prevName}.`); setSel(l.id); }}
+      onHide={wide && plan ? () => setInsOpen(false) : undefined} />
   ) : (
     <Receipt
       models={models}
@@ -589,25 +617,62 @@ export default function PlaygroundScreen(props: Props) {
             className="pl-2.5 pr-1.5 py-1 rounded-xl border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-2 text-left">
             <span className={`w-2 h-2 rounded-full ${verDot}`} />
             <span className="leading-tight">
-              <span className="block text-xs font-bold text-slate-800 whitespace-nowrap max-w-[160px] truncate">{tier.name}</span>
-              <span className="block text-[10px] text-slate-500 whitespace-nowrap">{BOQ_FORMAT_LABEL[format]} · {readOnly ? 'Frozen' : 'Draft'}</span>
+              <span className="block text-xs font-bold text-slate-800 whitespace-nowrap max-w-[160px] truncate">{tier.name}{vplace && vplace.versions.length > 1 ? ` · v${vplace.n}` : ''}</span>
+              <span className="block text-[10px] text-slate-500 whitespace-nowrap">{BOQ_FORMAT_LABEL[format]} · {readOnlyProp ? 'Frozen' : superseded ? 'Kept as it was' : 'Draft'}</span>
             </span>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" aria-hidden />
           </button>
           {menu === 'ver' && (
-            <div className="absolute left-0 top-full mt-1.5 z-40 w-[280px] rounded-2xl bg-white border border-slate-200 shadow-2xl p-1.5 hud-panel-in">
-              <div className={`${LABEL} px-3 pt-1.5 pb-1`}>Options on this project</div>
-              {tiers.map(t => (
-                <button key={t.id} type="button" onClick={() => { onSelectTier?.(t.id); setMenu(null); }}
-                  className={`w-full text-left px-3 py-2 rounded-xl flex items-center gap-2 ${t.id === tier.id ? 'bg-[#3D52A0]/[0.06]' : 'hover:bg-slate-50'}`}>
-                  <span className={`w-2 h-2 rounded-full ${boqFormatOf(t) === 'playground' ? 'bg-[#3D52A0]' : 'bg-slate-400'}`} />
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-sm font-semibold text-slate-800 truncate">{t.name}</span>
-                    <span className="block text-[11px] text-slate-500">{BOQ_FORMAT_LABEL[boqFormatOf(t)]} · {(t.boq || []).length} lines</span>
-                  </span>
-                  {t.id === tier.id && <Check className="w-4 h-4 text-[#3D52A0]" aria-hidden />}
-                </button>
-              ))}
+            <div className="absolute left-0 top-full mt-1.5 z-40 w-[300px] rounded-2xl bg-white border border-slate-200 shadow-2xl p-1.5 hud-panel-in">
+              {vplace && (
+                <>
+                  <div className={`${LABEL} px-3 pt-1.5 pb-1`}>Versions of {tier.name}</div>
+                  {[...vplace.versions].reverse().map(v => {
+                    const i = vplace.versions.indexOf(v) + 1;
+                    const newest = v.id === vplace.latest.id;
+                    return (
+                      <button key={v.id} type="button" onClick={() => { if (v.id !== tier.id) onSelectTier?.(v.id); setMenu(null); }}
+                        className={`w-full text-left px-3 py-2 rounded-xl flex items-start gap-2 ${v.id === tier.id ? 'bg-[#3D52A0]/[0.06]' : 'hover:bg-slate-50'}`}>
+                        <span className="w-4 mt-0.5 text-[#3D52A0]">{v.id === tier.id && <Check className="w-4 h-4" aria-hidden />}</span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-slate-800">v{i} · {newest ? (readOnlyProp ? 'Frozen' : 'Draft') : 'Kept as it was'}</span>
+                          <span className="block text-[11px] text-slate-500">{newest ? (v.id === tier.id ? 'Editing now' : 'The newest version') : `${when(v.timestamp) || 'Earlier'} · read-only`}{boqFormatOf(v) !== format ? ` · ${BOQ_FORMAT_LABEL[boqFormatOf(v)]}` : ''}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {prev && (
+                    <label className="mx-1.5 my-1 px-2.5 py-2 rounded-xl bg-slate-50 flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
+                      <input type="checkbox" checked={cmp} onChange={e => { setCmp(e.target.checked); if (e.target.checked) { setSel(null); setSelRoom(null); setInsOpen(true); } }} className="w-4 h-4 accent-[#3D52A0]" />
+                      Show changes since {prevName}
+                    </label>
+                  )}
+                  {onNewVersion && !readOnly && format === 'playground' && (
+                    <button type="button" onClick={() => { setMenu(null); onNewVersion(); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 flex items-start gap-2">
+                      <span className="w-4 mt-0.5" />
+                      <span><span className="block text-sm font-semibold text-slate-800">New version</span><span className="block text-[11px] text-slate-500">Keep v{vplace.n} as it is, edit v{vplace.n + 1}</span></span>
+                    </button>
+                  )}
+                </>
+              )}
+              {(() => {
+                const others = optionChains(tiers).filter(c => !c.versions.some(v => v.id === tier.id)).map(latestOf);
+                return others.length > 0 && (
+                  <div className={vplace ? 'border-t border-slate-100 mt-1.5 pt-1.5' : ''}>
+                    <div className={`${LABEL} px-3 pt-1.5 pb-1`}>Other options on this project</div>
+                    {others.map(t => (
+                      <button key={t.id} type="button" onClick={() => { onSelectTier?.(t.id); setMenu(null); }}
+                        className="w-full text-left px-3 py-2 rounded-xl flex items-center gap-2 hover:bg-slate-50">
+                        <span className={`w-2 h-2 rounded-full ${boqFormatOf(t) === 'playground' ? 'bg-[#3D52A0]' : 'bg-slate-400'}`} />
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-semibold text-slate-800 truncate">{t.name}</span>
+                          <span className="block text-[11px] text-slate-500">{BOQ_FORMAT_LABEL[boqFormatOf(t)]} · {(t.boq || []).length} lines</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
               {format === 'classic' && !readOnly && onMakePlaygroundVersion && (
                 <button type="button" onClick={() => { setMenu(null); onMakePlaygroundVersion(); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 text-sm font-semibold text-[#3D52A0] inline-flex items-center gap-2">
                   <Sparkles className="w-4 h-4" aria-hidden />Make a Playground version
@@ -703,7 +768,7 @@ export default function PlaygroundScreen(props: Props) {
                   readOnly={readOnly} sel={sel} onSel={pickLine} selRoom={selRoom} onSelRoom={pickRoom}
                   commit={commit} newId={newId} libOpen={showLib} hideFigures={hideFigures} fitSignal={fitSignal} prepareNew={prepareNew}
                   onRooms={resizeRooms}
-                  layer={layer} civilTool={civilTool} onCivilRoom={civilRoom} onCivilWall={civilWall} onNote={setNote} onDropKit={(id, room) => openKit(id, room)}
+                  layer={layer} civilTool={civilTool} onCivilRoom={civilRoom} onCivilWall={civilWall} onNote={setNote} onDropKit={(id, room) => openKit(id, room)} changes={changes}
                 />
               ) : (
                 <div className="absolute inset-0 grid place-items-center p-6" style={{ paddingLeft: showLib && wide ? 260 : undefined }}>
@@ -727,6 +792,7 @@ export default function PlaygroundScreen(props: Props) {
                     readOnly={readOnly} seesMargins={seesMargins} hideFigures={hideFigures} floor={floor} query={query}
                     onSel={pickLine} onRoom={pickRoom} onAdd={onAddFromBank}
                     onShowOnPlan={name => { setLens('plan'); pickRoom(name); setFitSignal(s => s + 1); }}
+                    changes={changes} baseName={prevName}
                     onDropItem={(id, room) => { if (id.startsWith(KIT_DRAG)) { openKit(id.slice(KIT_DRAG.length), room); return; } const it = bank.find(i => i.id === id); if (it) addToRoom(it, room); }}
                     onReplaceMany={replaceMany} />
                 )}
@@ -741,7 +807,8 @@ export default function PlaygroundScreen(props: Props) {
                     seesMargins={seesMargins} hideFigures={hideFigures} floor={floor} query={query}
                     onSel={pickLine} onReplace={l => replace(l)} onReplaceMany={replaceMany} onDelete={remove}
                     onFullGrid={renderFullGrid ? () => setFullGrid(true) : undefined}
-                    specBank={specBank} onUpdateLines={offer ? updateLines : undefined} />
+                    specBank={specBank} onUpdateLines={offer ? updateLines : undefined}
+                    changes={changes} removedName={l => bankMap.get(l.bankId)?.name || (l as { name?: string }).name || 'Line'} />
                 )}
                 {lens === 'tune' && (
                   <TuneLens boq={boq} bankMap={bankMap} rules={rules} rooms={rooms} floor={floor} floors={floors}
@@ -790,7 +857,7 @@ export default function PlaygroundScreen(props: Props) {
                     </div>
                   )}
                 </span>
-                {readOnly && <span className="ml-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-bold text-slate-600"><Lock className="w-3.5 h-3.5 text-[#3D52A0]" aria-hidden />Read-only</span>}
+                {readOnly && <span className="ml-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-bold text-slate-600" title={superseded ? `v${vplace!.n} is kept as it was. Switch to v${vplace!.versions.length} to edit.` : undefined}><Lock className="w-3.5 h-3.5 text-[#3D52A0]" aria-hidden />{superseded ? `v${vplace!.n} · kept as it was` : 'Read-only'}</span>}
                 <span className="ml-1.5 inline-flex p-0.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm" role="radiogroup" aria-label="Plan layer">
                   {([['int', 'Interiors'], ['civ', 'Civil']] as const).map(([k, n]) => (
                     <button key={k} type="button" role="radio" aria-checked={layer === k} onClick={() => pickLayer(k)}
@@ -821,6 +888,9 @@ export default function PlaygroundScreen(props: Props) {
                   <div className="text-right">
                     <div className={LABEL}>Client pays · work</div>
                     <div className="text-base font-black text-slate-800 tabular-nums leading-tight">{hideFigures ? '••••' : inr(totals.sell)}</div>
+                    {changes && !hideFigures && Math.abs(changes.after - changes.before) >= 1 && (
+                      <div className={`text-[10px] font-bold tabular-nums ${changes.after > changes.before ? 'text-rose-600' : 'text-emerald-600'}`}>{changes.after > changes.before ? '+' : '−'}{inr(Math.abs(changes.after - changes.before))} vs {prevName}</div>
+                    )}
                   </div>
                 </div>
                 {!showIns && (
@@ -838,7 +908,7 @@ export default function PlaygroundScreen(props: Props) {
         </section>
         {showIns && (
           <div className="min-h-0 min-w-0">
-            <aside className="rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col min-h-0 h-full overflow-hidden" aria-label={selModel ? 'Line' : selRoomObj ? 'Room' : 'Live BOQ'}>
+            <aside className="rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col min-h-0 h-full overflow-hidden" aria-label={selModel ? 'Line' : selRoomObj ? 'Room' : changes ? 'Changes' : 'Live BOQ'}>
               <div className="flex-1 overflow-auto">{inspector}</div>
             </aside>
           </div>

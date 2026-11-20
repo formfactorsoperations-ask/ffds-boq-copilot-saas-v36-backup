@@ -8,6 +8,8 @@ import { PieceThumb } from './pieceArt';
 import { inr, marginTone, Scrub, withCost, withMarkup, withRate, type LineModel } from './playgroundUi';
 import type { ShareRow } from './LiveBoq';
 import { currentVersion, type MaterialSpecsBank } from '../../lib/materialSpecs';
+import type { Changes } from '../../lib/playground/changes';
+import { TagChip, Delta } from './ChangesParts';
 
 /*
   The Sheet lens (was Excel): every line in a grid, grouped by room, each with
@@ -24,7 +26,7 @@ const STATUS_CHIP: Record<string, [string, 'warn' | 'slate' | 'good']> = {
   pending_finalisation: ['To confirm', 'warn'],
 };
 
-export default function SheetLens({ rooms, models, shares, roomTotals, sel, readOnly, seesMargins, hideFigures, floor, query, onSel, onReplace, onReplaceMany, onDelete, onFullGrid, specBank, onUpdateLines }: {
+export default function SheetLens({ rooms, models, shares, roomTotals, sel, readOnly, seesMargins, hideFigures, floor, query, onSel, onReplace, onReplaceMany, onDelete, onFullGrid, specBank, onUpdateLines, changes, removedName }: {
   rooms: Room[];
   models: LineModel[];
   shares: Map<string, ShareRow[]>;
@@ -45,6 +47,10 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
   specBank?: MaterialSpecsBank | null;
   /** Takes these lines to the current versions of their materials. */
   onUpdateLines?: (ids: string[]) => void;
+  /** Show changes since the version before (PR R): each line's tag and amount, and the lines taken out. */
+  changes?: Changes | null;
+  /** A removed line's name. */
+  removedName?: (l: BoqItem) => string;
 }) {
   /* The mockup's spec chips: the first three parts, their material and version, amber when a newer one is out. */
   const specChips = (m: LineModel) => {
@@ -71,7 +77,9 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
   const N = 4 + (money ? 3 : 0) - (showAmount ? 0 : 1);
   const realNames = rooms.map(r => r.name);
   const order = [...realNames, ...SCOPE_BUCKETS, ...models.map(m => m.room)].filter((n, i, a) => a.indexOf(n) === i);
-  const groups = order.map(name => ({ name, ms: models.filter(m => m.room === name && query(m)) })).filter(g => g.ms.length);
+  const goneIn = (name: string) => !!changes && [...changes.out.values()].some(e => e.gone && (e.was!.roomId || 'Whole flat') === name);
+  const order2 = changes ? [...order, ...[...changes.out.values()].filter(e => e.gone).map(e => e.was!.roomId || 'Whole flat')].filter((n, i, a) => a.indexOf(n) === i) : order;
+  const groups = order2.map(name => ({ name, ms: models.filter(m => m.room === name && query(m)) })).filter(g => g.ms.length || goneIn(g.name));
   const toggle = (set: Set<string>, id: string, on?: boolean) => { const s = new Set(set); (on ?? !s.has(id)) ? s.add(id) : s.delete(id); return s; };
   const picked = models.filter(m => picks.has(m.line.id));
   const total = models.filter(m => m.billable && !m.separate).reduce((a, m) => a + m.amount, 0);
@@ -96,7 +104,7 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
                 {m.draw && m.size ? <PieceThumb kind={m.draw.kind} w={m.size.w} d={m.size.d} words={m.words} {...m.art} className="w-9 h-7" /> : <span className="w-9 h-7 grid place-items-center text-slate-300"><Layers className="w-3.5 h-3.5" aria-hidden /></span>}
               </span>
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-slate-800 truncate">{m.name}{st && <> <span className="align-middle"><Chip tone={st[1]}>{st[0]}</Chip></span></>}</div>
+                <div className="text-sm font-semibold text-slate-800 truncate">{m.name}{st && <> <span className="align-middle"><Chip tone={st[1]}>{st[0]}</Chip></span></>}{changes?.out.get(l.id) && <> <span className="align-middle"><TagChip tag={changes.out.get(l.id)!.tag} /></span></>}</div>
                 <div className="text-[11px] text-slate-500 truncate">{m.words || 'No words yet'}</div>
                 {specBank && <div className="mt-1 leading-none">{specChips(m)}</div>}
                 {l.byRoom && (
@@ -121,7 +129,10 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
             </td>
             <td className="px-1" onClick={e => e.stopPropagation()}><Scrub variant="cell" label={`${m.name} rate`} value={m.rate} step={10} pxPerStep={2} format={inr} disabled={readOnly} onCommit={v => onReplace(withRate(m, v))} /></td>
           </>}
-          {showAmount && <td className={`px-2 text-right text-sm font-black tabular-nums ${m.billable && !m.separate ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{inr(m.amount)}</td>}
+          {showAmount && <td className={`px-2 text-right text-sm font-black tabular-nums ${m.billable && !m.separate ? 'text-slate-800' : 'text-slate-400 line-through'}`}>
+            {inr(m.amount)}
+            {changes?.out.get(l.id) && Math.abs(changes.out.get(l.id)!.d) >= 1 && <div className="text-[10px]"><Delta d={changes.out.get(l.id)!.d} /></div>}
+          </td>}
         </tr>
         {l.byRoom && isOpen && rooms.map(r => {
           const s = (shares.get(r.name) || []).find(x => x.model.line.id === l.id);
@@ -181,6 +192,13 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
                     </td>
                   </tr>
                   {g.ms.map(row)}
+                  {changes && [...changes.out].filter(([, e]) => e.gone && (e.was!.roomId || 'Whole flat') === g.name).map(([id, e]) => (
+                    <tr key={`gone-${id}`} className="border-t border-slate-100 bg-rose-50/50" data-gone={id}>
+                      <td />
+                      <td colSpan={N - (showAmount ? 2 : 1)} className="px-2 py-2"><span className="text-sm text-slate-400 line-through">{removedName ? removedName(e.was!) : id}</span> <span className="align-middle"><TagChip tag="REMOVED" /></span></td>
+                      {showAmount && <td className="px-2 text-right text-[10px]"><Delta d={e.d} /></td>}
+                    </tr>
+                  ))}
                 </React.Fragment>
               );
             })}
