@@ -709,6 +709,20 @@ describe('Tune (PR 4)', () => {
 describe('no plan yet (PR 5)', () => {
   const noPlan = { name: 'Joshi – 2BHK', area: 650, config: '2BHK', rooms: [], designFeeType: 'percentage', designFee: 10 };
 
+  it('shows the three ways to start under the empty state, not squeezed beside its words', () => {
+    /* A new project: rooms from the brief, none on a plan yet, its options made by the setup wizard (Classic). */
+    const fresh = { ...noPlan, rooms: [{ name: 'Living', size: 180, unit: 'sq ft' }, { name: 'Bedroom', size: 130, unit: 'sq ft' }] };
+    render(<Harness ctx0={fresh} />);
+    lens('Plan');
+    const words = screen.getByText('No plan yet').closest('.border-dashed') as HTMLElement;
+    expect(words).toBeTruthy();
+    for (const name of ['Sketch a rough plan', 'Quick build', 'Set up the plan']) {
+      const btn = screen.getByRole('button', { name });
+      // Beside the words they kept their full width and the words shrank to a column one letter wide.
+      expect(words.contains(btn)).toBe(false);
+    }
+  });
+
   it('a rough sketch becomes the project’s plan in one step', async () => {
     let c: any = null;
     render(<Harness ctx0={noPlan} tier={{ ...PG, boq: [] }} probeCtx={x => { c = x; }} />);

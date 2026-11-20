@@ -962,16 +962,25 @@ export default function PlaygroundScreen(props: Props) {
                 />
               ) : (
                 <div className="absolute inset-0 grid place-items-center p-6" style={{ paddingLeft: showLib && wide ? 260 : undefined }}>
-                  <div className="max-w-md w-full bg-white rounded-2xl p-4 shadow-sm">
+                  {/*
+                    The three ways in sit under the empty state, not in its action slot.
+                    EmptyState holds one button beside its words; with three there the
+                    buttons kept their full width and squeezed the words to a column one
+                    letter wide, and the buttons ran off the card, so a new project's plan
+                    showed no way to start.
+                  */}
+                  <div className="max-w-md w-full bg-white rounded-2xl p-4 shadow-sm space-y-3">
                     <EmptyState icon={MapIcon} title="No plan yet"
-                      text="Sketch the rooms roughly and tidy them into a plan, build the BOQ from the flat’s size in one step, or read the rooms off the brief’s plan. Then draw the furniture here."
-                      action={readOnly
+                      text="Sketch the rooms roughly and tidy them into a plan, build the BOQ from the flat’s size in one step, or read the rooms off the brief’s plan. Then draw the furniture here." />
+                    <div className="flex flex-wrap gap-2">
+                      {readOnly
                         ? <Button size="sm" onClick={() => setPlanModal(true)}>See the plan</Button>
-                        : <div className="flex flex-wrap gap-2">
-                          <Button size="sm" onClick={() => setPlanModal(true)}>Set up the plan</Button>
-                          <Button size="sm" icon={Zap} onClick={() => setBuilding(true)}>Quick build</Button>
+                        : <>
                           <Button size="sm" variant="primary" icon={PenLine} onClick={() => setSketching(true)}>Sketch a rough plan</Button>
-                        </div>} />
+                          <Button size="sm" icon={Zap} onClick={() => setBuilding(true)}>Quick build</Button>
+                          <Button size="sm" onClick={() => setPlanModal(true)}>Set up the plan</Button>
+                        </>}
+                    </div>
                   </div>
                 </div>
               )
