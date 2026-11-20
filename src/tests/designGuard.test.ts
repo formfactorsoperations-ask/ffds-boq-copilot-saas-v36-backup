@@ -109,4 +109,9 @@ describe('design guard', () => {
   it('keeps the screen kit itself clean', () => {
     expect(now['components/ui/kit.tsx']).toBeUndefined();
   });
+
+  it('keeps the BOQ Playground at zero (PR 7): its screens and the Material specs it reads', () => {
+    const dirty = Object.keys(now).filter(f => f.startsWith('components/playground/') || f.startsWith('components/materialSpecs/'));
+    expect(dirty.map(f => `${f}: ${JSON.stringify(now[f])}`)).toEqual([]);
+  });
 });

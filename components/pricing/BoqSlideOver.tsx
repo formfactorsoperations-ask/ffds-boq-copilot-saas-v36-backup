@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from '@/lib/lucide-shim';
 import '../projectHeader/projectHeader.css';
+import '../playground/playground.css';
 
 /*
   The BOQ, opened over Pricing & Tiers.
@@ -24,7 +25,7 @@ export default function BoqSlideOver({ title, onClose, children }: { title: stri
   return createPortal(
     <div className="fixed inset-0 z-[300]" role="dialog" aria-label={`Edit BOQ: ${title}`}>
       <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="phd-pop absolute inset-y-0 right-0 w-full max-w-[1240px] bg-slate-50 border-l border-slate-200 shadow-2xl flex flex-col">
+      <div className="pg-slide absolute inset-y-0 right-0 w-full max-w-[1240px] bg-slate-50 border-l border-slate-200 shadow-2xl flex flex-col">
         <div className="px-6 py-4 bg-white border-b border-slate-200 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">Edit BOQ</p>

@@ -1,0 +1,44 @@
+/*
+  BOQ Playground motion (PR 7, DESIGN.md "BOQ Playground motion"): the approved
+  mockup's own keyframes, with its timings. Every one stops under reduced motion.
+
+    pg-slide  a drawer from the right (the recipe drawer, the BOQ slide-over, a material's panel)
+    pg-drop   a piece dropped onto the plan settles into place (kits stagger it, 110 ms a piece)
+    pg-glow   the room it landed in glows once
+    pg-tag    what the change did to the price floats up from the piece
+    pg-print  a new line prints into the Live BOQ, the Sheet and the Rooms
+*/
+@keyframes pg-slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.pg-slide { animation: pg-slide 320ms cubic-bezier(.16, 1, .3, 1); }
+
+@keyframes pg-drop {
+  0% { opacity: 0; transform: translateY(-1.6px) scale(1.2); }
+  55% { opacity: 1; transform: translateY(.1px) scale(.97); }
+  100% { opacity: 1; transform: none; }
+}
+.pg-drop { animation: pg-drop 600ms cubic-bezier(.2, .9, .3, 1.25) backwards; transform-box: fill-box; transform-origin: center; }
+
+@keyframes pg-glow { 0% { opacity: 0; } 30% { opacity: .3; } 100% { opacity: 0; } }
+.pg-glow { animation: pg-glow 1100ms ease-out forwards; }
+
+@keyframes pg-tag {
+  0% { opacity: 0; transform: translate(-50%, 6px) scale(.85); }
+  15% { opacity: 1; transform: translate(-50%, -6px) scale(1); }
+  75% { opacity: 1; transform: translate(-50%, -24px); }
+  100% { opacity: 0; transform: translate(-50%, -36px); }
+}
+.pg-tag { animation: pg-tag 1500ms cubic-bezier(.16, 1, .3, 1) forwards; pointer-events: none; }
+
+@keyframes pg-print {
+  0% { opacity: 0; transform: translateY(-8px); background: rgba(61, 82, 160, .14); }
+  40% { opacity: 1; transform: none; background: rgba(61, 82, 160, .14); }
+  100% { background: transparent; }
+}
+.pg-print { animation: pg-print 1400ms cubic-bezier(.16, 1, .3, 1) backwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-slide, .pg-drop, .pg-glow, .pg-tag, .pg-print { animation: none !important; }
+  .pg-glow { opacity: 0; }
+  /* The price tag still says what changed; it stands still, above the piece, until it goes. */
+  .pg-tag { transform: translate(-50%, -12px); }
+}

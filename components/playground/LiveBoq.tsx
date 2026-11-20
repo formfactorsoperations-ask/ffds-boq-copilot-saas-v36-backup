@@ -16,7 +16,7 @@ import { ISSUE_LABEL, type IssueKind } from '../../lib/playground/issues';
 import { basisOfUnit, readSize, parseSize, formatSize, sizeUpdates } from '../../lib/boqSize';
 import { PieceThumb } from './pieceArt';
 import { CivilBlock, CivilRoom } from './CivilParts';
-import { inr, lakh, marginTone, Scrub, withCost, withMarkup, withRate, type LineModel } from './playgroundUi';
+import { inr, lakh, marginTone, Scrub, withCost, withMarkup, withRate, usePrinted, type LineModel } from './playgroundUi';
 
 /*
   The right-hand panel of the BOQ Playground (the approved mockup's inspector).
@@ -67,6 +67,7 @@ export function Receipt({ models, rooms, roomTotals, shares, workTotal, tierName
   onUpdateStale?: () => void;
 }) {
   const stale = models.filter(m => m.stale.length);
+  const printed = usePrinted();
   const realNames = rooms.map(r => r.name);
   const order = [...realNames, ...SCOPE_BUCKETS, ...models.map(m => m.room)].filter((n, i, a) => a.indexOf(n) === i);
   const groups = order.map(name => ({
@@ -115,7 +116,7 @@ export function Receipt({ models, rooms, roomTotals, shares, workTotal, tierName
             </button>
             {g.ms.map(m => (
               <button key={m.line.id} type="button" onClick={() => onSel(m.line.id)}
-                className={`w-full flex items-start gap-2 px-1 py-1.5 rounded-lg text-left ${sel === m.line.id ? 'bg-[#3D52A0]/[0.08]' : 'hover:bg-slate-50'}`}>
+                className={`w-full flex items-start gap-2 px-1 py-1.5 rounded-lg text-left ${sel === m.line.id ? 'bg-[#3D52A0]/[0.08]' : 'hover:bg-slate-50'}${printed(m.line.id)}`}>
                 <span className="w-7 h-6 shrink-0 mt-0.5">{thumbOf(m, 'w-7 h-6')}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-xs font-semibold text-slate-700 truncate">{m.name}{m.stale.length > 0 && <> <span className="inline-block px-1 rounded bg-amber-100 text-amber-700 text-[10px] font-bold align-middle">new spec</span></>}</span>
@@ -125,7 +126,7 @@ export function Receipt({ models, rooms, roomTotals, shares, workTotal, tierName
               </button>
             ))}
             {g.real && (shares.get(g.name) || []).map(s => (
-              <button key={s.model.line.id} type="button" onClick={() => onSel(s.model.line.id)} className="w-full flex items-center gap-2 px-1 py-1 rounded-lg hover:bg-slate-50 text-left">
+              <button key={s.model.line.id} type="button" onClick={() => onSel(s.model.line.id)} className={`w-full flex items-center gap-2 px-1 py-1 rounded-lg hover:bg-slate-50 text-left${printed(s.model.line.id)}`}>
                 <span className="w-7 h-5 shrink-0 grid place-items-center text-slate-300"><Layers className="w-3 h-3" aria-hidden /></span>
                 <span className="min-w-0 flex-1 text-[11px] text-slate-500 truncate">{s.model.name} · {round2(s.qty)} {s.model.unit}</span>
                 {!hideFigures && <span className="text-[11px] font-bold tabular-nums text-slate-600">{inr(s.amount)}</span>}
@@ -149,7 +150,7 @@ export function Receipt({ models, rooms, roomTotals, shares, workTotal, tierName
             <span className="text-[10px] text-slate-400">{separate.length} items</span>
           </div>
           {separate.map(m => (
-            <button key={m.line.id} type="button" onClick={() => onSel(m.line.id)} className="w-full flex items-center gap-2 px-1 py-1 rounded-lg hover:bg-white text-left">
+            <button key={m.line.id} type="button" onClick={() => onSel(m.line.id)} className={`w-full flex items-center gap-2 px-1 py-1 rounded-lg hover:bg-white text-left${printed(m.line.id)}`}>
               <span className="min-w-0 flex-1">
                 <span className="block text-xs font-semibold text-slate-700 truncate">{m.name}</span>
                 <span className="block text-[10px] text-slate-500">{m.room} · {m.line.boqStatus === 'client_procured' ? 'Bought by the client' : 'At actuals, paid to the vendor'}</span>

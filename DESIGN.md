@@ -121,6 +121,82 @@ The owner asked for the BOQ Playground's design library (`components/playground/
 - Tabs change with `hud-swap`; tiles arrive with `hud-row-in`, staggered.
 - Everything stops under `prefers-reduced-motion` (`useReducedMotion`, `motion-safe:`, `phd-lift`'s own rule).
 
+## BOQ Playground (approved mockup v14, recorded 20 Nov 2026)
+
+The BOQ Editor's one screen (`components/playground/`), built to the approved mockup. Read this before
+changing any part of it; new Playground parts follow the same rules.
+
+### The screen
+
+- **The bar** (white, `rounded-2xl border-slate-200 shadow-sm`): the BOQ Playground mark (a brand
+  tile with a white pen), the version chip and its menu, the lens switch, the library toggle, search,
+  Undo, Save and the Export menu.
+- **Five lenses** in one `Segmented` (`label="Lens"`): **Plan**, **Rooms**, **Sheet**, **Tune**, **Deal**.
+  A lens change swaps the work area with `key={lens}` and `hud-swap`. A Classic BOQ opens on the Sheet.
+- **The library** floats over the stage's left edge (232px): Pieces, Kits and By client tabs, each a
+  `Segmented`. It slides in with `pg-slide`.
+- **The right rail** is the Live BOQ (a receipt, room by room, with the work total) until a line or a
+  room is picked; then the inspector for it. Each inspector is keyed by what it shows and swaps in with
+  `hud-swap`. The rail hides to a "Live BOQ" button on narrow screens.
+- **Over the plan**: the client's figure in a white glass card at the top right (the margin ring
+  beside it for the studio's finance roles), the zoom controls centred at the foot, notes as a dark
+  toast above them.
+- **Menus** under the bar are `rounded-2xl bg-white border-slate-200 shadow-2xl p-1.5 hud-panel-in`;
+  **modals** (sketch, quick build, kits, the plan, revision issue, import) follow "Modals" above.
+- **Classic BOQs** open with a white banner (`hud-panel-in`) that says so and offers Make a Playground
+  version; a signed, superseded or sent version shows why it is read-only in the same way.
+
+### Surfaces and type
+
+- Built from the kit: `Button`, `Chip`, `Segmented`, `EmptyState`, `LABEL`, `INPUT`. The scale and
+  palette are the app's. The guard keeps `components/playground/` and `components/materialSpecs/`
+  at zero (`designGuard.test.ts`, "keeps the BOQ Playground at zero"): no half-pixel or 6–9px text,
+  no Tailwind colour outside the palette, no font of their own.
+- Figures are `font-black tabular-nums`; money is written as `₹13,28,700`, and `₹1.32 L` where a
+  tag is small (the plan's room tags).
+- Margins colour against the studio's floor: rose under it, amber within five points, emerald above.
+- Cost, markup, margin and Tune follow `seesStudioFinance` and Hide figures. A client page never
+  shows them.
+
+### The drawing
+
+- The plan is SVG, drawn to scale: a dotted ground, the rooms on paper (`#f7f6f2`), walls in near-black,
+  each room tinted brand by its share of the price, its name and price on a tag.
+- **Only inside the drawing**, as SVG fills, the materials have their own colours: wood grains, stone,
+  fabric and paint shades (`pieceArt.tsx`), and the Civil layer's marks (break rose, build slate,
+  re-floor amber, wall tiles brand, waterproofing `#0284c7`). Nothing outside the drawing uses them.
+- Pieces are seen from above, with their finish and a soft shadow; high pieces (lofts, wall units)
+  are drawn faint, with a dashed outline and no shadow.
+  The Civil layer fades the furniture to 22% and draws its own work over the rooms.
+
+### Client pages
+
+- The first-proposal PDF, the meeting view and the Client Proposal panel use the same type and
+  palette. The PDF's sheets are A4 (794px wide on screen), white, with a quiet footer and the page number; they open over
+  the whole page (`createPortal` to `document.body`) so no ancestor's print rule can blank them.
+- **The drawing gate:** no client page, PDF or portal copy draws the plan with pieces until Space
+  Planning is approved. The PDF shows the builder's plan as the client gave it.
+
+### BOQ Playground motion (approved with the mockup)
+
+The mockup's motion, in `components/playground/playground.css` (imported by `src/index.css` too, so the
+deploy build keeps it), with the mockup's timings. On top of the app's classes (`hud-panel-in`, `hud-swap`,
+`hud-row-in`, `phd-scrim`, `phd-pop`, `phd-lift`) and "Playground library motion" above:
+- **`pg-slide`** (320 ms): a drawer from the right comes in 24px and fades up. The library, the
+  Item bank's recipe drawer, the "Edit BOQ" slide-over and a material's panel in Material specs.
+- **`pg-drop`** (600 ms, a small overshoot): a piece put on the plan settles into place. A kit's
+  pieces drop one after another, 110 ms apart.
+- **`pg-glow`** (1.1 s): the room a piece landed in, or was moved into, glows brand once.
+- **`pg-tag`** (1.5 s): one piece added, resized or given another finish floats what it did to the
+  price up from the piece: `+₹12,400` on emerald, `−₹3,000` on rose. Nothing under a rupee, nothing
+  for a move or a turn, and nothing for a kit.
+- **`pg-print`** (1.4 s): a new line prints into the Live BOQ, the Sheet and the Rooms: it drops 8px
+  into place on a brand tint that fades.
+- What an edit shows is worked out from the BOQ before and after it (`lib/playground/motion.ts`).
+  Undo shows nothing.
+- Under `prefers-reduced-motion` all five stop; the glow is not shown, and the price tag stands still
+  above the piece until it goes.
+
 ## Copy
 
 Sentence case. Write to the person using the screen, in the studio's own words (clients, projects,

@@ -12,7 +12,7 @@ import { segmentFor, segLength, toolOf, type CivilTool, type Segment } from '../
 import { PieceArt } from './pieceArt';
 import { KIT_DRAG, KIT_TYPE } from './KitParts';
 import { TAG_COLOUR, shortInr, type Changes } from '../../lib/playground/changes';
-import { inr, lakh, type LineModel } from './playgroundUi';
+import { inr, lakh, type LineModel, type FreshState } from './playgroundUi';
 
 /*
   The Plan lens's stage (BOQ Playground, as in the approved mockup).
@@ -79,6 +79,8 @@ interface Props {
   onDropKit?: (kitId: string, room: string) => void;
   /** Show changes since the version before (PR R): each changed piece outlined and tagged, the ones taken out drawn faint. */
   changes?: Changes | null;
+  /** What the last edit did (PR 7): pieces drop in, the room glows, the price change floats up. */
+  fresh?: FreshState | null;
 }
 
 type Drag =
@@ -93,7 +95,7 @@ type Drag =
 export const stageStats = { pieceRenders: 0 };
 
 export default function PlanStage(props: Props) {
-  const { ctx, bank, bankMap, models, roomTotals, readOnly, sel, onSel, selRoom, onSelRoom, commit, newId, libOpen, hideFigures, fitSignal, prepareNew, onRooms, layer = 'int', civilTool, onCivilRoom, onCivilWall, onNote, onDropKit, changes } = props;
+  const { ctx, bank, bankMap, models, roomTotals, readOnly, sel, onSel, selRoom, onSelRoom, commit, newId, libOpen, hideFigures, fitSignal, prepareNew, onRooms, layer = 'int', civilTool, onCivilRoom, onCivilWall, onNote, onDropKit, changes, fresh } = props;
   const civ = layer === 'civ';
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
@@ -620,6 +622,7 @@ export default function PlanStage(props: Props) {
                 {!underlay && <rect x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h} fill="#f7f6f2" />}
                 <rect data-room={r.name} x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h} fill={`rgba(61,82,160,${a})`}
                   onPointerDown={e => { e.stopPropagation(); startPan(e, r.name); }} />
+                {fresh?.glow === r.name && <rect key={`glow-${fresh.key}`} className="pg-glow" data-glow={r.name} x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h} fill={BRAND} opacity={0} pointerEvents="none" />}
                 {selRoom === r.name && <rect x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h} fill="none" stroke={BRAND} strokeWidth={px(2.5)} pointerEvents="none" />}
               </g>
             );
@@ -636,7 +639,7 @@ export default function PlanStage(props: Props) {
           {/* On the Civil layer the furniture fades back and cannot be picked. */}
           <g opacity={civ ? 0.22 : 1} pointerEvents={civ ? 'none' : undefined}>
             {pieces.map(p => (
-              <PieceNode key={p.id} piece={p} faded={!models.get(p.id)?.billable} readOnly={readOnly} onDown={onPieceDown}
+              <PieceNode key={p.id} piece={p} faded={!models.get(p.id)?.billable} readOnly={readOnly} onDown={onPieceDown} drop={fresh?.drop.get(p.id)}
                 fill={models.get(p.id)?.art.fill} base={models.get(p.id)?.art.base} top={models.get(p.id)?.art.top} />
             ))}
           </g>
@@ -651,6 +654,17 @@ export default function PlanStage(props: Props) {
         </g>
       </svg>
       {float}
+      {fresh?.tag && (() => {
+        const p = pieces.find(x => x.id === fresh.tag!.id);
+        if (!p) return null;
+        return (
+          <div key={`tag-${fresh.key}`} aria-hidden data-price-tag
+            className={`pg-tag absolute z-40 px-2.5 py-1 rounded-full text-xs font-black tabular-nums shadow-lg text-white ${fresh.tag.up ? 'bg-emerald-600' : 'bg-rose-600'}`}
+            style={{ left: view.tx + p.place.x * view.k, top: view.ty + p.place.y * view.k - 12 }}>
+            {fresh.tag.text}
+          </div>
+        );
+      })()}
       <div className="absolute -translate-x-1/2 bottom-2.5 rounded-xl bg-white/95 border border-slate-200 shadow-lg px-1.5 py-1 flex items-center gap-1"
         style={{ left: `calc(50% + ${libOpen ? 122 : 0}px)` }} onPointerDown={e => e.stopPropagation()}>
         <button type="button" onClick={() => zoomBy(0.8)} aria-label="Zoom out" className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100"><Minus className="w-3.5 h-3.5" aria-hidden /></button>
@@ -663,8 +677,10 @@ export default function PlanStage(props: Props) {
 
 /* ── one piece ── */
 
-const PieceNode = React.memo(function PieceNode({ piece, faded, readOnly, onDown, fill, base, top }: {
+const PieceNode = React.memo(function PieceNode({ piece, faded, readOnly, onDown, fill, base, top, drop }: {
   piece: BoardPiece; faded: boolean; readOnly: boolean; fill?: string; base?: string; top?: string;
+  /** Just dropped onto the plan: its place in the stagger (PR 7). */
+  drop?: number;
   onDown: (e: React.PointerEvent, p: BoardPiece) => void;
 }) {
   stageStats.pieceRenders++;
@@ -672,7 +688,9 @@ const PieceNode = React.memo(function PieceNode({ piece, faded, readOnly, onDown
   return (
     <g data-piece={piece.id} transform={`translate(${place.x} ${place.y}) rotate(${place.rot})`} onPointerDown={e => onDown(e, piece)}
       style={{ cursor: readOnly ? 'pointer' : 'move' }} aria-label={`${piece.item?.name || 'Piece'}, ${ftin(size.w)} wide`}>
-      <PieceArt kind={draw.kind} w={size.w} d={size.d} words={piece.line.specs ?? piece.item?.specs} high={draw.mount === 'high'} faded={faded} fill={fill} base={base} top={top} />
+      <g className={drop != null ? 'pg-drop' : undefined} style={drop != null ? { animationDelay: `${drop * 110}ms` } : undefined}>
+        <PieceArt kind={draw.kind} w={size.w} d={size.d} words={piece.line.specs ?? piece.item?.specs} high={draw.mount === 'high'} faded={faded} fill={fill} base={base} top={top} />
+      </g>
     </g>
   );
 });
