@@ -305,7 +305,8 @@ const LocalStrategy: DBService = {
         }
 
         const index = projects.findIndex(p => p.id === cleanProject.id);
-        if (index >= 0) projects[index] = cleanProject;
+        // An option that arrives without its lines keeps the ones this device holds (keepTrimmedLines).
+        if (index >= 0) projects[index] = keepTrimmedLines(cleanProject, projects[index]);
         else projects.unshift(cleanProject);
         
         // Ensure all projects are stripped of derived data
@@ -675,10 +676,51 @@ async function writeEngagement(projectId: string, engagement: any): Promise<void
     }
 }
 
+/**
+ * The options whose lines a save may write to projects/{id}/tierBoq.
+ *
+ * Not one marked `boqTrimmed` and holding no lines. That means this copy was read from a
+ * project document too big to carry the option's lines: they are in tierBoq
+ * already, and this copy does not have them until the project is opened
+ * (hydrateTierBoqs). Writing its empty list would replace the stored lines with
+ * nothing — which is what a save of an unopened project did, from the Projects
+ * list or from an auto-save that landed before the lines arrived.
+ *
+ * An option that is simply empty is not marked, and is written as before. So
+ * is a marked one that does hold lines: they were added here, and are the
+ * newest there are.
+ */
+const awaitsItsLines = (t: any): boolean => t?.boqTrimmed === true && !(Array.isArray(t.boq) && t.boq.length > 0);
+
+export function tierBoqsToWrite(tiers: any[]): any[] {
+    return (Array.isArray(tiers) ? tiers : []).filter(t => t?.id && Array.isArray(t.boq) && !awaitsItsLines(t));
+}
+
+/**
+ * The same rule for the copy kept on this device: an option that arrives
+ * trimmed keeps the lines already held for it, rather than losing them to an
+ * empty list. With no trimmed option, or nothing held, the project is returned
+ * as it came.
+ */
+export function keepTrimmedLines<T extends { tiers?: any[] }>(incoming: T, held: { tiers?: any[] } | null | undefined): T {
+    const tiers = Array.isArray(incoming?.tiers) ? incoming.tiers : [];
+    if (!held || !Array.isArray(held.tiers) || !tiers.some(awaitsItsLines)) return incoming;
+    const lines = new Map<string, any[]>(
+        held.tiers.filter(t => t?.id && Array.isArray(t.boq) && t.boq.length > 0).map(t => [String(t.id), t.boq]),
+    );
+    let changed = false;
+    const next = tiers.map(t => {
+        if (!awaitsItsLines(t) || !lines.has(String(t.id))) return t;
+        changed = true;
+        return { ...t, boq: lines.get(String(t.id)), boqTrimmed: false };
+    });
+    return changed ? { ...incoming, tiers: next } : incoming;
+}
+
 async function writeTierBoqs(projectId: string, tiers: any[]): Promise<void> {
     if (!firestore || !projectId || !tiers?.length) return;
 
-    const pending = tiers.filter(t => t?.id && Array.isArray(t.boq));
+    const pending = tierBoqsToWrite(tiers);
     if (!pending.length) return;
 
     try {
