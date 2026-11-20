@@ -1,4 +1,5 @@
 import { Item, ProposalTier, ProjectDiscount } from '../types';
+import { CIVIL_TRADE, type CivilType } from './playground/civil';
 import { resolveBoqLine } from './boqPricing';
 import { gstOn, type GstTerms } from './paymentSchedule';
 import { asScopeBucket, bucketForItem } from './scopeBuckets';
@@ -118,6 +119,8 @@ export function scopeSplit(tier: Pick<ProposalTier, 'boq'> | undefined, bankMap:
     const item = bankMap.get(line.bankId);
     const room = line.roomId || priced.room;
     let { part, trade } = tradeOfLine(room, lineLook(line, item));
+    // A line on the plan's Civil layer is the Civil part, whatever its item's category (PR C).
+    if (line.civil?.type) { part = 'civil'; trade = CIVIL_TRADE[line.civil.type as CivilType] || trade; }
     /* A line with no bank item whose category says nothing of its part keeps the part its room gives it. */
     if (!item && part === 'others') part = tradeOfLine(room, undefined).part;
     const key = String(line.id || `${priced.key}#${i}`);

@@ -61,7 +61,7 @@ const baseBoq = () => [
 ];
 const placedWardrobe = { id: 'p1', bankId: 'wardrobe', qty: 42, roomId: 'Bedroom', calcLength: 6, calcWidth: 7, sizeUnit: 'ft', place: { x: 3.12, y: 1.12, rot: 0, depthFt: 2 } };
 
-function Harness({ tier = {}, focus = null, onSave = vi.fn(async () => undefined), probe, onSelect = vi.fn(), ctx0, probeCtx }: { tier?: any; focus?: any; onSave?: any; probe?: (tiers: any[], active: string) => void; onSelect?: any; ctx0?: any; probeCtx?: (ctx: any) => void }) {
+function Harness({ tier = {}, focus = null, onSave = vi.fn(async () => undefined), probe, onSelect = vi.fn(), ctx0, probeCtx, bankIn }: { tier?: any; focus?: any; onSave?: any; probe?: (tiers: any[], active: string) => void; onSelect?: any; ctx0?: any; probeCtx?: (ctx: any) => void; bankIn?: any[] }) {
   const [tiers, setTiers] = useState<any[]>([{ id: 't1', name: 'Comfort Upgrade', timestamp: 1, boq: baseBoq(), ...tier }]);
   const [active, setActive] = useState('t1');
   const [ctx, setCtx] = useState<any>(ctx0 || { name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10 });
@@ -76,7 +76,7 @@ function Harness({ tier = {}, focus = null, onSave = vi.fn(async () => undefined
       setTiers={setTiers as any}
       activeTierId={active}
       onSelectTier={(id: string) => { onSelect(id); setActive(id); }}
-      bank={bank}
+      bank={bankIn || bank}
       aiStrategy={'balanced' as any}
       onViewInBank={() => undefined}
       onSaveProject={onSave}
@@ -745,5 +745,129 @@ describe('Excel out and in (PR 6)', () => {
     fireEvent.click(within(d).getByRole('checkbox', { name: 'Add another Sliding wardrobe' }));
     fireEvent.click(within(d).getByRole('button', { name: 'Add 1 line' }));
     expect(latest[0].boq.filter((l: any) => l.bankId === 'wardrobe')).toHaveLength(2);
+  });
+});
+
+describe('the Civil layer (PR C)', () => {
+  const civilBank = [
+    ...bank,
+    { id: 'b50', name: 'Wall demolition, brick', cat: 'Civil', unit: 'sq ft', specs: 'Breaking brick wall with plaster.', materials: 22, labor: 14, margin: 25 },
+    { id: 'b52', name: 'Remove existing floor tiles', cat: 'Civil', unit: 'sq ft', specs: 'Hacking the old tiles.', materials: 10, labor: 8, margin: 25 },
+    { id: 'b53', name: 'Floor tiles, laid', cat: 'Flooring', unit: 'sq ft', specs: 'Vitrified tiles.', materials: 90, labor: 42, margin: 25 },
+    { id: 'b54', name: 'Wall tiles to 7 ft, laid', cat: 'Tiling', unit: 'sq ft', specs: 'Wall tiles to 7 ft.', materials: 80, labor: 40, margin: 25 },
+    { id: 'b55', name: 'Waterproofing, floor and upstand', cat: 'Civil', unit: 'sq ft', specs: 'Two coats.', materials: 30, labor: 22, margin: 25 },
+    { id: 'b56', name: 'Debris removal', cat: 'Civil', unit: 'lot', specs: 'Carting away.', materials: 9000, labor: 5400, margin: 25 },
+  ];
+  const renovation = { name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10, propertyStatus: 'finished', civilScope: { flooring: true } };
+  const civilOn = () => fireEvent.click(screen.getByRole('radio', { name: /^Civil/ }));
+  const panel = () => screen.getByRole('region', { name: 'Civil work' });
+  const room = (name: string) => document.querySelector(`[data-room="${name}"]`) as Element;
+
+  it('the Civil layer fades the furniture back and offers the tools; Start from the brief lays out the flooring, each line measured', () => {
+    let latest: any[] = [];
+    render(<Harness ctx0={renovation} bankIn={civilBank} tier={{ ...PG, boq: [placedWardrobe] }} probe={t => { latest = t; }} />);
+    civilOn();
+    expect(screen.getByText('Civil layer: the furniture fades back. Pick a tool and draw, or start from the brief.')).toBeTruthy();
+    expect(within(panel()).getByText('Renovation')).toBeTruthy();
+    expect(within(panel()).getByText(/The brief asks for new flooring throughout\. Quantities come from the plan\./)).toBeTruthy();
+    ['Break a wall', 'Build a wall', 'Re-floor a room', 'Wall tiles to 7′', 'Waterproofing'].forEach(t => expect(within(panel()).getByRole('button', { name: new RegExp(t) })).toBeTruthy());
+    // No item for a new wall in this bank: the tool says so.
+    expect(within(within(panel()).getByRole('button', { name: /Build a wall/ })).getByText('Not in the Item Bank yet')).toBeTruthy();
+    expect(piece('p1').closest('g[opacity]')!.getAttribute('opacity')).toBe('0.22');
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Start from the brief' }));
+    const civil = latest[0].boq.filter((l: any) => l.civil);
+    expect(civil.map((l: any) => [l.roomId, l.civil.type, l.qty])).toEqual([
+      ['Bedroom', 'floorRemove', 120], ['Bedroom', 'floor', 120], ['Kitchen', 'floorRemove', 80], ['Kitchen', 'floor', 80],
+    ]);
+    expect(latest[0].boq.filter((l: any) => l.bankId === 'b56')).toHaveLength(1);
+    expect(screen.getByText(/^From the brief: 4 civil lines for new flooring throughout, measured from the plan\. Debris removal added once, across the flat\./)).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /^Civil/ }).textContent).toBe('Civil 4');
+    // One undo takes it all back.
+    fireEvent.click(screen.getByRole('button', { name: /Undo/ }));
+    expect(latest[0].boq.filter((l: any) => l.civil)).toHaveLength(0);
+  });
+
+  it('Replace flooring is room by room: the rooms the brief names, each in two lines', () => {
+    let latest: any[] = [];
+    render(<Harness ctx0={{ ...renovation, clientBrief: 'Modular kitchen. Replace the flooring in the kitchen only.' }} bankIn={civilBank} tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} />);
+    civilOn();
+    expect(within(panel()).getByText(/The brief asks for new flooring in the kitchen\. Quantities come from the plan\./)).toBeTruthy();
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Start from the brief' }));
+    expect(latest[0].boq.filter((l: any) => l.civil).map((l: any) => [l.roomId, l.civil.type, l.bankId, l.qty])).toEqual([
+      ['Kitchen', 'floorRemove', 'b52', 80], ['Kitchen', 'floor', 'b53', 80],
+    ]);
+    // Any other room is re-floored by hand with the tool, when the site needs it.
+    fireEvent.click(within(panel()).getByRole('button', { name: /Re-floor a room/ }));
+    fireEvent.pointerDown(room('Bedroom'), { ...at(6, 5), pointerId: 1 });
+    expect(latest[0].boq.filter((l: any) => l.civil && l.roomId === 'Bedroom').map((l: any) => l.civil.type)).toEqual(['floorRemove', 'floor']);
+  });
+
+  it('a room tool clicked on a room puts its civil work in, and again takes it out; waterproofing is for wet rooms', () => {
+    let latest: any[] = [];
+    render(<Harness ctx0={renovation} bankIn={civilBank} tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} />);
+    civilOn();
+    fireEvent.click(within(panel()).getByRole('button', { name: /Wall tiles to 7′/ }));
+    expect(screen.getByText('Wall tiles to 7′: click a bathroom or the kitchen. Click the tool again, or press Esc, to stop.')).toBeTruthy();
+    fireEvent.pointerDown(room('Kitchen'), { ...at(16, 4), pointerId: 1 });
+    fireEvent.pointerUp(stage(), { ...at(16, 4), pointerId: 1 });
+    // 36 ft of wall × 7 ft, less one door.
+    expect(latest[0].boq.find((l: any) => l.civil?.type === 'walls7')).toMatchObject({ roomId: 'Kitchen', qty: 36 * 7 - 21 });
+    fireEvent.pointerDown(room('Kitchen'), { ...at(16, 4), pointerId: 1 });
+    expect(latest[0].boq.some((l: any) => l.civil?.type === 'walls7')).toBe(false);
+    expect(screen.getByText('Kitchen: wall tiles to 7′ taken out.')).toBeTruthy();
+    fireEvent.click(within(panel()).getByRole('button', { name: /Waterproofing/ }));
+    fireEvent.pointerDown(room('Bedroom'), { ...at(6, 5), pointerId: 1 });
+    expect(screen.getByText('Waterproofing is for bathrooms and the kitchen.')).toBeTruthy();
+    // Esc stops the tool: a click on a room picks it again.
+    fireEvent.keyDown(stage(), { key: 'Escape' });
+    expect(within(panel()).getByRole('button', { name: /Waterproofing/ }).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('a wall break snaps to the nearest wall, is measured from it, and says how', async () => {
+    let latest: any[] = [];
+    render(<Harness ctx0={renovation} bankIn={civilBank} tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} />);
+    civilOn();
+    fireEvent.click(within(panel()).getByRole('button', { name: /Break a wall/ }));
+    await drag(room('Bedroom'), [11.6, 2], [11.8, 7]);
+    const brk = latest[0].boq.find((l: any) => l.civil?.type === 'break');
+    expect(brk).toMatchObject({ roomId: 'Bedroom', qty: 50, civil: { segment: [12, 2, 12, 7] } });
+    expect(brk.specs).toMatch(/Check structure and society approval before the wall is broken\.$/);
+    const ins = inspector();
+    expect(within(ins).getByText('Measured from the plan')).toBeTruthy();
+    expect(within(ins).getByText(/5′ long × 10′ high:/)).toBeTruthy();
+    fireEvent.change(within(ins).getByLabelText('Length'), { target: { value: '6' } });
+    fireEvent.blur(within(ins).getByLabelText('Length'));
+    expect(latest[0].boq.find((l: any) => l.civil?.type === 'break')).toMatchObject({ qty: 60, civil: { segment: [12, 2, 12, 8] } });
+    expect(document.querySelector(`[data-civ="${brk.id}"]`)).toBeTruthy();
+  });
+
+  it('a room’s inspector toggles its civil work; resizing the room moves its civil quantities', async () => {
+    let latest: any[] = [], c: any = null;
+    render(<Harness ctx0={renovation} bankIn={civilBank} tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} probeCtx={x => { c = x; }} />);
+    civilOn();
+    fireEvent.pointerDown(room('Bedroom'), { ...at(6, 5), pointerId: 1 });
+    fireEvent.pointerUp(stage(), { ...at(6, 5), pointerId: 1 });
+    const ri = screen.getByRole('complementary', { name: 'Room' });
+    expect(within(ri).getByText('Civil work in this room')).toBeTruthy();
+    expect(within(ri).queryByRole('button', { name: 'Waterproofing' })).toBeNull();
+    fireEvent.click(within(ri).getByRole('button', { name: 'Re-floor a room' }));
+    expect(latest[0].boq.filter((l: any) => l.civil).map((l: any) => l.qty)).toEqual([120, 120]);
+    // Pull the bedroom's bottom wall down 2 ft: its floor follows.
+    await drag(document.querySelector('[data-room-edge="bottom"]') as Element, [6, 10], [6, 12]);
+    expect(c.rooms.find((r: any) => r.name === 'Bedroom').plan.h).toBe(12);
+    expect(latest[0].boq.filter((l: any) => l.civil).map((l: any) => l.qty)).toEqual([144, 144]);
+  });
+
+  it('the Owner adds the standard civil items the Item Bank lacks; a tool with no item says what to add', () => {
+    let c: any = null;
+    render(<Harness ctx0={renovation} probeCtx={x => { c = x; }} tier={{ ...PG, boq: [] }} />);
+    civilOn();
+    fireEvent.click(within(panel()).getByRole('button', { name: /Re-floor a room/ }));
+    fireEvent.pointerDown(room('Kitchen'), { ...at(16, 4), pointerId: 1 });
+    expect(screen.getByText('No item in the Item Bank for the new floor: add one such as “Floor tiles, laid”, priced per sq ft.')).toBeTruthy();
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Add the standard civil items' }));
+    expect(c.adHocItems.map((i: any) => i.name)).toEqual([
+      'Wall demolition, brick', 'New wall, 4.5″ brick', 'Remove existing floor tiles', 'Floor tiles, laid', 'Wall tiles to 7 ft, laid', 'Waterproofing, floor and upstand', 'Debris removal',
+    ]);
   });
 });

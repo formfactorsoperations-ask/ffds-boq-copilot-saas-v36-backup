@@ -97,9 +97,16 @@ export function resizeRoom(args: {
     return e && r.plan ? withRect(r, moved(r.plan, e, to)) : r;
   });
 
-  // Pieces standing against the wall move with it.
+  // Pieces standing against the wall move with it, and a break or new wall on it (PR C).
   const nextBoq = boq.map(l => {
     const e = l.roomId ? changes.get(l.roomId) : undefined;
+    const seg = l.civil?.segment;
+    if (e && seg) {
+      const along = horiz(e) ? seg[0] === seg[2] && Math.abs(seg[0] - from) < NEAR : seg[1] === seg[3] && Math.abs(seg[1] - from) < NEAR;
+      if (!along) return l;
+      const s: [number, number, number, number] = horiz(e) ? [to, seg[1], to, seg[3]] : [seg[0], to, seg[2], to];
+      return { ...l, civil: { ...l.civil!, segment: s } };
+    }
     if (!e || !l.place) return l;
     const item = pieceItemOf(l, bankMap);
     const draw = drawOf(item);

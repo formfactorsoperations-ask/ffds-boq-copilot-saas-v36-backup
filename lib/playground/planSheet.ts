@@ -306,6 +306,17 @@ export function replacePlan(args: {
   const needsPlace: string[] = [];
 
   const nextBoq = boq.map(line => {
+    // A wall broken or built moves with its room, and stays inside it (PR C).
+    const seg = line.civil?.segment;
+    if (seg && line.roomId) {
+      const was = before.get(line.roomId);
+      const now = after.get(line.roomId);
+      if (!was || !now || placed.missing.includes(line.roomId)) return line;
+      const dx = now.x - was.x, dy = now.y - was.y;
+      const cx = (v: number) => round2(Math.max(now.x, Math.min(now.x + now.w, v + dx)));
+      const cy = (v: number) => round2(Math.max(now.y, Math.min(now.y + now.h, v + dy)));
+      return { ...line, civil: { ...line.civil!, segment: [cx(seg[0]), cy(seg[1]), cx(seg[2]), cy(seg[3])] as [number, number, number, number] } };
+    }
     if (!line.place || !line.roomId) return line;
     const was = before.get(line.roomId);
     const now = after.get(line.roomId);

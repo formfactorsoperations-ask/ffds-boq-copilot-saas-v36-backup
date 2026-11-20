@@ -1325,6 +1325,15 @@ export interface BoqItem {
     materialSpecs?: Record<string, LineMaterialSpec>;
     /** Words typed by hand: `specs` no longer follows the materials or their versions. */
     specsOwn?: boolean;
+    /** BOQ Playground PR C: a civil line on the plan's Civil layer, and how it is measured
+     *  (lib/playground/civil.ts). Its quantity follows the room's size and, for a wall, its length. */
+    civil?: BoqCivil;
+}
+
+/** What a civil line is. `segment` is the wall broken or built, [x1, y1, x2, y2] in feet on the plan. */
+export interface BoqCivil {
+    type: 'break' | 'build' | 'floor' | 'floorRemove' | 'walls7' | 'waterproof';
+    segment?: [number, number, number, number];
 }
 
 /** One part of a line: which material, at which version. `shade` is picked at Selections (PR M). */

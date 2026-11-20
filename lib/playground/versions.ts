@@ -17,6 +17,7 @@ import type { Item, BoqItem, ProposalTier, Room, ShareBasis } from '../../types'
 import { inferBasis } from '../takeoff';
 import { PLAYGROUND_PRICING, isPlaygroundTier, playgroundTotals, designFeeForTier } from './pricing';
 import { byRoomQty, withByRoomQty, type MeasureContext } from './rooms';
+import { withCivilQty } from './civil';
 import { isScopeBucket } from '../scopeBuckets';
 
 export type BoqFormat = 'playground' | 'classic';
@@ -132,9 +133,9 @@ export function paintingFromPlan(
   return { lines: [line(wall, 'wallPaint'), line(ceiling, 'ceilingPaint')], wall, ceiling };
 }
 
-/** Every whole-flat line with its quantity brought in line with the rooms (after the plan changed). */
-export const syncedWholeFlat = (boq: BoqItem[], rooms: Room[], ctx: MeasureContext = {}) =>
-  (boq || []).map(l => (l.byRoom ? withByRoomQty(l, rooms, ctx) : l));
+/** Every whole-flat line, and every civil line (PR C), with its quantity brought in line with the rooms (after the plan changed). */
+export const syncedWholeFlat = (boq: BoqItem[], rooms: Room[], ctx: MeasureContext = {}, bankMap?: Map<string, Item>) =>
+  (boq || []).map(l => (l.byRoom ? withByRoomQty(l, rooms, ctx) : l.civil && bankMap ? withCivilQty(l, rooms, bankMap) : l));
 
 /**
  * A Playground option's summary, priced by its rules: what App's tier summary

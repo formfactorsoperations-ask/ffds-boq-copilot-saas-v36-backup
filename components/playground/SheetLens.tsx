@@ -79,9 +79,10 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
   const th = 'px-2 py-2 bg-white sticky top-0 z-[2]';
   const row = (m: LineModel) => {
     const l = m.line;
-    const typed = !l.byRoom && !(m.size && l.place && /sq|r\s*ft|rft|running/i.test(m.unit));
+    // A civil line is measured from its room on the plan (PR C): its quantity is not typed over here.
+    const typed = !l.byRoom && !l.civil && !(m.size && l.place && /sq|r\s*ft|rft|running/i.test(m.unit));
     const st = STATUS_CHIP[String(l.boqStatus || '')];
-    const from = l.byRoom ? ' · by room' : !typed ? ' · from size' : '';
+    const from = l.byRoom ? ' · by room' : l.civil ? ' · from plan' : !typed ? ' · from size' : '';
     const isOpen = open.has(l.id);
     return (
       <React.Fragment key={l.id}>

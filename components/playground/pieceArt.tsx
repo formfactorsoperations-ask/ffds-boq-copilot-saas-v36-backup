@@ -35,6 +35,11 @@ export function ArtDefs() {
         <linearGradient id="pg-g-steel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#e5e7eb" /><stop offset=".5" stopColor="#c3c8d0" /><stop offset="1" stopColor="#e9ebef" /></linearGradient>
         <pattern id="pg-dots" width="1" height="1" patternUnits="userSpaceOnUse"><circle cx=".5" cy=".5" r=".04" fill="#cfd6e2" /></pattern>
         <pattern id="pg-hatch" width=".4" height=".4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width=".4" height=".4" fill="#fffbeb" /><path d="M0 0V.4" stroke="#f59e0b" strokeWidth=".06" /></pattern>
+        {/* The Civil layer (PR C): a new floor, waterproofing, a wall broken, a wall built. */}
+        <pattern id="pg-civ-floor" width="2" height="2" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="#fef3c7" fillOpacity=".8" /><path d="M0 0H2M0 0V2" stroke="#d97706" strokeWidth=".05" strokeOpacity=".7" /></pattern>
+        <pattern id="pg-civ-waterproof" width=".6" height=".6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V.6" stroke="#0284c7" strokeWidth=".06" strokeOpacity=".55" /></pattern>
+        <pattern id="pg-civ-break" width=".3" height=".3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width=".3" height=".3" fill="#ffe4e6" /><path d="M0 0V.3" stroke="#e11d48" strokeWidth=".07" /></pattern>
+        <pattern id="pg-civ-build" width=".25" height=".25" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect width=".25" height=".25" fill="#cbd5e1" /><path d="M0 0V.25" stroke="#334155" strokeWidth=".06" /></pattern>
         <filter id="pg-sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx=".1" dy=".16" stdDeviation=".14" floodColor="#0f172a" floodOpacity=".28" /></filter>
         <filter id="pg-sh2" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx=".05" dy=".08" stdDeviation=".08" floodColor="#0f172a" floodOpacity=".22" /></filter>
       </defs>
