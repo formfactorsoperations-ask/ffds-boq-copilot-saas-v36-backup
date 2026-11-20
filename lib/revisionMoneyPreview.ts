@@ -59,7 +59,7 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
     const base = tiers.find(t => t.id === rec.baseTierId);
     if (!base) return null;
     const bankMap = buildBankMap(bank, ctx.adHocItems);
-    const signed = signedLinesFrom(base.boq, bankMap, docPricingOf(base, ctx.rooms));
+    const signed = signedLinesFrom(base.boq, bankMap, docPricingOf(base, ctx.rooms, bankMap));
     /* The same engine the Revisions screen uses: as actuals stay outside both totals. */
     const result = revisionFromDraft(signed, draftOfRecord(rec, signed, base.boq, bankMap));
     v1Total = result.v1Total;

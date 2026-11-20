@@ -423,7 +423,7 @@ export default function ScopeWorkspace({
 
   const startRevision = () => {
     if (!baseTier || !v1Approved) return;
-    const signed = signedLinesFrom(baseTier.boq, bankMap, docPricingOf(baseTier, ctx.rooms));
+    const signed = signedLinesFrom(baseTier.boq, bankMap, docPricingOf(baseTier, ctx.rooms, bankMap));
     const draft = startDraft(signed, baseTier.boq, bankMap);
     const now = Date.now();
     saveRecord({
@@ -446,7 +446,7 @@ export default function ScopeWorkspace({
     const base = tiers.find(t => t.id === rec.baseTierId);
     if (!(issue?.clientSignature || issue?.recordedApproval) || !base || !setTiers) return;
     const at = Date.now();
-    const signed = signedLinesFrom(base.boq, bankMap, docPricingOf(base, ctx.rooms));
+    const signed = signedLinesFrom(base.boq, bankMap, docPricingOf(base, ctx.rooms, bankMap));
     let result: RevisionResult;
     let revisedBoq: any[];
     if (rec.playground) {
@@ -795,7 +795,7 @@ function RevisionEditor({
   const [issueError, setIssueError] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [previewXl, setPreviewXl] = useState(false);
-  const signed: SignedLine[] = useMemo(() => signedLinesFrom(base.boq, bankMap, docPricingOf(base, ctx.rooms)), [base, bankMap, ctx.rooms]);
+  const signed: SignedLine[] = useMemo(() => signedLinesFrom(base.boq, bankMap, docPricingOf(base, ctx.rooms, bankMap)), [base, bankMap, ctx.rooms]);
   const draft: ScopeDraft = useMemo(() => draftOfRecord(rec, signed, base.boq, bankMap), [rec, signed, base.boq, bankMap]);
   const result = useMemo(() => revisionFromDraft(signed, draft), [signed, draft]);
   const margin = useMemo(() => draftMargin(signed, draft, result), [signed, draft, result]);

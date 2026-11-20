@@ -10,7 +10,7 @@ import { realRooms } from '../../lib/scopeBuckets';
 import { boardPieces, drawOf, isHigh, isWallBacked, pieceSize, footprintOf, wallCovers, pieceItemOf } from '../../lib/playground/pieces';
 import { autoPlace, type PlacedPiece } from '../../lib/playground/placing';
 import { lineIssues, marginFloorFor } from '../../lib/playground/issues';
-import { pricingRulesOf, playgroundTotals, isPlaygroundTier } from '../../lib/playground/pricing';
+import { pricingRulesOf, playgroundTotals, isPlaygroundTier, measureOfBoq } from '../../lib/playground/pricing';
 import { boqFormatOf, BOQ_FORMAT_LABEL, paintingFromPlan, syncedWholeFlat, versionPlace } from '../../lib/playground/versions';
 import { withNewPlan, sketchRects, sketchFromRooms, mergeRooms, type TidyResult } from '../../lib/playground/sketch';
 import { quickBuild, standardLines, sizeOf, type RoomStandards } from '../../lib/playground/quickBuild';
@@ -52,7 +52,14 @@ import { ChangesPanel } from './ChangesParts';
 import { RevisionIssueModal } from './RevisionParts';
 import { needingReason } from '../../lib/playground/revision';
 import type { ScopeRevisionRecord, RevisionResult } from '../../lib/scopeRevision';
-import { optionChains, latestOf } from '../../lib/optionChains';
+import { optionChains, latestOf, sameOption } from '../../lib/optionChains';
+import { scopeSplit, splitPricingOf, splitLines } from '../../lib/offers';
+import { gstTermsOf, scheduleFor, contractInForce } from '../../lib/paymentSchedule';
+import { playgroundTierSummary } from '../../lib/playground/versions';
+import { proposalValidity, withValidDays, followBoq, discountsOf, withDiscounts, withInitiationFee } from '../../lib/playground/deal';
+import { holdsFinanceRole } from '../../lib/roleAccess';
+import { DealLens } from './DealParts';
+import type { PaymentStructure, TermsSettings } from '../../types';
 import { changesBetween } from '../../lib/playground/changes';
 import { withSupply, supplyLine, supplyOf, SUPPLY_WORDS } from '../../lib/playground/supply';
 
@@ -159,11 +166,15 @@ interface Props {
   kits?: BundleLike[];
   /** A room saved to the Item Bank as a kit. */
   onSaveKit?: (bundle: SavedKit['bundle']) => Promise<void>;
+  /** Terms & Payment's stages, for the payment schedule when Money has none saved (PR P). */
+  paymentStructure?: PaymentStructure | null;
+  /** Terms & Payment: the proposal's validity period (PR P). */
+  termsSettings?: TermsSettings | null;
 }
 
 export default function PlaygroundScreen(props: Props) {
   const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly: readOnlyProp, currentRoles, tenantId, onBoq: onBoqProp, newId,
-    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit } = props;
+    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit, paymentStructure, termsSettings } = props;
   /* A signed version (PR R2) is read-only; a revision of it is drawn and edited here, against it. */
   const revRec = signed?.rec || null;
   const revDraft = !!revRec && signed?.revState === 'draft';
@@ -217,9 +228,12 @@ export default function PlaygroundScreen(props: Props) {
   }, []);
   useEffect(() => { if (focusLineId) { setLens('sheet'); setSel(focusLineId); } }, [focusLineId]);
   const firstTier = useRef(true);
+  /* A version opened from the Deal lens opens on the Deal lens. */
+  const keepLens = useRef<Lens | null>(null);
   useEffect(() => {
     if (firstTier.current) { firstTier.current = false; return; }
-    setLens(isPlaygroundTier(tier) ? 'plan' : 'sheet'); setSel(null); setSelRoom(null);
+    setLens(keepLens.current || (isPlaygroundTier(tier) ? 'plan' : 'sheet')); setSel(null); setSelRoom(null);
+    keepLens.current = null;
   }, [tier.id]);
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(null), 3200); return () => clearTimeout(t); }, [note]);
   useEffect(() => {
@@ -254,7 +268,7 @@ export default function PlaygroundScreen(props: Props) {
     return { base: { rules: pricingRulesOf(prev), rooms, measure: baseMeasure }, cur: { rules, rooms, measure } };
   }, [prev, bankMap, rooms, rules, measure]);
   /* A revision is set against the signed BOQ, priced as its documents are (the rules and rooms, as Money reads them). */
-  const revOpts = useMemo(() => (revRec ? { base: { rules, rooms }, cur: { rules, rooms } } : null), [revRec, rules, rooms]);
+  const revOpts = useMemo(() => (revRec ? { base: { rules, rooms, measure: measureOfBoq(tier.boq, bankMap) }, cur: { rules, rooms, measure } } : null), [revRec, rules, rooms, tier.boq, bankMap, measure]);
   const changes = useMemo(() => (revRec && revOpts ? changesBetween(tier.boq || [], boq, bankMap, revOpts)
     : cmp && prev && changeOpts ? changesBetween(prev.boq || [], boq, bankMap, changeOpts) : null), [revRec, revOpts, tier.boq, cmp, prev, changeOpts, boq, bankMap]);
   const revNeed = useMemo(() => new Set((signed?.result ? needingReason(signed.result, {}) : []).map(id => id.replace(/^removed:/, ''))), [signed?.result]);
@@ -279,6 +293,31 @@ export default function PlaygroundScreen(props: Props) {
   const floors: MarginFloors | null = marginFloors || (ctx as any)?.marginFloors || null;
   const floor = marginFloorFor(undefined, floors);
   const waiting = useMemo(() => needsPlace(boq, bankMap), [boq, bankMap]);
+
+  /* ── the deal (PR P): the project's offers on this option, as Money reads them ── */
+  const discounts = discountsOf(ctx);
+  const gstTerms = useMemo(() => gstTermsOf(ctx), [ctx]);
+  const dealSummary = useMemo(() => (isPlaygroundTier(tier) ? playgroundTierSummary(tier, bankMap, ctx) : tier.summary), [tier, bankMap, ctx]);
+  const dealSplit = useMemo(() => scopeSplit(tier, bankMap, splitPricingOf(tier, ctx.rooms, bankMap)), [tier, bankMap, ctx.rooms]);
+  const validity = proposalValidity(ctx, termsSettings);
+  /* Offers are written by the studio's finance roles, on an option that is not signed or kept as it was. */
+  const dealLocked = readOnlyProp || superseded || !!signed || contractInForce(ctx) || !holdsFinanceRole(currentRoles);
+  /* Why, in words, with the way to where it can be changed. */
+  const dealLockedWhy = !dealLocked ? null
+    : superseded && vplace ? {
+      text: `v${vplace.n} is kept as it was, so its deal is shown, not changed. Offers are made on v${vplace.versions.length}, the newest version of ${tier.name || 'this option'}: it is the one the proposal and Money price.`,
+      action: onSelectTier ? { label: `Open v${vplace.versions.length}`, onClick: () => { keepLens.current = 'deal'; onSelectTier(vplace.latest.id); } } : undefined,
+    }
+    : signed || contractInForce(ctx) ? { text: 'This option is signed: its offers stay as the client signed them. A change to the scope goes through a revision.' }
+    : readOnlyProp ? { text: 'The BOQ is frozen, so the deal is shown, not changed.' }
+    : { text: 'Offers, the design fee and the schedule are set by the Owner and the studio’s finance roles. Ask one of them to change the deal.' };
+  const chains = useMemo(() => optionChains(tiers), [tiers]);
+  /* The offers follow the BOQ: a changed line re-prices them, and a special price still meets its target. A sent proposal keeps its figures. */
+  useEffect(() => {
+    if (dealLocked || validity.issued) return;
+    const next = followBoq(discounts, tier.id, dealSplit, { summary: dealSummary, terms: gstTerms }, (a, b) => sameOption(chains, a, b));
+    if (next) setProjectContext(prev => withDiscounts(prev, next));
+  }, [dealLocked, validity.issued, discounts, tier.id, dealSplit, dealSummary, gstTerms, chains, setProjectContext]);
   const query = useCallback((m: LineModel) => {
     const s = q.trim().toLowerCase();
     return !s || `${m.name} ${m.words} ${m.cat}`.toLowerCase().includes(s);
@@ -570,6 +609,7 @@ export default function PlaygroundScreen(props: Props) {
   const inspector = selModel ? (
     <React.Fragment key={selModel.line.id}><LineInspector
       m={selModel}
+      measure={measure}
       index={models.findIndex(x => x.line.id === selModel.line.id)}
       count={models.length}
       issues={lineIssues(selModel.line, { bankMap, pieces, rooms: planRooms, floors, specBank: offer ? specBank : null })}
@@ -901,13 +941,27 @@ export default function PlaygroundScreen(props: Props) {
                     changes={changes} removedName={l => bankMap.get(l.bankId)?.name || (l as { name?: string }).name || 'Line'} />
                 )}
                 {lens === 'tune' && (
-                  <TuneLens boq={boq} bankMap={bankMap} rules={rules} rooms={rooms} floor={floor} floors={floors}
+                  <TuneLens boq={boq} bankMap={bankMap} rules={rules} rooms={rooms} measure={measure} floor={floor} floors={floors}
                     seesMargins={seesMargins} readOnly={readOnly} commit={commit} />
                 )}
-                {lens === 'deal' && (
-                  <div className="p-6 max-w-xl"><EmptyState icon={Target} title="Deal comes next"
-                    text="Offers, the design fee, GST and what the client pays, on one page. Until then, Money & Offers shows them for this option." /></div>
-                )}
+                {lens === 'deal' && (() => {
+                  const order = new Map(boq.map((l, i) => [String(l.id), i]));
+                  const lines = splitLines(dealSplit).sort((a, b) => (order.get(a.key) ?? 1e9) - (order.get(b.key) ?? 1e9));
+                  const named = rooms.map(r => r.name);
+                  const dealRooms = [...named, ...Object.keys(dealSplit.byRoom).filter(n => !named.includes(n))].filter(n => (dealSplit.byRoom[n] || 0) > 0);
+                  return (
+                    <DealLens tierId={tier.id} optionName={tier.name || 'this option'} summary={dealSummary} lineCount={lines.length} rounded={!!rules}
+                      split={dealSplit} discounts={discounts} terms={gstTerms}
+                      schedule={scheduleFor(ctx, { tierSummary: dealSummary }, { paymentStructure })}
+                      validity={validity} fee={{ type: ctx.designFeeType || 'percentage', value: Number(ctx.designFee ?? 10) }}
+                      floor={floor} seesMargins={seesMargins && !hideFigures} locked={dealLocked} lockedWhy={dealLockedWhy} rooms={dealRooms} pickLines={lines} newId={newId}
+                      onDiscounts={(next, msg) => { setProjectContext(prev => withDiscounts(prev, next)); if (msg) setNote(msg); }}
+                      onFee={v => setProjectContext(prev => ({ ...prev, designFee: (prev.designFeeType || 'percentage') === 'percentage' ? Math.min(30, Math.max(0, v)) : Math.max(0, v) }))}
+                      onDays={d => setProjectContext(prev => withValidDays(prev, d))}
+                      onInitiation={v => setProjectContext(prev => withInitiationFee(prev, v))}
+                      onNote={setNote} />
+                  );
+                })()}
               </div>
             )}
 

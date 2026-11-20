@@ -32,7 +32,7 @@ const live = (l: BoqItem) => l.boqStatus !== 'deleted' && l.boqStatus !== 'subst
 
 /** The signed version's lines, priced as its Detailed BOQ is. */
 export const signedLinesOf = (base: ProposalTier, bankMap: Map<string, Item>, rooms: ProjectContext['rooms']) =>
-  signedLinesFrom(base.boq || [], bankMap, docPricingOf(base, rooms));
+  signedLinesFrom(base.boq || [], bankMap, docPricingOf(base, rooms, bankMap));
 
 /**
  * The revision's draft, from the BOQ as drawn: one draft line per priced line,
@@ -45,7 +45,8 @@ export function draftFromPlan(args: {
   reasons?: Record<string, string>; summary?: string; roomNotes?: Record<string, string>;
 }): ScopeDraft {
   const { signed, bankMap, reasons = {} } = args;
-  const pricing = docPricingOf(args.base, args.rooms);
+  /* The revised BOQ is priced by the signed version's rules, measured on its own plan. */
+  const pricing = docPricingOf({ ...args.base, boq: args.boq }, args.rooms, bankMap);
   const byId = new Map(signed.map(s => [s.lineId, s]));
   const lines: DraftLine[] = [];
   (args.boq || []).filter(l => live(l) && isBillable(l)).forEach(l => {
