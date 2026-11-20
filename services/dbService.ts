@@ -27,6 +27,7 @@ import { INITIAL_BANK } from '../constants';
 import { INITIAL_TEMPLATES, TemplateData } from '../lib/standardPackages';
 import { EMAIL_TEMPLATE_LIBRARY } from '../lib/templateEngine';
 import { get, set, del } from "idb-keyval";
+import { withoutUndefined } from '../lib/withoutUndefined';
 
 // --- CONSTANTS ---
 const STORAGE_KEYS = {
@@ -693,7 +694,13 @@ async function writeTierBoqs(projectId: string, tiers: any[]): Promise<void> {
                 tierId: tier.id,
                 itemCount: tier.boq.length,
                 updatedAt: Date.now(),
-                boq: tier.boq,
+                /*
+                  Without the fields that are undefined. Firestore refuses a
+                  document holding one, and lines made by the standard templates
+                  carry some, so a new project's lines failed to land here. The project document never noticed:
+                  it is stored as compressed JSON, which drops them.
+                */
+                boq: withoutUndefined(tier.boq),
             });
             lastWrittenTierBoq.set(cacheKey, serialised);
             queued++;

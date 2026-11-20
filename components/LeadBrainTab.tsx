@@ -1,11 +1,12 @@
 import React from "react";
 import { usePageHeader } from "../contexts/PageHeaderContext";
 import { ProjectContext, LeadProfile, AIStrategy } from "../types";
-import ProjectContextCard from "./ProjectContextCard";
+import BriefReadView from "./brief/BriefReadView";
 
 /**
  * Brief & Site. One screen, so no view switcher in the header: the BOQ is drawn
- * on the plan in the BOQ Editor's Plan lens, not here.
+ * on the plan in the BOQ Editor's Plan lens, not here. It opens as a read of the
+ * brief, each part editable in place (components/brief/BriefReadView).
  */
 interface LeadBrainTabProps {
   projectContext: ProjectContext;
@@ -33,15 +34,11 @@ const LeadBrainTab: React.FC<LeadBrainTabProps> = ({
   }, [projectContext.area, projectContext.config, projectContext.theme]);
 
   return (
-    <div className="space-y-8 w-full animate-in fade-in duration-300">
-      <ProjectContextCard
-        projectContext={projectContext}
-        setProjectContext={setProjectContext}
-        aiStrategy={aiStrategy}
-        projectId={projectId}
-        hideExecutionControls={true}
-      />
-    </div>
+    <BriefReadView
+      projectContext={projectContext}
+      setProjectContext={setProjectContext}
+      projectId={projectId}
+    />
   );
 };
 

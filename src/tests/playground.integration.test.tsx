@@ -706,8 +706,42 @@ describe('Tune (PR 4)', () => {
   });
 });
 
+describe('the line plan', () => {
+  it('draws a plan read off the client’s drawing as a line plan, and shows the drawing only when asked', () => {
+    const sheet = { source: 'brief', imageUrl: 'https://x/o/plan.jpg?alt=media', imagePx: { w: 1000, h: 700 }, ftPerPx: 0.05, page: 1 };
+    render(<Harness tier={PG} ctx0={{ name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10, planSheet: sheet }} />);
+    const stageSvg = screen.getByRole('application', { name: /The flat/ });
+    expect(stageSvg.querySelector('[data-line-plan]')).toBeTruthy();
+    expect(stageSvg.querySelector('image')).toBeNull();
+    // Each room's name and size, as the mockup prints them (Bedroom is 12 × 10 ft on the plan).
+    expect(stageSvg.querySelector('[data-room-label="Bedroom"]')?.textContent).toBe(`BEDROOM12'-0" X 10'-0"`);
+    fireEvent.click(screen.getByRole('radio', { name: 'Drawing' }));
+    expect(stageSvg.querySelector('image')?.getAttribute('href')).toBe(sheet.imageUrl);
+    expect(stageSvg.querySelector('[data-line-plan]')).toBeNull();
+  });
+
+  it('offers no switch when there is no drawing under the plan', () => {
+    render(<Harness tier={PG} />);
+    expect(screen.queryByRole('radio', { name: 'Drawing' })).toBeNull();
+  });
+});
+
 describe('no plan yet (PR 5)', () => {
   const noPlan = { name: 'Joshi – 2BHK', area: 650, config: '2BHK', rooms: [], designFeeType: 'percentage', designFee: 10 };
+
+  it('shows the three ways to start under the empty state, not squeezed beside its words', () => {
+    /* A new project: rooms from the brief, none on a plan yet, its options made by the setup wizard (Classic). */
+    const fresh = { ...noPlan, rooms: [{ name: 'Living', size: 180, unit: 'sq ft' }, { name: 'Bedroom', size: 130, unit: 'sq ft' }] };
+    render(<Harness ctx0={fresh} />);
+    lens('Plan');
+    const words = screen.getByText('No plan yet').closest('.border-dashed') as HTMLElement;
+    expect(words).toBeTruthy();
+    for (const name of ['Sketch a rough plan', 'Quick build', 'Set up the plan']) {
+      const btn = screen.getByRole('button', { name });
+      // Beside the words they kept their full width and the words shrank to a column one letter wide.
+      expect(words.contains(btn)).toBe(false);
+    }
+  });
 
   it('a rough sketch becomes the project’s plan in one step', async () => {
     let c: any = null;

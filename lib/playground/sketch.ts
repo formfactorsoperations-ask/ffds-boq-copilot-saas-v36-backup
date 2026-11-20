@@ -77,8 +77,8 @@ export function sketchName(kind: string, rooms: Pick<SketchRoom, 'id' | 'name'>[
 
 const areaOf = (rs: Pick<SketchRoom, 'w' | 'h'>[]) => rs.reduce((a, r) => a + r.w * r.h, 0);
 
-/** Every edge within the tolerance of another moved to their mean: one wall. */
-function lineUp(out: SketchRoom[], axis: 'x' | 'y'): number {
+/** Every edge within the tolerance of another moved to their mean: one wall. Exported for the plan read off a drawing (planFromDrawing). */
+export function lineUp(out: Pick<SketchRoom, 'x' | 'y' | 'w' | 'h'>[], axis: 'x' | 'y', tolerance = TIDY_TOLERANCE_FT): number {
   const size = axis === 'x' ? 'w' : 'h';
   const vals: { v: number; i: number; far: boolean }[] = [];
   out.forEach((r, i) => { vals.push({ v: r[axis], i, far: false }, { v: r[axis] + r[size], i, far: true }); });
@@ -96,13 +96,13 @@ function lineUp(out: SketchRoom[], axis: 'x' | 'y'): number {
     });
     group = [];
   };
-  vals.forEach(x => { if (group.length && x.v - group[0].v > TIDY_TOLERANCE_FT) flush(); group.push(x); });
+  vals.forEach(x => { if (group.length && x.v - group[0].v > tolerance) flush(); group.push(x); });
   flush();
   return moved;
 }
 
-/** One pass of overlap removal; the number removed. */
-function removeOverlaps(out: SketchRoom[]): number {
+/** One pass of overlap removal; the number removed. Exported for planFromDrawing. */
+export function removeOverlaps(out: Pick<SketchRoom, 'x' | 'y' | 'w' | 'h'>[]): number {
   let n = 0;
   for (let a = 0; a < out.length; a++) {
     for (let b = a + 1; b < out.length; b++) {

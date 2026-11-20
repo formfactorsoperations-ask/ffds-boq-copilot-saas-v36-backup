@@ -3,11 +3,16 @@ import React, { useState } from 'react';
 import { downscalePlanToBase64 } from '../lib/imageDownscale';
 import { uploadPlanImage } from '../services/planStorage';
 import { showSuccessWithNext } from './SuccessWithNextToast';
-import { Item, ProjectContext, ProposalTier, AIStrategy, MaterialSuggestion, TimelinePhase, LeadProfile, DecisionBrainOutput, Room } from '../types';
-import { generateStandardPackages, TemplateData, resolveActiveTemplate, ensureRoomsExistForTemplate, detectRoomType, roomFamily } from '../lib/standardPackages';
-import { ensureScopeRooms, uniqueRoomNames, polishRoomNames } from '../lib/scopeBuckets';
+import { Item, ProjectContext, ProposalTier, AIStrategy, MaterialSuggestion, TimelinePhase, LeadProfile, DecisionBrainOutput } from '../types';
+import { generateStandardPackages, TemplateData } from '../lib/standardPackages';
 import ProjectContextCard from './ProjectContextCard';
-import { analyzeFloorPlan, isAiAvailable, generateProjectTimeline, generateMaterialMoodBoard, generateTieredBoqPackages, estimateRoomSizes } from '../services/geminiService';
+import { isAiAvailable, generateProjectTimeline, generateMaterialMoodBoard, generateTieredBoqPackages } from '../services/geminiService';
+import { readPlanOntoSheet } from '../services/planRooms';
+import { asNewPlaygroundOption } from '../lib/playground/versions';
+import { optionsWaitForPlan, OPTIONS_NEED_PLAN } from '../lib/briefRead';
+import { planImageFromFile } from '../services/planImage';
+import { buildBankMap } from '../lib/boqPricing';
+import { PLAYGROUND_PRICING } from '../lib/playground/pricing';
 import { id as generateId } from '../lib/utils';
 import { AI_STRATEGIES } from '../constants';
 import { FullBoqItem, BoqItem } from '../types'; // Import necessary types
@@ -67,6 +72,8 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
   const [selectedStrategy, setSelectedStrategy] = useState<AIStrategy>('balanced');
   
   const isContextComplete = (projectContext.rooms || []).length > 0 && projectContext.area > 0;
+  /* No options without the client's floor plan on the project (lib/briefRead optionsWaitForPlan). */
+  const waitsForPlan = optionsWaitForPlan(projectContext, isFeeOnly(engagementOf(projectContext)));
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0]) return;
@@ -75,6 +82,8 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       // Shrunk before it goes anywhere: a 4000px plan costs the studio upload
       // time and the client load time, and nothing here reads it at that size.
       const base64String = await downscalePlanToBase64(file);
+      /* What the AI reads and the preview shows: the image, or page 1 of a PDF drawn as one. The PDF itself is what is stored. */
+      const image = file.type === 'application/pdf' ? await planImageFromFile(file) : base64String;
 
       /*
         The bytes stay in component state and the document gets a URL.
@@ -84,7 +93,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
         `floorplanImage` a plan was 200-270KB of a 1 MiB document, and once the
         wizard is done nothing displays it again.
       */
-      setPlanBase64(base64String);
+      setPlanBase64(image);
       setPlanUploadError(null);
       setProjectContext(p => ({ ...p, floorplanImage: undefined }));
 
@@ -99,86 +108,12 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
           setup, not just the stored copy.
         */
         console.error('Floor plan could not be uploaded', uploadErr);
-        setPlanUploadError('The plan could not be saved to storage. Setup can continue — room detection still works.');
+        setPlanUploadError('The plan could not be saved. Room detection still works, but options wait until the plan is saved: choose the file again.');
       }
     } catch (err) {
       console.error('Floor plan could not be read', err);
-      alert('That file could not be read. Please try another image.');
+      alert('That file could not be read. Please try another image or PDF.');
     }
-  };
-
-  /**
-   * The BHK the plan actually shows.
-   *
-   * The studio was typing this in after the AI had just counted the bedrooms
-   * for them, and a wrong or empty config silently changes everything
-   * downstream — it picks the template, the room distribution, and therefore
-   * every quantity in the BOQ. Bedrooms are counted by room type rather than by
-   * name, so "Bed 1" and "Master Bedroom" both count once.
-   *
-   * Returns null when the plan yielded no bedrooms at all; a guess would be
-   * worse than leaving the field for a human.
-   */
-  const configFromRooms = (rooms: Room[]): string | null => {
-    const bedrooms = rooms.filter(r => detectRoomType(r.name).includes('bedroom')).length;
-    if (bedrooms < 1) return null;
-    return `${Math.min(bedrooms, 4)}-BHK`;
-  };
-
-  /**
-   * Top up a plan-derived room list with whatever the typology expects.
-   *
-   * Matched on room *type* rather than name, so "Bed 1" from a plan and
-   * "Master Bedroom" from the distribution are not both added. Returns the
-   * detected rooms first, in the order the plan gave them.
-   */
-  const autoMapMissingRooms = async (detected: Room[], area: number): Promise<Room[]> => {
-    const config = projectContext.config;
-    if (!config || !area) return detected;
-
-    let expected: Room[] = [];
-    try {
-      if (isAiAvailable() && detected.length === 0) {
-        expected = await estimateRoomSizes(area, config);
-      }
-    } catch { /* falls through to the distribution below */ }
-
-    if (expected.length === 0) {
-      const { activeTemplate, configKey } = resolveActiveTemplate(undefined, config);
-      expected = ensureRoomsExistForTemplate({ ...projectContext, rooms: [], area } as any, activeTemplate, configKey);
-    }
-
-    if (detected.length === 0) return expected;
-
-    /* The plan's own labels repeat — "Toilet" three times is normal draughting.
-       Counting by type below is unaffected; the names are separated when the
-       list is written, by ensureScopeRooms. */
-
-    /*
-      One slot per room FAMILY, not per exact type.
-
-      A plan labels its rooms "Bedroom" and "Toilet"; the typology calls the same
-      rooms "Master Bedroom" and "Common Bathroom". Matching on the exact type
-      meant none of them ever paired up, so a plan that already showed three
-      bedrooms and three toilets was topped up with a master bedroom, a guest
-      bedroom, a master bathroom and a common bathroom — a second set of rooms,
-      with no dimensions, inflating the flat.
-    */
-    const seen = new Map<string, number>();
-    detected.forEach(r => {
-      const k = roomFamily(r.name);
-      seen.set(k, (seen.get(k) || 0) + 1);
-    });
-
-    const additions: Room[] = [];
-    expected.forEach(r => {
-      const k = roomFamily(r.name);
-      const remaining = seen.get(k) || 0;
-      if (remaining > 0) { seen.set(k, remaining - 1); return; }
-      additions.push(r);
-    });
-
-    return [...detected, ...additions];
   };
 
   const handleAnalyzeFloorplan = async () => {
@@ -191,63 +126,20 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
     setIsLoading(true);
     setLoadingMessage('Analyzing floor plan...');
     try {
-      const rooms = await analyzeFloorPlan(planForAnalysis, projectContext.area);
-      const totalAreaFromAI = rooms.reduce((sum, room) => sum + (room.size || 0), 0);
-      const areaAfterPlan = totalAreaFromAI > 0 ? Number(totalAreaFromAI.toFixed(2)) : projectContext.area;
-
       /*
-        Auto-map anything the plan did not yield.
-
-        Plan analysis reads what is drawn, and a plan that is partial, low
-        resolution or cropped comes back with two rooms for a 3-BHK — or none
-        at all. The BOQ generator prices per room, so a short room list is a
-        short bill, which is most of why a generated BOQ read as thin.
-
-        Detected rooms are never overwritten: this only tops up the rooms the
-        typology expects and the plan did not give, so a real plan always beats
-        a ratio.
+        The reading itself (rooms, the typology's top-up, the configuration and
+        the area from the drawing, the studio's room names) lives in
+        services/planRooms, so Brief & Site reads a plan the same way.
       */
-      setLoadingMessage('Auto-mapping rooms...');
-      const mapped = await autoMapMissingRooms(rooms, areaAfterPlan);
-
-      /*
-        The plan sets the configuration too.
-
-        It has just counted the bedrooms; asking the studio to type "3-BHK"
-        afterwards is asking them to repeat the answer. The config picks the
-        template and the room distribution, so getting it from the drawing
-        rather than from memory is worth more than it looks — an empty config
-        falls back to whichever template happens to be first.
-
-        Only filled in, never overwritten: a studio that has already set it
-        knows something about the flat that the drawing does not say.
-      */
-      const detectedConfig = configFromRooms(mapped);
-
-      /*
-        Named the way a studio names them, once, at creation.
-
-        A drawing says "Toilet"; a BOQ a client reads should say "Common
-        Bathroom". This runs here and nowhere else: the name is the identity a
-        BOQ line carries, so polishing it later would orphan every line already
-        priced against the old name.
-      */
-      const named = ensureScopeRooms(polishRoomNames(mapped, roomFamily));
-
+      const read = await readPlanOntoSheet(planForAnalysis, projectContext, { tenantId: orgData?.tenantId, imageUrl: projectContext.floorplanImageUrl });
       setProjectContext(p => ({
           ...p,
-          rooms: named,
-          area: areaAfterPlan,
-          /*
-            The plan sets the configuration outright.
-
-            `p.config || detected` never fired: a new project is created with
-            "2-BHK" already filled in, so there was no empty value for the
-            detection to fall into and a three-bedroom plan stayed 2-BHK. The
-            drawing counted the bedrooms; it wins. A studio who disagrees edits
-            the field, and analysis does not run again unless they ask for it.
-          */
-          config: detectedConfig || p.config,
+          rooms: read.rooms,
+          area: read.area,
+          /* The drawing counted the bedrooms; it wins. A studio who disagrees edits the field. */
+          config: read.config || p.config,
+          /* The plan under the BOQ, its rooms where they are drawn (BOQ Editor's Plan). */
+          ...(read.sheet ? { planSheet: read.sheet } : {}),
       }));
       showSuccessWithNext("Project area is calculated. Check the rooms.", {
           label: "Review Rooms",
@@ -262,7 +154,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       console.error(e);
       // The reason, not a shrug. "Gemini API Key missing on server" is
       // actionable; "please try manual setup" sent people round in circles.
-      alert(`Could not read the floor plan: ${e instanceof Error ? e.message : String(e)}\n\nYou can still set the rooms by hand, or use Auto-Map Rooms.`);
+      alert(`Could not read the floor plan: ${e instanceof Error ? e.message : String(e)}\n\nYou can still set the rooms by hand, or use Map rooms.`);
     } finally {
       setIsLoading(false);
     }
@@ -287,6 +179,13 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
           id: generateId(),
           name: "Standard Proposal",
           timestamp: Date.now(),
+          /*
+            A Playground BOQ: it starts empty, so there is nothing to carry over,
+            and only a Playground version opens the design library on the plan,
+            which is how items are added by hand to the client's plan.
+          */
+          boqFormat: 'playground',
+          pricingRules: { ...PLAYGROUND_PRICING },
           boq: [],
           projectContext: { ...projectContext, theme },
           summary: { totalSell: 0, totalCost: 0, totalGm: 0, itemCount: 0, totalRevenue: 0, designFee: 0, blendedGm: 0 }
@@ -298,7 +197,16 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       if (onComplete) onComplete('manual');
   }
 
-  const finalizeGeneration = async (newTiers: ProposalTier[]) => {
+  const finalizeGeneration = async (generated: ProposalTier[]) => {
+      /*
+        The furniture on the plan. With the rooms on the client's plan, each
+        option's lines that draw are placed in their rooms (lib/playground/placeAll),
+        so the BOQ Editor opens with the pieces drawn rather than waiting under
+        Needs a place. A manual BOQ starts empty and needs none of this.
+      */
+      const bankMap = buildBankMap(bank, projectContext.adHocItems);
+      /* Every generated option is a Playground version (owner, 20 Nov 2026), its pieces placed. */
+      const newTiers = generated.map(t => asNewPlaygroundOption(t, bankMap, projectContext.rooms || []));
       setTiers(newTiers);
       if (onComplete) onComplete('options');
       const premiumTier = newTiers.find(t => t.name === "Comfort Upgrade") || newTiers[0];
@@ -470,22 +378,25 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       {/* STEP 1: project details */}
       {step === 1 && (
         <div className="space-y-4">
-          {setupMethod === 'floorplan' && (
-            <Panel icon={Upload} title="Upload the floor plan" blurb="The area and an image of the plan. Analyse it to fill in the rooms below.">
+          {/* The plan is needed either way: options are made on it. Entering by hand only means the rooms are typed, not read. */}
+          {(setupMethod === 'floorplan' || waitsForPlan || projectContext.floorplanImageUrl) && (
+            <Panel icon={Upload} title="Upload the floor plan"
+              badge={waitsForPlan ? <Chip tone="warn">Needed for options</Chip> : <Chip tone="good">Saved</Chip>}
+              blurb={setupMethod === 'floorplan' ? 'The area and the client’s plan, an image or a PDF. Analyse it to fill in the rooms below.' : 'The client’s plan, an image or a PDF. Options are made on it; set the rooms by hand below, or analyse it.'}>
               <div className="flex flex-col md:flex-row gap-4 md:items-end">
                 <div className="flex-1 w-full">
                   <label htmlFor="wiz-area" className={`${LABEL} block`}>Project area (sq ft)</label>
                   <input id="wiz-area" type="number" value={projectContext.area || ''} onChange={e => setProjectContext(p => ({ ...p, area: Number(e.target.value) }))} className={`${INPUT} mt-1`} placeholder="e.g. 1200" />
                 </div>
                 <div className="flex-1 w-full">
-                  <label htmlFor="wiz-plan" className={`${LABEL} block`}>Floor plan image</label>
-                  <input id="wiz-plan" type="file" onChange={handleFileChange} accept="image/*" className={`${INPUT} mt-1 py-1.5`} />
+                  <label htmlFor="wiz-plan" className={`${LABEL} block`}>Floor plan</label>
+                  <input id="wiz-plan" type="file" onChange={handleFileChange} accept="image/*,application/pdf" className={`${INPUT} mt-1 py-1.5`} />
                 </div>
-                <Button variant="primary" icon={Sparkles} onClick={handleAnalyzeFloorplan} disabled={isLoading || !isAiAvailable()}>
+                <Button variant="primary" icon={Sparkles} onClick={handleAnalyzeFloorplan} disabled={isLoading || !isAiAvailable() || !(planBase64 || projectContext.floorplanImage)}>
                   {isLoading ? loadingMessage : 'Analyse the plan'}
                 </Button>
               </div>
-              {(planBase64 || projectContext.floorplanImage || projectContext.floorplanImageUrl) && (
+              {(planBase64 || projectContext.floorplanImage || (projectContext.floorplanImageUrl && !/\.pdf(\?|#|$)/i.test(projectContext.floorplanImageUrl))) && (
                 <img
                   src={planBase64 || projectContext.floorplanImage
                     ? `data:image/jpeg;base64,${planBase64 || projectContext.floorplanImage}`
@@ -512,9 +423,12 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                 Create the project
               </Button>
             ) : (
-              <Button variant="primary" icon={ArrowRight} onClick={() => setStep(3)} disabled={!isContextComplete}>
-                Next: generate the options
-              </Button>
+              <span className="inline-flex flex-wrap items-center justify-end gap-3">
+                {waitsForPlan && <span className="text-xs font-semibold text-amber-700" role="status">{OPTIONS_NEED_PLAN}</span>}
+                <Button variant="primary" icon={ArrowRight} onClick={() => setStep(3)} disabled={!isContextComplete || waitsForPlan}>
+                  Next: generate the options
+                </Button>
+              </span>
             )}
           </div>
         </div>
@@ -561,7 +475,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
             </div>
 
             <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button type="button" onClick={handleGenerateTemplates} disabled={isLoading} className={`${CHOICE} hud-row-in`}>
+              <button type="button" onClick={handleGenerateTemplates} disabled={isLoading || waitsForPlan} className={`${CHOICE} hud-row-in`}>
                 <span className="absolute top-4 right-4"><Chip tone="brand">Fastest · recommended</Chip></span>
                 <IconChip icon={List} />
                 <h3 className="mt-4 font-bold text-slate-800">Use the standard templates</h3>
@@ -569,7 +483,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                   Makes {proposalMode === 'single' ? 'one option (Comfort Upgrade)' : 'three tiers (Essential, Comfort, Harmony)'} straight away from the studio's standard specifications for {projectContext.config}.
                 </p>
               </button>
-              <button type="button" onClick={handleGenerateAI} disabled={isLoading || !isAiAvailable()} className={`${CHOICE} hud-row-in`} style={{ animationDelay: '40ms' }}>
+              <button type="button" onClick={handleGenerateAI} disabled={isLoading || !isAiAvailable() || waitsForPlan} className={`${CHOICE} hud-row-in`} style={{ animationDelay: '40ms' }}>
                 <span className="absolute top-4 right-4"><Chip tone="slate">Flexible · tailored</Chip></span>
                 <IconChip icon={Sparkles} />
                 <h3 className="mt-4 font-bold text-slate-800">Ask AI to build them</h3>
@@ -589,7 +503,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
             <Button onClick={() => setStep(1)} disabled={isLoading}>Back</Button>
-            <Button variant="quiet" icon={ArrowRight} onClick={handleStartManual} disabled={isLoading}>
+            <Button variant="quiet" icon={ArrowRight} onClick={handleStartManual} disabled={isLoading || waitsForPlan}>
               Skip, and start a manual BOQ
             </Button>
           </div>

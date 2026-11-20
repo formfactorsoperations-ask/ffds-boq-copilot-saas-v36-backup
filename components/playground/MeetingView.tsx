@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, Check, Copy, Download } from 'lucide-react';
 import { Button, Chip, Segmented, LABEL } from '../ui/kit';
 import type { BoqItem, Item, ProjectContext, ProposalTier, PaymentStructure, Room, PlanSheet } from '../../types';
-import { sheetOf, isPdfSheet } from '../../lib/playground/planSheet';
+import { sheetOf } from '../../lib/playground/planSheet';
+import { LinePlanRooms, LinePlanLabels, drawingOf } from './linePlan';
 import { scopeSplit, splitPricingOf, dealFor, complimentaryKeys, type OfferDiscount } from '../../lib/offers';
 import { gstTermsOf, scheduleFor } from '../../lib/paymentSchedule';
 import { playgroundTierSummary } from '../../lib/playground/versions';
@@ -35,8 +36,8 @@ const dateOf = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', mont
 
 /** The flat drawn from above: the rooms, the pieces in their finishes, one room picked out. */
 function DrawnPlan({ rooms, boq, bankMap, specBank, focus, className, sheet }: { rooms: Room[]; boq: BoqItem[]; bankMap: Map<string, Item>; specBank?: MaterialSpecsBank | null; focus?: string; className: string; sheet?: PlanSheet | null }) {
-  /* The builder's plan under the rooms, placed as the Plan lens places it, once its scale is set. */
-  const underlay = sheet?.imageUrl && Number(sheet.ftPerPx) > 0 && sheet.imagePx && !isPdfSheet(sheet) ? sheet : null;
+  /* A plan read off the builder's drawing is shown as a line plan (linePlan.tsx): no rendered furniture or flooring under the pieces. */
+  const traced = !!drawingOf(sheet);
   const rs = rooms.filter(r => r.plan);
   if (!rs.length) return null;
   const f = focus ? rs.find(r => r.name === focus) : undefined;
@@ -47,10 +48,7 @@ function DrawnPlan({ rooms, boq, bankMap, specBank, focus, className, sheet }: {
   return (
     <svg viewBox={vb} className={className} preserveAspectRatio="xMidYMid meet" aria-hidden focusable="false">
       <ArtDefs />
-      {underlay && (
-        <image href={underlay.imageUrl} x={-(underlay.origin?.x || 0) * underlay.ftPerPx!} y={-(underlay.origin?.y || 0) * underlay.ftPerPx!}
-          width={underlay.imagePx!.w * underlay.ftPerPx!} height={underlay.imagePx!.h * underlay.ftPerPx!} preserveAspectRatio="none" />
-      )}
+      {traced && <LinePlanRooms rooms={rs} />}
       {rs.map(r => (
         <rect key={r.name} x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h}
           fill={focus === r.name ? 'rgba(61,82,160,.12)' : 'rgba(61,82,160,.03)'} stroke={focus === r.name ? '#3D52A0' : 'rgba(15,23,42,.45)'} strokeWidth={focus === r.name ? 0.18 : 0.08} />
@@ -63,6 +61,7 @@ function DrawnPlan({ rooms, boq, bankMap, specBank, focus, className, sheet }: {
           </g>
         );
       })}
+      {traced && <LinePlanLabels rooms={rs} />}
     </svg>
   );
 }

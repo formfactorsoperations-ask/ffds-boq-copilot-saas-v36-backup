@@ -1,4 +1,8 @@
 import React, { useState, useMemo } from 'react';
+import { asNewPlaygroundOption } from '../lib/playground/versions';
+import { PLAYGROUND_PRICING } from '../lib/playground/pricing';
+import { optionsWaitForPlan, OPTIONS_NEED_PLAN } from '../lib/briefRead';
+import { engagementOf, isFeeOnly } from '../lib/engagement';
 import { useFiguresHidden } from './ui/HideFigures';
 import { createPortal } from 'react-dom';
 import { RefreshCw, Plus, LineChart, Building2 } from '@/lib/lucide-shim';
@@ -92,19 +96,26 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
     /* What Regenerate replaced, so one click can put it back. */
     const [regenUndo, setRegenUndo] = useState<{ tiers: ProposalTier[]; activeTierId: string | null; approvedTierId?: string } | null>(null);
 
+    /* No option is made without the client's floor plan on the project (lib/briefRead optionsWaitForPlan). */
+    const waitsForPlan = optionsWaitForPlan(projectContext, isFeeOnly(engagementOf(projectContext)));
+
     const handleRegenerate = () => {
-        const fresh = generateStandardPackages(
+        if (waitsForPlan) return;
+        const generated = generateStandardPackages(
             projectContext,
             bank || [],
             templates || INITIAL_TEMPLATES,
             projectContext.proposalMode || 'tiered',
         );
-        if (!fresh.length) {
+        if (!generated.length) {
             showSuccessWithNext('Nothing to generate — check the rooms and configuration.');
             setRegenOpen(false);
             return;
         }
         setRegenUndo({ tiers, activeTierId, approvedTierId: projectContext.approvedTierId });
+        /* Playground versions, their pieces placed on the plan (lib/playground/versions asNewPlaygroundOption). */
+        const bankMap = buildBankMap(bank || [], projectContext?.adHocItems);
+        const fresh = generated.map(t => asNewPlaygroundOption(t, bankMap, projectContext.rooms || []));
         setTiers(fresh);
         setActiveTierId((fresh.find(t => t.name === 'Comfort Upgrade') || fresh[0]).id);
         setProjectContext(prev => ({ ...prev, approvedTierId: undefined }));
@@ -319,10 +330,14 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
     );
 
     const handleAddTier = () => {
+        if (waitsForPlan) return;
         const newTier: ProposalTier = {
             id: id(),
             name: `New Option ${tiers.length + 1}`,
             timestamp: Date.now(),
+            /* An empty option is a Playground BOQ: nothing to carry over, and the design library opens on the plan. */
+            boqFormat: 'playground',
+            pricingRules: { ...PLAYGROUND_PRICING },
             boq: [],
             projectContext,
             summary: { totalSell: 0, totalCost: 0, totalGm: 0, itemCount: 0, totalRevenue: 0, designFee: 0, blendedGm: 0 },
@@ -626,12 +641,17 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                 columns={visibleColumns}
                 summary={`${chains.length} ${chains.length === 1 ? 'option' : 'options'}${versionCount > chains.length ? ` · ${versionCount} versions` : ''}`}
                 toolbar={<>
-                    <button type="button" onClick={handleAddTier}
-                        className="group w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486]">
+                    {waitsForPlan && (
+                        <p className="text-xs font-semibold text-amber-700" role="status">
+                            {OPTIONS_NEED_PLAN}{setActiveTab && <> <button type="button" onClick={() => setActiveTab('leadiq')} className="underline underline-offset-2 hover:text-amber-800">Upload it in Brief &amp; Site</button></>}
+                        </p>
+                    )}
+                    <button type="button" onClick={handleAddTier} disabled={waitsForPlan} title={waitsForPlan ? OPTIONS_NEED_PLAN : undefined}
+                        className="group w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50 disabled:pointer-events-none">
                         <Plus className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90" /> Add option
                     </button>
-                    <button type="button" onClick={() => setRegenOpen(true)} title="Rebuild all options from the current brief, rooms and civil scope"
-                        className="group w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">
+                    <button type="button" onClick={() => setRegenOpen(true)} disabled={waitsForPlan} title={waitsForPlan ? OPTIONS_NEED_PLAN : 'Rebuild all options from the current brief, rooms and civil scope'}
+                        className="group w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 disabled:opacity-50 disabled:pointer-events-none">
                         <RefreshCw className="w-4 h-4 text-slate-400 transition-transform duration-500 group-hover:rotate-180" /> Regenerate
                     </button>
                 </>}

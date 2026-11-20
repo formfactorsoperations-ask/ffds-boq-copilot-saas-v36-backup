@@ -144,10 +144,6 @@
     "tinyPx": 2,
     "mono": 2
   },
-  "components/ProjectContextCard.tsx": {
-    "tinyPx": 4,
-    "offPalette": 41
-  },
   "components/ProjectContextTier.tsx": {
     "halfPx": 3,
     "offPalette": 3
