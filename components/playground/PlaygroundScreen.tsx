@@ -7,7 +7,7 @@ import { Button, EmptyState, LABEL, Segmented } from '../ui/kit';
 import { useSeesMargins } from '../ui/HideFigures';
 import type { ProjectContext, ProposalTier, Item, BoqItem, Room } from '../../types';
 import { realRooms } from '../../lib/scopeBuckets';
-import { boardPieces, drawOf, isHigh, isWallBacked, pieceSize, footprintOf, wallCovers } from '../../lib/playground/pieces';
+import { boardPieces, drawOf, isHigh, isWallBacked, pieceSize, footprintOf, wallCovers, pieceItemOf } from '../../lib/playground/pieces';
 import { autoPlace, type PlacedPiece } from '../../lib/playground/placing';
 import { lineIssues, marginFloorFor } from '../../lib/playground/issues';
 import { pricingRulesOf, playgroundTotals, isPlaygroundTier } from '../../lib/playground/pricing';
@@ -224,7 +224,7 @@ export default function PlaygroundScreen(props: Props) {
   };
   const libTarget = selRoom || (sel ? byId.get(sel)?.room : null) || planRooms[0]?.name || rooms[0]?.name || 'Others';
   const placeLine = (line: BoqItem) => {
-    const item = bankMap.get(line.bankId);
+    const item = pieceItemOf(line, bankMap);
     const room = planRooms.find(r => r.name === line.roomId);
     const probe = item ? probeOf(item, line) : null;
     if (!room || !probe) { setNote(`${line.roomId || 'Its room'} is not on the plan yet.`); return; }
@@ -236,7 +236,8 @@ export default function PlaygroundScreen(props: Props) {
     const copy: BoqItem = { ...m.line, id: newId() };
     if (copy.place) {
       const room = planRooms.find(r => r.name === copy.roomId);
-      const probe = m.item ? probeOf(m.item, copy) : null;
+      const pi = pieceItemOf(copy, bankMap);
+      const probe = pi ? probeOf(pi, copy) : null;
       const at = room && probe ? autoPlace(probe, room, pieces.filter(p => p.room === room.name)) : null;
       copy.place = at ? { ...copy.place, x: at.x, y: at.y, rot: at.rot } : { ...copy.place, x: copy.place.x + 0.5, y: copy.place.y + 0.5 };
     }

@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   studioRows, clientGroups, readStudio, studioDiff, applyStudio, readVendor, importPlan, importLines,
-  sizeFromName, nameWithoutSize, matchBankItem, roomFor, fingerprintOf, lineIdAt, type Grid,
+  sizeFromName, nameWithoutSize, matchBankItem, roomFor, fingerprintOf, lineIdAt, alreadyThere, type Grid,
 } from '../../lib/playground/excel';
+import { needsPlace } from '../../lib/playground/board';
+import { boardPieces } from '../../lib/playground/pieces';
 import { buildStudioBook, buildClientBook, readBook } from '../../lib/playground/excelBook';
 import { PLAYGROUND_PRICING } from '../../lib/playground/pricing';
 import { studioStandard } from '../../lib/materialSpecs';
@@ -161,5 +163,65 @@ describe('any other sheet onto the plan (importPlan)', () => {
     expect(ticked.items[0]).toMatchObject({ name: 'Wallpaper on the bed wall', cat: 'Imported', unit: 'sq ft', materials: 144, labor: 0, margin: 25 });
     expect(ticked.lines[2].bankId).toBe(ticked.items[0].id);
     expect(ticked.lines[0]).toBe(plan[0].line);
+  });
+});
+
+describe('imported lines are drawn in their rooms, and what is already there is asked about', () => {
+  const read = readVendor([
+    ['Item', 'Location', 'Qty', 'Unit', 'Rate'],
+    ['Loft over store shelves, 6 x 2 ft', 'Store', null, 'sq ft', 1500],
+    ['Bar unit 4 x 3 ft', 'Living', null, 'sq ft', 2400],
+    ['Wallpaper on the bed wall', 'Master', 120, 'sq ft', 180],
+  ]);
+
+  it('a line not in the Item Bank is drawn when its name says what it is; a wall finish is listed, not drawn', () => {
+    const plan = importPlan(read.rows, { bank, bankMap, rooms, boq, newId });
+    const bar = plan[1];
+    expect(bar.item).toBeUndefined();
+    expect(bar).toMatchObject({ room: 'Living Room', lands: 'plan' });
+    expect(bar.line).toMatchObject({ name: 'Bar unit', cat: 'Imported', qty: 12, calcLength: 4, calcWidth: 3 });
+    expect(bar.line.place).toBeTruthy();
+    // It is a piece on the board like any other, and not waiting for a place.
+    expect(boardPieces([bar.line], bankMap).map(p => p.draw.kind)).toEqual(['cabinet']);
+    expect(needsPlace([bar.line], bankMap)).toEqual([]);
+    expect(plan[2]).toMatchObject({ lands: 'list' });
+    expect(plan[2].line.place).toBeUndefined();
+  });
+
+  it('a row already in the BOQ, in the same room, is flagged and left out unless the user adds another', () => {
+    const have: any[] = [...boq, { id: 'loft1', bankId: 'b3', qty: 12, roomId: 'Store', calcLength: 6, calcWidth: 2, sizeUnit: 'ft' }];
+    const plan = importPlan(read.rows, { bank, bankMap, rooms, boq: have, newId });
+    expect(plan[0].dup).toBe('loft1');
+    expect(plan[1].dup).toBeUndefined();
+    expect(importLines(plan, new Set(), newId).lines.map(l => l.bankId ?? (l as any).name)).toEqual(['Bar unit', 'Wallpaper on the bed wall']);
+    expect(importLines(plan, new Set(), newId, new Set([0, 1, 2])).lines).toHaveLength(3);
+    // The same item in another room is not a repeat.
+    expect(alreadyThere({ id: 'x', bankId: 'b3', qty: 1, roomId: 'Living Room' } as any, have, bankMap)).toBeUndefined();
+  });
+
+  it('a studio copy’s new rows are drawn in their rooms; a repeat waits to be ticked; a piece moved on the sheet is drawn in its new room', async () => {
+    const placed: any[] = [{ id: 'tv', bankId: 'b4', qty: 12, roomId: 'Living Room', calcLength: 3, calcWidth: 4, sizeUnit: 'ft', place: { x: 14, y: 1, rot: 0, depthFt: 1.25 } }];
+    const book = await readBook(await buildStudioBook(placed, ctx, meta));
+    const g = book.BOQ as Grid;
+    const h = g.findIndex(r => r[0] === 'Line ID');
+    const col = (n: string) => g[h].indexOf(n);
+    g[g.findIndex(r => r[0] === 'L-0001')][col('Room')] = 'Master Bedroom';
+    g.push([null, 'Store', 'Loft', '', '', '', 5, 2, null, 'sq ft', null, null, null, null, null]);
+    g.push([null, 'Master Bedroom', 'Pooja unit', '', '', '', 3, 4, null, 'sq ft', null, null, null, null, null]);
+    const d = studioDiff(readStudio(book)!, placed, { ...ctx, bank, newId });
+    const [moved, loft, again] = d.changes;
+    expect(moved).toMatchObject({ kind: 'chg', what: 'Moved to Master Bedroom', lands: 'plan' });
+    expect(moved.after!.place!.x).toBeLessThan(12);
+    expect(loft).toMatchObject({ kind: 'new', lands: 'plan', what: 'No Line ID · matched to the Item Bank · drawn in Store' });
+    expect(loft.after!.place).toBeTruthy();
+    // Another Pooja unit, in the Master Bedroom where the sheet has none yet: new, and drawn.
+    expect(again).toMatchObject({ kind: 'new', lands: 'plan' });
+    expect(again.dup).toBeUndefined();
+    // A row repeating a line in its own room waits to be ticked, and says so.
+    const book2 = await readBook(await buildStudioBook(placed, ctx, meta));
+    (book2.BOQ as Grid).push([null, 'Living Room', 'Pooja unit', '', '', '', 3, 4, null, 'sq ft', null, null, null, null, null]);
+    const d2 = studioDiff(readStudio(book2)!, placed, { ...ctx, bank, newId });
+    expect(d2.changes).toHaveLength(1);
+    expect(d2.changes[0]).toMatchObject({ kind: 'new', dup: 'tv', what: 'No Line ID · already in Living Room: tick to add another' });
   });
 });

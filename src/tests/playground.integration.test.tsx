@@ -711,4 +711,39 @@ describe('Excel out and in (PR 6)', () => {
     expect(boq[0].place).toBeTruthy();
     expect(boq[1]).toMatchObject({ name: 'Curtain tracks, motorised', cat: 'Imported', qty: 4, roomId: 'Bedroom' });
   });
+
+  it('an item already in the room is not added on its own: the user is asked; what is added is drawn on the plan', async () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: [placedWardrobe] }} probe={t => { latest = t; }} />);
+    fireEvent.click(screen.getByRole('button', { name: /Import/ }));
+    await upload(await xlsxOf({ Sheet1: [
+      ['Item', 'Location', 'Qty', 'Unit', 'Rate'],
+      ['Sliding wardrobe 6 x 7 ft', 'Bedroom', null, 'sq ft', 2100],
+      ['Queen bed', 'Bedroom', 1, 'nos', 48000],
+    ] }), 'List.xlsx');
+    const d = screen.getByRole('dialog', { name: 'List.xlsx' });
+    expect(within(d).getByText('Already in the BOQ')).toBeTruthy();
+    expect(within(d).getByText(/Bedroom has it as L-0001\. Left out unless you add another\./)).toBeTruthy();
+    expect(within(d).getByText('1 already in the BOQ, left out')).toBeTruthy();
+    const add = within(d).getByRole('checkbox', { name: 'Add another Sliding wardrobe' }) as HTMLInputElement;
+    expect(add.checked).toBe(false);
+    fireEvent.click(within(d).getByRole('button', { name: 'Add 1 line' }));
+    expect(latest[0].boq.map((l: any) => l.bankId)).toEqual(['wardrobe', 'bed']);
+    // The bed is drawn in the bedroom, as a piece from the library would be.
+    expect(latest[0].boq[1].place).toBeTruthy();
+    expect(document.querySelector(`[data-piece="${latest[0].boq[1].id}"]`)).toBeTruthy();
+    expect(screen.getByText(/1 line added from List\.xlsx: 1 drawn on the plan; 1 already in the BOQ left out/)).toBeTruthy();
+  });
+
+  it('ticking Add another adds the repeat too', async () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: [placedWardrobe] }} probe={t => { latest = t; }} />);
+    fireEvent.click(screen.getByRole('button', { name: /Import/ }));
+    await upload(await xlsxOf({ Sheet1: [['Item', 'Location', 'Qty', 'Unit', 'Rate'], ['Sliding wardrobe 6 x 7 ft', 'Bedroom', null, 'sq ft', 2100]] }), 'One.xlsx');
+    const d = screen.getByRole('dialog', { name: 'One.xlsx' });
+    expect((within(d).getByRole('button', { name: 'Add 0 lines' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(d).getByRole('checkbox', { name: 'Add another Sliding wardrobe' }));
+    fireEvent.click(within(d).getByRole('button', { name: 'Add 1 line' }));
+    expect(latest[0].boq.filter((l: any) => l.bankId === 'wardrobe')).toHaveLength(2);
+  });
 });

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus, Maximize } from 'lucide-react';
 import type { ProjectContext, Item, BoqItem, Room } from '../../types';
-import { boardPieces, drawOf, isHigh, isWallBacked, pieceSize, footprintOf, type BoardPiece } from '../../lib/playground/pieces';
+import { boardPieces, drawOf, isHigh, isWallBacked, pieceSize, footprintOf, pieceItemOf, type BoardPiece } from '../../lib/playground/pieces';
 import { placeAt, softSnap, type PlacedPiece, type SnapGuide, type PlanRoom } from '../../lib/playground/placing';
 import { boundsOf, ftin, normRot, pieceBox } from '../../lib/playground/geometry';
 import { lineIssues } from '../../lib/playground/issues';
@@ -160,7 +160,7 @@ export default function PlanStage(props: Props) {
   /* ── adding from the library ── */
 
   const asPlaced = (line: BoqItem): PlacedPiece | null => {
-    const item = bankMap.get(line.bankId);
+    const item = pieceItemOf(line, bankMap);
     const draw = drawOf(item);
     if (!draw || !line.place) return null;
     return { id: line.id, room: line.roomId, fp: footprintOf(pieceSize(line, item, draw)), place: line.place, high: isHigh(draw), wallBacked: isWallBacked(draw) };
@@ -242,7 +242,7 @@ export default function PlanStage(props: Props) {
     const dx = at[0] - d.from[0], dy = at[1] - d.from[1];
     const along = dx * Math.cos(rot) + dy * Math.sin(rot);
     const across = -dx * Math.sin(rot) + dy * Math.cos(rot);
-    const item = bankMap.get(d.start.bankId);
+    const item = pieceItemOf(d.start, bankMap);
     let live = d.start;
     if (d.sx) live = resizedFromEdge(live, item, (d.sx > 0 ? 'right' : 'left') as Edge, d.sx > 0 ? along : -along);
     if (d.sy) live = resizedFromEdge(live, item, (d.sy > 0 ? 'front' : 'back') as Edge, d.sy > 0 ? across : -across);

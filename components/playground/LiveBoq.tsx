@@ -247,11 +247,11 @@ export function LineInspector({ m, index, count, issues, rooms, bankMap, rules, 
       {m.size && placed && (
         <div className="grid grid-cols-4 gap-1.5">
           <Scrub label={/r\s*ft|rft|running/i.test(m.unit) ? 'Length' : 'Width'} value={m.size.w} step={0.25} min={0.5} pxPerStep={6} format={ftin} disabled={readOnly}
-            onCommit={v => onReplace(resizedTo(line, m.item, v, m.size!.h, m.size!.d))} />
+            onCommit={v => onReplace(resizedTo(line, m.pieceItem, v, m.size!.h, m.size!.d))} />
           <Scrub label="Height" value={m.size.h} step={0.25} min={0.5} pxPerStep={6} format={ftin} disabled={readOnly}
-            onCommit={v => onReplace(resizedTo(line, m.item, m.size!.w, v, m.size!.d))} />
+            onCommit={v => onReplace(resizedTo(line, m.pieceItem, m.size!.w, v, m.size!.d))} />
           <Scrub label="Depth" value={m.size.d} step={0.25} min={0.25} pxPerStep={6} format={ftin} disabled={readOnly}
-            onCommit={v => onReplace(resizedTo(line, m.item, m.size!.w, m.size!.h, v))} />
+            onCommit={v => onReplace(resizedTo(line, m.pieceItem, m.size!.w, m.size!.h, v))} />
           <Scrub label="Turn" value={line.place!.rot} step={15} min={0} max={345} pxPerStep={3} format={v => `${Math.round(v)}°`} disabled={readOnly}
             onCommit={v => onReplace({ ...line, place: { ...line.place!, rot: ((Math.round(v) % 360) + 360) % 360 } })} />
         </div>

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { BoqItem, Item, PieceDraw, PricingRules, Room } from '../../types';
 import { formatINR } from '../../lib/utils';
 import { resolveBoqLine, isAsActuals } from '../../lib/boqPricing';
-import { drawOf, pieceSize, type PieceSize } from '../../lib/playground/pieces';
+import { drawOf, pieceSize, pieceItemOf, type PieceSize } from '../../lib/playground/pieces';
 import { lineAmount, lineCost } from '../../lib/playground/pricing';
 import { markupOf, specWordsOf, DEFAULT_MARGIN_FLOOR } from '../../lib/playground/issues';
 import { withByRoomQty, type MeasureContext } from '../../lib/playground/rooms';
@@ -163,6 +163,8 @@ export interface LineModel {
   stale: string[];
   /** How it is drawn, from its materials. */
   art: { fill?: string; base?: string; top?: string };
+  /** The item it is drawn as: its bank item, or the line's own name for a line not in the bank. */
+  pieceItem?: Item;
 }
 
 /** The Material specs bank, and whether this option is offered newer versions. */
@@ -174,7 +176,9 @@ export function lineModel(line: BoqItem, bankMap: Map<string, Item>, rules: Pric
   const item = bankMap.get(line.bankId);
   const b = rooms.length && line.byRoom ? withByRoomQty(line, rooms, measure) : line;
   const r = resolveBoqLine(b, bankMap);
-  const draw = drawOf(item);
+  /* A line of its own (imported, not in the bank) is drawn from its own name. */
+  const pieceItem = pieceItemOf(line, bankMap);
+  const draw = drawOf(pieceItem);
   const qty = Number(b.qty) || 0;
   const unitCost = qty ? lineCost(b, bankMap) / qty : lineCost({ ...b, qty: 1 }, bankMap);
   const labor = Number(b.labor ?? item?.labor ?? 0) || 0;
@@ -188,7 +192,8 @@ export function lineModel(line: BoqItem, bankMap: Map<string, Item>, rules: Pric
     words: specWordsOf(b, item),
     room: r.room,
     draw,
-    size: draw ? pieceSize(b, item, draw) : null,
+    size: draw ? pieceSize(b, pieceItem, draw) : null,
+    pieceItem,
     qty,
     cost: unitCost,
     labor,

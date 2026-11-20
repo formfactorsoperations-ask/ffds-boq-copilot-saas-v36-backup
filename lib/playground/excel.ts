@@ -32,7 +32,7 @@ import { readSize, sizeUpdates, convertLength } from '../boqSize';
 import { lineAmount, lineCost } from './pricing';
 import { markupOf, marginFloorFor, specWordsOf, type MarginFloors } from './issues';
 import type { MeasureContext } from './rooms';
-import { drawOf, footprintOf, isHigh, isWallBacked, pieceSize } from './pieces';
+import { drawOf, footprintOf, isHigh, isWallBacked, pieceSize, pieceItemOf, newPlace } from './pieces';
 import { autoPlace, type PlacedPiece } from './placing';
 import { newPieceLine, resizedTo } from './board';
 import { matchRooms, roomKey } from './planSheet';
@@ -215,6 +215,10 @@ export interface StudioChange {
   after?: BoqItem;
   /** What the client's amount moves by. */
   delta: number;
+  /** A new row that is already in the BOQ, in the same room: the line it repeats. Not added unless ticked. */
+  dup?: string;
+  /** Where a new or moved line lands: drawn on the plan, waiting for a place, or on the room's list. */
+  lands?: 'plan' | 'waits' | 'list';
 }
 
 /** The Item Bank item a name stands for: every word of the bank's name in it, or most words shared. */
@@ -244,6 +248,48 @@ export function roomFor(name: string, rooms: string[]): string | null {
   if (m) return m;
   const k = roomKey(t);
   return rooms.find(r => roomKey(r).split(' ').includes(k) || roomKey(r).includes(k)) || null;
+}
+
+/* ───────────────────────────── drawn in its room, and already there ───────────────────────────── */
+
+/** A line drawn on the plan, as placing reads it. */
+function placedOf(l: BoqItem, bankMap: Map<string, Item>): PlacedPiece | null {
+  const item = pieceItemOf(l, bankMap);
+  const draw = drawOf(item);
+  if (!draw || !l.place) return null;
+  return { id: l.id, room: l.roomId, fp: footprintOf(pieceSize(l, item, draw)), place: l.place, high: isHigh(draw), wallBacked: isWallBacked(draw) };
+}
+
+/**
+ * The line drawn in its room: on a free wall, or the open floor when it stands
+ * free. A piece with no room on the plan, or no space, keeps no place and waits
+ * under Needs a place. A line that does not draw (wallpaper, curtain tracks,
+ * painting) is returned as it is: it belongs to the room's list.
+ */
+export function placeInRoom(line: BoqItem, rooms: Room[], others: BoqItem[], bankMap: Map<string, Item>): { line: BoqItem; lands: 'plan' | 'waits' | 'list' } {
+  const item = pieceItemOf(line, bankMap);
+  const draw = drawOf(item);
+  const { place: _old, ...bare } = line;
+  if (!draw) return { line: bare as BoqItem, lands: 'list' };
+  const room = rooms.find(r => r.name === line.roomId && r.plan);
+  const start = line.place || newPlace(draw, 0, 0, 0);
+  const probe: PlacedPiece = { id: line.id, room: line.roomId, fp: footprintOf(pieceSize({ ...line, place: start }, item, draw)), place: start, high: isHigh(draw), wallBacked: isWallBacked(draw) };
+  const near = others.filter(o => o.roomId === line.roomId && o.id !== line.id).map(o => placedOf(o, bankMap)).filter((p): p is PlacedPiece => !!p);
+  const at = room ? autoPlace(probe, { name: room.name, plan: room.plan }, near) : null;
+  if (!at) return { line: bare as BoqItem, lands: 'waits' };
+  return { line: { ...line, place: { ...start, x: at.x, y: at.y, rot: at.rot } }, lands: 'plan' };
+}
+
+const nameKey = (s: string) => nameWithoutSize(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/** What makes two lines the same thing: the same Item Bank item, or for lines of their own, the same name. */
+const sameKey = (l: BoqItem, bankMap: Map<string, Item>) =>
+  (l.bankId && bankMap.has(l.bankId) ? `b:${l.bankId}` : `n:${nameKey(String((l as any).name || ''))}`);
+
+/** A live line already in the BOQ that is the same thing in the same room, if any. */
+export function alreadyThere(line: BoqItem, boq: BoqItem[], bankMap: Map<string, Item>): BoqItem | undefined {
+  const k = sameKey(line, bankMap);
+  if (k === 'n:') return undefined;
+  return (boq || []).find(l => live(l) && l.id !== line.id && (l.roomId || FLAT) === (line.roomId || FLAT) && sameKey(l, bankMap) === k);
 }
 
 const describe = (before: BoqItem, after: BoqItem, bankMap: Map<string, Item>, unit: string): string[] => {
@@ -296,8 +342,8 @@ export function studioDiff(
       if ((room || undefined) !== (line.roomId || undefined) && !(row.room === FLAT && !line.roomId)) {
         next = { ...next, ...(room ? { roomId: room } : {}) };
         if (!room) delete (next as any).roomId;
-        if (next.place) delete (next as any).place; // a piece moved on the sheet waits under Needs a place in its new room
       }
+      const moved = (next.roomId || FLAT) !== (line.roomId || FLAT);
       const s0 = sizeFt(line, unit);
       const sizeChanged = (row.w !== undefined || row.h !== undefined) && (round2(row.w ?? 0) !== round2(s0.w ?? 0) || round2(row.h ?? 0) !== round2(s0.h ?? 0));
       if (sizeChanged) next = { ...next, ...sizeUpdates({ a: row.w, b: row.h, nos: Number(line.calcMultiplier) || 1, unit: 'ft' }, unit) };
@@ -309,13 +355,28 @@ export function studioDiff(
       if (row.words && row.words !== specWordsOf(line, item)) next = { ...next, specs: row.words, specsOwn: true };
       const what = describe(line, next, bankMap, unit);
       if (!what.length) { unchanged++; return; }
-      changes.push({ kind: 'chg', id: line.id, name: resolveBoqLine(line, bankMap).name, room: next.roomId || FLAT, what: what.join(' · '), after: next, delta: amount(next) - amount(line) });
+      // A piece moved to another room on the sheet is drawn there, on a free wall.
+      let lands: StudioChange['lands'];
+      if (moved && line.place) {
+        const p = placeInRoom(next, ctx.rooms || [], [...boq, ...changes.map(c => c.after!).filter(Boolean)], bankMap);
+        next = p.line; lands = p.lands;
+      }
+      changes.push({ kind: 'chg', id: line.id, name: resolveBoqLine(line, bankMap).name, room: next.roomId || FLAT, what: what.join(' · '), after: next, delta: amount(next) - amount(line), ...(lands ? { lands } : {}) });
       return;
     }
     if (row.key && line) return; // a deleted line's row: leave it
     if (!row.item) return;
-    const made = newLineFor({ name: row.item, room: row.room && row.room !== FLAT ? (roomFor(row.room, roomNames) || row.room) : null, qty: row.qty, unit: row.unit, w: row.w, h: row.h, cost: row.cost, markup: row.markup, words: row.words }, ctx);
-    changes.push({ kind: 'new', name: resolveBoqLine(made, bankMap).name, room: made.roomId || FLAT, what: made.bankId && bankMap.has(made.bankId) ? `No Line ID · matched to the Item Bank${made.roomId ? ` · in ${made.roomId}` : ''}` : 'No Line ID · not in the Item Bank', after: made, delta: amount(made) });
+    const raw = newLineFor({ name: row.item, room: row.room && row.room !== FLAT ? (roomFor(row.room, roomNames) || row.room) : null, qty: row.qty, unit: row.unit, w: row.w, h: row.h, cost: row.cost, markup: row.markup, words: row.words }, ctx);
+    const dup = alreadyThere(raw, boq, bankMap);
+    // Drawn in its room like a piece from the library; a repeat does not take a wall until it is ticked.
+    const placed = placeInRoom(raw, ctx.rooms || [], [...boq, ...changes.filter(c => !c.dup).map(c => c.after!).filter(Boolean)], bankMap);
+    const made = placed.line;
+    const inBank = !!made.bankId && bankMap.has(made.bankId);
+    const where = made.roomId ? (placed.lands === 'plan' ? ` · drawn in ${made.roomId}` : placed.lands === 'waits' ? ` · ${made.roomId}, waits under Needs a place` : ` · on ${made.roomId}’s list`) : '';
+    const what = dup
+      ? `No Line ID · already in ${made.roomId || FLAT}: tick to add another`
+      : `No Line ID · ${inBank ? 'matched to the Item Bank' : 'not in the Item Bank'}${where}`;
+    changes.push({ kind: 'new', name: resolveBoqLine(made, bankMap).name, room: made.roomId || FLAT, what, after: made, delta: amount(made), lands: placed.lands, ...(dup ? { dup: dup.id } : {}) });
   });
 
   boq.filter(l => live(l) && !seen.has(l.id)).forEach(l => {
@@ -431,6 +492,8 @@ export interface ImportRow {
   /** The margin the sheet's rate makes, %. */
   margin: number;
   underFloor: boolean;
+  /** Already in the BOQ, in the same room: the line it repeats. Left out unless the user adds another. */
+  dup?: string;
 }
 
 /**
@@ -450,37 +513,22 @@ export function importPlan(rows: VendorRow[], ctx: {
 }): ImportRow[] {
   const { bank, bankMap } = ctx;
   const names = ctx.rooms.map(r => r.name);
-  const placedSoFar: BoqItem[] = [];
-  const asPlaced = (l: BoqItem): PlacedPiece | null => {
-    const item = bankMap.get(l.bankId);
-    const draw = drawOf(item);
-    if (!draw || !l.place) return null;
-    return { id: l.id, room: l.roomId, fp: footprintOf(pieceSize(l, item, draw)), place: l.place, high: isHigh(draw), wallBacked: isWallBacked(draw) };
-  };
+  const added: BoqItem[] = [];
   return rows.map((row, i) => {
     const named = roomFor(row.room, names);
     const room = named || ctx.fallbackRoom || null;
     const item = matchBankItem(row.sheet, bank);
     let line: BoqItem;
-    let lands: Lands;
     let cost: number;
     let markup: number;
     if (item) {
-      const draw = drawOf(item);
-      const planRoom = ctx.rooms.find(r => r.name === room && r.plan);
-      if (draw) {
-        const made = newPieceLine(item, room, { x: 0, y: 0, rot: 0 }, ctx.newId())!;
+      const made = drawOf(item) ? newPieceLine(item, room, { x: 0, y: 0, rot: 0 }, ctx.newId()) : null;
+      if (made) {
         line = row.size ? resizedTo(made, item, row.size.w, row.size.h) : made;
         if (!row.size && row.qty) line = { ...line, qty: row.qty };
-        const fp = footprintOf(pieceSize(line, item, draw));
-        const others = [...ctx.boq, ...placedSoFar].filter(l => l.roomId === room).map(asPlaced).filter((p): p is PlacedPiece => !!p);
-        const at = planRoom ? autoPlace({ id: line.id, room: room || undefined, fp, place: line.place!, high: isHigh(draw), wallBacked: isWallBacked(draw) }, { name: planRoom.name, plan: planRoom.plan }, others) : null;
-        if (at) { line = { ...line, place: { ...line.place!, x: at.x, y: at.y, rot: at.rot } }; lands = 'plan'; placedSoFar.push(line); }
-        else { const { place: _p, ...rest } = line; line = rest as BoqItem; lands = 'waits'; }
       } else {
         line = { id: ctx.newId(), bankId: item.id, qty: row.qty ?? 1, ...(room ? { roomId: room } : {}), baseRate: item.materials };
         if (row.size) line = { ...line, ...sizeUpdates({ a: row.size.w, b: row.size.h, unit: 'ft' }, item.unit) };
-        lands = 'list';
       }
       if (row.cost !== undefined) line = { ...line, baseRate: Math.max(0, round2(row.cost - (Number(item.labor) || 0))) };
       cost = unitCostOf(line, bankMap);
@@ -489,27 +537,38 @@ export function importPlan(rows: VendorRow[], ctx: {
     } else {
       cost = ctx.costs?.[i] ?? row.cost ?? (row.rate ? Math.round(row.rate * 0.8) : 0);
       markup = row.rate && cost > 0 ? round2((row.rate / cost - 1) * 100) : 0;
-      const qty = row.qty ?? 1;
       line = {
-        id: ctx.newId(), name: nameWithoutSize(row.sheet), cat: 'Imported', unit: row.unit || 'nos', qty,
+        id: ctx.newId(), name: nameWithoutSize(row.sheet), cat: 'Imported', unit: row.unit || 'nos', qty: row.qty ?? 1,
         ...(room ? { roomId: room } : {}), baseRate: cost, marginOverride: markup, specs: row.words || nameWithoutSize(row.sheet),
       } as unknown as BoqItem;
-      lands = 'list';
+      // A line of its own still draws when its name says what it is ("Pooja unit 3 x 4 ft"), at the sheet's size.
+      const pi = pieceItemOf(line, bankMap);
+      const draw = drawOf(pi);
+      if (row.size) line = { ...line, ...sizeUpdates({ a: row.size.w, b: row.size.h, unit: 'ft' }, row.unit || 'nos') };
+      if (draw) line = { ...line, place: newPlace(draw, 0, 0, 0) };
     }
-    if (!named) lands = 'room';
+    const dup = alreadyThere(line, ctx.boq, bankMap);
+    // Each line is drawn in its room on a free wall, or waits; a repeat is placed but holds no wall for the rows after it.
+    const placed = placeInRoom(line, ctx.rooms, [...ctx.boq, ...added], bankMap);
+    line = placed.line;
+    if (!dup) added.push(line);
+    const lands: Lands = !named ? 'room' : placed.lands;
     const rate = cost * (1 + markup / 100);
     const margin = rate > 0 ? ((rate - cost) / rate) * 100 : 0;
-    return { row, item, line, room, lands, cost, markup, margin, underFloor: margin < marginFloorFor(item?.cat || 'Imported', ctx.floors) - 1e-6 };
+    return { row, item, line, room, lands, cost, markup, margin, underFloor: margin < marginFloorFor(item?.cat || 'Imported', ctx.floors) - 1e-6, ...(dup ? { dup: dup.id } : {}) };
   });
 }
 
 /**
  * The lines to add, and the Item Bank items the Owner ticked: a row not in
- * the bank becomes an item of its own, and its line points at it.
+ * the bank becomes an item of its own, and its line points at it. A row
+ * already in the BOQ is left out unless `include` names it.
  */
-export function importLines(plan: ImportRow[], toBank: Set<number>, newId: () => string): { lines: BoqItem[]; items: Item[] } {
+export function importLines(plan: ImportRow[], toBank: Set<number>, newId: () => string, include?: Set<number>): { lines: BoqItem[]; items: Item[] } {
   const items: Item[] = [];
+  const keep = include || new Set(plan.map((p, i) => (p.dup ? -1 : i)).filter(i => i >= 0));
   const lines = plan.map((p, i) => {
+    if (!keep.has(i)) return null;
     if (p.item || !toBank.has(i)) return p.line;
     const item: Item = {
       id: newId(), name: p.line.name || nameWithoutSize(p.row.sheet), cat: 'Imported', unit: (p.line as any).unit || 'nos',
@@ -517,6 +576,6 @@ export function importLines(plan: ImportRow[], toBank: Set<number>, newId: () =>
     } as Item;
     items.push(item);
     return { ...p.line, bankId: item.id };
-  });
+  }).filter((l): l is BoqItem => !!l);
   return { lines, items };
 }

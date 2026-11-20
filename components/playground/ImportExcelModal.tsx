@@ -60,6 +60,8 @@ export default function ImportExcelModal({ project, option, tierId, boq, ctx, ba
   const [fallback, setFallback] = useState<string>(ctx.rooms?.[0]?.name || '');
   const [costs, setCosts] = useState<Record<number, number>>({});
   const [toBank, setToBank] = useState<Set<number>>(new Set());
+  /* Rows already in the BOQ that the user chose to add again. */
+  const [again, setAgain] = useState<Set<number>>(new Set());
   const fileRef = useRef<HTMLInputElement | null>(null);
   const want = useRef<'studio' | 'other' | null>(null);
 
@@ -70,7 +72,8 @@ export default function ImportExcelModal({ project, option, tierId, boq, ctx, ba
       const studio = readStudio(book);
       if (studio && want.current !== 'other') {
         const d = studioDiff(studio, boq, { ...ctx, bank, newId });
-        setSel(new Set(d.changes.map((c, i) => (c.kind === 'del' ? -1 : i)).filter(i => i >= 0)));
+        // Missing rows, and new rows already in the BOQ, wait to be ticked.
+        setSel(new Set(d.changes.map((c, i) => (c.kind === 'del' || c.dup ? -1 : i)).filter(i => i >= 0)));
         setStep({ k: 'studio', file: file.name, meta: studio.meta, ...d });
         return;
       }
@@ -79,7 +82,7 @@ export default function ImportExcelModal({ project, option, tierId, boq, ctx, ba
       const v = readVendor((book[first] || []) as Grid);
       if (!v.rows.length) { setErr('No item column was found in this sheet. The first rows need a heading such as Item, Description or Particulars.'); return; }
       if (want.current === 'studio' && !studio) setErr('This is not a studio copy exported from the Playground, so it is read as any other sheet.');
-      setCosts({}); setToBank(new Set());
+      setCosts({}); setToBank(new Set()); setAgain(new Set());
       setStep({ k: 'other', file: file.name, rows: v.rows, matched: v.matched, sheets: names.length });
     } catch (e: any) {
       setErr(`The file could not be read: ${e?.message || String(e)}`);
@@ -194,6 +197,9 @@ export default function ImportExcelModal({ project, option, tierId, boq, ctx, ba
 
   /* Any other sheet. */
   const needsRoom = plan.some(p => p.lands === 'room');
+  const ids = new Map(boq.filter(l => l.boqStatus !== 'deleted' && l.boqStatus !== 'substituted').map((l, i) => [l.id, lineIdAt(i)]));
+  const include = new Set<number>(plan.map((p, i) => (!p.dup || again.has(i) ? i : -1)).filter(i => i >= 0));
+  const dups = plan.filter((p, i) => p.dup && !again.has(i)).length;
   return wrap(step.file, `Sheet 1 of ${step.sheets} · ${step.rows.length} priced rows · read like today’s Excel import, then placed`, (
     <>
       <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-600 mb-4">
@@ -207,7 +213,7 @@ export default function ImportExcelModal({ project, option, tierId, boq, ctx, ba
               const unit = p.item?.unit || (p.line as any).unit || '';
               const rate = p.row.rate ?? p.cost * (1 + p.markup / 100);
               return (
-                <tr key={i} className="align-top">
+                <tr key={i} className={`align-top ${p.dup && !again.has(i) ? 'opacity-60' : ''}`}>
                   <td className="py-2.5 pr-2">
                     <div className="font-semibold text-slate-800">{p.row.sheet}</div>
                     <div className="text-[11px] text-slate-500">{p.row.room || 'No location'} · {p.row.size ? `${p.row.size.w} × ${p.row.size.h} ft` : `${p.row.qty ?? 1} ${p.row.unit || unit}`}</div>
@@ -223,9 +229,19 @@ export default function ImportExcelModal({ project, option, tierId, boq, ctx, ba
                     )}
                   </td>
                   <td className="py-2.5 px-2">
-                    {p.lands === 'plan' && <><Chip tone="good">On the plan</Chip><div className="text-[11px] text-slate-500 mt-0.5">{p.room}, on a free wall</div></>}
-                    {p.lands === 'waits' && <><Chip tone="slate">Room list</Chip><div className="text-[11px] text-slate-500 mt-0.5">{p.room} · no free wall, waits under Needs a place</div></>}
-                    {p.lands === 'list' && <><Chip tone="slate">Room list</Chip><div className="text-[11px] text-slate-500 mt-0.5">{p.room}</div></>}
+                    {p.dup && (
+                      <div className="mb-1.5">
+                        <Chip tone="warn">Already in the BOQ</Chip>
+                        <div className="text-[11px] text-slate-500 mt-0.5">{p.room} has it{ids.get(p.dup) ? ` as ${ids.get(p.dup)}` : ''}. Left out unless you add another.</div>
+                        <label className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
+                          <input type="checkbox" checked={again.has(i)} onChange={() => setAgain(s => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })} className="w-3.5 h-3.5 accent-[#3D52A0]" aria-label={`Add another ${p.item?.name || p.row.sheet}`} />
+                          Add another
+                        </label>
+                      </div>
+                    )}
+                    {(!p.dup || again.has(i)) && p.lands === 'plan' && <><Chip tone="good">On the plan</Chip><div className="text-[11px] text-slate-500 mt-0.5">{p.room}, on a free wall</div></>}
+                    {(!p.dup || again.has(i)) && p.lands === 'waits' && <><Chip tone="slate">Room list</Chip><div className="text-[11px] text-slate-500 mt-0.5">{p.room} · no free wall, waits under Needs a place</div></>}
+                    {(!p.dup || again.has(i)) && p.lands === 'list' && <><Chip tone="slate">Room list</Chip><div className="text-[11px] text-slate-500 mt-0.5">{p.room} · not a piece, so it is listed, not drawn</div></>}
                     {p.lands === 'room' && (
                       <>
                         <Chip tone="warn">Needs a room</Chip>
@@ -265,12 +281,16 @@ export default function ImportExcelModal({ project, option, tierId, boq, ctx, ba
     </>
   ), (
     <>
+      {dups > 0 && <span className="mr-auto text-xs text-slate-600">{dups} already in the BOQ, left out</span>}
       <Button onClick={onClose}>Cancel</Button>
-      <Button variant="primary" icon={Check} disabled={!plan.length} onClick={() => {
-        const { lines, items } = importLines(plan, toBank, newId);
+      <Button variant="primary" icon={Check} disabled={!include.size} onClick={() => {
+        const { lines, items } = importLines(plan, toBank, newId, include);
         const fresh = lines.map(l => ({ ...l, id: newId() }));
-        onAdd(fresh, items, `${fresh.length} line${fresh.length === 1 ? '' : 's'} added from ${step.file}${items.length ? `, ${items.length} added to the Item Bank` : ''}. Undo takes them out.`, plan.map(p => (p.item ? p.row.rate : undefined)));
-      }}>Add {plan.length} lines</Button>
+        const drawn = fresh.filter(l => l.place).length;
+        const listed = fresh.length - drawn - plan.filter((p, i) => include.has(i) && p.lands === 'waits').length;
+        const where = [drawn ? `${drawn} drawn on the plan` : '', fresh.length - drawn - listed > 0 ? `${fresh.length - drawn - listed} waiting under Needs a place` : '', listed > 0 ? `${listed} on the room lists` : ''].filter(Boolean).join(', ');
+        onAdd(fresh, items, `${fresh.length} line${fresh.length === 1 ? '' : 's'} added from ${step.file}: ${where}${items.length ? `; ${items.length} added to the Item Bank` : ''}${dups ? `; ${dups} already in the BOQ left out` : ''}. Undo takes them out.`, plan.filter((_, i) => include.has(i)).map(p => (p.item ? p.row.rate : undefined)));
+      }}>Add {include.size} line{include.size === 1 ? '' : 's'}</Button>
     </>
   ));
 }
