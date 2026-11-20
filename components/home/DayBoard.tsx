@@ -12,7 +12,6 @@ import { useGuide } from '../../services/peopleGuideService';
 import { openPeopleSection } from '../../lib/peopleSection';
 import { useNoteArrivals } from '../notify/NotifyContext';
 import MyDayCard from '../people/MyDayCard';
-import { teamLanyards } from '../people/Arrivals';
 import StudioMoments from './StudioMoments';
 import { AttentionWidget, ComingUpWidget, ForYouWidget, Pinned, ReviewWidget, StudioLifeWidget, TeamWidget } from './HomeWidgets';
 import type { AttentionRow } from './useAttention';
@@ -69,9 +68,6 @@ export default function DayBoard({ feeds, projects, attention, onNavigate }: {
   /* Studio life (lib/peopleGuide.ts): null while it loads; left out when there is nothing in it, or it cannot be read. */
   const guide = useGuide(!!onPeople);
   useNoteArrivals((n) => n.kind.startsWith('guide.'), () => guide.refresh());
-  /* The team's badges for the Team today pin: times only for those this person looks after. */
-  const guideEntries = guide.view?.entries;
-  const badges = useMemo(() => (onPeople && snapshot?.me ? teamLanyards(snapshot, guideEntries) : null), [onPeople, snapshot, guideEntries]);
   const life = useMemo(() => (!onPeople || (guide.error && !guide.view) ? undefined : guide.view ? lifeOf(guide.view) || undefined : null), [onPeople, guide.view, guide.error]);
   const counts = useMemo(() => (attention ? {
     blocked: attention.rows.filter((r) => r.worst === 'blocker').length,
@@ -102,7 +98,7 @@ export default function DayBoard({ feeds, projects, attention, onNavigate }: {
       : p.kind === 'checkin' ? <MyDayCard variant="pin" lamp sites={sites} onOpenPeople={() => onNavigate('people')} />
       : p.kind === 'attention' ? <AttentionWidget index={0} {...attention!} />
       : p.kind === 'life' ? (guide.view ? <StudioLifeWidget index={0} view={guide.view} onOpen={openPeople} /> : <div className="pp-shimmer h-40 rounded-2xl" />)
-      : team ? <TeamWidget index={0} t={team} badges={badges} onAll={() => onNavigate('people')} />
+      : team ? <TeamWidget index={0} t={team} onAll={() => onNavigate('people')} />
       : <div className="pp-shimmer h-40 rounded-2xl" />;
 
   return (
