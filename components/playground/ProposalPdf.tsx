@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { FileText, Download, Send, X, Globe } from 'lucide-react';
 import { Button, Chip } from '../ui/kit';
 import type { BoqItem, Item, ProjectContext, ProposalTier, TermsSettings, PaymentStructure } from '../../types';
@@ -360,7 +361,11 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
 
   const build = async () => {
     if (!root.current) throw new Error('The pages are not on screen');
-    return buildProposalPdf(root.current, 'portrait');
+    const pdf = await buildProposalPdf(root.current, 'portrait');
+    /* A page that could not be drawn comes out as nothing: never hand the client a file short of pages. */
+    const got = (pdf as any).getNumberOfPages?.() ?? sheets.length;
+    if (got < sheets.length) throw new Error(`only ${got} of ${sheets.length} pages could be drawn. Close the preview, open it again and retry`);
+    return pdf;
   };
   const name = proposalFileName(project, v.from);
   const download = async () => {
@@ -382,7 +387,12 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
     } finally { setBusy(null); }
   };
 
-  return (
+  /*
+    Over the whole page, at the top of the document: nothing it sits inside
+    (a panel marked no-print, a transformed or scrolled container) can hide
+    or move what is shown and captured.
+  */
+  return createPortal(
     <div className="fixed inset-0 z-[350] flex flex-col phd-scrim bg-slate-100" role="dialog" aria-modal="true" aria-label="First proposal PDF preview">
       <header className="shrink-0 px-4 py-2.5 flex items-center gap-3 flex-wrap bg-white border-b border-slate-200">
         <span className="w-9 h-9 rounded-xl bg-[#3D52A0] text-white grid place-items-center"><FileText className="w-4 h-4" aria-hidden /></span>
@@ -413,7 +423,8 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
           {sheets.map((body, i) => <React.Fragment key={i}><Page n={i + 1} foot={foot}>{body}</Page></React.Fragment>)}
         </div>
       </main>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

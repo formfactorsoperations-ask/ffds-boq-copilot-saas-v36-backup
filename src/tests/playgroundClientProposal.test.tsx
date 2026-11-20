@@ -88,6 +88,14 @@ describe('the Client Proposal of a Playground option', () => {
     expect(within(pdf()).getByText('Bedroom total')).toBeTruthy();
   });
 
+  it('the preview is drawn over the whole page, never inside the panel: a no-print panel cannot blank the PDF', () => {
+    render(<Harness />);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' }));
+    expect(pdf().parentElement).toBe(document.body);
+    expect(pdf().closest('.no-print')).toBeNull();
+    expect(panel().contains(pdf())).toBe(false);
+  });
+
   it('once the client has booked, Publish to the portal writes their copy', async () => {
     const onRelease = vi.fn(async () => undefined);
     render(<Harness booked onRelease={onRelease} />);
