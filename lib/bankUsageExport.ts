@@ -156,15 +156,20 @@ function otherRefs(project: any): UsageProject['otherRefs'] {
   return out;
 }
 
+/*
+  The three figures are carried exactly as stored. Some items hold a list where
+  a number belongs ([1440]); turning those into numbers here once hid them from
+  a check that then promised more than the app could do.
+*/
 const cleanItem = (i: any): Item => ({
   id: String(i?.id ?? ''),
   name: String(i?.name ?? ''),
   cat: String(i?.cat ?? ''),
   specs: String(i?.specs ?? ''),
   unit: String(i?.unit ?? ''),
-  materials: Number(i?.materials) || 0,
-  labor: Number(i?.labor) || 0,
-  margin: Number(i?.margin) || 0,
+  materials: i?.materials ?? 0,
+  labor: i?.labor ?? 0,
+  margin: i?.margin ?? 0,
 });
 
 export function usageProject(project: FullProjectData, bank: Item[]): UsageProject {

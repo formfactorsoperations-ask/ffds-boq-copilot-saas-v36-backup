@@ -246,7 +246,7 @@ export default function PriceLockModal({ bank, studio, read, save, onClose }: Pr
                       {r.why && ` · ${r.why}`}
                     </span>
                   </span>
-                  {plan.skipped > 0 && <Chip tone="warn" title="Their Item Bank item holds a rate that is not a number. They are left as they are.">{plural(plan.skipped, 'line')} left out</Chip>}
+                  {plan.skipped > 0 && <Chip tone="warn" title="Their item holds a rate the app cannot read, or one it adds up wrongly. They are left as they are.">{plural(plan.skipped, 'line')} left out</Chip>}
                   {r.why ? <Chip tone="warn">Left alone</Chip>
                     : !plan.changed ? <Chip>Nothing to {mode === 'undo' ? 'put back' : 'lock'}</Chip>
                     : plan.same ? <Chip tone="good">Totals unchanged</Chip>

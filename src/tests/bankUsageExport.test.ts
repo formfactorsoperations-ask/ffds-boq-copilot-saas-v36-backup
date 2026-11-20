@@ -103,6 +103,11 @@ describe('Item Bank usage export', () => {
     expect(p.baseline?.lines[0]).toMatchObject({ bankId: 'gen-015', qty: 40, margin: 15 });
   });
 
+  it('carries a project\'s own item figures exactly as stored, a list included', () => {
+    const odd = buildBankUsageExport(bank(), [project({ context: { name: 'Hiranandani One', adHocItems: [item('own-9', 'PANELING', { materials: [1440], labor: [], margin: 0 })] } })]);
+    expect(odd.projects[0].ownItems[0]).toMatchObject({ materials: [1440], labor: [], margin: 0 });
+  });
+
   it('finds bank ids outside the options, so no reference is missed', () => {
     expect(p.otherRefs).toEqual([{ path: 'context.revision.actions[].newValue', bankId: 'ADHOC_zz' }]);
   });

@@ -23,8 +23,8 @@ import { hasRole, type RoleSet } from './roles';
  * every cost and every total is exactly the same.
  *
  * It follows `freezeBoqLines` (lib/detailedBoq.ts), with two differences: a
- * line whose bank item holds something other than numbers is left alone and
- * reported, and what was added to each line is recorded so it can be undone.
+ * line whose item holds no figure the app can read is left alone and reported
+ * (see `figure`), and what was added to each line is recorded so it can be undone.
  */
 
 export const PRICE_LOCK_KIND = 'ffds-price-lock';
@@ -80,24 +80,41 @@ export interface LockPlan {
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
-/** The item's three figures, when all of them are numbers. */
-function ratesOf(item: Item | undefined): { materials: number; labor: number; margin: number } | null {
+/**
+ * A figure as the app reads it. Some items made by Revision Studio hold a list
+ * where a number belongs: `[1440]` for materials, `[]` for labour. Pricing puts
+ * every figure through Number(), which reads those as 1440 and 0, so that is
+ * what a line was priced at and what locking writes. Anything else (a longer
+ * list, text, nothing) has no figure: null.
+ */
+function figure(v: unknown): { n: number; exact: boolean } | null {
+  if (isNum(v)) return { n: v, exact: true };
+  if (Array.isArray(v) && v.length === 0) return { n: 0, exact: false };
+  if (Array.isArray(v) && v.length === 1 && isNum(v[0])) return { n: v[0], exact: false };
+  return null;
+}
+
+/** The item's three figures. `exact` is false when any of them was read out of a list. */
+function ratesOf(item: Item | undefined): { materials: number; labor: number; margin: number; exact: boolean } | null {
   if (!item) return null;
-  const { materials, labor, margin } = item as any;
-  return isNum(materials) && isNum(labor) && isNum(margin) ? { materials, labor, margin } : null;
+  const m = figure((item as any).materials), l = figure((item as any).labor), g = figure((item as any).margin);
+  return m && l && g ? { materials: m.n, labor: l.n, margin: g.n, exact: m.exact && l.exact && g.exact } : null;
+}
+
+/** What the studio sees for one line: its rate, total, cost and margin. */
+function lineFingerprint(b: any, bankMap: Map<string, Item>): unknown[] {
+  const r = resolveBoqLine(b, bankMap);
+  const item = bankMap.get(b.bankId);
+  // The cost, as App's tier summary adds it up.
+  const cost = item
+    ? ((b.baseRate !== undefined ? b.baseRate : item.materials) + (b.labor !== undefined ? b.labor : item.labor)) * b.qty
+    : null;
+  return [r.rate, r.total, String(cost), String(b.marginOverride ?? item?.margin ?? null)];
 }
 
 /** What the studio sees for an option: every line's rate, total and cost, and the option's totals. */
 function fingerprint(tier: any, boq: any[], bankMap: Map<string, Item>, ctx: any): string {
-  const lines = boq.map(b => {
-    const r = resolveBoqLine(b, bankMap);
-    const item = bankMap.get(b.bankId);
-    // The cost, as App's tier summary adds it up.
-    const cost = item
-      ? ((b.baseRate !== undefined ? b.baseRate : item.materials) + (b.labor !== undefined ? b.labor : item.labor)) * b.qty
-      : null;
-    return [r.rate, r.total, String(cost), b.marginOverride ?? item?.margin ?? null];
-  });
+  const lines = boq.map(b => lineFingerprint(b, bankMap));
   const playground = isPlaygroundTier(tier) ? playgroundTierSummary({ ...tier, boq }, bankMap, ctx) : null;
   return JSON.stringify({ lines, total: boqTotal(boq, bankMap), asActuals: asActualsTotal(boq, bankMap), playground });
 }
@@ -182,8 +199,11 @@ export function planPriceLock(project: FullProjectData, bank: Item[], at = Date.
     const added: LockedLine['added'] = {};
     missing.forEach(f => { added[f] = from[f]; });
     const stamp = b.rateSnapshotAt ? undefined : at;
+    const line = { ...b, ...added, ...(stamp !== undefined && { rateSnapshotAt: stamp }) };
+    // A figure read out of a list: only if this line prices exactly as it did. Otherwise it is left as it is.
+    if (!rates.exact && JSON.stringify(lineFingerprint(b, bankMap)) !== JSON.stringify(lineFingerprint(line, bankMap))) return { line: b, skipped: true };
     return {
-      line: { ...b, ...added, ...(stamp !== undefined && { rateSnapshotAt: stamp }) },
+      line,
       rec: { id: String(b.id ?? ''), added, ...(stamp !== undefined && { stamped: stamp }), ...(b.marginOverride === null && { wasNull: true }) },
     };
   });

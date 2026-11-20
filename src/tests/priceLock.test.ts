@@ -20,6 +20,8 @@ const bank = () => [
   item('gen-014', 'WARDOBE WITH LOFT'),
   item('gen-015', 'KING SIZE BED WITH STORAGE', { materials: 1260, labor: 540 }),
   item('ADHOC_a1', 'PANELING AROUND HEADBOARD', { materials: [1440], labor: [], margin: 0 }),
+  item('ADHOC_a2', 'MANDIR WITHOUT STORAGE', { materials: [2160, 5], labor: [], margin: 0 }),
+  item('ADHOC_a3', 'SIDE TABLE FOLDING', { materials: '2160', labor: 0, margin: 0 }),
   item('gen-030', 'TILES (AS ACTUALS)', { unit: 'lumpsum', materials: 11000, labor: 0, margin: 0 }),
 ];
 
@@ -35,7 +37,8 @@ const project = (over: any = {}): any => ({
       { id: 'l3', bankId: 'gen-014', qty: 10, baseRate: 1400, labor: 500, marginOverride: 25 },      // already holds its price
       { id: 'l4', bankId: 'own-1', qty: 12, baseRate: 950 },                                         // the project's own item
       { id: 'l5', bankId: 'gone', qty: 2, name: 'Old shelf', baseRate: 900, marginOverride: 10 },    // not in the bank
-      { id: 'l6', bankId: 'ADHOC_a1', qty: 20 },                                                     // the bank item is not numbers
+      { id: 'l6', bankId: 'ADHOC_a2', qty: 20 },                                                     // the item holds no figure the app can read
+      { id: 'l9', bankId: 'ADHOC_a3', qty: 3 },                                                      // nor this one: text
       { id: 'l7', bankId: 'gen-030', qty: 1, marginOverride: null },                                 // as actuals, margin stored as null
       { id: 'l8', bankId: 'gen-015', qty: 5, boqStatus: 'deleted' },
     ],
@@ -68,15 +71,49 @@ describe('locking a project\'s prices', () => {
     expect(line('l8')).toMatchObject({ baseRate: 1260, labor: 540, marginOverride: 15, boqStatus: 'deleted' });
   });
 
-  it('leaves alone a line that is not in the bank, and one whose bank item is not numbers', () => {
+  it('leaves alone a line that is not in the bank, and one whose item holds no figure', () => {
     expect(line('l5')).toBe(p.tiers[0].boq[4]);
     expect(line('l6')).toBe(p.tiers[0].boq[5]);
-    expect(plan.skipped).toBe(1);
+    expect(line('l9')).toBe(p.tiers[0].boq[6]);
+    expect(plan.skipped).toBe(2);
+  });
+
+  /*
+    Revision Studio made items whose materials is a list, [1440], and whose
+    labour is an empty one. The app reads those as 1440 and 0, so a line on such
+    an item is locked at those figures: as numbers, never as the lists.
+  */
+  describe('an item whose figures sit in a list', () => {
+    const own = [item('ADHOC_a1', 'PANELING AROUND HEADBOARD', { materials: [1440], labor: [], margin: 0 })];
+    const listed = (boq: any[]) => project({ context: { name: 'Hiranandani One - Fairway', status: 'completed', adHocItems: own }, tiers: [{ id: 't1', name: 'Client-BOQ', boq }] });
+
+    it('locks the line at the figures the app reads, and no total moves', () => {
+      const src = listed([{ id: 'h1', bankId: 'ADHOC_a1', qty: 20, baseRate: 1152, marginOverride: 20 }, { id: 'h2', bankId: 'ADHOC_a1', qty: 4 }]);
+      const pl = planPriceLock(src, bank(), 5);
+      expect(pl.same).toBe(true);
+      expect(pl.skipped).toBe(0);
+      expect(pl.project.tiers[0].boq[0]).toMatchObject({ baseRate: 1152, labor: 0, marginOverride: 20 });
+      expect(pl.project.tiers[0].boq[1]).toMatchObject({ baseRate: 1440, labor: 0, marginOverride: 0 });
+      expect(pl.options[0].before).toBe(1152 * 1.2 * 20 + 1440 * 4);
+      expect(pl.options[0].after).toBe(pl.options[0].before);
+      // And it comes off again.
+      expect(planPriceUnlock(pl.project, bank(), pl.record).project.tiers).toEqual(src.tiers);
+    });
+
+    it('leaves the line out when the list made the app add its cost up wrongly', () => {
+      // Labour on the line, materials from the list: the app joins them as text ("1440" + 600) for the cost.
+      const pl = planPriceLock(listed([{ id: 'h3', bankId: 'ADHOC_a1', qty: 2, labor: 600 }, { id: 'h4', bankId: 'gen-015', qty: 1 }]), bank(), 5);
+      expect(pl.skipped).toBe(1);
+      expect(pl.changed).toBe(1);
+      expect(pl.same).toBe(true);
+      expect(pl.project.tiers[0].boq[0]).toEqual({ id: 'h3', bankId: 'ADHOC_a1', qty: 2, labor: 600 });
+    });
   });
 
   it('counts what it does and records it line by line', () => {
     expect(plan.changed).toBe(5);
     expect(plan.fields).toBe(2 + 3 + 2 + 3 + 3);
+    expect(plan.options[0].lines).toBe(9);
     expect(plan.options[1]).toMatchObject({ tierName: 'Essential Elegance', changed: 0, same: true });
     expect(plan.record).toEqual([{ tierId: 't1', lines: expect.arrayContaining([{ id: 'l1', added: { baseRate: 1295, labor: 555 }, stamped: 1763000000000 }]) }]);
     // An option with nothing to lock keeps the very same object.
@@ -89,7 +126,7 @@ describe('locking a project\'s prices', () => {
       const f = frozen.find((x: any) => x.id === id);
       expect({ b: line(id).baseRate, l: line(id).labor, m: line(id).marginOverride }).toEqual({ b: f.baseRate, l: f.labor, m: f.marginOverride });
     });
-    expect(isFrozen(plan.project.tiers[0].boq.filter((l: any) => l.id !== 'l6'), map)).toBe(true);
+    expect(isFrozen(plan.project.tiers[0].boq.filter((l: any) => l.id !== 'l6' && l.id !== 'l9'), map)).toBe(true);
   });
 
   it('holds once the bank moves: the locked project keeps its totals, the unlocked one does not', () => {
