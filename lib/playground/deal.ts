@@ -37,11 +37,12 @@ export interface Validity {
 }
 
 /** How long the proposal holds: the project's own days, else the studio's. */
-export function proposalValidity(ctx: Pick<ProjectContext, 'proposal'> | null | undefined, terms: Pick<TermsSettings, 'proposalValidityDays'> | null | undefined, now = Date.now()): Validity {
+export function proposalValidity(ctx: Pick<ProjectContext, 'proposal'> | null | undefined, terms: Pick<TermsSettings, 'proposalValidityDays'> | null | undefined, now = Date.now(), tierId?: string): Validity {
   const p: ProposalRecord = ctx?.proposal || {};
   const studioDays = validityDaysOf(terms);
   const days = Number(p.validDays) >= 1 ? clampDays(Number(p.validDays)) : studioDays;
-  const issued = typeof p.issuedAt === 'number' && p.issuedAt > 0;
+  /* Issued on this version: a newer version is a draft until it is sent in its turn. */
+  const issued = typeof p.issuedAt === 'number' && p.issuedAt > 0 && (!tierId || !p.tierId || p.tierId === tierId);
   const from = new Date(issued ? p.issuedAt! : now);
   const until = issued && typeof p.validUntil === 'number' ? new Date(p.validUntil) : validUntil(from, days);
   return { days, studioDays, issued, from, until, expired: issued && now > until.getTime() };

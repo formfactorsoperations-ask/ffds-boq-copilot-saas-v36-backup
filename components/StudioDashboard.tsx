@@ -56,6 +56,8 @@ interface StudioDashboardProps {
     onStartRevision?: () => void;
     /** Puts the project's documents in the client's portal (a revision issued from the BOQ Playground, PR R2). */
     onReleasePortal?: (ctx: ProjectContext) => Promise<any>;
+    /** The lead profile's main concern: the order of the first proposal's pages (PR P). */
+    leadConcern?: string | null;
     /** Lines to show and highlight on opening (Pricing & Tiers, "Where the money goes" → a line). */
     focusLines?: { ids: string[]; at: number } | null;
     /** Makes another option the one being edited (App's setActiveTierId): used by "Make a Playground version". */
@@ -118,7 +120,7 @@ const itemVar = {
     show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100, damping: 12 } }
 };
 
-const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision, focusLines, onSelectTier, onReleasePortal }) => {
+const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision, focusLines, onSelectTier, onReleasePortal, leadConcern }) => {
   /* Signed scope: the version the client signed is shown but never changed
      here. Every edit path below goes through setTiers, so it is guarded once. */
   const signedTierId = lockedTierId(projectContext);
@@ -943,6 +945,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               kits={settings?.customBundles}
               paymentStructure={terms.paymentStructure}
               termsSettings={terms.termsSettings}
+              leadConcern={leadConcern}
               onSaveKit={async bundle => { await updateSettings('customBundles', [...(settings?.customBundles || []), bundle]); }}
               renderFullGrid={() => (
                 <StudioExcelGrid

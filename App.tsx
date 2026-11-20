@@ -2858,6 +2858,7 @@ export default function App() {
                         <StudioDashboard
                           onStartRevision={() => setActiveTab("revision-studio")}
                           onReleasePortal={releasePortalNow}
+                          leadConcern={leadProfile?.primaryFrictionPoint}
                           focusLines={boqDrawerOpen ? boqFocus : null}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}

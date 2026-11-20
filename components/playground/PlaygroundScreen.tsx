@@ -59,6 +59,8 @@ import { playgroundTierSummary } from '../../lib/playground/versions';
 import { proposalValidity, withValidDays, followBoq, discountsOf, withDiscounts, withInitiationFee } from '../../lib/playground/deal';
 import { holdsFinanceRole } from '../../lib/roleAccess';
 import { DealLens } from './DealParts';
+import ProposalPdf from './ProposalPdf';
+import { issueProposal, sentProposalTier } from '../../lib/playground/proposal';
 import type { PaymentStructure, TermsSettings } from '../../types';
 import { changesBetween } from '../../lib/playground/changes';
 import { withSupply, supplyLine, supplyOf, SUPPLY_WORDS } from '../../lib/playground/supply';
@@ -170,11 +172,13 @@ interface Props {
   paymentStructure?: PaymentStructure | null;
   /** Terms & Payment: the proposal's validity period (PR P). */
   termsSettings?: TermsSettings | null;
+  /** The lead profile's main concern: the order of the proposal's pages. */
+  leadConcern?: string | null;
 }
 
 export default function PlaygroundScreen(props: Props) {
   const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly: readOnlyProp, currentRoles, tenantId, onBoq: onBoqProp, newId,
-    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit, paymentStructure, termsSettings } = props;
+    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit, paymentStructure, termsSettings, leadConcern } = props;
   /* A signed version (PR R2) is read-only; a revision of it is drawn and edited here, against it. */
   const revRec = signed?.rec || null;
   const revDraft = !!revRec && signed?.revState === 'draft';
@@ -184,7 +188,9 @@ export default function PlaygroundScreen(props: Props) {
   const vplace = useMemo(() => versionPlace(tiers, tier.id), [tiers, tier.id]);
   const superseded = !!vplace?.superseded;
   /* A frozen BOQ is changed only through a revision: a revision's draft is edited even when the BOQ is frozen. */
-  const readOnly = revDraft ? false : readOnlyProp || superseded || !!signed;
+  /* The version the first proposal went out on is kept as it went (PR P): changes go in a new version. */
+  const sentHere = !signed && !superseded && sentProposalTier(ctx) === tier.id;
+  const readOnly = revDraft ? false : readOnlyProp || superseded || !!signed || sentHere;
   const seesMargins = useSeesMargins(currentRoles);
   /* Hide figures hides margins only (lib/figuresPrivacy): prices stay, and seesMargins already reads it. */
   const hideFigures = false;
@@ -212,6 +218,8 @@ export default function PlaygroundScreen(props: Props) {
   const [fitSignal, setFitSignal] = useState(0);
   const [fullGrid, setFullGrid] = useState(false);
   const [recipeItemId, setRecipeItemId] = useState<string | null>(null);
+  /* The first-proposal PDF (PR P), over the screen. */
+  const [pdfOpen, setPdfOpen] = useState(false);
   /* S2: the option's grade picks each recipe's column; a draft is offered newer versions. */
   const grade = gradeOf(tier);
   const offer = !!specBank && offersUpdates(tier, ctx, readOnly);
@@ -299,9 +307,9 @@ export default function PlaygroundScreen(props: Props) {
   const gstTerms = useMemo(() => gstTermsOf(ctx), [ctx]);
   const dealSummary = useMemo(() => (isPlaygroundTier(tier) ? playgroundTierSummary(tier, bankMap, ctx) : tier.summary), [tier, bankMap, ctx]);
   const dealSplit = useMemo(() => scopeSplit(tier, bankMap, splitPricingOf(tier, ctx.rooms, bankMap)), [tier, bankMap, ctx.rooms]);
-  const validity = proposalValidity(ctx, termsSettings);
+  const validity = proposalValidity(ctx, termsSettings, Date.now(), tier.id);
   /* Offers are written by the studio's finance roles, on an option that is not signed or kept as it was. */
-  const dealLocked = readOnlyProp || superseded || !!signed || contractInForce(ctx) || !holdsFinanceRole(currentRoles);
+  const dealLocked = readOnlyProp || superseded || !!signed || sentHere || contractInForce(ctx) || !holdsFinanceRole(currentRoles);
   /* Why, in words, with the way to where it can be changed. */
   const dealLockedWhy = !dealLocked ? null
     : superseded && vplace ? {
@@ -310,14 +318,18 @@ export default function PlaygroundScreen(props: Props) {
     }
     : signed || contractInForce(ctx) ? { text: 'This option is signed: its offers stay as the client signed them. A change to the scope goes through a revision.' }
     : readOnlyProp ? { text: 'The BOQ is frozen, so the deal is shown, not changed.' }
+    : sentHere ? {
+      text: `This version went to the client on ${when(ctx.proposal?.issuedAt)}${validity.expired ? `, and expired on ${when(validity.until.getTime())}` : `, valid until ${when(validity.until.getTime())}`}. It stays as it went: make a new version to change the deal, then send it.`,
+      action: onNewVersion ? { label: 'New version', onClick: () => { keepLens.current = 'deal'; onNewVersion(); } } : undefined,
+    }
     : { text: 'Offers, the design fee and the schedule are set by the Owner and the studio’s finance roles. Ask one of them to change the deal.' };
   const chains = useMemo(() => optionChains(tiers), [tiers]);
   /* The offers follow the BOQ: a changed line re-prices them, and a special price still meets its target. A sent proposal keeps its figures. */
   useEffect(() => {
-    if (dealLocked || validity.issued) return;
+    if (dealLocked) return;
     const next = followBoq(discounts, tier.id, dealSplit, { summary: dealSummary, terms: gstTerms }, (a, b) => sameOption(chains, a, b));
     if (next) setProjectContext(prev => withDiscounts(prev, next));
-  }, [dealLocked, validity.issued, discounts, tier.id, dealSplit, dealSummary, gstTerms, chains, setProjectContext]);
+  }, [dealLocked, discounts, tier.id, dealSplit, dealSummary, gstTerms, chains, setProjectContext]);
   const query = useCallback((m: LineModel) => {
     const s = q.trim().toLowerCase();
     return !s || `${m.name} ${m.words} ${m.cat}`.toLowerCase().includes(s);
@@ -743,7 +755,7 @@ export default function PlaygroundScreen(props: Props) {
             <span className={`w-2 h-2 rounded-full ${verDot}`} />
             <span className="leading-tight">
               <span className="block text-xs font-bold text-slate-800 whitespace-nowrap max-w-[160px] truncate">{tier.name}{vplace && vplace.versions.length > 1 ? ` · v${vplace.n}` : ''}</span>
-              <span className="block text-[10px] text-slate-500 whitespace-nowrap">{revRec ? `Revision ${revRec.number} · ${signed!.revState === 'draft' ? 'Draft' : signed!.revState === 'issued' ? 'With the client' : 'Signed by the client'}` : signed ? `Signed · ${signed.at}` : `${BOQ_FORMAT_LABEL[format]} · ${readOnlyProp ? 'Frozen' : superseded ? 'Kept as it was' : 'Draft'}`}</span>
+              <span className="block text-[10px] text-slate-500 whitespace-nowrap">{revRec ? `Revision ${revRec.number} · ${signed!.revState === 'draft' ? 'Draft' : signed!.revState === 'issued' ? 'With the client' : 'Signed by the client'}` : signed ? `Signed · ${signed.at}` : `${BOQ_FORMAT_LABEL[format]} · ${readOnlyProp ? 'Frozen' : superseded ? 'Kept as it was' : sentHere ? `Sent ${when(ctx.proposal?.issuedAt)}` : 'Draft'}`}</span>
             </span>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" aria-hidden />
           </button>
@@ -878,7 +890,7 @@ export default function PlaygroundScreen(props: Props) {
             </div>
           )}
         </div>
-        {!classic && <button type="button" onClick={() => setNote('The first-proposal PDF comes with the proposal part of the Playground. Export → BOQ as a PDF prints this BOQ today.')}
+        {!classic && <button type="button" onClick={() => { setMenu(null); setPdfOpen(true); }}
           title="First proposal PDF: no drawing until the layout is approved" className={`${barBtn} px-3 bg-slate-800 text-white hover:bg-slate-900`}>
           <FileText className="w-3.5 h-3.5" aria-hidden />Proposal PDF
         </button>}
@@ -959,7 +971,7 @@ export default function PlaygroundScreen(props: Props) {
                       onFee={v => setProjectContext(prev => ({ ...prev, designFee: (prev.designFeeType || 'percentage') === 'percentage' ? Math.min(30, Math.max(0, v)) : Math.max(0, v) }))}
                       onDays={d => setProjectContext(prev => withValidDays(prev, d))}
                       onInitiation={v => setProjectContext(prev => withInitiationFee(prev, v))}
-                      onNote={setNote} />
+                      onNote={setNote} onPresent={isPlaygroundTier(tier) ? () => setPdfOpen(true) : undefined} />
                   );
                 })()}
               </div>
@@ -1001,7 +1013,7 @@ export default function PlaygroundScreen(props: Props) {
                     </div>
                   )}
                 </span>
-                {readOnly && <span className="ml-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-bold text-slate-600" title={superseded ? `v${vplace!.n} is kept as it was. Switch to v${vplace!.versions.length} to edit.` : undefined}><Lock className="w-3.5 h-3.5 text-[#3D52A0]" aria-hidden />{superseded ? `v${vplace!.n} · kept as it was` : signed?.elsewhere ? `Revision ${signed.elsewhere} is being drafted in Revision Studio` : signed ? (revRec ? `Revision ${revRec.number} · ${signed.revState === 'issued' ? 'with the client' : 'signed by the client'}` : 'Signed · read-only') : 'Read-only'}</span>}
+                {readOnly && <span className="ml-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-bold text-slate-600" title={superseded ? `v${vplace!.n} is kept as it was. Switch to v${vplace!.versions.length} to edit.` : undefined}><Lock className="w-3.5 h-3.5 text-[#3D52A0]" aria-hidden />{superseded ? `v${vplace!.n} · kept as it was` : sentHere ? `Sent ${when(ctx.proposal?.issuedAt)} · kept as it went` : signed?.elsewhere ? `Revision ${signed.elsewhere} is being drafted in Revision Studio` : signed ? (revRec ? `Revision ${revRec.number} · ${signed.revState === 'issued' ? 'with the client' : 'signed by the client'}` : 'Signed · read-only') : 'Read-only'}</span>}
                 <span className="ml-1.5 inline-flex p-0.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm" role="radiogroup" aria-label="Plan layer">
                   {([['int', 'Interiors'], ['civ', 'Civil']] as const).map(([k, n]) => (
                     <button key={k} type="button" role="radio" aria-checked={layer === k} onClick={() => pickLayer(k)}
@@ -1072,6 +1084,15 @@ export default function PlaygroundScreen(props: Props) {
         />
       )}
 
+      {pdfOpen && (
+        <ProposalPdf ctx={ctx} tier={{ ...tier, boq }} tiers={tiers} bankMap={bankMap} specBank={specBank} termsSettings={termsSettings} paymentStructure={paymentStructure}
+          studioName={studioName || 'The studio'} userName={userName} concern={leadConcern} booked={false}
+          onSent={(via, shapedFor) => {
+            setProjectContext(prev => issueProposal(prev, { tierId: tier.id, at: Date.now(), via, days: validity.days, shapedFor, by: userName }));
+            setNote(`Sent. ${tier.name} is kept as it went; make a new version to change it.`);
+          }}
+          onClose={() => setPdfOpen(false)} />
+      )}
       {importing && (
         <ImportExcelModal project={ctx.name || 'Project'} option={tier.name || 'Option'} tierId={tier.id} boq={boq}
           ctx={{ bankMap, rules, rooms, measure, specBank }} bank={bank} floors={floors} isOwner={!!isOwner} seesMargins={seesMargins} newId={newId}

@@ -38,6 +38,12 @@ vi.mock('../../services/materialSpecsService', () => ({
   saveMaterialSpecs: vi.fn(async () => undefined),
 }));
 
+const pdfMock = { save: vi.fn(), built: 0 };
+vi.mock('../../lib/proposalPdf', async (orig) => ({
+  ...(await orig() as any),
+  buildProposalPdf: vi.fn(async () => { pdfMock.built++; return { save: pdfMock.save, output: () => new Blob(['%PDF']) }; }),
+}));
+
 import StudioDashboard from '../../components/StudioDashboard';
 import { stageStats } from '../../components/playground/PlanStage';
 import { setFiguresHidden } from '../../lib/figuresPrivacy';
@@ -1337,5 +1343,70 @@ describe('a signed BOQ revised on the plan (PR R2)', () => {
     expect(c.approvedTierId).toBe('tv2');
     expect(c.scopeRevisions[0].status).toBe('applied');
     expect(screen.getByText(/Revision 1 applied: it is the contract in force/)).toBeTruthy();
+  });
+});
+
+describe('The first proposal (PR P)', () => {
+  const dialog = () => screen.getByRole('dialog', { name: 'First proposal PDF preview' });
+  const num = (t: string | null | undefined) => Number(String(t).replace(/[^0-9]/g, ''));
+
+  it('opens from the bar: the work as Money prices it, the client pays as the Deal lens says, no cost, markup or drawing', async () => {
+    let ctx: any = null;
+    render(<Harness tier={{ ...PG, boq: [...baseBoq(), placedWardrobe] }} probeCtx={c => { ctx = c; }} />);
+    lens('Deal');
+    fireEvent.click(screen.getByRole('button', { name: 'Add the offer off a part' }));
+    const pays = document.querySelector('[data-deal-pays]')!.textContent;
+    fireEvent.click(screen.getByRole('button', { name: /Proposal PDF/ }));
+    const d = dialog();
+    const { playgroundTierSummary } = await import('../../lib/playground/versions');
+    const t: any = { id: 't1', boq: [...baseBoq(), placedWardrobe], ...PG };
+    expect(num(d.querySelector('[data-pdf-work]')!.textContent)).toBe(playgroundTierSummary(t, new Map(bank.map(b => [b.id, b])), ctx).totalSell);
+    expect(d.querySelector('[data-pdf-pays]')!.textContent).toBe(pays);
+    expect(within(d).getByText('5% off carpentry')).toBeTruthy();
+    expect(d.querySelectorAll('[data-pdf-page]').length).toBeGreaterThanOrEqual(7);
+    expect(d.textContent).not.toMatch(/markup|margin/i);
+    // The drawing gate: no piece and no plan drawing on any page.
+    expect(d.querySelector('[data-piece]')).toBeNull();
+    expect(within(d).queryByRole('application')).toBeNull();
+    // Annexure A last, with the validity.
+    const pages = [...d.querySelectorAll('[data-pdf-page]')];
+    expect(pages.at(-1)!.textContent).toMatch(/This proposal is valid for 15 days/);
+  });
+
+  it('shaped for the overall budget, the investment comes straight after the cover', () => {
+    render(<Harness tier={PG} />);
+    fireEvent.click(screen.getByRole('button', { name: /Proposal PDF/ }));
+    const second = () => dialog().querySelectorAll('[data-pdf-page]')[1].textContent;
+    expect(second()).toMatch(/From this proposal to your keys/);
+    fireEvent.change(within(dialog()).getByLabelText(/Shaped for/), { target: { value: 'Overall Budget' } });
+    expect(second()).toMatch(/Your investment/i);
+    expect(second()).toMatch(/Your investment₹/);
+  });
+
+  it('Send on WhatsApp records the proposal on the project, and the sent version is kept as it went', async () => {
+    let ctx: any = null;
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    render(<Harness tier={PG} probeCtx={c => { ctx = c; }} />);
+    fireEvent.click(screen.getByRole('button', { name: /Proposal PDF/ }));
+    await act(async () => { fireEvent.click(within(dialog()).getByRole('button', { name: 'Send on WhatsApp' })); });
+    expect(pdfMock.save).toHaveBeenCalled();
+    expect(open.mock.calls[0][0]).toMatch(/^https:\/\/wa\.me\/\?text=/);
+    expect(ctx.proposal).toMatchObject({ tierId: 't1', validDays: 15, shapedFor: 'Itemized Costs' });
+    expect(ctx.proposal.validUntil - ctx.proposal.issuedAt).toBe(15 * 864e5);
+    expect(within(dialog()).getByText(/^Sent /)).toBeTruthy();
+    fireEvent.click(within(dialog()).getByRole('button', { name: 'Close' }));
+    expect(screen.getAllByText(/kept as it went/).length).toBeGreaterThan(0);
+    lens('Deal');
+    const why = screen.getByRole('note', { name: 'Why the deal is read-only' });
+    expect(why.textContent).toMatch(/went to the client/);
+    expect(within(why).getByRole('button', { name: 'New version' })).toBeTruthy();
+    open.mockRestore();
+  });
+
+  it('Present to the client opens the first proposal while the layout is not approved', () => {
+    render(<Harness tier={PG} />);
+    lens('Deal');
+    fireEvent.click(screen.getByRole('button', { name: 'Present to the client' }));
+    expect(dialog()).toBeTruthy();
   });
 });

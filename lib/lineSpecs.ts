@@ -227,6 +227,9 @@ export function sentTierIds(ctx: Pick<ProjectContext, 'documents'> & Partial<Pro
   ((ctx as any)?.documents?.issues || []).forEach((i: any) => { const t = i?.snapshot?.tierId; if (t) out.add(String(t)); });
   const locked = lockedTierId(ctx as ProjectContext);
   if (locked) out.add(locked);
+  /* The version the first proposal went out on (PR P). */
+  const p = (ctx as any)?.proposal;
+  if (p?.issuedAt && p.tierId) out.add(String(p.tierId));
   return out;
 }
 
