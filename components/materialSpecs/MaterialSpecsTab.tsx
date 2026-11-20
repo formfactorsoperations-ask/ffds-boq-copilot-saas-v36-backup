@@ -10,6 +10,7 @@ import {
 import { recipeOf, sentTierIds } from '../../lib/lineSpecs';
 import type { MaterialSpecsState } from './useMaterialSpecs';
 import Swatch from './Swatch';
+import '../playground/playground.css';
 
 /*
   The Material specs bank, in Templates & Bank (the approved mockup's screen).
@@ -245,7 +246,7 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
             {note && <p role="status" className={`text-xs ${note.tone === 'bad' ? 'text-rose-700' : 'text-emerald-700'}`}>{note.text}</p>}
           </section>
         ) : mat && d && (
-          <section key={mat.id} className="rounded-3xl bg-white border border-slate-200 overflow-hidden xl:sticky xl:top-4 hud-panel-in">
+          <section key={mat.id} className="rounded-3xl bg-white border border-slate-200 overflow-hidden xl:sticky xl:top-4 pg-slide">
             <div className="p-5 border-b border-slate-100">
               <div className="flex items-start gap-3">
                 <Swatch mat={mat} className="w-12 h-12 rounded-xl" />

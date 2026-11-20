@@ -5,7 +5,7 @@ import type { BoqItem, Room } from '../../types';
 import { SCOPE_BUCKETS } from '../../lib/scopeBuckets';
 import { round2 } from '../../lib/playground/geometry';
 import { PieceThumb } from './pieceArt';
-import { inr, marginTone, Scrub, withCost, withMarkup, withRate, sizeWords, type LineModel } from './playgroundUi';
+import { inr, marginTone, Scrub, withCost, withMarkup, withRate, sizeWords, usePrinted, type LineModel } from './playgroundUi';
 import type { ShareRow } from './LiveBoq';
 import { currentVersion, type MaterialSpecsBank } from '../../lib/materialSpecs';
 import type { Changes } from '../../lib/playground/changes';
@@ -85,6 +85,7 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
   const total = models.filter(m => m.billable && !m.separate).reduce((a, m) => a + m.amount, 0);
 
   const th = 'px-2 py-2 bg-white sticky top-0 z-[2]';
+  const printed = usePrinted();
   const row = (m: LineModel) => {
     const l = m.line;
     // A civil line is measured from its room on the plan (PR C): its quantity is not typed over here.
@@ -94,7 +95,7 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
     const isOpen = open.has(l.id);
     return (
       <React.Fragment key={l.id}>
-        <tr onClick={() => onSel(l.id)} className={`border-t border-slate-100 cursor-pointer ${sel === l.id ? 'bg-[#3D52A0]/[0.07]' : 'bg-white hover:bg-slate-50'}`}>
+        <tr onClick={() => onSel(l.id)} className={`border-t border-slate-100 cursor-pointer ${sel === l.id ? 'bg-[#3D52A0]/[0.07]' : 'bg-white hover:bg-slate-50'}${printed(l.id)}`}>
           <td className="px-2" onClick={e => e.stopPropagation()}>
             <input type="checkbox" checked={picks.has(l.id)} disabled={readOnly} onChange={() => setPicks(p => toggle(p, l.id))} aria-label={`Pick ${m.name}`} className="w-4 h-4 accent-[#3D52A0]" />
           </td>

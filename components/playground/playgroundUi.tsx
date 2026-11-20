@@ -11,6 +11,7 @@ import { staleParts, shadeHexOf } from '../../lib/lineSpecs';
 import { artOfSpecs } from './pieceArt';
 import { basisOfUnit, readSize, formatSize } from '../../lib/boqSize';
 import { ftin } from '../../lib/playground/geometry';
+import type { Fresh } from '../../lib/playground/motion';
 
 /*
   The small parts the BOQ Playground screen is built from (the approved
@@ -249,4 +250,20 @@ export function sizeWords(m: Pick<LineModel, 'line' | 'unit' | 'draw' | 'size'>)
   if (!dims.length) return '';
   if (s.unit === 'ft') return basis === 'length' && dims.length === 1 ? `${ftin(dims[0])} long` : dims.map(ftin).join(' × ');
   return formatSize(s);
+}
+
+/* ───────────────────────────── what an edit just did (PR 7) ───────────────────────────── */
+
+/**
+ * The last edit's motion (lib/playground/motion): lines printing in, pieces
+ * dropping, a room glowing, the price change floating up. `key` changes with
+ * every edit, so the glow and the tag play again.
+ */
+export interface FreshState extends Fresh { key: number; tag: { id: string; text: string; up: boolean } | null }
+export const FreshContext = React.createContext<FreshState | null>(null);
+
+/** ' pg-print' on a line the last edit added, for the Live BOQ, the Sheet and the Rooms. */
+export function usePrinted(): (id: string) => string {
+  const fresh = React.useContext(FreshContext);
+  return (id: string) => (fresh?.flash.has(id) ? ' pg-print' : '');
 }

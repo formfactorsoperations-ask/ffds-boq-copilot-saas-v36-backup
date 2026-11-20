@@ -31,7 +31,9 @@ import QuickBuildModal, { type QuickBuildChoice } from './QuickBuildModal';
 import { sheetOf } from '../../lib/playground/planSheet';
 import { newPieceLine, needsPlace, pushHistory, undoHistory, type History } from '../../lib/playground/board';
 import { ArtDefs } from './pieceArt';
-import { inr, Ring, lineModel, type LineModel } from './playgroundUi';
+import { inr, Ring, lineModel, type LineModel, FreshContext, type FreshState } from './playgroundUi';
+import { freshOf, popWorth, popText } from '../../lib/playground/motion';
+import './playground.css';
 import PlanStage from './PlanStage';
 import Catalogue from './Catalogue';
 import RoomsLens from './RoomsLens';
@@ -225,6 +227,9 @@ export default function PlaygroundScreen(props: Props) {
   const [layer, setLayer] = useState<'int' | 'civ'>('int');
   const [civilTool, setCivilTool] = useState<CivilTool | null>(null);
   const [fitSignal, setFitSignal] = useState(0);
+  /* What the last edit did, played once (PR 7, lib/playground/motion): the BOQ and the price before it. */
+  const [fresh, setFresh] = useState<FreshState | null>(null);
+  const pending = useRef<{ boq: BoqItem[]; sell: number } | null>(null);
   const [fullGrid, setFullGrid] = useState(false);
   const [recipeItemId, setRecipeItemId] = useState<string | null>(null);
   /* The first-proposal PDF (PR P), over the screen; and once the layout is approved, the meeting view. */
@@ -353,9 +358,26 @@ export default function PlaygroundScreen(props: Props) {
   const commit = useCallback((next: BoqItem[], msg?: string) => {
     if (readOnly) return;
     setHist(h => pushHistory(h, boq));
+    pending.current = { boq, sell: totals.sell };
     onBoq(next);
     if (msg) setNote(msg);
-  }, [boq, onBoq, readOnly]);
+  }, [boq, onBoq, readOnly, totals.sell]);
+  /* Once the edit is in: new lines print in, new pieces drop, the room glows, the price change floats up. Undo shows nothing. */
+  useEffect(() => {
+    const p = pending.current;
+    if (!p || p.boq === boq) return;
+    pending.current = null;
+    const f = freshOf(p.boq, boq);
+    const d = totals.sell - p.sell;
+    const tag = f.pop && popWorth(d) && !hideFigures ? { id: f.pop, text: popText(d), up: d > 0 } : null;
+    if (!f.flash.size && !f.drop.size && !f.glow && !tag) return;
+    setFresh(prev => ({ ...f, tag, key: (prev?.key || 0) + 1 }));
+  }, [boq]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!fresh) return;
+    const t = setTimeout(() => setFresh(null), 1700);
+    return () => clearTimeout(t);
+  }, [fresh]);
   const replace = (line: BoqItem, msg?: string) => commit(boq.map(l => (l.id === line.id ? line : l)), msg);
   const replaceMany = (lines: BoqItem[]) => { const m = new Map(lines.map(l => [l.id, l])); commit(boq.map(l => m.get(l.id) || l)); };
   const remove = (ids: string[]) => { const s = new Set(ids); commit(boq.filter(l => !s.has(l.id)), `${ids.length === 1 ? 'Line' : `${ids.length} lines`} deleted. Undo puts ${ids.length === 1 ? 'it' : 'them'} back.`); if (sel && s.has(sel)) setSel(null); };
@@ -736,6 +758,7 @@ export default function PlaygroundScreen(props: Props) {
   const barBtn = 'px-2.5 py-1.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 whitespace-nowrap';
 
   return (
+    <FreshContext.Provider value={fresh}>
     <div onKeyDown={onKey} tabIndex={-1}
       className={`outline-none ${full ? 'fixed inset-0 z-[150] bg-slate-50 p-3 flex flex-col gap-3' : 'flex flex-col gap-3 mb-6'}`}
       style={full ? undefined : { height: wide ? 'calc(100vh - 150px)' : undefined, minHeight: wide ? 640 : undefined }}>
@@ -929,7 +952,7 @@ export default function PlaygroundScreen(props: Props) {
                   readOnly={readOnly} sel={sel} onSel={pickLine} selRoom={selRoom} onSelRoom={pickRoom}
                   commit={commit} newId={newId} libOpen={showLib} hideFigures={hideFigures} fitSignal={fitSignal} prepareNew={prepareNew}
                   onRooms={resizeRooms}
-                  layer={layer} civilTool={civilTool} onCivilRoom={civilRoom} onCivilWall={civilWall} onNote={setNote} onDropKit={(id, room) => openKit(id, room)} changes={changes}
+                  layer={layer} civilTool={civilTool} onCivilRoom={civilRoom} onCivilWall={civilWall} onNote={setNote} onDropKit={(id, room) => openKit(id, room)} changes={changes} fresh={fresh}
                 />
               ) : (
                 <div className="absolute inset-0 grid place-items-center p-6" style={{ paddingLeft: showLib && wide ? 260 : undefined }}>
@@ -997,7 +1020,7 @@ export default function PlaygroundScreen(props: Props) {
             )}
 
             {showLib && (
-              <div className="absolute left-2 top-2 bottom-2 z-20 w-[232px] flex hud-panel-in">
+              <div className="absolute left-2 top-2 bottom-2 z-20 w-[232px] flex pg-slide">
                 <Catalogue bank={bank} readOnly={readOnly} onClose={() => setLibOpen(false)} onAdd={it => addToRoom(it, libTarget)} addLabel={`to ${libTarget}`}
                   kits={kits} bankMap={bankMap} hideFigures={hideFigures} kitEstimate={kitCardEstimate} onKit={id => openKit(id)}
                   places={supplyPlaces} onAddSupplied={addSupplied}
@@ -1167,5 +1190,6 @@ export default function PlaygroundScreen(props: Props) {
         </div>
       )}
     </div>
+    </FreshContext.Provider>
   );
 }

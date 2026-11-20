@@ -1071,6 +1071,11 @@ describe('room kits (PR K)', () => {
     expect(boq.filter((l: any) => l.bankId === 'b56')).toHaveLength(1);
     expect(boq.find((l: any) => l.bankId === 'b25').place).toBeTruthy();
     expect(screen.getByText('Bathroom renovation (full): 9 lines in Bath 1 and Bath 2, sized from each room. Debris removal added once, across the flat.')).toBeTruthy();
+    // PR 7: every line it added prints into the Live BOQ, its piece drops into place and the first room glows; a kit floats no price.
+    expect(document.querySelectorAll('.pg-print').length).toBeGreaterThanOrEqual(boq.length);
+    expect(document.querySelector(`[data-piece="${boq.find((l: any) => l.bankId === 'b25').id}"] .pg-drop`)).toBeTruthy();
+    expect(document.querySelector('.pg-glow')?.getAttribute('data-glow')).toBe('Bath 1');
+    expect(document.querySelector('[data-price-tag]')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Undo/ }));
     expect(latest[0].boq).toHaveLength(0);
   });
@@ -1475,5 +1480,65 @@ describe('The meeting view (PR P)', () => {
     const was = latest[0].boq[0].materialSpecs, now = latest[1].boq[0].materialSpecs;
     expect(JSON.stringify(now)).not.toBe(JSON.stringify(was));
     expect(Object.values(now).map((x: any) => x.id)).toContain(specStore.bank.materials.find((m: any) => m.name === pick.getAttribute('title'))!.id);
+  });
+});
+
+describe('motion (PR 7, as the approved mockup)', () => {
+  const printed = () => [...document.querySelectorAll('.pg-print')].map(e => e.textContent || '');
+  const tag = () => document.querySelector('[data-price-tag]');
+  const wait = (ms: number) => act(async () => { await new Promise(r => setTimeout(r, ms)); });
+
+  it('a piece added: it drops onto the plan, the room glows, the price floats up and its line prints into the lenses; then it all stops', async () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Sliding wardrobe to Bedroom' }));
+    const line = latest[0].boq[0], id = line.id;
+    expect(piece(id).querySelector('.pg-drop')).toBeTruthy();
+    expect(document.querySelector('.pg-glow')?.getAttribute('data-glow')).toBe('Bedroom');
+    // The tag says what the piece did to the price: on an empty BOQ, its own amount, rounded up to ₹100.
+    expect(tag()?.textContent).toBe(`+₹${ceilTo(line.qty * 1680, 100).toLocaleString('en-IN')}`);
+    expect(tag()?.className).toContain('bg-emerald-600');
+    lens('Rooms');
+    expect(printed().some(t => t.includes('Sliding wardrobe'))).toBe(true);
+    lens('Plan');
+    await wait(1800);
+    expect(printed()).toEqual([]);
+    expect(tag()).toBeNull();
+    expect(document.querySelector('.pg-glow')).toBeNull();
+    expect(piece(id).querySelector('.pg-drop')).toBeNull();
+  });
+
+  it('pulling a handle floats the change in price from the piece; moving it within its room shows nothing', async () => {
+    render(<Harness tier={{ ...PG, boq: [placedWardrobe] }} />);
+    fireEvent.pointerDown(piece('p1'), { ...at(3.12, 1.12), pointerId: 1 });
+    fireEvent.pointerUp(stage(), { ...at(3.12, 1.12), pointerId: 1 });
+    await drag(screen.getByLabelText('Resize from the right'), [6.12, 1.12], [8.12, 1.12]);
+    // 42 → 56 sq ft at ₹1,680 a sq ft (₹1,400 at 20% margin), each rounded up to ₹100.
+    expect(tag()?.textContent).toBe(`+₹${(ceilTo(56 * 1680, 100) - ceilTo(42 * 1680, 100)).toLocaleString('en-IN')}`);
+    await wait(1800);
+    await drag(piece('p1'), [4, 1.12], [5, 4], { altKey: true });
+    expect(tag()).toBeNull();
+    expect(document.querySelector('.pg-glow')).toBeNull();
+  });
+
+  it('a piece moved into another room makes that room glow', async () => {
+    render(<Harness tier={{ ...PG, boq: [placedWardrobe] }} />);
+    await drag(piece('p1'), [3.12, 1.12], [17, 1.5]);
+    expect(document.querySelector('.pg-glow')?.getAttribute('data-glow')).toBe('Kitchen');
+  });
+
+  it('a line added in the Sheet prints in there too; Undo shows nothing', async () => {
+    render(<Harness tier={PG} />);
+    lens('Sheet');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Pick Wall paint' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Delete/ }));
+    await wait(1800);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(screen.getAllByText('Wall paint').length).toBeGreaterThan(0);
+    expect(printed()).toEqual([]);
+    // Duplicated from the inspector, the copy prints into the Sheet.
+    fireEvent.click(screen.getAllByText('Kitchen counter')[0]);
+    fireEvent.click(within(inspector()).getByRole('button', { name: /Duplicate/ }));
+    expect(document.querySelectorAll('tr.pg-print').length).toBe(1);
   });
 });

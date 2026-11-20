@@ -10,6 +10,7 @@ import { recipeOf, suggestedRecipeId, specsFromRecipe, composeWords } from '../.
 import { PieceThumb } from '../playground/pieceArt';
 import { inr } from '../playground/playgroundUi';
 import Swatch from './Swatch';
+import '../playground/playground.css';
 
 /*
   An Item Bank item's drawer (the approved mockup's), opened from the Item bank,
@@ -72,7 +73,7 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
   return (
     <div className="fixed inset-0 z-[300]">
       <div className="absolute inset-0 phd-scrim bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
-      <aside className="absolute right-0 top-0 bottom-0 w-full max-w-[780px] bg-white shadow-2xl flex flex-col hud-panel-in" role="dialog" aria-modal="true" aria-labelledby="recipe-drawer-title">
+      <aside className="absolute right-0 top-0 bottom-0 w-full max-w-[780px] bg-white shadow-2xl flex flex-col pg-slide" role="dialog" aria-modal="true" aria-labelledby="recipe-drawer-title">
         <div className="px-6 pt-5 pb-4 border-b border-slate-100 flex items-start gap-3">
           {draw && <span className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden shrink-0"><PieceThumb kind={draw.kind} w={draw.w} d={draw.d} words={item.specs} className="w-14 h-14" /></span>}
           <div className="min-w-0 flex-1">
