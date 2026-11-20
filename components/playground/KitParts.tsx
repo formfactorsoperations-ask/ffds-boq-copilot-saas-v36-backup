@@ -31,7 +31,7 @@ export function KitLibrary({ kits, bankMap, readOnly, hideFigures, estimate, onA
   onApply: (kitId: string) => void;
 }) {
   return (
-    <div className="flex-1 overflow-auto p-3 space-y-2">
+    <div className="hud-swap flex-1 overflow-auto p-3 space-y-2">
       {kits.map((k, i) => {
         const civ = kitHasCivil(k, bankMap);
         const Icon = civ ? HardHat : Boxes;
@@ -39,10 +39,10 @@ export function KitLibrary({ kits, bankMap, readOnly, hideFigures, estimate, onA
         return (
           <div key={k.id} draggable={!readOnly} data-kit={k.id}
             onDragStart={e => { e.dataTransfer.setData('text/plain', `${KIT_DRAG}${k.id}`); e.dataTransfer.setData(KIT_TYPE, k.id); e.dataTransfer.effectAllowed = 'copy'; }}
-            className={`hud-row-in rounded-xl border border-slate-200 bg-white p-2.5 ${readOnly ? '' : 'cursor-grab hover:border-[#3D52A0]/40 hover:shadow-md'}`}
+            className={`group hud-row-in rounded-xl border border-slate-200 bg-white p-2.5 transition-[box-shadow,border-color,scale] duration-200 ease-out ${readOnly ? '' : 'phd-lift cursor-grab active:cursor-grabbing hover:border-[#3D52A0]/40 hover:shadow-md motion-safe:active:scale-[0.98]'}`}
             style={{ animationDelay: `${Math.min(i, 14) * 30}ms` }}>
             <div className="flex items-start gap-2">
-              <span className={`w-8 h-8 rounded-lg grid place-items-center shrink-0 ${civ ? 'bg-amber-50 text-amber-700' : 'bg-[#3D52A0]/10 text-[#3D52A0]'}`}><Icon className="w-4 h-4" aria-hidden /></span>
+              <span className={`w-8 h-8 rounded-lg grid place-items-center shrink-0 transition-transform duration-300 motion-safe:group-hover:-rotate-6 motion-safe:group-hover:scale-110 ${civ ? 'bg-amber-50 text-amber-700' : 'bg-[#3D52A0]/10 text-[#3D52A0]'}`}><Icon className="w-4 h-4" aria-hidden /></span>
               <div className="min-w-0 flex-1">
                 <div className="text-xs font-bold text-slate-800 leading-tight">{k.name}</div>
                 <div className="text-[10px] text-slate-500">{k.items.length} item{k.items.length === 1 ? '' : 's'} · {kitKind(k, bankMap)}</div>
@@ -53,7 +53,7 @@ export function KitLibrary({ kits, bankMap, readOnly, hideFigures, estimate, onA
               <span className="text-[10px] font-bold text-slate-500 tabular-nums truncate">{est && est.amount > 0 ? `≈ ${lakh(est.amount)} in the ${est.room}` : ''}</span>
               {!readOnly && (
                 <button type="button" onClick={() => onApply(k.id)} aria-label={`Apply ${k.name}`}
-                  className="shrink-0 px-2 py-1 rounded-lg text-[11px] font-bold bg-[#3D52A0] text-white hover:bg-[#334486]">Apply</button>
+                  className="shrink-0 px-2 py-1 rounded-lg text-[11px] font-bold bg-[#3D52A0] text-white hover:bg-[#334486] transition-all duration-150 motion-safe:hover:scale-105 motion-safe:active:scale-95">Apply</button>
               )}
             </div>
           </div>

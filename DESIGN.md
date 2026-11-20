@@ -109,6 +109,18 @@ Use only the motion classes that already exist; do not write new keyframes.
 - Modals use `phd-scrim` and `phd-pop`. Small hover lifts use `phd-lift`.
 - Reduced motion is already handled in the CSS; do not add motion that bypasses it.
 
+### Playground library motion (approved 20 Nov 2026)
+
+The owner asked for the BOQ Playground's design library (`components/playground/Catalogue.tsx`,
+`KitParts.tsx`, `SupplyParts.tsx`) to feel fluid, with the mockup's hover motion:
+- Tiles and cards lift with `phd-lift` and take `hover:shadow-md` and a brand border; a click presses
+  them in (`active:scale-[0.98]`); a tile being dragged fades to half and shrinks a little.
+- A piece's picture gives the mockup's small wiggle on hover (−7° to 7°, 420 ms), with framer-motion
+  (`LibTile`), not a new keyframe. A kit's icon tips and grows a little on hover (a transition).
+- Add and Apply buttons grow a little on hover and press in on click.
+- Tabs change with `hud-swap`; tiles arrive with `hud-row-in`, staggered.
+- Everything stops under `prefers-reduced-motion` (`useReducedMotion`, `motion-safe:`, `phd-lift`'s own rule).
+
 ## Copy
 
 Sentence case. Write to the person using the screen, in the studio's own words (clients, projects,

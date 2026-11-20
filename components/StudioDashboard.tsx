@@ -15,7 +15,7 @@ import { useMaterialSpecs } from './materialSpecs/useMaterialSpecs';
 import { canEditMaterialSpecs } from '../lib/materialSpecs';
 import { withRecipeSpecs, gradeOf } from '../lib/lineSpecs';
 import { isPlaygroundTier } from '../lib/playground/pricing';
-import { makePlaygroundVersion } from '../lib/playground/versions';
+import { makePlaygroundVersion, nextVersionOf, versionPlace } from '../lib/playground/versions';
 import { contextWithTierCopied } from '../lib/specOverrides';
 import NumberField from './NumberField';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -527,6 +527,18 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
     setEditNotice(`A Playground version of ${src.name} is ready. The Classic version is kept as it was.`);
   };
 
+  /* The option's next version (PR R): this one is kept as it was, the copy opens to edit. */
+  const handleNewPlaygroundVersion = () => {
+    const src = tiers.find(t => t.id === activeTierId);
+    if (!src) return;
+    const copy = nextVersionOf(src, generateId(), Date.now());
+    const n = (versionPlace(tiers, src.id)?.versions.length || 1) + 1;
+    setTiers(prev => [...prev, copy]);
+    setProjectContext(prev => contextWithTierCopied(prev, src, copy.id));
+    onSelectTier?.(copy.id);
+    setEditNotice(`v${n} of ${src.name} is ready to edit. v${n - 1} is kept as it was.`);
+  };
+
   const handleOpenAddModal = (roomName: string) => {
       setActiveRoomId(roomName);
       setIsModalOpen(true);
@@ -827,6 +839,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               newId={generateId}
               onSelectTier={onSelectTier}
               onMakePlaygroundVersion={handleMakePlaygroundVersion}
+              onNewVersion={handleNewPlaygroundVersion}
               onSave={handleManualSave}
               saveState={saveState}
               onImport={() => setIsImportModalOpen(true)}

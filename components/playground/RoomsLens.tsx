@@ -7,6 +7,7 @@ import { boardPieces } from '../../lib/playground/pieces';
 import { PieceArt, PieceThumb } from './pieceArt';
 import { inr, lakh, marginTone, avgMarkup, setAvgMarkup, Scrub, type LineModel } from './playgroundUi';
 import type { ShareRow } from './LiveBoq';
+import { roomDelta, type Changes } from '../../lib/playground/changes';
 
 /*
   The Rooms lens (was Cards): a card per room with the room drawn small and its
@@ -15,7 +16,7 @@ import type { ShareRow } from './LiveBoq';
   (Civil, Functional, Others) follow as cards without a drawing.
 */
 
-export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, sel, selRoom, readOnly, seesMargins, hideFigures, floor, query, onSel, onRoom, onAdd, onShowOnPlan, onDropItem, onReplaceMany }: {
+export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, sel, selRoom, readOnly, seesMargins, hideFigures, floor, query, onSel, onRoom, onAdd, onShowOnPlan, onDropItem, onReplaceMany, changes, baseName }: {
   rooms: Room[];
   models: LineModel[];
   shares: Map<string, ShareRow[]>;
@@ -33,6 +34,9 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
   onAdd: (room: string) => void;
   onShowOnPlan: (room: string) => void;
   onDropItem: (itemId: string, room: string) => void;
+  /** Show changes since the version before (PR R): what each room changed by. */
+  changes?: Changes | null;
+  baseName?: string;
   onReplaceMany: (lines: BoqItem[]) => void;
 }) {
   const realNames = rooms.map(r => r.name);
@@ -73,6 +77,10 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
                 <div className="text-[11px] text-slate-500 tabular-nums">
                   {room?.plan ? `${ftin(room.plan.w)} × ${ftin(room.plan.h)} · ${Math.round(room.plan.w * room.plan.h)} sq ft` : room ? (Number(room.size) ? `${Math.round(Number(room.size))} sq ft` : 'Not on the plan yet') : 'Lines for the whole flat'}
                 </div>
+                {changes && !hideFigures && (() => {
+                  const v = roomDelta(changes, name, models.map(m => m.line));
+                  return Math.abs(v) >= 1 ? <div className={`mt-0.5 text-[10px] font-bold tabular-nums ${v > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{v > 0 ? '+' : '−'}{inr(Math.abs(v))} vs {baseName}</div> : null;
+                })()}
               </div>
               <div className="text-right shrink-0">
                 {!all.length && !total ? <div className="text-sm font-bold text-slate-400">Empty</div> : <>

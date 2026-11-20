@@ -34,11 +34,11 @@ export function SupplyLibrary({ items, rooms, dest, readOnly, hideFigures, onDes
           </select>
         </div>
       </div>
-      <div className="flex-1 overflow-auto p-3 space-y-2">
+      <div className="hud-swap flex-1 overflow-auto p-3 space-y-2">
         {items.map((it, i) => {
           const s = supplyOf(it)!;
           return (
-            <div key={it.id} data-supply-item={it.id} className="hud-row-in rounded-xl border border-slate-200 bg-white p-2.5" style={{ animationDelay: `${Math.min(i, 14) * 30}ms` }}>
+            <div key={it.id} data-supply-item={it.id} className="hud-row-in rounded-xl border border-slate-200 bg-white p-2.5 phd-lift transition-[box-shadow,border-color] duration-200 ease-out hover:border-[#3D52A0]/40 hover:shadow-md" style={{ animationDelay: `${Math.min(i, 14) * 30}ms` }}>
               <div className="text-xs font-bold text-slate-800 leading-tight">{it.name}</div>
               {it.specs && <div className="text-[10px] text-slate-500 mt-0.5 line-clamp-2">{it.specs}</div>}
               <div className="mt-1.5 flex items-center justify-between gap-2">
@@ -46,7 +46,7 @@ export function SupplyLibrary({ items, rooms, dest, readOnly, hideFigures, onDes
                 <span className="text-[10px] font-bold text-slate-500 tabular-nums">{s === 'actuals' && !hideFigures ? `≈ ${inr(unitEstimate(it))} est.` : ''}</span>
                 {!readOnly && (
                   <button type="button" onClick={() => onAdd(it)} aria-label={`Add ${it.name} to ${dest}`}
-                    className="shrink-0 px-2 py-1 rounded-lg text-[11px] font-bold bg-[#3D52A0] text-white hover:bg-[#334486]">Add</button>
+                    className="shrink-0 px-2 py-1 rounded-lg text-[11px] font-bold bg-[#3D52A0] text-white hover:bg-[#334486] transition-all duration-150 motion-safe:hover:scale-105 motion-safe:active:scale-95">Add</button>
                 )}
               </div>
             </div>

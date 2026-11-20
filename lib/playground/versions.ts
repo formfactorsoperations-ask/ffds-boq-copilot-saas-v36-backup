@@ -19,6 +19,7 @@ import { PLAYGROUND_PRICING, isPlaygroundTier, playgroundTotals, designFeeForTie
 import { byRoomQty, withByRoomQty, type MeasureContext } from './rooms';
 import { withCivilQty } from './civil';
 import { isScopeBucket } from '../scopeBuckets';
+import { optionChains, chainOf, latestOf, versionNo, previousVersion } from '../optionChains';
 
 export type BoqFormat = 'playground' | 'classic';
 
@@ -162,4 +163,38 @@ export function playgroundTierSummary(
     blendedGm: totalRevenue > 0 ? ((execProfit + designFee) / totalRevenue) * 100 : 0,
     asActualsTotal: t.asActuals,
   };
+}
+
+/* ───────────────────────────── versions of an option (PR R) ───────────────────────────── */
+
+export interface VersionPlace {
+  /** The option's versions, oldest first. */
+  versions: ProposalTier[];
+  /** This tier's number in them, from 1. */
+  n: number;
+  /** The version it came from, if any: what "Show changes since" compares against. */
+  previous?: ProposalTier;
+  /** The newest version, the one being worked on. */
+  latest: ProposalTier;
+  /** A newer version exists: this one is kept as it was. */
+  superseded: boolean;
+}
+
+/** Where a tier sits among its option's versions (lib/optionChains). */
+export function versionPlace(tiers: ProposalTier[], tierId: string): VersionPlace | null {
+  const chain = chainOf(optionChains(tiers), tierId);
+  const tier = (tiers || []).find(t => t.id === tierId);
+  if (!chain || !tier) return null;
+  const latest = latestOf(chain);
+  return { versions: chain.versions, n: versionNo(chain, tierId), previous: previousVersion(chain, tier), latest, superseded: latest.id !== tierId };
+}
+
+/**
+ * An option's next version, as Pricing & Tiers makes it: a deep copy, a new
+ * draft, the same name, linked to the one it came from (which stays as it was).
+ */
+export function nextVersionOf(src: ProposalTier, id: string, at: number): ProposalTier {
+  const copy: ProposalTier = { ...JSON.parse(JSON.stringify(src)), id, timestamp: at, lifecycleTag: 'Draft', parentTierId: src.id, name: src.name };
+  delete (copy as { approval?: unknown }).approval;
+  return copy;
 }
