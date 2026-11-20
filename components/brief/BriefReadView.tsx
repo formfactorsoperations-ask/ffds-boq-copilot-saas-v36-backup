@@ -350,7 +350,7 @@ export default function BriefReadView({ projectContext: ctx, setProjectContext, 
               )
             ) : (
               <EmptyState icon={MapIcon} title="No floor plan from the client yet"
-                text="Ask the client for it. The studio does not go ahead without the client’s floor plan. An image or a PDF." />
+                text="Ask the client for it, an image or a PDF. Options are not made until it is here." />
             )}
             {plan && (
               <div className="mt-4 flex flex-wrap items-center gap-3">

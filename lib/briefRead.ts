@@ -116,3 +116,13 @@ export function roomsArea(ctx: Partial<ProjectContext>): { count: number; sqft: 
     area: Number(ctx.area) || 0,
   };
 }
+
+/**
+ * Options wait for the client's floor plan (owner, 20 Nov 2026): no BOQ option
+ * is made, by the setup wizard or by Pricing & Tiers, until the plan is on the
+ * project. A design-only or PMC project makes no BOQ options, so it is not held.
+ */
+export const OPTIONS_NEED_PLAN = 'Upload the client’s floor plan first: options are made on it.';
+export function optionsWaitForPlan(ctx: Partial<ProjectContext>, feeOnly: boolean): boolean {
+  return !feeOnly && !clientPlanOf(ctx);
+}

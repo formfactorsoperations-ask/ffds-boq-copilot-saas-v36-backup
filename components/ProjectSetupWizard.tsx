@@ -9,6 +9,8 @@ import ProjectContextCard from './ProjectContextCard';
 import { isAiAvailable, generateProjectTimeline, generateMaterialMoodBoard, generateTieredBoqPackages } from '../services/geminiService';
 import { readPlanOntoSheet } from '../services/planRooms';
 import { asNewPlaygroundOption } from '../lib/playground/versions';
+import { optionsWaitForPlan, OPTIONS_NEED_PLAN } from '../lib/briefRead';
+import { planImageFromFile } from '../services/planImage';
 import { buildBankMap } from '../lib/boqPricing';
 import { PLAYGROUND_PRICING } from '../lib/playground/pricing';
 import { id as generateId } from '../lib/utils';
@@ -70,6 +72,8 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
   const [selectedStrategy, setSelectedStrategy] = useState<AIStrategy>('balanced');
   
   const isContextComplete = (projectContext.rooms || []).length > 0 && projectContext.area > 0;
+  /* No options without the client's floor plan on the project (lib/briefRead optionsWaitForPlan). */
+  const waitsForPlan = optionsWaitForPlan(projectContext, isFeeOnly(engagementOf(projectContext)));
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0]) return;
@@ -78,6 +82,8 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       // Shrunk before it goes anywhere: a 4000px plan costs the studio upload
       // time and the client load time, and nothing here reads it at that size.
       const base64String = await downscalePlanToBase64(file);
+      /* What the AI reads and the preview shows: the image, or page 1 of a PDF drawn as one. The PDF itself is what is stored. */
+      const image = file.type === 'application/pdf' ? await planImageFromFile(file) : base64String;
 
       /*
         The bytes stay in component state and the document gets a URL.
@@ -87,7 +93,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
         `floorplanImage` a plan was 200-270KB of a 1 MiB document, and once the
         wizard is done nothing displays it again.
       */
-      setPlanBase64(base64String);
+      setPlanBase64(image);
       setPlanUploadError(null);
       setProjectContext(p => ({ ...p, floorplanImage: undefined }));
 
@@ -102,11 +108,11 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
           setup, not just the stored copy.
         */
         console.error('Floor plan could not be uploaded', uploadErr);
-        setPlanUploadError('The plan could not be saved to storage. Setup can continue — room detection still works.');
+        setPlanUploadError('The plan could not be saved. Room detection still works, but options wait until the plan is saved: choose the file again.');
       }
     } catch (err) {
       console.error('Floor plan could not be read', err);
-      alert('That file could not be read. Please try another image.');
+      alert('That file could not be read. Please try another image or PDF.');
     }
   };
 
@@ -372,22 +378,25 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       {/* STEP 1: project details */}
       {step === 1 && (
         <div className="space-y-4">
-          {setupMethod === 'floorplan' && (
-            <Panel icon={Upload} title="Upload the floor plan" blurb="The area and an image of the plan. Analyse it to fill in the rooms below.">
+          {/* The plan is needed either way: options are made on it. Entering by hand only means the rooms are typed, not read. */}
+          {(setupMethod === 'floorplan' || waitsForPlan || projectContext.floorplanImageUrl) && (
+            <Panel icon={Upload} title="Upload the floor plan"
+              badge={waitsForPlan ? <Chip tone="warn">Needed for options</Chip> : <Chip tone="good">Saved</Chip>}
+              blurb={setupMethod === 'floorplan' ? 'The area and the client’s plan, an image or a PDF. Analyse it to fill in the rooms below.' : 'The client’s plan, an image or a PDF. Options are made on it; set the rooms by hand below, or analyse it.'}>
               <div className="flex flex-col md:flex-row gap-4 md:items-end">
                 <div className="flex-1 w-full">
                   <label htmlFor="wiz-area" className={`${LABEL} block`}>Project area (sq ft)</label>
                   <input id="wiz-area" type="number" value={projectContext.area || ''} onChange={e => setProjectContext(p => ({ ...p, area: Number(e.target.value) }))} className={`${INPUT} mt-1`} placeholder="e.g. 1200" />
                 </div>
                 <div className="flex-1 w-full">
-                  <label htmlFor="wiz-plan" className={`${LABEL} block`}>Floor plan image</label>
-                  <input id="wiz-plan" type="file" onChange={handleFileChange} accept="image/*" className={`${INPUT} mt-1 py-1.5`} />
+                  <label htmlFor="wiz-plan" className={`${LABEL} block`}>Floor plan</label>
+                  <input id="wiz-plan" type="file" onChange={handleFileChange} accept="image/*,application/pdf" className={`${INPUT} mt-1 py-1.5`} />
                 </div>
-                <Button variant="primary" icon={Sparkles} onClick={handleAnalyzeFloorplan} disabled={isLoading || !isAiAvailable()}>
+                <Button variant="primary" icon={Sparkles} onClick={handleAnalyzeFloorplan} disabled={isLoading || !isAiAvailable() || !(planBase64 || projectContext.floorplanImage)}>
                   {isLoading ? loadingMessage : 'Analyse the plan'}
                 </Button>
               </div>
-              {(planBase64 || projectContext.floorplanImage || projectContext.floorplanImageUrl) && (
+              {(planBase64 || projectContext.floorplanImage || (projectContext.floorplanImageUrl && !/\.pdf(\?|#|$)/i.test(projectContext.floorplanImageUrl))) && (
                 <img
                   src={planBase64 || projectContext.floorplanImage
                     ? `data:image/jpeg;base64,${planBase64 || projectContext.floorplanImage}`
@@ -414,9 +423,12 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                 Create the project
               </Button>
             ) : (
-              <Button variant="primary" icon={ArrowRight} onClick={() => setStep(3)} disabled={!isContextComplete}>
-                Next: generate the options
-              </Button>
+              <span className="inline-flex flex-wrap items-center justify-end gap-3">
+                {waitsForPlan && <span className="text-xs font-semibold text-amber-700" role="status">{OPTIONS_NEED_PLAN}</span>}
+                <Button variant="primary" icon={ArrowRight} onClick={() => setStep(3)} disabled={!isContextComplete || waitsForPlan}>
+                  Next: generate the options
+                </Button>
+              </span>
             )}
           </div>
         </div>
@@ -463,7 +475,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
             </div>
 
             <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button type="button" onClick={handleGenerateTemplates} disabled={isLoading} className={`${CHOICE} hud-row-in`}>
+              <button type="button" onClick={handleGenerateTemplates} disabled={isLoading || waitsForPlan} className={`${CHOICE} hud-row-in`}>
                 <span className="absolute top-4 right-4"><Chip tone="brand">Fastest · recommended</Chip></span>
                 <IconChip icon={List} />
                 <h3 className="mt-4 font-bold text-slate-800">Use the standard templates</h3>
@@ -471,7 +483,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                   Makes {proposalMode === 'single' ? 'one option (Comfort Upgrade)' : 'three tiers (Essential, Comfort, Harmony)'} straight away from the studio's standard specifications for {projectContext.config}.
                 </p>
               </button>
-              <button type="button" onClick={handleGenerateAI} disabled={isLoading || !isAiAvailable()} className={`${CHOICE} hud-row-in`} style={{ animationDelay: '40ms' }}>
+              <button type="button" onClick={handleGenerateAI} disabled={isLoading || !isAiAvailable() || waitsForPlan} className={`${CHOICE} hud-row-in`} style={{ animationDelay: '40ms' }}>
                 <span className="absolute top-4 right-4"><Chip tone="slate">Flexible · tailored</Chip></span>
                 <IconChip icon={Sparkles} />
                 <h3 className="mt-4 font-bold text-slate-800">Ask AI to build them</h3>
@@ -491,7 +503,7 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
             <Button onClick={() => setStep(1)} disabled={isLoading}>Back</Button>
-            <Button variant="quiet" icon={ArrowRight} onClick={handleStartManual} disabled={isLoading}>
+            <Button variant="quiet" icon={ArrowRight} onClick={handleStartManual} disabled={isLoading || waitsForPlan}>
               Skip, and start a manual BOQ
             </Button>
           </div>
