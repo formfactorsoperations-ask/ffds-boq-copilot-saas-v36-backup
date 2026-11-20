@@ -44,6 +44,10 @@ import RecipeDrawer from '../materialSpecs/RecipeDrawer';
 import { artOfSpecs } from './pieceArt';
 import type { MaterialSpecsBank } from '../../lib/materialSpecs';
 import { gradeOf, offersUpdates, withRecipeSpecs, updatedLine, recipeOf, specsFromRecipe } from '../../lib/lineSpecs';
+import { kitsOf, kitStartRooms, kitApply, kitAddsDebris, kitEstimate, kitFits, roomAsKit, type BundleLike, type SavedKit } from '../../lib/playground/kits';
+import { ADDON_BUNDLES } from '../../lib/standardPackages';
+import { lineAmount } from '../../lib/playground/pricing';
+import { KitModal, KIT_DRAG } from './KitParts';
 
 /*
   The BOQ Playground (the approved mockup, v14): the BOQ Editor's one tab.
@@ -115,11 +119,15 @@ interface Props {
   studioName?: string;
   /** The Owner may add an imported row's item to the Item Bank. */
   isOwner?: boolean;
+  /** The studio's Room Bundles & Kits (settings `customBundles`): the library's room kits, with the standard add-ons (PR K). */
+  kits?: BundleLike[];
+  /** A room saved to the Item Bank as a kit. */
+  onSaveKit?: (bundle: SavedKit['bundle']) => Promise<void>;
 }
 
 export default function PlaygroundScreen(props: Props) {
   const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly, currentRoles, tenantId, onBoq, newId,
-    onSelectTier, onMakePlaygroundVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner } = props;
+    onSelectTier, onMakePlaygroundVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit } = props;
   const boq = tier.boq || [];
   const seesMargins = useSeesMargins(currentRoles);
   /* Hide figures hides margins only (lib/figuresPrivacy): prices stay, and seesMargins already reads it. */
@@ -340,6 +348,45 @@ export default function PlaygroundScreen(props: Props) {
     setNote(`${items.length} civil item${items.length === 1 ? '' : 's'} added to the Item Bank at starting rates: ${items.map(i => i.name).join(', ')}. Set your own rates there.`);
   };
 
+  /* ── room kits (PR K): the Item Bank's bundles, sized from the room they land in ── */
+
+  const kits = useMemo(() => kitsOf(props.kits, ADDON_BUNDLES as BundleLike[], bankMap), [props.kits, bankMap]);
+  const kitRooms = useMemo(() => realRooms(rooms), [rooms]);
+  const [kitUi, setKitUi] = useState<{ id: string; rooms: string[]; off: Record<string, boolean> } | null>(null);
+  const openKit = (id: string, room?: string | null) => {
+    const kit = kits.find(k => k.id === id);
+    if (!kit) return;
+    if (readOnly) { setNote('This option is locked: kits cannot be added.'); return; }
+    setKitUi({ id, rooms: kitStartRooms(kit, kitRooms, room || (kit.kinds.length ? null : selRoom)), off: {} });
+  };
+  const kitOpen = kitUi ? kits.find(k => k.id === kitUi.id) || null : null;
+  const amountOf = (l: BoqItem) => lineAmount(l, bankMap, { rules, rooms, measure });
+  const applyKit = () => {
+    if (!kitUi || !kitOpen) return;
+    const r = kitApply({ kit: kitOpen, rooms: kitRooms, picked: kitUi.rooms, off: kitUi.off, boq, bank, bankMap, newId, prepare: prepareNew, ceilingHeight: Number(ctx.ceilingHeight) || undefined });
+    setKitUi(null);
+    if (!r) return;
+    commit(r.boq, r.message);
+    if (r.waiting) setTimeout(() => setNote(`${r.waiting} piece${r.waiting > 1 ? 's' : ''} found no free wall and ${r.waiting > 1 ? 'wait' : 'waits'} under Needs a place.`), 1900);
+  };
+  /** What a kit comes to in a room of its kind, for its card: the room picked, else the first of its kinds. */
+  const kitCardEstimate = (k: (typeof kits)[number]) => {
+    const room = (selRoom && kitRooms.find(r => r.name === selRoom && kitFits(k, r))) || kitRooms.find(r => (k.kinds.length ? kitFits(k, r) : r.name === libTarget));
+    return room ? { room: room.name, amount: kitEstimate(k, room, { bankMap, amount: amountOf }) } : null;
+  };
+  const saveRoomAsKit = async (room: Room) => {
+    if (!onSaveKit) return;
+    const saved = roomAsKit({ room, boq, bankMap, project: ctx.name, existing: (props.kits || []) as { name: string }[], id: `kit-${Date.now().toString(36)}` });
+    if (!saved) { setNote(`${room.name} has no Item Bank items to save as a kit.`); return; }
+    try {
+      await onSaveKit(saved.bundle);
+      const n = saved.bundle.items.length;
+      setNote(`Saved to Item Bank → Room Bundles & Kits as “${saved.bundle.name}”: ${n} item${n === 1 ? '' : 's'}, each with how it is sized (on a free wall, the floor, walls to 7′).${saved.skipped ? ` ${saved.skipped} line${saved.skipped === 1 ? '' : 's'} of this room’s own stayed out.` : ''}`);
+    } catch {
+      setNote('The kit could not be saved. Try again.');
+    }
+  };
+
   /* ── Excel (PR 6): the studio and client copies out; a studio copy or any other sheet in ── */
 
   const bookMeta = () => ({ studio: studioName || 'Studio', project: ctx.name || 'Project', option: tier.name || 'Option', tierId: tier.id, roundTo100: !!rules, at: Date.now() });
@@ -403,7 +450,7 @@ export default function PlaygroundScreen(props: Props) {
     if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
-    if (e.key === 'Escape') { if (civilTool) { setCivilTool(null); return; } setSel(null); setSelRoom(null); setMenu(null); return; }
+    if (e.key === 'Escape') { if (kitUi) { setKitUi(null); return; } if (civilTool) { setCivilTool(null); return; } setSel(null); setSelRoom(null); setMenu(null); return; }
     const line = sel ? boq.find(l => l.id === sel) : undefined;
     if (!line || readOnly || lens !== 'plan' || !line.place) return;
     const k = e.key, s = e.shiftKey ? 1 : 0.25;
@@ -473,6 +520,7 @@ export default function PlaygroundScreen(props: Props) {
       onReplace={l => replace(l)}
       civilShown={layer === 'civ'}
       onCivil={format === 'playground' ? (t => civilRoom(selRoomObj.name, t)) : undefined}
+      onSaveKit={format === 'playground' && onSaveKit ? () => saveRoomAsKit(selRoomObj) : undefined}
     /></React.Fragment>
   ) : (
     <Receipt
@@ -642,7 +690,7 @@ export default function PlaygroundScreen(props: Props) {
                   readOnly={readOnly} sel={sel} onSel={pickLine} selRoom={selRoom} onSelRoom={pickRoom}
                   commit={commit} newId={newId} libOpen={showLib} hideFigures={hideFigures} fitSignal={fitSignal} prepareNew={prepareNew}
                   onRooms={resizeRooms}
-                  layer={layer} civilTool={civilTool} onCivilRoom={civilRoom} onCivilWall={civilWall} onNote={setNote}
+                  layer={layer} civilTool={civilTool} onCivilRoom={civilRoom} onCivilWall={civilWall} onNote={setNote} onDropKit={(id, room) => openKit(id, room)}
                 />
               ) : (
                 <div className="absolute inset-0 grid place-items-center p-6" style={{ paddingLeft: showLib && wide ? 260 : undefined }}>
@@ -666,7 +714,7 @@ export default function PlaygroundScreen(props: Props) {
                     readOnly={readOnly} seesMargins={seesMargins} hideFigures={hideFigures} floor={floor} query={query}
                     onSel={pickLine} onRoom={pickRoom} onAdd={onAddFromBank}
                     onShowOnPlan={name => { setLens('plan'); pickRoom(name); setFitSignal(s => s + 1); }}
-                    onDropItem={(id, room) => { const it = bank.find(i => i.id === id); if (it) addToRoom(it, room); }}
+                    onDropItem={(id, room) => { if (id.startsWith(KIT_DRAG)) { openKit(id.slice(KIT_DRAG.length), room); return; } const it = bank.find(i => i.id === id); if (it) addToRoom(it, room); }}
                     onReplaceMany={replaceMany} />
                 )}
                 {lens === 'sheet' && fullGrid && renderFullGrid && (
@@ -696,6 +744,7 @@ export default function PlaygroundScreen(props: Props) {
             {showLib && (
               <div className="absolute left-2 top-2 bottom-2 z-20 w-[232px] flex hud-panel-in">
                 <Catalogue bank={bank} readOnly={readOnly} onClose={() => setLibOpen(false)} onAdd={it => addToRoom(it, libTarget)} addLabel={`to ${libTarget}`}
+                  kits={kits} bankMap={bankMap} hideFigures={hideFigures} kitEstimate={kitCardEstimate} onKit={id => openKit(id)}
                   artOf={specBank ? (it => { const r = recipeOf(it, specBank); return r ? artOfSpecs(specsFromRecipe(specBank, r, grade), specBank.materials) : {}; }) : undefined} />
               </div>
             )}
@@ -809,6 +858,13 @@ export default function PlaygroundScreen(props: Props) {
           own={rooms} bank={bank} boq={boq} standards={roomStandards}
           paints={!boq.some(l => l.byRoom?.basis === 'wallPaint') && !!paintingFromPlan(bank, rooms.length ? rooms : [{ name: 'x', size: 100, unit: 'sq ft' }], () => 'probe')}
           onBuild={runQuickBuild} onClose={() => setBuilding(false)} />
+      )}
+      {kitUi && kitOpen && (
+        <KitModal kit={kitOpen} rooms={kitRooms} picked={kitUi.rooms} off={kitUi.off} boq={boq} bankMap={bankMap} amount={amountOf} hideFigures={hideFigures}
+          addsDebris={kitAddsDebris(kitOpen, boq, bank, bankMap)}
+          onRoom={name => setKitUi(k => k && ({ ...k, rooms: k.rooms.includes(name) ? k.rooms.filter(r => r !== name) : [...k.rooms, name] }))}
+          onTick={(key, on) => setKitUi(k => k && ({ ...k, off: { ...k.off, [key]: !on } }))}
+          onClose={() => setKitUi(null)} onApply={applyKit} />
       )}
       {planModal && (
         <div className="fixed inset-0 z-[300] grid place-items-center p-4 phd-scrim" style={{ background: 'rgba(15,23,42,.45)' }} role="dialog" aria-modal="true" aria-label="The plan under this BOQ">

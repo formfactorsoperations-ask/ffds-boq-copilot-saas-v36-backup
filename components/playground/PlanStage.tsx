@@ -10,6 +10,7 @@ import { newPieceLine, movedLine, resizedFromEdge, type Edge } from '../../lib/p
 import { resizeRoom, edgeAt, type RoomEdge, type RoomResize } from '../../lib/playground/roomEdges';
 import { segmentFor, segLength, toolOf, type CivilTool, type Segment } from '../../lib/playground/civil';
 import { PieceArt } from './pieceArt';
+import { KIT_DRAG, KIT_TYPE } from './KitParts';
 import { inr, lakh, type LineModel } from './playgroundUi';
 
 /*
@@ -73,6 +74,8 @@ interface Props {
   onCivilWall?: (tool: 'break' | 'build', room: string, segment: Segment) => void;
   /** Says something to the person (a click outside every room, a drag too short). */
   onNote?: (msg: string) => void;
+  /** A room kit dropped on a room (PR K): its preview opens for that room. */
+  onDropKit?: (kitId: string, room: string) => void;
 }
 
 type Drag =
@@ -87,7 +90,7 @@ type Drag =
 export const stageStats = { pieceRenders: 0 };
 
 export default function PlanStage(props: Props) {
-  const { ctx, bank, bankMap, models, roomTotals, readOnly, sel, onSel, selRoom, onSelRoom, commit, newId, libOpen, hideFigures, fitSignal, prepareNew, onRooms, layer = 'int', civilTool, onCivilRoom, onCivilWall, onNote } = props;
+  const { ctx, bank, bankMap, models, roomTotals, readOnly, sel, onSel, selRoom, onSelRoom, commit, newId, libOpen, hideFigures, fitSignal, prepareNew, onRooms, layer = 'int', civilTool, onCivilRoom, onCivilWall, onNote, onDropKit } = props;
   const civ = layer === 'civ';
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
@@ -184,10 +187,29 @@ export default function PlanStage(props: Props) {
     if (!draw || !line.place) return null;
     return { id: line.id, room: line.roomId, fp: footprintOf(pieceSize(line, item, draw)), place: line.place, high: isHigh(draw), wallBacked: isWallBacked(draw) };
   };
+  /* A room kit dragged over the plan lights the room it would land in (PR K). */
+  const [kitOver, setKitOver] = useState<string | null>(null);
+  const roomUnder = (at: [number, number] | null) =>
+    at ? planRooms.find(r => at[0] >= r.plan!.x && at[0] <= r.plan!.x + r.plan!.w && at[1] >= r.plan!.y && at[1] <= r.plan!.y + r.plan!.h) || null : null;
+  const isKitDrag = (e: React.DragEvent) => Array.from(e.dataTransfer?.types || []).includes(KIT_TYPE);
+  const onDragOver = (e: React.DragEvent) => {
+    if (readOnly) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    if (isKitDrag(e)) { const r = roomUnder(pt(e))?.name || null; if (r !== kitOver) setKitOver(r); }
+  };
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    setKitOver(null);
     if (readOnly) return;
-    const item = bank.find(i => i.id === e.dataTransfer.getData('text/plain'));
+    const text = e.dataTransfer.getData('text/plain') || '';
+    if (text.startsWith(KIT_DRAG)) {
+      const room = roomUnder(pt(e));
+      if (room) onDropKit?.(text.slice(KIT_DRAG.length), room.name);
+      else onNote?.('Drop the kit inside a room.');
+      return;
+    }
+    const item = bank.find(i => i.id === text);
     const at = pt(e);
     const draw = drawOf(item);
     if (!item || !at || !draw) return;
@@ -535,7 +557,8 @@ export default function PlanStage(props: Props) {
       onPointerMove={onMove}
       onPointerUp={onUp}
       onPointerCancel={onUp}
-      onDragOver={e => { if (!readOnly) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+      onDragOver={onDragOver}
+      onDragLeave={e => { if (e.currentTarget === e.target) setKitOver(null); }}
       onDrop={onDrop}
     >
       <svg className="absolute inset-0 w-full h-full" role="application" style={civ && civilTool ? { cursor: 'crosshair' } : undefined}
@@ -558,6 +581,7 @@ export default function PlanStage(props: Props) {
               </g>
             );
           })}
+          {kitOver && (() => { const r = planRooms.find(x => x.name === kitOver); return r ? <rect x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h} fill={BRAND} fillOpacity={0.12} stroke={BRAND} strokeWidth={px(2.5)} pointerEvents="none" data-kit-over={r.name} /> : null; })()}
           {/* No drawing under the plan: the rooms' walls, drawn as a plan would draw them. */}
           {!underlay && planRooms.map(r => (
             <rect key={`w-${r.name}`} x={r.plan!.x} y={r.plan!.y} width={r.plan!.w} height={r.plan!.h} fill="none" stroke="#262626" strokeWidth={0.38} pointerEvents="none" />

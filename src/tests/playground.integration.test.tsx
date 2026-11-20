@@ -22,7 +22,8 @@ const org = { playground: true, role: 'Super Admin' };
 vi.mock('../../contexts/OrgContext', () => ({
   useOrg: () => ({ orgData: { tenantId: 'test-tenant', playground: org.playground }, currentRole: org.role, currentRoles: [org.role], currentUserAuth: { displayName: 'Priya Shah', email: 'priya@example.com' } }),
 }));
-vi.mock('../../hooks/useStudioSettings', () => ({ useStudioSettings: () => ({ settings: {}, updateSettings: vi.fn() }) }));
+const studio: { settings: any; update: any } = { settings: {}, update: null };
+vi.mock('../../hooks/useStudioSettings', () => ({ useStudioSettings: () => ({ settings: studio.settings, updateSettings: studio.update || (async () => undefined) }) }));
 vi.mock('../../services/firebaseClient', () => ({ db: null, functions: null, auth: null, storage: null }));
 vi.mock('../../services/dbService', () => ({ db: {} }));
 vi.mock('../../contexts/PageHeaderContext', () => ({ usePageHeader: () => undefined }));
@@ -114,7 +115,7 @@ const drag = async (el: Element, from: [number, number], to: [number, number], o
   fireEvent.pointerUp(stage(), { ...at(...to), pointerId: 1, ...opts });
 };
 
-beforeEach(() => { org.playground = true; org.role = 'Super Admin'; specStore.bank = null; setFiguresHidden(false); try { localStorage.clear(); } catch { /* jsdom */ } });
+beforeEach(() => { org.playground = true; org.role = 'Super Admin'; specStore.bank = null; studio.settings = {}; studio.update = null; setFiguresHidden(false); try { localStorage.clear(); } catch { /* jsdom */ } });
 afterEach(() => { cleanup(); });
 
 describe('one screen, five lenses', () => {
@@ -869,5 +870,128 @@ describe('the Civil layer (PR C)', () => {
     expect(c.adHocItems.map((i: any) => i.name)).toEqual([
       'Wall demolition, brick', 'New wall, 4.5″ brick', 'Remove existing floor tiles', 'Floor tiles, laid', 'Wall tiles to 7 ft, laid', 'Waterproofing, floor and upstand', 'Debris removal',
     ]);
+  });
+});
+
+describe('room kits (PR K)', () => {
+  const kitBank = [
+    ...bank,
+    { id: 'b52', name: 'Remove existing floor tiles', cat: 'Civil', unit: 'sq ft', specs: 'Hacking the old tiles.', materials: 10, labor: 8, margin: 25 },
+    { id: 'b53', name: 'Floor tiles, laid', cat: 'Flooring', unit: 'sq ft', specs: 'Vitrified tiles.', materials: 90, labor: 42, margin: 25 },
+    { id: 'b54', name: 'Wall tiles to 7 ft, laid', cat: 'Tiling', unit: 'sq ft', specs: 'Wall tiles.', materials: 80, labor: 40, margin: 25 },
+    { id: 'b55', name: 'Waterproofing, floor and upstand', cat: 'Civil', unit: 'sq ft', specs: 'Two coats.', materials: 30, labor: 22, margin: 25 },
+    { id: 'b56', name: 'Debris removal', cat: 'Civil', unit: 'lot', specs: 'Carting away.', materials: 9000, labor: 5400, margin: 25 },
+    { id: 'b25', name: 'Vanity unit with mirror', cat: 'Carpentry', unit: 'nos', specs: 'Vanity.', materials: 14000, labor: 4000, margin: 25 },
+  ];
+  const flat = [
+    { name: 'Bedroom', size: 120, unit: 'sq ft', plan: { x: 0, y: 0, w: 12, h: 10 } },
+    { name: 'Bath 1', size: 28, unit: 'sq ft', plan: { x: 12, y: 0, w: 4, h: 7 } },
+    { name: 'Bath 2', size: 35, unit: 'sq ft', plan: { x: 16, y: 0, w: 5, h: 7 } },
+  ];
+  const ctx0 = { name: 'Palacia – 3BHK', area: 465, rooms: flat, designFeeType: 'percentage', designFee: 10 };
+  const bathKit = { id: 'k-bath', name: 'Bathroom renovation (full)', description: '', kinds: ['toilet'], itemIds: ['b52', 'b55', 'b53', 'b54', 'b25', 'b56'],
+    items: [{ itemId: 'b52', fit: 'floorRemove' }, { itemId: 'b55', fit: 'waterproof' }, { itemId: 'b53', fit: 'floor' }, { itemId: 'b54', fit: 'walls7' }, { itemId: 'b25', fit: 'piece' }, { itemId: 'b56', fit: 'fixed' }] };
+  const oldBundle = { id: 'old', name: 'Bedroom set', description: 'Saved before kits', itemIds: ['wardrobe', 'bed'] };
+  const kitsTab = () => fireEvent.click(within(screen.getByRole('complementary', { name: 'Studio design library' })).getByRole('radio', { name: 'Kits' }));
+  const dialog = () => screen.getByRole('dialog', { name: 'Apply a room kit' });
+
+  it('a full bathroom renovation goes into both bathrooms in one step, each sized from its room; one undo takes it out', () => {
+    studio.settings = { customBundles: [bathKit, oldBundle] };
+    let latest: any[] = [];
+    render(<Harness ctx0={ctx0} bankIn={kitBank} tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} />);
+    kitsTab();
+    const lib = screen.getByRole('complementary', { name: 'Studio design library' });
+    expect(within(lib).getByText('From the Item Bank’s bundles. Drop a kit on a room: every line is sized from that room.')).toBeTruthy();
+    // The studio's own kits; the standard add-ons' items are not in this bank, so they are not offered.
+    expect(Array.from(lib.querySelectorAll('[data-kit]')).map(e => e.getAttribute('data-kit'))).toEqual(['k-bath', 'old']);
+    const card = lib.querySelector('[data-kit="k-bath"]') as HTMLElement;
+    expect(within(card).getByText('6 items · civil and fittings')).toBeTruthy();
+    expect(within(card).getByText(/^≈ ₹.* in the Bath 1$/)).toBeTruthy();
+    fireEvent.click(within(card).getByRole('button', { name: 'Apply Bathroom renovation (full)' }));
+    const d = dialog();
+    expect(within(d).getByText('Room kit · Item Bank → Room Bundles & Kits')).toBeTruthy();
+    // Both bathrooms are picked; the bedroom is not offered.
+    expect(within(d).getByRole('button', { name: 'Bath 1' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(d).getByRole('button', { name: 'Bath 2' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(d).queryByRole('button', { name: 'Bedroom' })).toBeNull();
+    const b1 = within(d).getByRole('group', { name: 'Bath 1' });
+    expect(within(b1).getByText('4′ × 7′ · 10′ high')).toBeTruthy();
+    expect(within(b1).getByText('22′ of wall × 7′, less 1 door')).toBeTruthy();
+    expect(within(b1).getByText('Placed on a free wall, 2′6″ wide')).toBeTruthy();
+    // Untick the vanity in Bath 2.
+    fireEvent.click(within(d).getByRole('checkbox', { name: 'Vanity unit with mirror in Bath 2' }));
+    expect(within(d).getByText(/^9 lines/)).toBeTruthy();
+    expect(within(d).getByText(/debris removal added once/)).toBeTruthy();
+    fireEvent.click(within(d).getByRole('button', { name: 'Add 9 lines' }));
+    expect(screen.queryByRole('dialog', { name: 'Apply a room kit' })).toBeNull();
+    const boq = latest[0].boq;
+    expect(boq.filter((l: any) => l.roomId === 'Bath 1').map((l: any) => [l.bankId, l.qty])).toEqual([['b52', 28], ['b55', 50], ['b53', 28], ['b54', 133], ['b25', 1]]);
+    expect(boq.filter((l: any) => l.roomId === 'Bath 2').map((l: any) => [l.bankId, l.qty])).toEqual([['b52', 35], ['b55', 59], ['b53', 35], ['b54', 147]]);
+    expect(boq.filter((l: any) => l.bankId === 'b56')).toHaveLength(1);
+    expect(boq.find((l: any) => l.bankId === 'b25').place).toBeTruthy();
+    expect(screen.getByText('Bathroom renovation (full): 9 lines in Bath 1 and Bath 2, sized from each room. Debris removal added once, across the flat.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Undo/ }));
+    expect(latest[0].boq).toHaveLength(0);
+  });
+
+  it('what a room already has is unticked and says so; a kit dropped on a room opens on that room', () => {
+    studio.settings = { customBundles: [bathKit] };
+    let latest: any[] = [];
+    const vanity = { id: 'v1', bankId: 'b25', qty: 1, roomId: 'Bath 2' };
+    render(<Harness ctx0={ctx0} bankIn={kitBank} tier={{ ...PG, boq: [vanity] }} probe={t => { latest = t; }} />);
+    kitsTab();
+    fireEvent.drop(stage(), { ...at(18, 3), dataTransfer: { getData: () => 'kit:k-bath', types: ['text/plain', 'application/x-room-kit'] } });
+    const d = dialog();
+    expect(within(d).getByRole('button', { name: 'Bath 2' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(d).getByRole('button', { name: 'Bath 1' }).getAttribute('aria-pressed')).toBe('false');
+    expect(within(d).queryByRole('group', { name: 'Bath 1' })).toBeNull();
+    expect((within(d).getByRole('checkbox', { name: 'Vanity unit with mirror in Bath 2' }) as HTMLInputElement).checked).toBe(false);
+    expect(within(d).getByText('Already in this room')).toBeTruthy();
+    // A room put in and taken out from the chips.
+    fireEvent.click(within(d).getByRole('button', { name: 'Bath 1' }));
+    expect(within(d).getByRole('group', { name: 'Bath 1' })).toBeTruthy();
+    fireEvent.click(within(d).getByRole('button', { name: 'Bath 1' }));
+    fireEvent.click(within(d).getByRole('button', { name: 'Add 4 lines' }));
+    expect(latest[0].boq.filter((l: any) => l.bankId === 'b25')).toHaveLength(1);
+    expect(latest[0].boq.filter((l: any) => l.roomId === 'Bath 2' && l.civil).map((l: any) => l.civil.type)).toEqual(['floorRemove', 'waterproof', 'floor', 'walls7']);
+    // A kit dropped outside every room says so; Esc closes a preview.
+    fireEvent.drop(stage(), { ...at(30, 30), dataTransfer: { getData: () => 'kit:k-bath', types: ['text/plain'] } });
+    expect(screen.getByText('Drop the kit inside a room.')).toBeTruthy();
+  });
+
+  it('a bundle saved before kits applies too: its pieces placed along a free wall; dropped on a room card', () => {
+    studio.settings = { customBundles: [oldBundle] };
+    let latest: any[] = [];
+    render(<Harness ctx0={ctx0} bankIn={kitBank} tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} />);
+    lens('Rooms');
+    fireEvent.drop(document.querySelector('[data-roomcard="Bedroom"]') as HTMLElement, { dataTransfer: { getData: () => 'kit:old' } });
+    const d = dialog();
+    expect(within(d).getByText('Room kit · Item Bank → Room Bundles & Kits')).toBeTruthy();
+    // Any room may take it.
+    expect(within(d).getAllByRole('button', { pressed: false }).map(b => b.textContent)).toEqual(['Bath 1', 'Bath 2']);
+    fireEvent.click(within(d).getByRole('button', { name: 'Add 2 lines' }));
+    const added = latest[0].boq.filter((l: any) => l.roomId === 'Bedroom');
+    expect(added.map((l: any) => [l.bankId, !!l.place])).toEqual([['wardrobe', true], ['bed', true]]);
+  });
+
+  it('a room is saved to the Item Bank as a kit, each item with how it is sized', async () => {
+    const update = vi.fn(async () => undefined);
+    studio.settings = { customBundles: [oldBundle] };
+    studio.update = update;
+    const boq = [
+      { id: 'w', bankId: 'b25', qty: 1, roomId: 'Bath 1', place: { x: 13, y: 0.2, rot: 0 } },
+      { id: 'f', bankId: 'b53', qty: 28, roomId: 'Bath 1', civil: { type: 'floor' } },
+    ];
+    render(<Harness ctx0={ctx0} bankIn={kitBank} tier={{ ...PG, boq }} />);
+    fireEvent.pointerDown(document.querySelector('[data-room="Bath 1"]') as Element, { ...at(14, 5), pointerId: 1 });
+    fireEvent.pointerUp(stage(), { ...at(14, 5), pointerId: 1 });
+    const ri = screen.getByRole('complementary', { name: 'Room' });
+    await act(async () => { fireEvent.click(within(ri).getByRole('button', { name: 'Save this room as a kit' })); });
+    expect(update).toHaveBeenCalledTimes(1);
+    const [key, list] = (update.mock.calls[0] as any[]);
+    expect(key).toBe('customBundles');
+    expect(list[0]).toBe(oldBundle);
+    expect(list[1]).toMatchObject({ name: 'Bath 1, Palacia', itemIds: ['b25', 'b53'], items: [{ itemId: 'b25', fit: 'piece' }, { itemId: 'b53', fit: 'floor' }], kinds: ['toilet'] });
+    expect(screen.getByText('Saved to Item Bank → Room Bundles & Kits as “Bath 1, Palacia”: 2 items, each with how it is sized (on a free wall, the floor, walls to 7′).')).toBeTruthy();
   });
 });

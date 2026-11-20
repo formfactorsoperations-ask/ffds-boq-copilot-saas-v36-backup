@@ -842,6 +842,8 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               studioName={(orgData as any)?.orgName || undefined}
               isOwner={canEditMaterialSpecs(currentRole, currentRoles as any)}
               userName={currentUserAuth?.displayName || undefined}
+              kits={settings?.customBundles}
+              onSaveKit={async bundle => { await updateSettings('customBundles', [...(settings?.customBundles || []), bundle]); }}
               renderFullGrid={() => (
                 <StudioExcelGrid
                   items={fullBoq}
