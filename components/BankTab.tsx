@@ -12,6 +12,8 @@ import { buildBankUsageExport, bankUsageFileName } from '../lib/bankUsageExport'
 import { Button, Chip } from './ui/kit';
 import { addToBank, isMergedCopy } from '../lib/bankMatch';
 import PriceLockModal from './bank/PriceLockModal';
+import RepeatedItemsModal from './bank/RepeatedItemsModal';
+import { duplicateGroups } from '../lib/bankMatch';
 import BankSpreadsheetTable from './bank/BankSpreadsheetTable';
 import BankCategoryGroupedView from './bank/BankCategoryGroupedView';
 import BankBulkActionModal, { BulkActionType } from './bank/BankBulkActionModal';
@@ -67,6 +69,8 @@ interface BankTabProps {
   isDraftBank?: boolean;
   /** Lock prices (lib/priceLock.ts). Given to the owner on the live bank; without it the button is not drawn. */
   priceLock?: { read: (stored?: boolean) => Promise<FullProjectData[]>; save: (project: FullProjectData) => Promise<void> };
+  /** Repeated items (lib/bankDuplicates.ts): the owner may pick the one item kept for a name, on the live bank. */
+  canSettle?: boolean;
 }
 
 const BankTab: React.FC<BankTabProps> = ({
@@ -80,6 +84,7 @@ const BankTab: React.FC<BankTabProps> = ({
   onOpenRecipe,
   isDraftBank = false,
   priceLock,
+  canSettle = false,
 }) => {
   const { orgData } = useOrg();
   /*
@@ -418,6 +423,8 @@ const BankTab: React.FC<BankTabProps> = ({
   };
 
   const [isPriceLockOpen, setIsPriceLockOpen] = useState(false);
+  const [isRepeatedOpen, setIsRepeatedOpen] = useState(false);
+  const repeatedCount = useMemo(() => (canSettle ? duplicateGroups(wholeBank).length : 0), [canSettle, wholeBank]);
 
   /* Which project line uses which item, at what price (lib/bankUsageExport.ts). Reads only. */
   const handleExportUsage = () => {
@@ -727,6 +734,17 @@ const BankTab: React.FC<BankTabProps> = ({
                 title="Make projects keep the prices they use today, so a change in the Item Bank no longer re-prices them. Shows every total before anything is saved."
               >
                 Lock prices
+              </Button>
+            )}
+
+            {canSettle && (repeatedCount > 0 || copyCount > 0) && (
+              <Button
+                size="sm"
+                icon={Layers}
+                onClick={() => setIsRepeatedOpen(true)}
+                title="Names the bank holds more than once. Pick the one item to keep for each; the others are kept, hidden. No rate and no project is changed."
+              >
+                Repeated items{repeatedCount > 0 ? ` (${repeatedCount})` : ''}
               </Button>
             )}
 
@@ -1531,6 +1549,10 @@ const BankTab: React.FC<BankTabProps> = ({
           save={priceLock.save}
           onClose={() => setIsPriceLockOpen(false)}
         />
+      )}
+
+      {isRepeatedOpen && canSettle && (
+        <RepeatedItemsModal bank={wholeBank} projects={projects} setBank={setBank} onClose={() => setIsRepeatedOpen(false)} />
       )}
 
       {/* 8. BULK IMPORT MODAL (CSV/Excel) */}

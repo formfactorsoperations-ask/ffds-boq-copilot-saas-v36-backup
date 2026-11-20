@@ -43,6 +43,7 @@ type SetupMethod = 'manual' | 'floorplan';
 import { useOrg } from '../contexts/OrgContext';
 import { engagementOf, isFeeOnly } from '../lib/engagement';
 
+import { pickable } from '../lib/bankMatch';
 const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
   const { orgData } = useOrg();
   // Correctly destructure props with initializer
@@ -272,7 +273,8 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       if (setAiStrategy) setAiStrategy(selectedStrategy);
 
       try {
-          const rawPackages = await generateTieredBoqPackages(updatedContext, theme, bank, selectedStrategy);
+          // Chosen from the items, never a copy of one (lib/bankMatch.ts).
+          const rawPackages = await generateTieredBoqPackages(updatedContext, theme, pickable(bank), selectedStrategy);
           
           const mapToTier = (name: string, items: any[]): ProposalTier => {
               const boqItems: BoqItem[] = items.map(i => ({

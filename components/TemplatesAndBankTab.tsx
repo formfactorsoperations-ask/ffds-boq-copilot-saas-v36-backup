@@ -290,6 +290,7 @@ export default function TemplatesAndBankTab({
               projects={projects}
               isDraftBank={isDraftBankMode}
               priceLock={priceLock}
+              canSettle={canLockPrices(currentRoles?.length ? currentRoles : currentRole) && !isDraftBankMode}
               specs={specs.bank}
               onOpenRecipe={(id: string) => setRecipeItemId(id)}
             />
