@@ -170,12 +170,15 @@ linkage, notes, change orders on a frozen BOQ). Do not add a mode or a switch ba
   so it is not drawn under the BOQ's pieces. The rooms are made into a clean plan first
   (`lib/playground/planFromDrawing.ts`): the AI's rough boxes snapped onto the walls found in the drawing
   (`lib/playground/walls.ts`), tidied so rooms share walls, a passage grown to the rooms it reaches.
-  Walls are near-black: an inside wall 4½″, the outside wall heavier. Doors are a gap with the leaf and a
-  dashed swing into the room; windows a gap with the glazing's two thin lines. Each room prints its name
+  Drawn as the mockup draws a plan: inside walls solid near-black, 4½″; the outside wall about twice that,
+  cross-hatched. Doors are a gap with the leaf open into the room and a thin solid quarter-circle swing;
+  windows a white pane across the wall with three thin lines. Each door's width is printed inside its swing
+  and each window's outside the wall (`D 3'-0"`, `W 4'-6"`, to the nearest 3″). Each room prints its name
   in capitals (slate-700, bold) and its size under it (slate-500, `13'-0" X 14'-0"`, the client's printed
-  size where the plan gave one), centred just above its price tag, over the furniture with a paper edge;
-  a room too small for them shows its tag alone. The Plan lens's
-  **Line plan / Drawing** switch shows the drawing under the rooms, to check them; the line plan is the
+  size where the plan gave one), just above its price tag, over the furniture with a paper edge; an empty
+  room has no tag on the line plan and is named by the plan alone (PASSAGE, DRESS). A title block sits
+  under the plan's right corner: the project, configuration and city, then LAYOUT PLAN and the area.
+  The Plan lens's **Line plan / Drawing** switch shows the drawing under the rooms, to check them; the line plan is the
   default, and the meeting view always draws the line plan.
 - **Only inside the drawing**, as SVG fills, the materials have their own colours: wood grains, stone,
   fabric and paint shades (`pieceArt.tsx`), and the Civil layer's marks (break rose, build slate,

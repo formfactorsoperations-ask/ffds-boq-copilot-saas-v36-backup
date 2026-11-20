@@ -6,7 +6,7 @@ import { placeAt, softSnap, type PlacedPiece, type SnapGuide, type PlanRoom } fr
 import { boundsOf, ftin, normRot, pieceBox } from '../../lib/playground/geometry';
 import { lineIssues } from '../../lib/playground/issues';
 import { sheetOf } from '../../lib/playground/planSheet';
-import { LinePlanRooms, LinePlanLabels, drawingOf } from './linePlan';
+import { LinePlanRooms, LinePlanLabels, LinePlanTitle, drawingOf } from './linePlan';
 import { newPieceLine, movedLine, resizedFromEdge, type Edge } from '../../lib/playground/board';
 import { resizeRoom, edgeAt, type RoomEdge, type RoomResize } from '../../lib/playground/roomEdges';
 import { segmentFor, segLength, toolOf, type CivilTool, type Segment } from '../../lib/playground/civil';
@@ -141,8 +141,13 @@ export default function PlanStage(props: Props) {
       const k = underlay.ftPerPx!, o = underlay.origin || { x: 0, y: 0 };
       rects.push({ x: -o.x * k, y: -o.y * k, w: underlay.imagePx!.w * k, h: underlay.imagePx!.h * k });
     }
+    /* The line plan's title block sits under its right corner (linePlan.tsx): the view takes it in. */
+    if (traced && rects.length) {
+      const b = boundsOf(rects)!;
+      rects.push({ x: b.x, y: b.y + b.h, w: b.w, h: 3.2 });
+    }
     return boundsOf(rects) || { x: 0, y: 0, w: 30, h: 20 };
-  }, [planRooms, underlay]);
+  }, [planRooms, underlay, traced]);
 
   const fit = useCallback(() => {
     const { w, h } = size;
@@ -386,10 +391,17 @@ export default function PlanStage(props: Props) {
   const selModel = sel ? models.get(sel) : undefined;
   const tight = view.k < 22;
 
+  const roomHasLines = (name: string) => (roomTotals.get(name) || 0) > 0 || boq.some(l => l.roomId === name);
+  /* The title block under the line plan (linePlan.tsx LinePlanTitle). */
+  const planTitle = [String(ctx.name || 'Project').split(/[·–—]/)[0].trim(), ctx.config, String(ctx.location || '').split(/[,·]/)[0].trim()]
+    .filter(Boolean).join(' · ').toUpperCase();
+  const planSub = `LAYOUT PLAN${Number(ctx.area) > 0 ? ` · ${Math.round(Number(ctx.area))} SQ FT` : ''} · FROM THE CLIENT’S PLAN`;
   const tags = planRooms.map(r => {
     const room = rooms.find(x => x.name === r.name)!;
     const price = roomTotals.get(r.name) || 0;
     const has = price > 0 || boq.some(l => l.roomId === r.name);
+    /* On the line plan an empty room is named by the plan alone, as in the mockup (PASSAGE, DRESS, UTILITY). */
+    if (traced && !has) return null;
     const narrow = r.plan!.w < 6 || tight;
     const name = (narrow && room.name.length > 10 ? room.name.split(/\s+/)[0] : room.name).toUpperCase();
     const pr = !has ? 'Empty' : hideFigures ? '' : narrow ? lakh(price).replace(' L', 'L') : inr(price);
@@ -655,7 +667,8 @@ export default function PlanStage(props: Props) {
           </g>
           {civ && <g>{civilG}</g>}
           {ghosts.length > 0 && <g>{ghosts}</g>}
-          {traced && <LinePlanLabels rooms={rooms} tagClearance={px(23)} />}
+          {traced && <LinePlanLabels rooms={rooms} tagClearance={px(23)} tagged={roomHasLines} />}
+          {traced && <LinePlanTitle rooms={rooms} title={planTitle} sub={planSub} />}
           <g>{tags}</g>
           {civ && <g>{civilLabels}</g>}
           <g>{overlay}</g>
