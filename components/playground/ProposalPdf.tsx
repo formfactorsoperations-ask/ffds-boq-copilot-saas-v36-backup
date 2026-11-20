@@ -1,0 +1,401 @@
+import React, { useMemo, useRef, useState } from 'react';
+import { FileText, Download, Send, X } from 'lucide-react';
+import { Button, Chip } from '../ui/kit';
+import type { BoqItem, Item, ProjectContext, ProposalTier, TermsSettings, PaymentStructure } from '../../types';
+import { scopeSplit, splitPricingOf, dealFor, complimentaryKeys, type OfferDiscount } from '../../lib/offers';
+import { gstTermsOf, scheduleFor, type ScheduleStage } from '../../lib/paymentSchedule';
+import { playgroundTierSummary } from '../../lib/playground/versions';
+import { isPlaygroundTier } from '../../lib/playground/pricing';
+import { proposalValidity, discountsOf } from '../../lib/playground/deal';
+import { optionChains, latestOf } from '../../lib/optionChains';
+import { hasCivilWork } from '../../lib/annexure';
+import type { MaterialSpecsBank } from '../../lib/materialSpecs';
+import {
+  CONCERNS, pageOrder, itemsOf, paginateRooms, separatePage, materialsPage, annexOf, homeRooms, proposalFileName,
+  type PdfRoom, type PdfRow, type PdfAnnexSection, type PageKey,
+} from '../../lib/playground/proposal';
+import { buildProposalPdf } from '../../lib/proposalPdf';
+import { inr } from './playgroundUi';
+
+/*
+  The first proposal, as a PDF (BOQ Playground PR P, as in the approved mockup).
+
+  A preview of the A4 pages over the screen, with how they are shaped (the lead
+  profile's main concern), Download PDF and Send on WhatsApp. Sending records
+  the proposal on the project: the date it went, how long it holds, the version.
+  No page draws the plan with pieces, and none shows a cost or a markup.
+*/
+
+const LABEL_SM = 'text-[10px] font-bold uppercase tracking-wider text-slate-500';
+const dateOf = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const qtyOf = (q: number) => (Math.round(q * 100) / 100).toLocaleString('en-IN');
+
+const Kicker = ({ children }: { children: React.ReactNode }) => <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#3D52A0]">{children}</div>;
+const H2 = ({ children }: { children: React.ReactNode }) => <h2 className="text-2xl font-extrabold text-slate-900 mt-2">{children}</h2>;
+
+function Page({ n, foot, children }: { n: number; foot: string; children: React.ReactNode }) {
+  return (
+    <section className="ff-page relative bg-white shadow-[0_10px_30px_-12px_rgba(15,23,42,.35)] rounded-sm mx-auto w-full" style={{ maxWidth: 794, aspectRatio: '210 / 297' }} data-pdf-page={n}>
+      <div className="absolute inset-0 p-8 md:p-12 flex flex-col overflow-hidden">
+        {children}
+        <div className="mt-auto pt-4 flex justify-between text-[10px] text-slate-400 border-t border-slate-100"><span>{foot}</span><span className="tabular-nums">{n}</span></div>
+      </div>
+    </section>
+  );
+}
+
+const COLS = (
+  <colgroup><col /><col style={{ width: 56 }} /><col style={{ width: 40 }} /><col style={{ width: 66 }} /><col style={{ width: 84 }} /></colgroup>
+);
+const HEAD = (
+  <thead><tr className={`text-left ${LABEL_SM}`}><th className="py-1 pr-2">Item</th><th className="py-1 px-1 text-right">Qty</th><th className="py-1 px-1">Unit</th><th className="py-1 px-1 text-right">Rate</th><th className="py-1 pl-1 text-right">Amount</th></tr></thead>
+);
+
+function RowLine({ r }: { r: PdfRow }) {
+  return (
+    <tr className="border-t border-slate-100 align-top">
+      <td className="py-1.5 pr-2">
+        <div className="text-[12px] text-slate-800 font-semibold">{r.name}{r.free && <span className="text-emerald-700 text-[11px] font-semibold"> complimentary</span>}</div>
+        {r.sub && <div className="text-[11px] text-slate-400 leading-snug">{r.sub}</div>}
+      </td>
+      <td className="py-1.5 px-1 text-right tabular-nums text-[12px] text-slate-600 whitespace-nowrap">{qtyOf(r.qty)}</td>
+      <td className="py-1.5 px-1 text-[11px] text-slate-400">{r.unit}</td>
+      <td className="py-1.5 px-1 text-right tabular-nums text-[12px] text-slate-600 whitespace-nowrap">{inr(r.rate)}</td>
+      <td className="py-1.5 pl-1 text-right tabular-nums text-[12px] font-semibold whitespace-nowrap text-slate-800">
+        {r.free ? <><span className="line-through text-slate-400 font-normal mr-1">{inr(r.amount)}</span>₹0</> : inr(r.amount)}
+      </td>
+    </tr>
+  );
+}
+
+function RoomTable({ b }: { b: PdfRoom }) {
+  return (
+    <div className="mt-4" data-pdf-room={b.name}>
+      <div className="flex items-baseline justify-between"><h3 className="text-[15px] font-bold text-slate-800">{b.name}</h3>{b.size && <span className="text-[11px] text-slate-400">{b.size} from the brief</span>}</div>
+      <table className="w-full mt-1" style={{ tableLayout: 'fixed' }}>
+        {COLS}{HEAD}
+        <tbody>
+          {b.rows.map(r => <React.Fragment key={r.id}><RowLine r={r} /></React.Fragment>)}
+          <tr className="border-t-2 border-slate-200"><td colSpan={4} className="py-1.5 text-[12px] font-bold text-slate-800">{b.name} total</td><td className="py-1.5 text-right tabular-nums text-[13px] font-black">{inr(b.total)}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StageTable({ title, figures, stages }: { title: string; figures: string; stages: ScheduleStage[] }) {
+  return (
+    <>
+      <tr><td colSpan={4} className="pt-3 pb-1"><b className="text-slate-800 text-[12px]">{title}</b> <span className="text-[11px] text-slate-500 tabular-nums">· {figures}</span></td></tr>
+      {stages.map(x => (
+        <tr key={x.id} className="border-t border-slate-100 align-top">
+          <td className="py-1 pr-1 font-bold text-slate-500 tabular-nums">{x.code}</td>
+          <td className="py-1 pr-2"><b className="text-slate-800">{x.name}</b>{x.trigger && <span className="block text-[10px] text-slate-500">{x.trigger}</span>}</td>
+          <td className="py-1 px-1 text-right tabular-nums text-slate-500">{x.fixed ? '' : `${x.pct}%`}</td>
+          <td className="py-1 pl-1 text-right tabular-nums font-semibold text-slate-800">{inr(x.amount)}</td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function AnnexBlock({ s }: { s: PdfAnnexSection }) {
+  const L = ({ xs, ordered }: { xs: string[]; ordered?: boolean }) => (ordered
+    ? <ol className="mt-1 list-decimal pl-4 space-y-0.5 text-[11px] text-slate-600 leading-snug">{xs.map((x, i) => <li key={i}>{x}</li>)}</ol>
+    : <ul className="mt-1 list-disc pl-4 space-y-0.5 text-[11px] text-slate-600 leading-snug">{xs.map((x, i) => <li key={i}>{x}</li>)}</ul>);
+  return (
+    <div data-annex={s.n}>
+      <h4 className="mt-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-800">{s.n} · {s.title}</h4>
+      {s.text && <p className="text-[11px] text-slate-600 mt-1">{s.text}</p>}
+      {s.table && (
+        <table className="mt-1 w-full text-[11px]"><tbody>
+          {s.table.map(([a, v], i) => (
+            <tr key={a} className={`border-t ${i === s.table!.length - 1 ? 'border-slate-300 font-bold text-slate-800' : 'border-slate-100 text-slate-600'}`}><td className="py-0.5">{a}</td><td className="py-0.5 text-right tabular-nums">{inr(v)}</td></tr>
+          ))}
+        </tbody></table>
+      )}
+      {s.items && <L xs={s.items} ordered={s.ordered} />}
+      {s.pair && (
+        <div className="grid grid-cols-2 gap-4">
+          {[s.pair.a, s.pair.b].map(([t, xs]) => <div key={t}><div className="text-[10px] font-bold text-slate-500 mt-1">{t}</div><L xs={xs} /></div>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export interface ProposalPdfProps {
+  ctx: ProjectContext;
+  tier: ProposalTier;
+  tiers: ProposalTier[];
+  bankMap: Map<string, Item>;
+  specBank?: MaterialSpecsBank | null;
+  termsSettings?: TermsSettings | null;
+  paymentStructure?: PaymentStructure | null;
+  studioName: string;
+  userName?: string;
+  /** The lead profile's main concern: the page order it shapes. */
+  concern?: string | null;
+  /** The client has booked: the portal is open. */
+  booked?: boolean;
+  /** Records the proposal as sent, on this version, shaped for this concern. */
+  onSent: (via: 'whatsapp', shapedFor: string) => void;
+  onClose: () => void;
+}
+
+export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, termsSettings, paymentStructure, studioName, userName, concern: concern0, booked, onSent, onClose }: ProposalPdfProps) {
+  const [concern, setConcern] = useState<string>(ctx.proposal?.shapedFor || concern0 || 'Itemized Costs');
+  const [busy, setBusy] = useState<null | 'download' | 'send'>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+
+  const m = useMemo(() => {
+    const boq: BoqItem[] = tier.boq || [];
+    const pricing = splitPricingOf(tier, ctx.rooms, bankMap);
+    const summaryOf = (t: ProposalTier) => (isPlaygroundTier(t) ? playgroundTierSummary(t, bankMap, ctx) : t.summary);
+    const summary = summaryOf(tier);
+    const discounts = discountsOf(ctx) as OfferDiscount[];
+    const terms = gstTermsOf(ctx);
+    const deal = dealFor(summary, discounts, terms);
+    const schedule = scheduleFor(ctx, { tierSummary: summary }, { paymentStructure });
+    const validity = proposalValidity(ctx, termsSettings);
+    const free = complimentaryKeys(discounts.filter(d => d.basis?.tierId === tier.id));
+    const items = itemsOf({ boq, bankMap, pricing, rooms: ctx.rooms || [], free, specBank });
+    const options = optionChains(tiers).map(latestOf).map(t => (t.id === tier.id ? tier : t));
+    const optionRows = options.map(t => ({ t, split: scopeSplit(t, bankMap, splitPricingOf(t, ctx.rooms, bankMap)), work: summaryOf(t)?.totalSell || 0 }));
+    const offers = discounts.map(d => ({ name: d.name, value: d.type === 'percentage' ? (d.target === 'design' ? deal.fee : deal.sell) * (d.value / 100) : d.value }));
+    return {
+      summary, deal, schedule, validity, items, options: optionRows, offers,
+      separate: separatePage(boq, bankMap),
+      materials: materialsPage(specBank, options, tier.id),
+      civil: hasCivilWork(boq.map(l => ({ ...l, name: bankMap.get(l.bankId)?.name, cat: bankMap.get(l.bankId)?.cat }))),
+      annex: annexOf({
+        terms: termsSettings, studioName, gstRate: terms.rate, after: Math.max(0, deal.sell - deal.execOff), fee: deal.fee - deal.designOff, gst: deal.gst, total: deal.clientPays,
+        initiationFee: schedule.initiationFee, boq, bankMap, validDays: validity.days, issued: validity.from,
+      }),
+    };
+  }, [tier, tiers, ctx, bankMap, specBank, termsSettings, paymentStructure, studioName]);
+
+  const { deal, schedule: sc, validity: v, items } = m;
+  const project = ctx.name || 'Your home';
+  const foot = `${studioName} · ${project} · First proposal`;
+  const after = Math.max(0, deal.sell - deal.execOff);
+  const fee = deal.fee - deal.designOff;
+  const roomNames = items.rooms.map(r => r.name);
+  const flatOf = (byRoom: Record<string, number>) => Object.entries(byRoom).filter(([n]) => !roomNames.includes(n)).reduce((a, [, x]) => a + x, 0);
+
+  /* Each page's content, by its key; a page with nothing to say is left out. */
+  const pages: Partial<Record<PageKey, React.ReactNode[]>> = {};
+  pages.cover = [(
+    <div className="flex-1 flex flex-col justify-center" key="c">
+      <Kicker>Interior design proposal</Kicker>
+      <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 mt-3">{project}</h1>
+      <p className="text-lg text-slate-500 mt-2">{[ctx.location, ctx.config, Number(ctx.area) ? `${Number(ctx.area).toLocaleString('en-IN')} sq ft carpet` : ''].filter(Boolean).join(' · ')}</p>
+      {(ctx as any).theme && <p className="mt-4 text-[13px] text-slate-600">Style: {(ctx as any).theme}</p>}
+      <div className="mt-10 grid grid-cols-2 gap-6 text-sm">
+        {([['Prepared for', ctx.clientName || '—'], ['Prepared by', [userName, studioName].filter(Boolean).join(', ')], ['Date', dateOf(v.from)]] as [string, string][]).map(([a, b]) => (
+          <div key={a}><div className={LABEL_SM}>{a}</div><div className="font-semibold text-slate-800 mt-1">{b}</div></div>
+        ))}
+        <div><div className={LABEL_SM}>Valid until</div><div className="font-semibold text-slate-800 mt-1">{dateOf(v.until)} <span className="font-normal text-slate-400">· {v.days} days</span></div></div>
+      </div>
+    </div>
+  )];
+  pages.how = [(
+    <React.Fragment key="h">
+      <Kicker>How we work</Kicker><H2>From this proposal to your keys</H2>
+      <ol className="mt-5 space-y-3">
+        {[['This proposal', 'What each room includes, the materials, the options and the price'], ['Booking', 'You choose how we work together and pay the booking amount; your portal login follows'], ['Site measurement', 'We measure every room'], ['Layout and design', 'Space planning, then 3D, until you approve the design'], ['Detailed BOQ', 'Every line, size and specification, approved by you in your portal'], ['Execution and handover', 'Built to the approved BOQ, with progress in your portal']].map(([t, d], i) => (
+          <li key={t} className="flex gap-3"><span className="w-7 h-7 rounded-full bg-[#3D52A0] text-white text-xs font-bold grid place-items-center shrink-0">{i + 1}</span><span><b className="block text-[14px] text-slate-800">{t}</b><span className="text-[12px] text-slate-500">{d}</span></span></li>
+        ))}
+      </ol>
+    </React.Fragment>
+  )];
+  const plan = ctx.planSheet?.imageUrl && ctx.planSheet.source !== 'blocks' && ctx.planSheet.source !== 'sketch' ? ctx.planSheet.imageUrl : null;
+  pages.home = [(
+    <React.Fragment key="home">
+      <Kicker>Your home</Kicker><H2>{plan ? 'As in your builder’s plan' : 'Room by room, from the brief'}</H2>
+      <p className="text-[12px] text-slate-500 mt-1">{plan ? 'Shown as you gave it to us. Nothing is placed on it yet: the layout comes after site measurement.' : 'The rooms and their sizes as we have them. The layout comes after site measurement.'}</p>
+      {/* The builder's plan as the client gave it: never the plan with pieces drawn on it (the drawing gate). */}
+      {plan && <div className="mt-4 rounded-lg border border-slate-200 overflow-hidden"><img src={plan} crossOrigin="anonymous" alt={`The builder’s plan of ${project}, as the client shared it`} className="w-full h-auto block max-h-[520px] object-contain" /></div>}
+      <table className="mt-4 w-full text-[12px]"><thead><tr className={`text-left ${LABEL_SM}`}><th className="py-1">Room</th><th className="py-1 text-right">Size from the brief</th></tr></thead>
+        <tbody>{homeRooms(ctx.rooms || []).map(r => <tr key={r.name} className="border-t border-slate-100"><td className="py-1 text-slate-700">{r.name}</td><td className="py-1 text-right tabular-nums text-slate-600">{r.size}</td></tr>)}</tbody>
+      </table>
+    </React.Fragment>
+  )];
+  const blocks = [...items.rooms, ...(items.flat ? [items.flat] : [])];
+  pages.items = paginateRooms(blocks).map((grp, i, all) => (
+    <React.Fragment key={`i${i}`}>
+      <Kicker>Item by item</Kicker><H2>{i ? 'Room by room, continued' : 'Room by room'}</H2>
+      {!i && <p className="text-[12px] text-slate-500 mt-1">{tier.name}, the recommended option. Sizes and quantities are allowances from the brief; the final ones follow site measurement and the approved design. Offers are applied on the investment page. Each amount is rounded up to the nearest ₹100.</p>}
+      {grp.map(b => <React.Fragment key={b.name}><RoomTable b={b} /></React.Fragment>)}
+      {i === all.length - 1 && <div className="mt-4 pt-3 border-t-2 border-slate-800 flex items-baseline justify-between"><span className="font-bold text-slate-800">The work, {tier.name}</span><b className="tabular-nums text-lg" data-pdf-work>{inr(items.work)}</b></div>}
+    </React.Fragment>
+  ));
+  if (m.separate) {
+    const s = m.separate;
+    const tbl = (rows: typeof s.actuals, last: string) => (
+      <table className="mt-2 w-full text-[12px]" style={{ tableLayout: 'fixed' }}>
+        <colgroup><col /><col style={{ width: 140 }} /><col style={{ width: 120 }} /></colgroup>
+        <thead><tr className={`text-left ${LABEL_SM}`}><th className="py-1">Item</th><th className="py-1">Room</th><th className="py-1 text-right">{last}</th></tr></thead>
+        <tbody>{rows.map(r => (
+          <tr key={r.line.id} className="border-t border-slate-100 align-top"><td className="py-1.5 pr-2"><div className="font-semibold text-slate-800">{r.name}</div>{r.words && <div className="text-[11px] text-slate-500">{r.words}</div>}</td><td className="py-1.5 text-slate-600">{r.room}</td><td className="py-1.5 text-right tabular-nums text-slate-700">{r.estimate !== null ? `≈ ${inr(r.estimate)}` : 'Your choice'}</td></tr>
+        ))}</tbody>
+      </table>
+    );
+    pages.sep = [(
+      <React.Fragment key="sep">
+        <Kicker>Separate from the price</Kicker><H2>Bought by you, and at actuals</H2>
+        <p className="text-[12px] text-slate-500 mt-1">These are part of the design: we plan the space, points and fixings for them. They are not in your investment, the offers, GST or the payment schedule.</p>
+        {s.actuals.length > 0 && <div className="mt-5"><div className="font-bold text-slate-800 text-[14px]">At actuals</div><p className="text-[11px] text-slate-500">We choose them with you and manage the vendor; you pay the vendor directly at actual cost. The figures are estimates.</p>{tbl(s.actuals, 'Estimate')}<div className="mt-1 text-right text-[12px] text-slate-600">Estimated <b className="tabular-nums">≈ {inr(s.estimate)}</b></div></div>}
+        {s.client.length > 0 && <div className="mt-5"><div className="font-bold text-slate-800 text-[14px]">Bought by you</div><p className="text-[11px] text-slate-500">You choose and buy these; we help you pick and plan around them.</p>{tbl(s.client, '')}</div>}
+      </React.Fragment>
+    )];
+  }
+  if (m.materials) {
+    const mt = m.materials;
+    pages.mat = [(
+      <React.Fragment key="mat">
+        <Kicker>Materials and brands</Kicker><H2>{mt.options.length === 3 ? 'Three ways to finish it' : mt.options.length === 1 ? 'How it is finished' : `${mt.options.length} ways to finish it`}</H2>
+        <p className="text-[12px] text-slate-500 mt-1">The same rooms and pieces in each option. What changes is the material, named with its brand or equivalent.</p>
+        <table className="mt-4 w-full text-[11px]" style={{ tableLayout: 'fixed' }}>
+          <thead><tr className="text-left"><th className={`py-2 w-[22%] ${LABEL_SM}`}>Part</th>{mt.options.map(o => <th key={o.name} className={`py-2 pr-2 text-[12px] font-bold ${o.recommended ? 'text-[#3D52A0]' : 'text-slate-800'}`}>{o.name}{o.recommended && <span className="font-semibold text-[10px]"> · recommended</span>}</th>)}</tr></thead>
+          <tbody>{mt.rows.map(r => (
+            <tr key={r.part} className="border-t border-slate-100 align-top"><td className="py-2 font-semibold text-slate-700">{r.part}</td>
+              {r.cells.map((c, i) => <td key={i} className={`py-2 pr-2 ${mt.options[i].recommended ? 'bg-[#3D52A0]/[0.04]' : ''}`}>{c ? <><span className="text-slate-800">{c.words}</span>{c.brand && <span className="block text-slate-400">{c.brand}</span>}{c.range && <span className="block text-slate-500">{c.range}</span>}</> : '—'}</td>)}
+            </tr>
+          ))}</tbody>
+        </table>
+        {mt.ranges.length > 0 && (
+          <div className="mt-5 rounded-lg border border-slate-200 p-4">
+            <div className="font-bold text-slate-800 text-[13px]">Every finish is a range, not one shade</div>
+            <p className="text-[11px] text-slate-500 mt-0.5">The pictures show one shade from each range. You choose the exact shade at Selections, from sample boards in the studio, after you approve the design. Any shade within a range costs the same.</p>
+            <div className="mt-3 grid grid-cols-5 gap-2">{mt.ranges.slice(0, 5).map(r => (
+              <div key={r.name}><div className="flex flex-wrap gap-0.5">{r.hexes.map((h, i) => <span key={i} className="w-3.5 h-3.5 rounded-full border border-slate-200" style={{ background: h }} />)}</div><div className="text-[11px] font-bold text-slate-800 mt-1 leading-tight">{r.name}</div><div className="text-[10px] text-slate-500">{r.count}+ {r.unit}</div></div>
+            ))}</div>
+          </div>
+        )}
+      </React.Fragment>
+    )];
+  }
+  pages.inv = [(
+    <React.Fragment key="inv">
+      <Kicker>Your investment</Kicker><H2>{m.options.length > 1 ? `${m.options.length === 3 ? 'Three' : m.options.length} options, one recommended` : 'What it comes to'}</H2>
+      {m.options.length > 1 && (
+        <>
+          <div className="mt-4 grid gap-3" style={{ gridTemplateColumns: `repeat(${m.options.length}, minmax(0, 1fr))` }}>{m.options.map(o => (
+            <div key={o.t.id} className={`rounded-lg border-2 p-3 ${o.t.id === tier.id ? 'border-[#3D52A0]' : 'border-slate-200'}`}><div className="text-[12px] font-bold text-slate-800">{o.t.name}</div><div className="text-lg font-black tabular-nums mt-1">{inr(o.work)}</div><div className="text-[10px] text-slate-500">the work, before offers and GST</div></div>
+          ))}</div>
+          <table className="mt-4 w-full text-[12px]" style={{ tableLayout: 'fixed' }}>
+            <thead><tr className={`text-left ${LABEL_SM}`}><th className="py-1">Room</th>{m.options.map(o => <th key={o.t.id} className={`py-1 text-right ${o.t.id === tier.id ? 'text-[#3D52A0]' : ''}`}>{(o.t.name || '').split(' ')[0]}</th>)}</tr></thead>
+            <tbody>
+              {[...roomNames, ...(m.options.some(o => flatOf(o.split.byRoom) > 0) ? ['Across the flat'] : [])].map(n => (
+                <tr key={n} className="border-t border-slate-100"><td className="py-1 text-slate-700">{n}</td>{m.options.map(o => <td key={o.t.id} className={`py-1 text-right tabular-nums ${o.t.id === tier.id ? 'font-bold text-slate-800 bg-[#3D52A0]/[0.04]' : 'text-slate-600'}`}>{inr(n === 'Across the flat' ? flatOf(o.split.byRoom) : o.split.byRoom[n] || 0)}</td>)}</tr>
+              ))}
+              <tr className="border-t-2 border-slate-300"><td className="py-1.5 font-bold text-slate-800">The work</td>{m.options.map(o => <td key={o.t.id} className={`py-1.5 text-right tabular-nums font-black ${o.t.id === tier.id ? 'bg-[#3D52A0]/[0.04]' : ''}`}>{inr(o.work)}</td>)}</tr>
+            </tbody>
+          </table>
+        </>
+      )}
+      <div className="mt-6 text-[13px]">
+        <div className="font-bold text-slate-800 mb-1">{tier.name}, all in</div>
+        <div className="flex justify-between py-1.5 border-b border-slate-100"><span>The work</span><b className="tabular-nums">{inr(deal.sell)}</b></div>
+        {m.offers.map(o => <div key={o.name} className="flex justify-between py-1.5 border-b border-slate-100 text-emerald-700"><span>{o.name}</span><b className="tabular-nums">−{inr(o.value)}</b></div>)}
+        <div className="flex justify-between py-1.5 border-b border-slate-100"><span>Design fee</span><b className="tabular-nums">{inr(deal.fee)}</b></div>
+        <div className="flex justify-between py-1.5 border-b border-slate-100"><span>GST {gstTermsOf(ctx).rate}%</span><b className="tabular-nums">{inr(deal.gst)}</b></div>
+        <div className="flex justify-between items-baseline pt-3"><span className="text-base font-bold">Your investment</span><b className="text-2xl font-black tabular-nums" data-pdf-pays>{inr(deal.clientPays)}</b></div>
+        {deal.execOff + deal.designOff > 0 && <div className="mt-2 rounded-md bg-emerald-50 px-3 py-2 text-emerald-800 font-semibold">You save {inr(deal.execOff + deal.designOff)}. Offers valid until {dateOf(v.until)}.</div>}
+      </div>
+    </React.Fragment>
+  )];
+  pages.next = [(
+    <React.Fragment key="next">
+      <Kicker>Next step</Kicker><H2>How you would like to work with us</H2>
+      <div className="mt-4 space-y-2.5">{[['Turnkey (recommended)', 'Design, materials, labour and quality, from design to handover. The price in this proposal.'], ['Design + PMC', 'We design and manage your contractors.'], ['Design only', 'We design; your team executes.']].map(([t, d], i) => (
+        <div key={t} className={`rounded-lg border p-3 ${i ? 'border-slate-200' : 'border-[#3D52A0] bg-[#3D52A0]/[0.04]'}`}><b className="text-[13px] text-slate-800">{t}</b><p className="text-[12px] text-slate-500">{d}</p></div>
+      ))}</div>
+      <div className="mt-5">
+        <div className="font-bold text-slate-800 text-[14px]">How you pay, for Turnkey</div>
+        <p className="text-[11px] text-slate-500">Two schedules: one for the design fee, one for the work. Each amount includes GST{sc.gstRate ? ` at ${sc.gstRate}%` : ''}.</p>
+        <table className="w-full text-[11px] mt-1" style={{ tableLayout: 'fixed' }}>
+          <colgroup><col style={{ width: 34 }} /><col /><col style={{ width: 44 }} /><col style={{ width: 96 }} /></colgroup>
+          <tbody>
+            <StageTable title="Design fee" figures={`${inr(fee)} + GST = ${inr(sc.design.total)}`} stages={sc.design.stages} />
+            {sc.execution.stages.length > 0 && <StageTable title="The work" figures={`${inr(after)} after offers + GST = ${inr(sc.execution.total)}`} stages={sc.execution.stages} />}
+            <tr className="border-t-2 border-slate-300"><td colSpan={3} className="py-1.5 font-bold text-slate-800 text-[12px]">Together</td><td className="py-1.5 text-right tabular-nums font-black text-[13px]">{inr(sc.total)}</td></tr>
+          </tbody>
+        </table>
+        <div className="mt-3 rounded-md bg-[#3D52A0]/[0.06] px-3 py-2 text-[12px] text-slate-700"><b>To book:</b> {sc.design.stages[0]?.code || 'D1'}, {inr(sc.booking)}{sc.initiationFee > 0 ? ` (${inr(sc.design.stages[0]?.amount || 0)} less the ${inr(sc.initiationFee)} Project Initiation Fee you have paid)` : `, which is ${sc.design.stages[0]?.pct || 0}% of the design fee with GST`}. Your portal login follows the booking.</div>
+        <p className="mt-2 text-[11px] text-slate-500">Design + PMC or Design only: the design-fee schedule applies and you pay your contractors directly; any PMC fee is set out in the agreement.</p>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-400">Sizes are allowances from the brief. Final quantities follow site measurement and the approved design, in a Detailed BOQ you approve before work starts. Terms are in Annexure A.</p>
+    </React.Fragment>
+  )];
+  const half = m.annex.findIndex(s => s.n === 7);
+  pages.annex = [
+    <React.Fragment key="a1"><Kicker>Annexure A</Kicker><H2>Commercial terms and conditions</H2><p className="text-[11px] text-slate-500 mt-1">Part of this proposal. Where it differs from the studio’s general terms for this project, this annexure prevails.</p>{m.annex.slice(0, half).map(s => <React.Fragment key={s.n}><AnnexBlock s={s} /></React.Fragment>)}</React.Fragment>,
+    <React.Fragment key="a2"><Kicker>Annexure A, continued</Kicker>{m.annex.slice(half).map(s => <React.Fragment key={s.n}><AnnexBlock s={s} /></React.Fragment>)}
+      <div className="mt-6 grid grid-cols-2 gap-8 text-[11px] text-slate-500"><div className="border-t border-slate-300 pt-1">{ctx.clientName || 'Client'} · date</div><div className="border-t border-slate-300 pt-1">For {studioName}</div></div>
+    </React.Fragment>,
+  ];
+
+  /* The one-page summary and the brief come with PR B; until then the order skips them. */
+  const order = pageOrder(concern, false);
+  const sheets = order.flatMap(k => pages[k] || []);
+
+  const build = async () => {
+    if (!root.current) throw new Error('The pages are not on screen');
+    return buildProposalPdf(root.current, 'portrait');
+  };
+  const name = proposalFileName(project, v.from);
+  const download = async () => {
+    setBusy('download'); setProblem(null);
+    try { (await build()).save(name); } catch (e: any) { setProblem(`The PDF could not be made: ${e?.message || e}`); } finally { setBusy(null); }
+  };
+  const send = async () => {
+    setBusy('send'); setProblem(null);
+    try {
+      const pdf = await build();
+      const file = new File([pdf.output('blob')], name, { type: 'application/pdf' });
+      const text = `${project}: our proposal for ${tier.name}, valid until ${dateOf(v.until)}.`;
+      const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean };
+      if (nav.canShare?.({ files: [file] }) && nav.share) await nav.share({ files: [file], title: name, text });
+      else { pdf.save(name); window.open(`https://wa.me/?text=${encodeURIComponent(`${text} The PDF is attached.`)}`, '_blank', 'noopener'); }
+      onSent('whatsapp', concern);
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') setProblem(`It was not sent: ${e?.message || e}`);
+    } finally { setBusy(null); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[350] flex flex-col phd-scrim bg-slate-100" role="dialog" aria-modal="true" aria-label="First proposal PDF preview">
+      <header className="shrink-0 px-4 py-2.5 flex items-center gap-3 flex-wrap bg-white border-b border-slate-200">
+        <span className="w-9 h-9 rounded-xl bg-[#3D52A0] text-white grid place-items-center"><FileText className="w-4 h-4" aria-hidden /></span>
+        <div className="leading-tight">
+          <div className="text-sm font-bold text-slate-800">First proposal · PDF</div>
+          <div className="text-[11px] text-slate-500">{tier.name} · {sheets.length} pages · valid {v.days} days · Annexure A from Terms & Payment{m.civil ? ' · renovation terms' : ''}</div>
+        </div>
+        <label className="flex items-center gap-1.5 text-[11px] text-slate-500" title="The lead profile’s main concern. It changes the page order.">Shaped for
+          <select value={concern} onChange={e => setConcern(e.target.value)} className="px-1.5 py-1 rounded-lg border border-slate-300 text-xs font-semibold bg-white text-slate-700">
+            {CONCERNS.map(o => <option key={o}>{o}</option>)}
+          </select>
+        </label>
+        {v.issued && <Chip tone={v.expired ? 'warn' : 'good'}>{v.expired ? `Expired ${dateOf(v.until)}` : `Sent ${dateOf(v.from)}`}</Chip>}
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
+          {/* The first proposal never draws the plan with pieces, whatever the layout's state: the builder's plan only. */}
+          <Chip tone="slate" title="The builder’s plan, unmarked. Drawings reach the client only after the layout is approved.">No drawing: the builder’s plan only</Chip>
+          <Button size="sm" icon={Download} onClick={download} disabled={!!busy}>{busy === 'download' ? 'Making the PDF…' : 'Download PDF'}</Button>
+          <Button size="sm" icon={Send} onClick={send} disabled={!!busy}>{busy === 'send' ? 'Making the PDF…' : 'Send on WhatsApp'}</Button>
+          {!booked && <span className="text-[11px] text-slate-400 max-w-[180px] leading-tight">Portal: after the client books</span>}
+          <Button size="sm" icon={X} onClick={onClose}>Close</Button>
+        </div>
+      </header>
+      {problem && <div role="alert" className="shrink-0 px-4 py-2 bg-rose-50 border-b border-rose-200 text-xs font-semibold text-rose-700">{problem}</div>}
+      <main className="flex-1 min-h-0 overflow-auto px-3 py-6">
+        <div ref={root} className="hud-swap space-y-6">
+          {sheets.map((body, i) => <React.Fragment key={i}><Page n={i + 1} foot={foot}>{body}</Page></React.Fragment>)}
+        </div>
+      </main>
+    </div>
+  );
+}
+

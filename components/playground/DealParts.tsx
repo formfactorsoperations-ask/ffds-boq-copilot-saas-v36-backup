@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Target, Percent, Gift, Map as MapIcon, List, X, Plus, Clock, Lock, ArrowRight } from 'lucide-react';
+import { Target, Percent, Gift, Map as MapIcon, List, X, Plus, Clock, Lock, ArrowRight, Play } from 'lucide-react';
 import { Button, Chip } from '../ui/kit';
 import {
   SCOPE_PARTS, offerDiscount, offerWhy, dealFor, complimentaryKeys,
@@ -43,7 +43,7 @@ const amountOf = (d: OfferDiscount, sell: number, fee: number) =>
 
 export function DealLens({
   tierId, optionName, summary, lineCount, rounded, split, discounts, terms, schedule, validity, fee, floor, seesMargins, locked, lockedWhy,
-  rooms, pickLines, newId, onDiscounts, onFee, onDays, onInitiation, onNote,
+  rooms, pickLines, newId, onDiscounts, onFee, onDays, onInitiation, onNote, onPresent,
 }: {
   tierId: string;
   optionName: string;
@@ -74,6 +74,8 @@ export function DealLens({
   onDays: (days: number) => void;
   onInitiation: (value: number) => void;
   onNote: (msg: string) => void;
+  /** Opens what the client is shown: the first-proposal PDF until the layout is approved. */
+  onPresent?: () => void;
 }) {
   const deal = dealFor(summary, discounts, terms);
   const sell = deal.sell;
@@ -191,6 +193,7 @@ export function DealLens({
             </p>
           </div>
         )}
+        {onPresent && <div className="mt-4 flex flex-wrap gap-2"><Button variant="primary" icon={Play} onClick={onPresent}>Present to the client</Button></div>}
       </section>
 
       <div className="space-y-4">
