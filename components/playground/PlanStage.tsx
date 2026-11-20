@@ -6,7 +6,7 @@ import { placeAt, softSnap, type PlacedPiece, type SnapGuide, type PlanRoom } fr
 import { boundsOf, ftin, normRot, pieceBox } from '../../lib/playground/geometry';
 import { lineIssues } from '../../lib/playground/issues';
 import { sheetOf } from '../../lib/playground/planSheet';
-import { LinePlanRooms, drawingOf } from './linePlan';
+import { LinePlanRooms, LinePlanLabels, drawingOf } from './linePlan';
 import { newPieceLine, movedLine, resizedFromEdge, type Edge } from '../../lib/playground/board';
 import { resizeRoom, edgeAt, type RoomEdge, type RoomResize } from '../../lib/playground/roomEdges';
 import { segmentFor, segLength, toolOf, type CivilTool, type Segment } from '../../lib/playground/civil';
@@ -655,6 +655,7 @@ export default function PlanStage(props: Props) {
           </g>
           {civ && <g>{civilG}</g>}
           {ghosts.length > 0 && <g>{ghosts}</g>}
+          {traced && <LinePlanLabels rooms={rooms} tagClearance={px(23)} />}
           <g>{tags}</g>
           {civ && <g>{civilLabels}</g>}
           <g>{overlay}</g>

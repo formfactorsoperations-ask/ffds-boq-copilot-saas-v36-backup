@@ -171,7 +171,10 @@ linkage, notes, change orders on a frozen BOQ). Do not add a mode or a switch ba
   (`lib/playground/planFromDrawing.ts`): the AI's rough boxes snapped onto the walls found in the drawing
   (`lib/playground/walls.ts`), tidied so rooms share walls, a passage grown to the rooms it reaches.
   Walls are near-black: an inside wall 4½″, the outside wall heavier. Doors are a gap with the leaf and a
-  dashed swing into the room; windows a gap with the glazing's two thin lines. The Plan lens's
+  dashed swing into the room; windows a gap with the glazing's two thin lines. Each room prints its name
+  in capitals (slate-700, bold) and its size under it (slate-500, `13'-0" X 14'-0"`, the client's printed
+  size where the plan gave one), centred just above its price tag, over the furniture with a paper edge;
+  a room too small for them shows its tag alone. The Plan lens's
   **Line plan / Drawing** switch shows the drawing under the rooms, to check them; the line plan is the
   default, and the meeting view always draws the line plan.
 - **Only inside the drawing**, as SVG fills, the materials have their own colours: wood grains, stone,

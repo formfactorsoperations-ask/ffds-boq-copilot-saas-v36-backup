@@ -713,6 +713,8 @@ describe('the line plan', () => {
     const stageSvg = screen.getByRole('application', { name: /The flat/ });
     expect(stageSvg.querySelector('[data-line-plan]')).toBeTruthy();
     expect(stageSvg.querySelector('image')).toBeNull();
+    // Each room's name and size, as the mockup prints them (Bedroom is 12 × 10 ft on the plan).
+    expect(stageSvg.querySelector('[data-room-label="Bedroom"]')?.textContent).toBe(`BEDROOM12'-0" X 10'-0"`);
     fireEvent.click(screen.getByRole('radio', { name: 'Drawing' }));
     expect(stageSvg.querySelector('image')?.getAttribute('href')).toBe(sheet.imageUrl);
     expect(stageSvg.querySelector('[data-line-plan]')).toBeNull();

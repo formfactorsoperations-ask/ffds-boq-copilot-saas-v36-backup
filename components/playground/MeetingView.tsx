@@ -4,7 +4,7 @@ import { X, ChevronLeft, ChevronRight, Check, Copy, Download } from 'lucide-reac
 import { Button, Chip, Segmented, LABEL } from '../ui/kit';
 import type { BoqItem, Item, ProjectContext, ProposalTier, PaymentStructure, Room, PlanSheet } from '../../types';
 import { sheetOf } from '../../lib/playground/planSheet';
-import { LinePlanRooms, drawingOf } from './linePlan';
+import { LinePlanRooms, LinePlanLabels, drawingOf } from './linePlan';
 import { scopeSplit, splitPricingOf, dealFor, complimentaryKeys, type OfferDiscount } from '../../lib/offers';
 import { gstTermsOf, scheduleFor } from '../../lib/paymentSchedule';
 import { playgroundTierSummary } from '../../lib/playground/versions';
@@ -61,6 +61,7 @@ function DrawnPlan({ rooms, boq, bankMap, specBank, focus, className, sheet }: {
           </g>
         );
       })}
+      {traced && <LinePlanLabels rooms={rs} />}
     </svg>
   );
 }
