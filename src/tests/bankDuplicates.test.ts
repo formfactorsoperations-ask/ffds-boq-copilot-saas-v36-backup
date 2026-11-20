@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { bankCounts, bankSell, bankUse, mergeCopies, originOf, repeatedGroups, separateCopy, settledGroups, suggestMaster } from '../../lib/bankDuplicates';
+import {
+  bankCounts, bankSell, bankUse, mergeCopies, originOf, previousRate, rateChoices, rateEffects, repeatedGroups, separateCopy, settledGroups, suggestMaster,
+  withPreviousRate, withStandardRate,
+} from '../../lib/bankDuplicates';
+import { planPriceLock } from '../../lib/priceLock';
 import { matchBank, pickable } from '../../lib/bankMatch';
 import { boqTotal, buildBankMap, resolveBoqLine } from '../../lib/boqPricing';
 
@@ -137,5 +141,99 @@ describe('keeping one item per name', () => {
     expect(settledGroups(after).map(g => [g.master?.id, g.copies.map(c => c.id)])).toEqual([['gen-015', ['ADHOC_a1', 'ADHOC_a2']]]);
     const orphan = [...before, item('o1', 'LOST', { mergedInto: 'deleted-item' })];
     expect(settledGroups(orphan)[0]).toMatchObject({ master: null });
+  });
+});
+
+/*
+  The rate the kept item carries. With every project's lines holding their own
+  price, the bank's rate is only what a NEW line starts from, so it can be set
+  to what the studio sells at now. It is checked, not assumed: a line that still
+  follows the bank would be re-priced, and that name's rate is then left alone.
+*/
+describe('setting the standard rate', () => {
+  const kept = item('gen-015', 'KING SIZE BED WITH STORAGE');   // 1260 + 540 at 15% = 2070
+
+  it('sells at the new rate, keeps its margin and its split of cost, and remembers what it was', () => {
+    const next = withStandardRate(kept, 2280, 99);
+    // To the rate asked, not a few paise off it: 40 sq ft must come to 91,200.
+    expect(bankSell(next)).toBeCloseTo(2280, 3);
+    expect(Math.round(bankSell(next) * 40)).toBe(91200);
+    expect(Number.isInteger(next.materials)).toBe(true);
+    expect(next.margin).toBe(15);
+    expect(next.materials / (next.materials + next.labor)).toBeCloseTo(0.7, 2);
+    expect(next.rateHistory).toEqual([{ at: 99, materials: 1260, labor: 540, margin: 15 }]);
+    expect(previousRate(next)).toBe(2070);
+    expect([next.id, next.name, next.unit, next.specs]).toEqual([kept.id, kept.name, kept.unit, kept.specs]);
+  });
+
+  it('changes nothing for the rate it already has, or a rate that is no rate', () => {
+    expect(withStandardRate(kept, 2070)).toBe(kept);
+    expect(withStandardRate(kept, 2070.4)).toBe(kept);
+    expect(withStandardRate(kept, 0)).toBe(kept);
+    expect(withStandardRate(kept, NaN)).toBe(kept);
+  });
+
+  it('gives an item with no cost a 65/35 split, and reads figures stored in a list', () => {
+    const bare = withStandardRate(item('n', 'NEW', { materials: 0, labor: 0, margin: 20 }), 1200);
+    expect([bare.materials, bare.labor, bare.margin]).toEqual([650, 350, 20]);
+    const listed = withStandardRate(item('l', 'PANEL', { materials: [1440], labor: [], margin: 0 }), 1500, 5);
+    expect([listed.materials, listed.labor]).toEqual([1500, 0]);
+    expect(listed.rateHistory![0]).toEqual({ at: 5, materials: [1440], labor: [], margin: 0 });
+  });
+
+  it('is put back exactly, one change at a time', () => {
+    const twice = withStandardRate(withStandardRate(kept, 2280, 1), 2376, 2);
+    expect(previousRate(twice)).toBeCloseTo(2280, 3);
+    const once = withPreviousRate(twice);
+    expect(Math.round(bankSell(once))).toBe(2280);
+    expect(once.rateHistory).toHaveLength(1);
+    const back = withPreviousRate(once);
+    expect(back).toEqual(kept);
+    expect('rateHistory' in back).toBe(false);
+    expect(withPreviousRate(kept)).toBe(kept);
+    expect(previousRate(kept)).toBeNull();
+    // A list comes back as the list it was.
+    const listed = item('l', 'PANEL', { materials: [1440], labor: [], margin: 0 });
+    expect(withPreviousRate(withStandardRate(listed, 1500))).toEqual(listed);
+  });
+
+  it('offers the rates the name has been at, without the kept item\'s own', () => {
+    const copies = [kept, bank()[1], bank()[2]];
+    expect(rateChoices(kept, copies, 2280, true)).toEqual([{ rate: 2280, label: 'last sold' }, { rate: 2376, label: 'a copy' }]);
+    expect(rateChoices(kept, copies, 2070, true).map(c => c.rate)).toEqual([2376, 2280]);
+    expect(rateChoices(kept, [kept], null, false)).toEqual([]);
+    expect(rateChoices(kept, copies, 2500, false)[0]).toEqual({ rate: 2500, label: 'last quoted' });
+  });
+});
+
+describe('is it safe to change this item\'s rate?', () => {
+  const b = bank();
+  const next = withStandardRate(b[0], 2280);
+  const follows: any = { id: 'p1', context: { name: 'New Project', status: 'lead' }, tiers: [{ id: 't1', name: 'Option 1', boq: [{ id: 'l1', bankId: 'gen-015', qty: 40, baseRate: 1260 }] }, { id: 't2', name: 'Option 2', boq: [{ id: 'l2', bankId: 'gen-014', qty: 10 }] }] };
+
+  it('names the options a line that still follows the bank would re-price', () => {
+    const fx = rateEffects(b, next, [follows]);
+    expect(fx).toHaveLength(1);
+    expect(fx[0]).toMatchObject({ project: 'New Project', option: 'Option 1' });
+    expect(fx[0].after).not.toBe(fx[0].before);
+  });
+
+  it('finds nothing once the project\'s prices are locked', () => {
+    const locked = planPriceLock(follows, b).project;
+    expect(rateEffects(b, next, [locked])).toEqual([]);
+  });
+
+  it('finds nothing in a project that reads its own copy of the item, or does not use it', () => {
+    const own = { ...follows, context: { ...follows.context, adHocItems: [item('gen-015', 'KING SIZE BED WITH STORAGE')] } };
+    expect(rateEffects(b, next, [own])).toEqual([]);
+    expect(rateEffects(b, withStandardRate(b[3], 2000), [follows])).toEqual([]);
+    expect(rateEffects(b, next, [])).toEqual([]);
+    expect(rateEffects(b, next, [null as any, { id: 'x' } as any])).toEqual([]);
+  });
+
+  it('catches a cost that would move even when the sell rate would not', () => {
+    // Margin on the line, materials and labour from the bank: the split is the bank's.
+    const marginOnly: any = { id: 'p2', context: { name: 'Draft' }, tiers: [{ id: 't', name: 'A', boq: [{ id: 'l', bankId: 'gen-015', qty: 1, marginOverride: 15 }] }] };
+    expect(rateEffects(b, next, [marginOnly])).toHaveLength(1);
   });
 });

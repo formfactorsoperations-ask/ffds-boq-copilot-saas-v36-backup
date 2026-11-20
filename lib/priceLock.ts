@@ -113,7 +113,7 @@ function lineFingerprint(b: any, bankMap: Map<string, Item>): unknown[] {
 }
 
 /** What the studio sees for an option: every line's rate, total and cost, and the option's totals. */
-function fingerprint(tier: any, boq: any[], bankMap: Map<string, Item>, ctx: any): string {
+export function optionFingerprint(tier: any, boq: any[], bankMap: Map<string, Item>, ctx: any): string {
   const lines = boq.map(b => lineFingerprint(b, bankMap));
   const playground = isPlaygroundTier(tier) ? playgroundTierSummary({ ...tier, boq }, bankMap, ctx) : null;
   return JSON.stringify({ lines, total: boqTotal(boq, bankMap), asActuals: asActualsTotal(boq, bankMap), playground });
@@ -138,8 +138,8 @@ function plan(
       if (c.rec) recs.push(c.rec);
       return c.line;
     });
-    const before = fingerprint(tier, boq, bankMap, ctx);
-    const after = recs.length ? fingerprint(tier, next, bankMap, ctx) : before;
+    const before = optionFingerprint(tier, boq, bankMap, ctx);
+    const after = recs.length ? optionFingerprint(tier, next, bankMap, ctx) : before;
     options.push({
       tierId: String(tier?.id ?? ''),
       tierName: String(tier?.name ?? ''),

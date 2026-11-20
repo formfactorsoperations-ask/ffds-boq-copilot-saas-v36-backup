@@ -1,7 +1,8 @@
 import { Item, FullProjectData } from '../types';
-import { buildBankMap, resolveBoqLine } from './boqPricing';
+import { boqTotal, buildBankMap, resolveBoqLine } from './boqPricing';
 import { calculateSellPrice } from './utils';
 import { duplicateGroups, isMergedCopy, pickable, sameThingKey } from './bankMatch';
+import { optionFingerprint } from './priceLock';
 
 /**
  * SETTLING THE REPEATED ITEMS — one item kept per name, the rest hidden as its copies.
@@ -154,3 +155,97 @@ export function settledGroups(bank: Item[]): Array<{ master: Item | null; copies
 
 /** How many items the bank offers, and how many copies it keeps out of sight. */
 export const bankCounts = (bank: Item[]) => ({ items: pickable(bank).length, copies: (bank || []).filter(isMergedCopy).length });
+
+/* ───────────────────────────── the rate the kept item carries ───────────────────────────── */
+
+/* Labour takes up what whole-rupee materials leave, to four places, so the item sells at the rate asked and not a few paise off it. */
+const round4 = (n: number) => Math.round(n * 10000) / 10000;
+const MAX_HISTORY = 20;
+
+/**
+ * The item, selling at `sell`.
+ *
+ * Its margin stays, and so does the split of its cost between materials and
+ * labour: the cost is scaled to what that margin needs. (A copy made by a
+ * revision carries a rate split 70/30 at no margin, which is no cost at all;
+ * taking its figures would lose the item's real ones.) An item with no cost
+ * yet is split 65/35. Figures stored as a list come out as numbers.
+ *
+ * What it held before is kept in `rateHistory`, exactly as stored, so the
+ * change can be put back. A rate that is already the item's changes nothing.
+ */
+export function withStandardRate(item: Item, sell: number, at = Date.now()): Item {
+  if (!(sell > 0) || !Number.isFinite(sell) || Math.round(bankSell(item)) === Math.round(sell)) return item;
+  const m = Number(item.materials) || 0, l = Number(item.labor) || 0, g = Number(item.margin) || 0;
+  const cost = sell / (1 + g / 100);
+  const share = m + l > 0 ? m / (m + l) : 0.65;
+  const materials = Math.min(Math.round(cost * share), Math.floor(cost));
+  const history = Array.isArray(item.rateHistory) ? item.rateHistory : [];
+  return {
+    ...item,
+    materials,
+    labor: round4(cost - materials),
+    margin: g,
+    rateHistory: [...history, { at, materials: item.materials, labor: item.labor, margin: item.margin }].slice(-MAX_HISTORY),
+  };
+}
+
+/** The sell rate the item had before its standard rate was last set, or null when it never was. */
+export function previousRate(item: Item): number | null {
+  const last = Array.isArray(item.rateHistory) ? item.rateHistory[item.rateHistory.length - 1] : null;
+  return last ? calculateSellPrice(Number(last.materials) || 0, Number(last.labor) || 0, Number(last.margin) || 0) : null;
+}
+
+/** The item with the figures it held before its standard rate was last set, exactly as they were. */
+export function withPreviousRate(item: Item): Item {
+  const history = Array.isArray(item.rateHistory) ? item.rateHistory : [];
+  const last = history[history.length - 1];
+  if (!last) return item;
+  const { rateHistory: _h, ...rest } = item as any;
+  return { ...rest, materials: last.materials, labor: last.labor, margin: last.margin, ...(history.length > 1 && { rateHistory: history.slice(0, -1) }) } as Item;
+}
+
+export interface RateEffect { project: string; option: string; before: number; after: number }
+
+/**
+ * The options that would price differently if `next` replaced the item of the
+ * same id in the bank: every line rate, cost and total is compared, as Lock
+ * prices compares them. Empty means no project reads this item's rate any more,
+ * so it is safe to change. A line that still follows the bank shows up here.
+ */
+export function rateEffects(bank: Item[], next: Item, projects: FullProjectData[] | null | undefined): RateEffect[] {
+  const out: RateEffect[] = [];
+  const nextBank = (bank || []).map(i => (i.id === next.id ? next : i));
+  (projects || []).forEach(p => {
+    if (!p || !p.id) return;
+    const ctx: any = p.context || {};
+    const own = Array.isArray(ctx.adHocItems) ? ctx.adHocItems : [];
+    // The project's own copy of the item is the one it reads: the bank's does not reach it.
+    if (own.some((i: any) => i?.id === next.id)) return;
+    const tiers = (Array.isArray(p.tiers) ? p.tiers : []).filter((t: any) => Array.isArray(t?.boq) && t.boq.some((b: any) => b?.bankId === next.id));
+    if (!tiers.length) return;
+    const was = buildBankMap(bank || [], own), now = buildBankMap(nextBank, own);
+    tiers.forEach((t: any) => {
+      if (optionFingerprint(t, t.boq, was, ctx) === optionFingerprint(t, t.boq, now, ctx)) return;
+      out.push({ project: String(ctx.name || 'Untitled project'), option: String(t.name || 'Option'), before: boqTotal(t.boq, was), after: boqTotal(t.boq, now) });
+    });
+  });
+  return out;
+}
+
+/** The rates worth offering for a name: what its copies hold and what it was last sold at, without the kept item's own. */
+export function rateChoices(kept: Item, copies: Item[], lastRate: number | null, lastSold: boolean): Array<{ rate: number; label: string }> {
+  const own = Math.round(bankSell(kept));
+  const seen = new Set<number>([own]);
+  const out: Array<{ rate: number; label: string }> = [];
+  const add = (rate: number | null, label: string) => {
+    if (rate === null || !(rate > 0)) return;
+    const r = Math.round(rate);
+    if (seen.has(r)) return;
+    seen.add(r);
+    out.push({ rate: r, label });
+  };
+  add(lastRate, lastSold ? 'last sold' : 'last quoted');
+  [...copies].filter(c => c.id !== kept.id).map(bankSell).sort((a, b) => b - a).forEach(r => add(r, 'a copy'));
+  return out.slice(0, 4);
+}

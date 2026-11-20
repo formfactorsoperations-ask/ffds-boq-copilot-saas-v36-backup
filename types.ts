@@ -1211,6 +1211,9 @@ export interface Item {
      *  It stays in the bank so every line that points at it still finds it, but it is left out
      *  of the bank list, the pickers and import matching. Missing or null: an item in its own right. */
     mergedInto?: string | null;
+    /** The figures this item held before each time its standard rate was set (lib/bankDuplicates.ts),
+     *  oldest first, exactly as they were stored. The last one is what "put it back" restores. */
+    rateHistory?: Array<{ at: number; materials: unknown; labor: unknown; margin: unknown }>;
 }
 
 export type ItemSupply = 'client' | 'actuals';

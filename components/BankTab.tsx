@@ -1552,7 +1552,7 @@ const BankTab: React.FC<BankTabProps> = ({
       )}
 
       {isRepeatedOpen && canSettle && (
-        <RepeatedItemsModal bank={wholeBank} projects={projects} setBank={setBank} onClose={() => setIsRepeatedOpen(false)} />
+        <RepeatedItemsModal bank={wholeBank} projects={projects} setBank={setBank} read={priceLock?.read} onClose={() => setIsRepeatedOpen(false)} />
       )}
 
       {/* 8. BULK IMPORT MODAL (CSV/Excel) */}
