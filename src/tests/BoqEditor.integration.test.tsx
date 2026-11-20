@@ -238,7 +238,8 @@ describe('Pricing & Tiers: one price per option', () => {
       ] },
     ];
     const [tiers, setTiers] = useState<any[]>(withSummaries(raw, bankMap));
-    const [ctx, setCtx] = useState<any>({ name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10 });
+    // The client's plan is on the project: options wait for it (lib/briefRead optionsWaitForPlan; optionsNeedPlan.test).
+    const [ctx, setCtx] = useState<any>({ name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10, floorplanImageUrl: 'https://x/o/plan.jpg' });
     const [active, setActive] = useState<string | null>('com');
     return (
       <TierManager tiers={tiers} setTiers={setTiers as any} activeTierId={active} setActiveTierId={setActive}
@@ -281,7 +282,7 @@ function TierHarness({ projects, useBank = bank, probe, ctx: extraCtx }: { proje
     { id: 'com', name: 'Comfort Upgrade', timestamp: 2, boq: [{ id: 'c', bankId: 'wardrobe', qty: 40 }, { id: 'd', bankId: 'paint', qty: 300 }] },
   ]);
   const calc = useMemo(() => withSummaries(tiers, bankMap), [tiers, bankMap]);
-  const [ctx, setCtx] = useState<any>({ name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10, config: '1BHK', ...extraCtx });
+  const [ctx, setCtx] = useState<any>({ name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10, config: '1BHK', floorplanImageUrl: 'https://x/o/plan.jpg', ...extraCtx });
   const [active, setActive] = useState<string | null>('ess');
   probe?.({ ctx, tiers });
   return (
