@@ -228,9 +228,12 @@ export default function PlaygroundScreen(props: Props) {
   }, []);
   useEffect(() => { if (focusLineId) { setLens('sheet'); setSel(focusLineId); } }, [focusLineId]);
   const firstTier = useRef(true);
+  /* A version opened from the Deal lens opens on the Deal lens. */
+  const keepLens = useRef<Lens | null>(null);
   useEffect(() => {
     if (firstTier.current) { firstTier.current = false; return; }
-    setLens(isPlaygroundTier(tier) ? 'plan' : 'sheet'); setSel(null); setSelRoom(null);
+    setLens(keepLens.current || (isPlaygroundTier(tier) ? 'plan' : 'sheet')); setSel(null); setSelRoom(null);
+    keepLens.current = null;
   }, [tier.id]);
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(null), 3200); return () => clearTimeout(t); }, [note]);
   useEffect(() => {
@@ -299,6 +302,15 @@ export default function PlaygroundScreen(props: Props) {
   const validity = proposalValidity(ctx, termsSettings);
   /* Offers are written by the studio's finance roles, on an option that is not signed or kept as it was. */
   const dealLocked = readOnlyProp || superseded || !!signed || contractInForce(ctx) || !holdsFinanceRole(currentRoles);
+  /* Why, in words, with the way to where it can be changed. */
+  const dealLockedWhy = !dealLocked ? null
+    : superseded && vplace ? {
+      text: `v${vplace.n} is kept as it was, so its deal is shown, not changed. Offers are made on v${vplace.versions.length}, the newest version of ${tier.name || 'this option'}: it is the one the proposal and Money price.`,
+      action: onSelectTier ? { label: `Open v${vplace.versions.length}`, onClick: () => { keepLens.current = 'deal'; onSelectTier(vplace.latest.id); } } : undefined,
+    }
+    : signed || contractInForce(ctx) ? { text: 'This option is signed: its offers stay as the client signed them. A change to the scope goes through a revision.' }
+    : readOnlyProp ? { text: 'The BOQ is frozen, so the deal is shown, not changed.' }
+    : { text: 'Offers, the design fee and the schedule are set by the Owner and the studio’s finance roles. Ask one of them to change the deal.' };
   const chains = useMemo(() => optionChains(tiers), [tiers]);
   /* The offers follow the BOQ: a changed line re-prices them, and a special price still meets its target. A sent proposal keeps its figures. */
   useEffect(() => {
@@ -942,7 +954,7 @@ export default function PlaygroundScreen(props: Props) {
                       split={dealSplit} discounts={discounts} terms={gstTerms}
                       schedule={scheduleFor(ctx, { tierSummary: dealSummary }, { paymentStructure })}
                       validity={validity} fee={{ type: ctx.designFeeType || 'percentage', value: Number(ctx.designFee ?? 10) }}
-                      floor={floor} seesMargins={seesMargins && !hideFigures} locked={dealLocked} rooms={dealRooms} pickLines={lines} newId={newId}
+                      floor={floor} seesMargins={seesMargins && !hideFigures} locked={dealLocked} lockedWhy={dealLockedWhy} rooms={dealRooms} pickLines={lines} newId={newId}
                       onDiscounts={(next, msg) => { setProjectContext(prev => withDiscounts(prev, next)); if (msg) setNote(msg); }}
                       onFee={v => setProjectContext(prev => ({ ...prev, designFee: (prev.designFeeType || 'percentage') === 'percentage' ? Math.min(30, Math.max(0, v)) : Math.max(0, v) }))}
                       onDays={d => setProjectContext(prev => withValidDays(prev, d))}

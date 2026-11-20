@@ -440,10 +440,27 @@ describe('Deal (PR P)', () => {
     expect(screen.queryByLabelText('Proposal valid for')).toBeNull();
   });
 
+  it('an earlier version’s deal is shown, not changed: it says why, and opens the newest version', () => {
+    const onSelect = vi.fn();
+    const t1 = { ...PG, id: 't1', name: 'Comfort Upgrade', timestamp: 1, boq: baseBoq() };
+    const t2 = { ...PG, id: 't2', name: 'Comfort Upgrade', timestamp: 2, parentTierId: 't1', boq: baseBoq() };
+    render(<Harness tiersIn={[t1, t2]} activeIn="t1" onSelect={onSelect} />);
+    lens('Deal');
+    const why = screen.getByRole('note', { name: 'Why the deal is read-only' });
+    expect(why.textContent).toMatch(/v1 is kept as it was.*Offers are made on v2/);
+    fireEvent.click(within(why).getByRole('button', { name: 'Open v2' }));
+    expect(onSelect).toHaveBeenCalledWith('t2');
+    // It opens on the Deal lens, now changeable.
+    expect(screen.getByRole('radio', { name: /^Deal$/ }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.queryByRole('note', { name: 'Why the deal is read-only' })).toBeNull();
+    expect((screen.getByLabelText(/Design fee/) as HTMLInputElement).disabled).toBe(false);
+  });
+
   it('a Designer sees the deal but cannot change it, and never the margin', () => {
     org.role = 'Designer';
     render(<Harness tier={PG} />);
     lens('Deal');
+    expect(screen.getByRole('note', { name: 'Why the deal is read-only' }).textContent).toMatch(/Owner and the studio’s finance roles/);
     expect(pays()).toMatch(/^₹/);
     expect(screen.queryByText(/Margin on the work/)).toBeNull();
     expect((screen.getByLabelText(/Design fee/) as HTMLInputElement).disabled).toBe(true);

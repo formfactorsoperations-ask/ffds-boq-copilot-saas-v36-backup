@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Target, Percent, Gift, Map as MapIcon, List, X, Plus, Clock } from 'lucide-react';
+import { Target, Percent, Gift, Map as MapIcon, List, X, Plus, Clock, Lock, ArrowRight } from 'lucide-react';
 import { Button, Chip } from '../ui/kit';
 import {
   SCOPE_PARTS, offerDiscount, offerWhy, dealFor, complimentaryKeys,
@@ -42,7 +42,7 @@ const amountOf = (d: OfferDiscount, sell: number, fee: number) =>
   (d.type === 'percentage' ? (d.target === 'design' ? fee : sell) * (d.value / 100) : d.value);
 
 export function DealLens({
-  tierId, optionName, summary, lineCount, rounded, split, discounts, terms, schedule, validity, fee, floor, seesMargins, locked,
+  tierId, optionName, summary, lineCount, rounded, split, discounts, terms, schedule, validity, fee, floor, seesMargins, locked, lockedWhy,
   rooms, pickLines, newId, onDiscounts, onFee, onDays, onInitiation, onNote,
 }: {
   tierId: string;
@@ -62,6 +62,8 @@ export function DealLens({
   seesMargins: boolean;
   /** Signed, superseded or frozen: the deal is shown, not changed. */
   locked: boolean;
+  /** Why it cannot be changed, and where it can be. */
+  lockedWhy?: { text: string; action?: { label: string; onClick: () => void } } | null;
   /** The rooms with work in them, in the plan's order. */
   rooms: string[];
   /** The billable lines, in the BOQ's order, to give at no charge. */
@@ -117,6 +119,13 @@ export function DealLens({
 
   return (
     <div className="p-4 grid gap-4 grid-cols-1 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] hud-swap" role="region" aria-label="Deal">
+      {locked && lockedWhy && (
+        <div className="xl:col-span-2 rounded-2xl bg-white border border-slate-200 px-4 py-3 flex items-center gap-3 flex-wrap" role="note" aria-label="Why the deal is read-only">
+          <span className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 grid place-items-center shrink-0"><Lock className="w-4 h-4" aria-hidden /></span>
+          <p className="flex-1 min-w-[240px] text-xs text-slate-600">{lockedWhy.text}</p>
+          {lockedWhy.action && <Button size="sm" variant="primary" icon={ArrowRight} onClick={lockedWhy.action.onClick}>{lockedWhy.action.label}</Button>}
+        </div>
+      )}
       <section className="rounded-2xl bg-white border border-slate-200 p-5">
         <div className="flex items-center gap-2">
           <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><Target className="w-4 h-4" aria-hidden /></span>
