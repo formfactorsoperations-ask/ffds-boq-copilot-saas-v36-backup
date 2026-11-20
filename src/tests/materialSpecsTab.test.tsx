@@ -4,7 +4,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
 const role = { current: 'Owner' };
 vi.mock('../../contexts/OrgContext', () => ({
-  useOrg: () => ({ orgData: { tenantId: 'studio_a', playground: true }, currentRole: role.current, currentRoles: [role.current], currentUserAuth: { displayName: 'Anish K.' } }),
+  useOrg: () => ({ orgData: { tenantId: 'studio_a' }, currentRole: role.current, currentRoles: [role.current], currentUserAuth: { displayName: 'Anish K.' } }),
 }));
 
 import MaterialSpecsTab from '../../components/materialSpecs/MaterialSpecsTab';

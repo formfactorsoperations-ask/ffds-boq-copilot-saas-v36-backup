@@ -1,18 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { BoqItem } from '../types';
 import {
-  SizeUnit, LineSize, readSize, qtyFromSize, sizeUpdates, CLEAR_SIZE, formatSize,
-  parseSize, basisOfUnit,
+  SizeUnit, readSize, qtyFromSize, sizeUpdates, CLEAR_SIZE, formatSize,
+  parseSize,
 } from '../lib/boqSize';
-import NumberField from './NumberField';
 
 /*
   The size of a piece, typed once, and the quantity that follows from it.
 
-  Two shapes of the same control: a full panel for the Focus Editor and the
-  card view, where there is room to say what each box is; and a single text
-  cell for the Excel view, where "7 x 8" or "2100 x 2400 mm" is quicker to
-  type than three boxes. Both write the same fields through lib/boqSize.ts.
+  One text cell, in the full grid (Sheet → Open the full grid), where "7 x 8"
+  or "2100 x 2400 mm" is quicker to type than three boxes. It writes the same
+  fields as the BOQ Playground's inspector, through lib/boqSize.ts. (The panel
+  shape went with the Focus Editor and the card view, PR 7b.)
 */
 
 type SizedLine = Pick<BoqItem, 'id' | 'qty' | 'calcLength' | 'calcWidth' | 'calcMultiplier' | 'sizeUnit'> & { unit?: string };
@@ -37,120 +36,6 @@ export function useSizeUnit(): [SizeUnit, (u: SizeUnit) => void] {
 
 /** Why a size gave no quantity. (The project is not strict, so the union does not narrow.) */
 const reasonOf = (r: ReturnType<typeof qtyFromSize>): string => ('reason' in r ? r.reason : '');
-
-/** A dimension of zero, or none, is no dimension. */
-const dim = (v: number | undefined): number | undefined => (v !== undefined && v > 0 ? v : undefined);
-
-const fieldCls = 'w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] disabled:bg-slate-50 tabular-nums';
-const labelCls = 'block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5';
-
-/** The full control: unit, dimensions, pieces, and what they come to. */
-export const SizePanel: React.FC<{
-  line: SizedLine;
-  onChange: (updates: Partial<BoqItem>) => void;
-  disabled?: boolean;
-}> = ({ line, onChange, disabled }) => {
-  const [defaultUnit, rememberUnit] = useSizeUnit();
-  const stored = readSize(line);
-  const unit: SizeUnit = stored?.unit || (line.sizeUnit as SizeUnit) || defaultUnit;
-  const basis = basisOfUnit(line.unit);
-  const size: LineSize = { a: stored?.a, b: stored?.b, nos: line.calcMultiplier || undefined, unit };
-  const result = qtyFromSize(stored ? size : null, line.unit);
-  const overridden = result.ok && Math.abs(result.qty - (Number(line.qty) || 0)) > 0.01;
-
-  const write = (next: Partial<LineSize>) => onChange(sizeUpdates({ ...size, ...next }, line.unit));
-
-  const firstLabel = basis === 'length' ? 'Length' : 'Width';
-  const showSecond = basis !== 'length';
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3" data-testid="size-panel">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <span className={labelCls.replace(' mb-1.5', '')}>Size</span>
-        <div className="inline-flex p-1 rounded-xl bg-slate-100" role="group" aria-label="Size unit">
-          {UNIT_CHOICES.map(u => (
-            <button
-              key={u}
-              type="button"
-              disabled={disabled}
-              aria-pressed={unit === u}
-              onClick={() => { rememberUnit(u); if (stored) write({ unit: u }); else onChange({ sizeUnit: u }); }}
-              className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-colors ${unit === u ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >{u}</button>
-          ))}
-        </div>
-      </div>
-
-      <div className={`grid gap-2 items-end ${showSecond ? 'grid-cols-[1fr_auto_1fr_auto_72px]' : 'grid-cols-[1fr_auto_72px]'}`}>
-        <div>
-          <label className={labelCls}>{firstLabel}</label>
-          <NumberField
-            disabled={disabled} min={0} allowEmpty decimals={4}
-            aria-label={`${firstLabel} (${unit})`}
-            value={size.a}
-            onCommit={v => write({ a: dim(v) })}
-            placeholder={unit}
-            className={fieldCls}
-          />
-        </div>
-        {showSecond && (<>
-          <span className="pb-2 text-slate-400 text-sm">×</span>
-          <div>
-            <label className={labelCls}>Height</label>
-            <NumberField
-              disabled={disabled} min={0} allowEmpty decimals={4}
-              aria-label={`Height (${unit})`}
-              value={size.b}
-              onCommit={v => write({ b: dim(v) })}
-              placeholder={unit}
-              className={fieldCls}
-            />
-          </div>
-        </>)}
-        <span className="pb-2 text-slate-400 text-sm">×</span>
-        <div>
-          <label className={labelCls} title="How many identical pieces">Nos</label>
-          <NumberField
-            disabled={disabled} min={0} allowEmpty
-            aria-label="Number of pieces"
-            value={line.calcMultiplier && line.calcMultiplier !== 1 ? line.calcMultiplier : undefined}
-            onCommit={v => write({ nos: dim(v) })}
-            placeholder="1"
-            className={fieldCls}
-          />
-        </div>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between gap-2 min-h-[20px]">
-        {result.ok ? (
-          <span className="text-[11px] text-slate-500" data-testid="size-working">
-            {result.working}{!overridden && <span className="text-emerald-700 font-semibold"> · sets the quantity</span>}
-          </span>
-        ) : (
-          <span className="text-[11px] text-slate-400">
-            {stored ? reasonOf(result) : basis === 'count'
-              ? 'Optional: the size is noted on the line, quantity is the number of pieces'
-              : basis === 'lump'
-                ? 'Optional: the size is noted on the line'
-                : `Type the size and the quantity is worked out in ${line.unit || 'the item unit'}`}
-          </span>
-        )}
-        {stored && !disabled && (
-          <button type="button" onClick={() => onChange(CLEAR_SIZE)} className="text-[11px] font-bold text-slate-400 hover:text-slate-700 shrink-0">Clear size</button>
-        )}
-      </div>
-
-      {overridden && result.ok && (
-        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5">
-          <span className="text-[11px] text-amber-800">Quantity {line.qty} was typed in; the size gives {result.qty}.</span>
-          {!disabled && (
-            <button type="button" onClick={() => onChange({ qty: result.qty })} className="text-[11px] font-bold text-amber-800 hover:text-amber-900 shrink-0">Use {result.qty}</button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
 
 /** One text cell: "7 x 8", "2100 x 2400 mm", "7'6\" x 8'". Commits on Enter or leaving the cell. */
 export const SizeCell: React.FC<{

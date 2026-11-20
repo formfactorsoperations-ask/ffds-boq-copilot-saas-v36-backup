@@ -23,7 +23,7 @@ import { uploadPlanImage } from '../../services/planStorage';
 import { downscalePlanToBase64 } from '../../lib/imageDownscale';
 import { connectGoogleCalendar, isGoogleCalendarConnected } from '../../services/googleCalendarService';
 import { CountUp, Dot } from '../ui/HudBits';
-import { Panel as KitPanel, Chip, Segmented } from '../ui/kit';
+import { Panel as KitPanel, Chip } from '../ui/kit';
 import StudioTeamSection from './StudioTeamSection';
 import ZohoBooksCard from './ZohoBooksCard';
 import GoogleDriveCard from './GoogleDriveCard';
@@ -608,34 +608,6 @@ export default function StudioSettingsConsole(props: {
                   <p className="text-xs text-slate-500 mt-0.5">Import projects from a JSON file.</p>
                   <input type="file" accept="application/json" className="hidden" onChange={props.onImportProject} />
                 </label>
-              </div>
-
-              {/* The BOQ Playground preview (BOQ Playground plan, rollout): off unless a studio switches it on. */}
-              <div className="mt-6 pt-6 border-t border-slate-100">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">
-                  BOQ Playground preview
-                </h3>
-                <div className="flex items-center justify-between gap-4 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex-wrap">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-800">
-                      {draft.playground ? 'On for this studio' : 'Off'}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      The plan-based BOQ, as it is built: for now, the plan under the BOQ in the BOQ Editor&rsquo;s Plan Takeoff view. Switching it off brings back today&rsquo;s editor as it was.
-                    </p>
-                  </div>
-                  {canEdit ? (
-                    <Segmented<'off' | 'on'>
-                      label="BOQ Playground preview"
-                      size="sm"
-                      value={draft.playground ? 'on' : 'off'}
-                      onChange={(v) => setField('playground', v === 'on')}
-                      options={[{ id: 'off', label: 'Off' }, { id: 'on', label: 'On' }]}
-                    />
-                  ) : (
-                    <Chip tone={draft.playground ? 'brand' : 'slate'}>{draft.playground ? 'On' : 'Off'}</Chip>
-                  )}
-                </div>
               </div>
 
               <div className="mt-6 pt-6 border-t border-slate-100">

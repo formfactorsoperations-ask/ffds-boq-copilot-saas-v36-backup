@@ -27,8 +27,7 @@ import { planImageFromFile, planImageFromUrl, storePlanImage, planBase64FromUrl 
   name, pieces move with their room, and each room's price change is shown
   before anything moves. The old plan is kept in history.
 
-  Shown in the BOQ Editor's Plan Takeoff view while the studio's BOQ
-  Playground switch is on. The Playground screen (PR 3a) reuses it as its Plan lens.
+  The BOQ Playground (PR 3a) shows it from its plan menu: the plan under the BOQ.
 */
 
 type Tool = 'look' | 'scale' | 'trace';

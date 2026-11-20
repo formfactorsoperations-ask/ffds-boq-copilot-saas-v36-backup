@@ -39,10 +39,6 @@
     "offPalette": 31,
     "mono": 2
   },
-  "components/BoqItemCard.tsx": {
-    "tinyPx": 18,
-    "offPalette": 26
-  },
   "components/BulkImportModal.tsx": {
     "offPalette": 1,
     "mono": 2
@@ -104,10 +100,6 @@
   "components/LoginScreen.tsx": {
     "halfPx": 9,
     "offPalette": 1
-  },
-  "components/MarginDeviationIndicator.tsx": {
-    "tinyPx": 1,
-    "offPalette": 2
   },
   "components/MarginOptimizer.tsx": {
     "mono": 3
@@ -184,9 +176,6 @@
     "offPalette": 21,
     "mono": 3
   },
-  "components/RoomCard.tsx": {
-    "offPalette": 8
-  },
   "components/SOFBoardTab.tsx": {
     "offPalette": 17,
     "mono": 5
@@ -213,7 +202,7 @@
   "components/StudioDashboard.tsx": {
     "halfPx": 3,
     "tinyPx": 1,
-    "offPalette": 8,
+    "offPalette": 2,
     "mono": 5
   },
   "components/StudioExcelGrid.tsx": {
