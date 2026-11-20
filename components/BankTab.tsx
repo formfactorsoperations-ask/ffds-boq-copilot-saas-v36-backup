@@ -8,6 +8,8 @@ import BulkImportModal from './BulkImportModal';
 import BankSpecImportModal from './bank/BankSpecImportModal';
 import { applySpecs, buildSpecSheetWorkbook, specSheetName } from '../lib/bankSpecs';
 import { downloadWorkbook } from '../lib/scopeWorkbook';
+import { buildBankUsageExport, bankUsageFileName } from '../lib/bankUsageExport';
+import { Button } from './ui/kit';
 import BankSpreadsheetTable from './bank/BankSpreadsheetTable';
 import BankCategoryGroupedView from './bank/BankCategoryGroupedView';
 import BankBulkActionModal, { BulkActionType } from './bank/BankBulkActionModal';
@@ -58,6 +60,8 @@ interface BankTabProps {
   /** BOQ Playground S2: the Material specs bank. With it, items show their recipe and the No recipe filter appears. */
   specs?: MaterialSpecsBank;
   onOpenRecipe?: (id: string) => void;
+  /** The bank shown is the draft sandbox, not the live bank. Noted in the usage export. */
+  isDraftBank?: boolean;
 }
 
 const BankTab: React.FC<BankTabProps> = ({
@@ -69,6 +73,7 @@ const BankTab: React.FC<BankTabProps> = ({
   projects = [],
   specs,
   onOpenRecipe,
+  isDraftBank = false,
 }) => {
   const { orgData } = useOrg();
   const { settings, updateSettings } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
@@ -397,6 +402,26 @@ const BankTab: React.FC<BankTabProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  /* Which project line uses which item, at what price (lib/bankUsageExport.ts). Reads only. */
+  const handleExportUsage = () => {
+    try {
+      const studio = orgData?.orgName || 'Studio';
+      const data = buildBankUsageExport(bank, projects, { studio, draftBank: isDraftBank });
+      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = bankUsageFileName(studio);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Usage export failed:', err);
+      alert('The usage file could not be made. Please try again.');
+    }
+  };
+
   const handleJsonUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -656,6 +681,15 @@ const BankTab: React.FC<BankTabProps> = ({
               <Download className="w-3.5 h-3.5 text-slate-500" />
               Export JSON
             </button>
+
+            <Button
+              size="sm"
+              icon={Briefcase}
+              onClick={handleExportUsage}
+              title={`Download which project lines use each item and at what price, across ${projects.length} project${projects.length === 1 ? '' : 's'}. Nothing is changed.`}
+            >
+              Export usage
+            </Button>
 
             <button
               onClick={handleAiSynthesis}

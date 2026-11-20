@@ -279,6 +279,7 @@ export default function TemplatesAndBankTab({
               highlightedBankItemId={highlightedBankItemId}
               onHighlightClear={() => setHighlightedBankItemId(null)}
               projects={projects}
+              isDraftBank={isDraftBankMode}
               specs={specs.bank}
               onOpenRecipe={(id: string) => setRecipeItemId(id)}
             />
