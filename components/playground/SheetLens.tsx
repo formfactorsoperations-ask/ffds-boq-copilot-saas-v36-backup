@@ -5,7 +5,7 @@ import type { BoqItem, Room } from '../../types';
 import { SCOPE_BUCKETS } from '../../lib/scopeBuckets';
 import { round2 } from '../../lib/playground/geometry';
 import { PieceThumb } from './pieceArt';
-import { inr, marginTone, Scrub, withCost, withMarkup, withRate, type LineModel } from './playgroundUi';
+import { inr, marginTone, Scrub, withCost, withMarkup, withRate, sizeWords, type LineModel } from './playgroundUi';
 import type { ShareRow } from './LiveBoq';
 import { currentVersion, type MaterialSpecsBank } from '../../lib/materialSpecs';
 import type { Changes } from '../../lib/playground/changes';
@@ -119,6 +119,7 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
             {typed && !readOnly
               ? <Scrub variant="cell" label={`${m.name} quantity`} value={m.qty} step={1} pxPerStep={8} format={v => v.toLocaleString('en-IN')} onCommit={v => onReplace({ ...l, qty: v })} />
               : <span className="text-sm font-bold text-slate-800 tabular-nums">{m.qty.toLocaleString('en-IN')}</span>}
+            {sizeWords(m) && <div className="text-[10px] font-bold text-slate-600 tabular-nums -mt-0.5 whitespace-nowrap" data-size={l.id}>{sizeWords(m)}</div>}
             <div className="text-[10px] text-slate-400 -mt-0.5">{m.unit}{from}</div>
           </td>
           {money && <>

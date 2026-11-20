@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import '../projectHeader/projectHeader.css';
 import { Sparkles, X, Search, Plus } from 'lucide-react';
 import { INPUT } from '../ui/kit';
 import type { Item, PieceKind } from '../../types';
@@ -68,7 +70,7 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
         <div className="mt-2 grid grid-cols-3 gap-0.5 p-0.5 rounded-xl bg-slate-100" role="radiogroup" aria-label="Library">
           {([['pieces', 'Pieces'], ['kits', 'Kits'], ['client', 'By client']] as [Tab, string][]).map(([k, n]) => (
             <button key={k} type="button" role="radio" aria-checked={tab === k} onClick={() => setTab(k)}
-              className={`py-1 rounded-lg text-[11px] font-bold ${tab === k ? 'bg-white text-[#3D52A0] shadow-sm' : 'text-slate-600'}`}>{n}</button>
+              className={`py-1 rounded-lg text-[11px] font-bold transition-all duration-200 ${tab === k ? 'bg-white text-[#3D52A0] shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>{n}</button>
           ))}
         </div>
         {tab === 'kits' && <div className="text-[11px] text-slate-500 mt-1.5">From the Item Bank’s bundles. Drop a kit on a room: every line is sized from that room.</div>}
@@ -81,28 +83,26 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
           <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
             {CATS.map(c => (
               <button key={c} type="button" onClick={() => setCat(c)} aria-pressed={cat === c}
-                className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold ${cat === c ? 'bg-[#3D52A0] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{c}</button>
+                className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors duration-150 ${cat === c ? 'bg-[#3D52A0] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{c}</button>
             ))}
           </div>
         </>}
       </div>
       {tab === 'pieces' ? (
-        <div className="flex-1 overflow-auto p-3 grid grid-cols-2 gap-2 content-start">
+        <div key="pieces" className="hud-swap flex-1 overflow-auto p-3 grid grid-cols-2 gap-2 content-start">
           {list.map(({ item, draw }, i) => (
-            <div key={item.id} draggable={!readOnly}
+            <React.Fragment key={item.id}><LibTile i={i} readOnly={readOnly} title={readOnly ? item.name : `Drag ${item.name} onto the plan`}
               onDragStart={e => { e.dataTransfer.setData('text/plain', item.id); e.dataTransfer.effectAllowed = 'copy'; }}
-              className={`hud-row-in relative rounded-xl border border-slate-200 bg-white p-2 ${readOnly ? '' : 'cursor-grab hover:border-[#3D52A0]/40 hover:shadow-md'}`}
-              style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }} title={readOnly ? item.name : `Drag ${item.name} onto the plan`}>
-              <span className="block"><PieceThumb kind={draw.kind} w={draw.w} d={draw.d} words={item.specs} {...(artOf?.(item) || {})} /></span>
+              thumb={<PieceThumb kind={draw.kind} w={draw.w} d={draw.d} words={item.specs} {...(artOf?.(item) || {})} />}>
               <span className="block text-[11px] font-semibold text-slate-800 leading-tight mt-1 line-clamp-2">{item.name}</span>
               <span className="block text-[10px] font-bold text-slate-500 tabular-nums">{inr(calculateSellPrice(item.materials, item.labor, item.margin))}/{item.unit}</span>
               {!readOnly && (
                 <button type="button" onClick={() => onAdd(item)} aria-label={`Add ${item.name} ${addLabel}`} title={`Add ${addLabel}`}
-                  className="absolute top-1.5 right-1.5 w-6 h-6 rounded-lg bg-white/90 border border-slate-200 text-slate-600 hover:bg-[#3D52A0] hover:text-white grid place-items-center">
+                  className="absolute top-1.5 right-1.5 w-6 h-6 rounded-lg bg-white/90 border border-slate-200 text-slate-600 hover:bg-[#3D52A0] hover:text-white hover:border-transparent hover:scale-110 active:scale-95 transition-all duration-150 grid place-items-center">
                   <Plus className="w-3 h-3" aria-hidden />
                 </button>
               )}
-            </div>
+            </LibTile></React.Fragment>
           ))}
           {list.length === 0 && <p className="col-span-2 text-xs text-slate-500 px-1">No item in the bank draws by that name.</p>}
         </div>
@@ -114,5 +114,37 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
           readOnly={readOnly} hideFigures={hideFigures} onDest={setDest} onAdd={it => onAddSupplied?.(it, places.includes(dest) ? dest : (places[places.length - 1] || 'Whole flat'))} />
       )}
     </aside>
+  );
+}
+
+/*
+  A library tile, with the motion the owner asked for (20 Nov 2026, as the
+  mockup's pg-tile): it lifts on hover and its picture gives a little wiggle;
+  it presses in on click and fades while it is being dragged. Transitions and
+  framer-motion only, no new keyframes; still under reduced motion.
+*/
+export function LibTile({ i, readOnly, title, thumb, onDragStart, children, className = '' }: {
+  i: number;
+  readOnly: boolean;
+  title?: string;
+  thumb: React.ReactNode;
+  onDragStart: (e: React.DragEvent) => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const still = useReducedMotion();
+  const [hover, setHover] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  return (
+    <div draggable={!readOnly} title={title}
+      onDragStart={e => { setDragging(true); onDragStart(e); }} onDragEnd={() => setDragging(false)}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      className={`hud-row-in relative rounded-xl border bg-white p-2 transition-[box-shadow,border-color,opacity,scale] duration-200 ease-out ${dragging ? 'opacity-50 scale-95' : ''} ${readOnly ? 'border-slate-200' : `phd-lift cursor-grab active:cursor-grabbing border-slate-200 hover:border-[#3D52A0]/40 hover:shadow-md ${still ? '' : 'active:scale-[0.98]'}`} ${className}`}
+      style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }}>
+      <motion.span className="block origin-center" animate={hover && !still && !readOnly ? { rotate: [0, -7, 7, 0] } : { rotate: 0 }} transition={{ duration: 0.42, ease: 'easeInOut' }}>
+        {thumb}
+      </motion.span>
+      {children}
+    </div>
   );
 }

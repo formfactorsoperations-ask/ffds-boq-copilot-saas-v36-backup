@@ -9,6 +9,8 @@ import type { MeasureContext } from '../../lib/playground/rooms';
 import type { MaterialSpecsBank } from '../../lib/materialSpecs';
 import { staleParts, shadeHexOf } from '../../lib/lineSpecs';
 import { artOfSpecs } from './pieceArt';
+import { basisOfUnit, readSize, formatSize } from '../../lib/boqSize';
+import { ftin } from '../../lib/playground/geometry';
 
 /*
   The small parts the BOQ Playground screen is built from (the approved
@@ -228,4 +230,23 @@ export function avgMarkup(ms: LineModel[]): number {
 export function setAvgMarkup(ms: LineModel[], to: number): BoqItem[] {
   const a = avgMarkup(ms);
   return ms.map(m => withMarkup(m, Math.max(0, Math.min(400, a > 0.01 ? (m.markup * to) / a : to))));
+}
+
+/**
+ * A sized line's width and height in words, for the Sheet's quantity: "5′ × 6′"
+ * (an area), "8′ long" (a run). Lines measured from the plan or shared into
+ * rooms, and counts, have none.
+ */
+export function sizeWords(m: Pick<LineModel, 'line' | 'unit' | 'draw' | 'size'>): string {
+  const l = m.line;
+  if (l.civil || l.byRoom) return '';
+  const basis = basisOfUnit(m.unit);
+  if (basis !== 'area' && basis !== 'length') return '';
+  if (m.draw && m.size) return basis === 'area' ? `${ftin(m.size.w)} × ${ftin(m.size.h)}` : `${ftin(m.size.w)} long`;
+  const s = readSize({ ...l, unit: m.unit });
+  if (!s) return '';
+  const dims = [s.a, s.b].filter((d): d is number => !!d && d > 0);
+  if (!dims.length) return '';
+  if (s.unit === 'ft') return basis === 'length' && dims.length === 1 ? `${ftin(dims[0])} long` : dims.map(ftin).join(' × ');
+  return formatSize(s);
 }

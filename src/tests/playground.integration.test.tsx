@@ -1113,3 +1113,13 @@ describe('versions (PR R)', () => {
     expect(screen.getByText('v3 of Comfort Upgrade is ready to edit. v2 is kept as it was.')).toBeTruthy();
   });
 });
+
+describe('the Sheet shows a sized line’s width and height', () => {
+  it('beside its quantity: 6′ × 7′ for the wardrobe; none for a count or a line shared into rooms', () => {
+    render(<Harness tier={{ ...PG, boq: [placedWardrobe, { id: 'l3', bankId: 'counter', qty: 10, roomId: 'Kitchen', calcLength: 10, sizeUnit: 'ft' }, { id: 'b1', bankId: 'bed', qty: 1, roomId: 'Bedroom' }] }} />);
+    lens('Sheet');
+    expect((document.querySelector('[data-size="p1"]') as HTMLElement).textContent).toBe('6′ × 7′');
+    expect((document.querySelector('[data-size="l3"]') as HTMLElement).textContent).toBe('10′ long');
+    expect(document.querySelector('[data-size="b1"]')).toBeNull();
+  });
+});
