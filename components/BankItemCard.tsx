@@ -9,6 +9,8 @@ import { Sparkles, Copy, Trash2, Building2 } from '@/lib/lucide-shim';
 import type { MaterialSpecsBank } from '../lib/materialSpecs';
 import { recipeOf, specsFromRecipe, composeWords } from '../lib/lineSpecs';
 import Swatch from './materialSpecs/Swatch';
+import { Chip } from './ui/kit';
+import { supplyOf, SUPPLY_LABEL } from '../lib/playground/supply';
 
 interface BankItemCardProps {
   item: Item;
@@ -212,6 +214,7 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
                 {recipe ? 'Recipe' : 'No recipe'}
               </button>
             )}
+            {supplyOf(item) && <Chip tone="warn">{SUPPLY_LABEL[supplyOf(item)!]}</Chip>}
           </div>
 
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -358,6 +361,22 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
                 {opt}
               </option>
             ))}
+          </select>
+        </div>
+        {/* BOQ Playground X: bought by the client, or at actuals, keeps its lines out of every figure. */}
+        <div>
+          <label htmlFor={`supply-${item.id}`} className="text-[10px] font-extrabold text-slate-400 uppercase block mb-0.5">
+            Supplied
+          </label>
+          <select
+            id={`supply-${item.id}`}
+            value={supplyOf(item) || ''}
+            onChange={(e) => handleUpdate('supply', e.target.value || null)}
+            className="text-xs font-bold text-slate-600 bg-transparent outline-none cursor-pointer"
+          >
+            <option value="">By the studio</option>
+            <option value="client">Bought by client</option>
+            <option value="actuals">At actuals</option>
           </select>
         </div>
         <div className="text-right">

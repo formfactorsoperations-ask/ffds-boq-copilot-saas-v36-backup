@@ -12,6 +12,7 @@
  */
 import type { BoqItem, Room } from '../../types';
 import { rangeLabel } from '../materialSpecs';
+import { separateOf } from './supply';
 import {
   STUDIO_MARK, studioRows, clientGroups, fingerprintOf, type ExcelContext, type Grid,
 } from './excel';
@@ -198,9 +199,39 @@ export async function buildClientBook(boq: BoqItem[], ctx: ExcelContext, meta: B
   tr.font = { bold: true, size: 12 };
   tr.getCell(7).numFmt = NUM;
   ws.addRow([meta.roundTo100 ? 'Each amount is rounded up to the nearest ₹100. Taxes as applicable.' : 'Taxes as applicable.']).getCell(1).font = { color: { argb: MUTED } };
+  const sep = separateOf(boq, ctx.bankMap);
+  if (sep.actuals.length || sep.client.length) ws.addRow(['Items bought by you, and items at actuals, are on their own sheet and not in this total.']).getCell(1).font = { color: { argb: MUTED } };
   ws.columns.forEach((c: any, i: number) => { c.width = [5, 30, 60, 9, 8, 12, 14][i]; });
   font(ws);
   await ws.protect(randomPassword(), { selectLockedCells: true, selectUnlockedCells: true, formatColumns: true, autoFilter: true });
+
+  /* Bought by you, and at actuals (PR X): their own sheet, not in the total. */
+  if (sep.actuals.length || sep.client.length) {
+    const xs = sheetOf(wb, 'Bought by you, and at actuals');
+    xs.addRow(['Bought by you, and at actuals']).getCell(1).font = { bold: true, size: 14, color: { argb: BLUE } };
+    xs.addRow(['These are part of the design: we plan the space, points and fixings for them. They are not in your investment, the offers, GST or the payment schedule.']).getCell(1).font = { color: { argb: MUTED } };
+    const table = (title: string, words: string, rows: typeof sep.actuals, last: string) => {
+      xs.addRow([]);
+      xs.addRow([title]).getCell(1).font = { bold: true, size: 12 };
+      xs.addRow([words]).getCell(1).font = { color: { argb: MUTED } };
+      head(xs, ['Item', 'Specification', 'Room', last]);
+      rows.forEach(r => xs.addRow([r.name, r.words, r.room, r.estimate ?? 'Your choice']).eachCell({ includeEmpty: true }, (c: any, col: number) => {
+        c.border = box;
+        c.alignment = { vertical: 'top', wrapText: col === 2 };
+        if (col === 4 && typeof c.value === 'number') c.numFmt = NUM;
+      }));
+    };
+    if (sep.actuals.length) {
+      table('At actuals', 'We choose them with you and manage the vendor; you pay the vendor directly at actual cost. The figures are estimates.', sep.actuals, 'Estimate');
+      const er = xs.addRow(['', '', 'Estimated', sep.estimate]);
+      er.font = { bold: true };
+      er.getCell(4).numFmt = NUM;
+    }
+    if (sep.client.length) table('Bought by you', 'You choose and buy these; we help you pick and plan around them.', sep.client, '');
+    xs.columns.forEach((c: any, i: number) => { c.width = [32, 60, 20, 14][i]; });
+    font(xs);
+    await xs.protect(randomPassword(), { selectLockedCells: true, selectUnlockedCells: true });
+  }
 
   const ms = sheetOf(wb, 'Material specifications');
   head(ms, ['Family', 'Material', 'What it is', 'Brand or equivalent', 'Range']);

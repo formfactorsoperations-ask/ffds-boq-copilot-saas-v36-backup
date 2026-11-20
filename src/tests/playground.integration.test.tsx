@@ -995,3 +995,50 @@ describe('room kits (PR K)', () => {
     expect(screen.getByText('Saved to Item Bank → Room Bundles & Kits as “Bath 1, Palacia”: 2 items, each with how it is sized (on a free wall, the floor, walls to 7′).')).toBeTruthy();
   });
 });
+
+describe('bought by the client, and at actuals (PR X)', () => {
+  const xBank = [
+    ...bank,
+    { id: 'b57', name: 'Light fittings', cat: 'Electrical', unit: 'lot', specs: 'Chosen with you, billed by the vendor at actual cost.', materials: 45000, labor: 0, margin: 0, supply: 'actuals' },
+    { id: 'b58', name: 'Hob and chimney', cat: 'Appliances', unit: 'nos', specs: 'Chosen and bought by you; we plan the cut-outs and points.', materials: 38000, labor: 0, margin: 0, supply: 'client' },
+  ];
+  const byClient = () => fireEvent.click(within(screen.getByRole('complementary', { name: 'Studio design library' })).getByRole('radio', { name: 'By client' }));
+
+  it('the By client tab adds to the room picked; the Live BOQ lists them apart and no figure moves', () => {
+    let latest: any[] = [];
+    render(<Harness bankIn={xBank} tier={PG} probe={t => { latest = t; }} />);
+    const pays = () => screen.getByText('Client pays · work').nextElementSibling!.textContent;
+    const before = pays();
+    byClient();
+    const lib = screen.getByRole('complementary', { name: 'Studio design library' });
+    expect(within(lib).getByText(/^Bought by the client, or paid to the vendor at actuals\./)).toBeTruthy();
+    // In the bank's order, an item at actuals with its estimate.
+    expect(Array.from(lib.querySelectorAll('[data-supply-item]')).map(e => e.getAttribute('data-supply-item'))).toEqual(['b57', 'b58']);
+    expect(within(lib).getByText('≈ ₹45,000 est.')).toBeTruthy();
+    expect((within(lib).getByLabelText('Add to') as HTMLSelectElement).value).toBe('Whole flat');
+    fireEvent.click(within(lib).getByRole('button', { name: 'Add Light fittings to Whole flat' }));
+    expect(screen.getByText(`Light fittings added to Whole flat, at actuals. The price stays ${before}.`)).toBeTruthy();
+    fireEvent.change(within(lib).getByLabelText('Add to'), { target: { value: 'Kitchen' } });
+    fireEvent.click(within(lib).getByRole('button', { name: 'Add Hob and chimney to Kitchen' }));
+    const boq = latest[0].boq;
+    expect(boq.filter((l: any) => l.bankId === 'b57')).toEqual([expect.objectContaining({ roomId: 'Whole flat', qty: 1, boqStatus: 'as_actuals' })]);
+    expect(boq.filter((l: any) => l.bankId === 'b58')).toEqual([expect.objectContaining({ roomId: 'Kitchen', qty: 1, boqStatus: 'client_procured' })]);
+    expect(pays()).toBe(before);
+    const live = screen.getByText('Separate · not in the price').closest('div.rounded-xl') as HTMLElement;
+    expect(within(live).getByText('Whole flat · At actuals, paid to the vendor')).toBeTruthy();
+    expect(within(live).getByText('Kitchen · Bought by the client')).toBeTruthy();
+    expect(within(live).getByText('Actuals, estimated')).toBeTruthy();
+    expect(within(live).getByText('On their own page for the client. No effect on the price, offers, fee, GST or the payment schedule.')).toBeTruthy();
+    // The tier's summary: price and fee as before.
+    expect(latest[0].boq.length).toBe(baseBoq().length + 2);
+  });
+
+  it('a supplied item added any other way (dropped from Pieces) is supplied too', () => {
+    let latest: any[] = [];
+    const sofaBank = [...bank, { id: 'sofa', name: 'Three-seater sofa, loose', cat: 'Furniture', unit: 'nos', specs: 'Fabric sofa.', materials: 55000, labor: 0, margin: 0, supply: 'client' }];
+    render(<Harness bankIn={sofaBank} tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} />);
+    fireEvent.drop(stage(), { ...at(6, 5), dataTransfer: { getData: () => 'sofa' } });
+    expect(latest[0].boq[0]).toMatchObject({ bankId: 'sofa', roomId: 'Bedroom', boqStatus: 'client_procured' });
+    expect(screen.getByText('Client pays · work').nextElementSibling!.textContent).toBe('₹0');
+  });
+});

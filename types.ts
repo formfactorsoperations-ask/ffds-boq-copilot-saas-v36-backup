@@ -1169,7 +1169,14 @@ export interface Item {
      *  part, at each option grade. Missing: a suggested recipe for its kind, if any. null: none,
      *  the words are typed by hand. */
     recipeId?: string | null;
+    /** BOQ Playground X: how it is supplied. client: bought by the client; actuals: paid to the
+     *  vendor at actual cost. A line of it takes boqStatus client_procured or as_actuals, which
+     *  keeps it out of the price, offers, design fee (on a Playground version), GST and payments.
+     *  Missing: supplied by the studio, priced as usual. */
+    supply?: ItemSupply | null;
 }
+
+export type ItemSupply = 'client' | 'actuals';
 
 /** What kind of piece an item draws as. Decides the symbol and how it sits in a room. */
 export type PieceKind =

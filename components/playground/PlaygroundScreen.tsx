@@ -48,6 +48,7 @@ import { kitsOf, kitStartRooms, kitApply, kitAddsDebris, kitEstimate, kitFits, r
 import { ADDON_BUNDLES } from '../../lib/standardPackages';
 import { lineAmount } from '../../lib/playground/pricing';
 import { KitModal, KIT_DRAG } from './KitParts';
+import { withSupply, supplyLine, supplyOf, SUPPLY_WORDS } from '../../lib/playground/supply';
 
 /*
   The BOQ Playground (the approved mockup, v14): the BOQ Editor's one tab.
@@ -161,7 +162,8 @@ export default function PlaygroundScreen(props: Props) {
   const offer = !!specBank && offersUpdates(tier, ctx, readOnly);
   const spec = useMemo(() => (specBank ? { bank: specBank, offer } : undefined), [specBank, offer]);
   /* A Classic BOQ stays as it was: its new lines keep the Item Bank's words. */
-  const prepareNew = useCallback((line: BoqItem) => (format === 'playground' ? withRecipeSpecs(line, bankMap.get(line.bankId), specBank, grade) : line), [bankMap, specBank, grade, format]);
+  /* A new line takes its recipe's words, and an item bought by the client or at actuals its status (PR X): it never reaches the price. */
+  const prepareNew = useCallback((line: BoqItem) => withSupply(format === 'playground' ? withRecipeSpecs(line, bankMap.get(line.bankId), specBank, grade) : line, bankMap.get(line.bankId)), [bankMap, specBank, grade, format]);
   const [hint, setHint] = useState(() => { try { return !localStorage.getItem(HINT_KEY); } catch { return true; } });
   const [wide, setWide] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth >= 1280));
   useEffect(() => {
@@ -385,6 +387,17 @@ export default function PlaygroundScreen(props: Props) {
     } catch {
       setNote('The kit could not be saved. Try again.');
     }
+  };
+
+  /* ── bought by the client, and at actuals (PR X): on their own list, out of every figure ── */
+
+  const supplyPlaces = useMemo(() => [...kitRooms.map(r => r.name), 'Whole flat'], [kitRooms]);
+  const addSupplied = (item: Item, room: string) => {
+    if (readOnly) { setNote('This option is locked: nothing can be added.'); return; }
+    const s = supplyOf(item);
+    if (!s) return;
+    const { line } = supplyLine({ item, room, rooms, boq, bankMap, newId });
+    commit([...boq, prepareNew(line)], `${item.name} added to ${room}, ${SUPPLY_WORDS[s]}. The price stays ${inr(totals.sell)}.`);
   };
 
   /* ── Excel (PR 6): the studio and client copies out; a studio copy or any other sheet in ── */
@@ -745,6 +758,7 @@ export default function PlaygroundScreen(props: Props) {
               <div className="absolute left-2 top-2 bottom-2 z-20 w-[232px] flex hud-panel-in">
                 <Catalogue bank={bank} readOnly={readOnly} onClose={() => setLibOpen(false)} onAdd={it => addToRoom(it, libTarget)} addLabel={`to ${libTarget}`}
                   kits={kits} bankMap={bankMap} hideFigures={hideFigures} kitEstimate={kitCardEstimate} onKit={id => openKit(id)}
+                  places={supplyPlaces} onAddSupplied={addSupplied}
                   artOf={specBank ? (it => { const r = recipeOf(it, specBank); return r ? artOfSpecs(specsFromRecipe(specBank, r, grade), specBank.materials) : {}; }) : undefined} />
               </div>
             )}
