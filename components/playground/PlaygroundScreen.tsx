@@ -18,6 +18,11 @@ import { inferBasis } from '../../lib/takeoff';
 import { lockedTierId } from '../../lib/scopeFlow';
 import { ftin } from '../../lib/playground/geometry';
 import SketchModal from './SketchModal';
+import { CivilPanel } from './CivilParts';
+import {
+  civilItems, toggleRoomCivil, addWallCivil, fromBrief, missingStandardItems, briefCivilAsk, toolOf, syncedCivil, SITE_LABEL,
+  type CivilTool, type CivilResult, type Segment,
+} from '../../lib/playground/civil';
 import ImportExcelModal from './ImportExcelModal';
 import { buildStudioBook, buildClientBook, bookName } from '../../lib/playground/excelBook';
 import { unitCostOf } from '../../lib/playground/excel';
@@ -137,6 +142,9 @@ export default function PlaygroundScreen(props: Props) {
   const [sketching, setSketching] = useState(false);
   const [building, setBuilding] = useState(false);
   const [importing, setImporting] = useState(false);
+  /* The plan's layer (PR C): Interiors, the furniture; Civil, the civil work and its tools. */
+  const [layer, setLayer] = useState<'int' | 'civ'>('int');
+  const [civilTool, setCivilTool] = useState<CivilTool | null>(null);
   const [fitSignal, setFitSignal] = useState(0);
   const [fullGrid, setFullGrid] = useState(false);
   const [recipeItemId, setRecipeItemId] = useState<string | null>(null);
@@ -258,7 +266,7 @@ export default function PlaygroundScreen(props: Props) {
     setTiers(ts => ts.map(t => {
       const n = np.tiers.find(x => x.id === t.id) || t;
       if (t.id !== tier.id) return n;
-      return { ...n, boq: syncedWholeFlat([...(n.boq || []), ...more.lines], nextRooms, measure), ...(more.specGrade ? { specGrade: more.specGrade } : {}) };
+      return { ...n, boq: syncedWholeFlat([...(n.boq || []), ...more.lines], nextRooms, measure, bankMap), ...(more.specGrade ? { specGrade: more.specGrade } : {}) };
     }));
     setProjectContext(p => ({ ...p, rooms: np.rooms, planSheet: np.planSheet, ...(np.planHistory ? { planHistory: np.planHistory } : {}) }));
     setHist({ past: [], future: [] });
@@ -286,6 +294,52 @@ export default function PlaygroundScreen(props: Props) {
     setBuilding(false);
     setNote(`Built: ${qb.rects.length} rooms, ${placed} pieces placed${waiting ? `, ${waiting} waiting under Needs a place` : ''}. Replace the blocks with the real plan from the plan menu.`);
   };
+  /* ── the Civil layer (PR C): tools on the plan, a room's civil work, the brief ── */
+
+  /* A civil line's stored quantity follows its room whatever changed it (a new scale, a traced room), so the
+     Detailed BOQ, the exports and Classic readers read what the plan says. Prices already follow it live. */
+  useEffect(() => {
+    if (readOnly || !rooms.length || !boq.some(l => l.civil)) return;
+    const synced = syncedCivil(boq, rooms, bankMap);
+    if (synced.some((l, i) => l !== boq[i])) onBoq(synced);
+  }, [rooms, bankMap]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+
+  const civilCtx = { bank, bankMap, rooms, newId };
+  const civilLinesNow = boq.filter(l => l.civil && l.boqStatus !== 'deleted' && l.boqStatus !== 'substituted');
+  const civilModels = models.filter(m => m.line.civil || (m.line.roomId === 'Whole flat' && /\bdebris\b/i.test(m.name)));
+  const applyCivil = (r: CivilResult, selectLast = false) => {
+    if ('problem' in r) { setNote(r.problem); return; }
+    commit(r.boq, `${r.message}${r.debris ? ' Debris removal added once, across the flat.' : ''}`);
+    const last = [...r.added].reverse().find(l => l.civil);
+    if (selectLast && last) { setSel(last.id); setSelRoom(null); }
+  };
+  const pickLayer = (v: 'int' | 'civ') => {
+    setLayer(v); setSel(null);
+    if (v !== 'civ') setCivilTool(null);
+    else if (!civilLinesNow.length) setNote('Civil layer: the furniture fades back. Pick a tool and draw, or start from the brief.');
+  };
+  const pickTool = (t: CivilTool) => {
+    const next = civilTool === t ? null : t;
+    setCivilTool(next);
+    if (next) setNote(`${toolOf(next).label}: ${toolOf(next).hint.toLowerCase()}. Click the tool again, or press Esc, to stop.`);
+  };
+  const civilRoom = (roomName: string, tool: 'floor' | 'walls7' | 'waterproof') => {
+    const room = rooms.find(r => r.name === roomName);
+    if (room) applyCivil(toggleRoomCivil(boq, room, tool, civilCtx));
+  };
+  const civilWall = (tool: 'break' | 'build', roomName: string, segment: Segment) => {
+    const room = rooms.find(r => r.name === roomName);
+    if (room) applyCivil(addWallCivil(boq, tool, room, segment, civilCtx), true);
+  };
+  const civilBrief = () => { setCivilTool(null); applyCivil(fromBrief(boq, { ...civilCtx, project: ctx })); };
+  const addCivilItems = () => {
+    const items = missingStandardItems(bank, newId);
+    if (!items.length) { setNote('The Item Bank has every civil item already.'); return; }
+    setProjectContext(p => ({ ...p, adHocItems: [...(p.adHocItems || []), ...items] }));
+    setNote(`${items.length} civil item${items.length === 1 ? '' : 's'} added to the Item Bank at starting rates: ${items.map(i => i.name).join(', ')}. Set your own rates there.`);
+  };
+
   /* ── Excel (PR 6): the studio and client copies out; a studio copy or any other sheet in ── */
 
   const bookMeta = () => ({ studio: studioName || 'Studio', project: ctx.name || 'Project', option: tier.name || 'Option', tierId: tier.id, roundTo100: !!rules, at: Date.now() });
@@ -315,7 +369,7 @@ export default function PlaygroundScreen(props: Props) {
   const resizeRooms = (next: Room[], nextBoq: BoqItem[], changed: string[]) => {
     const all = mergeRooms(ctx.rooms || [], next.filter(r => changed.includes(r.name)));
     setProjectContext(p => ({ ...p, rooms: mergeRooms(p.rooms || [], next.filter(r => changed.includes(r.name))) }));
-    const synced = syncedWholeFlat(nextBoq, realRooms(all), measure);
+    const synced = syncedWholeFlat(nextBoq, realRooms(all), measure, bankMap);
     if (synced.some((l, i) => l !== boq[i])) commit(synced);
     const r = next.find(x => x.name === changed[0]);
     if (r?.plan) setNote(`${r.name} is now ${ftin(r.plan.w)} × ${ftin(r.plan.h)}, ${Math.round(r.plan.w * r.plan.h)} sq ft.${changed.length > 1 ? ` ${changed.slice(1).join(', ')} gave the same.` : ''}`);
@@ -349,7 +403,7 @@ export default function PlaygroundScreen(props: Props) {
     if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
-    if (e.key === 'Escape') { setSel(null); setSelRoom(null); setMenu(null); return; }
+    if (e.key === 'Escape') { if (civilTool) { setCivilTool(null); return; } setSel(null); setSelRoom(null); setMenu(null); return; }
     const line = sel ? boq.find(l => l.id === sel) : undefined;
     if (!line || readOnly || lens !== 'plan' || !line.place) return;
     const k = e.key, s = e.shiftKey ? 1 : 0.25;
@@ -417,6 +471,8 @@ export default function PlaygroundScreen(props: Props) {
       onSel={pickLine}
       onClose={() => setSelRoom(null)}
       onReplace={l => replace(l)}
+      civilShown={layer === 'civ'}
+      onCivil={format === 'playground' ? (t => civilRoom(selRoomObj.name, t)) : undefined}
     /></React.Fragment>
   ) : (
     <Receipt
@@ -586,6 +642,7 @@ export default function PlaygroundScreen(props: Props) {
                   readOnly={readOnly} sel={sel} onSel={pickLine} selRoom={selRoom} onSelRoom={pickRoom}
                   commit={commit} newId={newId} libOpen={showLib} hideFigures={hideFigures} fitSignal={fitSignal} prepareNew={prepareNew}
                   onRooms={resizeRooms}
+                  layer={layer} civilTool={civilTool} onCivilRoom={civilRoom} onCivilWall={civilWall} onNote={setNote}
                 />
               ) : (
                 <div className="absolute inset-0 grid place-items-center p-6" style={{ paddingLeft: showLib && wide ? 260 : undefined }}>
@@ -672,9 +729,12 @@ export default function PlaygroundScreen(props: Props) {
                 </span>
                 {readOnly && <span className="ml-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-bold text-slate-600"><Lock className="w-3.5 h-3.5 text-[#3D52A0]" aria-hidden />Read-only</span>}
                 <span className="ml-1.5 inline-flex p-0.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm" role="radiogroup" aria-label="Plan layer">
-                  <button type="button" role="radio" aria-checked className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#3D52A0] text-white">Interiors</button>
-                  <button type="button" role="radio" aria-checked={false} onClick={() => setNote('Civil works on the plan (floors, waterproofing, walls broken and built) come with the civil part of the Playground.')}
-                    className="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100">Civil</button>
+                  {([['int', 'Interiors'], ['civ', 'Civil']] as const).map(([k, n]) => (
+                    <button key={k} type="button" role="radio" aria-checked={layer === k} onClick={() => pickLayer(k)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold ${layer === k ? 'bg-[#3D52A0] text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+                      {n}{k === 'civ' && civilLinesNow.length > 0 && <span className="tabular-nums opacity-80"> {civilLinesNow.length}</span>}
+                    </button>
+                  ))}
                 </span>
                 {waiting.length > 0 && (
                   <button type="button" onClick={() => pickLine(waiting[0].id)} className="ml-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 border border-amber-200 shadow-sm text-xs font-bold text-amber-700">
@@ -682,6 +742,13 @@ export default function PlaygroundScreen(props: Props) {
                   </button>
                 )}
               </div>
+            )}
+
+            {plan && layer === 'civ' && planRooms.length > 0 && (
+              <CivilPanel left={showLib ? 248 : 10} tool={civilTool} site={ctx.propertyStatus ? SITE_LABEL[ctx.propertyStatus] : undefined}
+                ask={briefCivilAsk(ctx, rooms)} lines={civilModels.length} total={civilModels.reduce((a, m) => a + (m.billable ? m.amount : 0), 0)}
+                hideFigures={hideFigures} readOnly={readOnly || classic} items={civilItems(bank)} isOwner={!!isOwner}
+                onTool={pickTool} onBrief={civilBrief} onAddItems={addCivilItems} />
             )}
 
             {plan && (

@@ -16,6 +16,7 @@ import type { Item, BoqItem, ProposalTier, PricingRules, Room } from '../../type
 import { resolveBoqLine, designFeeFor } from '../boqPricing';
 import { calculateCostFromSell } from '../utils';
 import { roomShares, storedShares, withByRoomQty, type MeasureContext } from './rooms';
+import { withCivilQty } from './civil';
 
 /** The rules a new Playground version is made with. */
 export const PLAYGROUND_PRICING: PricingRules = { roundUpTo: 100, feeOnActuals: false };
@@ -76,10 +77,23 @@ export function sharesOf(b: BoqItem, opts: LineAmountOptions = {}): Map<string, 
 }
 
 /**
+ * The line with the quantity the plan gives it: a whole-flat line's from its
+ * rooms, a civil line's from its room. Other lines, and lines with no rooms to
+ * hand, keep their own.
+ */
+export function withPlanQty(line: BoqItem, bankMap: Map<string, Item>, opts: LineAmountOptions = {}): BoqItem {
+  if (!opts.rooms?.length) return line;
+  if (line.byRoom) return withByRoomQty(line, opts.rooms, opts.measure);
+  if (line.civil) return withCivilQty(line, opts.rooms, bankMap);
+  return line;
+}
+
+/**
  * What the client is charged for the line. Classic: rate × qty, exact. Playground:
  * rounded up to ₹100; a whole-flat line rounds each room's share and adds them.
  */
-export function lineAmount(b: BoqItem, bankMap: Map<string, Item>, opts: LineAmountOptions = {}): number {
+export function lineAmount(line: BoqItem, bankMap: Map<string, Item>, opts: LineAmountOptions = {}): number {
+  const b = line.civil ? withPlanQty(line, bankMap, opts) : line;
   const r = resolveBoqLine(b, bankMap);
   const rules = opts.rules || null;
   if (!rules) return r.total;
@@ -125,8 +139,8 @@ export function playgroundTotals(boq: BoqItem[], bankMap: Map<string, Item>, opt
   let sell = 0, cost = 0, asActuals = 0, itemCount = 0;
   const byRoom = new Map<string, number>();
   (boq || []).forEach(line => {
-    // A whole-flat line's quantity follows its rooms, so its cost and its amount agree.
-    const b = opts.rooms?.length && line.byRoom ? withByRoomQty(line, opts.rooms, opts.measure) : line;
+    // A whole-flat line's quantity follows its rooms, and a civil line's its room (PR C), so cost and amount agree.
+    const b = withPlanQty(line, bankMap, opts);
     const r = resolveBoqLine(b, bankMap);
     if (!r.billable) return;
     itemCount++;

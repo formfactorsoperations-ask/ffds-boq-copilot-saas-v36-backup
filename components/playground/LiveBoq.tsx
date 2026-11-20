@@ -15,6 +15,7 @@ import { resizedTo, turnedLine } from '../../lib/playground/board';
 import { ISSUE_LABEL, type IssueKind } from '../../lib/playground/issues';
 import { basisOfUnit, readSize, parseSize, formatSize, sizeUpdates } from '../../lib/boqSize';
 import { PieceThumb } from './pieceArt';
+import { CivilBlock, CivilRoom } from './CivilParts';
 import { inr, lakh, marginTone, Scrub, withCost, withMarkup, withRate, type LineModel } from './playgroundUi';
 
 /*
@@ -221,7 +222,8 @@ export function LineInspector({ m, index, count, issues, rooms, bankMap, rules, 
   /* A placed measured piece takes its size from the plan; an unplaced measured line from a typed size. */
   const sizeDriven = measured && (!!line.place && !!m.size || !!readSize({ ...line, unit: m.unit }));
   const basis = !line.byRoom && isWholeFlatLine(line) ? shareBasisFor(m.item) : null;
-  const qtyLabel = line.byRoom ? 'Whole flat, room by room'
+  const civil = !!line.civil;
+  const qtyLabel = civil ? 'Measured from the plan' : line.byRoom ? 'Whole flat, room by room'
     : sizeDriven && line.place && m.size && basisU === 'area' ? `${ftin(m.size.w)} × ${ftin(m.size.h)} high`
     : sizeDriven ? 'Running length' : 'Quantity';
   const placed = !!line.place;
@@ -259,7 +261,7 @@ export function LineInspector({ m, index, count, issues, rooms, bankMap, rules, 
 
       <div className="flex items-center justify-between gap-3 rounded-xl bg-[#3D52A0]/[0.05] border border-[#3D52A0]/15 px-3 py-2">
         <span className="text-xs text-slate-600">{qtyLabel}</span>
-        {!sizeDriven && !line.byRoom && !readOnly ? (
+        {!sizeDriven && !line.byRoom && !civil && !readOnly ? (
           <span className="w-28">
             <Scrub variant="cell" label="Quantity" value={m.qty} step={1} min={0} pxPerStep={8} format={v => `${v.toLocaleString('en-IN')} ${m.unit}`}
               onCommit={v => onReplace({ ...line, qty: v })} className="!text-xl !font-black" />
@@ -269,7 +271,8 @@ export function LineInspector({ m, index, count, issues, rooms, bankMap, rules, 
         )}
       </div>
 
-      {measured && !line.place && !line.byRoom && <SizeField line={line} unit={m.unit} readOnly={readOnly} onReplace={onReplace} />}
+      {civil && <CivilBlock line={line} room={rooms.find(r => r.name === line.roomId)} unit={m.unit} readOnly={readOnly} onReplace={onReplace} />}
+      {measured && !line.place && !line.byRoom && !civil && <SizeField line={line} unit={m.unit} readOnly={readOnly} onReplace={onReplace} />}
 
       {line.byRoom && <SplitBlock m={m} rooms={rooms} bankMap={bankMap} rules={rules} readOnly={readOnly} hideFigures={hideFigures} onReplace={onReplace} />}
       {basis && !readOnly && rooms.length > 0 && <SplitOffer m={m} basis={basis} rooms={rooms} hideFigures={hideFigures} onReplace={onReplace} />}
@@ -639,7 +642,7 @@ function ShareRowEdit({ line, room, q, amount, unit, readOnly, hideFigures, room
 
 /* ───────────────────────────── a room ───────────────────────────── */
 
-export function RoomInspector({ room, models, shares, total, rooms, bankMap, rules, measure, readOnly, hideFigures, canPaint, onAddPainting, onSel, onClose, onReplace }: {
+export function RoomInspector({ room, models, shares, total, rooms, bankMap, rules, measure, readOnly, hideFigures, canPaint, onAddPainting, onSel, onClose, onReplace, civilShown, onCivil }: {
   room: Room;
   models: LineModel[];
   shares: ShareRow[];
@@ -655,8 +658,13 @@ export function RoomInspector({ room, models, shares, total, rooms, bankMap, rul
   onSel: (id: string) => void;
   onClose: () => void;
   onReplace: (l: BoqItem) => void;
+  /** The Civil layer is on: the room's civil work is shown even when it has none (PR C). */
+  civilShown?: boolean;
+  /** A room tool toggled for the room: re-flooring, wall tiles, waterproofing. */
+  onCivil?: (tool: 'floor' | 'walls7' | 'waterproof') => void;
 }) {
   const p = room.plan;
+  const civilLines = models.filter(m => m.line.civil);
   const mr = measureRoom(room, measure);
   const servicesTotal = shares.reduce((a, s) => a + s.amount, 0);
   const own = total - servicesTotal;
@@ -709,6 +717,8 @@ export function RoomInspector({ room, models, shares, total, rooms, bankMap, rul
         {canPaint && !readOnly && <div className="mt-2"><Button size="sm" icon={PaintRoller} onClick={onAddPainting}>Add painting from the plan</Button></div>}
         <p className="text-[11px] text-slate-500 mt-1">One line for the flat, one rate. This room’s share is measured here and can be typed over.</p>
       </div>
+
+      {onCivil && p && (civilShown || civilLines.length > 0) && <CivilRoom room={room} lines={civilLines} readOnly={readOnly} onToggle={onCivil} onSel={onSel} />}
 
       <div>
         <div className={`${LABEL} mb-1.5`}>Items in this room</div>

@@ -8,6 +8,7 @@ import { lineIssues } from '../../lib/playground/issues';
 import { sheetOf, isPdfSheet } from '../../lib/playground/planSheet';
 import { newPieceLine, movedLine, resizedFromEdge, type Edge } from '../../lib/playground/board';
 import { resizeRoom, edgeAt, type RoomEdge, type RoomResize } from '../../lib/playground/roomEdges';
+import { segmentFor, segLength, toolOf, type CivilTool, type Segment } from '../../lib/playground/civil';
 import { PieceArt } from './pieceArt';
 import { inr, lakh, type LineModel } from './playgroundUi';
 
@@ -22,6 +23,12 @@ import { inr, lakh, type LineModel } from './playgroundUi';
   round handle to turn it. Drag the ground to pan; the wheel and the buttons zoom.
   Pick a room and pull the handle on one of its walls to size it (PR 5): the
   room across a shared wall gives the same, and the pieces against it move.
+
+  The Civil layer (PR C): the furniture fades back, and the civil work is drawn
+  over the rooms (a new floor, waterproofing, wall tiles to 7′, each tagged)
+  with the walls broken and built as segments. With a tool picked, a drag in a
+  room draws a wall broken (snapped to the nearest wall) or built; a click on a
+  room puts its re-flooring, wall tiles or waterproofing in, or takes them out.
 
   One drag is one write of the BOQ, so one undo. Only the piece being dragged
   redraws while it moves.
@@ -56,6 +63,16 @@ interface Props {
   prepareNew?: (line: BoqItem) => BoqItem;
   /** A room pulled to a new size by its wall handle (PR 5): the rooms that changed, and the BOQ with the pieces moved. */
   onRooms?: (rooms: Room[], boq: BoqItem[], changed: string[]) => void;
+  /** Which layer is on: Interiors (the furniture) or Civil (PR C). */
+  layer?: 'int' | 'civ';
+  /** The Civil tool picked, if any. */
+  civilTool?: CivilTool | null;
+  /** A room tool clicked on a room: re-flooring, wall tiles, waterproofing. */
+  onCivilRoom?: (room: string, tool: 'floor' | 'walls7' | 'waterproof') => void;
+  /** A wall broken or built: the segment drawn in a room. */
+  onCivilWall?: (tool: 'break' | 'build', room: string, segment: Segment) => void;
+  /** Says something to the person (a click outside every room, a drag too short). */
+  onNote?: (msg: string) => void;
 }
 
 type Drag =
@@ -63,13 +80,15 @@ type Drag =
   | { kind: 'resize'; id: string; sx: number; sy: number; from: [number, number]; start: BoqItem; live: BoqItem }
   | { kind: 'turn'; id: string; start: BoqItem; live: BoqItem }
   | { kind: 'pan'; from: [number, number]; view: View; room: string | null }
-  | { kind: 'room'; name: string; edge: RoomEdge; live: RoomResize | null };
+  | { kind: 'room'; name: string; edge: RoomEdge; live: RoomResize | null }
+  | { kind: 'civdraw'; tool: 'break' | 'build'; room: string; a: [number, number]; b: [number, number] };
 
 /** Counts piece redraws, so a test can hold a drag to one piece per frame. */
 export const stageStats = { pieceRenders: 0 };
 
 export default function PlanStage(props: Props) {
-  const { ctx, bank, bankMap, models, roomTotals, readOnly, sel, onSel, selRoom, onSelRoom, commit, newId, libOpen, hideFigures, fitSignal, prepareNew, onRooms } = props;
+  const { ctx, bank, bankMap, models, roomTotals, readOnly, sel, onSel, selRoom, onSelRoom, commit, newId, libOpen, hideFigures, fitSignal, prepareNew, onRooms, layer = 'int', civilTool, onCivilRoom, onCivilWall, onNote } = props;
+  const civ = layer === 'civ';
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const [view, setView] = useState<View>({ k: 20, tx: 40, ty: 60 });
@@ -88,7 +107,7 @@ export default function PlanStage(props: Props) {
 
   /* The pieces from the BOQ; while dragging only the dragged one is swapped in. */
   const basePieces = useMemo(() => boardPieces(boq, bankMap), [boq, bankMap]);
-  const livePiece = useMemo(() => (drag && drag.kind !== 'pan' && drag.kind !== 'room' ? boardPieces([drag.live], bankMap)[0] : undefined), [drag, bankMap]);
+  const livePiece = useMemo(() => (drag && (drag.kind === 'move' || drag.kind === 'resize' || drag.kind === 'turn') ? boardPieces([drag.live], bankMap)[0] : undefined), [drag, bankMap]);
   const pieces = useMemo(() => {
     const ps = livePiece ? basePieces.map(p => (p.id === livePiece.id ? livePiece : p)) : basePieces;
     return [...ps].sort((a, b) => Number(a.high) - Number(b.high));
@@ -214,7 +233,23 @@ export default function PlanStage(props: Props) {
     wrapRef.current?.setPointerCapture?.(e.pointerId);
     setDrag({ kind: 'room', name, edge, live: null });
   };
+  /* The Civil layer's tools: a drag draws a wall broken or built; a click toggles a room's civil work. */
+  const startCivil = (e: React.PointerEvent): boolean => {
+    if (!civ || !civilTool) return false;
+    e.stopPropagation();
+    if (readOnly) return true;
+    const at = pt(e);
+    if (!at) return true;
+    const room = planRooms.find(r => r.plan && at[0] >= r.plan.x && at[0] <= r.plan.x + r.plan.w && at[1] >= r.plan.y && at[1] <= r.plan.y + r.plan.h);
+    if (!room) { onNote?.('Click inside a room.'); return true; }
+    if (civilTool === 'break' || civilTool === 'build') {
+      wrapRef.current?.setPointerCapture?.(e.pointerId);
+      setDrag({ kind: 'civdraw', tool: civilTool, room: room.name, a: at, b: at });
+    } else onCivilRoom?.(room.name, civilTool);
+    return true;
+  };
   const startPan = (e: React.PointerEvent, room: string | null) => {
+    if (startCivil(e)) return;
     panMoved.current = false;
     wrapRef.current?.setPointerCapture?.(e.pointerId);
     setDrag({ kind: 'pan', from: [e.clientX, e.clientY], view, room });
@@ -222,6 +257,7 @@ export default function PlanStage(props: Props) {
 
   const liveFor = (d: Drag, at: [number, number], alt: boolean, shift: boolean): Drag => {
     if (d.kind === 'pan') return d;
+    if (d.kind === 'civdraw') return { ...d, b: at };
     if (d.kind === 'room') {
       const to = d.edge === 'left' || d.edge === 'right' ? at[0] : at[1];
       return { ...d, live: resizeRoom({ rooms: props.rooms, boq: props.boq, bankMap, name: d.name, edge: d.edge, to }) };
@@ -283,6 +319,13 @@ export default function PlanStage(props: Props) {
       if (d.live && onRooms) onRooms(d.live.rooms, d.live.boq, d.live.changed);
       return;
     }
+    if (d.kind === 'civdraw') {
+      const room = props.rooms.find(r => r.name === d.room);
+      const seg = room ? segmentFor(d.tool, room, d.a, d.b) : null;
+      if (seg) onCivilWall?.(d.tool, d.room, seg);
+      else onNote?.('Drag a little further: a wall is at least 1 ft long, inside the room.');
+      return;
+    }
     if (d.live === d.start) return;
     if (d.kind === 'move') {
       const me = asPlaced(d.live)!;
@@ -328,13 +371,14 @@ export default function PlanStage(props: Props) {
   });
 
   const overlay: React.ReactNode[] = [];
-  pieces.forEach(p => {
+  /* On the Civil layer the furniture's own marks (overlaps, newer specs) step back with it. */
+  if (!civ) pieces.forEach(p => {
     if (p.id === sel || !flagged.has(p.id)) return;
     const b = pieceBox(p.fp, p.place);
     overlay.push(<rect key={`f-${p.id}`} x={b.x - 0.06} y={b.y - 0.06} width={b.w + 0.12} height={b.h + 0.12} rx={0.1} fill="rgba(245,158,11,.08)" stroke="#d97706" strokeWidth={px(1.5)} strokeDasharray={`${px(5)} ${px(3)}`} pointerEvents="none" />);
   });
   /* A line on an older version of a material: the amber mark the mockup puts at the piece's corner. */
-  pieces.forEach(p => {
+  if (!civ) pieces.forEach(p => {
     if (p.id === sel || !models.get(p.id)?.stale.length) return;
     const b = pieceBox(p.fp, p.place);
     overlay.push(
@@ -344,8 +388,8 @@ export default function PlanStage(props: Props) {
       </g>,
     );
   });
-  /* The picked room's walls: a handle on each, to pull the room to size. */
-  const pickedRoom = !selected && selRoom && onRooms && !readOnly ? planRooms.find(r => r.name === selRoom) : undefined;
+  /* The picked room's walls: a handle on each, to pull the room to size (not while a civil tool is drawing). */
+  const pickedRoom = !selected && selRoom && onRooms && !readOnly && !(civ && civilTool) ? planRooms.find(r => r.name === selRoom) : undefined;
   if (pickedRoom?.plan) {
     const p = pickedRoom.plan;
     (['left', 'right', 'top', 'bottom'] as RoomEdge[]).forEach(e => {
@@ -391,7 +435,7 @@ export default function PlanStage(props: Props) {
   if (selected && selModel) {
     const b = pieceBox(selected.fp, selected.place);
     const [sx, sy] = toScreen(selected.place.x, b.y);
-    const liveLine = drag && drag.kind !== 'pan' && drag.kind !== 'room' && drag.id === selected.id ? drag.live : null;
+    const liveLine = drag && (drag.kind === 'move' || drag.kind === 'resize' || drag.kind === 'turn') && drag.id === selected.id ? drag.live : null;
     const qty = liveLine ? Number(liveLine.qty) || 0 : selModel.qty;
     const amount = liveLine ? selModel.rate * qty : selModel.amount;
     const face = /sq\s*ft|sft|sqft/i.test(selModel.unit);
@@ -422,6 +466,66 @@ export default function PlanStage(props: Props) {
     }
   }
 
+  /* ── the Civil layer: room fills and tags, the walls broken and built, the one being drawn ── */
+  const civilG: React.ReactNode[] = [];
+  const civilLabels: React.ReactNode[] = [];
+  if (civ) {
+    const civLines = boq.filter(l => l.civil && l.boqStatus !== 'deleted' && l.boqStatus !== 'substituted');
+    const pill = (key: string, text: string, x: number, y: number, fill: string, centred = false) => {
+      const fs = px(10), h = fs + px(6), w = text.length * fs * 0.64 + px(10);
+      const x0 = centred ? x - w / 2 : x;
+      return (
+        <g key={key} pointerEvents="none">
+          <rect x={x0} y={y} width={w} height={h} rx={px(4)} fill={fill} />
+          <text x={centred ? x : x0 + px(5)} y={y + h - px(4.5)} fontSize={fs} fontWeight={800} fill="#fff" textAnchor={centred ? 'middle' : 'start'}>{text}</text>
+        </g>
+      );
+    };
+    planRooms.forEach(r => {
+      const p = r.plan!;
+      const has = (t: string) => civLines.some(l => l.roomId === r.name && l.civil!.type === t);
+      const tags: [string, string][] = [];
+      if (has('floor')) { civilG.push(<rect key={`cf-${r.name}`} x={p.x} y={p.y} width={p.w} height={p.h} fill="url(#pg-civ-floor)" pointerEvents="none" />); tags.push(['FLOOR', '#d97706']); }
+      if (has('waterproof')) { civilG.push(<rect key={`cw-${r.name}`} x={p.x} y={p.y} width={p.w} height={p.h} fill="url(#pg-civ-waterproof)" pointerEvents="none" />); tags.push(['WATERPROOF', '#0284c7']); }
+      if (has('walls7')) {
+        civilG.push(<rect key={`ct-${r.name}`} x={p.x + 0.18} y={p.y + 0.18} width={Math.max(0, p.w - 0.36)} height={Math.max(0, p.h - 0.36)} fill="none" stroke="#3D52A0" strokeWidth={0.2} strokeDasharray=".5 .2" pointerEvents="none" />);
+        tags.push(['WALL TILES', '#3D52A0']);
+      }
+      const h = px(16) + px(3);
+      tags.forEach(([t, c], i) => civilLabels.push(pill(`tag-${r.name}-${t}`, t, p.x + px(6), p.y + px(6) + i * h, c)));
+    });
+    const segRect = (g: Segment) => {
+      const t = 0.45;
+      return g[1] === g[3] ? { x: g[0], y: g[1] - t / 2, w: g[2] - g[0], h: t } : { x: g[0] - t / 2, y: g[1], w: t, h: g[3] - g[1] };
+    };
+    civLines.filter(l => l.civil!.segment).forEach(l => {
+      const g = l.civil!.segment!;
+      const type = l.civil!.type as 'break' | 'build';
+      const R = segRect(g);
+      const on = sel === l.id;
+      const colour = toolOf(type).colour;
+      civilG.push(
+        <g key={`cs-${l.id}`} data-civ={l.id} style={{ cursor: civilTool ? undefined : 'pointer' }}
+          onPointerDown={e => { if (civilTool) return; e.stopPropagation(); onSel(l.id); onSelRoom(null); }}>
+          <rect x={R.x} y={R.y} width={R.w} height={R.h} fill={`url(#pg-civ-${type})`} stroke={on ? BRAND : colour} strokeWidth={px(on ? 3 : 1.5)}
+            strokeDasharray={type === 'break' ? `${px(5)} ${px(3)}` : undefined} />
+        </g>,
+      );
+      const m = models.get(l.id);
+      const text = `${type === 'break' ? 'BREAK' : 'NEW WALL'} ${ftin(segLength(g))} · ${Math.round(m?.qty ?? l.qty)} ${String(m?.unit || 'sq ft').toUpperCase()}`;
+      civilLabels.push(pill(`cl-${l.id}`, text, (g[0] + g[2]) / 2, Math.min(g[1], g[3]) - px(24), colour, true));
+    });
+    if (drag?.kind === 'civdraw') {
+      const room = props.rooms.find(r => r.name === drag.room);
+      const g = room ? segmentFor(drag.tool, room, drag.a, drag.b) : null;
+      if (g) {
+        const R = segRect(g);
+        civilG.push(<rect key="civ-draft" x={R.x} y={R.y} width={R.w} height={R.h} fill={`url(#pg-civ-${drag.tool})`} stroke={toolOf(drag.tool).colour} strokeWidth={px(2)} pointerEvents="none" />);
+        civilLabels.push(pill('civ-draft-len', ftin(segLength(g)), (g[0] + g[2]) / 2, Math.min(g[1], g[3]) - px(24), '#1e293b', true));
+      }
+    }
+  }
+
   const ground = { x: bounds.x - 200, y: bounds.y - 200, w: bounds.w + 400, h: bounds.h + 400 };
 
   return (
@@ -434,7 +538,7 @@ export default function PlanStage(props: Props) {
       onDragOver={e => { if (!readOnly) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
       onDrop={onDrop}
     >
-      <svg className="absolute inset-0 w-full h-full" role="application"
+      <svg className="absolute inset-0 w-full h-full" role="application" style={civ && civilTool ? { cursor: 'crosshair' } : undefined}
         aria-label="The flat. Drag furniture to move it; pull its handles to resize or turn it."
         onPointerDown={e => startPan(e, null)}>
         <g transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>
@@ -462,11 +566,16 @@ export default function PlanStage(props: Props) {
             const b = boundsOf(planRooms.map(r => r.plan!))!;
             return <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="none" stroke="#262626" strokeWidth={0.7} pointerEvents="none" />;
           })()}
-          {pieces.map(p => (
-            <PieceNode key={p.id} piece={p} faded={!models.get(p.id)?.billable} readOnly={readOnly} onDown={onPieceDown}
-              fill={models.get(p.id)?.art.fill} base={models.get(p.id)?.art.base} top={models.get(p.id)?.art.top} />
-          ))}
+          {/* On the Civil layer the furniture fades back and cannot be picked. */}
+          <g opacity={civ ? 0.22 : 1} pointerEvents={civ ? 'none' : undefined}>
+            {pieces.map(p => (
+              <PieceNode key={p.id} piece={p} faded={!models.get(p.id)?.billable} readOnly={readOnly} onDown={onPieceDown}
+                fill={models.get(p.id)?.art.fill} base={models.get(p.id)?.art.base} top={models.get(p.id)?.art.top} />
+            ))}
+          </g>
+          {civ && <g>{civilG}</g>}
           <g>{tags}</g>
+          {civ && <g>{civilLabels}</g>}
           <g>{overlay}</g>
           {drag?.kind === 'move' && drag.guides.map((g, i) => (
             <line key={i} x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} stroke={g.wall ? BRAND : '#64748b'} strokeDasharray={`${px(4)} ${px(3)}`} strokeWidth={px(1)} pointerEvents="none" />

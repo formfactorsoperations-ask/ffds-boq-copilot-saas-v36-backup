@@ -3,9 +3,9 @@ import type { BoqItem, Item, PieceDraw, PricingRules, Room } from '../../types';
 import { formatINR } from '../../lib/utils';
 import { resolveBoqLine, isAsActuals } from '../../lib/boqPricing';
 import { drawOf, pieceSize, pieceItemOf, type PieceSize } from '../../lib/playground/pieces';
-import { lineAmount, lineCost } from '../../lib/playground/pricing';
+import { lineAmount, lineCost, withPlanQty } from '../../lib/playground/pricing';
 import { markupOf, specWordsOf, DEFAULT_MARGIN_FLOOR } from '../../lib/playground/issues';
-import { withByRoomQty, type MeasureContext } from '../../lib/playground/rooms';
+import type { MeasureContext } from '../../lib/playground/rooms';
 import type { MaterialSpecsBank } from '../../lib/materialSpecs';
 import { staleParts, shadeHexOf } from '../../lib/lineSpecs';
 import { artOfSpecs } from './pieceArt';
@@ -174,7 +174,7 @@ const SEPARATE = new Set(['client_procured']);
 
 export function lineModel(line: BoqItem, bankMap: Map<string, Item>, rules: PricingRules | null, rooms: Room[], measure?: MeasureContext, spec?: SpecContext): LineModel {
   const item = bankMap.get(line.bankId);
-  const b = rooms.length && line.byRoom ? withByRoomQty(line, rooms, measure) : line;
+  const b = withPlanQty(line, bankMap, { rooms, measure });
   const r = resolveBoqLine(b, bankMap);
   /* A line of its own (imported, not in the bank) is drawn from its own name. */
   const pieceItem = pieceItemOf(line, bankMap);

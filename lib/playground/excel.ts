@@ -345,8 +345,11 @@ export function studioDiff(
       }
       const moved = (next.roomId || FLAT) !== (line.roomId || FLAT);
       const s0 = sizeFt(line, unit);
+      // A civil line's quantity comes from its room on the plan, a whole-flat line's from its rooms: a typed one is not taken.
+      const planQty = !!line.civil || !!line.byRoom;
       const sizeChanged = (row.w !== undefined || row.h !== undefined) && (round2(row.w ?? 0) !== round2(s0.w ?? 0) || round2(row.h ?? 0) !== round2(s0.h ?? 0));
-      if (sizeChanged) next = { ...next, ...sizeUpdates({ a: row.w, b: row.h, nos: Number(line.calcMultiplier) || 1, unit: 'ft' }, unit) };
+      if (planQty) { /* quantity from the plan */ }
+      else if (sizeChanged) next = { ...next, ...sizeUpdates({ a: row.w, b: row.h, nos: Number(line.calcMultiplier) || 1, unit: 'ft' }, unit) };
       else if (row.qty !== undefined && round2(row.qty) !== round2(Number(line.qty) || 0)) next = { ...next, qty: round2(row.qty) };
       if (row.cost !== undefined && round2(row.cost) !== unitCostOf(line, bankMap)) {
         next = { ...next, baseRate: Math.max(0, round2(row.cost - laborOf(line, bankMap))) };

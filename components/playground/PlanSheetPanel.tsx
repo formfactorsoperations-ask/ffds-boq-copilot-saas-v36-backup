@@ -9,6 +9,7 @@ import {
 } from '../../lib/playground/planSheet';
 import { ftin, roundTo3in, boundsOf, type Point } from '../../lib/playground/geometry';
 import { mergeRooms } from '../../lib/playground/sketch';
+import { syncedCivil } from '../../lib/playground/civil';
 import { pricingRulesOf } from '../../lib/playground/pricing';
 import { buildBankMap } from '../../lib/boqPricing';
 import { lockedTierId } from '../../lib/scopeFlow';
@@ -181,7 +182,8 @@ export default function PlanSheetPanel({ projectContext: ctx, setProjectContext,
       setTiers(ts => ts.map(t => {
         if (t.id === locked) return t;
         const r = replacePlan({ rooms, boq: t.boq || [], bankMap, oldSheet: ctx.planSheet, rects: replan.rects, at, by: userName });
-        return { ...t, boq: r.boq };
+        // Civil lines measure from their rooms: their quantities follow the new plan (PR C).
+        return { ...t, boq: syncedCivil(r.boq, r.rooms, bankMap) };
       }));
     }
     const r = replacePlan({ rooms, boq: [], bankMap, oldSheet: ctx.planSheet, rects: replan.rects, at, by: userName });
