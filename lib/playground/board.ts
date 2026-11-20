@@ -17,7 +17,7 @@
  * Pure: no screen.
  */
 import type { Item, BoqItem, PieceDraw, PiecePlace } from '../../types';
-import { drawOf, pieceSize, resizeUpdates, qtyFromPiece, newPlace } from './pieces';
+import { drawOf, pieceSize, resizeUpdates, qtyFromPiece, newPlace, pieceItemOf } from './pieces';
 import { localToPlan, normRot, roundTo3in, round2, type Point } from './geometry';
 
 /** The new line for an item dropped on the plan. */
@@ -104,7 +104,7 @@ export function resizedTo(line: BoqItem, item: Pick<Item, 'unit' | 'name' | 'cat
 
 /** Lines whose item draws but that are not on the plan yet: Needs a place. */
 export function needsPlace(boq: BoqItem[], bankMap: Map<string, Item>): BoqItem[] {
-  return (boq || []).filter(l => !l.place && !!drawOf(bankMap.get(l.bankId)) && l.boqStatus !== 'deleted' && l.boqStatus !== 'substituted');
+  return (boq || []).filter(l => !l.place && !!drawOf(pieceItemOf(l, bankMap)) && l.boqStatus !== 'deleted' && l.boqStatus !== 'substituted');
 }
 
 /** The bank items that can be drawn, in name order. */

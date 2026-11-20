@@ -7,7 +7,7 @@ import { Button, EmptyState, LABEL, Segmented } from '../ui/kit';
 import { useSeesMargins } from '../ui/HideFigures';
 import type { ProjectContext, ProposalTier, Item, BoqItem, Room } from '../../types';
 import { realRooms } from '../../lib/scopeBuckets';
-import { boardPieces, drawOf, isHigh, isWallBacked, pieceSize, footprintOf, wallCovers } from '../../lib/playground/pieces';
+import { boardPieces, drawOf, isHigh, isWallBacked, pieceSize, footprintOf, wallCovers, pieceItemOf } from '../../lib/playground/pieces';
 import { autoPlace, type PlacedPiece } from '../../lib/playground/placing';
 import { lineIssues, marginFloorFor } from '../../lib/playground/issues';
 import { pricingRulesOf, playgroundTotals, isPlaygroundTier } from '../../lib/playground/pricing';
@@ -18,6 +18,10 @@ import { inferBasis } from '../../lib/takeoff';
 import { lockedTierId } from '../../lib/scopeFlow';
 import { ftin } from '../../lib/playground/geometry';
 import SketchModal from './SketchModal';
+import ImportExcelModal from './ImportExcelModal';
+import { buildStudioBook, buildClientBook, bookName } from '../../lib/playground/excelBook';
+import { unitCostOf } from '../../lib/playground/excel';
+import { downloadWorkbook } from '../../lib/scopeWorkbook';
 import QuickBuildModal, { type QuickBuildChoice } from './QuickBuildModal';
 import { sheetOf } from '../../lib/playground/planSheet';
 import { newPieceLine, needsPlace, pushHistory, undoHistory, type History } from '../../lib/playground/board';
@@ -102,11 +106,15 @@ interface Props {
   roomStandards?: RoomStandards | null;
   /** Who is working, for the plan history. */
   userName?: string;
+  /** The studio's name, on the client copy. */
+  studioName?: string;
+  /** The Owner may add an imported row's item to the Item Bank. */
+  isOwner?: boolean;
 }
 
 export default function PlaygroundScreen(props: Props) {
   const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly, currentRoles, tenantId, onBoq, newId,
-    onSelectTier, onMakePlaygroundVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName } = props;
+    onSelectTier, onMakePlaygroundVersion, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner } = props;
   const boq = tier.boq || [];
   const seesMargins = useSeesMargins(currentRoles);
   /* Hide figures hides margins only (lib/figuresPrivacy): prices stay, and seesMargins already reads it. */
@@ -128,6 +136,7 @@ export default function PlaygroundScreen(props: Props) {
   const [planModal, setPlanModal] = useState(false);
   const [sketching, setSketching] = useState(false);
   const [building, setBuilding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [fitSignal, setFitSignal] = useState(0);
   const [fullGrid, setFullGrid] = useState(false);
   const [recipeItemId, setRecipeItemId] = useState<string | null>(null);
@@ -215,7 +224,7 @@ export default function PlaygroundScreen(props: Props) {
   };
   const libTarget = selRoom || (sel ? byId.get(sel)?.room : null) || planRooms[0]?.name || rooms[0]?.name || 'Others';
   const placeLine = (line: BoqItem) => {
-    const item = bankMap.get(line.bankId);
+    const item = pieceItemOf(line, bankMap);
     const room = planRooms.find(r => r.name === line.roomId);
     const probe = item ? probeOf(item, line) : null;
     if (!room || !probe) { setNote(`${line.roomId || 'Its room'} is not on the plan yet.`); return; }
@@ -227,7 +236,8 @@ export default function PlaygroundScreen(props: Props) {
     const copy: BoqItem = { ...m.line, id: newId() };
     if (copy.place) {
       const room = planRooms.find(r => r.name === copy.roomId);
-      const probe = m.item ? probeOf(m.item, copy) : null;
+      const pi = pieceItemOf(copy, bankMap);
+      const probe = pi ? probeOf(pi, copy) : null;
       const at = room && probe ? autoPlace(probe, room, pieces.filter(p => p.room === room.name)) : null;
       copy.place = at ? { ...copy.place, x: at.x, y: at.y, rot: at.rot } : { ...copy.place, x: copy.place.x + 0.5, y: copy.place.y + 0.5 };
     }
@@ -276,6 +286,32 @@ export default function PlaygroundScreen(props: Props) {
     setBuilding(false);
     setNote(`Built: ${qb.rects.length} rooms, ${placed} pieces placed${waiting ? `, ${waiting} waiting under Needs a place` : ''}. Replace the blocks with the real plan from the plan menu.`);
   };
+  /* ── Excel (PR 6): the studio and client copies out; a studio copy or any other sheet in ── */
+
+  const bookMeta = () => ({ studio: studioName || 'Studio', project: ctx.name || 'Project', option: tier.name || 'Option', tierId: tier.id, roundTo100: !!rules, at: Date.now() });
+  const exportBook = async (kind: 'studio' | 'client') => {
+    try {
+      const m = bookMeta();
+      const x = { bankMap, rules, rooms, measure, specBank };
+      const buf = kind === 'studio' ? await buildStudioBook(boq, x, m) : await buildClientBook(boq, x, m);
+      downloadWorkbook(buf, bookName(m, kind));
+      setNote(kind === 'studio' ? 'Studio copy downloaded. Edit the blue cells, then Import Excel brings it back by its Line IDs.' : 'Client copy downloaded: locked, with no costs.');
+    } catch (e: any) { setNote(`The Excel file could not be made: ${e?.message || String(e)}`); }
+  };
+  const addImported = (lines: BoqItem[], items: Item[], msg: string, rates: (number | undefined)[]) => {
+    const map = new Map([...bankMap, ...items.map(i => [i.id, i] as [string, Item])]);
+    const ready = lines.map((l, i) => {
+      const p = prepareNew(l);
+      const rate = rates[i];
+      const cost = unitCostOf(p, map);
+      // The recipe's finish can move the cost: the markup is solved again so the rate still meets the sheet.
+      return rate && cost > 0 && p !== l ? { ...p, marginOverride: Math.round((rate / cost - 1) * 10000) / 100 } : p;
+    });
+    if (items.length) setProjectContext(p => ({ ...p, adHocItems: [...(p.adHocItems || []), ...items] }));
+    commit([...boq, ...ready], msg);
+    setImporting(false);
+  };
+
   const resizeRooms = (next: Room[], nextBoq: BoqItem[], changed: string[]) => {
     const all = mergeRooms(ctx.rooms || [], next.filter(r => changed.includes(r.name)));
     setProjectContext(p => ({ ...p, rooms: mergeRooms(p.rooms || [], next.filter(r => changed.includes(r.name))) }));
@@ -495,7 +531,7 @@ export default function PlaygroundScreen(props: Props) {
           <Undo2 className="w-4 h-4" aria-hidden />
         </button>
         {!readOnly && (
-          <button type="button" onClick={onImport} title="Import Excel" className={`${barBtn} bg-[#3D52A0]/[0.06] border border-[#3D52A0]/20 text-[#334486]`}>
+          <button type="button" onClick={classic ? onImport : () => setImporting(true)} disabled={readOnly && !classic} title="Import Excel" className={`${barBtn} bg-[#3D52A0]/[0.06] border border-[#3D52A0]/20 text-[#334486]`}>
             <Upload className="w-3.5 h-3.5" aria-hidden /><span className="hidden 2xl:inline">Import Excel</span><span className="2xl:hidden">Import</span>
           </button>
         )}
@@ -504,16 +540,28 @@ export default function PlaygroundScreen(props: Props) {
             <Download className="w-3.5 h-3.5" aria-hidden />Export<ChevronDown className="w-3 h-3" aria-hidden />
           </button>
           {menu === 'export' && (
-            <div className="absolute right-0 top-full mt-1.5 z-40 w-[260px] rounded-2xl bg-white border border-slate-200 shadow-2xl p-1.5 hud-panel-in">
-              {onExportExcel && (
+            <div className={`absolute right-0 top-full mt-1.5 z-40 ${classic ? 'w-[260px]' : 'w-[340px]'} rounded-2xl bg-white border border-slate-200 shadow-2xl p-1.5 hud-panel-in`}>
+              {!classic && onExportExcel && (
+                <button type="button" onClick={() => { setMenu(null); exportBook('studio'); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50">
+                  <span className="block text-sm font-semibold text-slate-800">Studio copy · .xlsx</span>
+                  <span className="block text-[11px] text-slate-500">Line IDs, materials with versions, sizes, cost, markup, live formulas. Blue cells edit; import it back. Rooms, Material specs and Read me sheets.</span>
+                </button>
+              )}
+              {!classic && (
+                <button type="button" onClick={() => { setMenu(null); exportBook('client'); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50">
+                  <span className="block text-sm font-semibold text-slate-800">Client copy · .xlsx</span>
+                  <span className="block text-[11px] text-slate-500">Locked. Item, specification, qty, unit, rate, amount by room, and the material specifications. No costs or markups.</span>
+                </button>
+              )}
+              {classic && onExportExcel && (
                 <button type="button" onClick={() => { setMenu(null); onExportExcel(); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50">
                   <span className="block text-sm font-semibold text-slate-800">Excel with live formulas</span>
                   <span className="block text-[11px] text-slate-500">Every line with cost, markup and rate. Studio only.</span>
                 </button>
               )}
               <button type="button" onClick={() => { setMenu(null); onExportPdf(); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50">
-                <span className="block text-sm font-semibold text-slate-800">BOQ as a PDF</span>
-                <span className="block text-[11px] text-slate-500">The schedule of finishes, as on screen.</span>
+                <span className="block text-sm font-semibold text-slate-800">{classic ? 'BOQ as a PDF' : 'PDF'}</span>
+                <span className="block text-[11px] text-slate-500">{classic ? 'The schedule of finishes, as on screen.' : 'The client BOQ, as today.'}</span>
               </button>
             </div>
           )}
@@ -680,6 +728,11 @@ export default function PlaygroundScreen(props: Props) {
         />
       )}
 
+      {importing && (
+        <ImportExcelModal project={ctx.name || 'Project'} option={tier.name || 'Option'} tierId={tier.id} boq={boq}
+          ctx={{ bankMap, rules, rooms, measure, specBank }} bank={bank} floors={floors} isOwner={!!isOwner} seesMargins={seesMargins} newId={newId}
+          onApply={(next, msg) => { commit(next, msg); setImporting(false); }} onAdd={addImported} onClose={() => setImporting(false)} />
+      )}
       {sketching && (
         <SketchModal project={(ctx.name || 'Project').split(/[(]/)[0].trim()} initial={sketchFromRooms(rooms)} carpet={Number(ctx.area) || 0}
           onUse={useSketch} onClose={() => setSketching(false)} />

@@ -20,7 +20,7 @@
 import type { Room, RoomPlanRect, PlanSheet, PlanHistoryEntry, BoqItem, Item, PricingRules } from '../../types';
 import { classifyRoom } from '../takeoff';
 import { roundTo3in, round2, pieceBox, pastWalls, type Point } from './geometry';
-import { drawOf, pieceSize, footprintOf } from './pieces';
+import { drawOf, pieceSize, footprintOf, pieceItemOf } from './pieces';
 import { playgroundTotals } from './pricing';
 
 /* ───────────────────────────── scale ───────────────────────────── */
@@ -311,7 +311,7 @@ export function replacePlan(args: {
     const now = after.get(line.roomId);
     if (!was || !now || placed.missing.includes(line.roomId)) return line;
     const place = { ...line.place, x: round2(line.place.x - was.x + now.x), y: round2(line.place.y - was.y + now.y) };
-    const item = bankMap.get(line.bankId);
+    const item = pieceItemOf(line, bankMap);
     const draw = drawOf(item);
     if (draw) {
       const box = pieceBox(footprintOf(pieceSize(line, item, draw)), place);

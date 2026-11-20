@@ -839,6 +839,8 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               onSaveSpecs={materialSpecs.save}
               marginFloors={(orgData as any)?.settings?.marginFloors}
               roomStandards={(orgData as any)?.settings?.roomStandards}
+              studioName={(orgData as any)?.orgName || undefined}
+              isOwner={canEditMaterialSpecs(currentRole, currentRoles as any)}
               userName={currentUserAuth?.displayName || undefined}
               renderFullGrid={() => (
                 <StudioExcelGrid

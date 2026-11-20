@@ -14,7 +14,7 @@
  */
 import type { BoqItem, Item, Room } from '../../types';
 import { roundTo3in, round2, pieceBox } from './geometry';
-import { drawOf, footprintOf, pieceSize } from './pieces';
+import { drawOf, footprintOf, pieceSize, pieceItemOf } from './pieces';
 import { withRect } from './planSheet';
 
 export type RoomEdge = 'left' | 'right' | 'top' | 'bottom';
@@ -101,7 +101,7 @@ export function resizeRoom(args: {
   const nextBoq = boq.map(l => {
     const e = l.roomId ? changes.get(l.roomId) : undefined;
     if (!e || !l.place) return l;
-    const item = bankMap.get(l.bankId);
+    const item = pieceItemOf(l, bankMap);
     const draw = drawOf(item);
     if (!draw) return l;
     const box = pieceBox(footprintOf(pieceSize(l, item, draw)), l.place);

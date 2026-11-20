@@ -69,8 +69,8 @@ const DEFAULTS: [RegExp, PieceDraw][] = [
   [/\b(book\s*shelf|bookshelf|book\s*case|bookcase)/i, D('cabinet', 5, 6, 1)],
 ];
 
-/** Lines that are measured, never drawn, whatever their name says. */
-const NEVER_DRAWN = /\b(paint|putty|primer|false\s*ceiling|gypsum|pop\s*ceiling|electrical|wiring|plumbing|tiles?|flooring|demolition|debris|waterproof|civil|cleaning|light\s*fitting)/i;
+/** Lines that are measured, or finish a wall or window, never drawn, whatever their name says ("wallpaper on the bed wall" is not a bed). */
+const NEVER_DRAWN = /\b(paint|putty|primer|false\s*ceiling|gypsum|pop\s*ceiling|electrical|wiring|plumbing|tiles?|flooring|demolition|debris|waterproof|civil|cleaning|light\s*fitting|wall\s*paper|wallpaper|curtains?|blinds?|tracks?|cladding|upholstery|soft\s*furnishing)/i;
 const NEVER_DRAWN_CATS = /^(painting|electrical|plumbing|civil|flooring|tiling|ceiling|services)$/i;
 
 /** The draw an item uses: its own, else one inferred from its name, else null (not drawable). */
@@ -81,6 +81,21 @@ export function drawOf(item: Pick<Item, 'name' | 'cat' | 'draw'> | null | undefi
   if (NEVER_DRAWN_CATS.test((item.cat || '').trim()) || NEVER_DRAWN.test(name)) return null;
   for (const [re, d] of DEFAULTS) if (re.test(name)) return { ...d };
   return null;
+}
+
+/**
+ * The item a line is drawn as: its Item Bank item, else, for a line of its own
+ * (imported from a sheet, not in the bank), the line's own name, category and
+ * unit, so a "Pooja unit" from a vendor's list is drawn like the bank's. Used
+ * only to draw and place a piece; prices always read the line itself.
+ */
+export function pieceItemOf(line: Partial<BoqItem> & { name?: string; cat?: string; unit?: string } | null | undefined, bankMap: Map<string, Item>): Item | undefined {
+  if (!line) return undefined;
+  const item = line.bankId ? bankMap.get(line.bankId) : undefined;
+  if (item) return item;
+  const name = String(line.name || '').trim();
+  if (!name) return undefined;
+  return { id: '', name, cat: line.cat || 'Imported', unit: line.unit || 'nos', specs: line.specs || '', materials: Number(line.baseRate) || 0, labor: 0, margin: 0 } as Item;
 }
 
 /** True when a piece is wall-hung above the floor: it never collides with floor pieces. */
@@ -162,7 +177,7 @@ export function boardPieces(boq: BoqItem[], bankMap: Map<string, Item>): BoardPi
   const out: BoardPiece[] = [];
   (boq || []).forEach(line => {
     if (!line.place) return;
-    const item = bankMap.get(line.bankId);
+    const item = pieceItemOf(line, bankMap);
     const draw = drawOf(item);
     if (!draw) return;
     const size = pieceSize(line, item, draw);
