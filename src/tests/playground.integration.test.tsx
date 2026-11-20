@@ -633,3 +633,82 @@ describe('no plan yet (PR 5)', () => {
     expect(screen.getByText('Bedroom is now 13′ × 10′, 130 sq ft. Kitchen gave the same.')).toBeTruthy();
   });
 });
+
+describe('Excel out and in (PR 6)', () => {
+  /* jsdom's File may not read itself back: read it through FileReader. */
+  if (!(File.prototype as any).arrayBuffer) {
+    (File.prototype as any).arrayBuffer = function () {
+      return new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsArrayBuffer(this); });
+    };
+  }
+  const xlsxOf = async (sheets: Record<string, any[][]>) => {
+    const XLSX: any = await import('xlsx');
+    const wb = XLSX.utils.book_new();
+    Object.entries(sheets).forEach(([n, g]) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(g), n));
+    return new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }));
+  };
+  const upload = async (bytes: Uint8Array, name: string) => {
+    const input = screen.getByLabelText('Excel file') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [new File([bytes], name)] } });
+      await new Promise(r => setTimeout(r, 400));
+    });
+  };
+
+  it('the Export menu offers the studio copy, the client copy and the PDF', () => {
+    render(<Harness tier={PG} />);
+    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+    expect(screen.getByText('Studio copy · .xlsx')).toBeTruthy();
+    expect(screen.getByText('Client copy · .xlsx')).toBeTruthy();
+    expect(screen.getByText('PDF')).toBeTruthy();
+  });
+
+  it('a studio copy comes back by its Line IDs: every change shown and priced, applied in one undo', async () => {
+    const { buildStudioBook, readBook } = await import('../../lib/playground/excelBook');
+    let latest: any[] = [];
+    render(<Harness tier={PG} probe={t => { latest = t; }} />);
+    const bankMap = new Map(bank.map(b => [b.id, b]));
+    const book = await readBook(await buildStudioBook(latest[0].boq, { bankMap, rules: PLAYGROUND_PRICING, rooms: rooms as any }, { studio: 'S', project: 'Test flat', option: 'Comfort Upgrade', tierId: 't1', roundTo100: true }));
+    const g = book.BOQ as any[][];
+    const h = g.findIndex(r => r[0] === 'Line ID');
+    g[g.findIndex(r => r[0] === 'L-0003')][g[h].indexOf('Qty')] = 12; // the kitchen counter, 10 → 12 rft
+    fireEvent.click(screen.getByRole('button', { name: /Import/ }));
+    const dlg = () => screen.getByRole('dialog', { name: 'What are you bringing in?' });
+    expect(within(dlg()).getByText('A studio copy, edited in Excel')).toBeTruthy();
+    await upload(await xlsxOf(book as any), 'Test flat – studio copy.xlsx');
+    const d = screen.getByRole('dialog', { name: 'Test flat – studio copy.xlsx' });
+    expect(within(d).getByText(/A studio copy, read by its Line IDs\. 2 rows are unchanged and left alone\./)).toBeTruthy();
+    expect(within(d).getByText('Qty 10 → 12')).toBeTruthy();
+    expect(within(d).getByText(/the BOQ has not changed since/)).toBeTruthy();
+    fireEvent.click(within(d).getByRole('button', { name: 'Apply changes' }));
+    expect(latest[0].boq.find((l: any) => l.id === 'l3').qty).toBe(12);
+    expect(screen.getByText(/1 change from Test flat – studio copy\.xlsx applied/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Undo/ }));
+    expect(latest[0].boq.find((l: any) => l.id === 'l3').qty).toBe(10);
+  });
+
+  it('any other sheet: each row placed in its room and priced to the sheet; nothing written until Add', async () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} />);
+    fireEvent.click(screen.getByRole('button', { name: /Import/ }));
+    await upload(await xlsxOf({ Sheet1: [
+      ['Item', 'Location', 'Qty', 'Unit', 'Rate'],
+      ['Sliding wardrobe 6 x 7 ft', 'Bedroom', null, 'sq ft', 2100],
+      ['Curtain tracks, motorised', null, 4, 'nos', 9500],
+    ] }), 'Vendor quote.xlsx');
+    const d = screen.getByRole('dialog', { name: 'Vendor quote.xlsx' });
+    expect(within(d).getByText(/Columns matched as today:/)).toBeTruthy();
+    expect(within(d).getByText('On the plan')).toBeTruthy();
+    expect(within(d).getByText('Not in the Item Bank')).toBeTruthy();
+    expect(within(d).getByText('Needs a room')).toBeTruthy();
+    // The bank's ₹1,400 cost, marked up 50% to meet the sheet's ₹2,100.
+    expect(within(d).getByText(/markup/).textContent).toContain('50.0%');
+    expect(latest[0].boq).toEqual([]);
+    fireEvent.click(within(d).getByRole('button', { name: 'Add 2 lines' }));
+    const boq = latest[0].boq;
+    expect(boq).toHaveLength(2);
+    expect(boq[0]).toMatchObject({ bankId: 'wardrobe', roomId: 'Bedroom', qty: 42, marginOverride: 50 });
+    expect(boq[0].place).toBeTruthy();
+    expect(boq[1]).toMatchObject({ name: 'Curtain tracks, motorised', cat: 'Imported', qty: 4, roomId: 'Bedroom' });
+  });
+});
