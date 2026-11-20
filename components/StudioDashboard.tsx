@@ -22,7 +22,7 @@ import type { ScopeRevisionRecord } from '../lib/scopeRevision';
 import { contextWithTierCopied } from '../lib/specOverrides';
 import { X, Lock, Plus } from 'lucide-react';
 import { keepLockedTier, lockedTierId, scopeInForce, detailedBoqForTier, detailedBoqVersion, isApprovedIssue } from '../lib/scopeFlow';
-import { resolveBoqLine, isBillable, isAsActuals } from '../lib/boqPricing';
+import { resolveBoqLine, isBillable, isAsActuals, holdPrice } from '../lib/boqPricing';
 import { removeLines, restoreLines, RemovedLine } from '../lib/boqEdits';
 import { useOrg } from '../contexts/OrgContext';
 import { useSeesMargins } from './ui/HideFigures';
@@ -427,14 +427,15 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
 
   const handleAddItems = (items: Item[], qtys: { [itemId: string]: number }, rationales: { [itemId: string]: string }) => {
       if (!activeTierId || !activeRoomId) return;
-      const newBoqItems: BoqItem[] = items.map(item => ({
+      /* The line holds the item's whole price from now on (lib/boqPricing.ts holdPrice): a later change in the bank does not reach it. */
+      const newBoqItems: BoqItem[] = items.map(item => holdPrice({
           id: generateId(),
           bankId: item.id,
           qty: qtys[item.id] || 1,
           roomId: activeRoomId === 'Unassigned' ? undefined : activeRoomId,
           rationale: rationales[item.id] || '',
           baseRate: item.materials,
-      }));
+      }, item));
 
       setTiers(prev => prev.map(tier => {
           if (tier.id !== activeTierId) return tier;

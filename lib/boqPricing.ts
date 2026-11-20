@@ -83,6 +83,38 @@ export function lineSellRate(b: any, item: Pick<Item, 'materials' | 'labor' | 'm
 }
 
 /**
+ * A new line holds its item's price from the moment it is added.
+ *
+ * A line used to take whatever it did not hold from the bank each time it was
+ * drawn, so a rate or margin edited in the bank re-priced every project that
+ * used the item, finished ones included. The figures the line would borrow are
+ * written onto it instead (`baseRate`, `labor`, `marginOverride`), which is
+ * what every pricing path reads first: it sells at exactly what it would have,
+ * and goes on doing so whatever the bank does later. Changing the line's price
+ * is done on the line.
+ *
+ * A figure the line already holds is kept. Two kinds of item are left to follow
+ * the bank: one with no cost yet (it is priced in the bank, and that price
+ * should reach its line), and one whose figures are not plain numbers.
+ */
+export function holdPrice<T extends Record<string, any>>(line: T, item: Pick<Item, 'materials' | 'labor' | 'margin'> | null | undefined): T {
+  if (!line || !item) return line;
+  const { materials, labor, margin } = item as any;
+  const plain = [materials, labor, margin].every(v => typeof v === 'number' && Number.isFinite(v));
+  if (!plain || materials + labor <= 0) return line;
+  const add: Record<string, number> = {};
+  if (line.baseRate === undefined) add.baseRate = materials;
+  if (line.labor === undefined) add.labor = labor;
+  if (line.marginOverride === undefined || line.marginOverride === null) add.marginOverride = margin;
+  return Object.keys(add).length ? { ...line, ...add } : line;
+}
+
+/** `holdPrice` for every line of an option, each from the item it points at. */
+export function holdPrices<T extends Record<string, any>>(boq: T[], bankMap: Map<string, Item>): T[] {
+  return (boq || []).map(l => holdPrice(l, bankMap.get((l as any)?.bankId)));
+}
+
+/**
  * One line, priced exactly as the studio prices it.
  *
  * `bankMap` must include the project's own `adHocItems`, or lines added outside

@@ -63,7 +63,7 @@ import MeetingScopeInbox from "./scope/MeetingScopeInbox";
 import { useMomScopeQueue, MomScopeItem } from "../hooks/useMomScopeQueue";
 import { isScopeFlowOn } from "../lib/scopeFlow";
 import { addToBank, syncRevisionItems } from "../lib/bankMatch";
-import { lineSellRate } from "../lib/boqPricing";
+import { buildBankMap, holdPrices, lineSellRate } from "../lib/boqPricing";
 import { db } from "../services/dbService";
 
 interface RevisionStudioProps {
@@ -4505,7 +4505,9 @@ export default function RevisionStudio({
                     parentTierId: selectedTierId || approvedTierId || activeTierId,
                     lifecycleTag: "Revised after design",
                     projectContext: { ...projectContext },
-                    boq: currentRevisionBoq
+                    /* Each line holds the price of the item it points at, this revision's own
+                       items included (lib/boqPricing.ts holdPrices). */
+                    boq: holdPrices(currentRevisionBoq
                       .filter(
                         (b: any) => b.qty > 0 && b.status !== "Vendor Direct",
                       )
@@ -4523,7 +4525,7 @@ export default function RevisionStudio({
                         selectedRate: b.rate,
                         inclusions: b.inclusions || [],
                         exclusions: b.exclusions || [],
-                      })),
+                      })), buildBankMap(bank || [], [...(projectContext?.adHocItems || []), ...(newAdHocItems as any[])])),
                     summary: {
                       totalSell: rawRevisedExecutionTotal,
                       totalCost: rawRevisedExecutionTotal * 0.7,

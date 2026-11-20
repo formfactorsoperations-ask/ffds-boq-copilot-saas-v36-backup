@@ -4,6 +4,7 @@ import { resolveCivilScope, describeCivilScope } from './civilScope';
 import { realRooms, bucketForItem, ensureScopeRooms, uniqueRoomNames, ScopeBucket } from './scopeBuckets';
 import { computeTakeoff, classifyRoom, defaultCeiling, DEFAULT_CONVENTIONS, RoomGeometry, TakeoffTotals } from './takeoff';
 import { id as generateId, calculateSellPrice } from './utils';
+import { holdPrices } from './boqPricing';
 
 // Define the structure for templates
 export type TemplateData = Record<string, Record<string, string[]>>;
@@ -1210,7 +1211,9 @@ export const generateStandardPackages = (
             id: generateId(),
             name: tier.name,
             timestamp: Date.now(),
-            boq: boqItems,
+            /* Every line holds its item's price from the start (lib/boqPricing.ts holdPrice): the
+               option sells at what it was made at, whatever the bank says later. */
+            boq: holdPrices(boqItems, bankMap),
             projectContext: updatedContext,
             summary: {
                 totalSell: Math.round(totalSell),

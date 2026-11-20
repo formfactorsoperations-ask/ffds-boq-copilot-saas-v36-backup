@@ -71,6 +71,7 @@ import { issueProposal, sentProposalTier } from '../../lib/playground/proposal';
 import type { PaymentStructure, TermsSettings } from '../../types';
 import { changesBetween } from '../../lib/playground/changes';
 import { withSupply, supplyLine, supplyOf, SUPPLY_WORDS } from '../../lib/playground/supply';
+import { holdPrice } from '../../lib/boqPricing';
 
 /*
   The BOQ Playground (the approved mockup, v14): the BOQ Editor's one tab.
@@ -365,9 +366,12 @@ export default function PlaygroundScreen(props: Props) {
     if (readOnly) return;
     setHist(h => pushHistory(h, boq));
     pending.current = { boq, sell: totals.sell };
-    onBoq(next);
+    /* A line that is new in this edit holds its item's price from now on (lib/boqPricing.ts
+       holdPrice), however it came in: the catalogue, a kit, Quick Build, the brief, a sheet. */
+    const had = new Set(boq.map(l => l.id));
+    onBoq(next.map(l => (had.has(l.id) ? l : holdPrice(l, bankMap.get(l.bankId)))));
     if (msg) setNote(msg);
-  }, [boq, onBoq, readOnly, totals.sell]);
+  }, [boq, onBoq, readOnly, totals.sell, bankMap]);
   /* Once the edit is in: new lines print in, new pieces drop, the room glows, the price change floats up. Undo shows nothing. */
   useEffect(() => {
     const p = pending.current;

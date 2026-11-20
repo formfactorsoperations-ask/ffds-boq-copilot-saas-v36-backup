@@ -160,7 +160,7 @@ import { verifyApiKey } from "./services/geminiService";
 import { id as generateId, calculateSellPrice, calculateCostFromSell } from "./lib/utils";
 import { isPlaygroundTier, docPricingOf } from "./lib/playground/pricing";
 import { playgroundTierSummary } from "./lib/playground/versions";
-import { designFeeFor, isAsActuals } from "./lib/boqPricing";
+import { designFeeFor, holdPrice, isAsActuals } from "./lib/boqPricing";
 import { addToBank, masterFor } from "./lib/bankMatch";
 import { INITIAL_TEMPLATES } from "./lib/standardPackages";
 import { INITIAL_BANK } from "./constants";
@@ -2473,13 +2473,14 @@ export default function App() {
       setBank((prev) => addToBank(prev, newBankItems));
     }
 
-    const newBoqItems: BoqItem[] = itemsToAdd.map(({ item, qty }) => ({
+    // Each line holds its item's price from now on (lib/boqPricing.ts holdPrice).
+    const newBoqItems: BoqItem[] = itemsToAdd.map(({ item, qty }) => holdPrice({
       id: generateId(),
       bankId: item.id,
       qty,
       roomId: "General", // Default room for prompt adds
       rationale: item.name || "Added via Prompt",
-    }));
+    }, item));
 
     setTiers((prev) =>
       prev.map((tier) => {
@@ -3962,16 +3963,13 @@ export default function App() {
                             };
                             if (!existing) setBank((prev) => addToBank(prev, [newBankItem]));
 
-                            const newBoqItem: BoqItem = {
+                            const newBoqItem: BoqItem = holdPrice({
                               id: generateId(),
                               bankId: newBankItem.id,
                               qty,
                               roomId,
                               rationale: "Calculated value",
-                              ...(existing && Number.isFinite(Number(existing.materials)) && Number.isFinite(Number(existing.labor)) && Number.isFinite(Number(existing.margin))
-                                ? { baseRate: Number(existing.materials), labor: Number(existing.labor), marginOverride: Number(existing.margin) }
-                                : {}),
-                            };
+                            }, existing);
                             setTiers((prev) =>
                               prev.map((tier) => {
                                 if (tier.id !== activeTierId) return tier;
@@ -4693,16 +4691,13 @@ export default function App() {
                             };
                             if (!existing) setBank((prev) => addToBank(prev, [newBankItem]));
 
-                            const newBoqItem: BoqItem = {
+                            const newBoqItem: BoqItem = holdPrice({
                               id: generateId(),
                               bankId: newBankItem.id,
                               qty,
                               roomId,
                               rationale: "Calculated value",
-                              ...(existing && Number.isFinite(Number(existing.materials)) && Number.isFinite(Number(existing.labor)) && Number.isFinite(Number(existing.margin))
-                                ? { baseRate: Number(existing.materials), labor: Number(existing.labor), marginOverride: Number(existing.margin) }
-                                : {}),
-                            };
+                            }, existing);
                             setTiers((prev) =>
                               prev.map((tier) => {
                                 if (tier.id !== activeTierId) return tier;
