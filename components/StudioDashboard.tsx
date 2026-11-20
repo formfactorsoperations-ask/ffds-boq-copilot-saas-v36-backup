@@ -1,5 +1,7 @@
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useContext } from 'react';
+import { JourneyContext } from '../services/journeyEngine';
+import { journeyOf } from '../lib/playground/meeting';
 import { ProjectContext, Item, BoqItem, Room, AIStrategy, FullBoqItem, CommandAction, ProposalTier, AuditResult } from '../types';
 import { id as generateId, calculateSellPrice } from '../lib/utils';
 import RoomCard from './RoomCard';
@@ -188,6 +190,9 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   const mode = viewMode;
   /* BOQ Playground S2: the Material specs bank, for new lines' materials and the versions offered to drafts. */
   const materialSpecs = useMaterialSpecs(orgData?.tenantId, playground);
+  /* Where the client is (PR P): booked, and the layout approved. The journey is advisory; without it, neither. */
+  const journeyCtx = useContext(JourneyContext);
+  const journey = useMemo(() => journeyOf(journeyCtx?.steps), [journeyCtx?.steps]);
   /* Terms & Payment, for the Deal lens (PR P): the stages when Money has no schedule saved, and the proposal's validity. */
   const [terms, setTerms] = useState<{ paymentStructure: any; termsSettings: any }>({ paymentStructure: null, termsSettings: null });
   useEffect(() => {
@@ -553,10 +558,11 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
   };
 
   /* The option's next version (PR R): this one is kept as it was, the copy opens to edit. */
-  const handleNewPlaygroundVersion = () => {
+  const handleNewPlaygroundVersion = (boq?: any[]) => {
     const src = tiers.find(t => t.id === activeTierId);
     if (!src) return;
-    const copy = nextVersionOf(src, generateId(), Date.now());
+    /* From the meeting view, the copy carries the client's asks (PR P). */
+    const copy = { ...nextVersionOf(src, generateId(), Date.now()), ...(boq ? { boq: JSON.parse(JSON.stringify(boq)) } : {}) };
     const n = (versionPlace(tiers, src.id)?.versions.length || 1) + 1;
     setTiers(prev => [...prev, copy]);
     setProjectContext(prev => contextWithTierCopied(prev, src, copy.id));
@@ -946,6 +952,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               paymentStructure={terms.paymentStructure}
               termsSettings={terms.termsSettings}
               leadConcern={leadConcern}
+              journey={journey}
               onSaveKit={async bundle => { await updateSettings('customBundles', [...(settings?.customBundles || []), bundle]); }}
               renderFullGrid={() => (
                 <StudioExcelGrid

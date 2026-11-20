@@ -45,6 +45,7 @@ vi.mock('../../lib/proposalPdf', async (orig) => ({
 }));
 
 import StudioDashboard from '../../components/StudioDashboard';
+import { JourneyContext } from '../../services/journeyEngine';
 import { stageStats } from '../../components/playground/PlanStage';
 import { setFiguresHidden } from '../../lib/figuresPrivacy';
 import { PLAYGROUND_PRICING, ceilTo } from '../../lib/playground/pricing';
@@ -1408,5 +1409,68 @@ describe('The first proposal (PR P)', () => {
     lens('Deal');
     fireEvent.click(screen.getByRole('button', { name: 'Present to the client' }));
     expect(dialog()).toBeTruthy();
+  });
+});
+
+describe('The meeting view (PR P)', () => {
+  const approvedLayout = { steps: [{ id: 'space_planning_approved', status: 'done' }] } as any;
+  const withJourney = (el: React.ReactElement) => <JourneyContext.Provider value={approvedLayout}>{el}</JourneyContext.Provider>;
+  const meeting = () => screen.getByRole('dialog', { name: 'Presenting the proposal' });
+  const specsLine = () => withRecipeSpecs({ ...placedWardrobe } as any, bank[0], specStore.bank, 'C');
+
+  it('before the layout is approved, Present is the PDF: no drawing reaches the client', () => {
+    render(<Harness tier={PG} />);
+    expect(screen.queryByRole('button', { name: /^Present$/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Proposal PDF/ }));
+    expect(screen.queryByRole('dialog', { name: 'Presenting the proposal' })).toBeNull();
+  });
+
+  it('once it is, Present opens the meeting: chapters, the rooms drawn, the client pays as the Deal lens says, the price detail saved', () => {
+    let ctx: any = null;
+    render(withJourney(<Harness tier={{ ...PG, boq: [...baseBoq(), placedWardrobe] }} probeCtx={c => { ctx = c; }} />));
+    lens('Deal');
+    const pays = document.querySelector('[data-deal-pays]')!.textContent;
+    fireEvent.click(screen.getByRole('button', { name: 'Present to the client' }));
+    const d = meeting();
+    expect(d.querySelector('[data-meeting-pays]')!.textContent).toBe(pays);
+    const chapters = within(within(d).getByRole('navigation', { name: 'Chapters' })).getAllByRole('button').map(b => b.textContent);
+    expect(chapters).toEqual(['Welcome', 'Your home', 'Bedroom', 'Kitchen', 'Materials', 'Investment', 'Next step']);
+    expect(d.textContent).not.toMatch(/markup|margin/i);
+    fireEvent.click(within(d).getByRole('radio', { name: 'Every line' }));
+    expect(ctx.proposal.priceDetail).toBe('lines');
+    fireEvent.click(within(d).getByRole('button', { name: 'Exit' }));
+    expect(screen.queryByRole('dialog', { name: 'Presenting the proposal' })).toBeNull();
+    // The bar's button is Present now; the PDF stays in Export.
+    expect(screen.getByRole('button', { name: /^Present$/ })).toBeTruthy();
+  });
+
+  it('the client approves the option: it becomes the approved option, as Approve Option does', () => {
+    let ctx: any = null; let latest: any[] = [];
+    render(withJourney(<Harness tier={PG} probeCtx={c => { ctx = c; }} probe={t => { latest = t; }} />));
+    fireEvent.click(screen.getByRole('button', { name: /^Present$/ }));
+    fireEvent.click(within(meeting()).getByRole('button', { name: 'Next step' }));
+    fireEvent.click(within(meeting()).getByRole('button', { name: 'The client approves Comfort Upgrade' }));
+    expect(ctx.approvedTierId).toBe('t1');
+    expect(latest[0]).toMatchObject({ lifecycleTag: 'Current contract', approval: { by: 'Priya Shah' } });
+    expect(within(meeting()).getByText('Approved by the client')).toBeTruthy();
+  });
+
+  it('a finish the client asks for is priced, and the asks become the next version', () => {
+    specStore.bank = studioStandard();
+    const onSelect = vi.fn(); let latest: any[] = [];
+    render(withJourney(<Harness tier={{ ...PG, boq: [specsLine()] }} onSelect={onSelect} probe={t => { latest = t; }} />));
+    fireEvent.click(screen.getByRole('button', { name: /^Present$/ }));
+    fireEvent.click(within(meeting()).getByRole('button', { name: 'Bedroom' }));
+    const tiles = within(within(meeting()).getByRole('group', { name: 'Finish for Sliding wardrobe' })).getAllByRole('button');
+    const pick = tiles.find(t => t.getAttribute('aria-pressed') === 'false')!;
+    fireEvent.click(pick);
+    expect(within(meeting()).getByText(/^1 change/)).toBeTruthy();
+    fireEvent.click(within(meeting()).getByRole('button', { name: 'Next step' }));
+    fireEvent.click(within(meeting()).getByRole('button', { name: 'Make a new version with 1 change' }));
+    expect(latest).toHaveLength(2);
+    expect(onSelect).toHaveBeenCalledWith(latest[1].id);
+    const was = latest[0].boq[0].materialSpecs, now = latest[1].boq[0].materialSpecs;
+    expect(JSON.stringify(now)).not.toBe(JSON.stringify(was));
+    expect(Object.values(now).map((x: any) => x.id)).toContain(specStore.bank.materials.find((m: any) => m.name === pick.getAttribute('title'))!.id);
   });
 });

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PenTool, Map as MapIcon, LayoutGrid, Table2, SlidersHorizontal, Target, Plus, Search, Check, Undo2, Upload, Download,
-  ChevronDown, FileText, Expand, Shrink, Receipt as ReceiptIcon, Lock, Sparkles, MapPin, X, PenLine, Zap, ChevronRight, AlertTriangle,
+  ChevronDown, FileText, Expand, Shrink, Receipt as ReceiptIcon, Lock, Sparkles, MapPin, X, PenLine, Zap, ChevronRight, AlertTriangle, Play,
 } from 'lucide-react';
 import { Button, EmptyState, LABEL, Segmented } from '../ui/kit';
 import { useSeesMargins } from '../ui/HideFigures';
@@ -60,6 +60,9 @@ import { proposalValidity, withValidDays, followBoq, discountsOf, withDiscounts,
 import { holdsFinanceRole } from '../../lib/roleAccess';
 import { DealLens } from './DealParts';
 import ProposalPdf from './ProposalPdf';
+import MeetingView from './MeetingView';
+import type { Journey } from '../../lib/playground/meeting';
+import { contextWithApproved, tiersWithApproved } from '../../lib/tierApproval';
 import { issueProposal, sentProposalTier } from '../../lib/playground/proposal';
 import type { PaymentStructure, TermsSettings } from '../../types';
 import { changesBetween } from '../../lib/playground/changes';
@@ -134,8 +137,8 @@ interface Props {
   newId: () => string;
   onSelectTier?: (id: string) => void;
   onMakePlaygroundVersion?: () => void;
-  /** The option's next version: this one is kept as it was, the copy opens to edit (PR R). */
-  onNewVersion?: () => void;
+  /** The option's next version: this one is kept as it was, the copy opens to edit (PR R); from the meeting view, with the client's asks made (PR P). */
+  onNewVersion?: (boq?: BoqItem[]) => void;
   /** The signed version and its revision (PR R2). */
   signed?: SignedPlayground | null;
   onSave: () => void;
@@ -174,11 +177,13 @@ interface Props {
   termsSettings?: TermsSettings | null;
   /** The lead profile's main concern: the order of the proposal's pages. */
   leadConcern?: string | null;
+  /** Where the client is: booked, and the layout approved (lib/playground/meeting journeyOf). */
+  journey?: Journey | null;
 }
 
 export default function PlaygroundScreen(props: Props) {
   const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly: readOnlyProp, currentRoles, tenantId, onBoq: onBoqProp, newId,
-    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit, paymentStructure, termsSettings, leadConcern } = props;
+    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit, paymentStructure, termsSettings, leadConcern, journey } = props;
   /* A signed version (PR R2) is read-only; a revision of it is drawn and edited here, against it. */
   const revRec = signed?.rec || null;
   const revDraft = !!revRec && signed?.revState === 'draft';
@@ -218,8 +223,12 @@ export default function PlaygroundScreen(props: Props) {
   const [fitSignal, setFitSignal] = useState(0);
   const [fullGrid, setFullGrid] = useState(false);
   const [recipeItemId, setRecipeItemId] = useState<string | null>(null);
-  /* The first-proposal PDF (PR P), over the screen. */
+  /* The first-proposal PDF (PR P), over the screen; and once the layout is approved, the meeting view. */
   const [pdfOpen, setPdfOpen] = useState(false);
+  const [meeting, setMeeting] = useState(false);
+  const layoutApproved = !!journey?.layoutApproved;
+  /* No drawing reaches the client until the layout is approved (the drawing gate): before that, Present is the PDF. */
+  const present = () => (layoutApproved ? setMeeting(true) : setPdfOpen(true));
   /* S2: the option's grade picks each recipe's column; a draft is offered newer versions. */
   const grade = gradeOf(tier);
   const offer = !!specBank && offersUpdates(tier, ctx, readOnly);
@@ -784,7 +793,7 @@ export default function PlaygroundScreen(props: Props) {
                       Show changes since {prevName}
                     </label>
                   )}
-                  {onNewVersion && !readOnly && format === 'playground' && (
+                  {onNewVersion && (!readOnly || sentHere) && format === 'playground' && (
                     <button type="button" onClick={() => { setMenu(null); onNewVersion(); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 flex items-start gap-2">
                       <span className="w-4 mt-0.5" />
                       <span><span className="block text-sm font-semibold text-slate-800">New version</span><span className="block text-[11px] text-slate-500">Keep v{vplace.n} as it is, edit v{vplace.n + 1}</span></span>
@@ -883,6 +892,12 @@ export default function PlaygroundScreen(props: Props) {
                   <span className="block text-[11px] text-slate-500">Every line with cost, markup and rate. Studio only.</span>
                 </button>
               )}
+              {!classic && (
+                <button type="button" onClick={() => { setMenu(null); setPdfOpen(true); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50">
+                  <span className="block text-sm font-semibold text-slate-800">First proposal · PDF</span>
+                  <span className="block text-[11px] text-slate-500">The A4 pages the client is sent: room by room, materials, investment, Annexure A. No drawing.</span>
+                </button>
+              )}
               <button type="button" onClick={() => { setMenu(null); onExportPdf(); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50">
                 <span className="block text-sm font-semibold text-slate-800">{classic ? 'BOQ as a PDF' : 'PDF'}</span>
                 <span className="block text-[11px] text-slate-500">{classic ? 'The schedule of finishes, as on screen.' : 'The client BOQ, as today.'}</span>
@@ -890,9 +905,9 @@ export default function PlaygroundScreen(props: Props) {
             </div>
           )}
         </div>
-        {!classic && <button type="button" onClick={() => { setMenu(null); setPdfOpen(true); }}
-          title="First proposal PDF: no drawing until the layout is approved" className={`${barBtn} px-3 bg-slate-800 text-white hover:bg-slate-900`}>
-          <FileText className="w-3.5 h-3.5" aria-hidden />Proposal PDF
+        {!classic && <button type="button" onClick={() => { setMenu(null); present(); }}
+          title={layoutApproved ? 'Meeting view: the layout is approved, so rooms are drawn' : 'First proposal PDF: no drawing until the layout is approved'} className={`${barBtn} px-3 bg-slate-800 text-white hover:bg-slate-900`}>
+          {layoutApproved ? <><Play className="w-3.5 h-3.5" aria-hidden />Present</> : <><FileText className="w-3.5 h-3.5" aria-hidden />Proposal PDF</>}
         </button>}
         <button type="button" onClick={() => { setFull(f => !f); setFitSignal(s => s + 1); }} aria-label={full ? 'Leave full screen' : 'Full screen'} title={full ? 'Leave full screen' : 'Full screen'} className="p-1.5 rounded-xl border border-slate-200 text-slate-600">
           {full ? <Shrink className="w-4 h-4" aria-hidden /> : <Expand className="w-4 h-4" aria-hidden />}
@@ -971,7 +986,7 @@ export default function PlaygroundScreen(props: Props) {
                       onFee={v => setProjectContext(prev => ({ ...prev, designFee: (prev.designFeeType || 'percentage') === 'percentage' ? Math.min(30, Math.max(0, v)) : Math.max(0, v) }))}
                       onDays={d => setProjectContext(prev => withValidDays(prev, d))}
                       onInitiation={v => setProjectContext(prev => withInitiationFee(prev, v))}
-                      onNote={setNote} onPresent={isPlaygroundTier(tier) ? () => setPdfOpen(true) : undefined} />
+                      onNote={setNote} onPresent={isPlaygroundTier(tier) ? present : undefined} />
                   );
                 })()}
               </div>
@@ -1084,9 +1099,26 @@ export default function PlaygroundScreen(props: Props) {
         />
       )}
 
+      {meeting && (
+        <MeetingView ctx={ctx} tier={{ ...tier, boq }} tiers={tiers} bankMap={bankMap} specBank={specBank} paymentStructure={paymentStructure}
+          studioName={studioName || 'The studio'} userName={userName}
+          priceDetail={ctx.proposal?.priceDetail || 'rooms'}
+          onPriceDetail={p => setProjectContext(prev => ({ ...prev, proposal: { ...(prev.proposal || {}), priceDetail: p } }))}
+          approved={ctx.approvedTierId === tier.id}
+          onApprove={() => {
+            const now = Date.now();
+            const was = ctx.approvedTierId;
+            setProjectContext(prev => contextWithApproved(prev, tier, tiers, now));
+            setTiers(prev => tiersWithApproved(prev, tier.id, was, { at: now, by: userName || 'The studio' }));
+            setNote(`${tier.name} is the client’s approved option.`);
+          }}
+          onNewVersion={onNewVersion ? next => { setMeeting(false); onNewVersion(next); } : undefined}
+          onPdf={() => { setMeeting(false); setPdfOpen(true); }}
+          onClose={() => setMeeting(false)} />
+      )}
       {pdfOpen && (
         <ProposalPdf ctx={ctx} tier={{ ...tier, boq }} tiers={tiers} bankMap={bankMap} specBank={specBank} termsSettings={termsSettings} paymentStructure={paymentStructure}
-          studioName={studioName || 'The studio'} userName={userName} concern={leadConcern} booked={false}
+          studioName={studioName || 'The studio'} userName={userName} concern={leadConcern} booked={!!journey?.booked}
           onSent={(via, shapedFor) => {
             setProjectContext(prev => issueProposal(prev, { tierId: tier.id, at: Date.now(), via, days: validity.days, shapedFor, by: userName }));
             setNote(`Sent. ${tier.name} is kept as it went; make a new version to change it.`);
