@@ -9,7 +9,8 @@ import BankSpecImportModal from './bank/BankSpecImportModal';
 import { applySpecs, buildSpecSheetWorkbook, specSheetName } from '../lib/bankSpecs';
 import { downloadWorkbook } from '../lib/scopeWorkbook';
 import { buildBankUsageExport, bankUsageFileName } from '../lib/bankUsageExport';
-import { Button } from './ui/kit';
+import { Button, Chip } from './ui/kit';
+import { addToBank, isMergedCopy } from '../lib/bankMatch';
 import PriceLockModal from './bank/PriceLockModal';
 import BankSpreadsheetTable from './bank/BankSpreadsheetTable';
 import BankCategoryGroupedView from './bank/BankCategoryGroupedView';
@@ -69,7 +70,7 @@ interface BankTabProps {
 }
 
 const BankTab: React.FC<BankTabProps> = ({
-  bank,
+  bank: wholeBank,
   setBank,
   aiStrategy,
   highlightedBankItemId,
@@ -81,6 +82,15 @@ const BankTab: React.FC<BankTabProps> = ({
   priceLock,
 }) => {
   const { orgData } = useOrg();
+  /*
+    The screen works on the items. A copy of another item (lib/bankMatch.ts)
+    stays in the bank, so old lines still find it, but is left off this list
+    unless asked for. Everything that saves works on the whole bank: setBank
+    takes the previous bank, and the exports and Lock prices are given it whole.
+  */
+  const [showCopies, setShowCopies] = useState(false);
+  const copyCount = useMemo(() => wholeBank.filter(isMergedCopy).length, [wholeBank]);
+  const bank = useMemo(() => (showCopies || !copyCount ? wholeBank : wholeBank.filter((i) => !isMergedCopy(i))), [wholeBank, showCopies, copyCount]);
   const { settings, updateSettings } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
   const customBundles = useMemo(() => settings?.customBundles || [], [settings]);
 
@@ -394,7 +404,7 @@ const BankTab: React.FC<BankTabProps> = ({
   // EXPORT & IMPORT HANDLERS
   // ==========================================
   const handleExportBank = () => {
-    const exportList = selectedItems.length > 0 ? selectedItems : bank;
+    const exportList = selectedItems.length > 0 ? selectedItems : wholeBank;
     const dataStr = JSON.stringify(exportList, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -413,7 +423,7 @@ const BankTab: React.FC<BankTabProps> = ({
   const handleExportUsage = () => {
     try {
       const studio = orgData?.orgName || 'Studio';
-      const data = buildBankUsageExport(bank, projects, { studio, draftBank: isDraftBank });
+      const data = buildBankUsageExport(wholeBank, projects, { studio, draftBank: isDraftBank });
       const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -623,6 +633,17 @@ const BankTab: React.FC<BankTabProps> = ({
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
                 {stats.totalItems} Active Items · {stats.totalCategories} Categories
               </span>
+              {copyCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowCopies((v) => !v)}
+                  aria-pressed={showCopies}
+                  title="Copies of an item the bank already has. They are kept so older projects still find them, and are left out of this list, the pickers and imports."
+                  className="cursor-pointer"
+                >
+                  <Chip tone={showCopies ? 'brand' : 'slate'}>{copyCount} {copyCount === 1 ? 'copy' : 'copies'} {showCopies ? 'shown' : 'hidden'}</Chip>
+                </button>
+              )}
               {stats.itemsInProjectsCount > 0 && (
                 <button
                   onClick={() => { setHealthFilter('in-active-projects'); setViewMode('spreadsheet'); }}
@@ -1504,7 +1525,7 @@ const BankTab: React.FC<BankTabProps> = ({
 
       {isPriceLockOpen && priceLock && (
         <PriceLockModal
-          bank={bank}
+          bank={wholeBank}
           studio={orgData?.orgName || 'Studio'}
           read={priceLock.read}
           save={priceLock.save}
@@ -1517,7 +1538,8 @@ const BankTab: React.FC<BankTabProps> = ({
         isOpen={isTextImportOpen}
         onClose={() => setIsTextImportOpen(false)}
         onImport={(importedItems) => {
-          setBank((prev) => [...importedItems, ...prev]);
+          // One the bank already has by name and unit goes in as its copy, not as another item.
+          setBank((prev) => addToBank(prev, importedItems, 'start'));
           setIsTextImportOpen(false);
         }}
         rooms={[]}

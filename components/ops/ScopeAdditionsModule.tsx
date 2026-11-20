@@ -35,6 +35,7 @@ import { jsPDF } from 'jspdf';
 import ScopeAdditionInvoiceDoc from '../client/ScopeAdditionInvoiceDoc';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 import autoTable from 'jspdf-autotable';
+import { pickable } from '../../lib/bankMatch';
 
 interface ScopeAdditionProps {
     projectId: string;
@@ -573,9 +574,11 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
 
     // Filter library search list
     const filteredLibraryItems = useMemo(() => {
-        if (!searchQuery.trim()) return bank.slice(0, 10);
+        // The items, never a copy of one (lib/bankMatch.ts).
+        const offered = pickable(bank);
+        if (!searchQuery.trim()) return offered.slice(0, 10);
         const query = searchQuery.toLowerCase();
-        return bank.filter(item => 
+        return offered.filter(item => 
             (item.name || '').toLowerCase().includes(query) || 
             (item.cat || '').toLowerCase().includes(query)
         ).slice(0, 15);

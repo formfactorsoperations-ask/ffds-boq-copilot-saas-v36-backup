@@ -62,6 +62,7 @@ import ScopeWorkspace from "./scope/ScopeWorkspace";
 import MeetingScopeInbox from "./scope/MeetingScopeInbox";
 import { useMomScopeQueue, MomScopeItem } from "../hooks/useMomScopeQueue";
 import { isScopeFlowOn } from "../lib/scopeFlow";
+import { addToBank, syncRevisionItems } from "../lib/bankMatch";
 import { db } from "../services/dbService";
 
 interface RevisionStudioProps {
@@ -135,17 +136,16 @@ export default function RevisionStudio({
 
     if (newBankItems.length > 0) {
       if (setBank) {
+        /* Every imported item is kept in the bank, so a line pointing at it finds it. One the
+           bank already has by name and unit goes in as that item's copy (lib/bankMatch.ts). The
+           items left out here used to arrive anyway, as second items, through the project's own. */
         setBank((prev) => {
-          const existingIds = new Set(prev.map((i) => i.id));
-          const existingNames = new Set(prev.map((i) => i.name.toLowerCase().trim()));
-          const toAdd = newBankItems.filter(
-            (item) => !existingIds.has(item.id) && !existingNames.has(item.name.toLowerCase().trim())
-          );
-          if (toAdd.length === 0) return prev;
-          const updated = [...prev, ...toAdd];
-          db.saveBank(updated).catch((err) =>
-            console.error("Failed to sync imported items to Item Bank:", err)
-          );
+          const updated = addToBank(prev, newBankItems);
+          if (updated !== prev) {
+            db.saveBank(updated).catch((err) =>
+              console.error("Failed to sync imported items to Item Bank:", err)
+            );
+          }
           return updated;
         });
       }
@@ -4402,18 +4402,9 @@ export default function RevisionStudio({
                   }));
 
                 if (setBank && newAdHocItems.length > 0) {
-                  setBank((prev) => {
-                    const merged = [...prev];
-                    newAdHocItems.forEach((newBI: any) => {
-                      const existingIndex = merged.findIndex((i) => i.id === newBI.id);
-                      if (existingIndex >= 0) {
-                        merged[existingIndex] = { ...merged[existingIndex], ...newBI };
-                      } else {
-                        merged.push(newBI as any);
-                      }
-                    });
-                    return merged;
-                  });
+                  /* Never over a standard bank item, and never as a second item of a name the
+                     bank has (syncRevisionItems, lib/bankMatch.ts). */
+                  setBank((prev) => syncRevisionItems(prev, newAdHocItems as any));
                 }
 
                 const newTierId = "tier_" + Math.random().toString(36).substring(2, 9);

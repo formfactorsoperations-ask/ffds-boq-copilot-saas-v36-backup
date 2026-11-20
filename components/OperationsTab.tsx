@@ -4,6 +4,7 @@ import { ProposalTier, Item, ProjectContext, FullProjectData } from '../types';
 import TierManager from './TierManager';
 import { TemplateData } from '../lib/standardPackages';
 import ExcelImportModal from './ExcelImportModal';
+import { addToBank } from '../lib/bankMatch';
 
 interface OperationsTabProps {
     tiers: ProposalTier[];
@@ -31,12 +32,8 @@ const OperationsTab: React.FC<OperationsTabProps> = (props) => {
     const handleImportComplete = (newTier: ProposalTier, newBankItems: Item[]) => {
         // 1. Update Bank if there are new items
         if (newBankItems.length > 0 && setBank) {
-            // Check for dupes just in case (though modal handles it per session)
-            setBank(prev => {
-                const existingIds = new Set(prev.map(i => i.id));
-                const uniqueNew = newBankItems.filter(i => !existingIds.has(i.id));
-                return [...uniqueNew, ...prev];
-            });
+            // An item the bank already has by name and unit goes in as its copy, not as another item (lib/bankMatch.ts).
+            setBank(prev => addToBank(prev, newBankItems, 'start'));
 
             // Save adHocItems to project context to persist custom items to the current project
             if (setProjectContext) {

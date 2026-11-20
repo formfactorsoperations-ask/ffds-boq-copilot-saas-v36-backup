@@ -1207,6 +1207,10 @@ export interface Item {
      *  keeps it out of the price, offers, design fee (on a Playground version), GST and payments.
      *  Missing: supplied by the studio, priced as usual. */
     supply?: ItemSupply | null;
+    /** A copy of another Item Bank item (lib/bankMatch.ts): the id of the item to use instead.
+     *  It stays in the bank so every line that points at it still finds it, but it is left out
+     *  of the bank list, the pickers and import matching. Missing or null: an item in its own right. */
+    mergedInto?: string | null;
 }
 
 export type ItemSupply = 'client' | 'actuals';

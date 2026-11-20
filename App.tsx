@@ -161,6 +161,7 @@ import { id as generateId, calculateSellPrice, calculateCostFromSell } from "./l
 import { isPlaygroundTier, docPricingOf } from "./lib/playground/pricing";
 import { playgroundTierSummary } from "./lib/playground/versions";
 import { designFeeFor, isAsActuals } from "./lib/boqPricing";
+import { addToBank, masterFor } from "./lib/bankMatch";
 import { INITIAL_TEMPLATES } from "./lib/standardPackages";
 import { INITIAL_BANK } from "./constants";
 import { SaveIcon, UploadIcon, NewFileIcon } from "./components/Icons";
@@ -1161,26 +1162,26 @@ export default function App() {
     }
   }, [draftBank, isDataLoaded]);
 
-  // Sync AdHoc Items to Bank
+  /*
+    A project's own items are kept in the Item Bank too, so every screen that
+    looks a line's item up there finds it (the client's BOQ is one).
+
+    They used to go in as items in their own right, checked by id alone, so a
+    project's own "KING SIZE BED WITH STORAGE" at its own rate became a second
+    item of that name; 153 of the bank's 223 repeated items came in this way.
+    addToBank (lib/bankMatch.ts) puts in something the bank already has as a
+    copy of that item: found by its id as before, not seen as another item.
+  */
   useEffect(() => {
     if (projectContext?.adHocItems && projectContext.adHocItems.length > 0) {
       setBank((prevBank) => {
-        const seenIds = new Set(prevBank.map((item) => item.id));
-        const uniqueNewItems: Item[] = [];
-        projectContext.adHocItems!.forEach((adHocItem) => {
-          if (!seenIds.has(adHocItem.id)) {
-            seenIds.add(adHocItem.id);
-            uniqueNewItems.push(adHocItem);
-          }
-        });
-        if (uniqueNewItems.length > 0) {
-          const updated = [...prevBank, ...uniqueNewItems];
+        const updated = addToBank(prevBank, projectContext.adHocItems!);
+        if (updated !== prevBank) {
           db.saveBank(updated).catch((err) =>
             console.error("Failed to sync adhoc items to DB:", err),
           );
-          return updated;
         }
-        return prevBank;
+        return updated;
       });
     }
   }, [projectContext?.adHocItems]);
@@ -2469,7 +2470,7 @@ export default function App() {
     });
 
     if (newBankItems.length > 0) {
-      setBank((prev) => [...prev, ...newBankItems]);
+      setBank((prev) => addToBank(prev, newBankItems));
     }
 
     const newBoqItems: BoqItem[] = itemsToAdd.map(({ item, qty }) => ({
@@ -3946,7 +3947,10 @@ export default function App() {
                             roomId,
                           ) => {
                             if (!activeTierId) return;
-                            const newBankItem: Item = {
+                            /* The Item Bank's own item when it has one by this name and unit, at
+                               the bank's rate and held on the line; a new item only for a new thing. */
+                            const existing = masterFor({ name, unit }, bank);
+                            const newBankItem: Item = existing || {
                               id: generateId(),
                               name,
                               cat,
@@ -3956,7 +3960,7 @@ export default function App() {
                               labor: 0,
                               margin: 0,
                             };
-                            setBank((prev) => [...prev, newBankItem]);
+                            if (!existing) setBank((prev) => addToBank(prev, [newBankItem]));
 
                             const newBoqItem: BoqItem = {
                               id: generateId(),
@@ -3964,6 +3968,9 @@ export default function App() {
                               qty,
                               roomId,
                               rationale: "Calculated value",
+                              ...(existing && Number.isFinite(Number(existing.materials)) && Number.isFinite(Number(existing.labor)) && Number.isFinite(Number(existing.margin))
+                                ? { baseRate: Number(existing.materials), labor: Number(existing.labor), marginOverride: Number(existing.margin) }
+                                : {}),
                             };
                             setTiers((prev) =>
                               prev.map((tier) => {
@@ -4671,7 +4678,10 @@ export default function App() {
                             roomId,
                           ) => {
                             if (!activeTierId) return;
-                            const newBankItem: Item = {
+                            /* The Item Bank's own item when it has one by this name and unit, at
+                               the bank's rate and held on the line; a new item only for a new thing. */
+                            const existing = masterFor({ name, unit }, bank);
+                            const newBankItem: Item = existing || {
                               id: generateId(),
                               name,
                               cat,
@@ -4681,7 +4691,7 @@ export default function App() {
                               labor: 0,
                               margin: 0,
                             };
-                            setBank((prev) => [...prev, newBankItem]);
+                            if (!existing) setBank((prev) => addToBank(prev, [newBankItem]));
 
                             const newBoqItem: BoqItem = {
                               id: generateId(),
@@ -4689,6 +4699,9 @@ export default function App() {
                               qty,
                               roomId,
                               rationale: "Calculated value",
+                              ...(existing && Number.isFinite(Number(existing.materials)) && Number.isFinite(Number(existing.labor)) && Number.isFinite(Number(existing.margin))
+                                ? { baseRate: Number(existing.materials), labor: Number(existing.labor), marginOverride: Number(existing.margin) }
+                                : {}),
                             };
                             setTiers((prev) =>
                               prev.map((tier) => {

@@ -7,6 +7,7 @@ import { ftin, boundsOf } from '../../lib/playground/geometry';
 import { drawOf, pieceSize } from '../../lib/playground/pieces';
 import { quickBuild, QUICK_SIZES, type QuickSize, type RoomStandards } from '../../lib/playground/quickBuild';
 import { PieceArt } from './pieceArt';
+import { pickable } from '../../lib/bankMatch';
 
 /*
   The quick build (BOQ Playground PR 5): no plan, and a BOQ in one step.
@@ -44,7 +45,8 @@ export default function QuickBuildModal({ project, size: size0, carpet: carpet0,
   const bankMap = useMemo(() => new Map(bank.map(i => [i.id, i])), [bank]);
   const build = useMemo(() => {
     let n = 0;
-    return carpet > 0 ? quickBuild({ size, carpet, own, bank, boq, standards, newId: () => `q${++n}` }) : null;
+    // Built from the items, never a copy of one (lib/bankMatch.ts).
+    return carpet > 0 ? quickBuild({ size, carpet, own, bank: pickable(bank), boq, standards, newId: () => `q${++n}` }) : null;
   }, [size, carpet, own, bank, boq, standards]);
 
   /* The same scale as the sketch's grid: 40 × 30 ft, or larger when the rooms need it. */

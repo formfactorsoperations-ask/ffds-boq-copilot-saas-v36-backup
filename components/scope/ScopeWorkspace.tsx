@@ -43,6 +43,7 @@ import { sendScopeEmail } from '../../services/emailService';
 import { publicAppOrigin } from '../../lib/publicUrl';
 import { AGREED_VIA, AgreedVia, agreedViaPhrase, approvalLabel, approvalOf, recordAgreement } from '../../lib/scopeAgreement';
 import { isSentBack, previousSentBack, sentBackHistory, topicLabels } from '../../lib/scopeChangeRequest';
+import { pickable } from '../../lib/bankMatch';
 
 /**
  * SCOPE REVISION — one screen for changing a signed scope.
@@ -1854,7 +1855,8 @@ const ItemPicker: React.FC<{
   const [v, setV] = useState({ name: '', unit: 'nos', qty: '1', rate: '', cost: '', description: '' });
   const hits = useMemo(() => {
     const t = q.trim().toLowerCase();
-    const list = t ? bank.filter(b => `${b.name} ${b.cat} ${b.specs || ''}`.toLowerCase().includes(t)) : bank;
+    const offered = pickable(bank);   // the items, never a copy of one (lib/bankMatch.ts)
+    const list = t ? offered.filter(b => `${b.name} ${b.cat} ${b.specs || ''}`.toLowerCase().includes(t)) : offered;
     return list.slice(0, 40);
   }, [bank, q]);
   const ok = v.name.trim() && Number(v.qty) > 0 && Number(v.rate) > 0;

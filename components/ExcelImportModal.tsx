@@ -3,8 +3,9 @@ import React, { useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CloseIcon, UploadIcon, CheckIcon, ArrowRightIcon, PlusIcon, FileSpreadsheetIcon, GridIcon, SparklesIcon } from './Icons';
 import { Item, ProposalTier } from '../types';
-import { id as generateId, formatCurrency } from '../lib/utils';
+import { id as generateId, formatCurrency, calculateSellPrice } from '../lib/utils';
 import { isScopeBucket } from '../lib/scopeBuckets';
+import { matchBank, sameThingKey } from '../lib/bankMatch';
 
 interface ExcelImportModalProps {
     isOpen: boolean;
@@ -52,9 +53,12 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
         unit: string;
         specs: string;
         room: string;
-        status: 'match' | 'new';
-        matchedBankId?: string;
-        baseCost?: number; 
+        /** What the sheet's name found in the Item Bank (lib/bankMatch.ts). */
+        found: 'exact' | 'close' | 'none';
+        /** The bank item this row uses, or 'new' for a new item in the bank. Starts as what was found. */
+        choice: string;
+        /** The bank items worth offering for this row, best first. */
+        candidates: string[];
     }[]>([]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -197,31 +201,20 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
         setMergedCount(dupesFound);
 
         // 3. Match against Bank & Final Structure
+        /*
+          The name is read the way the bank reads it (capitals, dots and brackets
+          aside), with the unit, and the nearest item is offered when there is no
+          exact one. This used to need the name letter for letter, so "King Size
+          Bed with Storage " became a second item of that name.
+        */
         const finalResults = uniqueItems.map(item => {
-            // Check Bank for Match
-            const exactMatch = bank.find(i => (i.name || '').toLowerCase() === item.name.toLowerCase());
-            
-            let status: 'match' | 'new' = 'new';
-            let matchedBankId = undefined;
-            let baseCost = 0;
-
-            if (exactMatch) {
-                status = 'match';
-                matchedBankId = exactMatch.id;
-                baseCost = exactMatch.materials + exactMatch.labor;
-            } else {
-                status = 'new';
-                // Reverse Calculate Cost (Assumed 20% Margin)
-                // Sell = Cost / 0.8  => Cost = Sell * 0.8
-                baseCost = item.rate * 0.8; 
-            }
-
+            const m = matchBank(item.name, bank, { unit: item.unit });
             return {
                 tempId: generateId(),
                 ...item,
-                status,
-                matchedBankId,
-                baseCost
+                found: m.kind,
+                choice: m.item ? m.item.id : 'new',
+                candidates: m.candidates.map(c => c.id),
             };
         });
 
@@ -235,57 +228,64 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
         let totalSell = 0;
         let totalCost = 0;
 
-        processedItems.forEach(p => {
-            let bankId = p.matchedBankId;
+        /* One new item per name and unit in a sheet: the same wardrobe in two rooms, or at two rates, is one item. */
+        const made = new Map<string, Item>();
 
-            if (p.status === 'new') {
-                // Create New Bank Item
-                const newItem: Item = {
+        processedItems.forEach(p => {
+            const chosen = p.choice !== 'new' ? bank.find(i => i.id === p.choice) : undefined;
+            const key = sameThingKey({ name: p.name, unit: p.unit });
+            let refItem: Item;
+            /* The row that makes a new item sets that item's rate; every other row keeps its own on the line. */
+            let makes = false;
+
+            if (chosen) {
+                refItem = chosen;
+            } else if (made.has(key)) {
+                refItem = made.get(key)!;
+            } else {
+                // Reverse-calculate the cost at an assumed 20% margin (cost = sell × 0.8), split 65/35.
+                const baseCost = p.rate * 0.8;
+                refItem = {
                     id: generateId(), 
                     name: p.name,
                     cat: p.category,
                     specs: p.specs || 'Imported via Excel',
                     unit: p.unit,
-                    // Split base cost 65/35
-                    materials: Math.round(p.baseCost! * 0.65),
-                    labor: Math.round(p.baseCost! * 0.35),
+                    materials: Math.round(baseCost * 0.65),
+                    labor: Math.round(baseCost * 0.35),
                     margin: 20 // Default base margin
                 };
-                newBankItems.push(newItem);
-                bankId = newItem.id;
+                made.set(key, refItem);
+                newBankItems.push(refItem);
+                makes = true;
             }
 
-            // Create BOQ Item
-            // Ensure Sell Price matches Excel Rate using override
-            const refItem = p.status === 'new' ? newBankItems.find(i => i.id === bankId)! : bank.find(i => i.id === bankId)!;
-            const cost = refItem.materials + refItem.labor;
-            
+            /* The figures as pricing reads them: a few bank items hold a list where a number belongs. */
+            const refLabor = Number(refItem.labor) || 0;
+            const refMaterials = Number(refItem.materials) || 0;
+            const bankId = refItem.id;
+
+            // The line's own price, so the sell rate is the sheet's whatever the bank says, now or later.
             let marginOverride = 20; 
-            let baseRateOverride: number | undefined = undefined;
+            let baseRate: number;
 
-            if (p.status === 'match') {
-                const expectedCost = p.rate * 0.8;
-                baseRateOverride = Math.max(0, expectedCost - refItem.labor);
-                const newCost = baseRateOverride + refItem.labor;
-                if (p.rate > 0 && newCost > 0) {
-                    marginOverride = ((p.rate - newCost) / newCost) * 100;
-                }
+            if (makes) {
+                baseRate = refMaterials;
             } else {
-                if (p.rate > 0 && cost > 0) {
-                    marginOverride = ((p.rate - cost) / cost) * 100;
-                }
+                const expectedCost = p.rate * 0.8;
+                baseRate = Math.max(0, expectedCost - refLabor);
             }
-
-            const finalCost = p.status === 'match' && baseRateOverride !== undefined 
-                ? baseRateOverride + refItem.labor 
-                : cost;
+            const finalCost = baseRate + refLabor;
+            if (p.rate > 0 && finalCost > 0) {
+                marginOverride = ((p.rate - finalCost) / finalCost) * 100;
+            }
 
             totalSell += p.rate * p.qty;
             totalCost += finalCost * p.qty;
 
             // Construct Rationale
-            // If it's a match, preserve the Excel specs in rationale so specific details aren't lost
-            const rationale = p.status === 'match' && p.specs && p.specs !== refItem.specs 
+            // On a bank item, the sheet's own words are kept in the rationale so its details are not lost
+            const rationale = !makes && p.specs && p.specs !== refItem.specs 
                 ? `Imported: ${p.specs}` 
                 : 'Imported';
 
@@ -295,7 +295,9 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                 qty: p.qty,
                 // Use higher precision to ensure the Sell Price is recalculated exactly close to imported Rate
                 marginOverride: parseFloat(marginOverride.toFixed(4)),
-                ...(baseRateOverride !== undefined && { baseRate: parseFloat(baseRateOverride.toFixed(2)) }),
+                baseRate: parseFloat(baseRate.toFixed(2)),
+                // Labour is held on the line too: a later change in the bank does not re-price this option.
+                labor: refLabor,
                 roomId: p.room,
                 // The sheet named this scope; it stays there (lib/scopeMigration.ts).
                 ...(isScopeBucket(p.room) && { scopeChosen: true }),
@@ -325,6 +327,17 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
         onImport(newTier, newBankItems);
         handleClose();
     };
+
+    /* A nearest match (not the same name) that is still the row's choice: worth a look before importing. */
+    const needsCheck = (p: { found: string; choice: string; candidates: string[] }) => p.found === 'close' && p.choice !== 'new' && p.choice === p.candidates[0];
+    const byId = useMemo(() => new Map(bank.map(i => [i.id, i])), [bank]);
+    const optionsFor = (p: { candidates: string[]; choice: string }) => {
+        const ids = p.choice !== 'new' && !p.candidates.includes(p.choice) ? [p.choice, ...p.candidates] : p.candidates;
+        return ids.map(id => byId.get(id)).filter((i): i is Item => !!i);
+    };
+    const setChoice = (tempId: string, choice: string) => setProcessedItems(prev => prev.map(p => (p.tempId === tempId ? { ...p, choice } : p)));
+    /* New items are counted by name and unit: two rows of one new thing make one item. */
+    const newNames = new Set(processedItems.filter(p => p.choice === 'new').map(p => sameThingKey({ name: p.name, unit: p.unit }))).size;
 
     const handleClose = () => {
         setStep('upload');
@@ -517,10 +530,15 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                                     </div>
                                     <div className="flex gap-2">
                                         <div className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold">
-                                            {(processedItems || []).filter(p => p.status === 'match').length} Matched in Bank
+                                            {(processedItems || []).filter(p => p.choice !== 'new' && !needsCheck(p)).length} Matched in Bank
                                         </div>
-                                        <div className="px-3 py-1 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold">
-                                            {(processedItems || []).filter(p => p.status === 'new').length} New Items
+                                        {(processedItems || []).some(needsCheck) && (
+                                            <div className="px-3 py-1 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold">
+                                                {(processedItems || []).filter(needsCheck).length} Closest match: check
+                                            </div>
+                                        )}
+                                        <div className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold">
+                                            {newNames} New {newNames === 1 ? 'Item' : 'Items'}
                                         </div>
                                     </div>
                                 </div>
@@ -530,7 +548,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                                         <table className="w-full text-xs text-left bg-white">
                                             <thead className="bg-slate-50 font-bold text-slate-500 sticky top-0 shadow-sm z-10">
                                                 <tr>
-                                                    <th className="p-3 pl-6 border-b">Status</th>
+                                                    <th className="p-3 pl-6 border-b">Item Bank</th>
                                                     <th className="p-3 border-b">Room</th>
                                                     <th className="p-3 border-b">Item Name</th>
                                                     <th className="p-3 border-b text-right">Qty</th>
@@ -541,12 +559,25 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                                             <tbody className="divide-y divide-slate-100">
                                                 {processedItems.map((item, idx) => (
                                                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                                        <td className="p-3 pl-6">
-                                                            {item.status === 'match' ? (
-                                                                <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded">Matched</span>
+                                                        <td className="p-3 pl-6 w-80">
+                                                            {item.choice === 'new' ? (
+                                                                <span className="text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded">New item</span>
+                                                            ) : needsCheck(item) ? (
+                                                                <span className="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded">Closest match: check</span>
                                                             ) : (
-                                                                <span className="text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded">New</span>
+                                                                <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded">Matched</span>
                                                             )}
+                                                            <select
+                                                                aria-label={`Item Bank item for ${item.name}`}
+                                                                value={item.choice}
+                                                                onChange={(e) => setChoice(item.tempId, e.target.value)}
+                                                                className="mt-1.5 w-full px-2 py-1 rounded-lg border border-slate-300 bg-white text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]"
+                                                            >
+                                                                {optionsFor(item).map(o => (
+                                                                    <option key={o.id} value={o.id}>Use: {o.name} · {formatCurrency(calculateSellPrice(Number(o.materials) || 0, Number(o.labor) || 0, Number(o.margin) || 0))}/{o.unit}</option>
+                                                                ))}
+                                                                <option value="new">New item in the Item Bank</option>
+                                                            </select>
                                                         </td>
                                                         <td className="p-3 text-slate-600">{item.room}</td>
                                                         <td className="p-3 font-medium text-slate-800">
@@ -565,7 +596,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
                                 
                                 <div className="p-4 bg-slate-100 rounded-xl text-xs text-slate-600 flex gap-2 items-start">
                                     <span className="text-lg">💡</span>
-                                    <p>New items will be added to your <strong>Item Bank</strong> automatically. We reverse-calculate the base cost assuming a 20% margin to maintain data consistency.</p>
+                                    <p>A row on a bank item keeps the sheet's rate on this project only; the <strong>Item Bank</strong>'s own rate is not changed. A new item is added to the bank once, however many rows use it, at a base cost reverse-calculated from the sheet's rate at a 20% margin.</p>
                                 </div>
                             </div>
                         )}
