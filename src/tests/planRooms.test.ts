@@ -13,6 +13,8 @@ vi.mock('../../services/geminiService', () => ({
 const store = vi.fn(async () => ({ imageUrl: 'https://x/o/drawn.jpg', imagePx: { w: 1000, h: 700 }, base64: '' }));
 vi.mock('../../services/planImage', () => ({
   imageSizeOf: vi.fn(async () => ({ w: 1000, h: 700 })),
+  // No canvas here: the plan is tidied without the drawing's walls (planFromDrawing.test covers them).
+  wallMaskOfImage: vi.fn(async () => null),
   storePlanImage: (...a: any[]) => (store as any)(...a),
 }));
 
@@ -44,8 +46,8 @@ describe('reading the rooms off a plan', () => {
     const box = (name: string, L: number, W: number, x: number, y: number, w: number, h: number) => ({ name, lengthFt: L, widthFt: W, dimensionPrinted: true, box: { x, y, w, h } });
     // 1000 × 700 px, 0.05 ft a pixel: a 15 × 12 ft room is 300 × 240 px.
     boxes.mockResolvedValueOnce({
-      rooms: [room('Living', 15, 12), room('Toilet', 8, 5), room('Toilet', 5, 4)],
-      boxes: [box('Living', 15, 12, 0, 0, 0.3, 240 / 700), box('Toilet', 8, 5, 0.3, 0, 0.16, 100 / 700), box('Toilet', 5, 4, 0.46, 0, 0.1, 80 / 700)],
+      rooms: [room('Living', 15, 12), room('Toilet', 8, 5), room('Toilet', 5, 3)],
+      boxes: [box('Living', 15, 12, 0, 0, 0.3, 240 / 700), box('Toilet', 8, 5, 0.3, 0, 0.16, 100 / 700), box('Toilet', 5, 3, 0.46, 0, 0.1, 60 / 700)],
     });
     const read = await readPlanOntoSheet('/9j/IMG', { area: 0, config: '1-BHK' }, { tenantId: 't1', imageUrl: 'https://x/o/plan.jpg' });
     expect(store).not.toHaveBeenCalled();
@@ -56,7 +58,7 @@ describe('reading the rooms off a plan', () => {
     expect(placed).toHaveLength(3);
     // The second "Toilet" box went to the second toilet, whatever it is called now; printed sizes are kept.
     const small = placed.find(r => r.length === 5)!;
-    expect(small.plan).toMatchObject({ x: 23, y: 0, w: 5, h: 4 });
+    expect(small.plan).toMatchObject({ x: 23, y: 0, w: 5, h: 3 });
   });
 
   it('stores a drawn PDF page as the image, and leaves the plan off the BOQ when no size is printed', async () => {

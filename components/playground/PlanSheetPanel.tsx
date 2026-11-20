@@ -4,7 +4,7 @@ import { Panel, Button, Chip, Segmented, EmptyState, LABEL, INPUT } from '../ui/
 import '../projectHeader/projectHeader.css';
 import type { ProjectContext, ProposalTier, Item, Room, RoomPlanRect, PlanSheet } from '../../types';
 import {
-  sheetOf, isPdfSheet, withScale, rescaleRooms, traceRect, rectToPx, scaleFromBoxes, rectsFromBoxes,
+  sheetOf, isPdfSheet, withScale, rescaleRooms, traceRect, rectToPx,
   placeRooms, withRect, blocksLayout, replacePlan, replanPreview, withHistory, parseFeet, type ReplanRow,
 } from '../../lib/playground/planSheet';
 import { ftin, roundTo3in, boundsOf, type Point } from '../../lib/playground/geometry';
@@ -15,7 +15,8 @@ import { buildBankMap } from '../../lib/boqPricing';
 import { lockedTierId } from '../../lib/scopeFlow';
 import { formatCurrency } from '../../lib/utils';
 import { readPlanBoxes } from '../../services/geminiService';
-import { planImageFromFile, planImageFromUrl, storePlanImage, planBase64FromUrl } from '../../services/planImage';
+import { planImageFromFile, planImageFromUrl, storePlanImage, planBase64FromUrl, wallMaskOfImage } from '../../services/planImage';
+import { planFromDrawing } from '../../lib/playground/planFromDrawing';
 
 /*
   The plan under the BOQ (BOQ Playground PR 2).
@@ -142,9 +143,11 @@ export default function PlanSheetPanel({ projectContext: ctx, setProjectContext,
     const b64 = base64 || await planBase64FromUrl(s.imageUrl);
     const { boxes } = await readPlanBoxes(b64, ctx.area);
     if (!boxes.length) throw new Error('No rooms could be read off this plan. Trace them instead.');
-    const k = Number(s.ftPerPx) > 0 ? s.ftPerPx! : scaleFromBoxes(boxes, s.imagePx);
-    if (!k) throw new Error('No room on the plan has its size printed, so the scale is not known. Set the scale, then read the rooms again.');
-    return { k, rects: rectsFromBoxes(boxes, s.imagePx, k) };
+    /* The same clean plan Brief & Site makes (lib/playground/planFromDrawing): snapped to the drawing's walls, rooms sharing them. */
+    const walls = await wallMaskOfImage(b64).catch(() => null);
+    const drawn = planFromDrawing(boxes, s.imagePx, walls?.mask, walls?.thickness || 0, Number(s.ftPerPx) > 0 ? s.ftPerPx : null);
+    if (!drawn) throw new Error('No room on the plan has its size printed, so the scale is not known. Set the scale, then read the rooms again.');
+    return { k: drawn.ftPerPx, rects: drawn.rooms.map(r => ({ name: r.name, plan: r.plan })) };
   };
 
   const readRooms = () => run('Reading the rooms off the plan…', async () => {

@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { asNewPlaygroundOption } from '../lib/playground/versions';
+import { PLAYGROUND_PRICING } from '../lib/playground/pricing';
 import { useFiguresHidden } from './ui/HideFigures';
 import { createPortal } from 'react-dom';
 import { RefreshCw, Plus, LineChart, Building2 } from '@/lib/lucide-shim';
@@ -93,18 +95,21 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
     const [regenUndo, setRegenUndo] = useState<{ tiers: ProposalTier[]; activeTierId: string | null; approvedTierId?: string } | null>(null);
 
     const handleRegenerate = () => {
-        const fresh = generateStandardPackages(
+        const generated = generateStandardPackages(
             projectContext,
             bank || [],
             templates || INITIAL_TEMPLATES,
             projectContext.proposalMode || 'tiered',
         );
-        if (!fresh.length) {
+        if (!generated.length) {
             showSuccessWithNext('Nothing to generate — check the rooms and configuration.');
             setRegenOpen(false);
             return;
         }
         setRegenUndo({ tiers, activeTierId, approvedTierId: projectContext.approvedTierId });
+        /* Playground versions, their pieces placed on the plan (lib/playground/versions asNewPlaygroundOption). */
+        const bankMap = buildBankMap(bank || [], projectContext?.adHocItems);
+        const fresh = generated.map(t => asNewPlaygroundOption(t, bankMap, projectContext.rooms || []));
         setTiers(fresh);
         setActiveTierId((fresh.find(t => t.name === 'Comfort Upgrade') || fresh[0]).id);
         setProjectContext(prev => ({ ...prev, approvedTierId: undefined }));
@@ -323,6 +328,9 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             id: id(),
             name: `New Option ${tiers.length + 1}`,
             timestamp: Date.now(),
+            /* An empty option is a Playground BOQ: nothing to carry over, and the design library opens on the plan. */
+            boqFormat: 'playground',
+            pricingRules: { ...PLAYGROUND_PRICING },
             boq: [],
             projectContext,
             summary: { totalSell: 0, totalCost: 0, totalGm: 0, itemCount: 0, totalRevenue: 0, designFee: 0, blendedGm: 0 },

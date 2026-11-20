@@ -84,3 +84,31 @@ export async function planBase64FromUrl(url: string): Promise<string> {
     r.readAsDataURL(blob);
   });
 }
+
+/**
+ * The walls of a plan image (lib/playground/walls): read on a canvas at most
+ * WALL_READ_EDGE on its long side, the dark strokes found, the thin ones
+ * (furniture, flooring, text) taken out. Null where there is no canvas.
+ */
+export const WALL_READ_EDGE = 1200;
+export async function wallMaskOfImage(base64: string): Promise<{ mask: import('../lib/playground/walls').Mask; thickness: number } | null> {
+  if (typeof document === 'undefined') return null;
+  const { darkMask, wallMask } = await import('../lib/playground/walls');
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error('The plan image could not be read'));
+    i.src = dataUrl(base64);
+  });
+  const s = Math.min(1, WALL_READ_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * s)), h = Math.max(1, Math.round(img.naturalHeight * s));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  const { mask, thickness } = wallMask(darkMask(ctx.getImageData(0, 0, w, h).data, w, h));
+  return { mask, thickness };
+}

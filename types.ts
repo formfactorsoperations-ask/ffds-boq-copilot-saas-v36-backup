@@ -150,6 +150,17 @@ export interface Room {
      *  A rectangle; an L-shaped room is two rooms. Missing: the room is not on a plan
      *  (lib/playground/geometry.ts). */
     plan?: RoomPlanRect;
+    /** Doors and windows in the room's walls, found in the client's drawing
+     *  (lib/playground/planFromDrawing.ts) and drawn on the line plan. */
+    openings?: RoomOpening[];
+}
+
+/** A door or a window in one side of a room, measured along that side from its left or top end, in feet. */
+export interface RoomOpening {
+    kind: 'door' | 'window';
+    side: 'top' | 'bottom' | 'left' | 'right';
+    at: number;
+    w: number;
 }
 
 /** Where the plan under a BOQ came from, and how its pixels map to feet. */

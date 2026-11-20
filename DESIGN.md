@@ -166,8 +166,12 @@ linkage, notes, change orders on a frozen BOQ). Do not add a mode or a switch ba
 - The plan is SVG, drawn to scale: a dotted ground, the rooms on paper (`#f7f6f2`), walls in near-black,
   each room tinted brand by its share of the price, its name and price on a tag.
 - **A plan read off the client's drawing is a line plan** (`components/playground/linePlan.tsx`, owner,
-  20 Nov 2026): a builder's plan often comes rendered with furniture and flooring, so it is not drawn under
-  the BOQ's pieces. Each room is on paper inside a near-black wall 4½″ out from it. The Plan lens's
+  20 Nov 2026), drawn like the mockup's: a builder's plan often comes rendered with furniture and flooring,
+  so it is not drawn under the BOQ's pieces. The rooms are made into a clean plan first
+  (`lib/playground/planFromDrawing.ts`): the AI's rough boxes snapped onto the walls found in the drawing
+  (`lib/playground/walls.ts`), tidied so rooms share walls, a passage grown to the rooms it reaches.
+  Walls are near-black: an inside wall 4½″, the outside wall heavier. Doors are a gap with the leaf and a
+  dashed swing into the room; windows a gap with the glazing's two thin lines. The Plan lens's
   **Line plan / Drawing** switch shows the drawing under the rooms, to check them; the line plan is the
   default, and the meeting view always draws the line plan.
 - **Only inside the drawing**, as SVG fills, the materials have their own colours: wood grains, stone,

@@ -9,8 +9,9 @@
 */
 import type { PlanSheet, ProjectContext, Room } from '../types';
 import { analyzeFloorPlan, estimateRoomSizes, isAiAvailable, readPlanBoxes } from './geminiService';
-import { scaleFromBoxes, rectsFromBoxes, withRect } from '../lib/playground/planSheet';
-import { imageSizeOf, storePlanImage } from './planImage';
+import { withRect } from '../lib/playground/planSheet';
+import { planFromDrawing } from '../lib/playground/planFromDrawing';
+import { imageSizeOf, storePlanImage, wallMaskOfImage } from './planImage';
 import { resolveActiveTemplate, ensureRoomsExistForTemplate, detectRoomType, roomFamily } from '../lib/standardPackages';
 import { ensureScopeRooms, polishRoomNames } from '../lib/scopeBuckets';
 
@@ -138,23 +139,32 @@ export async function readPlanOntoSheet(image: string, ctx: Partial<ProjectConte
   let withPlans: Room[] = detected;
   let onPlan = 0;
   const imagePx = await imageSizeOf(dataUrlOf(image)).catch(() => null);
-  const k = imagePx ? scaleFromBoxes(boxes, imagePx) : null;
-  if (imagePx && k) {
+  /*
+    The rooms made into a clean plan (lib/playground/planFromDrawing): the
+    scale from the printed sizes, each box snapped onto the walls found in the
+    drawing, tidied so rooms share walls, a passage grown to the rooms it
+    reaches, and the doors and windows from the gaps in the walls.
+  */
+  const walls = imagePx ? await wallMaskOfImage(image).catch(() => null) : null;
+  const drawn = imagePx ? planFromDrawing(boxes, imagePx, walls?.mask, walls?.thickness || 0) : null;
+  const k = drawn?.ftPerPx || null;
+  if (imagePx && drawn && k) {
     /*
       Rooms and boxes come back as two lists from one reading, each in the
       drawing's order but filtered differently, so a box is matched to its room
       by the label on the plan, in order: the second "Toilet" box is the second
       "Toilet" room. Before the names are polished, while they still match.
     */
-    const rects = rectsFromBoxes(boxes, imagePx, k);
     const used = new Set<number>();
     withPlans = detected.map(r => {
-      const i = rects.findIndex((x, j) => !used.has(j) && x.name === r.name);
+      const i = drawn.rooms.findIndex((x, j) => !used.has(j) && x.name === r.name);
       if (i < 0) return r;
       used.add(i);
       onPlan++;
-      // A printed size is kept; the drawing gives the room its place.
-      return r.dimSource === 'read' ? { ...r, plan: rects[i].plan } : withRect(r, rects[i].plan);
+      const d = drawn.rooms[i];
+      // A printed size is kept; the drawing gives the room its place, its doors and its windows.
+      const placed = r.dimSource === 'read' ? { ...r, plan: d.plan } : withRect(r, d.plan);
+      return d.openings.length ? { ...placed, openings: d.openings } : placed;
     });
     const imageUrl = opts.imageUrl || (await storePlanImage(opts.tenantId, image)).imageUrl;
     sheet = { source: 'brief', imageUrl, imagePx, ftPerPx: k, page: 1, readAt: Date.now() };

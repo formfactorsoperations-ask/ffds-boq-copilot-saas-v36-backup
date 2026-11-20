@@ -624,7 +624,7 @@ export default function PlanStage(props: Props) {
             <image href={underlay.imageUrl} x={-(underlay.origin?.x || 0) * underlay.ftPerPx!} y={-(underlay.origin?.y || 0) * underlay.ftPerPx!}
               width={underlay.imagePx!.w * underlay.ftPerPx!} height={underlay.imagePx!.h * underlay.ftPerPx!} preserveAspectRatio="none" />
           )}
-          {traced && <LinePlanRooms rooms={planRooms} />}
+          {traced && <LinePlanRooms rooms={rooms} />}
           {planRooms.map(r => {
             const a = 0.02 + 0.12 * ((roomTotals.get(r.name) || 0) / maxRoom);
             return (

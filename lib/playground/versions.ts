@@ -19,6 +19,7 @@ import { PLAYGROUND_PRICING, isPlaygroundTier, playgroundTotals, designFeeForTie
 import { byRoomQty, withByRoomQty, type MeasureContext } from './rooms';
 import { withCivilQty } from './civil';
 import { isScopeBucket } from '../scopeBuckets';
+import { placeWaitingLines } from './placeAll';
 import { optionChains, chainOf, latestOf, versionNo, previousVersion } from '../optionChains';
 
 export type BoqFormat = 'playground' | 'classic';
@@ -197,4 +198,25 @@ export function nextVersionOf(src: ProposalTier, id: string, at: number): Propos
   const copy: ProposalTier = { ...JSON.parse(JSON.stringify(src)), id, timestamp: at, lifecycleTag: 'Draft', parentTierId: src.id, name: src.name };
   delete (copy as { approval?: unknown }).approval;
   return copy;
+}
+
+/**
+ * A newly made option, as a Playground version (owner, 20 Nov 2026): the
+ * setup wizard's options (standard templates or AI), Pricing & Tiers'
+ * Regenerate and Add option. Unlike makePlaygroundVersion it is not a copy of
+ * anything, so it keeps its id and has no parent. Lines take their Item Bank
+ * rate as their base rate, as a Playground version does, and with the rooms on
+ * the plan its drawing lines are placed in them (lib/playground/placeAll).
+ */
+export function asNewPlaygroundOption(tier: ProposalTier, bankMap: Map<string, Item>, rooms?: Room[]): ProposalTier {
+  const boq = (tier.boq || []).map(line => {
+    const item = bankMap.get(line.bankId);
+    return line.baseRate === undefined && item ? { ...line, baseRate: item.materials } : line;
+  });
+  return {
+    ...tier,
+    boqFormat: 'playground',
+    pricingRules: { ...PLAYGROUND_PRICING },
+    boq: rooms ? placeWaitingLines(boq, rooms, bankMap).boq : boq,
+  };
 }

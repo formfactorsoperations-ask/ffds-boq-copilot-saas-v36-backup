@@ -8,7 +8,7 @@ import { generateStandardPackages, TemplateData } from '../lib/standardPackages'
 import ProjectContextCard from './ProjectContextCard';
 import { isAiAvailable, generateProjectTimeline, generateMaterialMoodBoard, generateTieredBoqPackages } from '../services/geminiService';
 import { readPlanOntoSheet } from '../services/planRooms';
-import { placeWaitingLines } from '../lib/playground/placeAll';
+import { asNewPlaygroundOption } from '../lib/playground/versions';
 import { buildBankMap } from '../lib/boqPricing';
 import { PLAYGROUND_PRICING } from '../lib/playground/pricing';
 import { id as generateId } from '../lib/utils';
@@ -199,7 +199,8 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
         Needs a place. A manual BOQ starts empty and needs none of this.
       */
       const bankMap = buildBankMap(bank, projectContext.adHocItems);
-      const newTiers = generated.map(t => ({ ...t, boq: placeWaitingLines(t.boq || [], projectContext.rooms || [], bankMap).boq }));
+      /* Every generated option is a Playground version (owner, 20 Nov 2026), its pieces placed. */
+      const newTiers = generated.map(t => asNewPlaygroundOption(t, bankMap, projectContext.rooms || []));
       setTiers(newTiers);
       if (onComplete) onComplete('options');
       const premiumTier = newTiers.find(t => t.name === "Comfort Upgrade") || newTiers[0];
