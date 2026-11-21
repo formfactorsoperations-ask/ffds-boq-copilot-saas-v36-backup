@@ -30,7 +30,8 @@
 */
 
 import { billingBase, computeSchedule, gstTermsOf, resolveFinancials } from './paymentSchedule';
-import { asActualsTotal, boqTotal, buildBankMap, designFeeFor } from './boqPricing';
+import { asActualsTotal, boqTotal, buildBankMap } from './boqPricing';
+import { designFeeForTier } from './playground/pricing';
 import { lockedTierId } from './scopeFlow';
 import { clientPeople } from './clientContacts';
 import { isPlaceholderText } from './detailedBoq';
@@ -257,9 +258,9 @@ export function approvedOption(ctx: any, tiers: any[] | undefined, bank: any[] =
   }
   const map = buildBankMap(bank, ctx?.adHocItems);
   const work = boqTotal(tier.boq || [], map);
-  // A Playground version charges no fee on actuals (PR X); a Classic one keeps today's rule.
-  const onActuals = !tier.pricingRules || tier.pricingRules.feeOnActuals;
-  return { id: tier.id, name: tier.name || '', execution: work, design: designFeeFor(ctx, work, onActuals ? asActualsTotal(tier.boq || [], map) : 0) };
+  // A Playground version charges no fee on actuals (PR X) and rounds the fee up to ₹100; a Classic one keeps today's rule.
+  const rules = tier.pricingRules && Number(tier.pricingRules.roundUpTo) > 0 ? tier.pricingRules : null;
+  return { id: tier.id, name: tier.name || '', execution: work, design: designFeeForTier(ctx, work, asActualsTotal(tier.boq || [], map), rules) };
 }
 
 /**
