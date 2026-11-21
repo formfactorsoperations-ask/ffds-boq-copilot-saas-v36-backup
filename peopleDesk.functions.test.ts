@@ -66,7 +66,8 @@ beforeAll(async () => {
         { id: 'tm-client', name: 'Mrs Kapoor', email: 'kapoor@x.in', role: 'Client' },
       ],
       peopleDesk: {
-        policy: { office: OFFICE, requireLocation: true },
+        /* Planned leave is off by default (lib/peopleDesk plannedIsCasual); this studio gives 12 days of it. */
+        policy: { office: OFFICE, requireLocation: true, allowances: { PL: 12, SL: 6, CL: 6, COMP: 0, WFH: 0 } },
         members: { 'tm-tanvi': { managerId: 'tm-mayuri' }, 'tm-riya': { managerId: 'tm-anish' } },
       },
     });

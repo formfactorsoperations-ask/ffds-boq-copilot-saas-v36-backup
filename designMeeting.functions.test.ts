@@ -231,7 +231,7 @@ describe('a design meeting', { timeout: 60000 }, () => {
     /* The approval email: a real address is needed; with no email service set up it is simulated, and recorded. */
     expect(await code(users.head.meet({ action: 'sendApproval', meetingId: open.id, to: 'not an address', clientName: 'Mr. Mehta' }))).toBe('functions/invalid-argument');
     expect(await code(users.head.meet({ action: 'sendApproval', meetingId: open.id, to: 'mehta@gmail.com', clientName: 'Mr. Mehta', driveLink: 'javascript:alert(1)' }))).toBe('functions/invalid-argument');
-    expect(await code(users.ops.meet({ action: 'sendApproval', meetingId: open.id, to: 'mehta@gmail.com', clientName: 'Mr. Mehta' }))).toBe('functions/permission-denied');
+    expect(await code(users.designer.meet({ action: 'sendApproval', meetingId: open.id, to: 'mehta@gmail.com', clientName: 'Mr. Mehta' }))).toBe('functions/permission-denied');
     const sent = await users.head.meet({ action: 'sendApproval', meetingId: open.id, to: 'mehta@gmail.com', clientName: 'Mr. Mehta', driveLink: 'https://drive.google.com/drive/folders/x' });
     expect(sent.sandbox).toBe(true);
     const held = await read(`${P}/designMeetings/${open.id}`);
@@ -242,7 +242,8 @@ describe('a design meeting', { timeout: 60000 }, () => {
     /* Taken as approved only after the date in the email. */
     expect(await code(users.head.meet({ action: 'recordApproval', meetingId: open.id, outcome: 'deemed' }))).toBe('functions/failed-precondition');
     /* The client replied "Approved". */
-    const answeredAt = Date.now() - 60_000;
+    /* An answer cannot be dated before the meeting closed; the server would use the time it was recorded. */
+    const answeredAt = held.closedAt + 1;
     const rec = await users.head.meet({ action: 'recordApproval', meetingId: open.id, outcome: 'approved', note: 'Approved.', answeredAt });
     expect(rec.approved).toEqual(['Living Room Layout']);
     const l1 = await read(`${DT}/l1`);

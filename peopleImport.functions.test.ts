@@ -45,8 +45,11 @@ async function makeUser(key: string, email: string, profile: any) {
   const cred = await createUserWithEmailAndPassword(auth, email, 'password-123');
   await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `users/${cred.user.uid}`), { email, ...profile }); });
   const imp = httpsCallable(fns, 'peopleImport', { timeout: 60000 });
-  const snap = httpsCallable(fns, 'peopleSnapshot', { timeout: 60000 });
-  const cmd = httpsCallable(fns, 'peopleCommand', { timeout: 60000 });
+  /* The People functions run in asia-south1; the import itself in the default region. */
+  const people = getFunctions(app, 'asia-south1');
+  connectFunctionsEmulator(people, '127.0.0.1', 5001);
+  const snap = httpsCallable(people, 'peopleSnapshot', { timeout: 60000 });
+  const cmd = httpsCallable(people, 'peopleCommand', { timeout: 60000 });
   call[key] = {
     imp: async (d) => (await imp(d)).data,
     snap: async (d = {}) => ((await snap(d)).data as any).snapshot,
@@ -119,7 +122,9 @@ describe('People Hub import', () => {
   it('shows imported leave in balances, and an imported month to the report', async () => {
     const tanvi = await call.tanvi.snap();
     expect(tanvi.requests.map((r: any) => r.id)).toContain('ph_rq_R1');
-    expect(tanvi.balances['2025'].PL.used).toBe(1);
+    /* This studio gives no planned leave, so the planned day People Hub recorded counts as casual leave (lib/peopleDesk plannedIsCasual). */
+    expect(tanvi.balances['2025'].CL.used).toBe(1);
+    expect(tanvi.balances['2025'].PL.used).toBe(0);
     expect(tanvi.attendance.some((a: any) => a.date === '2026-03-10')).toBe(false);
     const march = await call.tanvi.snap({ month: '2026-03' });
     expect(march.attendance.filter((a: any) => a.date.startsWith('2026-03')).map((a: any) => a.date).sort()).toEqual(['2026-03-10', '2026-03-11']);

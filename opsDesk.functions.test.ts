@@ -100,8 +100,8 @@ describe('escalations', () => {
 describe('the daily check', () => {
   it('raises an escalation for a payment unanswered for a week, once, and only a lead may run it', async () => {
     expect(await code(users.riya.check())).toBe('functions/permission-denied');
-    expect(await users.anish.check()).toEqual({ raised: 1 });
-    expect(await users.anish.check()).toEqual({ raised: 0 });
+    expect(await users.anish.check()).toEqual({ raised: 1, meetingsSynced: 0 });
+    expect(await users.anish.check()).toEqual({ raised: 0, meetingsSynced: 0 });
     const ids = await new Promise<any[]>((res) => env.withSecurityRulesDisabled(async (ctx) => {
       const { getDocs, collection } = await import('firebase/firestore');
       res((await getDocs(collection(ctx.firestore(), 'projects/p1/escalations'))).docs.map((d) => ({ id: d.id, ...d.data() })));
