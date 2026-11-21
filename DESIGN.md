@@ -909,6 +909,28 @@ three columns (families, materials, the picked material); this adds to it:
   sentence a changed part alters arrives again (`hud-swap`). Its scrim is the modal navy.
 - Still at zero in the design guard, as "BOQ Playground" requires.
 
+Standard templates (`components/TemplateEditorTab.tsx`, `components/templates/TemplateMetricsBar.tsx`;
+owner, 21 Nov 2026: "doesn't allow me to see all the details"). The screen was a fixed-height box: once
+the typologies, the figures and the room tabs were drawn, the room's list had room for a row and a half,
+and names were cut with an ellipsis.
+
+- The page scrolls; nothing scrolls inside a box except the Item bank picker. Top to bottom: one card
+  with the typology switch (the pill glides), its actions, four figures (Room scopes, Items, Extras,
+  No standard size) and the trades covered; then three columns.
+- Left, the rooms as a rail, copied from Material specs: the brand pill glides to the room picked, each
+  with its count, Add room last. Under 1280px the rail is a row of wrapping pills.
+- Middle, the open room, as wide as the screen allows. A row is the whole item: its full name (it
+  wraps), category chip, unit, rate, its standard size or "No standard size yet", its room-area share,
+  its specification (two lines, the whole of it on a click), then Extra / In no option, the E C H
+  marks and the bin. The header counts the items and how many each option takes, and says when the
+  room lists an item the bank no longer has.
+- Right, "Add from the Item bank": search, trade, and rows that add on a click; an item already in the
+  room is ticked. It stays beside the room while the room scrolls (`lg:sticky`).
+- Suggestions sit under the room's header as white pills on `bg-slate-50`, not on a tinted gradient.
+- Rows rise in and fold away (framer-motion, as before); a room or typology arrives with `hud-swap`.
+- Both files are at zero in the design guard. The windows this screen opens (New typology, Add room,
+  AI architect, AI audit, Preview the options) have not been redone.
+
 ### Notifications motion (approved 22 Oct 2026)
 
 The owner chose four of the fifteen notification patterns in the round-two
