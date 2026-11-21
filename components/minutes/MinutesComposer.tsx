@@ -8,7 +8,7 @@ import {
   KIND_LABEL, ALL_KINDS, ROUTE_LABEL, type CarriedAction, type LineKind, type MinutesContent, type MinutesLine, type MinutesTopic, type OwnerSide, type ReviewNote, type DesignReviewRecord, AUDIENCE_LABEL,
   type CorrectionLine,
 } from '../../lib/minutes';
-import { useKept, readKept, writeKept, dropKept } from '../../lib/minutesKept';
+import { useKept, readKept, writeKept, dropKept, type KeptCloud } from '../../lib/minutesKept';
 import { meetingTypeLabel } from '../../lib/meetingTypes';
 import { DesignReviewRooms, designReviewRoutes } from './DesignReviewRooms';
 import { ClientCorrections } from './ClientCorrections';
@@ -61,6 +61,8 @@ export interface ComposerProps {
    */
   keptKey?: string | null;
   savedAt?: number | null;
+  /** Rough notes kept with the minutes, so they follow the writer to another device. */
+  roughCloud?: KeptCloud<string> | null;
   /** Saves as you type; resolves when stored. */
   onSave: (c: MinutesContent) => Promise<void>;
   onNotesToPoints: (notes: string) => Promise<{ topics: MinutesTopic[]; summary: string }>;
@@ -264,7 +266,7 @@ export default function MinutesComposer(p: ComposerProps) {
 
       {/* right */}
       <div className="space-y-5 min-w-0">
-        {!ro && <QuickCapture keptKey={p.keptKey ? `${p.keptKey}:rough` : null} initial={p.initialNotes || ''} onTurn={async (notes) => {
+        {!ro && <QuickCapture keptKey={p.keptKey ? `${p.keptKey}:rough` : null} cloud={p.roughCloud} initial={p.initialNotes || ''} onTurn={async (notes) => {
           const out = await p.onNotesToPoints(notes);
           setC((x) => {
             const keep = x.topics.filter((t) => t.title.trim() || t.lines.length);
@@ -548,10 +550,10 @@ function NewPoint({ onAdd, keptKey }: { onAdd: (text: string) => void; keptKey?:
 
 /* ── Quick capture ───────────────────────────────────────────────────────── */
 
-function QuickCapture({ onTurn, initial, keptKey }: { onTurn: (notes: string) => Promise<number>; initial: string; keptKey?: string | null }) {
+function QuickCapture({ onTurn, initial, keptKey, cloud }: { onTurn: (notes: string) => Promise<number>; initial: string; keptKey?: string | null; cloud?: KeptCloud<string> | null }) {
   const [mode, setMode] = useState<'paste' | 'speak'>('paste');
-  /* Rough notes are kept on the device until they are turned into points. */
-  const [notes, setNotes] = useKept(keptKey, initial);
+  /* Rough notes are kept, on the device and beside the minutes, until they are turned into points. */
+  const [notes, setNotes] = useKept(keptKey, initial, cloud);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
