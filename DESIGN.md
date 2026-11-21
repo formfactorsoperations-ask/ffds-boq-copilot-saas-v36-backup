@@ -827,6 +827,88 @@ colours (brand, slate, rose/amber/emerald). Only the Money screen (`components/m
   % / ₹ choice on each row glides (`layoutId`).
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel sizes.
 
+### Item bank motion (asked for 21 Nov 2026)
+
+The owner sent a screenshot of the Item bank with its nine buttons running off the side of the screen
+and its status pills stacked in a column, and asked for it to be "modern and immersive, with motions",
+and fluid to use. It uses the kits already approved (the People kit's `IconTile`, `listV`/`rowV` and
+`pp-lift`; the Pricing view switch), with the same fonts and colours. Only the Item bank's own screen
+(`components/BankTab.tsx`, `components/bank/BankCommandBar.tsx`) uses it.
+
+- Top to bottom: five figures, then one card with the view switch and the actions, search, and the
+  filters. Nothing scrolls sideways; pills wrap.
+- Figures are white tiles with an `IconTile` and a `CountUp`. In project BOQs, Low margin and No recipe
+  yet (Missing specs where the studio has no Material specs) are buttons: one click filters the list,
+  a second click clears it. The one that is on takes the brand border. They lift on hover (`pp-lift`)
+  and rise in one after another (`listV`, `rowV`).
+- The view switch's white pill glides to the chosen view (`layoutId`), and its icon tips on hover. A
+  view arrives with `hud-swap`; cards arrive with `hud-row-in`, a row at a time.
+- Import (Excel/CSV, specs, JSON) and Export (JSON, usage) are two menus that open with `phd-pop`;
+  the chevron turns. Lock prices, Repeated items and AI room kits stay as buttons, and Add item is the
+  one primary, last in the row; its plus turns a quarter on hover.
+- Filter and category pills are white with a `StateDot` for state; the brand fill glides to the one
+  picked (`layoutId`). Every pill carries its count. The count of matching items and Clear filters sit
+  beside search. `/` puts the cursor in search and Esc empties it.
+- In Room kits the search and filters fold away by height.
+- Reaching the end of the list brings in the next sixty items; Show more and Show all stay.
+- The selection bar rises from the foot of the screen on a spring, on the modal scrim's navy
+  (`#12182F`), with every action in the same quiet style and its count through `CountUp`.
+- Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel
+  sizes; the file is at zero in the design guard.
+
+The same day the owner asked for "the same for the item cards and spreadsheet"
+(`components/BankItemCard.tsx`, `components/bank/BankSpreadsheetTable.tsx`, which By category also draws):
+
+- A card: kit chips for category, recipe and supply; the name; the specification; internal notes behind
+  a lock; a well with Cost, Margin and Factor and a margin bar that grows in and follows the figure
+  (emerald from 20%, amber from 15%, rose below; full at 40%); then Unit, Supplied and Sell price. It
+  lifts on hover (`pp-lift`) and takes the brand border; a ticked card takes the brand ring.
+- The sheet: column heads are the field-label class and are buttons that sort, the sorted one in brand
+  with its arrow. A field has no box until it is pointed at or typed in. Margin is tinted by the same
+  three states. A ticked row takes the brand tint and a brand rule down its left edge. Rows arrive with
+  `hud-row-in`; the specification opens under its row by height and the chevron turns.
+- Row and card buttons (AI split, Duplicate, Delete) are dim until pointed at, never hidden, because a
+  tablet has no hover. AI split is drawn only where AI is available.
+- Fluid to work in: a row or card is drawn again only when its own item changes; the order of rows is
+  held while typing and set again when a column head is clicked; a number can be emptied and retyped;
+  Enter moves down a column and Shift+Enter up. Columns are fixed so nothing is cut off at 1280px.
+- Both files are at zero in the design guard.
+
+And then "the same for room kits and the modals":
+
+- Every Item bank window opens in `components/bank/BankModal.tsx`, which is the "Modals" pattern above
+  as a component (scrim, `phd-pop`, brand eyebrow, title, a scrolling body, a `bg-slate-50` footer; Esc
+  and a click outside close it unless it is working). Change the selected items, Where an item is used,
+  Import from Excel (`components/BulkImportModal.tsx`, which Studio also opens), AI room kits and
+  Create a room kit use it. Lock prices, Repeated items and Specs from Excel were already on the pattern.
+- A window with several actions switches between them with the same gliding pill as the view switch;
+  its body arrives with `hud-swap`. A choice among a few is a white pill that turns brand. What a change
+  will do is shown first: old value struck through, an arrow, the new value in brand.
+- What stops a primary button is said on the button (disabled, with a title), not in an alert after it.
+- Room kits (`components/bank/BankRoomKits.tsx`): a card per kit with an `IconTile`, an item chip and a
+  base cost that counts up. The card lifts on hover and arrives with `hud-row-in`; its items open by
+  height. Add an item is a search that stays open so several go in; deleting a kit asks on the card.
+- All of these files are at zero in the design guard.
+
+And "the same for material specs" (`components/materialSpecs/`). The screen keeps the approved mockup's
+three columns (families, materials, the picked material); this adds to it:
+
+- Four figures above the work, the Item bank's tiles: Materials, Priced as ranges, In an item's recipe,
+  Revised.
+- The family rail's brand pill glides to the family picked (`layoutId`). A family holding a change that
+  is not saved carries an amber dot.
+- Search looks in every family. While searching, the middle column is "Search results", each card names
+  its family, the rail shows how many match in each, and picking a family ends the search. `/` puts the
+  cursor in search and Esc empties it; nothing matching is an `EmptyState` with Clear search.
+- A change that is not saved stays with its material while another is looked at, and its card says
+  "Not saved". Picking another material used to discard it silently.
+- Material cards lift (`pp-lift`), take the brand border and tip their swatch on hover; a family or a
+  search arrives with `hud-swap`. Saving a version draws a `DoneTick`. History rows arrive one after
+  another.
+- The recipe drawer closes on Esc, says "Not saved yet" in its footer once something changed, and the
+  sentence a changed part alters arrives again (`hud-swap`). Its scrim is the modal navy.
+- Still at zero in the design guard, as "BOQ Playground" requires.
+
 ### Notifications motion (approved 22 Oct 2026)
 
 The owner chose four of the fifteen notification patterns in the round-two

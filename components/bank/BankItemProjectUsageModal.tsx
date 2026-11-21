@@ -1,20 +1,16 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Item, FullProjectData } from '../../types';
 import { formatCurrency, calculateSellPrice } from '../../lib/utils';
-import { 
-  X, 
-  Briefcase, 
-  ExternalLink, 
-  Building2, 
-  Layers, 
-  DollarSign, 
-  CheckCircle2, 
-  Clock, 
-  FolderKanban,
-  Hash,
-  Sparkles
-} from '@/lib/lucide-shim';
+import { FolderKanban } from '@/lib/lucide-shim';
+import { Button, Chip, EmptyState, SummaryStrip, LABEL, type Tone } from '../ui/kit';
+import { CountUp } from '../ui/HudBits';
+import BankModal from './BankModal';
+
+/*
+  Item bank → where an item is used (DESIGN.md "Item bank motion"): every BOQ
+  line that carries it, by project, room and option, with what it was quoted at.
+  It reads the projects and changes nothing.
+*/
 
 export interface ProjectUsageDetail {
   projectId: string;
@@ -49,7 +45,7 @@ export function computeItemProjectUsage(item: Item | null, projects: FullProject
     const projId = proj.id;
     const projName = proj.context?.name || 'Untitled Project';
     const clientName = proj.context?.clientName || 'Client';
-    const location = proj.context?.location || 'Mumbai';
+    const location = proj.context?.location || '';
     const status = proj.context?.status || 'draft';
     const rooms = proj.context?.rooms || [];
 
@@ -119,185 +115,85 @@ export function computeItemProjectUsage(item: Item | null, projects: FullProject
   return usageList;
 }
 
+/** A project's stage, as a chip: state colours only. */
+const STAGE: Record<string, { label: string; tone: Tone }> = {
+  won: { label: 'Execution', tone: 'good' },
+  execution: { label: 'Execution', tone: 'good' },
+  completed: { label: 'Completed', tone: 'brand' },
+  proposal_sent: { label: 'Proposal sent', tone: 'warn' },
+  negotiation: { label: 'Proposal sent', tone: 'warn' },
+};
+
 const BankItemProjectUsageModal: React.FC<BankItemProjectUsageModalProps> = ({
   isOpen,
   onClose,
   item,
   projects,
-  onOpenProject,
 }) => {
   if (!isOpen || !item) return null;
 
   const usageList = computeItemProjectUsage(item, projects);
-
-  // Group by project
   const distinctProjectsCount = new Set(usageList.map((u) => u.projectId)).size;
   const totalQtyUsed = usageList.reduce((sum, u) => sum + (u.qty || 0), 0);
   const totalValueQuoted = usageList.reduce((sum, u) => sum + (u.total || 0), 0);
 
-  const getStatusBadge = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'won':
-      case 'execution':
-        return <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-bold">Execution</span>;
-      case 'completed':
-        return <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-[10px] font-bold">Completed</span>;
-      case 'proposal_sent':
-      case 'negotiation':
-        return <span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-md text-[10px] font-bold">Proposal Sent</span>;
-      default:
-        return <span className="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded-md text-[10px] font-bold">Draft / Lead</span>;
-    }
-  };
-
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-          onClick={onClose}
-        />
+    <BankModal
+      label={`Where ${item.name || 'this item'} is used`}
+      eyebrow={`${item.cat || 'General'} · ${String(item.unit || 'nos').toUpperCase()}`}
+      title={item.name || 'Unnamed item'}
+      blurb="Every BOQ line that uses this item, and what it was quoted at. Nothing here is changed."
+      size="xl"
+      onClose={onClose}
+      footer={<><span /><Button variant="primary" onClick={onClose}>Close</Button></>}
+    >
+      <div className="space-y-4">
+        <SummaryStrip stats={[
+          { label: 'Projects', value: <CountUp value={distinctProjectsCount} />, sub: `${usageList.length} BOQ ${usageList.length === 1 ? 'line' : 'lines'}` },
+          { label: 'Quantity', value: <><CountUp value={totalQtyUsed} format={(v) => String(Math.round(v * 100) / 100)} /> <span className="text-sm font-bold text-slate-500">{item.unit}</span></>, sub: 'Across all projects' },
+          { label: 'Quoted', value: <CountUp value={totalValueQuoted} format={(v) => formatCurrency(Math.round(v))} />, sub: 'At each line\'s rate' },
+        ]} />
 
-        {/* Modal Window */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 16 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 16 }}
-          className="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]"
-        >
-          {/* Header */}
-          <div className="p-6 bg-slate-50 border-b border-slate-200/80 flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 bg-sky-50 text-[#3D52A0] border border-sky-200 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                  {item.cat || 'General'}
-                </span>
-                <span className="text-xs text-slate-400 font-mono">
-                  Unit: {item.unit?.toUpperCase()}
-                </span>
-              </div>
-              <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                {item.name || 'Untitled Item'}
-              </h3>
-              <p className="text-xs text-slate-500">
-                Project Linkage & Live BOQ Deployments across Studio Projects
-              </p>
-            </div>
-
-            <button
-              onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-full transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-3 gap-3 p-4 bg-white border-b border-slate-100">
-            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">Deployments</div>
-              <div className="text-lg font-black text-slate-900 mt-0.5">
-                {distinctProjectsCount} {distinctProjectsCount === 1 ? 'Project' : 'Projects'}
-              </div>
-              <div className="text-[10px] text-slate-500">{usageList.length} BOQ entries</div>
-            </div>
-
-            <div className="bg-sky-50/60 p-3 rounded-2xl border border-sky-100">
-              <div className="text-[10px] font-bold text-[#3D52A0] uppercase">Total Quantity</div>
-              <div className="text-lg font-black text-[#3D52A0] mt-0.5">
-                {totalQtyUsed} {item.unit}
-              </div>
-              <div className="text-[10px] text-sky-700/70">Sum across all projects</div>
-            </div>
-
-            <div className="bg-emerald-50/60 p-3 rounded-2xl border border-emerald-100">
-              <div className="text-[10px] font-bold text-emerald-700 uppercase">Total Quoted Volume</div>
-              <div className="text-lg font-black text-emerald-700 mt-0.5">
-                {formatCurrency(totalValueQuoted)}
-              </div>
-              <div className="text-[10px] text-emerald-600">Aggregate Client BOQ Value</div>
-            </div>
-          </div>
-
-          {/* Body: Projects Table */}
-          <div className="p-6 overflow-y-auto space-y-4 flex-1">
-            {usageList.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 space-y-2">
-                <FolderKanban className="w-12 h-12 mx-auto text-slate-300" />
-                <p className="text-sm font-bold text-slate-700">Not Currently Linked to Any Projects</p>
-                <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                  This item exists in your Master Item Bank but has not yet been added to any active project BOQ or Proposal Tier.
-                </p>
-              </div>
-            ) : (
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-black text-slate-500 uppercase tracking-wider">
-                      <th className="py-3 px-4">Project & Client</th>
-                      <th className="py-3 px-3">Room / Section</th>
-                      <th className="py-3 px-3">Tier</th>
-                      <th className="py-3 px-3 text-right">Qty</th>
-                      <th className="py-3 px-3 text-right">Rate</th>
-                      <th className="py-3 px-4 text-right">Total Amount</th>
-                      <th className="py-3 px-3 text-center">Status</th>
+        {usageList.length === 0 ? (
+          <EmptyState icon={FolderKanban} title="No project uses this item" text="It is in the bank, but not on any project's BOQ or option yet." />
+        ) : (
+          <div className="rounded-xl border border-slate-200 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th scope="col" className={`${LABEL} py-2.5 px-3`}>Project and client</th>
+                  <th scope="col" className={`${LABEL} py-2.5 px-3`}>Room</th>
+                  <th scope="col" className={`${LABEL} py-2.5 px-3`}>Option</th>
+                  <th scope="col" className={`${LABEL} py-2.5 px-3 text-right`}>Qty</th>
+                  <th scope="col" className={`${LABEL} py-2.5 px-3 text-right`}>Rate</th>
+                  <th scope="col" className={`${LABEL} py-2.5 px-3 text-right`}>Amount</th>
+                  <th scope="col" className={`${LABEL} py-2.5 px-3`}>Stage</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {usageList.map((usage, idx) => {
+                  const stage = STAGE[String(usage.status || '').toLowerCase()] || { label: 'Draft', tone: 'slate' as Tone };
+                  return (
+                    <tr key={idx} className="hud-row-in hover:bg-slate-50 transition-colors" style={{ animationDelay: `${Math.min(idx, 14) * 20}ms` }}>
+                      <td className="py-2.5 px-3">
+                        <div className="font-semibold text-slate-800">{usage.projectName}</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">{[usage.clientName, usage.location].filter(Boolean).join(' · ')}</div>
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-700">{usage.roomName}</td>
+                      <td className="py-2.5 px-3"><Chip tone="slate">{usage.tierName}</Chip></td>
+                      <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-slate-800 whitespace-nowrap">{usage.qty} {usage.unit}</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums text-slate-600 whitespace-nowrap">{formatCurrency(usage.rate)}</td>
+                      <td className="py-2.5 px-3 text-right tabular-nums font-bold text-slate-800 whitespace-nowrap">{formatCurrency(usage.total)}</td>
+                      <td className="py-2.5 px-3"><Chip tone={stage.tone}>{stage.label}</Chip></td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs">
-                    {usageList.map((usage, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="font-extrabold text-slate-900">{usage.projectName}</div>
-                          <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
-                            <span>{usage.clientName}</span>
-                            <span>•</span>
-                            <span>{usage.location}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-3 font-semibold text-slate-700">
-                          {usage.roomName}
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px] font-medium">
-                            {usage.tierName}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-bold text-slate-800">
-                          {usage.qty} {usage.unit}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono text-slate-600">
-                          {formatCurrency(usage.rate)}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-black text-slate-900">
-                          {formatCurrency(usage.total)}
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          {getStatusBadge(usage.status)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-
-          {/* Footer */}
-          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
-            <button
-              onClick={onClose}
-              className="px-5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
-            >
-              Close
-            </button>
-          </div>
-        </motion.div>
+        )}
       </div>
-    </AnimatePresence>
+    </BankModal>
   );
 };
 

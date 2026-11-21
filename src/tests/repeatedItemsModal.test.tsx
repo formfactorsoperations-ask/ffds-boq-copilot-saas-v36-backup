@@ -195,9 +195,9 @@ describe('Item Bank: the Repeated items button', () => {
   it('lists the items only, with a chip for the copies kept out of sight', () => {
     const settled = seed().map(i => (i.id.startsWith('ADHOC_a') ? { ...i, mergedInto: 'gen-015' } : i));
     render(<BankTab {...props} bank={settled} canSettle />);
-    expect(screen.getByText(/4 Active Items/)).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('4 items');
     fireEvent.click(screen.getByText('2 copies hidden'));
-    expect(screen.getByText(/6 Active Items/)).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('6 items');
     expect(screen.getByText('2 copies shown')).toBeTruthy();
   });
 });

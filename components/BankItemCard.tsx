@@ -3,13 +3,14 @@ import { motion } from 'framer-motion';
 import { Item, AIStrategy, FullProjectData } from '../types';
 import { splitCost, isAiAvailable } from '../services/geminiService';
 import { formatCurrency, calculateSellPrice } from '../lib/utils';
-import { DeleteIcon, WandIcon } from './Icons';
 import { UOM_OPTIONS } from '../constants';
-import { Sparkles, Copy, Trash2, Building2 } from '@/lib/lucide-shim';
+import { Sparkles, Copy, Trash2, Building2, Lock } from '@/lib/lucide-shim';
 import type { MaterialSpecsBank } from '../lib/materialSpecs';
 import { recipeOf, specsFromRecipe, composeWords } from '../lib/lineSpecs';
 import Swatch from './materialSpecs/Swatch';
-import { Chip } from './ui/kit';
+import { Chip, LABEL } from './ui/kit';
+import { bankUsageIndex, projectsUsingItem } from '../lib/bankUsage';
+import './people/peopleStyles';
 import { supplyOf, SUPPLY_LABEL } from '../lib/playground/supply';
 
 interface BankItemCardProps {
@@ -25,6 +26,8 @@ interface BankItemCardProps {
   gridTemplate?: string;
   projects?: FullProjectData[];
   onViewProjectUsage?: (item: Item) => void;
+  /** How many projects use the item, when the screen has already counted. Without it the card counts for itself. */
+  projectCount?: number;
   /** BOQ Playground S2: the Material specs bank. With it, the card shows the item's recipe and opens its drawer. */
   specBank?: MaterialSpecsBank;
   onOpenRecipe?: (id: string) => void;
@@ -66,8 +69,8 @@ const FastInput: React.FC<{
         onChange={handleChange}
         onBlur={onBlur}
         placeholder={placeholder}
-        rows={String(localValue || '').includes('\n') ? 4 : 1}
-        className={`bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-sky-400 focus:ring-2 focus:ring-sky-100 rounded px-1.5 py-0.5 outline-none transition-all w-full text-slate-800 placeholder:text-slate-300 resize-y ${className}`}
+        rows={String(localValue || '').includes('\n') ? 4 : 2}
+        className={`bg-transparent border border-transparent hover:border-slate-200 hover:bg-white focus:bg-white focus:border-[#3D52A0] focus:ring-2 focus:ring-[#3D52A0]/20 rounded-md px-1.5 py-0.5 outline-none transition-colors w-full text-slate-800 placeholder:text-slate-300 resize-y ${className}`}
       />
     );
   }
@@ -79,10 +82,18 @@ const FastInput: React.FC<{
       onChange={handleChange}
       onBlur={onBlur}
       placeholder={placeholder}
-      className={`bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-sky-400 focus:ring-2 focus:ring-sky-100 rounded px-1.5 py-0.5 outline-none transition-all w-full text-slate-800 placeholder:text-slate-300 ${className}`}
+      className={`bg-transparent border border-transparent hover:border-slate-200 hover:bg-white focus:bg-white focus:border-[#3D52A0] focus:ring-2 focus:ring-[#3D52A0]/20 rounded-md px-1.5 py-0.5 outline-none transition-colors w-full text-slate-800 placeholder:text-slate-300 ${className}`}
     />
   );
 };
+
+/* A small button in the card's corner. */
+const ICON_BUTTON = 'p-1.5 rounded-lg text-slate-400 transition-colors hover:text-[#3D52A0] hover:bg-[#3D52A0]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30 disabled:opacity-50';
+/* A select that looks like text until it is pointed at. */
+const QUIET_SELECT = 'max-w-full -ml-1 px-1 py-0.5 rounded-md border border-transparent bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer transition-colors hover:border-slate-200 hover:bg-white focus:border-[#3D52A0] focus:ring-2 focus:ring-[#3D52A0]/20';
+
+/* The margin bar is full at 40%; below 15% is the studio's low-margin line. */
+const MARGIN_FULL = 40;
 
 const BankItemCard: React.FC<BankItemCardProps> = ({
   item,
@@ -93,10 +104,9 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
   isHighlighted,
   isSelected,
   onToggleSelect,
-  viewMode = 'grid',
-  gridTemplate,
-  projects = [],
+  projects,
   onViewProjectUsage,
+  projectCount: countGiven,
   specBank,
   onOpenRecipe,
 }) => {
@@ -105,62 +115,29 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
   const recipeSpecs = recipe && specBank ? specsFromRecipe(specBank, recipe, 'C') : null;
   const recipeWords = recipeSpecs && specBank ? composeWords(specBank, recipeSpecs) : '';
   const [isSplitting, setIsSplitting] = useState(false);
+  const aiOn = isAiAvailable();
 
-  const totalCost = useMemo(
-    () => (item.materials || 0) + (item.labor || 0),
-    [item.materials, item.labor]
+  const totalCost = (Number(item.materials) || 0) + (Number(item.labor) || 0);
+  const sellPrice = calculateSellPrice(item.materials, item.labor, item.margin);
+  const margin = Number(item.margin) || 0;
+  const marginTone = margin >= 20 ? 'good' : margin >= 15 ? 'warn' : 'bad';
+  const supply = supplyOf(item);
+  const name = item.name || 'this item';
+
+  const ownCount = useMemo(
+    () => (countGiven == null && projects && projects.length ? projectsUsingItem(bankUsageIndex(projects), item).size : 0),
+    [countGiven, projects, item.id, item.name], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const sellPrice = useMemo(
-    () => calculateSellPrice(item.materials, item.labor, item.margin),
-    [item.materials, item.labor, item.margin]
-  );
-
-  // Compute matched projects count
-  const projectCount = useMemo(() => {
-    if (!projects || projects.length === 0) return 0;
-    const targetId = item.id;
-    const targetName = (item.name || '').trim().toLowerCase();
-    const matched = new Set<string>();
-
-    projects.forEach((proj) => {
-      proj.tiers?.forEach((tier) => {
-        tier.boq?.forEach((boqItem) => {
-          if (
-            (boqItem.bankId && boqItem.bankId === targetId) ||
-            (boqItem.name && boqItem.name.trim().toLowerCase() === targetName)
-          ) {
-            matched.add(proj.id);
-          }
-        });
-      });
-
-      proj.canonical?.boq?.items?.forEach((cItem) => {
-        if (
-          (cItem.bankId && cItem.bankId === targetId) ||
-          (cItem.name && cItem.name.trim().toLowerCase() === targetName)
-        ) {
-          matched.add(proj.id);
-        }
-      });
-    });
-
-    return matched.size;
-  }, [item, projects]);
+  const projectCount = countGiven ?? ownCount;
 
   const handleUpdate = (field: keyof Item, value: any) => {
     onUpdate(item.id, { ...item, [field]: value });
   };
 
-  const handleTotalCostChange = (newTotal: number) => {
-    const materials = Math.round(newTotal * 0.65);
-    const labor = Math.round(newTotal * 0.35);
-    onUpdate(item.id, { ...item, materials, labor });
-  };
-
+  /* A price typed here is turned back into the margin that gives it. */
   const handleSellPriceChange = (newSellPrice: number) => {
-    const cost = totalCost;
-    if (cost > 0) {
-      const newMargin = ((newSellPrice / cost) - 1) * 100;
+    if (totalCost > 0) {
+      const newMargin = ((newSellPrice / totalCost) - 1) * 100;
       handleUpdate('margin', parseFloat(newMargin.toFixed(2)));
     }
   };
@@ -178,221 +155,213 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
     }
   };
 
-  const MotionDiv = motion.div as any;
-
   return (
-    <MotionDiv
+    <article
       id={`bank-item-${item.id}`}
-      layout
-      className={`bg-white rounded-2xl p-5 border shadow-2xs hover:shadow-md transition-all group relative flex flex-col justify-between ${
+      aria-label={item.name || 'New item'}
+      className={`group relative h-full min-w-0 bg-white rounded-2xl border p-5 flex flex-col gap-3 pp-lift transition-colors ${
         isSelected
-          ? 'border-[#3D52A0] ring-2 ring-sky-100 bg-sky-50/20'
+          ? 'border-[#3D52A0] ring-2 ring-[#3D52A0]/15'
           : isHighlighted
-          ? 'border-amber-400 ring-2 ring-amber-100 bg-amber-50/20'
-          : 'border-slate-200/80 hover:border-sky-300'
+          ? 'border-amber-400 ring-2 ring-amber-100'
+          : 'border-slate-200 hover:border-[#3D52A0]/40'
       }`}
     >
-      <div>
-        {/* Top bar with Selection checkbox, category tag, and actions */}
-        <div className="flex justify-between items-center mb-3">
-          <div className="flex items-center gap-2">
-            {onToggleSelect && (
-              <input
-                type="checkbox"
-                checked={isSelected || false}
-                onChange={() => onToggleSelect(item.id)}
-                className="rounded border-slate-300 text-[#3D52A0] focus:ring-[#3D52A0] cursor-pointer"
-              />
-            )}
-            <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-200/60">
-              {item.cat || 'General'}
-            </span>
-            {specBank && (
-              <button type="button" onClick={() => onOpenRecipe?.(item.id)}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${recipe ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-amber-100 text-amber-700'}`}
-                title={recipe ? `Recipe: ${recipe.name}. Open it` : 'No recipe yet. Open the item to start one'}>
-                {recipe ? 'Recipe' : 'No recipe'}
-              </button>
-            )}
-            {supplyOf(item) && <Chip tone="warn">{SUPPLY_LABEL[supplyOf(item)!]}</Chip>}
-          </div>
-
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              type="button"
-              onClick={handleCostSplit}
-              disabled={isSplitting}
-              className="p-1 text-purple-600 hover:bg-purple-50 rounded transition-colors"
-              title="AI Cost Split"
-            >
-              <Sparkles className={`w-3.5 h-3.5 ${isSplitting ? 'animate-spin' : ''}`} />
-            </button>
-            {onDuplicate && (
-              <button
-                type="button"
-                onClick={() => onDuplicate(item)}
-                className="p-1 text-slate-400 hover:text-[#3D52A0] hover:bg-sky-50 rounded transition-colors"
-                title="Duplicate Item"
-              >
-                <Copy className="w-3.5 h-3.5" />
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => onDelete(item.id)}
-              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
-              title="Delete Item"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Item Name & Linked Projects Badge */}
-        <div className="mb-1">
-          <FastInput
-            value={item.name}
-            onChange={(v) => handleUpdate('name', v)}
-            className="font-extrabold text-sm text-slate-900"
-            placeholder="Item Name (e.g. Wardrobe)"
-          />
-          {projectCount > 0 && (
-            <button
-              type="button"
-              onClick={() => onViewProjectUsage && onViewProjectUsage(item)}
-              className="inline-flex items-center gap-1 px-2 py-0.5 mt-1 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[#3D52A0] rounded-full text-[10px] font-extrabold transition-colors cursor-pointer"
-              title={`Used in ${projectCount} project(s). Click to view details.`}
-            >
-              <Building2 className="w-3 h-3" />
-              {projectCount} {projectCount === 1 ? 'Project' : 'Projects'}
+      {/* What it is, and what can be done to it. */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+          {onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={isSelected || false}
+              onChange={() => onToggleSelect(item.id)}
+              aria-label={`Select ${name}`}
+              className="mr-0.5 rounded border-slate-300 text-[#3D52A0] focus:ring-[#3D52A0] cursor-pointer"
+            />
+          )}
+          <Chip tone="slate">{item.cat || 'General'}</Chip>
+          {specBank && (
+            <button type="button" onClick={() => onOpenRecipe?.(item.id)}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors ${recipe ? 'bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/20' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
+              title={recipe ? `Recipe: ${recipe.name}. Open it` : 'No recipe yet. Open the item to start one'}>
+              {recipe ? 'Recipe' : 'No recipe'}
             </button>
           )}
+          {supply && <Chip tone="warn">{SUPPLY_LABEL[supply]}</Chip>}
         </div>
 
-        {/* Specs: from the recipe when it has one (BOQ Playground S2), else typed. */}
-        {recipeSpecs && specBank ? (
-          <button type="button" onClick={() => onOpenRecipe?.(item.id)} className="block w-full text-left mb-2">
-            <span className="mt-2 flex flex-wrap gap-1">
-              {Object.entries(recipeSpecs).slice(0, 4).map(([part, sp]) => {
-                const m = specBank.materials.find(x => x.id === sp.id);
-                return (
-                  <span key={part} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-600">
-                    {m?.swatch && <Swatch mat={m} className="w-3 h-3 rounded-full" />}{part}: {(m?.name || '').split(',')[0]} <span className="text-[#3D52A0]">v{sp.v}</span>
-                  </span>
-                );
-              })}
-            </span>
-            <span className="mt-2 text-xs text-slate-600 line-clamp-2">{recipeWords}</span>
+        {/* Dim until the card is pointed at or tabbed into, but never hidden: a tablet has no hover. */}
+        <div className="flex items-center gap-0.5 -mr-1.5 -mt-1 shrink-0 opacity-50 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          {aiOn && (
+            <button type="button" onClick={handleCostSplit} disabled={isSplitting} className={ICON_BUTTON}
+              title="Split the cost into material and labour with AI" aria-label={`Split the cost of ${name} with AI`}>
+              <Sparkles className={`w-3.5 h-3.5 ${isSplitting ? 'motion-safe:animate-spin' : ''}`} />
+            </button>
+          )}
+          {onDuplicate && (
+            <button type="button" onClick={() => onDuplicate(item)} className={ICON_BUTTON} title="Duplicate" aria-label={`Duplicate ${name}`}>
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button type="button" onClick={() => onDelete(item.id)} title="Delete" aria-label={`Delete ${name}`}
+            className={`${ICON_BUTTON} hover:!text-rose-600 hover:!bg-rose-50`}>
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
-        ) : (
+        </div>
+      </div>
+
+      {/* Its name, and who uses it. */}
+      <div className="-mx-1.5">
+        <FastInput
+          value={item.name}
+          onChange={(v) => handleUpdate('name', v)}
+          className="font-bold text-sm !text-slate-800"
+          placeholder="Item name, e.g. Wardrobe"
+        />
+        {projectCount > 0 && (
+          <button
+            type="button"
+            onClick={() => onViewProjectUsage && onViewProjectUsage(item)}
+            className="inline-flex items-center gap-1 ml-1.5 mt-1 px-2 py-0.5 rounded-full bg-[#3D52A0]/10 text-[#3D52A0] text-[10px] font-bold transition-colors hover:bg-[#3D52A0]/20"
+            title={`Used in ${projectCount} ${projectCount === 1 ? 'project' : 'projects'}. Open the list.`}
+          >
+            <Building2 className="w-3 h-3" aria-hidden />
+            {projectCount} {projectCount === 1 ? 'project' : 'projects'}
+          </button>
+        )}
+      </div>
+
+      {/* Specs: from the recipe when it has one (BOQ Playground S2), else typed. */}
+      {recipeSpecs && specBank ? (
+        <button type="button" onClick={() => onOpenRecipe?.(item.id)} className="block w-full text-left rounded-lg -m-1 p-1 transition-colors hover:bg-slate-50">
+          <span className="flex flex-wrap gap-1">
+            {Object.entries(recipeSpecs).slice(0, 4).map(([part, sp]) => {
+              const m = specBank.materials.find(x => x.id === sp.id);
+              return (
+                <span key={part} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-600">
+                  {m?.swatch && <Swatch mat={m} className="w-3 h-3 rounded-full" />}{part}: {(m?.name || '').split(',')[0]} <span className="text-[#3D52A0]">v{sp.v}</span>
+                </span>
+              );
+            })}
+          </span>
+          <span className="mt-2 block text-xs text-slate-600 line-clamp-2">{recipeWords}</span>
+        </button>
+      ) : (
+        <div className="-mx-1.5">
           <FastInput
             value={item.specs}
             multiline
             onChange={(v) => handleUpdate('specs', v)}
-            className="text-[11px] text-slate-500 mb-1"
-            placeholder="Public Concept Specs (L1/L2 Proposal)"
+            className="text-xs !text-slate-600"
+            placeholder="Specification the client sees"
           />
-        )}
+        </div>
+      )}
 
-        {/* Internal Specs */}
+      {/* Internal notes: the client never sees these. */}
+      <div className="flex items-center gap-1.5 rounded-lg bg-slate-50 pl-2 pr-0.5">
+        <Lock className="w-3 h-3 shrink-0 text-slate-400" aria-hidden />
         <FastInput
           value={item.internalSpecs || ''}
           onChange={(v) => handleUpdate('internalSpecs', v)}
-          className="text-[11px] text-slate-500 italic bg-amber-50/40 border-l-2 border-amber-300 pl-1.5 mb-3"
-          placeholder="Internal Execution Docs (Post-Signoff/Portal Data)"
+          className="text-[11px] !text-slate-600"
+          placeholder="Internal execution notes"
         />
+      </div>
 
-        {/* Cost & Margin Metrics */}
-        <div className="grid grid-cols-3 gap-2 mb-3 bg-slate-50 p-2 rounded-xl border border-slate-100">
-          <div>
-            <label className="text-[9px] font-extrabold text-slate-400 uppercase block mb-0.5">
-              Cost
-            </label>
-            <div className="font-mono text-xs text-blue-700 font-bold">
-              {formatCurrency(totalCost)}
+      <div className="mt-auto space-y-3">
+        {/* Cost, margin and the area factor. */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 pt-2.5 pb-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="min-w-0">
+              <span className={`${LABEL} block`}>Cost</span>
+              <span className="mt-1 block px-1.5 text-xs font-bold text-slate-800 tabular-nums truncate" title="Material plus labour">{formatCurrency(totalCost)}</span>
             </div>
-          </div>
-          <div>
-            <label className="text-[9px] font-extrabold text-slate-400 uppercase block mb-0.5">
-              Margin
+            <label className="block min-w-0">
+              <span className={`${LABEL} block`}>Margin</span>
+              <span className="mt-0.5 flex items-center gap-0.5">
+                <FastInput
+                  type="number"
+                  value={item.margin}
+                  onChange={(v) => handleUpdate('margin', v)}
+                  className={`!w-14 text-xs font-bold tabular-nums ${marginTone === 'good' ? '!text-emerald-700' : marginTone === 'warn' ? '!text-amber-700' : '!text-rose-700'}`}
+                />
+                <span className="text-[10px] font-bold text-slate-400" aria-hidden>%</span>
+              </span>
             </label>
-            <div className="flex items-center gap-0.5">
-              <FastInput
-                type="number"
-                value={item.margin}
-                onChange={(v) => handleUpdate('margin', v)}
-                className={`text-xs font-bold font-mono bg-white ${
-                  (item.margin || 0) < 15 ? 'text-rose-600' : 'text-emerald-600'
-                }`}
-              />
-              <span className="text-[10px] text-slate-400">%</span>
-            </div>
-          </div>
-          <div>
-            <label
-              className="text-[9px] font-extrabold text-slate-400 uppercase block mb-0.5"
-              title="Area Coefficient Multiplier"
-            >
-              Coeff
+            <label className="block min-w-0" title="Multiplies the quantity worked out from a room's size">
+              <span className={`${LABEL} block`}>Factor</span>
+              <span className="mt-0.5 block">
+                <FastInput
+                  type="number"
+                  value={item.areaMultiplierCoefficient || 1}
+                  onChange={(v) => handleUpdate('areaMultiplierCoefficient', v)}
+                  className="text-xs font-semibold !text-slate-700 tabular-nums"
+                />
+              </span>
             </label>
-            <FastInput
-              type="number"
-              value={item.areaMultiplierCoefficient || 1}
-              onChange={(v) => handleUpdate('areaMultiplierCoefficient', v)}
-              className="text-xs font-bold text-[#3D52A0] bg-white font-mono"
+          </div>
+          {/* The margin as a bar: it grows in, and follows the figure as it is typed. */}
+          <div className="mt-2.5 h-1 rounded-full bg-slate-200 overflow-hidden" role="img" aria-label={`Margin ${margin}%${margin < 15 ? ', under the 15% line' : ''}`}>
+            <motion.div
+              className={`h-full w-full rounded-full ${marginTone === 'good' ? 'bg-emerald-500' : marginTone === 'warn' ? 'bg-amber-500' : 'bg-rose-500'}`}
+              style={{ originX: 0 }}
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: Math.max(0.03, Math.min(1, margin / MARGIN_FULL)) }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             />
           </div>
         </div>
-      </div>
 
-      {/* Footer with Unit and Selling Price */}
-      <div className="flex justify-between items-end border-t border-slate-100 pt-3">
-        <div>
-          <label className="text-[9px] font-extrabold text-slate-400 uppercase block mb-0.5">
-            Unit
+        {/* Unit, who supplies it, and what it sells for. */}
+        <div className="flex items-end justify-between gap-3">
+          <label className="block min-w-0">
+            <span className={`${LABEL} block`}>Unit</span>
+            <select
+              value={item.unit}
+              onChange={(e) => handleUpdate('unit', e.target.value)}
+              className={`${QUIET_SELECT} uppercase`}
+            >
+              {UOM_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </label>
-          <select
-            value={item.unit}
-            onChange={(e) => handleUpdate('unit', e.target.value)}
-            className="text-xs font-bold text-slate-600 bg-transparent outline-none cursor-pointer uppercase"
-          >
-            {UOM_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-        </div>
-        {/* BOQ Playground X: bought by the client, or at actuals, keeps its lines out of every figure. */}
-        <div>
-          <label htmlFor={`supply-${item.id}`} className="text-[10px] font-extrabold text-slate-400 uppercase block mb-0.5">
-            Supplied
+          {/* BOQ Playground X: bought by the client, or at actuals, keeps its lines out of every figure. */}
+          <div className="min-w-0">
+            <label htmlFor={`supply-${item.id}`} className={`${LABEL} block`}>
+              Supplied
+            </label>
+            <select
+              id={`supply-${item.id}`}
+              value={supply || ''}
+              onChange={(e) => handleUpdate('supply', e.target.value || null)}
+              className={QUIET_SELECT}
+            >
+              <option value="">By the studio</option>
+              <option value="client">Bought by client</option>
+              <option value="actuals">At actuals</option>
+            </select>
+          </div>
+          <label className="block w-32 shrink-0 text-right">
+            <span className={`${LABEL} block`}>Sell price ₹</span>
+            <FastInput
+              type="number"
+              value={parseFloat(sellPrice.toFixed(0))}
+              onChange={(v) => handleSellPriceChange(v as number)}
+              className="text-base font-black !text-slate-800 text-right tabular-nums"
+            />
           </label>
-          <select
-            id={`supply-${item.id}`}
-            value={supplyOf(item) || ''}
-            onChange={(e) => handleUpdate('supply', e.target.value || null)}
-            className="text-xs font-bold text-slate-600 bg-transparent outline-none cursor-pointer"
-          >
-            <option value="">By the studio</option>
-            <option value="client">Bought by client</option>
-            <option value="actuals">At actuals</option>
-          </select>
-        </div>
-        <div className="text-right">
-          <label className="text-[9px] font-extrabold text-slate-400 uppercase block mb-0.5">
-            Sell Price
-          </label>
-          <FastInput
-            type="number"
-            value={parseFloat(sellPrice.toFixed(0))}
-            onChange={(v) => handleSellPriceChange(v as number)}
-            className="text-base font-black text-slate-900 bg-transparent text-right p-0 font-mono"
-          />
         </div>
       </div>
-    </MotionDiv>
+    </article>
   );
 };
 
-export default BankItemCard;
+/*
+  Remembered: a change to one item makes a new bank, and without this every
+  card on the screen was drawn again for each letter typed into one of them.
+*/
+export default React.memo(BankItemCard);

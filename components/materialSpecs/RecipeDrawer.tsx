@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { X, Plus, Check, Lock } from 'lucide-react';
-import { Button, LABEL, INPUT } from '../ui/kit';
+import { Button, Chip, LABEL, INPUT } from '../ui/kit';
 import NumberField from '../NumberField';
 import type { Item, PieceDraw, PieceKind } from '../../types';
 import { basisOfUnit } from '../../lib/boqSize';
@@ -70,6 +70,13 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
   const itemChanged = recipeId !== undefined;
   const recipes = useMemo(() => Object.values(bank.recipes), [bank]);
 
+  /* Esc closes it, as it does every other window; not while it is saving. */
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !saving) onClose(); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [onClose, saving]);
+
   const setPart = (part: string, g: Grade, mat: string) => {
     if (!recipe) return;
     try { setBank(b => setRecipePart(b, recipe.id, part, g, mat, 'Owner', Date.now())); setError(null); } catch (e: any) { setError(e?.message || String(e)); }
@@ -89,7 +96,7 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
 
   return (
     <div className="fixed inset-0 z-[300]">
-      <div className="absolute inset-0 phd-scrim bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 phd-scrim bg-[#12182F]/40 backdrop-blur-sm" onClick={onClose} />
       <aside className="absolute right-0 top-0 bottom-0 w-full max-w-[780px] bg-white shadow-2xl flex flex-col pg-slide" role="dialog" aria-modal="true" aria-labelledby="recipe-drawer-title">
         <div className="px-6 pt-5 pb-4 border-b border-slate-100 flex items-start gap-3">
           {draw && <span className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden shrink-0"><PieceThumb kind={draw.kind} w={draw.w} d={draw.d} words={item.specs} className="w-14 h-14" /></span>}
@@ -126,15 +133,16 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
                     <colgroup><col style={{ width: 112 }} /><col /><col /><col /></colgroup>
                     <thead><tr className={`bg-slate-50 ${LABEL}`}><th className="text-left px-3 py-2">Part</th>{GRADES.map(g => <th key={g} className="text-left px-3 py-2">{GRADE_TIER[g]}</th>)}</tr></thead>
                     <tbody className="divide-y divide-slate-100">
-                      {recipe.parts.map(p => (
-                        <tr key={p.part}>
+                      {recipe.parts.map((p, i) => (
+                        <tr key={p.part} className="hud-row-in transition-colors hover:bg-slate-50" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
                           <td className="px-3 py-2.5 font-semibold text-slate-800 whitespace-nowrap">{p.part}{p.finish && <div className="text-[10px] font-bold text-[#3D52A0]">finish swatch</div>}</td>
                           {GRADES.map(g => {
                             const m = bank.materials.find(x => x.id === p.byGrade[g]);
                             return (
                               <td key={g} className="px-3 py-2">
                                 <div className="flex items-center gap-1.5">
-                                  <Swatch mat={m} className="w-5 h-5 rounded-md" />
+                                  {/* Keyed on the material, so a new pick arrives rather than swapping silently. */}
+                                  <span key={m?.id} className="hud-swap shrink-0 grid"><Swatch mat={m} className="w-5 h-5 rounded-md" /></span>
                                   <select aria-label={`${p.part} in ${GRADE_TIER[g]}`} value={p.byGrade[g]} disabled={!canEditRecipes}
                                     onChange={e => setPart(p.part, g, e.target.value)}
                                     className="min-w-0 flex-1 px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold bg-white disabled:bg-slate-50">
@@ -160,14 +168,15 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
                   {GRADES.map(g => (
                     <div key={g} className={`rounded-xl border p-3 ${g === 'C' ? 'border-[#3D52A0]/30 bg-[#3D52A0]/[0.03]' : 'border-slate-200'}`}>
                       <div className={`${LABEL} mb-1`}>{GRADE_TIER[g]}</div>
-                      <p className="text-sm text-slate-700">{composeWords(bank, specsFromRecipe(bank, recipe, g))}</p>
+                      {/* Keyed on the words: when a part changes, the sentence it changes arrives again. */}
+                      <p key={composeWords(bank, specsFromRecipe(bank, recipe, g))} className="text-sm text-slate-700 hud-swap">{composeWords(bank, specsFromRecipe(bank, recipe, g))}</p>
                     </div>
                   ))}
                 </div>
               </div>
             </>
           ) : (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 hud-panel-in">
               <div className="text-sm font-bold text-slate-800">No recipe yet</div>
               <p className="text-xs text-slate-600 mt-1">Its words are typed by hand: “{item.specs || 'none yet'}”. Give it a recipe and its words come from the Material specs, versioned, like every other item.</p>
               {canEditItem && (
@@ -231,7 +240,8 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
           {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
         </div>
 
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+          {(itemChanged || recipeChanged || sizeChanged) && <span className="mr-auto hud-row-in"><Chip tone="warn">Not saved yet</Chip></span>}
           <Button onClick={onClose}>Close</Button>
           <Button variant="primary" icon={Check} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save item'}</Button>
         </div>
