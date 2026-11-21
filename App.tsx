@@ -162,6 +162,7 @@ import { isPlaygroundTier, docPricingOf } from "./lib/playground/pricing";
 import { playgroundTierSummary } from "./lib/playground/versions";
 import { designFeeFor, holdPrice, isAsActuals } from "./lib/boqPricing";
 import { addToBank, masterFor } from "./lib/bankMatch";
+import { planPublish, publishQuestion, NOTHING_TO_PUBLISH } from "./lib/bankPublish";
 import { INITIAL_TEMPLATES } from "./lib/standardPackages";
 import { INITIAL_BANK } from "./constants";
 import { SaveIcon, UploadIcon, NewFileIcon } from "./components/Icons";
@@ -3466,12 +3467,12 @@ export default function App() {
                         {isDraftBankMode && (
                           <button
                             onClick={() => {
-                              if (
-                                confirm(
-                                  "Are you sure you want to completely overwrite the LIVE item bank with your Draft sandbox? This will affect new projects and prices.",
-                                )
-                              ) {
-                                setBank(draftBank);
+                              /* The draft's edits go into the live bank; it is not replaced by the draft (lib/bankPublish.ts). */
+                              const plan = planPublish(bank, draftBank);
+                              if (plan.nothing) { alert(NOTHING_TO_PUBLISH); return; }
+                              if (confirm(publishQuestion(plan))) {
+                                setBank(plan.bank);
+                                setDraftBank(plan.bank);
                                 setIsDraftBankMode(false);
                                 alert(
                                   "Draft successfully published to Live Bank!",
@@ -4191,12 +4192,12 @@ export default function App() {
                         {isDraftBankMode && (
                           <button
                             onClick={() => {
-                              if (
-                                confirm(
-                                  "Are you sure you want to completely overwrite the LIVE item bank with your Draft sandbox? This will affect new projects and prices.",
-                                )
-                              ) {
-                                setBank(draftBank);
+                              /* The draft's edits go into the live bank; it is not replaced by the draft (lib/bankPublish.ts). */
+                              const plan = planPublish(bank, draftBank);
+                              if (plan.nothing) { alert(NOTHING_TO_PUBLISH); return; }
+                              if (confirm(publishQuestion(plan))) {
+                                setBank(plan.bank);
+                                setDraftBank(plan.bank);
                                 setIsDraftBankMode(false);
                                 alert(
                                   "Draft successfully published to Live Bank!",

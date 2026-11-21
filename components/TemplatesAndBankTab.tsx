@@ -29,6 +29,7 @@ import { Plus } from 'lucide-react';
 import { Button } from './ui/kit';
 import { canEditMaterialSpecs } from '../lib/materialSpecs';
 import { canLockPrices } from '../lib/priceLock';
+import { planPublish, publishQuestion, NOTHING_TO_PUBLISH } from '../lib/bankPublish';
 import { recipeOf } from '../lib/lineSpecs';
 import { useOrg } from '../contexts/OrgContext';
 
@@ -176,8 +177,12 @@ export default function TemplatesAndBankTab({
               {isDraftBankMode ? (
                 <button
                   onClick={() => {
-                    if (window.confirm('Overwrite the LIVE item bank with the draft sandbox? This changes the rates new projects are priced from.')) {
-                      setBank(draftBank);
+                    /* The draft's edits go into the live bank; it is not replaced by the draft (lib/bankPublish.ts). */
+                    const plan = planPublish(bank, draftBank);
+                    if (plan.nothing) { window.alert(NOTHING_TO_PUBLISH); return; }
+                    if (window.confirm(publishQuestion(plan))) {
+                      setBank(plan.bank);
+                      setDraftBank(plan.bank);
                       setIsDraftBankMode(false);
                     }
                   }}
