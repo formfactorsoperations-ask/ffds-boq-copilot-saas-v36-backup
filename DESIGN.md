@@ -909,6 +909,67 @@ three columns (families, materials, the picked material); this adds to it:
   sentence a changed part alters arrives again (`hud-swap`). Its scrim is the modal navy.
 - Still at zero in the design guard, as "BOQ Playground" requires.
 
+Standard templates (`components/TemplateEditorTab.tsx`, `components/templates/TemplateMetricsBar.tsx`;
+owner, 21 Nov 2026: "doesn't allow me to see all the details"). The screen was a fixed-height box: once
+the typologies, the figures and the room tabs were drawn, the room's list had room for a row and a half,
+and names were cut with an ellipsis.
+
+- The page scrolls; nothing scrolls inside a box except the Item bank picker. Top to bottom: one card
+  with the typology switch (the pill glides), its actions, four figures (Room scopes, Items, Extras,
+  No standard size) and the trades covered; then three columns.
+- Left, the rooms as a rail, copied from Material specs: the brand pill glides to the room picked, each
+  with its count, Add room last. Under 1280px the rail is a row of wrapping pills.
+- Middle, the open room, as wide as the screen allows. A row is the whole item: its full name (it
+  wraps), category chip, unit, rate, its standard size or "No standard size yet", its room-area share,
+  its specification (two lines, the whole of it on a click), then Extra / In no option, the E C H
+  marks and the bin. The header counts the items and how many each option takes, and says when the
+  room lists an item the bank no longer has.
+- Right, "Add from the Item bank": search, trade, and rows that add on a click; an item already in the
+  room is ticked. It stays beside the room while the room scrolls (`lg:sticky`).
+- Suggestions sit under the room's header as white pills on `bg-slate-50`, not on a tinted gradient.
+- Rows rise in and fold away (framer-motion, as before); a room or typology arrives with `hud-swap`.
+- Both files are at zero in the design guard.
+
+Its windows (`components/templates/`, the same day: "the same for the modals this screen opens"). Add a
+room, New typology, AI architect, AI audit and Preview the options each had a dark gradient header with
+tinted icon tiles. They open in `components/bank/BankModal.tsx` now, like the Item bank's. Option setup
+was already on the pattern.
+
+- A problem with what is typed is said under the field as it is typed, and the primary button is
+  disabled with the reason as its title. No alert, no error banner after the click.
+- AI working is one line in a `hud-scanning` box, and the window cannot be closed while it works. An AI
+  failure is a rose line with `role="alert"`; the audit used to fail to an empty window.
+- AI audit: the score is a `Ring` with `CountUp`, emerald from 85 and amber below. Gaps are rows in one
+  list with a trade chip; "Add to the room" turns into "Added". The three options' advice sits in three
+  cards named by `GRADE_TIER`, Comfort on the brand tint, as in the recipe drawer.
+- AI architect: the draft's rooms list every item with nothing cut and no box to scroll inside.
+- Preview the options: three cards with the Pricing & Tiers medals (sprout, gem, crown) on `IconTile`,
+  Comfort with the brand border and top rule; quotes count up; margin coloured by the three states. A
+  room opens to its lines (the chevron turns); names wrap.
+- No model name is shown on an AI window: the badge that read "Gemini 3.7" was not read from anything.
+- All five files are at zero in the design guard.
+
+Vendor directory (`components/VendorsManager.tsx`; owner, 21 Nov 2026: "the same for vendor directory").
+It had gradient avatars in violet, orange and sky, tinted figure tiles, and four windows each with a look
+of its own.
+
+- Five figures: Vendors, Material, Labour, Turnkey, Average lead time. The three kinds of supplier are
+  buttons that filter the list, and clear on a second click.
+- One card: the Cards / Table switch, the actions (Add from projects, Export CSV, Add vendor last and
+  primary), search, the count, Clear filters, sort, then Show and Trade pills that wrap, each with its
+  count. Only trades a vendor is in are listed. What an action did is a line in this card, not an alert.
+- A vendor's avatar is its initials on the brand tint (slate when inactive). Colour never says what a
+  vendor supplies; a brand chip does.
+- A card: name and trades, supply chips, phone, email and GSTIN each with a copy button that turns to a
+  tick, lead time and payment terms in a well, notes, then Message and the edit and delete buttons. It
+  lifts on hover (`pp-lift`) and arrives with `hud-row-in`.
+- The table has the field-label heads and the same row buttons, dim until pointed at, never hidden.
+- A vendor opens in a drawer from the right (`pg-slide`, as the recipe drawer): how to reach them, lead
+  time and terms, trades, notes, and every project selection that names it.
+- Add or edit, Message and Delete open in `components/bank/BankModal.tsx`. What they supply and trades
+  are pills; payment terms is one field that suggests the usual ones.
+- At zero in the design guard.
+
 ### Notifications motion (approved 22 Oct 2026)
 
 The owner chose four of the fifteen notification patterns in the round-two

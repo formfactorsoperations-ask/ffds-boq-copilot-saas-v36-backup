@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { Plus, X, Layers, Check } from 'lucide-react';
+import { Plus, Check } from 'lucide-react';
+import BankModal from '../bank/BankModal';
+import { Button, INPUT, LABEL } from '../ui/kit';
+
+/*
+  Standard templates → Add room: a room to hold items in the open typology.
+  Pick a usual one, or name another.
+*/
 
 interface AddRoomScopeModalProps {
   isOpen: boolean;
@@ -30,114 +37,50 @@ const COMMON_ROOM_SUGGESTIONS = [
   { key: 'general', label: 'General / Whole House MEP' }
 ];
 
-export const AddRoomScopeModal: React.FC<AddRoomScopeModalProps> = ({
-  isOpen,
-  onClose,
-  existingRooms,
-  onAddRoom
-}) => {
-  const [customRoomKey, setCustomRoomKey] = useState('');
-  const [error, setError] = useState<string | null>(null);
+/** A room's name as it is stored: lower case, underscores for spaces. */
+const keyOf = (raw: string) => raw.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+
+export const AddRoomScopeModal: React.FC<AddRoomScopeModalProps> = ({ isOpen, onClose, existingRooms, onAddRoom }) => {
+  const [name, setName] = useState('');
 
   if (!isOpen) return null;
 
-  const handleAdd = (rawKey: string) => {
-    const cleanKey = rawKey.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-    if (!cleanKey) {
-      setError('Please enter a valid room identifier');
-      return;
-    }
-    if (existingRooms.includes(cleanKey)) {
-      setError(`Room scope "${cleanKey}" already exists in this template`);
-      return;
-    }
-    onAddRoom(cleanKey);
-    onClose();
-  };
+  const key = keyOf(name);
+  /* Why the typed name cannot be added, said under the field as it is typed. */
+  const problem = !name.trim() ? null : !key ? 'Use letters or numbers in the name.' : existingRooms.includes(key) ? 'This typology already has that room.' : null;
+  const add = (k: string) => { onAddRoom(k); setName(''); onClose(); };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="p-5 bg-gradient-to-r from-slate-900 to-sky-950 text-white flex items-center justify-between border-b border-sky-800">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-sky-500/20 rounded-xl text-sky-300">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold">Add Room Scope</h3>
-              <p className="text-xs text-sky-200">Create a room partition in this template</p>
-            </div>
+    <BankModal label="Add a room" eyebrow="Standard templates" title="Add a room" blurb="A room holds the items a new BOQ gets for it. Pick a usual one, or name another." size="md" onClose={onClose}>
+      <div className="space-y-5">
+        <form onSubmit={(e) => { e.preventDefault(); if (key && !problem) add(key); }}>
+          <label htmlFor="room-name" className={`${LABEL} block mb-1.5`}>Another room</label>
+          <div className="flex gap-2">
+            <input id="room-name" autoFocus type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Terrace deck" className={INPUT} aria-invalid={!!problem} />
+            <Button type="submit" variant="primary" icon={Plus} disabled={!key || !!problem} className="shrink-0">Add</Button>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+          {problem && <p role="alert" className="text-xs text-rose-700 mt-1.5">{problem}</p>}
+        </form>
 
-        <div className="p-5 space-y-4">
-          {error && (
-            <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200">
-              {error}
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Custom Room Name
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={customRoomKey}
-                onChange={(e) => {
-                  setCustomRoomKey(e.target.value);
-                  setError(null);
-                }}
-                placeholder="e.g. powder_room, terrace_deck, study"
-                className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
-              />
-              <button
-                type="button"
-                onClick={() => handleAdd(customRoomKey)}
-                disabled={!customRoomKey.trim()}
-                className="px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors shrink-0"
-              >
-                Add Custom
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-              Quick Suggestions
-            </label>
-            <div className="grid grid-cols-2 gap-1.5 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
-              {COMMON_ROOM_SUGGESTIONS.map(s => {
-                const isExisting = existingRooms.includes(s.key);
-                return (
-                  <button
-                    key={s.key}
-                    type="button"
-                    disabled={isExisting}
-                    onClick={() => handleAdd(s.key)}
-                    className={`p-2 rounded-xl text-left text-xs font-semibold border transition-all flex items-center justify-between ${
-                      isExisting
-                        ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
-                        : 'bg-white text-slate-700 border-slate-200 hover:border-[#3D52A0] hover:bg-sky-50'
-                    }`}
-                  >
-                    <span className="truncate mr-1">{s.label}</span>
-                    {isExisting ? (
-                      <span className="text-[10px] text-slate-400">Added</span>
-                    ) : (
-                      <Plus className="w-3.5 h-3.5 text-[#3D52A0] shrink-0" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+        <div>
+          <span className={`${LABEL} block mb-1.5`}>Usual rooms</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {COMMON_ROOM_SUGGESTIONS.map((s, i) => {
+              const has = existingRooms.includes(s.key);
+              return (
+                <button key={s.key} type="button" disabled={has} onClick={() => add(s.key)}
+                  className={`group hud-row-in px-3 py-2 rounded-xl border text-left text-xs font-semibold flex items-center justify-between gap-2 transition-colors ${has ? 'border-slate-200 bg-slate-50 text-slate-400' : 'border-slate-200 bg-white text-slate-700 hover:border-[#3D52A0]/40 hover:bg-[#3D52A0]/5 motion-safe:active:scale-[0.98]'}`}
+                  style={{ animationDelay: `${Math.min(i, 12) * 20}ms` }}>
+                  <span className="min-w-0 truncate">{s.label}</span>
+                  {has
+                    ? <span className="flex items-center gap-1 text-[11px] font-semibold shrink-0"><Check className="w-3 h-3" aria-hidden />Added</span>
+                    : <Plus className="w-3.5 h-3.5 text-[#3D52A0] shrink-0 transition-transform group-hover:rotate-90" aria-hidden />}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
-    </div>
+    </BankModal>
   );
 };
