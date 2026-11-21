@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { INITIAL_BANK } from '../../constants';
 import { generateStandardPackages, INITIAL_TEMPLATES } from '../../lib/standardPackages';
-import { drawOf, pieceSize, standardSizeOf, withStandardSize } from '../../lib/playground/pieces';
+import { drawOf, pieceSize, standardSizeOf, withStandardSize, canHaveSize } from '../../lib/playground/pieces';
 import { asNewPlaygroundOption } from '../../lib/playground/versions';
 import { quickBuild } from '../../lib/playground/quickBuild';
 import { buildBankMap } from '../../lib/boqPricing';
@@ -93,5 +93,18 @@ describe('a generated BOQ', () => {
     const big = quickBuild({ size: '3-BHK', carpet: 1600, bank, newId: () => `c${++m}` }).rooms;
     const other = generateStandardPackages({ ...ctx, area: 1600, rooms: big }, bank, INITIAL_TEMPLATES, 'tiered');
     expect(paint(other[1])).toBeGreaterThan(paint(tiers[1]));
+  });
+});
+
+describe('names the studio’s bank uses', () => {
+  it('reads "T.V. unit" as a TV unit', () => {
+    expect(drawOf(item('T.V. UNIT(DRAWER)'))).toMatchObject({ kind: 'tv' });
+    expect(drawOf(item('TV unit'))).toMatchObject({ kind: 'tv' });
+  });
+
+  it('asks no size of pipework, ducting or an HVAC line', () => {
+    expect(canHaveSize(item('AC COPPER PIPING', 'rft', { cat: 'HVAC' }))).toBe(false);
+    expect(canHaveSize(item('Copper piping', 'rft', { cat: 'Functional' }))).toBe(false);
+    expect(canHaveSize(item('HEADBOARD'))).toBe(true);
   });
 });

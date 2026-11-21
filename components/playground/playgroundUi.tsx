@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { tradeIcon } from '../ui/tradeIcon';
 import type { BoqItem, Item, PieceDraw, PricingRules, Room } from '../../types';
 import { formatINR } from '../../lib/utils';
 import { resolveBoqLine, isAsActuals } from '../../lib/boqPricing';
@@ -266,4 +267,14 @@ export const FreshContext = React.createContext<FreshState | null>(null);
 export function usePrinted(): (id: string) => string {
   const fresh = React.useContext(FreshContext);
   return (id: string) => (fresh?.flash.has(id) ? ' pg-print' : '');
+}
+
+/**
+ * The mark of a line that is not drawn on the plan (civil work, a service): its
+ * trade's icon, read from its category and name, so a room's list says tiling,
+ * plumbing or demolition at a glance. A drawn line has its piece instead.
+ */
+export function LineMark({ m, className = 'w-3.5 h-3.5' }: { m: Pick<LineModel, 'cat' | 'name'>; className?: string }) {
+  const Icon = tradeIcon(`${m.name} ${m.cat}`);
+  return <Icon className={className} aria-hidden />;
 }

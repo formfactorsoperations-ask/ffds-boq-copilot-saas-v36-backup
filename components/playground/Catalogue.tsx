@@ -13,13 +13,20 @@ import { SupplyLibrary } from './SupplyParts';
 import { suppliedItems } from '../../lib/playground/supply';
 import type { Kit } from '../../lib/playground/kits';
 import { pickable } from '../../lib/bankMatch';
+import { drawOf } from '../../lib/playground/pieces';
+import { supplyOf } from '../../lib/playground/supply';
+import { tradeIcon } from '../ui/tradeIcon';
+import { WORK_TYPE } from '../../lib/playground/works';
 
 /*
   The studio design library (the approved mockup's catalogue), over the left of
   the stage. Every Item Bank item that draws, as a picture with its price per
   unit: drag one onto the plan or a room card, or press + to add it to the room
-  you are in. The Kits tab holds the Item Bank's bundles as room kits (PR K);
-  By client, the items bought by the client or at actuals (PR X).
+  you are in. Works holds the items that are not drawn (civil, plumbing,
+  electrical, painting, site work), each with its trade's mark: + adds one to
+  the room you are in, sized from that room. The Kits tab holds the Item Bank's
+  bundles as room kits (PR K); By client, the items bought by the client or at
+  actuals (PR X).
 */
 
 const CATS = ['All', 'Storage', 'Living', 'Bedroom', 'Kitchen', 'Bath'] as const;
@@ -31,9 +38,9 @@ const CAT_OF: Record<PieceKind, Cat> = {
   base: 'Kitchen', wallunit: 'Kitchen',
   vanity: 'Bath', glass: 'Bath',
 };
-type Tab = 'pieces' | 'kits' | 'client';
+type Tab = 'pieces' | 'works' | 'kits' | 'client';
 
-export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, artOf, kits = [], bankMap, hideFigures = false, kitEstimate, onKit, places = [], onAddSupplied }: {
+export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, artOf, kits = [], bankMap, hideFigures = false, kitEstimate, onKit, places = [], onAddSupplied, onAddWork, workRoom = null, measureWork }: {
   bank: Item[];
   readOnly: boolean;
   onClose: () => void;
@@ -52,6 +59,12 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
   /** Where a By client item can go: the rooms, then the whole flat (PR X). */
   places?: string[];
   onAddSupplied?: (item: Item, room: string) => void;
+  /** The + on a Works tile: adds the item to the room the screen says, sized from it. Without it there is no Works tab. */
+  onAddWork?: (item: Item) => void;
+  /** The room a work's + goes to: the one in hand on the plan, or none. */
+  workRoom?: string | null;
+  /** What a work comes to in that room, and how (lib/playground/works). */
+  measureWork?: (item: Item) => { qty: number; how: string } | null;
 }) {
   const [dest, setDest] = useState('Whole flat');
   /* What is offered: the items, never a copy of one (lib/bankMatch.ts). */
@@ -61,6 +74,18 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<Cat>('All');
   const all = useMemo(() => drawableItems(offered), [offered]);
+  /* Works: what the bank has that is neither drawn nor bought by the client. */
+  const works = useMemo(() => offered.filter(i => !drawOf(i) && !supplyOf(i)).sort((a, b) => a.name.localeCompare(b.name)), [offered]);
+  const workCats = useMemo(() => {
+    const n = new Map<string, number>();
+    works.forEach(i => n.set(i.cat || 'General', (n.get(i.cat || 'General') || 0) + 1));
+    return [...n.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+  }, [works]);
+  const [workCat, setWorkCat] = useState('All');
+  const workList = works.filter(i => (workCat === 'All' || (i.cat || 'General') === workCat) && (!q.trim() || i.name.toLowerCase().includes(q.trim().toLowerCase())));
+  const tabs: [Tab, string][] = onAddWork
+    ? [['pieces', 'Pieces'], ['works', 'Works'], ['kits', 'Kits'], ['client', 'By client']]
+    : [['pieces', 'Pieces'], ['kits', 'Kits'], ['client', 'By client']];
   const list = all.filter(({ item, draw }) => (cat === 'All' || CAT_OF[draw.kind] === cat) && (!q.trim() || item.name.toLowerCase().includes(q.trim().toLowerCase())));
 
   return (
@@ -70,13 +95,29 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
           <div className="text-[11px] font-bold uppercase tracking-wider text-[#3D52A0] inline-flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" aria-hidden />Studio design library</div>
           <button type="button" onClick={onClose} aria-label="Close the library" className="ml-auto -mr-1 p-1 rounded-lg text-slate-400 hover:bg-slate-100"><X className="w-3.5 h-3.5" aria-hidden /></button>
         </div>
-        <div className="mt-2 grid grid-cols-3 gap-0.5 p-0.5 rounded-xl bg-slate-100" role="radiogroup" aria-label="Library">
-          {([['pieces', 'Pieces'], ['kits', 'Kits'], ['client', 'By client']] as [Tab, string][]).map(([k, n]) => (
+        <div className={`mt-2 grid ${tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3'} gap-0.5 p-0.5 rounded-xl bg-slate-100`} role="radiogroup" aria-label="Library">
+          {tabs.map(([k, n]) => (
             <button key={k} type="button" role="radio" aria-checked={tab === k} onClick={() => setTab(k)}
               className={`py-1 rounded-lg text-[11px] font-bold transition-all duration-200 ${tab === k ? 'bg-white text-[#3D52A0] shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>{n}</button>
           ))}
         </div>
         {tab === 'kits' && <div className="text-[11px] text-slate-500 mt-1.5">From the Item Bank’s bundles. Drop a kit on a room: every line is sized from that room.</div>}
+        {tab === 'works' && <>
+          <div className="text-[11px] text-slate-500 mt-1.5">Civil, plumbing, electrical and site work. Drag one onto a room: its quantity is measured from that room.</div>
+          <div className={`mt-1.5 text-[11px] font-semibold ${workRoom ? 'text-[#3D52A0]' : 'text-amber-700'}`} role="status">
+            {workRoom ? `+ adds to ${workRoom}, with the quantity shown.` : 'Click a room on the plan to use +.'}
+          </div>
+          <div className="relative mt-2">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" aria-hidden />
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter works by name…" aria-label="Filter the works" className={`${INPUT} !pl-8 !py-1.5`} />
+          </div>
+          <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
+            {['All', ...workCats].map(c => (
+              <button key={c} type="button" onClick={() => setWorkCat(c)} aria-pressed={workCat === c}
+                className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors duration-150 ${workCat === c ? 'bg-[#3D52A0] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{c}</button>
+            ))}
+          </div>
+        </>}
         {tab === 'pieces' && <>
           <div className="text-[11px] text-slate-500 mt-1.5">Drag onto the plan or a room card. Each comes with its words from the Item Bank.</div>
           <div className="relative mt-2">
@@ -108,6 +149,31 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
             </LibTile></React.Fragment>
           ))}
           {list.length === 0 && <p className="col-span-2 text-xs text-slate-500 px-1">No item in the bank draws by that name.</p>}
+        </div>
+      ) : tab === 'works' ? (
+        <div key="works" className="hud-swap flex-1 overflow-auto p-3 grid grid-cols-2 gap-2 content-start">
+          {workList.map((item, i) => {
+            const Icon = tradeIcon(`${item.name} ${item.cat}`);
+            const m = workRoom ? measureWork?.(item) : null;
+            return (
+              <React.Fragment key={item.id}><LibTile i={i} readOnly={readOnly} title={readOnly ? item.name : `Drag ${item.name} onto a room`}
+                onDragStart={e => { e.dataTransfer.setData('text/plain', item.id); e.dataTransfer.setData(WORK_TYPE, '1'); e.dataTransfer.effectAllowed = 'copy'; }}
+                thumb={<span className="w-full h-12 rounded-lg bg-slate-50 grid place-items-center text-slate-400"><Icon className="w-5 h-5" aria-hidden /></span>}>
+                <span className="block text-[11px] font-semibold text-slate-800 leading-tight mt-1 line-clamp-2">{item.name}</span>
+                <span className="block text-[10px] font-bold text-slate-500 tabular-nums">{inr(calculateSellPrice(item.materials, item.labor, item.margin))}/{item.unit}</span>
+                {m && <span className="block text-[10px] font-semibold text-[#3D52A0] tabular-nums" title={`In ${workRoom}: ${m.how}`}>{m.qty} {item.unit} here</span>}
+                {!readOnly && (
+                  <button type="button" onClick={() => onAddWork?.(item)} disabled={!workRoom}
+                    aria-label={workRoom ? `Add ${item.name} to ${workRoom}` : `Add ${item.name}: click a room on the plan first`}
+                    title={workRoom ? `Add to ${workRoom}${m ? `: ${m.qty} ${item.unit}, ${m.how}` : ''}` : 'Click a room on the plan first, or drag this onto a room'}
+                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-lg bg-white/90 border border-slate-200 text-slate-600 enabled:hover:bg-[#3D52A0] enabled:hover:text-white enabled:hover:border-transparent enabled:hover:scale-110 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 grid place-items-center">
+                    <Plus className="w-3 h-3" aria-hidden />
+                  </button>
+                )}
+              </LibTile></React.Fragment>
+            );
+          })}
+          {workList.length === 0 && <p className="col-span-2 text-xs text-slate-500 px-1">No work in the bank by that name.</p>}
         </div>
       ) : tab === 'kits' ? (
         <KitLibrary kits={kits} bankMap={bankMap || new Map(bank.map(i => [i.id, i]))} readOnly={readOnly} hideFigures={hideFigures}

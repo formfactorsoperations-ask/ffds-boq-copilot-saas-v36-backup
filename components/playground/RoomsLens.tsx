@@ -5,7 +5,7 @@ import { SCOPE_BUCKETS } from '../../lib/scopeBuckets';
 import { ftin, round2 } from '../../lib/playground/geometry';
 import { boardPieces } from '../../lib/playground/pieces';
 import { PieceArt, PieceThumb } from './pieceArt';
-import { inr, lakh, marginTone, avgMarkup, setAvgMarkup, Scrub, usePrinted, type LineModel } from './playgroundUi';
+import { inr, lakh, marginTone, avgMarkup, setAvgMarkup, Scrub, usePrinted, LineMark, type LineModel } from './playgroundUi';
 import type { ShareRow } from './LiveBoq';
 import { roomDelta, type Changes } from '../../lib/playground/changes';
 
@@ -95,7 +95,7 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
                 <button key={m.line.id} type="button" onClick={() => onSel(m.line.id)}
                   className={`w-full flex items-center gap-2 px-1.5 py-1 rounded-lg text-left ${sel === m.line.id ? 'bg-[#3D52A0]/[0.08]' : 'hover:bg-slate-50'}${printed(m.line.id)}`}>
                   <span className="w-7 h-6 shrink-0">
-                    {m.draw && m.size ? <PieceThumb kind={m.draw.kind} w={m.size.w} d={m.size.d} words={m.words} {...m.art} className="w-7 h-6" /> : <span className="w-7 h-6 grid place-items-center text-slate-300"><Layers className="w-3 h-3" aria-hidden /></span>}
+                    {m.draw && m.size ? <PieceThumb kind={m.draw.kind} w={m.size.w} d={m.size.d} words={m.words} {...m.art} className="w-7 h-6" /> : <span className="w-7 h-6 grid place-items-center text-slate-400"><LineMark m={m} /></span>}
                   </span>
                   <span className="flex-1 min-w-0 text-xs font-semibold text-slate-700 truncate">{m.name}{m.line.byRoom ? <span className="font-normal text-slate-400"> · shared into the rooms</span> : null}</span>
                   {m.stale.length > 0 && <span className="px-1 rounded bg-amber-100 text-amber-700 text-[10px] font-bold">new spec</span>}
@@ -104,7 +104,7 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
               ))}
               {roomShares.map(s => (
                 <button key={s.model.line.id} type="button" onClick={() => onSel(s.model.line.id)} className={`w-full flex items-center gap-2 px-1.5 py-1 rounded-lg text-left hover:bg-slate-50${printed(s.model.line.id)}`}>
-                  <span className="w-7 h-6 shrink-0 grid place-items-center text-slate-400"><Layers className="w-3.5 h-3.5" aria-hidden /></span>
+                  <span className="w-7 h-6 shrink-0 grid place-items-center text-slate-400"><LineMark m={s.model} /></span>
                   <span className="flex-1 min-w-0 text-xs text-slate-600 truncate">{s.model.name} <span className="text-slate-400 tabular-nums">· {round2(s.qty)} {s.model.unit}</span></span>
                   {!hideFigures && <span className="text-xs font-bold tabular-nums text-slate-600">{lakh(s.amount)}</span>}
                 </button>

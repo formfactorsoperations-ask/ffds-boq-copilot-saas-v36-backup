@@ -24,7 +24,7 @@ import {
 */
 
 export type BankView = 'spreadsheet' | 'grouped' | 'grid' | 'bundles';
-export type BankHealth = 'all' | 'low-margin' | 'missing-specs' | 'multiplier' | 'in-active-projects' | 'no-recipe';
+export type BankHealth = 'all' | 'low-margin' | 'missing-specs' | 'multiplier' | 'in-active-projects' | 'no-recipe' | 'no-size';
 
 type DotTone = 'slate' | 'good' | 'warn' | 'bad';
 
@@ -40,6 +40,8 @@ export interface BankCommandBarProps {
   };
   /** Items with no recipe; null where the studio has no Material specs bank. */
   noRecipeCount: number | null;
+  /** Items that are made and measured, with no standard size yet (lib/playground/pieces canHaveSize). */
+  noSizeCount?: number;
   copyCount: number;
   showCopies: boolean;
   onToggleCopies: () => void;
@@ -346,6 +348,9 @@ const BankCommandBar: React.FC<BankCommandBarProps> = (p) => {
                   <Pill group="health" on={p.health === 'missing-specs'} onClick={() => p.onHealth('missing-specs')} count={stats.missingSpecsCount} dot={stats.missingSpecsCount > 0 ? 'warn' : undefined}>Missing specs</Pill>
                   {p.noRecipeCount != null && (
                     <Pill group="health" on={p.health === 'no-recipe'} onClick={() => p.onHealth('no-recipe')} count={p.noRecipeCount} dot={p.noRecipeCount > 0 ? 'warn' : undefined}>No recipe yet</Pill>
+                  )}
+                  {p.noSizeCount != null && (
+                    <Pill group="health" on={p.health === 'no-size'} onClick={() => p.onHealth('no-size')} count={p.noSizeCount} dot={p.noSizeCount > 0 ? 'warn' : undefined}>No standard size</Pill>
                   )}
                   <Pill group="health" on={p.health === 'multiplier'} onClick={() => p.onHealth('multiplier')} count={stats.multiplierCount}>Custom area factor</Pill>
                 </div>

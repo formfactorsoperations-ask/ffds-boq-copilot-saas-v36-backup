@@ -16,7 +16,7 @@ import { ISSUE_LABEL, type IssueKind } from '../../lib/playground/issues';
 import { basisOfUnit, readSize, parseSize, formatSize, sizeUpdates } from '../../lib/boqSize';
 import { PieceThumb } from './pieceArt';
 import { CivilBlock, CivilRoom } from './CivilParts';
-import { inr, lakh, marginTone, Scrub, withCost, withMarkup, withRate, usePrinted, type LineModel } from './playgroundUi';
+import { inr, lakh, marginTone, Scrub, withCost, withMarkup, withRate, usePrinted, LineMark, type LineModel } from './playgroundUi';
 
 /*
   The right-hand panel of the BOQ Playground (the approved mockup's inspector).
@@ -29,7 +29,7 @@ import { inr, lakh, marginTone, Scrub, withCost, withMarkup, withRate, usePrinte
 
 const thumbOf = (m: LineModel, cls: string) => (m.draw && m.size
   ? <PieceThumb kind={m.draw.kind} w={m.size.w} d={m.size.d} words={m.words} {...m.art} className={cls} />
-  : <span className={`${cls} grid place-items-center text-slate-300`}><Layers className="w-3.5 h-3.5" aria-hidden /></span>);
+  : <span className={`${cls} grid place-items-center text-slate-400`}><LineMark m={m} /></span>);
 
 export interface ShareRow { model: LineModel; qty: number; amount: number }
 
@@ -127,7 +127,7 @@ export function Receipt({ models, rooms, roomTotals, shares, workTotal, tierName
             ))}
             {g.real && (shares.get(g.name) || []).map(s => (
               <button key={s.model.line.id} type="button" onClick={() => onSel(s.model.line.id)} className={`w-full flex items-center gap-2 px-1 py-1 rounded-lg hover:bg-slate-50 text-left${printed(s.model.line.id)}`}>
-                <span className="w-7 h-5 shrink-0 grid place-items-center text-slate-300"><Layers className="w-3 h-3" aria-hidden /></span>
+                <span className="w-7 h-5 shrink-0 grid place-items-center text-slate-400"><LineMark m={s.model} className="w-3 h-3" /></span>
                 <span className="min-w-0 flex-1 text-[11px] text-slate-500 truncate">{s.model.name} · {round2(s.qty)} {s.model.unit}</span>
                 {!hideFigures && <span className="text-[11px] font-bold tabular-nums text-slate-600">{inr(s.amount)}</span>}
               </button>

@@ -2,6 +2,11 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { AIStrategy, Item, FullProjectData } from '../types';
 import { id as generateId } from '../lib/utils';
 import { useOrg } from '../contexts/OrgContext';
+import { standardSizeOf, canHaveSize } from '../lib/playground/pieces';
+
+/** True for an item that is made and measured but has no standard size yet. */
+const needsSize = (item: Item) => !standardSizeOf(item) && canHaveSize(item);
+
 import { useStudioSettings, CustomBundle } from '../hooks/useStudioSettings';
 import { INITIAL_BANK, UOM_OPTIONS } from '../constants';
 import BulkImportModal from './BulkImportModal';
@@ -97,8 +102,10 @@ const BankTab: React.FC<BankTabProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('All');
-  const [healthFilter, setHealthFilter] = useState<'all' | 'low-margin' | 'missing-specs' | 'multiplier' | 'in-active-projects' | 'no-recipe'>('all');
+  const [healthFilter, setHealthFilter] = useState<'all' | 'low-margin' | 'missing-specs' | 'multiplier' | 'in-active-projects' | 'no-recipe' | 'no-size'>('all');
   const noRecipeCount = useMemo(() => (specs ? bank.filter((i) => !recipeOf(i, specs)).length : 0), [bank, specs]);
+  /* Made and measured, with no standard size yet: a new BOQ still sizes these from the room. */
+  const noSizeCount = useMemo(() => bank.filter(needsSize).length, [bank]);
 
   // Multi-Selection State
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -193,6 +200,8 @@ const BankTab: React.FC<BankTabProps> = ({
         if ((item.margin || 0) >= 15) return false;
       } else if (healthFilter === 'no-recipe') {
         if (!specs || recipeOf(item, specs)) return false;
+      } else if (healthFilter === 'no-size') {
+        if (!needsSize(item)) return false;
       } else if (healthFilter === 'missing-specs') {
         if (item.specs && item.specs.trim().length > 0) return false;
       } else if (healthFilter === 'multiplier') {
@@ -564,6 +573,7 @@ const BankTab: React.FC<BankTabProps> = ({
       <BankCommandBar
         stats={stats}
         noRecipeCount={specs ? noRecipeCount : null}
+        noSizeCount={specs ? noSizeCount : undefined}
         copyCount={copyCount}
         showCopies={showCopies}
         onToggleCopies={() => setShowCopies((v) => !v)}
@@ -628,6 +638,7 @@ const BankTab: React.FC<BankTabProps> = ({
           projects={projects}
           onViewProjectUsage={setUsageModalItem}
           projectCounts={projectCounts}
+          onOpenSize={specs ? (id) => openRecipe(id, 'size') : undefined}
         />
       )}
 

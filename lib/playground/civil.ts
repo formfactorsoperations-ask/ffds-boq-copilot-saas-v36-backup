@@ -83,6 +83,27 @@ const TESTS: Record<CivilKey, (n: string) => boolean> = {
   debris: n => /\bdebris\b/.test(n),
 };
 
+/**
+ * The civil work an Item Bank item is, when it is one a whole room takes: a
+ * floor laid or taken up, wall tiles, waterproofing. Null for anything else,
+ * and for a wall broken or built, which is drawn as a segment, not dropped on a
+ * room. Only an item priced by area or length is measured.
+ */
+export function civilTypeOf(item: Pick<Item, 'name' | 'cat' | 'unit'> | null | undefined): Exclude<CivilType, 'break' | 'build'> | null {
+  if (!item) return null;
+  const n = `${item.name} ${item.cat || ''}`.toLowerCase();
+  const basis = basisOfUnit(item.unit);
+  if (ACTUALS.test(n) || (basis !== 'area' && basis !== 'length')) return null;
+  if (TESTS.walls7(n)) return 'walls7';
+  if (TESTS.waterproof(n)) return 'waterproof';
+  if (TESTS.floorRemove(n)) return 'floorRemove';
+  if (TESTS.floorWet(n)) return 'floor';
+  /* One item that takes the old floor up and lays the new ("Demolish and install - flooring tiles") is the room's floor too. */
+  if (/\b(floor\w*|vitrified)\b/.test(n) && LIFTS.test(n) && /\b(install\w*|lay\w*|laid|relay\w*)\b/.test(n)
+    && !/\b(wall\s*til\w*|dado|skirting|false\s*ceiling|polish\w*|cleaning|protection|laminate|vinyl|carpet|wooden|engineered|spc|upstand)\b|water\s*proof/.test(n)) return 'floor';
+  return null;
+}
+
 export interface CivilItems {
   /** floor: the new floor of most rooms; floorWet: of a bathroom, utility or balcony (an anti-skid tile when the bank has one). */
   items: Partial<Record<CivilKey, Item>>;

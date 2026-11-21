@@ -19,6 +19,7 @@ import { IconTile, Ring, Tilt, DoneTick, Confetti, EASE, listV, rowV } from '../
 import { cardV, deskSectionV } from '../opsDesk/DeskBits';
 import { CountUp } from '../ui/HudBits';
 import { budgetGap } from '../../lib/budgetFit';
+import { tradeIcon } from '../ui/tradeIcon';
 import { useFiguresHidden, Masked } from '../ui/HideFigures';
 
 /*
@@ -128,28 +129,8 @@ const PART_LOOK: Record<ScopePart, { icon: React.ComponentType<any>; shade: stri
   others: { icon: Package, shade: 'bg-[#3D52A0]/20' },
 };
 
-/** An icon for a trade or category, read from its name. */
-export function tradeIcon(name: string): React.ComponentType<any> {
-  const n = (name || '').toLowerCase();
-  if (/kitchen/.test(n)) return ChefHat;
-  if (/ceiling/.test(n)) return LampCeiling;
-  if (/paint/.test(n)) return PaintRoller;
-  if (/light/.test(n)) return Lightbulb;
-  if (/electric/.test(n)) return Zap;
-  if (/plumb|sanitary/.test(n)) return Droplets;
-  if (/bath/.test(n)) return Bath;
-  if (/hvac|air/.test(n)) return AirVent;
-  if (/til|floor/.test(n)) return Grid3x3;
-  if (/demolition|site|debris/.test(n)) return /site|debris/.test(n) ? Truck : HardHat;
-  if (/civil|masonry|plaster|stone|marble|granite|waterproof/.test(n)) return BrickWall;
-  if (/glass|mirror/.test(n)) return PanelsTopLeft;
-  if (/decor|art/.test(n)) return Flower2;
-  if (/blind|curtain|furnish/.test(n)) return Blinds;
-  if (/furniture|loose|sofa/.test(n)) return Armchair;
-  if (/panel|tv/.test(n)) return Frame;
-  if (/carpentry|wood|wardrobe|joinery|modular/.test(n)) return Hammer;
-  return Package;
-}
+/* The icon for a trade or category is shared with the BOQ Playground (components/ui/tradeIcon). */
+export { tradeIcon };
 
 /* The grid every row shares: its columns, the options in them, and the selected column's tint. */
 const GridCtx = React.createContext<{ grid: React.CSSProperties; cols: any[]; tint: (id: string) => string; still: boolean }>({ grid: {}, cols: [], tint: () => '', still: true });

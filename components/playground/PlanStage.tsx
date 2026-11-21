@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { WORK_TYPE } from '../../lib/playground/works';
+import { tradeIcon } from '../ui/tradeIcon';
 import { Minus, Plus, Maximize } from 'lucide-react';
 import type { ProjectContext, Item, BoqItem, Room } from '../../types';
 import { boardPieces, drawOf, isHigh, isWallBacked, pieceSize, footprintOf, pieceItemOf, type BoardPiece } from '../../lib/playground/pieces';
@@ -78,6 +80,8 @@ interface Props {
   onNote?: (msg: string) => void;
   /** A room kit dropped on a room (PR K): its preview opens for that room. */
   onDropKit?: (kitId: string, room: string) => void;
+  /** A work from the library (an item that is not drawn) dropped on a room. */
+  onDropWork?: (item: Item, room: string) => void;
   /** Show changes since the version before (PR R): each changed piece outlined and tagged, the ones taken out drawn faint. */
   changes?: Changes | null;
   /** What the last edit did (PR 7): pieces drop in, the room glows, the price change floats up. */
@@ -210,7 +214,8 @@ export default function PlanStage(props: Props) {
   const [kitOver, setKitOver] = useState<string | null>(null);
   const roomUnder = (at: [number, number] | null) =>
     at ? planRooms.find(r => at[0] >= r.plan!.x && at[0] <= r.plan!.x + r.plan!.w && at[1] >= r.plan!.y && at[1] <= r.plan!.y + r.plan!.h) || null : null;
-  const isKitDrag = (e: React.DragEvent) => Array.from(e.dataTransfer?.types || []).includes(KIT_TYPE);
+  /* A kit and a work both land on a whole room, so the room under the pointer lights up for either. */
+  const isKitDrag = (e: React.DragEvent) => { const t = Array.from(e.dataTransfer?.types || []); return t.includes(KIT_TYPE) || t.includes(WORK_TYPE); };
   const onDragOver = (e: React.DragEvent) => {
     if (readOnly) return;
     e.preventDefault();
@@ -231,6 +236,12 @@ export default function PlanStage(props: Props) {
     const item = bank.find(i => i.id === text);
     const at = pt(e);
     const draw = drawOf(item);
+    if (item && !draw) {
+      const room = roomUnder(at);
+      if (room) props.onDropWork?.(item, room.name);
+      else onNote?.('Drop the work inside a room: it is measured from that room.');
+      return;
+    }
     if (!item || !at || !draw) return;
     const probe: PlacedPiece = { id: '__new', fp: { w: draw.w, d: draw.d }, place: { x: at[0], y: at[1], rot: 0 }, high: isHigh(draw), wallBacked: isWallBacked(draw) };
     const p = placeAt(probe, at[0], at[1], planRooms, { free: e.altKey });
@@ -391,6 +402,23 @@ export default function PlanStage(props: Props) {
   const selModel = sel ? models.get(sel) : undefined;
   const tight = view.k < 22;
 
+  /* Each room's work that is not drawn, as its trades' marks (components/ui/tradeIcon), commonest first. */
+  const workMarks = useMemo(() => {
+    const byRoom = new Map<string, Map<React.ComponentType<any>, { Icon: React.ComponentType<any>; label: string; n: number }>>();
+    models.forEach(m => {
+      if (m.draw || !m.room) return;
+      const Icon = tradeIcon(`${m.name} ${m.cat}`);
+      const room = byRoom.get(m.room) || new Map();
+      const cur = room.get(Icon);
+      if (cur) { cur.n++; cur.label = `${cur.label}, ${m.name}`; }
+      else room.set(Icon, { Icon, label: m.name, n: 1 });
+      byRoom.set(m.room, room);
+    });
+    const out = new Map<string, { Icon: React.ComponentType<any>; label: string; n: number }[]>();
+    byRoom.forEach((marks, room) => out.set(room, [...marks.values()].sort((a, b) => b.n - a.n)));
+    return out;
+  }, [models]);
+
   const roomHasLines = (name: string) => (roomTotals.get(name) || 0) > 0 || boq.some(l => l.roomId === name);
   /* The title block under the line plan (linePlan.tsx LinePlanTitle). */
   const planTitle = [String(ctx.name || 'Project').split(/[·–—]/)[0].trim(), ctx.config, String(ctx.location || '').split(/[,·]/)[0].trim()]
@@ -409,8 +437,30 @@ export default function PlanStage(props: Props) {
     const w = Math.max(name.length * fn * 0.68, pr.length * fp * 0.6) + px(14);
     const h = (pr ? fn + fp : fn) + px(14);
     const cx = r.plan!.x + r.plan!.w / 2, cy = r.plan!.y + r.plan!.h / 2;
+    /* The room's work that is not drawn (civil, plumbing, electrical…): one mark for each trade, under its tag. */
+    const marks = workMarks.get(r.name) || [];
+    const shown = marks.slice(0, narrow ? 3 : 5);
+    const ms = px(22), mg = px(4);
+    const mw = shown.length * ms + (shown.length - 1) * mg + (marks.length > shown.length ? px(16) : 0);
+    const my = cy + h / 2 + px(5);
     return (
       <g key={r.name} pointerEvents="none">
+        {shown.length > 0 && (
+          <g aria-label={`${room.name}: ${marks.map(m => m.label).join(', ')}`}>
+            {shown.map((m, i) => {
+              const x = cx - mw / 2 + i * (ms + mg);
+              return (
+                <g key={m.label} data-work-mark={m.label}>
+                  <rect x={x} y={my} width={ms} height={ms} rx={px(6)} fill="#fff" fillOpacity={0.96} stroke="#e2e8f0" strokeWidth={px(1)} />
+                  <m.Icon x={x + px(4)} y={my + px(4)} width={px(14)} height={px(14)} color="#475569" strokeWidth={2} aria-hidden />
+                </g>
+              );
+            })}
+            {marks.length > shown.length && (
+              <text x={cx - mw / 2 + shown.length * (ms + mg) + px(2)} y={my + ms * 0.68} fontSize={px(10)} fontWeight={700} fill="#64748b">+{marks.length - shown.length}</text>
+            )}
+          </g>
+        )}
         <rect x={cx - w / 2} y={cy - h / 2} width={w} height={h} rx={px(8)} fill="#fff" fillOpacity={0.94} stroke={selRoom === r.name ? BRAND : '#e2e8f0'} strokeWidth={px(1)} filter="url(#pg-sh2)" />
         <text x={cx} y={cy - h / 2 + px(6) + fn * 0.85} fontSize={fn} fontWeight={700} fill="#64748b" textAnchor="middle">{name}</text>
         {pr && <text x={cx} y={cy + h / 2 - px(6)} fontSize={fp} fontWeight={800} fill={has ? '#1e293b' : '#94a3b8'} textAnchor="middle">{pr}</text>}

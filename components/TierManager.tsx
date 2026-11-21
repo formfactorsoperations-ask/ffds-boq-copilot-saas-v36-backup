@@ -5,12 +5,13 @@ import { optionsWaitForPlan, OPTIONS_NEED_PLAN } from '../lib/briefRead';
 import { engagementOf, isFeeOnly } from '../lib/engagement';
 import { useFiguresHidden } from './ui/HideFigures';
 import { createPortal } from 'react-dom';
-import { RefreshCw, Plus, LineChart, Building2 } from '@/lib/lucide-shim';
+import { RefreshCw, Plus, LineChart, Building2, Layers } from '@/lib/lucide-shim';
+import { Button, EmptyState } from './ui/kit';
 import { showSuccessWithNext } from './SuccessWithNextToast';
-import { BoqItem, ProjectContext, ProposalTier, FullProjectData, Item } from '../types';
+import { BoqItem, ProjectContext, ProposalTier, FullProjectData, Item, CivilScope } from '../types';
 import { calculateSellPrice, formatCurrency, id } from '../lib/utils';
 import { generateStandardPackages, TemplateData, INITIAL_TEMPLATES } from '../lib/standardPackages';
-import { resolveCivilScope, describeCivilScope } from '../lib/civilScope';
+import { resolveCivilScope, describeCivilScope, CIVIL_SCOPE_FIELDS } from '../lib/civilScope';
 import { realRooms } from '../lib/scopeBuckets';
 import { isScopeFlowOn, lockedTierId } from '../lib/scopeFlow';
 import { buildBankMap, isAsActuals } from '../lib/boqPricing';
@@ -101,10 +102,17 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
     /* No option is made without the client's floor plan on the project (lib/briefRead optionsWaitForPlan). */
     const waitsForPlan = optionsWaitForPlan(projectContext, isFeeOnly(engagementOf(projectContext)));
 
+    /* The civil and site work chosen in the Regenerate window; saved on the project when it differs from what it had. */
+    const [regenScope, setRegenScope] = useState<CivilScope>(() => resolveCivilScope(projectContext));
+    const openRegen = () => { setRegenScope(resolveCivilScope(projectContext)); setRegenOpen(true); };
+
     const handleRegenerate = () => {
         if (waitsForPlan) return;
+        const had = resolveCivilScope(projectContext);
+        const scopeChanged = CIVIL_SCOPE_FIELDS.some(f => !!had[f.key] !== !!regenScope[f.key]);
+        const ctxForOptions = scopeChanged ? { ...projectContext, civilScope: { ...had, ...regenScope } } : projectContext;
         const generated = generateStandardPackages(
-            projectContext,
+            ctxForOptions,
             bank || [],
             templates || INITIAL_TEMPLATES,
             projectContext.proposalMode || 'tiered',
@@ -120,7 +128,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         const fresh = generated.map(t => asNewPlaygroundOption(t, bankMap, projectContext.rooms || []));
         setTiers(fresh);
         setActiveTierId((fresh.find(t => t.name === 'Comfort Upgrade') || fresh[0]).id);
-        setProjectContext(prev => ({ ...prev, approvedTierId: undefined }));
+        setProjectContext(prev => ({ ...prev, approvedTierId: undefined, ...(scopeChanged ? { civilScope: { ...resolveCivilScope(prev), ...regenScope } } : {}) }));
         setRegenOpen(false);
     };
 
@@ -672,7 +680,117 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         return contractTimeline[contractTimeline.length - 1].amount - contractTimeline[0].amount;
     }, [contractTimeline]);
 
-    if (!activeTier) return <div>Loading...</div>;
+    /* The Regenerate window: also what an empty project makes its first options with. */
+    const regenDialog = regenOpen && (
+                <div className="fixed inset-0 z-[220] bg-[#3D52A0]/90 backdrop-blur-md flex items-center justify-center p-5 no-print"
+                    onClick={() => setRegenOpen(false)}>
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 mb-2">
+                            <SparklesIcon className="w-5 h-5 text-indigo-600" /> Regenerate options
+                        </h3>
+
+                        {approvedTier ? (
+                            <>
+                                <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                                    <b className="text-slate-800">{approvedTier.name}</b> is the approved baseline — the figure the
+                                    client was shown, and what the payment schedule and revision chain hang off. Regenerating would
+                                    move the contract without anyone deciding to.
+                                </p>
+                                <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
+                                    Un-approve it first if the scope really has changed, or raise a revision instead.
+                                </p>
+                                <div className="flex justify-end">
+                                    <button onClick={() => setRegenOpen(false)}
+                                        className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors">
+                                        Close
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                                    Rebuilds every option from the project as it stands now.
+                                </p>
+                                {/* What it builds from — the four inputs that decide
+                                    every quantity in the result. */}
+                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 space-y-1.5">
+                                    {[
+                                        ['Rooms', `${regenPreview.rooms} rooms · ${regenPreview.area.toLocaleString('en-IN')} sq ft`],
+                                        ['Configuration', projectContext.config || 'not set'],
+                                        ['Site state', (projectContext.propertyStatus || 'finished').replace(/_/g, ' ')],
+                                    ].map(([k, v]) => (
+                                        <div key={k} className="flex gap-3 text-xs">
+                                            <span className="w-24 shrink-0 text-slate-400 font-semibold">{k}</span>
+                                            <span className="text-slate-800 font-medium">{v}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                {/* The civil and site work the options will carry, beyond the template's own items. It
+                                    used to be one line of small print, read off the site state; a bathroom overhaul
+                                    nobody asked for arrived with it. Each can be switched here, and the choice is kept. */}
+                                <fieldset className="border border-slate-200 rounded-xl p-3 mb-3">
+                                    <legend className="px-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Civil and site work to add</legend>
+                                    <p className="text-[11px] text-slate-500 mb-2">Beyond the Standard template’s own items. Untick what this project does not need.</p>
+                                    <div className="space-y-1.5">
+                                        {CIVIL_SCOPE_FIELDS.map(f => (
+                                            <label key={f.key} className="flex items-start gap-2 cursor-pointer">
+                                                <input type="checkbox" className="mt-0.5 w-4 h-4 accent-[#3D52A0]" checked={!!regenScope[f.key]}
+                                                    onChange={() => setRegenScope(sc => ({ ...sc, [f.key]: !sc[f.key] }))} />
+                                                <span className="min-w-0">
+                                                    <span className="block text-xs font-semibold text-slate-800">{f.label}</span>
+                                                    <span className="block text-[11px] text-slate-500">{f.detail}</span>
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </fieldset>
+                                {regenPreview.discarding > 0 && (
+                                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">
+                                        <p className="text-xs text-amber-900 font-semibold">
+                                            Replaces {regenPreview.discarding} existing {regenPreview.discarding === 1 ? 'option' : 'options'}
+                                            {regenPreview.lines > 0 ? ` and ${regenPreview.lines} priced lines` : ''}
+                                        </p>
+                                        <p className="text-[11px] text-amber-800/80 mt-1 leading-relaxed">
+                                            Hand-edited quantities, margins and added items in them are replaced. Options built by
+                                            two different versions of the rules cannot sit side by side and mean anything. You can
+                                            undo this straight after.
+                                        </p>
+                                    </div>
+                                )}
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setRegenOpen(false)}
+                                        className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors">
+                                        Cancel
+                                    </button>
+                                    <button onClick={handleRegenerate}
+                                        className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 shadow-sm transition-colors">
+                                        {regenPreview.discarding > 0 ? 'Regenerate and replace' : 'Regenerate'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            );
+
+    /*
+      No option at all: every one was deleted, or none was made yet. The screen
+      used to say "Loading..." for ever, with no way back; it now offers the two
+      ways to start again.
+    */
+    if (!activeTier) {
+        return (
+            <div className="w-full max-w-[1400px] mx-auto flex flex-col gap-4 font-sans pb-12">
+                <EmptyState icon={Layers} title="No options yet"
+                    text={waitsForPlan ? OPTIONS_NEED_PLAN : 'Make the three options from the studio’s Standard templates, or start an empty one and build it yourself.'}
+                    action={<span className="flex flex-wrap gap-2">
+                        <Button icon={Plus} disabled={waitsForPlan} onClick={handleAddTier}>Add option</Button>
+                        <Button variant="primary" icon={RefreshCw} disabled={waitsForPlan} onClick={openRegen}>Make the options</Button>
+                    </span>} />
+                {regenDialog}
+            </div>
+        );
+    }
 
     return (
         <div className="w-full max-w-[1400px] mx-auto flex flex-col gap-4 font-sans pb-12">
@@ -700,7 +818,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                         className="group w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50 disabled:pointer-events-none">
                         <Plus className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90" /> Add option
                     </button>
-                    <button type="button" onClick={() => setRegenOpen(true)} disabled={waitsForPlan} title={waitsForPlan ? OPTIONS_NEED_PLAN : 'Rebuild all options from the current brief, rooms and civil scope'}
+                    <button type="button" onClick={openRegen} disabled={waitsForPlan} title={waitsForPlan ? OPTIONS_NEED_PLAN : 'Rebuild all options from the current brief, rooms and civil scope'}
                         className="group w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 disabled:opacity-50 disabled:pointer-events-none">
                         <RefreshCw className="w-4 h-4 text-slate-400 transition-transform duration-500 group-hover:rotate-180" /> Regenerate
                     </button>
@@ -949,79 +1067,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                 </div>
             )}
 
-            {regenOpen && (
-                <div className="fixed inset-0 z-[220] bg-[#3D52A0]/90 backdrop-blur-md flex items-center justify-center p-5 no-print"
-                    onClick={() => setRegenOpen(false)}>
-                    <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 mb-2">
-                            <SparklesIcon className="w-5 h-5 text-indigo-600" /> Regenerate options
-                        </h3>
-
-                        {approvedTier ? (
-                            <>
-                                <p className="text-xs text-slate-500 mb-3 leading-relaxed">
-                                    <b className="text-slate-800">{approvedTier.name}</b> is the approved baseline — the figure the
-                                    client was shown, and what the payment schedule and revision chain hang off. Regenerating would
-                                    move the contract without anyone deciding to.
-                                </p>
-                                <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
-                                    Un-approve it first if the scope really has changed, or raise a revision instead.
-                                </p>
-                                <div className="flex justify-end">
-                                    <button onClick={() => setRegenOpen(false)}
-                                        className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors">
-                                        Close
-                                    </button>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <p className="text-xs text-slate-500 mb-3 leading-relaxed">
-                                    Rebuilds every option from the project as it stands now.
-                                </p>
-                                {/* What it builds from — the four inputs that decide
-                                    every quantity in the result. */}
-                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 space-y-1.5">
-                                    {[
-                                        ['Rooms', `${regenPreview.rooms} rooms · ${regenPreview.area.toLocaleString('en-IN')} sq ft`],
-                                        ['Configuration', projectContext.config || 'not set'],
-                                        ['Site state', (projectContext.propertyStatus || 'finished').replace(/_/g, ' ')],
-                                        ['Civil scope', regenPreview.scope],
-                                    ].map(([k, v]) => (
-                                        <div key={k} className="flex gap-3 text-xs">
-                                            <span className="w-24 shrink-0 text-slate-400 font-semibold">{k}</span>
-                                            <span className="text-slate-800 font-medium">{v}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                {regenPreview.discarding > 0 && (
-                                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">
-                                        <p className="text-xs text-amber-900 font-semibold">
-                                            Replaces {regenPreview.discarding} existing {regenPreview.discarding === 1 ? 'option' : 'options'}
-                                            {regenPreview.lines > 0 ? ` and ${regenPreview.lines} priced lines` : ''}
-                                        </p>
-                                        <p className="text-[11px] text-amber-800/80 mt-1 leading-relaxed">
-                                            Hand-edited quantities, margins and added items in them are replaced. Options built by
-                                            two different versions of the rules cannot sit side by side and mean anything. You can
-                                            undo this straight after.
-                                        </p>
-                                    </div>
-                                )}
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => setRegenOpen(false)}
-                                        className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors">
-                                        Cancel
-                                    </button>
-                                    <button onClick={handleRegenerate}
-                                        className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 shadow-sm transition-colors">
-                                        {regenPreview.discarding > 0 ? 'Regenerate and replace' : 'Regenerate'}
-                                    </button>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>
-            )}
+            {regenDialog}
         </div>
     );
 };
