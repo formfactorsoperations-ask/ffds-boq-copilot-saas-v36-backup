@@ -111,34 +111,12 @@ export interface OpsSettings {
    * and the kinds). Only what a lead changed is kept.
    */
   playbooks: Record<string, { steps: string[]; dont: string }>;
-  /** The studio's public enquiry form (lib/leadForm.ts). */
-  leadForm: LeadFormSettings;
-}
-
-/** The website enquiry form: whether it takes enquiries, its link, and who a new enquiry goes to. */
-export interface LeadFormSettings {
-  enabled: boolean;
-  /** `<studio>.<random>`, the part of the link that names the studio. Empty until the form is first switched on. */
-  token: string;
-  /** Who owns a new enquiry. Empty leaves it to the server to choose (lib/leadForm ownerFor). */
-  ownerEmail: string;
 }
 
 export const DEFAULT_OPS_SETTINGS: OpsSettings = {
   paymentDueDays: 7, escalateAfterReminders: 2, escalateAfterDays: 7, escalationRecipients: [], reviewLink: '', newMinutes: false, minutesFollowUps: true,
   playbooks: {},
-  leadForm: { enabled: false, token: '', ownerEmail: '' },
 };
-
-/* The form's settings as stored. A link that is not well formed is dropped (the same shape lib/leadForm tenantOfToken reads). */
-function cleanLeadForm(v: any): LeadFormSettings {
-  const token = String(v?.token || '');
-  return {
-    enabled: v?.enabled === true,
-    token: token.length <= 160 && /^[A-Za-z0-9_-]{1,80}\.[A-Za-z0-9]{16,64}$/.test(token) ? token : '',
-    ownerEmail: String(v?.ownerEmail || '').trim().toLowerCase(),
-  };
-}
 
 /* A playbook as stored: up to eight short steps and one "do not". */
 function cleanPlaybooks(v: any): OpsSettings['playbooks'] {
@@ -170,7 +148,6 @@ export function opsSettingsOf(org: any): OpsSettings {
     newMinutes: s.newMinutes === true,
     minutesFollowUps: s.minutesFollowUps !== false,
     playbooks: cleanPlaybooks(s.playbooks),
-    leadForm: cleanLeadForm(s.leadForm),
   };
 }
 

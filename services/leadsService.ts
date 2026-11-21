@@ -9,7 +9,6 @@ import { Type } from './aiSchema';
 import { db, functions } from './firebaseClient';
 import { getAi, aiIsReachable } from './aiClient';
 import { FLASH_MODEL } from '../constants/aiModels';
-import type { Enquiry } from '../lib/leadForm';
 import { blankPerson, readChat, type Lead, type LeadDraft, type LeadStage, type LeadTouch, type LeadNote, type LeadMeetingLog, type Match, type TouchKind } from '../lib/leads';
 
 const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -210,35 +209,4 @@ export async function studioMatches(people: { phone: string; email: string }[], 
     console.warn('Duplicate check', e?.code || e);
     return null;
   }
-}
-
-/* ── The public enquiry form (lib/leadForm.ts, components/opsDesk/EnquiryPage.tsx) ── */
-
-/** What the form's page may know before anyone signs in: whether the link takes enquiries, and whose form it is. */
-export interface FormDoor { open: boolean; name?: string; logo?: string; phone?: string }
-
-/** What the server said to an enquiry. `invalid` names what is missing, `busy` is the hourly limit. */
-export interface EnquiryResult { ok: boolean; reason?: 'busy' | 'invalid' | 'closed'; problems?: string[] }
-
-/** The studio behind a form link. Closed when the link is not one of ours, the form is off, or the server cannot be reached. */
-export async function formDoor(token: string): Promise<FormDoor> {
-  if (!functions) return { open: false };
-  const res: any = await httpsCallable(functions, 'leadFormDoor', { timeout: 20000 })({ token });
-  const d = res?.data || {};
-  return d.open === true
-    ? { open: true, name: clip(d.name, 120) || undefined, logo: clip(d.logo, 600) || undefined, phone: clip(d.phone, 30) || undefined }
-    : { open: false };
-}
-
-/** Sends an enquiry. The server checks it and writes the lead; this page never writes one itself. */
-export async function sendEnquiry(token: string, enquiry: Enquiry): Promise<EnquiryResult> {
-  if (!functions) return { ok: false, reason: 'closed' };
-  const res: any = await httpsCallable(functions, 'leadFormSubmit', { timeout: 30000 })({ token, enquiry });
-  const d = res?.data || {};
-  if (d.ok === true) return { ok: true };
-  return {
-    ok: false,
-    reason: d.reason === 'busy' || d.reason === 'invalid' ? d.reason : 'closed',
-    problems: Array.isArray(d.problems) ? d.problems.map((x: any) => clip(x, 80)).slice(0, 5) : undefined,
-  };
 }
