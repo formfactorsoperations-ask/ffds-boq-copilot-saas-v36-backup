@@ -5,7 +5,7 @@ import {
   boqFormatOf, makePlaygroundVersion, shareBasisFor, isWholeFlatLine, wholeFlatCandidates, shareIntoRooms, unshare,
   paintingFromPlan, syncedWholeFlat, playgroundTierSummary,
 } from '../../lib/playground/versions';
-import { PLAYGROUND_PRICING, ceilTo } from '../../lib/playground/pricing';
+import { PLAYGROUND_PRICING, ceilTo, designFeeForTier } from '../../lib/playground/pricing';
 
 const item = (o: Partial<Item> & Pick<Item, 'id' | 'name'>): Item =>
   ({ cat: 'Carpentry', specs: 'x', unit: 'sq ft', materials: 1000, labor: 400, margin: 20, ...o });
@@ -124,9 +124,23 @@ describe('a Playground option’s summary', () => {
     expect(s.totalSell).toBe(ceilTo(exact));
     expect(s.totalCost).toBeCloseTo(1733.33 * 42, 6);
     expect(s.asActualsTotal).toBe(45000);
-    expect(s.designFee).toBe(s.totalSell * 0.1); // not on the 45,000 at actuals
+    // Not on the 45,000 at actuals, and rounded up to ₹100 like every line: 10% of ₹87,400 is ₹8,740 → ₹8,800.
+    expect(s.totalSell * 0.1).toBe(8740);
+    expect(s.designFee).toBe(8800);
     expect(s.totalRevenue).toBe(s.totalSell + s.designFee);
     expect(s.itemCount).toBe(2);
+  });
+
+  it('the design fee is rounded up to ₹100 on a Playground version, whatever its basis; a Classic one keeps its exact fee', () => {
+    const boq: BoqItem[] = [{ id: 'l1', bankId: 'w', qty: 42, roomId: 'Master Bedroom' }];
+    const pg: ProposalTier = { ...classic, boqFormat: 'playground', pricingRules: PLAYGROUND_PRICING, boq };
+    const fee = (ctx: any, t: ProposalTier = pg) => playgroundTierSummary(t, bankMap, { rooms: ROOMS, ...ctx }).designFee;
+    expect(fee({ designFeeType: 'percentage', designFee: 7.5 }) % 100).toBe(0);
+    expect(fee({ designFeeType: 'fixed_sqft', designFee: 85, area: 936.63 })).toBe(79700); // 85 × 936.63 = 79,613.55
+    expect(fee({ designFeeType: 'fixed_lumpsum', designFee: 150000 })).toBe(150000);
+    expect(fee({ designFeeType: 'fixed_lumpsum', designFee: 150050 })).toBe(150100);
+    // A Classic BOQ keeps the exact fee, as before.
+    expect(designFeeForTier({ designFeeType: 'fixed_sqft', designFee: 85, area: 936.63 }, 0, 0, null)).toBeCloseTo(79613.55, 6);
   });
 
   it('prices a whole-flat line from its rooms, cost and amount together', () => {

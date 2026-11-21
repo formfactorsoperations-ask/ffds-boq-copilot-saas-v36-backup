@@ -157,8 +157,10 @@ export function playgroundTotals(boq: BoqItem[], bankMap: Map<string, Item>, opt
 
 /**
  * The design fee on a version. Classic keeps today's rule (a percentage fee is
- * charged on the as-actuals estimate too); a Playground version charges it on
- * the work only, unless the studio's rules say feeOnActuals.
+ * charged on the as-actuals estimate too, at its exact figure); a Playground
+ * version charges it on the work only, unless the studio's rules say
+ * feeOnActuals, and rounds it up to ₹100 as it rounds every BOQ line
+ * (CEILING.MATH(fee, 100)). A lump sum already round stays as it is.
  */
 export function designFeeForTier(
   ctx: { designFeeType?: string; designFee?: number; area?: number } | null | undefined,
@@ -167,7 +169,8 @@ export function designFeeForTier(
   rules: PricingRules | null | undefined,
 ): number {
   const onActuals = !rules || rules.feeOnActuals;
-  return designFeeFor(ctx, work, onActuals ? asActuals : 0);
+  const fee = designFeeFor(ctx, work, onActuals ? asActuals : 0);
+  return rules ? ceilTo(fee, rules.roundUpTo) : fee;
 }
 
 /* ───────────────────────────── documents (PR R) ───────────────────────────── */
