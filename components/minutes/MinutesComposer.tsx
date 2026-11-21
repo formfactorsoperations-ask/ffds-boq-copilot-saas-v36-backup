@@ -8,6 +8,7 @@ import {
   KIND_LABEL, ALL_KINDS, ROUTE_LABEL, type CarriedAction, type LineKind, type MinutesContent, type MinutesLine, type MinutesTopic, type OwnerSide, type ReviewNote, type DesignReviewRecord, AUDIENCE_LABEL,
   type CorrectionLine,
 } from '../../lib/minutes';
+import { useKept, readKept, writeKept, dropKept } from '../../lib/minutesKept';
 import { meetingTypeLabel } from '../../lib/meetingTypes';
 import { DesignReviewRooms, designReviewRoutes } from './DesignReviewRooms';
 import { ClientCorrections } from './ClientCorrections';
@@ -53,6 +54,13 @@ export interface ComposerProps {
   readOnlyNote?: React.ReactNode;
   /** Design review minutes: the review from Design Desk, shown locked above what is written. */
   designReview?: DesignReviewRecord | null;
+  /**
+   * Where this person's unsaved work on these minutes is kept on the device
+   * (lib/minutesKept), and when the minutes were last stored: what was typed
+   * after that and never reached the database is brought back.
+   */
+  keptKey?: string | null;
+  savedAt?: number | null;
   /** Saves as you type; resolves when stored. */
   onSave: (c: MinutesContent) => Promise<void>;
   onNotesToPoints: (notes: string) => Promise<{ topics: MinutesTopic[]; summary: string }>;
@@ -63,20 +71,44 @@ export interface ComposerProps {
 }
 
 export default function MinutesComposer(p: ComposerProps) {
-  const [c, setC] = useState<MinutesContent>(() => ({ ...p.initial, topics: p.initial.topics?.length ? p.initial.topics : [emptyTopic('')] }));
+  const contentKey = p.keptKey && !p.readOnly ? `${p.keptKey}:content` : null;
+  /* What was typed last time and never stored: newer than the minutes as they were last saved. */
+  const unsaved = useRef<MinutesContent | null | undefined>(undefined);
+  if (unsaved.current === undefined) {
+    const hit = readKept<MinutesContent>(contentKey);
+    unsaved.current = hit && Array.isArray(hit.value?.topics) && hit.at > (p.savedAt || 0) ? hit.value : null;
+    if (hit && !unsaved.current) dropKept(contentKey);
+  }
+  const [c, setC] = useState<MinutesContent>(() => unsaved.current || ({ ...p.initial, topics: p.initial.topics?.length ? p.initial.topics : [emptyTopic('')] }));
+  const [broughtBack, setBroughtBack] = useState(!!unsaved.current);
   const [saved, setSaved] = useState<'saved' | 'saving' | 'error'>('saved');
   const [saveError, setSaveError] = useState<string | null>(null);
-  const first = useRef(true);
+  /* Work brought back is saved straight away; minutes opened as stored are not. */
+  const first = useRef(!unsaved.current);
   const latest = useRef(c);
   latest.current = c;
+  const pending = useRef(false);
+  const onSave = useRef(p.onSave);
+  onSave.current = p.onSave;
 
-  /* Saves a moment after the last keystroke. */
+  const store = () => {
+    const x = latest.current;
+    pending.current = false;
+    return onSave.current(x).then(() => {
+      /* Only forget the device's copy when nothing was typed since. */
+      if (latest.current === x) dropKept(contentKey);
+    });
+  };
+
+  /* Kept on the device at once, and saved a moment after the last keystroke. */
   useEffect(() => {
     if (first.current) { first.current = false; return; }
     if (p.readOnly) return;
+    writeKept(contentKey, c);
+    pending.current = true;
     setSaved('saving');
     const t = setTimeout(() => {
-      p.onSave(latest.current).then(() => { setSaved('saved'); setSaveError(null); }).catch((e: any) => {
+      store().then(() => { setSaved('saved'); setSaveError(null); setBroughtBack(false); }).catch((e: any) => {
         setSaved('error');
         /* A refusal is not a connection problem: say what it is. */
         setSaveError(e?.code === 'permission-denied' || e?.code === 'rules' ? 'Not saved: the database refused it.' : null);
@@ -86,6 +118,12 @@ export default function MinutesComposer(p: ComposerProps) {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [c]);
+
+  /* Closed before that moment passed: save now instead of dropping the change. */
+  useEffect(() => () => {
+    if (pending.current) store().catch((e: any) => console.warn('Minutes not saved on closing:', e?.code || e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const checks = useMemo(() => checksOf({ ...c, topics: c.topics, designReview: p.designReview }), [c, p.designReview]);
   const ready = readyToSend(checks);
@@ -216,7 +254,7 @@ export default function MinutesComposer(p: ComposerProps) {
                       notes={notesFor(l.id)} correction={correctionFor(l.id)}
                       onChange={(patch) => setLine(t.id, l.id, patch)} onRemove={() => removeLine(t.id, l.id)} />
                   ))}
-                  {!ro && <NewPoint onAdd={(text) => addLine(t.id, text)} />}
+                  {!ro && <NewPoint keptKey={p.keptKey ? `${p.keptKey}:new:${t.id}` : null} onAdd={(text) => addLine(t.id, text)} />}
                 </div>
               </div>
             ))}
@@ -226,7 +264,7 @@ export default function MinutesComposer(p: ComposerProps) {
 
       {/* right */}
       <div className="space-y-5 min-w-0">
-        {!ro && <QuickCapture initial={p.initialNotes || ''} onTurn={async (notes) => {
+        {!ro && <QuickCapture keptKey={p.keptKey ? `${p.keptKey}:rough` : null} initial={p.initialNotes || ''} onTurn={async (notes) => {
           const out = await p.onNotesToPoints(notes);
           setC((x) => {
             const keep = x.topics.filter((t) => t.title.trim() || t.lines.length);
@@ -267,19 +305,20 @@ export default function MinutesComposer(p: ComposerProps) {
       </div>
 
       {/* the footer row, rendered by the shell through a portal-less slot */}
-      <ComposerFooter saved={saved} saveError={saveError} readOnly={ro} onPreview={() => p.onPreview(latest.current)} primary={p.primary(c, ready)} />
+      <ComposerFooter saved={saved} saveError={saveError} broughtBack={broughtBack} readOnly={ro} onPreview={() => p.onPreview(latest.current)} primary={p.primary(c, ready)} />
     </div>
   );
 }
 
 /* The footer sits at the bottom of the grid on small screens, and is pinned by the shell on large ones. */
-function ComposerFooter({ saved, saveError, readOnly, onPreview, primary }: { saved: 'saved' | 'saving' | 'error'; saveError?: string | null; readOnly: boolean; onPreview: () => void; primary: React.ReactNode }) {
+function ComposerFooter({ saved, saveError, broughtBack, readOnly, onPreview, primary }: { saved: 'saved' | 'saving' | 'error'; saveError?: string | null; broughtBack?: boolean; readOnly: boolean; onPreview: () => void; primary: React.ReactNode }) {
   return (
     <div className="xl:col-span-3 sticky bottom-0 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 bg-slate-50 border-t border-slate-100 px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3">
       {!readOnly && (
         <span className="text-xs text-slate-500 inline-flex items-center gap-1.5" aria-live="polite">
           <span className={`w-2 h-2 rounded-full ${saved === 'saved' ? 'bg-emerald-500' : saved === 'saving' ? 'bg-amber-500' : 'bg-rose-500'}`} />
-          {saved === 'saved' ? 'Saved' : saved === 'saving' ? 'Saving…' : saveError || 'Not saved. Check your connection.'}
+          {saved === 'saved' ? 'Saved' : saved === 'saving' ? 'Saving…' : saveError || 'Not saved. Check your connection. Your changes are kept on this device.'}
+          {broughtBack && saved !== 'error' && <span className="text-slate-400">· What you typed last time is back</span>}
         </span>
       )}
       <span className="flex-1" />
@@ -495,8 +534,8 @@ function AutoText({ value, onChange, readOnly, onFocus, label }: { value: string
 }
 
 /** "Type a point…": Enter adds it, sorted into a kind by its words. */
-function NewPoint({ onAdd }: { onAdd: (text: string) => void }) {
-  const [text, setText] = useState('');
+function NewPoint({ onAdd, keptKey }: { onAdd: (text: string) => void; keptKey?: string | null }) {
+  const [text, setText] = useKept(keptKey, '');
   return (
     <form className="rounded-xl border-2 border-dashed border-slate-300 bg-white px-3 py-2 flex items-center gap-3 focus-within:border-[#3D52A0]/50"
       onSubmit={(e) => { e.preventDefault(); if (text.trim()) { onAdd(text); setText(''); } }}>
@@ -509,9 +548,10 @@ function NewPoint({ onAdd }: { onAdd: (text: string) => void }) {
 
 /* ── Quick capture ───────────────────────────────────────────────────────── */
 
-function QuickCapture({ onTurn, initial }: { onTurn: (notes: string) => Promise<number>; initial: string }) {
+function QuickCapture({ onTurn, initial, keptKey }: { onTurn: (notes: string) => Promise<number>; initial: string; keptKey?: string | null }) {
   const [mode, setMode] = useState<'paste' | 'speak'>('paste');
-  const [notes, setNotes] = useState(initial);
+  /* Rough notes are kept on the device until they are turned into points. */
+  const [notes, setNotes] = useKept(keptKey, initial);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [listening, setListening] = useState(false);

@@ -19,6 +19,7 @@ import {
   watchMinutes, saveContent, sendForApproval, returnWithNotes, approve, markSent, startRevision, notesToTopics,
   waitingForApproval, watchPrivate, watchRevision, saveToLog, projectMinutes, RULES_HINT, type Me, type WaitingMinutes, type RevisionPart,
 } from '../../services/minutesService';
+import { keptKey, dropKeptUnder } from '../../lib/minutesKept';
 import MinutesComposer, { type PersonOption } from './MinutesComposer';
 import MinutesReview, { type QueueRow } from './MinutesReview';
 import MinutesSendSheet, { type SendChoice } from './MinutesSendSheet';
@@ -203,6 +204,17 @@ export default function MinutesWorkspace(props: Props) {
   };
   const clientName = props.client?.name || (c.attendees || []).filter((a) => a.side === 'client').map((a) => a.name).join(' & ');
 
+  /*
+    What this person is typing on these minutes, kept on their device until it
+    is stored (lib/minutesKept): the writer's work, and a lead's notes on one
+    round of approval.
+  */
+  const writeKey = keptKey('write', props.studioId, myEmail, at.projectId, mom?.id, mom?.revisionStage ? `rev${Number(mom?.rev || 0) + 1}` : 'first');
+  const reviewKey = keptKey('review', props.studioId, myEmail, at.projectId, mom?.id, mom?.reviewRequestedAt || 0);
+  /* The minutes this person may write on now: a save after they have moved on is not made. */
+  const writable = useRef<string | null>(null);
+  writable.current = mom && (mom.status === 'draft' || mom.revisionStage === 'draft' || (lead && editing)) ? String(mom.id) : null;
+
   const guard = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError(null);
@@ -318,7 +330,7 @@ export default function MinutesWorkspace(props: Props) {
     return (
       <MinutesShell label="Approve minutes" eyebrow="Ops Desk · Minutes to approve" title={title} step={step} onClose={props.onClose}>
         {errorBar}
-        <MinutesReview key={mom.id} content={c} me={me} queue={rows}
+        <MinutesReview key={mom.id} content={c} me={me} queue={rows} keptKey={reviewKey}
           before={mergePrivate(revising ? mom.topics : mom.reviewedTopics || [], priv.part)}
           corrections={revising ? corrections : undefined}
           revisionNumber={revising ? Number(mom.rev || 0) + 1 : null}
@@ -351,12 +363,14 @@ export default function MinutesWorkspace(props: Props) {
       /* Internal and vendor meetings: no approval, never sent to the client. */
       <button type="button" className={btnPri} disabled={!ok || busy || ro} onClick={() => guard(async () => {
         await saveToLog(props.studioId, at.projectId, mom, x, me);
+        dropKeptUnder(writeKey);
         setEditing(false);
       })}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Save to the log</button>
     ) : lead ? (
       <>
         <button type="button" className={btnPri} disabled={!ok || busy || ro} onClick={() => guard(async () => {
           await approve(props.studioId, at.projectId, mom, me, x, approveOpts);
+          dropKeptUnder(writeKey);
           setEditing(false);
           setSending(true);
         })}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Approve &amp; send</button>
@@ -364,6 +378,7 @@ export default function MinutesWorkspace(props: Props) {
     ) : (
       <button type="button" className={btnPri} disabled={!ok || busy || ro} onClick={() => guard(async () => {
         await sendForApproval(props.studioId, at.projectId, mom, x, me, { projectName: at.projectName });
+        dropKeptUnder(writeKey);
       })}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}{ro ? `With ${reviewer}` : 'Send for approval'}</button>
     );
     return (
@@ -382,7 +397,8 @@ export default function MinutesWorkspace(props: Props) {
           revision={revising ? { number: Number(mom.rev || 0) + 1 } : null}
           issuedTopics={revising ? mom.topics || [] : undefined}
           initialNotes={!revising && !allLines(mom.topics).length ? mom.rawNotes || '' : ''}
-          onSave={(x) => saveContent(props.studioId, at.projectId, mom.id, x, revising)}
+          keptKey={writeKey} savedAt={Number(revising ? (rev as any)?.updatedAt : mom.updatedAt) || 0}
+          onSave={(x) => (writable.current === String(mom.id) ? saveContent(props.studioId, at.projectId, mom.id, x, revising) : Promise.resolve())}
           onNotesToPoints={(notes) => notesToTopics({
             projectName: at.projectName, meetingDate: meeting.date, rawNotes: notes,
             knownAttendees: people.map((x) => `${x.name} (${x.side === 'ffds' ? 'studio' : x.side})`).join(', '),
