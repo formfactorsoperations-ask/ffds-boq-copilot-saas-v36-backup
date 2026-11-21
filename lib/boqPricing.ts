@@ -109,6 +109,17 @@ export function holdPrice<T extends Record<string, any>>(line: T, item: Pick<Ite
   return Object.keys(add).length ? { ...line, ...add } : line;
 }
 
+/**
+ * True when an item has no cost yet (it was added to the bank at ₹0 and is
+ * priced there later). A line for such an item must hold no figure of its own,
+ * or the price it is given in the bank never reaches the line.
+ */
+export function isUnpriced(item: Pick<Item, 'materials' | 'labor'> | null | undefined): boolean {
+  if (!item) return false;
+  const { materials, labor } = item as any;
+  return typeof materials === 'number' && typeof labor === 'number' && materials + labor <= 0;
+}
+
 /** `holdPrice` for every line of an option, each from the item it points at. */
 export function holdPrices<T extends Record<string, any>>(boq: T[], bankMap: Map<string, Item>): T[] {
   return (boq || []).map(l => holdPrice(l, bankMap.get((l as any)?.bankId)));

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { boqTotal, buildBankMap, holdPrice, holdPrices, lineSellRate, resolveBoqLine } from '../../lib/boqPricing';
+import { boqTotal, buildBankMap, holdPrice, holdPrices, isUnpriced, lineSellRate, resolveBoqLine } from '../../lib/boqPricing';
 import { generateStandardPackages } from '../../lib/standardPackages';
 import { INITIAL_BANK } from '../../constants';
 import { INITIAL_TEMPLATES } from '../../lib/standardPackages';
@@ -47,6 +47,24 @@ describe('holdPrice', () => {
     const line = { id: 'l', bankId: 'calc-1', qty: 3 };
     expect(holdPrice(line, unpriced)).toBe(line);
     expect(lineSellRate(line, { ...unpriced, materials: 800, labor: 200, margin: 20 })).toBe(1200);
+  });
+
+  it('tells an item with no price from a priced one, so the add-item picker writes no ₹0 materials onto its line', () => {
+    const unpriced: any = { materials: 0, labor: 0, margin: 15 };
+    expect(isUnpriced(unpriced)).toBe(true);
+    expect(isUnpriced({ materials: 1260, labor: 540 } as any)).toBe(false);
+    expect(isUnpriced({ materials: 0, labor: 540 } as any)).toBe(false);
+    // Figures that are not plain numbers are not "unpriced": they are left as they were.
+    expect(isUnpriced({ materials: [1440], labor: [] } as any)).toBe(false);
+    expect(isUnpriced(null)).toBe(false);
+    // The picker's line, as components/StudioDashboard.tsx builds it.
+    const picked = (item: any) => holdPrice({ id: 'l', bankId: 'x', qty: 1, ...(isUnpriced(item) ? {} : { baseRate: item.materials }) }, item);
+    const line = picked(unpriced);
+    expect(line).not.toHaveProperty('baseRate');
+    // Priced in the bank afterwards: the line reads the new price whole.
+    expect(lineSellRate(line, { materials: 1000, labor: 0, margin: 15 })).toBeCloseTo(1150, 5);
+    // The old line (materials ₹0 written on it) never saw the materials figure.
+    expect(lineSellRate({ ...line, baseRate: 0 }, { materials: 1000, labor: 0, margin: 15 })).toBe(0);
   });
 
   it('leaves alone an item whose figures are not plain numbers, and a line with no item', () => {
