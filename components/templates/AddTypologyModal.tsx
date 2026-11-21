@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { Plus, X, Building, Layers, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
+import BankModal from '../bank/BankModal';
+import { Button, Chip, Segmented, INPUT, LABEL } from '../ui/kit';
+
+/*
+  Standard templates → New typology: a named set of rooms a new project starts
+  from. It starts with the rooms of a usual kind of home, empty, or as a copy
+  of a typology the studio already has.
+*/
 
 interface AddTypologyModalProps {
   isOpen: boolean;
@@ -15,141 +23,81 @@ const DEFAULT_ROOM_SETS: Record<string, string[]> = {
   'Kitchen Overhaul': ['kitchen', 'dining', 'general'],
   'Commercial / Boutique Office': ['reception', 'conference', 'director_cabin', 'workstation_area', 'pantry', 'restroom', 'general']
 };
+const FIRST = Object.keys(DEFAULT_ROOM_SETS)[0];
 
-export const AddTypologyModal: React.FC<AddTypologyModalProps> = ({
-  isOpen,
-  onClose,
-  existingConfigs,
-  onAddConfig
-}) => {
-  const [configName, setConfigName] = useState('');
-  const [selectedPresetKey, setSelectedPresetKey] = useState('Standard Residential (1BHK/2BHK/3BHK)');
-  const [cloneFrom, setCloneFrom] = useState<string>('none');
-  const [error, setError] = useState<string | null>(null);
+export const AddTypologyModal: React.FC<AddTypologyModalProps> = ({ isOpen, onClose, existingConfigs, onAddConfig }) => {
+  const [name, setName] = useState('');
+  const [from, setFrom] = useState<'preset' | 'copy'>('preset');
+  const [preset, setPreset] = useState(FIRST);
+  const [copyOf, setCopyOf] = useState(existingConfigs[0] || '');
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanName = configName.trim();
-    if (!cleanName) {
-      setError('Please enter a template / typology name');
-      return;
-    }
-    if (existingConfigs.some(c => c.toLowerCase() === cleanName.toLowerCase())) {
-      setError('A configuration with this name already exists');
-      return;
-    }
-
-    const roomsToUse = DEFAULT_ROOM_SETS[selectedPresetKey] || ['living', 'bedroom', 'kitchen', 'bathroom', 'general'];
-    onAddConfig(cleanName, roomsToUse, cloneFrom !== 'none' ? cloneFrom : undefined);
+  const clean = name.trim();
+  const taken = !!clean && existingConfigs.some((c) => c.toLowerCase() === clean.toLowerCase());
+  const copying = from === 'copy' && !!copyOf;
+  const create = () => {
+    if (!clean || taken) return;
+    onAddConfig(clean, DEFAULT_ROOM_SETS[preset] || DEFAULT_ROOM_SETS[FIRST], copying ? copyOf : undefined);
+    setName('');
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="p-5 bg-gradient-to-r from-slate-900 to-sky-950 text-white flex items-center justify-between border-b border-sky-800">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-sky-500/20 rounded-xl text-sky-300">
-              <Building className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold">New Standard Template</h3>
-              <p className="text-xs text-sky-200">Add a custom typology or package</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10">
-            <X className="w-5 h-5" />
-          </button>
+    <BankModal
+      label="New typology" eyebrow="Standard templates" title="New typology"
+      blurb="A typology is the set of rooms, and what goes in each, that a new project of that kind starts from."
+      size="md" onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" icon={Check} onClick={create} disabled={!clean || taken} title={!clean ? 'Give it a name' : taken ? 'That name is taken' : undefined}>Create typology</Button>
+        </>
+      }
+    >
+      <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); create(); }}>
+        <div>
+          <label htmlFor="typology-name" className={`${LABEL} block mb-1.5`}>Name</label>
+          <input id="typology-name" autoFocus type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. 4-BHK, Studio, Duplex villa" className={INPUT} aria-invalid={taken} />
+          {taken && <p role="alert" className="text-xs text-rose-700 mt-1.5">The studio already has a typology with this name.</p>}
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {error && (
-            <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200">
-              {error}
-            </div>
-          )}
+        <div>
+          <span className={`${LABEL} block mb-1.5`}>Start from</span>
+          <Segmented label="Start from" value={from} onChange={setFrom}
+            options={[{ id: 'preset', label: 'Empty rooms' }, ...(existingConfigs.length ? [{ id: 'copy' as const, label: 'A copy of another' }] : [])]} />
+        </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Template / Typology Name
-            </label>
-            <input
-              type="text"
-              required
-              value={configName}
-              onChange={(e) => {
-                setConfigName(e.target.value);
-                setError(null);
-              }}
-              placeholder="e.g. 4-BHK Luxury, Studio-1RK, Duplex-Villa"
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Clone from Existing (Optional)
-            </label>
-            <select
-              value={cloneFrom}
-              onChange={(e) => setCloneFrom(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
-            >
-              <option value="none">Start Fresh with Standard Preset</option>
-              {existingConfigs.map(c => (
-                <option key={c} value={c}>Clone scopes from: {c}</option>
-              ))}
-            </select>
-          </div>
-
-          {cloneFrom === 'none' && (
+        <div key={from} className="hud-swap">
+          {from === 'copy' ? (
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Initial Room Scope Preset
-              </label>
-              <div className="space-y-2">
-                {Object.entries(DEFAULT_ROOM_SETS).map(([presetName, rooms]) => (
-                  <label
-                    key={presetName}
-                    onClick={() => setSelectedPresetKey(presetName)}
-                    className={`p-2.5 rounded-xl border flex items-start justify-between cursor-pointer transition-all ${
-                      selectedPresetKey === presetName
-                        ? 'border-[#3D52A0] bg-sky-50/60 ring-1 ring-[#3D52A0]'
-                        : 'border-slate-200 bg-white hover:bg-slate-50'
-                    }`}
-                  >
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">{presetName}</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">{rooms.join(', ')}</p>
-                    </div>
-                    {selectedPresetKey === presetName && (
-                      <Check className="w-4 h-4 text-[#3D52A0] shrink-0 mt-0.5" />
-                    )}
-                  </label>
-                ))}
-              </div>
+              <label htmlFor="typology-copy" className={`${LABEL} block mb-1.5`}>Copy the rooms and items of</label>
+              <select id="typology-copy" value={copyOf} onChange={(e) => setCopyOf(e.target.value)} className={`${INPUT} bg-white cursor-pointer`}>
+                {existingConfigs.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <p className="text-[11px] text-slate-500 mt-1.5">Its option marks come with it. Changing the copy does not change the original.</p>
+            </div>
+          ) : (
+            <div role="radiogroup" aria-label="Rooms to start with" className="space-y-1.5">
+              {Object.entries(DEFAULT_ROOM_SETS).map(([label, rooms]) => {
+                const on = preset === label;
+                return (
+                  <button key={label} type="button" role="radio" aria-checked={on} onClick={() => setPreset(label)}
+                    className={`w-full p-3 rounded-xl border text-left flex items-start gap-3 transition-colors ${on ? 'border-[#3D52A0] ring-2 ring-[#3D52A0]/15 bg-[#3D52A0]/[0.03]' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                    <span className={`mt-0.5 w-4 h-4 rounded-full border-2 grid place-items-center shrink-0 transition-colors ${on ? 'border-[#3D52A0]' : 'border-slate-300'}`}>
+                      {on && <span className="w-2 h-2 rounded-full bg-[#3D52A0]" />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800">{label}<Chip tone="slate">{rooms.length} rooms</Chip></span>
+                      <span className="block text-[11px] text-slate-500 mt-0.5 capitalize">{rooms.map((r) => r.replace(/_/g, ' ')).join(' · ')}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
-
-          <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-xs font-bold shadow-md shadow-sky-600/20"
-            >
-              Create Template
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+      </form>
+    </BankModal>
   );
 };

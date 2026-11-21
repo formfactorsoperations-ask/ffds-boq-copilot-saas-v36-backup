@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Plus, Check, Lock } from 'lucide-react';
-import { Button, Chip, LABEL } from '../ui/kit';
-import type { Item } from '../../types';
+import { Button, Chip, LABEL, INPUT } from '../ui/kit';
+import NumberField from '../NumberField';
+import type { Item, PieceDraw, PieceKind } from '../../types';
 import { basisOfUnit } from '../../lib/boqSize';
-import { drawOf } from '../../lib/playground/pieces';
+import { drawOf, withStandardSize, standardSizeOf, canHaveSize } from '../../lib/playground/pieces';
 import { ftin } from '../../lib/playground/geometry';
 import { GRADES, GRADE_TIER, currentVersion, materialsIn, setRecipePart, type Grade, type MaterialSpecsBank } from '../../lib/materialSpecs';
 import { recipeOf, suggestedRecipeId, specsFromRecipe, composeWords } from '../../lib/lineSpecs';
@@ -27,7 +28,16 @@ import '../playground/playground.css';
 
 const RULE: Record<string, string> = { area: 'Width × height', length: 'Running length', count: 'Counted', lump: 'Typed' };
 
-export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem, projects, sharedBy, onSave, onClose }: {
+/** How a piece is drawn from above, as the owner picks it. */
+const KINDS: [PieceKind, string][] = [
+  ['wardrobe', 'Wardrobe'], ['cabinet', 'Cabinet'], ['tv', 'TV unit'], ['panel', 'Wall panel'], ['base', 'Kitchen base unit'],
+  ['wallunit', 'Kitchen wall unit'], ['loft', 'Loft'], ['vanity', 'Vanity'], ['desk', 'Desk'], ['bed', 'Bed'],
+  ['glass', 'Glass'], ['sofa', 'Sofa'], ['dtable', 'Dining table'], ['generic', 'Other piece'],
+];
+
+export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem, projects, sharedBy, onSave, onClose, focus }: {
+  /** 'size' opens the drawer at the standard size ("On the plan"). */
+  focus?: 'size';
   item: Item;
   specs: MaterialSpecsBank;
   canEditRecipes: boolean;
@@ -36,8 +46,8 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
   projects: number;
   /** How many Item Bank items a recipe is shared by. */
   sharedBy: (recipeId: string) => number;
-  /** Writes what changed: the item's recipe, and the bank when a recipe part changed. */
-  onSave: (change: { recipeId?: string | null; bank?: MaterialSpecsBank }) => Promise<void> | void;
+  /** Writes what changed: the item's recipe, its standard size, and the bank when a recipe part changed. */
+  onSave: (change: { recipeId?: string | null; bank?: MaterialSpecsBank; draw?: PieceDraw }) => Promise<void> | void;
   onClose: () => void;
 }) {
   const [recipeId, setRecipeId] = useState<string | null | undefined>(undefined);
@@ -47,7 +57,20 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
   const shownItem = recipeId === undefined ? item : { ...item, recipeId };
   const recipe = recipeOf(shownItem, bank);
   const suggested = suggestedRecipeId(item);
-  const draw = drawOf(item);
+  /* The standard size: the item's own, else the one its name suggests. `size` is what the owner typed here. */
+  const [size, setSize] = useState<{ w: number; h: number; d: number; kind: PieceKind } | null>(null);
+  const basis = basisOfUnit(item.unit);
+  const measured = basis === 'area' || basis === 'length';
+  const sized = size && size.w > 0 && size.h > 0 ? withStandardSize(item, size) : item;
+  const draw = drawOf(sized);
+  const sizeChanged = !!size && size.w > 0 && size.h > 0;
+  const starts = standardSizeOf(sized);
+  const editSize = (patch: Partial<{ w: number; h: number; d: number; kind: PieceKind }>) =>
+    setSize(s => ({ w: draw?.w || 0, h: draw?.h || 0, d: draw?.d || 2, kind: draw?.kind || 'generic', ...(s || {}), ...patch }));
+  const sizeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focus === 'size') sizeRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [focus, item.id]);
   const [startFrom, setStartFrom] = useState<string>('');
   const recipeChanged = bank !== specs;
   const itemChanged = recipeId !== undefined;
@@ -65,10 +88,10 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
     try { setBank(b => setRecipePart(b, recipe.id, part, g, mat, 'Owner', Date.now())); setError(null); } catch (e: any) { setError(e?.message || String(e)); }
   };
   const save = async () => {
-    if (!itemChanged && !recipeChanged) { onClose(); return; }
+    if (!itemChanged && !recipeChanged && !sizeChanged) { onClose(); return; }
     setSaving(true);
     try {
-      await onSave({ ...(itemChanged ? { recipeId } : {}), ...(recipeChanged ? { bank } : {}) });
+      await onSave({ ...(itemChanged ? { recipeId } : {}), ...(recipeChanged ? { bank } : {}), ...(sizeChanged && sized.draw ? { draw: sized.draw } : {}) });
       onClose();
     } catch (e: any) {
       setError(e?.message || String(e));
@@ -174,24 +197,57 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
             </div>
           )}
 
-          {draw && (
-            <div>
-              <div className="font-bold text-slate-800 mb-2">On the plan</div>
-              <div className="rounded-2xl border border-slate-200 p-3 flex items-center gap-4">
-                <span className="w-28 h-20 rounded-xl bg-slate-50 border border-slate-200 overflow-hidden"><PieceThumb kind={draw.kind} w={draw.w} d={draw.d} words={item.specs} className="w-28 h-20" /></span>
-                <div className="text-xs text-slate-600 space-y-1">
-                  <div>Default size <b className="tabular-nums">{ftin(draw.w)} × {ftin(draw.h)} high × {ftin(draw.d)} deep</b></div>
-                  <div>Quantity rule <b>{RULE[basisOfUnit(item.unit) || 'count'] || 'Counted'}</b></div>
-                  <div>Looks like <b>{draw.kind}</b> from above</div>
-                </div>
+          {(draw || (canEditItem && canHaveSize(item))) && (
+            <div ref={sizeRef}>
+              <div className="font-bold text-slate-800">On the plan</div>
+              <p className="text-xs text-slate-500 mb-2">
+                {canEditItem
+                  ? 'The standard size: every new BOQ starts this item at it, in every flat. The designer fits it to the wall on the plan.'
+                  : 'The standard size every new BOQ starts this item at.'}
+              </p>
+              <div className="rounded-2xl border border-slate-200 p-3 flex flex-wrap items-start gap-4">
+                <span className="w-28 h-20 rounded-xl bg-slate-50 border border-slate-200 overflow-hidden shrink-0">
+                  {draw && <PieceThumb kind={draw.kind} w={draw.w} d={draw.d} words={item.specs} className="w-28 h-20" />}
+                </span>
+                {canEditItem ? (
+                  <div className="flex-1 min-w-[240px] space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      {([['w', 'Width, ft', 0.5], ['h', 'Height, ft', 0.5], ['d', 'Depth, ft', 0.12]] as const).map(([k, label, min]) => (
+                        <label key={k} className="block">
+                          <span className={`${LABEL} block mb-1.5`}>{label}</span>
+                          <NumberField aria-label={`Standard ${label}`} live min={min} max={40} decimals={2} className={`${INPUT} tabular-nums`}
+                            value={(size?.[k] ?? draw?.[k]) || undefined} onCommit={v => { if (v && v > 0) editSize({ [k]: v }); }} />
+                        </label>
+                      ))}
+                    </div>
+                    <label className="block">
+                      <span className={`${LABEL} block mb-1.5`}>Looks like, from above</span>
+                      <select aria-label="Looks like, from above" value={draw?.kind || 'generic'} onChange={e => editSize({ kind: e.target.value as PieceKind })}
+                        className="px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold bg-white">
+                        {KINDS.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                ) : draw && (
+                  <div className="text-xs text-slate-600 space-y-1">
+                    <div>Standard size <b className="tabular-nums">{ftin(draw.w)} × {ftin(draw.h)} high × {ftin(draw.d)} deep</b></div>
+                    <div>Looks like <b>{draw.kind}</b> from above</div>
+                  </div>
+                )}
               </div>
+              <p className="mt-2 text-xs text-slate-600">
+                Quantity rule <b>{RULE[basis || 'count'] || 'Counted'}</b>
+                {starts && draw
+                  ? <> · starts at <b className="tabular-nums">{ftin(draw.w)}{basis === 'area' ? ` × ${ftin(draw.h)}` : ''} = {starts.qty} {item.unit}</b></>
+                  : measured ? <> · <span className="text-amber-700 font-semibold">no standard size yet: a new BOQ sizes it from the room</span></> : null}
+              </p>
             </div>
           )}
           {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
         </div>
 
         <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
-          {(itemChanged || recipeChanged) && <span className="mr-auto hud-row-in"><Chip tone="warn">Not saved yet</Chip></span>}
+          {(itemChanged || recipeChanged || sizeChanged) && <span className="mr-auto hud-row-in"><Chip tone="warn">Not saved yet</Chip></span>}
           <Button onClick={onClose}>Close</Button>
           <Button variant="primary" icon={Check} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save item'}</Button>
         </div>

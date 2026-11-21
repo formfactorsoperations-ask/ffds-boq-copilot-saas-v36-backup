@@ -1,7 +1,18 @@
 import React, { useState } from 'react';
 import { Item, AIStrategy } from '../../types';
 import { auditAiTemplate, AiTemplateAuditResult } from '../../services/geminiService';
-import { ShieldCheck, AlertTriangle, CheckCircle, Sparkles, Loader2, X, Plus, ArrowRight, Layers, FileCheck } from 'lucide-react';
+import { ShieldCheck, AlertCircle, CheckCircle, Sparkles, Plus, RefreshCw } from 'lucide-react';
+import BankModal from '../bank/BankModal';
+import { Button, Chip, EmptyState, LABEL } from '../ui/kit';
+import { Ring } from '../people/PeopleBits';
+import { CountUp } from '../ui/HudBits';
+import { GRADE_TIER } from '../../lib/materialSpecs';
+
+/*
+  Standard templates → AI audit: AI reads the open typology and says what a
+  full interior of that kind usually has that this one lacks, with items from
+  the Item bank to fill each gap. A gap is filled only when its Add is clicked.
+*/
 
 interface AiTemplateAuditDrawerProps {
   isOpen: boolean;
@@ -25,273 +36,191 @@ export const AiTemplateAuditDrawer: React.FC<AiTemplateAuditDrawerProps> = ({
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditResult, setAuditResult] = useState<AiTemplateAuditResult | null>(null);
   const [appliedGaps, setAppliedGaps] = useState<Set<number>>(new Set());
+  /* The audit failing used to leave an empty window with nothing said. */
+  const [failed, setFailed] = useState<string | null>(null);
 
   const bankMap = React.useMemo(() => new Map<string, Item>(bank.map(i => [i.id, i])), [bank]);
 
   const runAudit = React.useCallback(async () => {
     setIsAuditing(true);
     setAuditResult(null);
+    setFailed(null);
     setAppliedGaps(new Set());
     try {
       const result = await auditAiTemplate(configName, rooms, bank, aiStrategy as AIStrategy);
       setAuditResult(result);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Audit failed:", err);
+      setFailed(err?.message || 'AI could not read the typology. Please try again.');
     } finally {
       setIsAuditing(false);
     }
   }, [configName, rooms, bank, aiStrategy]);
 
+  /*
+    It runs once each time the window opens. It used to run again whenever the
+    typology changed, which adding a gap's items does: the first Add threw the
+    whole audit away and started another.
+  */
+  const run = React.useRef(runAudit);
+  run.current = runAudit;
   React.useEffect(() => {
-    if (isOpen) {
-      runAudit();
-    }
-  }, [isOpen, runAudit]);
+    if (isOpen) run.current();
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
+  const gaps = auditResult?.missingTrades || [];
+  const fillable = (gap: { suggestedBankItemIds?: string[] }) => !!gap.suggestedBankItemIds && gap.suggestedBankItemIds.length > 0;
+  const toFill = gaps.filter((g, i) => fillable(g) && !appliedGaps.has(i)).length;
+
   const handleApplySingleGap = (idx: number, gap: any) => {
-    if (!gap.suggestedBankItemIds || gap.suggestedBankItemIds.length === 0) return;
-    const additions = gap.suggestedBankItemIds.map((itemId: string) => ({
-      roomType: gap.roomType || 'general',
-      itemId
-    }));
-    onAddMissingItems(additions);
+    if (!fillable(gap)) return;
+    onAddMissingItems(gap.suggestedBankItemIds.map((itemId: string) => ({ roomType: gap.roomType || 'general', itemId })));
     setAppliedGaps(prev => new Set(prev).add(idx));
   };
 
   const handleApplyAllGaps = () => {
-    if (!auditResult?.missingTrades) return;
     const allAdditions: Array<{ roomType: string; itemId: string }> = [];
-    auditResult.missingTrades.forEach((gap, idx) => {
-      if (gap.suggestedBankItemIds && gap.suggestedBankItemIds.length > 0) {
-        gap.suggestedBankItemIds.forEach(id => {
-          allAdditions.push({
-            roomType: gap.roomType || 'general',
-            itemId: id
-          });
-        });
-        setAppliedGaps(prev => new Set(prev).add(idx));
-      }
+    const done = new Set(appliedGaps);
+    gaps.forEach((gap, idx) => {
+      if (!fillable(gap) || done.has(idx)) return;
+      gap.suggestedBankItemIds.forEach(id => allAdditions.push({ roomType: gap.roomType || 'general', itemId: id }));
+      done.add(idx);
     });
-    if (allAdditions.length > 0) {
-      onAddMissingItems(allAdditions);
-    }
+    if (allAdditions.length > 0) onAddMissingItems(allAdditions);
+    setAppliedGaps(done);
   };
 
+  const score = Math.max(0, Math.min(100, Number(auditResult?.score) || 0));
+  const advice = auditResult?.tierStrategyAdvice;
+
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-2xl h-full shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-300">
-        {/* Header */}
-        <div className="p-5 bg-gradient-to-r from-slate-900 to-sky-950 text-white flex items-center justify-between border-b border-sky-800 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-bold tracking-tight">AI Scope Auditor & Gap Detector</h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-400 text-slate-950">
-                  Live Audit
-                </span>
+    <BankModal
+      label="AI audit" eyebrow={`Standard templates · ${configName}`} title="AI audit"
+      blurb="What a full interior of this kind usually has that this typology lacks. A gap is filled only when you add it."
+      size="xl" onClose={onClose} locked={isAuditing}
+      footer={
+        <>
+          <Button icon={RefreshCw} onClick={runAudit} disabled={isAuditing}>Audit again</Button>
+          <Button variant="primary" onClick={onClose} disabled={isAuditing}>Done</Button>
+        </>
+      }
+    >
+      {isAuditing && (
+        <div className="rounded-xl border border-slate-200 p-5 flex items-center gap-3 hud-scanning" role="status">
+          <span className="w-4 h-4 border-2 border-[#3D52A0] border-t-transparent rounded-full motion-safe:animate-spin shrink-0" />
+          <span className="text-xs text-slate-600">Reading {configName}: its rooms, trades and what each option would get.</span>
+        </div>
+      )}
+
+      {failed && !isAuditing && (
+        <div className="p-3 rounded-xl border border-rose-200 bg-rose-50 flex items-start gap-2 text-xs text-rose-800" role="alert">
+          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" aria-hidden />
+          <span>{failed}</span>
+        </div>
+      )}
+
+      {auditResult && !isAuditing && (
+        <div className="space-y-5 hud-panel-in">
+          {/* The score, as AI gives it. */}
+          <div className="rounded-xl border border-slate-200 p-4 flex flex-wrap items-center gap-4">
+            <Ring value={score / 100} size={84} stroke={8} tone={score >= 85 ? 'ok' : 'warn'} label={`Score ${score} of 100`}>
+              <span className="text-xl font-black text-slate-800 tabular-nums"><CountUp value={score} /></span>
+            </Ring>
+            <div className="min-w-0 flex-1 basis-56">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-slate-800">Score, out of 100</span>
+                <Chip tone={score >= 85 ? 'good' : 'warn'}>{score >= 85 ? 'Ready to use' : 'Worth a look'}</Chip>
               </div>
-              <p className="text-xs text-sky-200 mt-0.5">
-                Target Typology: <span className="font-bold text-white">{configName}</span>
-              </p>
+              <p className="text-xs text-slate-600 mt-1">{auditResult.summary}</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
-          {isAuditing && (
-            <div className="py-16 flex flex-col items-center justify-center text-center space-y-4">
-              <div className="p-4 bg-sky-50 text-[#3D52A0] rounded-full animate-spin">
-                <Loader2 className="w-8 h-8" />
-              </div>
-              <div>
-                <p className="font-bold text-slate-800 text-sm">Auditing Trade Completeness...</p>
-                <p className="text-xs text-slate-500 mt-1 max-w-sm">
-                  Checking for standard MEP, civil protection, deep cleaning, and hardware omissions against interior best practices.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {auditResult && !isAuditing && (
-            <div className="space-y-6 animate-in fade-in-50 duration-300">
-              {/* Score Banner */}
-              <div className="p-4 bg-gradient-to-br from-slate-50 to-sky-50/60 border border-sky-100 rounded-2xl flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Scope Health Score</span>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-3xl font-black text-slate-900">{auditResult.score}</span>
-                    <span className="text-xs text-slate-500 font-bold">/ 100</span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1 max-w-md">{auditResult.summary}</p>
-                </div>
-                <div className={`p-4 rounded-2xl flex flex-col items-center justify-center shrink-0 border ${
-                  auditResult.score >= 85 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-                }`}>
-                  <ShieldCheck className="w-7 h-7 mb-1" />
-                  <span className="text-[11px] font-black uppercase tracking-wider">
-                    {auditResult.score >= 85 ? 'Production Ready' : 'Optimization Recommended'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Strengths */}
-              {auditResult.strengths && auditResult.strengths.length > 0 && (
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Verified Strengths</span>
-                  <div className="space-y-1.5">
-                    {auditResult.strengths.map((str, idx) => (
-                      <div key={idx} className="p-2.5 bg-emerald-50/60 border border-emerald-100 rounded-xl flex items-center gap-2.5 text-xs text-emerald-900 font-medium">
-                        <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>{str}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+          {/* What is missing. */}
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+              <span className={LABEL}>What is missing ({gaps.length})</span>
+              {toFill > 0 && (
+                <Button size="sm" variant="primary" onClick={handleApplyAllGaps}>
+                  <Sparkles className="w-3.5 h-3.5" aria-hidden />Add all {toFill}
+                </Button>
               )}
-
-              {/* Missing Trades / Gaps */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-500" />
-                    Identified Scope Gaps & Recommendations ({auditResult.missingTrades.length})
-                  </span>
-                  {auditResult.missingTrades.length > 0 && (
-                    <button
-                      onClick={handleApplyAllGaps}
-                      className="px-3 py-1 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                      Auto-Add All Missing
-                    </button>
-                  )}
-                </div>
-
-                {auditResult.missingTrades.length === 0 ? (
-                  <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xs text-slate-500">
-                    No critical trade gaps detected. Your master list has comprehensive coverage across carpentry, MEP, and civil works.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {auditResult.missingTrades.map((gap, idx) => {
-                      const isApplied = appliedGaps.has(idx);
-                      return (
-                        <div
-                          key={idx}
-                          className={`p-4 border rounded-2xl transition-all ${
-                            isApplied ? 'bg-emerald-50/40 border-emerald-200 opacity-75' : 'bg-white border-slate-200 hover:border-sky-300 shadow-sm'
-                          }`}
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] font-bold uppercase tracking-wide">
-                                  {gap.trade}
-                                </span>
-                                <span className="text-xs font-bold text-slate-800 capitalize">
-                                  Target Room: {gap.roomType}
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">{gap.reason}</p>
-                            </div>
-                            <button
-                              onClick={() => handleApplySingleGap(idx, gap)}
-                              disabled={isApplied || (!gap.suggestedBankItemIds || gap.suggestedBankItemIds.length === 0)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ml-3 ${
-                                isApplied
-                                  ? 'bg-emerald-100 text-emerald-800 cursor-default'
-                                  : 'bg-sky-50 text-[#3D52A0] hover:bg-[#3D52A0] hover:text-white border border-sky-200'
-                              }`}
-                            >
-                              {isApplied ? (
-                                <>
-                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                                  Added
-                                </>
-                              ) : (
-                                <>
-                                  <Plus className="w-3.5 h-3.5" />
-                                  Add to Scope
-                                </>
-                              )}
-                            </button>
+            </div>
+            {gaps.length === 0 ? (
+              <EmptyState icon={ShieldCheck} title="Nothing found missing" text="AI found carpentry, services and civil work covered in this typology." />
+            ) : (
+              <ul className="rounded-xl border border-slate-200 divide-y divide-slate-100">
+                {gaps.map((gap, idx) => {
+                  const isApplied = appliedGaps.has(idx);
+                  const can = fillable(gap);
+                  return (
+                    <li key={idx} className={`hud-row-in p-4 transition-colors ${isApplied ? 'bg-slate-50' : ''}`} style={{ animationDelay: `${Math.min(idx, 10) * 30}ms` }}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 basis-64">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Chip tone="warn">{gap.trade}</Chip>
+                            <span className="text-sm font-semibold text-slate-800 capitalize">{String(gap.roomType || 'general').replace(/_/g, ' ')}</span>
                           </div>
-
-                          {gap.suggestedBankItemIds && gap.suggestedBankItemIds.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap gap-1.5 items-center">
-                              <span className="text-[10px] text-slate-400 font-semibold">Suggested Bank Items:</span>
-                              {gap.suggestedBankItemIds.map(id => {
-                                const item = bankMap.get(id);
-                                return (
-                                  <span key={id} className="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 font-medium">
-                                    {item ? item.name : id}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          )}
+                          <p className="text-xs text-slate-600 mt-1.5">{gap.reason}</p>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                        {isApplied ? (
+                          <span className="hud-row-in flex items-center gap-1.5 text-xs font-bold text-emerald-700 shrink-0"><CheckCircle className="w-4 h-4" aria-hidden />Added</span>
+                        ) : (
+                          <Button size="sm" icon={Plus} onClick={() => handleApplySingleGap(idx, gap)} disabled={!can}
+                            title={can ? undefined : 'The Item bank has nothing for this. Add an item there first.'} className="shrink-0">Add to the room</Button>
+                        )}
+                      </div>
+                      {can ? (
+                        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[11px] text-slate-500">From the Item bank:</span>
+                          {gap.suggestedBankItemIds.map(id => (
+                            <span key={id} className="px-2 py-0.5 rounded-full border border-slate-200 text-[11px] font-semibold text-slate-700">{bankMap.get(id)?.name || id}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-[11px] text-slate-500">
+                          The Item bank has nothing for this{gap.suggestedNewItemName ? <>. AI suggests adding <b className="font-semibold text-slate-700">{gap.suggestedNewItemName}</b></> : ''}.
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
 
-              {/* Tier Strategy Advice */}
-              {auditResult.tierStrategyAdvice && (
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Tier Formulation Guide
-                  </span>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
-                    <div className="p-3 bg-white border border-slate-200 rounded-xl">
-                      <p className="font-bold text-emerald-700 mb-1">1. Base (Essential)</p>
-                      <p className="text-slate-600 text-[11px] leading-relaxed">{auditResult.tierStrategyAdvice.essential}</p>
-                    </div>
-                    <div className="p-3 bg-white border border-slate-200 rounded-xl">
-                      <p className="font-bold text-[#334486] mb-1">2. Mid (Comfort)</p>
-                      <p className="text-slate-600 text-[11px] leading-relaxed">{auditResult.tierStrategyAdvice.comfort}</p>
-                    </div>
-                    <div className="p-3 bg-white border border-slate-200 rounded-xl">
-                      <p className="font-bold text-purple-700 mb-1">3. Top (Harmony)</p>
-                      <p className="text-slate-600 text-[11px] leading-relaxed">{auditResult.tierStrategyAdvice.harmony}</p>
-                    </div>
+          {/* What it already does well. */}
+          {auditResult.strengths && auditResult.strengths.length > 0 && (
+            <div>
+              <span className={`${LABEL} block mb-1.5`}>What it already covers</span>
+              <ul className="space-y-1.5">
+                {auditResult.strengths.map((str, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-xs text-slate-700">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-px" aria-hidden />
+                    <span>{str}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* How AI would split it across the three options. */}
+          {advice && (
+            <div>
+              <span className={`${LABEL} block mb-1.5`}>How AI would split it across the options</span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                {([['E', advice.essential], ['C', advice.comfort], ['P', advice.harmony]] as const).map(([g, text]) => (
+                  <div key={g} className={`p-3 rounded-xl border ${g === 'C' ? 'border-[#3D52A0]/30 bg-[#3D52A0]/[0.03]' : 'border-slate-200'}`}>
+                    <p className={`${LABEL} mb-1`}>{GRADE_TIER[g]}</p>
+                    <p className="text-xs text-slate-600">{text}</p>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center shrink-0">
-          <button
-            onClick={runAudit}
-            disabled={isAuditing}
-            className="px-3.5 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 border border-slate-300 rounded-lg hover:bg-white transition-colors"
-          >
-            Re-Audit Template
-          </button>
-          <button
-            onClick={onClose}
-            className="px-5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-lg text-xs font-bold transition-all"
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
+      )}
+    </BankModal>
   );
 };

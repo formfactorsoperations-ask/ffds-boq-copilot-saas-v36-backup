@@ -5,6 +5,10 @@ import { realRooms, bucketForItem, ensureScopeRooms, uniqueRoomNames, ScopeBucke
 import { computeTakeoff, classifyRoom, defaultCeiling, DEFAULT_CONVENTIONS, RoomGeometry, TakeoffTotals } from './takeoff';
 import { id as generateId, calculateSellPrice } from './utils';
 import { holdPrices } from './boqPricing';
+import { standardSizeOf } from './playground/pieces';
+import { roomScopesOf, optionMarks, takes } from './templateOptions';
+import { typologiesOf, optionSetupOf } from './optionSetup';
+import type { Grade } from './materialSpecs';
 
 // Define the structure for templates
 export type TemplateData = Record<string, Record<string, string[]>>;
@@ -456,7 +460,8 @@ export const resolveActiveTemplate = (
     templates: TemplateData | undefined,
     configStr: string
 ): { configKey: string; activeTemplate: Record<string, string[]> } => {
-    const all = templates || INITIAL_TEMPLATES;
+    /* The typologies only: the studio's option setup is saved beside them (lib/optionSetup). */
+    const all = typologiesOf(templates || INITIAL_TEMPLATES);
     const cleanConfig = (configStr || '').trim();
 
     // 1. Exact match
@@ -889,6 +894,9 @@ function planCivilItems(
   return out;
 }
 
+/** The items a higher option adds by the built-in rule (the `enhancements` below), unless the studio's template lists them. */
+export const BUILT_IN_EXTRAS: ReadonlySet<string> = new Set(['gen-017', 'gen-002', 'gen-044', 'gen-045']);
+
 export const generateStandardPackages = (
     projectContext: ProjectContext,
     bank: Item[],
@@ -921,6 +929,8 @@ export const generateStandardPackages = (
 
       Margin still moves, but it is no longer carrying the whole difference.
     */
+    /* The owner's figures for each option, or the standard ones (lib/optionSetup). */
+    const setup = optionSetupOf(templates);
     const tiers: {
         name: string;
         marginMod: number;
@@ -935,37 +945,37 @@ export const generateStandardPackages = (
     }[] = [
         {
             name: "Essential Elegance",
-            marginMod: 0.85,
-            materialMod: 0.88,
+            marginMod: setup.E.margin,
+            materialMod: setup.E.material,
             enhancements: [],
-            ceilingShare: 0.35,
+            ceilingShare: setup.E.ceiling,
             rationalePrefix: "Base spec: 0.8mm laminate, standard hardware",
             desc: "Core Functional Package",
             filterType: 'base'
         },
         {
             name: "Comfort Upgrade",
-            marginMod: 1.0,
-            materialMod: 1.0,
+            marginMod: setup.C.margin,
+            materialMod: setup.C.material,
             enhancements: [
                 { bankId: 'gen-017', rooms: 'bedrooms' }, // dressing mirrors
             ],
-            ceilingShare: 0.60,
+            ceilingShare: setup.C.ceiling,
             rationalePrefix: "Mid spec: 1mm laminate, soft-close hardware",
             desc: "Standard Turnkey Interiors",
             filterType: 'mid'
         },
         {
             name: "Complete Harmony",
-            marginMod: 1.25,
-            materialMod: 1.35,
+            marginMod: setup.P.margin,
+            materialMod: setup.P.material,
             enhancements: [
                 { bankId: 'gen-017', rooms: 'bedrooms' },  // dressing mirrors
                 { bankId: 'gen-002', rooms: 'living' },    // wall panelling
                 { bankId: 'gen-044', rooms: 'bedrooms' },  // feature wallpaper
                 { bankId: 'gen-045', rooms: 'habitable' },   // curtains and blinds
             ],
-            ceilingShare: 0.85,
+            ceilingShare: setup.P.ceiling,
             rationalePrefix: "Top spec: acrylic/PU finish, premium hardware",
             desc: "Fully Loaded Luxury Package",
             filterType: 'top'
@@ -977,7 +987,12 @@ export const generateStandardPackages = (
     const bankMap = new Map<string, Item>(bank.map(i => [i.id, i]));
     
     // 1. Resolve exact template
-    const { configKey, activeTemplate } = resolveActiveTemplate(templates, projectContext.config);
+    const { configKey, activeTemplate: marked } = resolveActiveTemplate(templates, projectContext.config);
+    /* The room scopes, and which options take each item (lib/templateOptions): unmarked means all three. */
+    const activeTemplate = roomScopesOf(marked);
+    const marks = optionMarks(marked);
+    /* An item the studio lists in this typology is the template's to place: the built-in extras below leave it alone. */
+    const listed = new Set(Object.values(activeTemplate).flat());
     
     /*
       2. Rooms — the real ones only.
@@ -1010,6 +1025,7 @@ export const generateStandardPackages = (
 
     return activeTiers.map(tier => {
         const boqItems: BoqItem[] = [];
+        const grade: Grade = tier.filterType === 'base' ? 'E' : tier.filterType === 'top' ? 'P' : 'C';
 
         /*
           1. PROCESS ROOM ITEMS
@@ -1028,17 +1044,28 @@ export const generateStandardPackages = (
             itemIds.forEach(bankId => {
                 const bankItem = bankMap.get(bankId);
                 if (!bankItem) return;
+                if (!takes(marks, roomKey, bankId, grade)) return;
 
                 if (NEVER_AUTO_PRICED.has(bankItem.id)) return;
 
                 const newMargin = Math.max(10, Math.min(45, Number((bankItem.margin * tier.marginMod).toFixed(1))));
                 const specMaterials = specRate(bankItem, tier.materialMod) ?? (bankItem.materials || 0);
                 const sellRate = calculateSellPrice(specMaterials, bankItem.labor || 0, newMargin);
-                const qty = capQuantity(bankItem, calculateQuantity(bankItem, matchingRoom.size, ceilingHeight), sellRate);
+                /*
+                  A piece comes in at the Item Bank's standard size, whatever the room.
+                  It used to be sized by a formula on the room's area, so one flat's
+                  three wardrobes were 81, 63 and 45 sq ft and no two projects started
+                  alike, while the plan drew each of them at the standard size: a line
+                  read "6′ × 2′ = 81 sq ft". The size and the quantity are now one
+                  thing; the designer fits the piece to the wall in the Playground.
+                */
+                const standard = standardSizeOf(bankItem);
+                const qty = standard?.qty ?? capQuantity(bankItem, calculateQuantity(bankItem, matchingRoom.size, ceilingHeight), sellRate);
 
                 boqItems.push({
                     id: generateId(),
                     bankId: bankItem.id,
+                    ...(standard || {}),
                     qty: qty,
                     roomId: matchingRoom.name,
                     marginOverride: newMargin,
@@ -1054,6 +1081,7 @@ export const generateStandardPackages = (
         templateGeneralIds.forEach(bankId => {
             const bankItem = bankMap.get(bankId);
             if (!bankItem) return;
+            if (!takes(marks, 'general', bankId, grade)) return;
             const itemName = (bankItem.name || '').toLowerCase();
             const itemCat = bankItem.cat;
 
@@ -1138,7 +1166,7 @@ export const generateStandardPackages = (
         const enhanced = new Set(boqItems.map(i => `${i.bankId}@${i.roomId}`));
         tier.enhancements.forEach(enh => {
             const bankItem = bankMap.get(enh.bankId);
-            if (!bankItem || NEVER_AUTO_PRICED.has(enh.bankId)) return;
+            if (!bankItem || NEVER_AUTO_PRICED.has(enh.bankId) || listed.has(enh.bankId)) return;
             roomsForEnhancement(enh.rooms, activeRooms).forEach(room => {
                 const key = `${enh.bankId}@${room.name}`;
                 if (enhanced.has(key)) return;
@@ -1148,10 +1176,12 @@ export const generateStandardPackages = (
                     specRate(bankItem, tier.materialMod) ?? (bankItem.materials || 0),
                     bankItem.labor || 0,
                     newMargin);
+                const standard = standardSizeOf(bankItem);
                 boqItems.push({
                     id: generateId(),
                     bankId: enh.bankId,
-                    qty: capQuantity(bankItem, calculateQuantity(bankItem, room.size, ceilingHeight), enhRate),
+                    ...(standard || {}),
+                    qty: standard?.qty ?? capQuantity(bankItem, calculateQuantity(bankItem, room.size, ceilingHeight), enhRate),
                     roomId: room.name,
                     marginOverride: newMargin,
                     baseRate: specRate(bankItem, tier.materialMod),
@@ -1210,6 +1240,8 @@ export const generateStandardPackages = (
         return {
             id: generateId(),
             name: tier.name,
+            /* The grade is saved, not read back from the name: a renamed option keeps it. */
+            specGrade: grade,
             timestamp: Date.now(),
             /* Every line holds its item's price from the start (lib/boqPricing.ts holdPrice): the
                option sells at what it was made at, whatever the bank says later. */

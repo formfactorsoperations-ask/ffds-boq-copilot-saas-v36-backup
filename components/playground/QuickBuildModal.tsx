@@ -5,7 +5,7 @@ import type { Item, BoqItem, Room } from '../../types';
 import type { Grade } from '../../lib/materialSpecs';
 import { ftin, boundsOf } from '../../lib/playground/geometry';
 import { drawOf, pieceSize } from '../../lib/playground/pieces';
-import { quickBuild, QUICK_SIZES, type QuickSize, type RoomStandards } from '../../lib/playground/quickBuild';
+import { quickBuild, QUICK_SIZES, type QuickSize, type RoomStandards, type QuickLines } from '../../lib/playground/quickBuild';
 import { PieceArt } from './pieceArt';
 import { pickable } from '../../lib/bankMatch';
 
@@ -23,7 +23,7 @@ const FINISH: { id: Grade; label: string }[] = [{ id: 'E', label: 'Essential' },
 
 export interface QuickBuildChoice { size: QuickSize; carpet: number; grade: Grade }
 
-export default function QuickBuildModal({ project, size: size0, carpet: carpet0, grade: grade0, own, bank, boq, standards, paints, onBuild, onClose }: {
+export default function QuickBuildModal({ project, size: size0, carpet: carpet0, grade: grade0, own, bank, boq, standards, fill, paints: paints0, onBuild, onClose }: {
   project: string;
   size: QuickSize;
   carpet: number;
@@ -33,6 +33,8 @@ export default function QuickBuildModal({ project, size: size0, carpet: carpet0,
   bank: Item[];
   boq: BoqItem[];
   standards?: RoomStandards | null;
+  /** The rooms filled from the studio's Standard templates at a grade; null when they name nothing in the Item Bank. */
+  fill?: (rooms: Room[], grade: Grade) => QuickLines | null;
   /** Painting will be added, measured from the rooms. */
   paints: boolean;
   onBuild: (c: QuickBuildChoice) => void;
@@ -52,8 +54,13 @@ export default function QuickBuildModal({ project, size: size0, carpet: carpet0,
   /* The same scale as the sketch's grid: 40 × 30 ft, or larger when the rooms need it. */
   const bb = build && boundsOf(build.rects.map(r => r.plan));
   const b = bb && { x: 0, y: 0, w: Math.max(40, Math.ceil(bb.x + bb.w) + 1), h: Math.max(26, Math.ceil(bb.y + bb.h) + 1) };
-  const placed = build ? build.standard.lines.filter(l => l.place) : [];
-  const pieceCount = (room: string) => build?.standard.lines.filter(l => l.roomId === room).length || 0;
+  /* What the rooms are filled with: the Standard templates at the grade, else the room standards. */
+  const fromTemplates = useMemo(() => (build && fill ? fill(build.rooms, grade) : null), [build, fill, grade]);
+  const std = fromTemplates || build?.standard || null;
+  /* The templates bring their own painting lines. */
+  const paints = paints0 && !fromTemplates;
+  const placed = std ? std.lines.filter(l => l.place) : [];
+  const pieceCount = (room: string) => std?.lines.filter(l => l.roomId === room && l.place).length || 0;
 
   return (
     <div className="fixed inset-0 z-[300] grid place-items-center p-4 phd-scrim" style={{ background: 'rgba(15,23,42,.45)' }} role="dialog" aria-modal="true" aria-label="Quick build"
@@ -127,29 +134,29 @@ export default function QuickBuildModal({ project, size: size0, carpet: carpet0,
             <div className="rounded-xl border border-slate-200 p-3">
               <div className={LABEL}>3 · Finish</div>
               <div className="mt-1.5"><Segmented size="sm" label="Finish" value={grade} options={FINISH} onChange={setGrade} /></div>
-              <p className="text-[11px] text-slate-500 mt-1">Each piece takes its recipe’s materials at this finish.</p>
+              <p className="text-[11px] text-slate-500 mt-1">{fromTemplates ? 'The option the Standard templates make at this finish.' : 'Each piece takes its recipe’s materials at this finish.'}</p>
             </div>
             {build && (
               <div className="rounded-xl border border-slate-200 p-3">
                 <div className={LABEL}>What goes in</div>
                 <ul className="mt-1.5 space-y-1 text-xs text-slate-700">
-                  <li className="flex gap-1.5"><span className="text-emerald-600"><Check className="w-3.5 h-3.5" aria-hidden /></span><span>{build.standard.placed} pieces placed in {build.rects.filter(r => pieceCount(r.name)).length} rooms</span></li>
-                  {build.standard.waiting.length > 0 && (
-                    <li className="flex gap-1.5"><span className="text-amber-600"><MapPin className="w-3.5 h-3.5" aria-hidden /></span><span>{build.standard.waiting.length} wait under Needs a place: {build.standard.waiting.join(', ')}</span></li>
+                  <li className="flex gap-1.5"><span className="text-emerald-600"><Check className="w-3.5 h-3.5" aria-hidden /></span><span>{std!.placed} pieces placed in {build.rects.filter(r => pieceCount(r.name)).length} rooms</span></li>
+                  {std!.waiting.length > 0 && (
+                    <li className="flex gap-1.5"><span className="text-amber-600"><MapPin className="w-3.5 h-3.5" aria-hidden /></span><span>{std!.waiting.length} wait under Needs a place: {std!.waiting.join(', ')}</span></li>
                   )}
                   {paints && <li className="flex gap-1.5"><span className="text-emerald-600"><Check className="w-3.5 h-3.5" aria-hidden /></span><span>Wall and ceiling painting, measured from the rooms</span></li>}
                 </ul>
-                {build.standard.missing.length > 0 && (
-                  <p className="text-[11px] text-slate-500 mt-2 inline-flex items-start gap-1"><Info className="w-3 h-3 mt-0.5 shrink-0" aria-hidden />Not in your Item Bank, so left out: {build.standard.missing.join(', ')}.</p>
+                {std!.missing.length > 0 && (
+                  <p className="text-[11px] text-slate-500 mt-2 inline-flex items-start gap-1"><Info className="w-3 h-3 mt-0.5 shrink-0" aria-hidden />Not in your Item Bank, so left out: {std!.missing.join(', ')}.</p>
                 )}
               </div>
             )}
-            <p className="text-[11px] text-slate-500">The pieces and their sizes are the room standards in Studio settings. Site measurement replaces these sizes later, and the client never sees this plan before layout approval.</p>
+            <p className="text-[11px] text-slate-500">{fromTemplates ? 'The items are the studio’s Standard templates, each piece at its Item Bank standard size.' : 'The pieces and their sizes are the room standards in Studio settings.'} Site measurement replaces these sizes later, and the client never sees this plan before layout approval.</p>
           </div>
         </div>
 
         <div className="px-5 py-3 border-t border-slate-100 flex items-center gap-3 flex-wrap">
-          <span className="text-xs text-slate-500 flex-1">{build ? <>{build.standard.lines.length + (paints ? 2 : 0)} lines in {build.rects.length} rooms. <Chip tone="brand">{FINISH.find(f => f.id === grade)!.label}</Chip></> : 'Type the carpet area first.'}</span>
+          <span className="text-xs text-slate-500 flex-1">{build ? <>{std!.lines.length + (paints ? 2 : 0)} lines in {build.rects.length} rooms. <Chip tone="brand">{FINISH.find(f => f.id === grade)!.label}</Chip></> : 'Type the carpet area first.'}</span>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" icon={Check} disabled={!build} onClick={() => build && onBuild({ size, carpet, grade })}>Build the BOQ</Button>
         </div>

@@ -1,6 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item, AIStrategy } from '../types';
 import { TemplateData, INITIAL_TEMPLATES, getSmartDefaultCoefficient } from '../lib/standardPackages';
+import { drawOf, standardSizeOf, canHaveSize } from '../lib/playground/pieces';
+import { ftin } from '../lib/playground/geometry';
+import { basisOfUnit } from '../lib/boqSize';
+import { roomScopesOf, gradesFor, withGrades, prunedMarks, roleOf } from '../lib/templateOptions';
+import { GRADES, GRADE_TIER, type Grade } from '../lib/materialSpecs';
+import { typologiesOf, optionSetupOf, withOptionSetup, isStandardSetup } from '../lib/optionSetup';
+import OptionSetupModal from './templates/OptionSetupModal';
 import { formatINR, calculateSellPrice, id as generateId } from '../lib/utils';
 import { AiGeneratedTemplateResult, aiSuggestRoomItems } from '../services/geminiService';
 import { AiTemplateArchitectModal } from './templates/AiTemplateArchitectModal';
@@ -8,7 +15,10 @@ import { AiTemplateAuditDrawer } from './templates/AiTemplateAuditDrawer';
 import { TemplateThreeTierPreviewModal } from './templates/TemplateThreeTierPreviewModal';
 import { AddTypologyModal } from './templates/AddTypologyModal';
 import { AddRoomScopeModal } from './templates/AddRoomScopeModal';
-import { TemplateMetricsBar } from './templates/TemplateMetricsBar';
+import { TemplateMetricsBar, TradeCoverage } from './templates/TemplateMetricsBar';
+import { Button, Chip, EmptyState, INPUT, LABEL } from './ui/kit';
+import { Tile } from './bank/BankCommandBar';
+import { listV } from './people/PeopleBits';
 import {
   List,
   Plus,
@@ -31,7 +41,8 @@ import {
   CheckCircle2,
   Copy,
   Download,
-  Upload
+  Upload,
+  SlidersHorizontal
 } from '@/lib/lucide-shim';
 import { addToBank, pickable } from '../lib/bankMatch';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -42,6 +53,8 @@ interface TemplateEditorTabProps {
   templates: TemplateData;
   setTemplates: React.Dispatch<React.SetStateAction<TemplateData>>;
   aiStrategy?: AIStrategy;
+  /** Opens an item's drawer from the Item bank, at its standard size ("On the plan"). */
+  onOpenItem?: (itemId: string) => void;
 }
 
 export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
@@ -49,9 +62,12 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
   setBank,
   templates = INITIAL_TEMPLATES,
   setTemplates,
-  aiStrategy = 'balanced'
+  aiStrategy = 'balanced',
+  onOpenItem
 }) => {
-  const configOptions = Object.keys(templates || {});
+  /* The typologies: the studio's option setup is saved beside them (lib/optionSetup). */
+  const configOptions = Object.keys(typologiesOf(templates || {}));
+  const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [activeConfig, setActiveConfig] = useState<string>(configOptions[0] || '2-BHK');
 
   // Ensure activeConfig is valid if templates change
@@ -62,7 +78,8 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
   }, [templates, activeConfig, configOptions]);
 
   // Current room types for the active configuration
-  const currentConfigRooms = templates[activeConfig] || {};
+  /* The room scopes; which options take each item is saved beside them (lib/templateOptions). */
+  const currentConfigRooms = roomScopesOf(templates[activeConfig] || {});
   const currentRoomKeys = Object.keys(currentConfigRooms);
   
   const [activeRoomType, setActiveRoomType] = useState<string>(currentRoomKeys[0] || 'living');
@@ -89,6 +106,14 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
   const [isLoadingRoomAi, setIsLoadingRoomAi] = useState(false);
 
   const bankMap = useMemo(() => new Map(bank.map(i => [i.id, i])), [bank]);
+
+  /* The rows whose specification is shown in full. */
+  const [openSpecs, setOpenSpecs] = useState<Set<string>>(new Set());
+  const toggleSpecs = (id: string) => setOpenSpecs(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   // Current items in selected room
   const currentRoomItemIds = currentConfigRooms[activeRoomType] || [];
@@ -151,11 +176,20 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
   const handleRemoveItem = (itemId: string) => {
     setTemplates(prev => ({
       ...prev,
-      [activeConfig]: {
+      [activeConfig]: prunedMarks({
         ...(prev[activeConfig] || {}),
         [activeRoomType]: (prev[activeConfig]?.[activeRoomType] || []).filter(id => id !== itemId)
-      }
+      })
     }));
+  };
+
+  /* Which options take an item: all three is a must-have, fewer an extra. */
+  const handleToggleGrade = (itemId: string, grade: Grade) => {
+    setTemplates(prev => {
+      const cur = gradesFor(prev[activeConfig], activeRoomType, itemId);
+      const next = cur.includes(grade) ? cur.filter(g => g !== grade) : [...cur, grade];
+      return { ...prev, [activeConfig]: withGrades(prev[activeConfig] || {}, activeRoomType, itemId, next) };
+    });
   };
 
   // Clear all items in active room
@@ -163,10 +197,10 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
     if (window.confirm(`Clear all items from "${activeRoomType}" scope?`)) {
       setTemplates(prev => ({
         ...prev,
-        [activeConfig]: {
+        [activeConfig]: prunedMarks({
           ...(prev[activeConfig] || {}),
           [activeRoomType]: []
-        }
+        })
       }));
     }
   };
@@ -216,7 +250,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
         delete copy[roomKey];
         return {
           ...prev,
-          [activeConfig]: copy
+          [activeConfig]: prunedMarks(copy)
         };
       });
       const remaining = currentRoomKeys.filter(k => k !== roomKey);
@@ -340,344 +374,300 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
     input.click();
   };
 
+  /* ── What the screen shows, worked out once per change ─────────────────── */
+
+  const roomLabel = (rk: string) => rk.replace(/_/g, ' ');
+
+  /* The open room's items as rows: everything a row says, so the list below only draws. */
+  const rows = currentRoomItemIds.map((itemId) => {
+    const item = bankMap.get(itemId);
+    if (!item) return null;
+    const draw = drawOf(item);
+    const standard = standardSizeOf(item);
+    const basis = basisOfUnit(item.unit);
+    const coeff = getSmartDefaultCoefficient(item);
+    const grades = gradesFor(templates[activeConfig], activeRoomType, itemId);
+    return {
+      item, grades, role: roleOf(grades), coeff,
+      rate: calculateSellPrice(item.materials, item.labor, item.margin || 20),
+      /* The size a new BOQ starts this item at (Item bank, "On the plan"). */
+      size: standard && draw ? `${ftin(draw.w)}${basis === 'area' ? ` × ${ftin(draw.h)}` : ''} · ${standard.qty} ${item.unit}` : null,
+      /* A size is asked only of what is made: a false ceiling, tiling or wiring is measured from the plan. */
+      noSize: !standard && canHaveSize(item),
+    };
+  }).filter(Boolean) as Array<{ item: Item; grades: Grade[]; role: 'must' | 'extra' | 'none'; coeff: number | undefined; rate: number; size: string | null; noSize: boolean }>;
+  /* Ids the room lists that the bank no longer has. They were skipped without a word. */
+  const missing = currentRoomItemIds.length - rows.length;
+  const takenBy = (g: Grade) => rows.filter((r) => r.grades.includes(g)).length;
+
+  /* The figures for the whole typology. */
+  const figures = useMemo(() => {
+    const scopes = roomScopesOf(templates[activeConfig] || {});
+    let items = 0, extras = 0, noSize = 0;
+    const unique = new Set<string>();
+    Object.entries(scopes).forEach(([rk, ids]) => (ids || []).forEach((id) => {
+      const item = bankMap.get(id);
+      if (!item) return;
+      items++; unique.add(id);
+      if (roleOf(gradesFor(templates[activeConfig], rk, id)) !== 'must') extras++;
+      const basis = basisOfUnit(item.unit);
+      if (!standardSizeOf(item) && canHaveSize(item)) noSize++;
+    }));
+    return { rooms: Object.keys(scopes).length, items, unique: unique.size, extras, noSize };
+  }, [templates, activeConfig, bankMap]);
+
+  const BANK_SHOWN = 80;
+  const iconButton = 'p-1.5 rounded-lg text-slate-400 transition-colors hover:text-[#3D52A0] hover:bg-[#3D52A0]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30';
+
   return (
-    <div className="space-y-4 w-full h-[calc(100vh-120px)] flex flex-col">
-      {/* Top Bar: Typology Switcher + Add Typology */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
-
-        {/* Typology Switcher Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 custom-scrollbar">
-          <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 shrink-0">
-            {configOptions.map(conf => (
-              <button
-                key={conf}
-                onClick={() => setActiveConfig(conf)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                  activeConfig === conf
-                    ? 'bg-white text-[#334486] shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {conf}
-              </button>
-            ))}
+    <div className="space-y-4 w-full">
+      {/* The typologies, and what can be done to the one that is open. */}
+      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4 hud-panel-in">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <div role="radiogroup" aria-label="Typology" className="inline-flex flex-wrap gap-0.5 p-1 rounded-xl bg-slate-100">
+              {configOptions.map((conf) => {
+                const on = activeConfig === conf;
+                return (
+                  <button key={conf} type="button" role="radio" aria-checked={on} onClick={() => setActiveConfig(conf)}
+                    className={`relative px-3 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30 ${on ? 'text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>
+                    {on && <motion.span layoutId="tpl-typology" className="absolute inset-0 rounded-lg bg-white shadow-sm" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
+                    <span className="relative">{conf}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <Button size="sm" variant="quiet" icon={Plus} onClick={() => setIsAddTypologyOpen(true)}>New typology</Button>
           </div>
-
-          <button
-            onClick={() => setIsAddTypologyOpen(true)}
-            className="px-3 py-1.5 bg-sky-50 text-[#3D52A0] hover:bg-[#3D52A0] hover:text-white border border-sky-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            New Typology
-          </button>
+          <TemplateMetricsBar
+            canDelete={configOptions.length > 1}
+            onOpenAiArchitect={() => setIsAiArchitectOpen(true)}
+            onOpenAiAudit={() => setIsAiAuditOpen(true)}
+            onOpenTierPreview={() => setIsTierPreviewOpen(true)}
+            onDuplicateConfig={handleDuplicateConfig}
+            onDeleteConfig={handleDeleteConfig}
+            onExportTemplates={handleExportTemplates}
+            onImportTemplates={handleImportTemplates}
+            onOpenOptionSetup={() => setIsSetupOpen(true)}
+            setupChanged={!isStandardSetup(optionSetupOf(templates))}
+          />
         </div>
-      </div>
 
-      {/* Metrics & Action Bar */}
-      <TemplateMetricsBar
-        activeConfig={activeConfig}
-        templates={templates}
-        bank={bank}
-        onOpenAiArchitect={() => setIsAiArchitectOpen(true)}
-        onOpenAiAudit={() => setIsAiAuditOpen(true)}
-        onOpenTierPreview={() => setIsTierPreviewOpen(true)}
-        onDuplicateConfig={handleDuplicateConfig}
-        onDeleteConfig={handleDeleteConfig}
-        onExportTemplates={handleExportTemplates}
-        onImportTemplates={handleImportTemplates}
-      />
+        <motion.div key={activeConfig} variants={listV} initial="hidden" animate="show" className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+          <Tile icon={Building} label="Room scopes" value={figures.rooms} sub={`In ${activeConfig}`} />
+          <Tile icon={Layers} label="Items" value={figures.items} sub={`${figures.unique} different items from the bank`} />
+          <Tile icon={Sliders} label="Extras" value={figures.extras} sub="Not taken by all three options" />
+          <Tile icon={Info} tone={figures.noSize > 0 ? 'warn' : 'ok'} dot={figures.noSize > 0 ? 'warn' : 'good'} label="No standard size" value={figures.noSize}
+            sub={figures.noSize > 0 ? 'Sized from the room until set in the Item bank' : 'Every measured item has one'} />
+        </motion.div>
 
-      {/* Room Scope Tabs */}
-      <div className="flex items-center justify-between gap-3 bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm shrink-0">
-        <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar flex-1">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
-            Room Scopes:
-          </span>
-          {currentRoomKeys.map(rk => {
-            const count = (currentConfigRooms[rk] || []).length;
-            const isActive = activeRoomType === rk;
+        <TradeCoverage templates={templates} activeConfig={activeConfig} bank={bank} />
+      </section>
+
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[210px_minmax(0,1fr)_360px] items-start">
+        {/* The rooms of this typology. */}
+        <nav aria-label="Room scopes" className="lg:col-span-2 xl:col-span-1 bg-white rounded-2xl border border-slate-200 p-2 flex flex-wrap xl:flex-col gap-1 hud-panel-in">
+          {currentRoomKeys.map((rk) => {
+            const on = activeRoomType === rk;
             return (
-              <button
-                key={rk}
-                onClick={() => setActiveRoomType(rk)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 border ${
-                  isActive
-                    ? 'bg-[#3D52A0] text-white border-[#3D52A0] shadow-sm'
-                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <span className="capitalize">{rk.replace(/_/g, ' ')}</span>
-                <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-bold ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
-                }`}>
-                  {count}
-                </span>
+              <button key={rk} type="button" onClick={() => setActiveRoomType(rk)} aria-current={on ? 'true' : undefined}
+                className={`relative xl:w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-between gap-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30 ${on ? 'text-white' : 'text-slate-700 hover:bg-slate-100'}`}>
+                {on && <motion.span layoutId="tpl-room" className="absolute inset-0 rounded-xl bg-[#3D52A0] shadow-sm" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
+                <span className="relative capitalize whitespace-nowrap">{roomLabel(rk)}</span>
+                <span className={`relative text-[11px] tabular-nums ${on ? 'text-white/80' : 'text-slate-400'}`}>{(currentConfigRooms[rk] || []).length}</span>
               </button>
             );
           })}
-
-          <button
-            onClick={() => setIsAddRoomScopeOpen(true)}
-            className="px-3 py-1.5 border border-dashed border-sky-300 text-[#3D52A0] hover:bg-sky-50 rounded-xl text-xs font-bold flex items-center gap-1 transition-all shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add Room Scope
+          <button type="button" onClick={() => setIsAddRoomScopeOpen(true)}
+            className="xl:w-full px-3 py-2.5 rounded-xl border border-dashed border-slate-300 text-sm font-semibold text-[#3D52A0] flex items-center gap-1.5 transition-colors hover:bg-[#3D52A0]/5 hover:border-[#3D52A0]/40">
+            <Plus className="w-3.5 h-3.5" aria-hidden />Add room
           </button>
-        </div>
+        </nav>
 
-        {currentRoomKeys.length > 1 && (
-          <button
-            onClick={() => handleDeleteRoomScope(activeRoomType)}
-            className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 text-xs font-semibold flex items-center gap-1 transition-colors shrink-0"
-            title="Delete this room scope"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Delete Scope</span>
-          </button>
-        )}
-      </div>
-
-      {/* Main Dual-Pane Workspace */}
-      <div className="grid grid-cols-12 gap-4 flex-1 min-h-0">
-        {/* LEFT PANE: Master Item Bank Explorer (5 Cols) */}
-        <div className="col-span-12 lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full min-h-0 overflow-hidden">
-          {/* Header */}
-          <div className="p-3.5 border-b border-slate-200 bg-slate-50/70 shrink-0 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                <List className="w-4 h-4 text-[#3D52A0]" />
-                Master Item Bank
-              </span>
-              <span className="text-[11px] font-semibold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-                {filteredBank.length} items
-              </span>
-            </div>
-
-            {/* Search & Category Filter */}
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search bank items..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-[#3D52A0] text-slate-800"
-                />
+        {/* The open room: everything it can get, with nothing cut short and no box to scroll inside. */}
+        <section key={`${activeConfig}|${activeRoomType}`} aria-label={`${roomLabel(activeRoomType)} in ${activeConfig}`} className="bg-white rounded-2xl border border-slate-200 shadow-sm min-w-0 hud-swap">
+          <div className="p-5 border-b border-slate-100">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 basis-56">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">{activeConfig}</p>
+                <h2 className="font-bold text-slate-800 capitalize mt-1">{roomLabel(activeRoomType)}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Everything this room can get. E, C and H mark the options that take each item: Essential, Comfort, Harmony.</p>
               </div>
-
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-36 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-[#3D52A0]"
-              >
-                <option value="ALL">All Trades</option>
-                {categories.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-1 shrink-0">
+                {currentRoomItemIds.length > 0 && <Button size="sm" variant="quiet" onClick={handleClearRoom} title="Take every item out of this room">Clear room</Button>}
+                {currentRoomKeys.length > 1 && (
+                  <button type="button" onClick={() => handleDeleteRoomScope(activeRoomType)} className={`${iconButton} hover:!text-rose-600 hover:!bg-rose-50`}
+                    title="Delete this room from the typology" aria-label={`Delete ${roomLabel(activeRoomType)} from ${activeConfig}`}>
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Chip tone="brand">{rows.length} {rows.length === 1 ? 'item' : 'items'}</Chip>
+              {GRADES.map((g) => <Chip key={g} tone="slate" title={`${GRADE_TIER[g]} takes ${takenBy(g)} of them`}>{g === 'P' ? 'H' : g} · {takenBy(g)}</Chip>)}
+              {missing > 0 && <Chip tone="warn" title="The room lists items the Item bank no longer has. They are left out of a new BOQ.">{missing} no longer in the bank</Chip>}
             </div>
           </div>
 
-          {/* List of Bank Items */}
-          <div className="p-3 flex-1 overflow-y-auto space-y-2 custom-scrollbar">
-            {filteredBank.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-400 italic">
-                No items found matching your filter.
-              </div>
-            ) : (
-              filteredBank.map(item => {
-                const isAdded = currentRoomItemIds.includes(item.id);
-                const baseCost = (item.materials || 0) + (item.labor || 0);
-                const sellRate = calculateSellPrice(item.materials, item.labor, item.margin || 20);
-                const smartCoeff = getSmartDefaultCoefficient(item);
-
-                return (
-                  <div
-                    key={item.id}
-                    className={`p-3 rounded-xl border transition-all flex items-center justify-between ${
-                      isAdded
-                        ? 'bg-slate-50/80 border-slate-200 opacity-60'
-                        : 'bg-white border-slate-200 hover:border-sky-300 hover:shadow-xs'
-                    }`}
-                  >
-                    <div className="min-w-0 pr-2">
-                      <p className="font-bold text-slate-800 text-xs truncate">{item.name}</p>
-                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                        <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded">
-                          {item.cat || 'Item'}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-medium">
-                          {item.unit}
-                        </span>
-                        {smartCoeff !== undefined && (
-                          <span className="text-[9px] font-bold bg-amber-50 text-amber-800 px-1 py-0.2 rounded border border-amber-200">
-                            ~{smartCoeff}x Area
-                          </span>
-                        )}
-                        <span className="text-[10px] font-bold text-slate-700">
-                          {formatINR(sellRate)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleAddItem(item.id)}
-                      disabled={isAdded}
-                      className={`p-2 rounded-xl transition-all shrink-0 ${
-                        isAdded
-                          ? 'bg-emerald-50 text-emerald-600 cursor-default'
-                          : 'bg-sky-50 text-[#3D52A0] hover:bg-[#3D52A0] hover:text-white border border-sky-100'
-                      }`}
-                    >
-                      {isAdded ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT PANE: Configured Master Scope for the Room (7 Cols) */}
-        <div className="col-span-12 lg:col-span-7 bg-white rounded-2xl border border-sky-100 ring-2 ring-sky-50 shadow-sm flex flex-col h-full min-h-0 overflow-hidden">
-          {/* Header */}
-          <div className="p-3.5 border-b border-slate-200 bg-gradient-to-r from-sky-50/50 via-white to-sky-50/50 shrink-0 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#3D52A0]" />
-              <div>
-                <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                  {activeConfig} &gt; {activeRoomType.replace(/_/g, ' ')} Scope
-                </span>
-                <p className="text-[11px] text-slate-500">
-                  Fully loaded deliverables for this room in the Master Top Model.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 bg-sky-100 text-[#334486] rounded-full text-xs font-bold">
-                {currentRoomItemIds.length} Items
-              </span>
-              {currentRoomItemIds.length > 0 && (
-                <button
-                  onClick={handleClearRoom}
-                  className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                  title="Clear room"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* AI Smart Room Suggestions Strip */}
+          {/* What AI would add here. */}
           {roomAiSuggestions.length > 0 && (
-            <div className="p-3 bg-gradient-to-r from-amber-50/80 to-sky-50/60 border-b border-amber-200/60 shrink-0">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-black text-amber-900 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  AI Suggested Additions for this Room:
-                </span>
-                <button
-                  onClick={loadRoomAiSuggestions}
-                  disabled={isLoadingRoomAi}
-                  className="text-[10px] text-slate-500 hover:text-slate-800 flex items-center gap-1"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isLoadingRoomAi ? 'animate-spin' : ''}`} />
-                  Refresh
+            <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className={`${LABEL} flex items-center gap-1.5`}><Sparkles className="w-3.5 h-3.5 text-[#3D52A0]" aria-hidden />Suggested for this room</span>
+                <button type="button" onClick={loadRoomAiSuggestions} disabled={isLoadingRoomAi} className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1">
+                  <RefreshCw className={`w-3 h-3 ${isLoadingRoomAi ? 'motion-safe:animate-spin' : ''}`} aria-hidden />Refresh
                 </button>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {roomAiSuggestions.map((sug, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleAddItem(sug.item.id)}
-                    className="px-2.5 py-1 bg-white border border-amber-200 hover:border-[#3D52A0] hover:bg-sky-50 text-slate-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs group"
-                  >
-                    <Plus className="w-3 h-3 text-[#3D52A0] group-hover:scale-125 transition-transform" />
+                  <button key={`${sug.item.id}-${idx}`} type="button" onClick={() => handleAddItem(sug.item.id)} title={sug.reason || undefined}
+                    className="group hud-row-in px-2.5 py-1 rounded-full bg-white border border-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5 text-left transition-colors hover:border-[#3D52A0]/40 hover:text-[#3D52A0] motion-safe:active:scale-[0.97]"
+                    style={{ animationDelay: `${Math.min(idx, 10) * 25}ms` }}>
+                    <Plus className="w-3 h-3 text-[#3D52A0] shrink-0 transition-transform group-hover:rotate-90" aria-hidden />
                     <span>{sug.item.name}</span>
-                    <span className="text-[10px] text-slate-400 font-normal">({sug.item.unit})</span>
+                    <span className="text-[11px] font-normal text-slate-400">{sug.item.unit}</span>
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Configured Room Items List */}
-          <div className="p-3.5 flex-1 overflow-y-auto space-y-2 custom-scrollbar">
-            {currentRoomItemIds.length === 0 ? (
-              <div className="h-full min-h-[220px] flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-slate-200 rounded-2xl space-y-3 text-slate-400">
-                <Layers className="w-10 h-10 text-slate-300 stroke-1" />
-                <div>
-                  <p className="font-bold text-sm text-slate-700">No items in this room scope yet</p>
-                  <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                    Select items from the Master Item Bank on the left, or use the AI Suggestions above to populate this scope.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <AnimatePresence>
-                {currentRoomItemIds.map((itemId, idx) => {
-                  const item = bankMap.get(itemId);
-                  if (!item) return null;
-
-                  const baseCost = (item.materials || 0) + (item.labor || 0);
-                  const sellRate = calculateSellPrice(item.materials, item.labor, item.margin || 20);
-                  const smartCoeff = getSmartDefaultCoefficient(item);
-
+          {rows.length === 0 ? (
+            <div className="p-5">
+              <EmptyState icon={Layers} title="Nothing in this room yet" text="Add items from the Item bank beside this list, or pick one of the suggestions." />
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              <AnimatePresence initial={false}>
+                {rows.map((r, idx) => {
+                  const open = openSpecs.has(r.item.id);
+                  const hasSpecs = !!(r.item.specs && r.item.specs.trim());
                   return (
-                    <motion.div
-                      key={itemId}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="p-3 bg-white border border-slate-200 hover:border-sky-200 rounded-xl flex items-center justify-between shadow-2xs group transition-all"
-                    >
-                      <div className="flex items-center gap-3 min-w-0 pr-2">
-                        <span className="text-xs font-bold text-slate-400 w-5 shrink-0 text-center">
-                          {idx + 1}
-                        </span>
-                        <div className="w-1.5 h-8 bg-[#3D52A0] rounded-full shrink-0" />
-                        <div className="min-w-0">
-                          <p className="font-bold text-slate-800 text-xs truncate">{item.name}</p>
-                          <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                            <span className="text-[10px] text-slate-500">
-                              {item.cat || 'General'}
-                            </span>
-                            <span className="text-[10px] text-slate-400">•</span>
-                            <span className="text-[10px] font-semibold text-slate-600">
-                              Unit: {item.unit}
-                            </span>
-                            {smartCoeff !== undefined && (
-                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-100">
-                                Coeff: {smartCoeff}x Room Area
-                              </span>
-                            )}
-                            <span className="text-[10px] font-black text-slate-900">
-                              {formatINR(sellRate)}
-                            </span>
-                          </div>
+                    <motion.li key={r.item.id} layout="position" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.22 }} className="group px-5 py-3.5 flex flex-wrap items-start gap-x-4 gap-y-2 transition-colors hover:bg-slate-50">
+                      <span className="w-6 pt-0.5 text-xs font-bold text-slate-400 tabular-nums text-right shrink-0">{idx + 1}</span>
+                      <div className="min-w-0 flex-1 basis-64">
+                        {/* The whole name: it wraps, it is not cut. */}
+                        <p className="text-sm font-semibold text-slate-800 break-words">{r.item.name}</p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[11px] text-slate-500">
+                          <Chip tone="slate">{r.item.cat || 'General'}</Chip>
+                          <span>per {r.item.unit}</span>
+                          <span className="font-bold text-slate-800 tabular-nums">{formatINR(r.rate)}</span>
+                          {/* The size the item starts a BOQ at. With the Item bank's drawer to hand, the chip opens it there. */}
+                          {r.size ? (
+                            <button type="button" disabled={!onOpenItem} onClick={() => onOpenItem?.(r.item.id)}
+                              className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap bg-[#3D52A0]/10 text-[#3D52A0] enabled:hover:bg-[#3D52A0]/20 transition-colors"
+                              title={onOpenItem ? 'The standard size every new BOQ starts this item at. Open it to change' : 'The standard size from the Item bank: every new BOQ starts this item at it.'}>
+                              {r.size}
+                            </button>
+                          ) : r.noSize ? (
+                            <button type="button" disabled={!onOpenItem} onClick={() => onOpenItem?.(r.item.id)}
+                              className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap bg-amber-100 text-amber-700 enabled:hover:bg-amber-200 transition-colors"
+                              title={onOpenItem ? 'No standard size yet: a new BOQ sizes it from the room. Open it to set one' : 'Set its standard size in the Item bank. Until then a new BOQ sizes it from the room.'}>
+                              {onOpenItem ? 'Set standard size' : 'No standard size yet'}
+                            </button>
+                          ) : null}
+                          {r.coeff !== undefined && <span title="Sized as this share of the room's floor area">{r.coeff}× room area</span>}
                         </div>
+                        {hasSpecs && (
+                          <button type="button" onClick={() => toggleSpecs(r.item.id)} aria-expanded={open}
+                            className={`mt-1.5 w-full text-left text-xs text-slate-500 hover:text-slate-700 ${open ? 'block whitespace-pre-line' : 'line-clamp-2'}`}
+                            title={open ? 'Show less' : 'Show the whole specification'}>
+                            {r.item.specs}
+                          </button>
+                        )}
                       </div>
-
-                      <button
-                        onClick={() => handleRemoveItem(itemId)}
-                        className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
-                        title="Remove from room scope"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </motion.div>
+                      <div className="flex items-center gap-2 shrink-0 ml-auto">
+                        {r.role !== 'must' && <Chip tone={r.role === 'none' ? 'bad' : 'slate'}>{r.role === 'none' ? 'In no option' : 'Extra'}</Chip>}
+                        <div className="inline-flex gap-1" role="group" aria-label={`Options that take ${r.item.name}`}>
+                          {GRADES.map((g) => {
+                            const on = r.grades.includes(g);
+                            return (
+                              <button key={g} type="button" aria-pressed={on} title={`${GRADE_TIER[g]}: ${on ? 'takes this item' : 'does not take this item'}`}
+                                onClick={() => handleToggleGrade(r.item.id, g)}
+                                className={`w-7 h-7 rounded-lg text-[10px] font-bold border transition-colors motion-safe:active:scale-90 ${on ? 'bg-[#3D52A0] border-[#3D52A0] text-white' : 'bg-white border-slate-300 text-slate-400 hover:bg-slate-50'}`}>
+                                {g === 'P' ? 'H' : g}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {onOpenItem && (
+                          <button type="button" onClick={() => onOpenItem(r.item.id)} className={iconButton}
+                            title="Open this item: its standard size and recipe" aria-label={`Open ${r.item.name}: standard size and recipe`}>
+                            <SlidersHorizontal className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button type="button" onClick={() => handleRemoveItem(r.item.id)} className={`${iconButton} hover:!text-rose-600 hover:!bg-rose-50`}
+                          title="Take out of this room" aria-label={`Take ${r.item.name} out of ${roomLabel(activeRoomType)}`}>
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </motion.li>
                   );
                 })}
               </AnimatePresence>
-            )}
+            </ul>
+          )}
+        </section>
+
+        {/* The Item bank, to add from. It stays beside the room while the room is read. */}
+        <aside aria-label="Item bank" className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col min-w-0 lg:sticky lg:top-2 lg:max-h-[calc(100vh-7rem)] hud-panel-in">
+          <div className="p-4 border-b border-slate-100 space-y-3 shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-bold text-slate-800 flex items-center gap-2"><List className="w-4 h-4 text-[#3D52A0]" aria-hidden />Add from the Item bank</h2>
+              <Chip tone="slate">{filteredBank.length}</Chip>
+            </div>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden />
+              <input type="text" aria-label="Search the Item bank" placeholder="Search the Item bank" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Escape' && searchTerm) { e.stopPropagation(); setSearchTerm(''); } }}
+                className={`${INPUT} !py-1.5 !pl-8 !pr-8`} />
+              {searchTerm && (
+                <button type="button" onClick={() => setSearchTerm('')} aria-label="Clear search" className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <select aria-label="Trade" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className={`${INPUT} !py-1.5 bg-white cursor-pointer`}>
+              <option value="ALL">All trades</option>
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
-        </div>
+
+          <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-slate-100">
+            {filteredBank.length === 0 && <li className="p-6 text-center text-xs text-slate-500">No item matches.</li>}
+            {filteredBank.slice(0, BANK_SHOWN).map((item) => {
+              const isAdded = currentRoomItemIds.includes(item.id);
+              return (
+                <li key={item.id}>
+                  <button type="button" onClick={() => handleAddItem(item.id)} disabled={isAdded} aria-label={isAdded ? `${item.name} is in this room` : `Add ${item.name}`}
+                    title={item.specs || undefined}
+                    className={`group w-full px-4 py-2.5 flex items-start gap-3 text-left transition-colors ${isAdded ? 'cursor-default' : 'hover:bg-[#3D52A0]/5'}`}>
+                    <span className={`mt-0.5 w-6 h-6 rounded-lg grid place-items-center shrink-0 transition-colors ${isAdded ? 'bg-emerald-100 text-emerald-700' : 'bg-[#3D52A0]/10 text-[#3D52A0] group-hover:bg-[#3D52A0] group-hover:text-white'}`}>
+                      {isAdded ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5 transition-transform group-hover:rotate-90" />}
+                    </span>
+                    <span className={`min-w-0 flex-1 ${isAdded ? 'opacity-60' : ''}`}>
+                      <span className="block text-xs font-semibold text-slate-800 break-words">{item.name}</span>
+                      <span className="mt-0.5 block text-[11px] text-slate-500">
+                        {item.cat || 'General'} · per {item.unit} · <span className="font-bold text-slate-700 tabular-nums">{formatINR(calculateSellPrice(item.materials, item.labor, item.margin || 20))}</span>
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+            {filteredBank.length > BANK_SHOWN && <li className="px-4 py-3 text-[11px] text-slate-500 text-center">The first {BANK_SHOWN} of {filteredBank.length}. Search to find the rest.</li>}
+          </ul>
+        </aside>
       </div>
 
       {/* Modals & Drawers */}
+      {isSetupOpen && (
+        <OptionSetupModal setup={optionSetupOf(templates)} onClose={() => setIsSetupOpen(false)}
+          onSave={(next) => setTemplates(prev => withOptionSetup(prev, next))} />
+      )}
+
       <AiTemplateArchitectModal
         isOpen={isAiArchitectOpen}
         onClose={() => setIsAiArchitectOpen(false)}

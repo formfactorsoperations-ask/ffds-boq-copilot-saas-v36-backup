@@ -1,13 +1,19 @@
 import React from 'react';
 import { Item } from '../../types';
 import { TemplateData } from '../../lib/standardPackages';
-import { formatINR, calculateSellPrice } from '../../lib/utils';
-import { Sparkles, ShieldCheck, Layers, Eye, Copy, Trash2, Download, Upload, CheckCircle2 } from 'lucide-react';
+import { roomScopesOf } from '../../lib/templateOptions';
+import { Sparkles, ShieldCheck, Eye, Copy, Trash2, Download, Upload, SlidersHorizontal } from 'lucide-react';
+import { Button, Chip, LABEL } from '../ui/kit';
+
+/*
+  Standard templates: what can be done to the open typology, and which trades
+  it covers (DESIGN.md "Item bank motion", Standard templates). The figures
+  that used to sit here are tiles on the screen now.
+*/
 
 interface TemplateMetricsBarProps {
-  activeConfig: string;
-  templates: TemplateData;
-  bank: Item[];
+  /** There is more than one typology, so this one may be deleted. */
+  canDelete: boolean;
   onOpenAiArchitect: () => void;
   onOpenAiAudit: () => void;
   onOpenTierPreview: () => void;
@@ -15,162 +21,63 @@ interface TemplateMetricsBarProps {
   onDeleteConfig: () => void;
   onExportTemplates: () => void;
   onImportTemplates: () => void;
+  /** Opens Option setup: the figures that separate the three options (lib/optionSetup). */
+  onOpenOptionSetup?: () => void;
+  /** The studio has changed a figure from the standard. */
+  setupChanged?: boolean;
 }
 
+const ICON = 'p-1.5 rounded-lg text-slate-400 transition-colors hover:text-[#3D52A0] hover:bg-[#3D52A0]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30';
+
 export const TemplateMetricsBar: React.FC<TemplateMetricsBarProps> = ({
-  activeConfig,
-  templates,
-  bank,
-  onOpenAiArchitect,
-  onOpenAiAudit,
-  onOpenTierPreview,
-  onDuplicateConfig,
-  onDeleteConfig,
-  onExportTemplates,
-  onImportTemplates
-}) => {
-  const bankMap = new Map<string, Item>(bank.map(i => [i.id, i]));
-  const currentConfigRooms = templates[activeConfig] || {};
-  
-  // Compute aggregate stats for current template
-  const allItemIds = (Object.values(currentConfigRooms).flat() as unknown as string[]);
-  const uniqueItemIds = Array.from(new Set(allItemIds));
-  
-  let totalSellEstimate = 0;
-  let totalBaseCost = 0;
-  const categoriesPresent = new Set<string>();
+  canDelete, onOpenAiArchitect, onOpenAiAudit, onOpenTierPreview, onDuplicateConfig, onDeleteConfig,
+  onExportTemplates, onImportTemplates, onOpenOptionSetup, setupChanged,
+}) => (
+  <div className="flex flex-wrap items-center gap-2">
+    <Button size="sm" icon={ShieldCheck} onClick={onOpenAiAudit} title="Look for what this typology is missing">AI audit</Button>
+    <Button size="sm" icon={Eye} onClick={onOpenTierPreview} title="See the three options this typology makes">Preview the options</Button>
+    {onOpenOptionSetup && (
+      <Button size="sm" icon={SlidersHorizontal} onClick={onOpenOptionSetup} title="The figures that separate Essential, Comfort and Harmony">
+        Option setup
+        {setupChanged && <span className="w-1.5 h-1.5 rounded-full bg-[#3D52A0]" title="Changed from the standard" />}
+      </Button>
+    )}
+    <span className="flex items-center gap-0.5 px-1" role="group" aria-label="This typology">
+      <button type="button" onClick={onDuplicateConfig} title="Duplicate this typology" aria-label="Duplicate this typology" className={ICON}><Copy className="w-4 h-4" /></button>
+      <button type="button" onClick={onExportTemplates} title="Export every typology as a file" aria-label="Export the templates" className={ICON}><Download className="w-4 h-4" /></button>
+      <button type="button" onClick={onImportTemplates} title="Import typologies from a file" aria-label="Import templates" className={ICON}><Upload className="w-4 h-4" /></button>
+      {canDelete && (
+        <button type="button" onClick={onDeleteConfig} title="Delete this typology" aria-label="Delete this typology" className={`${ICON} hover:!text-rose-600 hover:!bg-rose-50`}><Trash2 className="w-4 h-4" /></button>
+      )}
+    </span>
+    <Button size="sm" variant="primary" icon={Sparkles} onClick={onOpenAiArchitect} title="Have AI draft a new typology from the Item bank">AI architect</Button>
+  </div>
+);
 
-  uniqueItemIds.forEach(id => {
-    const item = bankMap.get(id);
-    if (item) {
-      const baseCost = (item.materials || 0) + (item.labor || 0);
-      const sellRate = calculateSellPrice(item.materials, item.labor, item.margin || 20);
-      totalBaseCost += baseCost;
-      totalSellEstimate += sellRate;
-      if (item.cat) categoriesPresent.add(item.cat);
-    }
-  });
+const CORE_TRADES = [
+  { name: 'Carpentry', match: ['wood', 'carpentry', 'modular', 'furniture'] },
+  { name: 'Electrical', match: ['electrical', 'light', 'wire'] },
+  { name: 'Civil / Wet', match: ['civil', 'plumbing', 'tile', 'bath', 'waterproof'] },
+  { name: 'Painting', match: ['paint', 'polish', 'punning'] },
+  { name: 'Protection', match: ['protection', 'cleaning', 'debris', 'general'] },
+];
 
-  const coreTrades = [
-    { name: 'Carpentry', match: ['wood', 'carpentry', 'modular', 'furniture'] },
-    { name: 'Electrical', match: ['electrical', 'light', 'wire'] },
-    { name: 'Civil / Wet', match: ['civil', 'plumbing', 'tile', 'bath', 'waterproof'] },
-    { name: 'Painting', match: ['paint', 'polish', 'punning'] },
-    { name: 'Protection', match: ['protection', 'cleaning', 'debris', 'general'] }
-  ];
-
+/** The five trades a full interior needs, and whether this typology has an item in each. */
+export const TradeCoverage: React.FC<{ templates: TemplateData; activeConfig: string; bank: Item[] }> = ({ templates, activeConfig, bank }) => {
+  const byId = new Map<string, Item>(bank.map((i) => [i.id, i]));
+  const cats = new Set<string>();
+  Object.values(roomScopesOf(templates[activeConfig] || {})).forEach((ids) => (ids || []).forEach((id) => {
+    const cat = byId.get(id)?.cat;
+    if (cat) cats.add(cat.toLowerCase());
+  }));
+  const covered = (match: string[]) => [...cats].some((c) => match.some((m) => c.includes(m)));
   return (
-    <div className="hud-well p-4 rounded-2xl border space-y-3 shrink-0 hud-panel-in">
-      {/* Top row: Metrics + Actions */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="pr-4 border-r border-slate-200">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-              Configured Scope
-            </span>
-            <span className="text-sm font-black text-slate-800">
-              {Object.keys(currentConfigRooms).length} Rooms • {allItemIds.length} Total Items
-            </span>
-          </div>
-
-          <div className="pr-4 border-r border-slate-200">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-              Unique Bank SKUs
-            </span>
-            <span className="text-sm font-black text-slate-800">
-              {uniqueItemIds.length} Master Items
-            </span>
-          </div>
-
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-              Trade Coverage
-            </span>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              {coreTrades.map(trade => {
-                const isCovered = Array.from(categoriesPresent).some(cat => 
-                  trade.match.some(m => cat.toLowerCase().includes(m))
-                );
-                return (
-                  <span
-                    key={trade.name}
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                      isCovered
-                        ? 'bg-[#3D52A0]/10 text-[#334486] border-[#3D52A0]/25'
-                        : 'bg-slate-100 text-slate-400 border-slate-200'
-                    }`}
-                  >
-                    {trade.name}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={onOpenAiArchitect}
-            className="px-3.5 py-1.5 bg-[#3D52A0] text-white rounded-xl text-xs font-bold hover:bg-[#334486] transition-colors flex items-center gap-1.5"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            AI Architect
-          </button>
-
-          <button
-            onClick={onOpenAiAudit}
-            className="px-3 py-1.5 bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
-            AI Audit
-          </button>
-
-          <button
-            onClick={onOpenTierPreview}
-            className="px-3 py-1.5 bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
-          >
-            <Eye className="w-3.5 h-3.5" />
-            3-Tier Simulation
-          </button>
-
-          <div className="h-4 w-px bg-slate-200 mx-1" />
-
-          <button
-            onClick={onDuplicateConfig}
-            title="Duplicate this template"
-            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <Copy className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={onExportTemplates}
-            title="Export templates as JSON"
-            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={onImportTemplates}
-            title="Import templates from JSON"
-            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <Upload className="w-4 h-4" />
-          </button>
-
-          {Object.keys(templates).length > 1 && (
-            <button
-              onClick={onDeleteConfig}
-              title="Delete this template"
-              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="flex flex-wrap items-center gap-2">
+      <span className={LABEL}>Trades covered</span>
+      {CORE_TRADES.map((t) => {
+        const on = covered(t.match);
+        return <Chip key={t.name} tone={on ? 'brand' : 'slate'} title={on ? `${activeConfig} has ${t.name.toLowerCase()} items` : `${activeConfig} has no ${t.name.toLowerCase()} item yet`} className={on ? '' : '!text-slate-400'}>{t.name}</Chip>;
+      })}
     </div>
   );
 };

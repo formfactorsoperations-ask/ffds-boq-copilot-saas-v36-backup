@@ -1,44 +1,19 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Vendor, POScope, FullProjectData } from '../types';
 import { db } from '../services/dbService';
-import { 
-  Plus, 
-  Trash2, 
-  Edit3, 
-  Check, 
-  X, 
-  Search, 
-  Phone, 
-  Mail, 
-  MessageCircle, 
-  ExternalLink, 
-  Copy, 
-  Clock, 
-  CreditCard, 
-  Building2, 
-  Boxes, 
-  Users, 
-  Sparkles, 
-  Download, 
-  Upload, 
-  Filter, 
-  ArrowUpDown, 
-  LayoutGrid, 
-  List, 
-  Store, 
-  CheckCircle2, 
-  AlertCircle, 
-  FileText, 
-  Truck, 
-  Send,
-  Briefcase,
-  ChevronRight,
-  ShieldCheck,
-  Tag,
-  Share2,
-  RefreshCw
+import {
+  Plus, Trash2, Edit3, Check, X, Search, Phone, Mail, MessageCircle, Copy, Clock, CreditCard, Boxes, Users,
+  Sparkles, Download, Store, FileText, Send, Briefcase, RefreshCw, ChevronDown, LayoutGrid, List, Lock,
 } from '@/lib/lucide-shim';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { useOrg } from '../contexts/OrgContext';
+import BankModal from './bank/BankModal';
+import { Tile } from './bank/BankCommandBar';
+import { Button, Chip, EmptyState, Segmented, StateDot, INPUT, LABEL } from './ui/kit';
+import { CountUp } from './ui/HudBits';
+import { listV } from './people/PeopleBits';
+import './playground/playground.css';
+import './projectHeader/projectHeader.css';
 
 interface Props {
   projects?: FullProjectData[];
@@ -53,6 +28,25 @@ interface Props {
 }
 
 type ScopeFilter = 'all' | 'material' | 'labour' | 'turnkey' | 'active';
+
+/*
+  The Vendor directory (DESIGN.md "Item bank motion", Vendor directory).
+
+  Top to bottom: five figures (the three kinds of supplier filter the list),
+  one card with the view switch, the actions, search, sort and the filters,
+  then the vendors as cards or a table. A vendor opens in a drawer; adding,
+  editing, messaging and deleting each open in the shared window.
+*/
+
+const SCOPE_LABEL: Record<POScope, string> = { material: 'Material', labour: 'Labour', turnkey: 'Turnkey' } as Record<POScope, string>;
+const isActive = (v: Pick<Vendor, 'active'>) => v.active !== false;
+const nameKey = (name: string | undefined) => (name || '').trim().toLowerCase();
+const initialsOf = (name: string) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'V';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+};
 type SortOption = 'name_asc' | 'name_desc' | 'lead_asc' | 'recent';
 
 const TRADE_CATEGORIES = [
@@ -193,6 +187,16 @@ const WHATSAPP_VENDOR_TEMPLATES = [
 ];
 
 export default function VendorsManager({ projects = [], onStats }: Props) {
+  /* Messages go out in the studio's own name. They were all signed "Form Factors Design Studio", whichever studio sent them. */
+  const { orgData } = useOrg() as any;
+  const studioName = orgData?.orgName || 'our studio';
+  /* What an action did, said on the screen rather than in an alert. */
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(t);
+  }, [notice]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -205,7 +209,7 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
   useEffect(() => {
     onStats?.({
       total: vendors.length,
-      active: vendors.filter(v => v.active).length,
+      active: vendors.filter(isActive).length,
       // A directory entry nobody can contact is not a supplier, it is a note.
       reachable: vendors.filter(v => !!(v.phone || v.email)).length,
     });
@@ -288,13 +292,14 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
     const filteredNew = newVendors.filter(v => !existingNames.has(v.name.toLowerCase().trim()));
 
     if (filteredNew.length === 0) {
-      alert("Curated standard vendors are already in your directory.");
+      setNotice('The sample vendors are already in the directory.');
       return;
     }
 
     const combined = [...vendors, ...filteredNew];
     await db.saveVendors(combined);
     setVendors(combined);
+    setNotice(`${filteredNew.length} sample vendors added. They are made-up examples: delete them before the directory is used for real orders.`);
   };
 
   const handleSeedFromProjects = async () => {
@@ -309,7 +314,7 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
     });
 
     if (seedNames.size === 0) {
-      alert("No vendor names found in any project material selections to seed from.");
+      setNotice('No project names a vendor in its material selections yet.');
       return;
     }
 
@@ -330,14 +335,14 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
     });
 
     if (toAdd.length === 0) {
-      alert("All project material vendors are already registered in the directory.");
+      setNotice('Every vendor the projects name is already in the directory.');
       return;
     }
 
     const combined = [...vendors, ...toAdd];
     await db.saveVendors(combined);
     setVendors(combined);
-    alert(`Successfully imported ${toAdd.length} vendors from project material selections!`);
+    setNotice(`${toAdd.length} ${toAdd.length === 1 ? 'vendor' : 'vendors'} added from the projects' material selections. Open each to add a phone or email.`);
   };
 
   // Export vendors to CSV
@@ -448,7 +453,7 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
   const filteredVendors = useMemo(() => {
     return vendors.filter(v => {
       // Scope filter
-      if (scopeFilter === 'active' && !v.active) return false;
+      if (scopeFilter === 'active' && !isActive(v)) return false;
       if (scopeFilter === 'material' && !(v.supplies || []).includes('material')) return false;
       if (scopeFilter === 'labour' && !(v.supplies || []).includes('labour')) return false;
       if (scopeFilter === 'turnkey' && !(v.supplies || []).includes('turnkey')) return false;
@@ -490,1424 +495,532 @@ export default function VendorsManager({ projects = [], onStats }: Props) {
   // Summary Metrics
   const metrics = useMemo(() => {
     const total = vendors.length;
-    const active = vendors.filter(v => v.active !== false).length;
+    const active = vendors.filter(isActive).length;
     const materialCount = vendors.filter(v => (v.supplies || []).includes('material')).length;
     const labourCount = vendors.filter(v => (v.supplies || []).includes('labour')).length;
     const turnkeyCount = vendors.filter(v => (v.supplies || []).includes('turnkey')).length;
-    const avgLead = vendors.length > 0
-      ? Math.round(vendors.reduce((acc, v) => acc + (v.defaultLeadDays || 0), 0) / vendors.length)
+    /* Over the vendors that have a lead time: one added from a project has none, and counting it as zero days pulled the average down. */
+    const timed = vendors.filter(v => (v.defaultLeadDays || 0) > 0);
+    const avgLead = timed.length > 0
+      ? Math.round(timed.reduce((acc, v) => acc + (v.defaultLeadDays || 0), 0) / timed.length)
       : 0;
 
-    return { total, active, materialCount, labourCount, turnkeyCount, avgLead };
+    return { total, active, materialCount, labourCount, turnkeyCount, avgLead, timed: timed.length };
   }, [vendors]);
 
-  // Color generator for avatar
-  const getAvatarGradient = (name: string, supplies: POScope[] = []) => {
-    if (supplies.includes('turnkey')) {
-      return 'from-violet-600 to-indigo-600 text-white';
-    }
-    if (supplies.includes('labour')) {
-      return 'from-amber-500 to-orange-600 text-white';
-    }
-    if (supplies.includes('material')) {
-      return 'from-sky-500 to-blue-600 text-white';
-    }
-    const colors = [
-      'from-emerald-500 to-teal-600 text-white',
-      'from-blue-600 to-cyan-600 text-white',
-      'from-purple-500 to-pink-600 text-white',
-      'from-rose-500 to-red-600 text-white',
-    ];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    return colors[Math.abs(hash) % colors.length];
-  };
+  /* ── What the screen shows ─────────────────────────────────────────────── */
 
-  const getInitials = (name: string) => {
-    const parts = name.trim().split(' ').filter(Boolean);
-    if (parts.length === 0) return 'V';
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return (parts[0][0] + parts[1][0]).toUpperCase();
+  const usageOf = (v: Vendor) => vendorUsageMap.get(nameKey(v.name)) || { projectCount: 0, projectNames: [], materialCount: 0 };
+  /* The trades the directory's vendors are in, each with how many. */
+  const tradeCounts = useMemo(() => {
+    const n = new Map<string, number>();
+    vendors.forEach(v => (v.categories || []).forEach(c => n.set(c, (n.get(c) || 0) + 1)));
+    return [...n.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [vendors]);
+  const filtersOn = !!searchQuery.trim() || scopeFilter !== 'all' || selectedCategory !== 'all';
+  const clearFilters = () => { setSearchQuery(''); setScopeFilter('all'); setSelectedCategory('all'); };
+  const toggleScope = (s: ScopeFilter) => () => setScopeFilter(scopeFilter === s ? 'all' : s);
+  const openMessage = (v: Vendor) => {
+    setCustomWhatsAppMsg(WHATSAPP_VENDOR_TEMPLATES[0].template(v.name, studioName));
+    setShowWhatsAppModal(v);
   };
+  const closeForm = () => { setShowAddModal(false); setEditingVendor(null); };
+
+  const iconButton = 'p-1.5 rounded-lg text-slate-400 transition-colors hover:text-[#3D52A0] hover:bg-[#3D52A0]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30';
+  const avatar = (v: Vendor, size = 'w-10 h-10 text-sm') => (
+    <span aria-hidden className={`${size} rounded-xl grid place-items-center font-bold shrink-0 ${isActive(v) ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'bg-slate-100 text-slate-400'}`}>{initialsOf(v.name)}</span>
+  );
+  /* A value with a button that copies it; the button turns to a tick for a moment. */
+  const copyable = (text: string, id: string, label: string) => (
+    <button type="button" onClick={(e) => { e.stopPropagation(); handleCopy(text, id); }} className={iconButton} title={`Copy the ${label}`} aria-label={`Copy the ${label}`}>
+      {copiedId === id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+    </button>
+  );
+  const pill = (on: boolean, onClick: () => void, label: React.ReactNode, count: number | undefined, group: string, key?: string) => (
+    <button key={key} type="button" onClick={onClick} aria-pressed={on}
+      className={`relative inline-flex items-center px-3 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap transition-colors motion-safe:active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30 ${on ? 'border-transparent text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}>
+      {on && <motion.span layoutId={`vendor-pill-${group}`} className="absolute inset-0 rounded-full bg-[#3D52A0]" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
+      <span className="relative inline-flex items-center gap-1.5">{label}{count != null && <span className={`text-[11px] font-bold tabular-nums ${on ? 'text-white/80' : 'text-slate-400'}`}>{count}</span>}</span>
+    </button>
+  );
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 space-y-4">
-        <div className="w-10 h-10 border-3 border-sky-500/20 border-t-sky-600 rounded-full animate-spin" />
-        <p className="text-sm font-semibold text-slate-500">Loading studio vendor network...</p>
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 flex items-center gap-3 hud-scanning" role="status">
+        <span className="w-4 h-4 border-2 border-[#3D52A0] border-t-transparent rounded-full motion-safe:animate-spin shrink-0" />
+        <span className="text-xs text-slate-600">Loading the vendor directory.</span>
       </div>
     );
   }
 
+  const v0 = selectedVendor;
+  const form = editingVendor;
+
   return (
-    <div className="space-y-6 w-full pb-12">
-      
-      {/*
-        Actions only. The title, the description and the reachability dial come
-        from the shared console header the library shell renders above this --
-        keeping a second heading here gave the screen two of everything.
-      */}
-      <div className="flex flex-wrap items-center justify-end gap-2.5">
+    <div className="space-y-4 w-full">
+      {/* The figures. The three kinds of supplier filter the list. */}
+      <motion.div variants={listV} initial="hidden" animate="show" className="grid gap-3 grid-cols-2 lg:grid-cols-5">
+        <Tile icon={Store} label="Vendors" value={metrics.total} sub={`${metrics.active} active`} />
+        <Tile icon={Boxes} label="Material" value={metrics.materialCount} sub="Supply materials and fittings"
+          onClick={toggleScope('material')} on={scopeFilter === 'material'} title="Show only material suppliers" />
+        <Tile icon={Users} label="Labour" value={metrics.labourCount} sub="Trade contractors"
+          onClick={toggleScope('labour')} on={scopeFilter === 'labour'} title="Show only labour contractors" />
+        <Tile icon={Briefcase} label="Turnkey" value={metrics.turnkeyCount} sub="Supply and install"
+          onClick={toggleScope('turnkey')} on={scopeFilter === 'turnkey'} title="Show only turnkey partners" />
+        <Tile icon={Clock} label="Average lead time" value={metrics.avgLead} format={(n) => `${Math.round(n)} ${Math.round(n) === 1 ? 'day' : 'days'}`}
+          sub={metrics.timed ? `Across ${metrics.timed} with a lead time` : 'No lead times set yet'} wide />
+      </motion.div>
+
+      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3 hud-panel-in">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Segmented label="View" value={viewMode} onChange={setViewMode}
+            options={[{ id: 'grid', label: <><LayoutGrid className="w-4 h-4" aria-hidden />Cards</> }, { id: 'table', label: <><List className="w-4 h-4" aria-hidden />Table</> }]} />
+          <div className="flex flex-wrap items-center gap-2">
             {vendors.length === 0 ? (
-              <button
-                id="btn-seed-curated"
-                type="button"
-                onClick={handleSeedCurated}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all border border-slate-200 flex items-center gap-2 shadow-xs cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4 text-amber-600" />
-                <span>Load Sample Vendors</span>
-              </button>
-            ) : (
-              <button
-                id="btn-seed-from-projects"
-                type="button"
-                onClick={handleSeedFromProjects}
-                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all border border-slate-200 flex items-center gap-1.5 cursor-pointer"
-                title="Scan all project BOQs for new vendor names"
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-[#3D52A0]" />
-                <span className="hidden sm:inline">Sync from Projects</span>
-              </button>
-            )}
-
-            {vendors.length > 0 && (
-              <button
-                id="btn-export-csv"
-                type="button"
-                onClick={handleExportCSV}
-                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all border border-slate-200 flex items-center gap-1.5 cursor-pointer"
-                title="Export Vendor List as CSV"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">Export CSV</span>
-              </button>
-            )}
-
-            <button
-              id="btn-add-vendor-main"
-              type="button"
-              onClick={openAddModal}
-              className="px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-xl text-xs font-semibold transition-colors shadow-xs flex items-center gap-2 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Vendor</span>
-            </button>
-      </div>
-
-      {/* 2. KPI METRIC SUMMARY STRIP */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 hud-panel-in">
-        {/* Metric 1: Total Directory */}
-        <div 
-          onClick={() => { setScopeFilter('all'); setSelectedCategory('all'); }}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'all' && selectedCategory === 'all' ? 'bg-[#3D52A0]/5 border-[#3D52A0]/40 ring-2 ring-[#3D52A0]/15 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Directory</span>
-            <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
-              <Store className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900">{metrics.total}</span>
-            <span className="text-[11px] font-semibold text-emerald-600">({metrics.active} active)</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Registered partners</p>
-        </div>
-
-        {/* Metric 2: Material Suppliers */}
-        <div 
-          onClick={() => setScopeFilter('material')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'material' ? 'bg-blue-50/80 border-blue-300 ring-2 ring-blue-400/20 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Material Suppliers</span>
-            <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-              <Boxes className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900">{metrics.materialCount}</span>
-            <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">Material</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Raw materials & fittings</p>
-        </div>
-
-        {/* Metric 3: Labour Contractors */}
-        <div 
-          onClick={() => setScopeFilter('labour')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'labour' ? 'bg-[#3D52A0]/5 border-[#3D52A0]/40 ring-2 ring-[#3D52A0]/15 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Labour Contractors</span>
-            <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
-              <Users className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900">{metrics.labourCount}</span>
-            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">Labour</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Trade & artisan teams</p>
-        </div>
-
-        {/* Metric 4: Turnkey Subcontractors */}
-        <div 
-          onClick={() => setScopeFilter('turnkey')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${scopeFilter === 'turnkey' ? 'bg-[#3D52A0]/5 border-[#3D52A0]/40 ring-2 ring-[#3D52A0]/15 shadow-sm' : 'hud-well border-slate-200/80 hover:border-slate-300'}`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Turnkey Partners</span>
-            <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
-              <Briefcase className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900">{metrics.turnkeyCount}</span>
-            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">Turnkey</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">End-to-end execution</p>
-        </div>
-
-        {/* Metric 5: Average Lead Time */}
-        <div className="p-4 rounded-2xl border hud-well border-slate-200/80">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Avg Lead Time</span>
-            <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-1">
-            <span className="text-2xl font-black text-slate-900">{metrics.avgLead}</span>
-            <span className="text-xs font-bold text-slate-500">Days</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Order to site dispatch</p>
-        </div>
-      </div>
-
-      {/* 3. SEARCH, FILTERS & CONTROLS STRIP */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          
-          {/* Search Input */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search vendor by name, phone, GSTIN, category, or trade keywords..."
-              className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200/90 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Scope Filters Pills */}
-          <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl shrink-0 overflow-x-auto">
-            {(
-              [
-                { id: 'all', label: 'All Partners' },
-                { id: 'material', label: 'Material' },
-                { id: 'labour', label: 'Labour' },
-                { id: 'turnkey', label: 'Turnkey' },
-                { id: 'active', label: 'Active Only' },
-              ] as { id: ScopeFilter; label: string }[]
-            ).map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setScopeFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                  scopeFilter === tab.id
-                    ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Sort & View Mode */}
-          <div className="flex items-center gap-2 shrink-0">
-            <select
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value as SortOption)}
-              aria-label="Sort vendors"
-              className="px-3 py-2 bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer"
-            >
-              <option value="name_asc">Name (A-Z)</option>
-              <option value="name_desc">Name (Z-A)</option>
-              <option value="lead_asc">Lead Time (Fastest)</option>
-              <option value="recent">Recently Added</option>
-            </select>
-
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/70">
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-lg transition-all ${
-                  viewMode === 'grid' ? 'bg-white text-sky-600 shadow-xs' : 'text-slate-400 hover:text-slate-700'
-                }`}
-                title="Grid View"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-lg transition-all ${
-                  viewMode === 'table' ? 'bg-white text-sky-600 shadow-xs' : 'text-slate-400 hover:text-slate-700'
-                }`}
-                title="Table View"
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Trade Category Quick Filter Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pt-1 pb-0.5 text-xs">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
-            <Tag className="w-3 h-3" />
-            Trade:
-          </span>
-          <button
-            type="button"
-            onClick={() => setSelectedCategory('all')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
-              selectedCategory === 'all'
-                ? 'bg-[#3D52A0] text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            All Categories
-          </button>
-          {TRADE_CATEGORIES.map(cat => {
-            const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
-            const count = vendors.filter(v => (v.categories || []).some(c => c.toLowerCase() === cat.toLowerCase())).length;
-            if (count === 0 && selectedCategory !== cat) return null;
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(isSelected ? 'all' : cat)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
-                  isSelected
-                    ? 'bg-sky-600 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <span>{cat}</span>
-                {count > 0 && (
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isSelected ? 'bg-sky-700 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 4. VENDORS DIRECTORY CONTENT (GRID OR TABLE) */}
-      {filteredVendors.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-dashed border-slate-300 p-12 text-center space-y-4 shadow-xs">
-          <div className="w-14 h-14 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mx-auto border border-sky-100 shadow-sm">
-            <Store className="w-7 h-7" />
-          </div>
-          <div className="space-y-1 max-w-md mx-auto">
-            <h3 className="text-base font-bold text-slate-900">
-              {searchQuery || scopeFilter !== 'all' || selectedCategory !== 'all' ? "No matching vendors found" : "No vendors in studio directory"}
-            </h3>
-            <p className="text-xs text-slate-500">
-              {searchQuery || scopeFilter !== 'all' || selectedCategory !== 'all'
-                ? "Try clearing your search keyword or changing the filter selections."
-                : "Add your trusted trade contractors, material suppliers, and modular partners to streamline BOQs and purchase orders."}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            {searchQuery || scopeFilter !== 'all' || selectedCategory !== 'all' ? (
-              <button
-                type="button"
-                onClick={() => { setSearchQuery(''); setScopeFilter('all'); setSelectedCategory('all'); }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all"
-              >
-                Reset All Filters
-              </button>
+              <Button size="sm" onClick={handleSeedCurated} title="Six made-up vendors, to see how the directory works. Delete them before real use.">
+                <Sparkles className="w-3.5 h-3.5 text-[#3D52A0]" aria-hidden />Load sample vendors
+              </Button>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={handleSeedCurated}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-all border border-slate-200 flex items-center gap-2"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-500" />
-                  <span>Load 6 Curated Sample Vendors</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={openAddModal}
-                  className="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-sky-600/20 flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4 stroke-[2.5]" />
-                  <span>Add First Vendor</span>
-                </button>
+                <Button size="sm" icon={RefreshCw} onClick={handleSeedFromProjects} title="Add any vendor a project's material selections name that the directory does not have">Add from projects</Button>
+                <Button size="sm" icon={Download} onClick={handleExportCSV} title="Download the whole directory as a CSV file">Export CSV</Button>
               </>
             )}
+            <Button size="sm" variant="primary" onClick={openAddModal} className="group motion-safe:active:scale-[0.97]">
+              <Plus className="w-3.5 h-3.5 transition-transform duration-300 group-hover:rotate-90" aria-hidden />Add vendor
+            </Button>
           </div>
         </div>
-      ) : viewMode === 'grid' ? (
-        /* GRID VIEW */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4.5">
-          <AnimatePresence>
-            {filteredVendors.map(vendor => {
-              const usage = vendorUsageMap.get(vendor.name.toLowerCase().trim());
-              const avatarGrad = getAvatarGradient(vendor.name, vendor.supplies);
 
+        {notice && (
+          <p role="status" className="hud-row-in flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+            <span className="flex-1">{notice}</span>
+            <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
+          </p>
+        )}
+
+        {vendors.length > 0 && (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative grow basis-72">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden />
+                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} aria-label="Search the vendor directory"
+                  onKeyDown={(e) => { if (e.key === 'Escape' && searchQuery) { e.stopPropagation(); setSearchQuery(''); } }}
+                  placeholder="Search by name, trade, phone, email, GSTIN or notes" className={`${INPUT} !rounded-xl pl-9 pr-9`} />
+                {searchQuery && (
+                  <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100"><X className="w-4 h-4" /></button>
+                )}
+              </div>
+              <p role="status" className="text-xs text-slate-500 whitespace-nowrap">
+                <span className="font-bold text-slate-800 tabular-nums">{filteredVendors.length}</span>
+                {filtersOn ? ` of ${vendors.length} vendors` : ` ${vendors.length === 1 ? 'vendor' : 'vendors'}`}
+              </p>
+              {filtersOn && <Button size="sm" variant="quiet" icon={X} onClick={clearFilters} className="hud-row-in">Clear filters</Button>}
+              <select aria-label="Sort" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOption)} className={`${INPUT} !w-auto !rounded-xl bg-white cursor-pointer`}>
+                <option value="name_asc">Name, A to Z</option>
+                <option value="name_desc">Name, Z to A</option>
+                <option value="lead_asc">Shortest lead time</option>
+                <option value="recent">Newest first</option>
+              </select>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Show">
+              <span className={`${LABEL} w-14 shrink-0`}>Show</span>
+              {pill(scopeFilter === 'all', () => setScopeFilter('all'), 'All', metrics.total, 'scope')}
+              {pill(scopeFilter === 'active', () => setScopeFilter('active'), 'Active', metrics.active, 'scope')}
+              {pill(scopeFilter === 'material', () => setScopeFilter('material'), 'Material', metrics.materialCount, 'scope')}
+              {pill(scopeFilter === 'labour', () => setScopeFilter('labour'), 'Labour', metrics.labourCount, 'scope')}
+              {pill(scopeFilter === 'turnkey', () => setScopeFilter('turnkey'), 'Turnkey', metrics.turnkeyCount, 'scope')}
+            </div>
+
+            {tradeCounts.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Trade">
+                <span className={`${LABEL} w-14 shrink-0`}>Trade</span>
+                {pill(selectedCategory === 'all', () => setSelectedCategory('all'), 'All', undefined, 'trade')}
+                {tradeCounts.map(([c, n]) => pill(selectedCategory.toLowerCase() === c.toLowerCase(), () => setSelectedCategory(c), c, n, 'trade', c))}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* The vendors. */}
+      <div key={viewMode} className="hud-swap">
+        {vendors.length === 0 ? (
+          <EmptyState icon={Store} className="bg-white" title="No vendors yet"
+            text="Add the suppliers and contractors the studio buys from, so orders and messages start from their details."
+            action={<Button size="sm" variant="primary" icon={Plus} onClick={openAddModal}>Add vendor</Button>} />
+        ) : filteredVendors.length === 0 ? (
+          <EmptyState icon={Search} className="bg-white" title="No vendor matches" text="Nothing passes the search and filters that are on."
+            action={<Button size="sm" icon={X} onClick={clearFilters}>Clear filters</Button>} />
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filteredVendors.map((v, i) => {
+              const usage = usageOf(v);
               return (
-                <motion.div
-                  layout
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.98 }}
-                  key={vendor.id}
-                  className={`group relative bg-white rounded-2xl border border-slate-200/90 hover:border-sky-300 shadow-2xs hover:shadow-lg hover:shadow-sky-500/8 transition-all p-5 flex flex-col justify-between ${
-                    !vendor.active ? 'opacity-70 bg-slate-50/60' : ''
-                  }`}
-                >
-                  <div>
-                    {/* Header: Avatar, Name, Status & Categories */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 min-w-0">
-                        <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${avatarGrad} flex items-center justify-center font-black text-sm shrink-0 shadow-md shadow-slate-900/10`}>
-                          {getInitials(vendor.name)}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <h3 
-                              onClick={() => setSelectedVendor(vendor)}
-                              className="font-bold text-slate-900 text-base leading-snug truncate hover:text-sky-600 cursor-pointer transition-colors"
-                              title={vendor.name}
-                            >
-                              {vendor.name}
-                            </h3>
-                          </div>
-
-                          {/* Categories Subtitle */}
-                          {vendor.categories && vendor.categories.length > 0 ? (
-                            <p className="text-[11px] font-semibold text-slate-500 truncate mt-0.5">
-                              {vendor.categories.join(' · ')}
-                            </p>
-                          ) : (
-                            <p className="text-[11px] font-medium text-slate-400 italic mt-0.5">
-                              General Trade Partner
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Status Tag */}
-                      <span className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
-                        vendor.active
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
-                          : 'bg-slate-100 text-slate-500 border-slate-200'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${vendor.active ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                        {vendor.active ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-
-                    {/* Scope Badges */}
-                    <div className="flex flex-wrap items-center gap-1.5 mt-3.5">
-                      {(vendor.supplies || ['material']).map(scope => {
-                        if (scope === 'material') {
-                          return (
-                            <span key={scope} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-sky-50 text-sky-700 border border-sky-200/80">
-                              <Boxes className="w-3 h-3" />
-                              <span>Material</span>
-                            </span>
-                          );
-                        }
-                        if (scope === 'labour') {
-                          return (
-                            <span key={scope} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/80">
-                              <Users className="w-3 h-3" />
-                              <span>Labour</span>
-                            </span>
-                          );
-                        }
-                        return (
-                          <span key={scope} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/80">
-                            <Briefcase className="w-3 h-3" />
-                            <span>Turnkey</span>
-                          </span>
-                        );
-                      })}
-
-                      {vendor.defaultLeadDays ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200/70 ml-auto">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          <span>{vendor.defaultLeadDays}d Lead</span>
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {/* Contact & Commercial Info Details */}
-                    <div className="mt-4 space-y-2 text-xs font-medium border-t border-slate-100 pt-3 text-slate-600">
-                      {/* Phone & WhatsApp Quick Actions */}
-                      {vendor.phone && (
-                        <div className="flex items-center justify-between group/contact">
-                          <div className="flex items-center gap-2 truncate">
-                            <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <a 
-                              href={`tel:${vendor.phone}`} 
-                              className="text-slate-700 font-mono text-xs hover:text-sky-600 hover:underline truncate"
-                            >
-                              {vendor.phone}
-                            </a>
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCustomWhatsAppMsg(WHATSAPP_VENDOR_TEMPLATES[0].template(vendor.name, "Form Factors Design Studio"));
-                                setShowWhatsAppModal(vendor);
-                              }}
-                              className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors"
-                              title="Chat on WhatsApp"
-                            >
-                              <MessageCircle className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(vendor.phone || '', `phone_${vendor.id}`)}
-                              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                              title="Copy Phone"
-                            >
-                              {copiedId === `phone_${vendor.id}` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Email */}
-                      {vendor.email && (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 truncate">
-                            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <a 
-                              href={`mailto:${vendor.email}`} 
-                              className="text-slate-700 text-xs hover:text-sky-600 hover:underline truncate"
-                            >
-                              {vendor.email}
-                            </a>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleCopy(vendor.email || '', `email_${vendor.id}`)}
-                            className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
-                            title="Copy Email"
-                          >
-                            {copiedId === `email_${vendor.id}` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
-                      )}
-
-                      {/* GSTIN */}
-                      {vendor.gstin && (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <ShieldCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">GST:</span>
-                            <span className="font-mono text-[11px] font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
-                              {vendor.gstin}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleCopy(vendor.gstin || '', `gst_${vendor.id}`)}
-                            className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
-                            title="Copy GSTIN"
-                          >
-                            {copiedId === `gst_${vendor.id}` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Payment Terms */}
-                      {vendor.paymentTerms && (
-                        <div className="flex items-start gap-2 pt-0.5 text-slate-600">
-                          <CreditCard className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                          <span className="text-[11px] font-medium leading-tight">
-                            {vendor.paymentTerms}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Internal Notes Snippet */}
-                    {vendor.notes && (
-                      <p className="mt-3 text-[11px] text-slate-500 bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/70 leading-relaxed italic line-clamp-2">
-                        "{vendor.notes}"
-                      </p>
-                    )}
-
-                    {/* Project Usage Tag */}
-                    {usage && usage.projectCount > 0 && (
-                      <div className="mt-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-sky-50/70 border border-sky-100 text-[11px] font-semibold text-sky-800">
-                        <Building2 className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                        <span>Used in {usage.projectCount} project{usage.projectCount > 1 ? 's' : ''} ({usage.materialCount} items)</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Card Bottom Footer Actions */}
-                  <div className="flex items-center justify-between border-t border-slate-100 pt-3.5 mt-4">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedVendor(vendor)}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-sky-600 hover:text-sky-800 transition-colors"
-                    >
-                      <span>View Dossier</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                <article key={v.id} aria-label={v.name}
+                  className={`group hud-row-in pp-lift bg-white rounded-2xl border p-5 flex flex-col gap-3 transition-colors hover:border-[#3D52A0]/40 ${isActive(v) ? 'border-slate-200' : 'border-slate-200 bg-slate-50'}`}
+                  style={{ animationDelay: `${Math.min(i, 11) * 25}ms` }}>
+                  <div className="flex items-start gap-3">
+                    {avatar(v)}
+                    <button type="button" onClick={() => setSelectedVendor(v)} className="min-w-0 flex-1 text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30" title="Open this vendor">
+                      <span className="block text-sm font-bold text-slate-800 break-words group-hover:text-[#3D52A0] transition-colors">{v.name}</span>
+                      <span className="mt-0.5 block text-[11px] text-slate-500 break-words">{(v.categories || []).join(' · ') || 'No trade set'}</span>
                     </button>
-
-                    <div className="flex items-center gap-1">
-                      {vendor.phone && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCustomWhatsAppMsg(WHATSAPP_VENDOR_TEMPLATES[0].template(vendor.name, "Form Factors Design Studio"));
-                            setShowWhatsAppModal(vendor);
-                          }}
-                          className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-all"
-                          title="Open WhatsApp Messaging"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(vendor)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-all"
-                        title="Edit vendor profile"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirmId(vendor.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
-                        title="Delete vendor"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    {!isActive(v) && <Chip tone="slate">Inactive</Chip>}
                   </div>
-                </motion.div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(v.supplies || []).map(s => <Chip key={s} tone="brand">{SCOPE_LABEL[s] || s}</Chip>)}
+                    {usage.projectCount > 0 && <Chip tone="slate" title={usage.projectNames.join(', ')}>{usage.projectCount} {usage.projectCount === 1 ? 'project' : 'projects'}</Chip>}
+                  </div>
+
+                  <dl className="space-y-1.5 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden />
+                      <dt className="sr-only">Phone</dt>
+                      {v.phone ? <><dd className="flex-1 min-w-0 font-semibold text-slate-700 tabular-nums truncate">{v.phone}</dd>{copyable(v.phone, `${v.id}-phone`, 'phone number')}</> : <dd className="text-slate-400">No phone</dd>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden />
+                      <dt className="sr-only">Email</dt>
+                      {v.email ? <><dd className="flex-1 min-w-0 text-slate-700 truncate" title={v.email}>{v.email}</dd>{copyable(v.email, `${v.id}-email`, 'email')}</> : <dd className="text-slate-400">No email</dd>}
+                    </div>
+                    {v.gstin && (
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden />
+                        <dt className="sr-only">GSTIN</dt>
+                        <dd className="flex-1 min-w-0 text-slate-700 tabular-nums truncate">{v.gstin}</dd>{copyable(v.gstin, `${v.id}-gstin`, 'GSTIN')}
+                      </div>
+                    )}
+                  </dl>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1">
+                    <span className={LABEL}>Lead time</span>
+                    <span className={LABEL}>Payment terms</span>
+                    <span className="text-xs font-bold text-slate-800 tabular-nums">{v.defaultLeadDays ? `${v.defaultLeadDays} ${v.defaultLeadDays === 1 ? 'day' : 'days'}` : 'Not set'}</span>
+                    <span className="text-xs text-slate-700 break-words">{v.paymentTerms || 'Not set'}</span>
+                  </div>
+
+                  {v.notes && <p className="text-xs text-slate-500 line-clamp-2" title={v.notes}>{v.notes}</p>}
+
+                  <div className="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <Button size="sm" icon={MessageCircle} onClick={() => openMessage(v)} disabled={!v.phone} title={v.phone ? 'Write a WhatsApp message to this vendor' : 'Add a phone number to message this vendor'}>Message</Button>
+                    <span className="flex items-center gap-0.5 opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                      <button type="button" onClick={() => openEditModal(v)} className={iconButton} title="Edit" aria-label={`Edit ${v.name}`}><Edit3 className="w-4 h-4" /></button>
+                      <button type="button" onClick={() => setDeleteConfirmId(v.id)} className={`${iconButton} hover:!text-rose-600 hover:!bg-rose-50`} title="Delete" aria-label={`Delete ${v.name}`}><Trash2 className="w-4 h-4" /></button>
+                    </span>
+                  </div>
+                </article>
               );
             })}
-          </AnimatePresence>
-        </div>
-      ) : (
-        /* TABLE VIEW */
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                  <th className="py-3.5 px-4">Vendor / Company</th>
-                  <th className="py-3.5 px-3">Scope</th>
-                  <th className="py-3.5 px-3">Categories</th>
-                  <th className="py-3.5 px-3">Contact</th>
-                  <th className="py-3.5 px-3">GSTIN</th>
-                  <th className="py-3.5 px-3">Payment Terms</th>
-                  <th className="py-3.5 px-3">Lead Time</th>
-                  <th className="py-3.5 px-3">Status</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {filteredVendors.map(vendor => {
-                  const avatarGrad = getAvatarGradient(vendor.name, vendor.supplies);
-                  return (
-                    <tr key={vendor.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${avatarGrad} flex items-center justify-center font-bold text-xs shrink-0`}>
-                            {getInitials(vendor.name)}
-                          </div>
-                          <div>
-                            <span 
-                              onClick={() => setSelectedVendor(vendor)}
-                              className="font-bold text-slate-900 hover:text-sky-600 cursor-pointer block"
-                            >
-                              {vendor.name}
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px] text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    {['Vendor', 'Supplies', 'Phone', 'Email', 'Lead time', 'Payment terms', 'Projects'].map(h => <th key={h} scope="col" className={`${LABEL} px-3 py-3`}>{h}</th>)}
+                    <th scope="col" className="w-28 px-3"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {filteredVendors.map((v, i) => {
+                    const usage = usageOf(v);
+                    return (
+                      <tr key={v.id} className={`group hud-row-in transition-colors hover:bg-slate-50 ${isActive(v) ? '' : 'text-slate-400'}`} style={{ animationDelay: `${Math.min(i, 14) * 18}ms` }}>
+                        <td className="px-3 py-2.5">
+                          <button type="button" onClick={() => setSelectedVendor(v)} className="flex items-center gap-2.5 text-left" title="Open this vendor">
+                            {avatar(v, 'w-8 h-8 text-xs')}
+                            <span className="min-w-0">
+                              <span className="flex items-center gap-1.5 font-semibold text-slate-800 group-hover:text-[#3D52A0]">{v.name}{!isActive(v) && <Chip tone="slate">Inactive</Chip>}</span>
+                              <span className="block text-[11px] text-slate-500">{(v.categories || []).join(' · ') || 'No trade set'}</span>
                             </span>
-                            {vendor.notes && (
-                              <span className="text-[10px] text-slate-400 truncate max-w-xs block">
-                                {vendor.notes}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="py-3 px-3">
-                        <div className="flex flex-wrap gap-1">
-                          {(vendor.supplies || ['material']).map(s => (
-                            <span 
-                              key={s} 
-                              className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                                s === 'material' ? 'bg-sky-50 text-sky-700 border border-sky-200/70' :
-                                s === 'labour' ? 'bg-amber-50 text-amber-700 border border-amber-200/70' :
-                                'bg-indigo-50 text-indigo-700 border border-indigo-200/70'
-                              }`}
-                            >
-                              {s}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-
-                      <td className="py-3 px-3 max-w-[180px] truncate">
-                        <span className="text-[11px] text-slate-600" title={(vendor.categories || []).join(', ')}>
-                          {(vendor.categories || []).join(', ') || '—'}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-3">
-                        <div className="space-y-0.5">
-                          {vendor.phone && (
-                            <div className="flex items-center gap-1 font-mono text-[11px]">
-                              <Phone className="w-3 h-3 text-slate-400" />
-                              <a href={`tel:${vendor.phone}`} className="hover:text-sky-600 hover:underline">{vendor.phone}</a>
-                            </div>
-                          )}
-                          {vendor.email && (
-                            <div className="flex items-center gap-1 text-[11px]">
-                              <Mail className="w-3 h-3 text-slate-400" />
-                              <a href={`mailto:${vendor.email}`} className="hover:text-sky-600 hover:underline truncate max-w-[140px] inline-block">{vendor.email}</a>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="py-3 px-3 font-mono text-[11px]">
-                        {vendor.gstin ? (
-                          <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 uppercase font-semibold">
-                            {vendor.gstin}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2.5"><span className="flex flex-wrap gap-1">{(v.supplies || []).map(s => <Chip key={s} tone="brand">{SCOPE_LABEL[s] || s}</Chip>)}</span></td>
+                        <td className="px-3 py-2.5 tabular-nums whitespace-nowrap text-slate-700">{v.phone || <span className="text-slate-300">–</span>}</td>
+                        <td className="px-3 py-2.5 text-slate-700">{v.email || <span className="text-slate-300">–</span>}</td>
+                        <td className="px-3 py-2.5 tabular-nums whitespace-nowrap font-semibold text-slate-800">{v.defaultLeadDays ? `${v.defaultLeadDays} d` : <span className="font-normal text-slate-300">–</span>}</td>
+                        <td className="px-3 py-2.5 text-slate-700">{v.paymentTerms || <span className="text-slate-300">–</span>}</td>
+                        <td className="px-3 py-2.5 tabular-nums">{usage.projectCount > 0 ? <Chip tone="slate" title={usage.projectNames.join(', ')}>{usage.projectCount}</Chip> : <span className="text-slate-300">–</span>}</td>
+                        <td className="pl-1 pr-3 py-2.5">
+                          <span className="flex items-center justify-end gap-0.5 opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                            <button type="button" onClick={() => openMessage(v)} disabled={!v.phone} className={`${iconButton} disabled:opacity-40 disabled:pointer-events-none`} title={v.phone ? 'Message on WhatsApp' : 'No phone number'} aria-label={`Message ${v.name}`}><MessageCircle className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => openEditModal(v)} className={iconButton} title="Edit" aria-label={`Edit ${v.name}`}><Edit3 className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => setDeleteConfirmId(v.id)} className={`${iconButton} hover:!text-rose-600 hover:!bg-rose-50`} title="Delete" aria-label={`Delete ${v.name}`}><Trash2 className="w-4 h-4" /></button>
                           </span>
-                        ) : '—'}
-                      </td>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
 
-                      <td className="py-3 px-3 text-[11px] max-w-[160px] truncate" title={vendor.paymentTerms}>
-                        {vendor.paymentTerms || '—'}
-                      </td>
+      {/* Add or edit a vendor. */}
+      {showAddModal && form && (
+        <BankModal label={form.id ? 'Edit vendor' : 'Add a vendor'} eyebrow="Vendor directory" title={form.id ? `Edit ${form.name || 'vendor'}` : 'Add a vendor'}
+          blurb="Who they are, what they supply and how to reach them. Orders and messages start from these details." size="lg" onClose={closeForm}
+          footer={
+            <>
+              <Button onClick={closeForm}>Cancel</Button>
+              <Button variant="primary" icon={Check} type="submit" form="vendor-form" disabled={!form.name?.trim()} title={!form.name?.trim() ? 'Give the vendor a name' : undefined}>
+                {form.id ? 'Save changes' : 'Add vendor'}
+              </Button>
+            </>
+          }>
+          <form id="vendor-form" onSubmit={handleSaveVendor} className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-4 items-end">
+              <label className="block">
+                <span className={`${LABEL} block mb-1.5`}>Name</span>
+                <input autoFocus required type="text" value={form.name || ''} onChange={e => setEditingVendor(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Royal Woodcrafters" className={INPUT} />
+              </label>
+              <div>
+                <span className={`${LABEL} block mb-1.5`}>Status</span>
+                <Segmented label="Status" value={form.active !== false ? 'on' : 'off'} onChange={(x) => setEditingVendor(p => ({ ...p, active: x === 'on' }))}
+                  options={[{ id: 'on', label: 'Active' }, { id: 'off', label: 'Inactive' }]} />
+              </div>
+            </div>
 
-                      <td className="py-3 px-3 text-[11px]">
-                        {vendor.defaultLeadDays ? `${vendor.defaultLeadDays} days` : '—'}
-                      </td>
-
-                      <td className="py-3 px-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          vendor.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${vendor.active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                          {vendor.active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {vendor.phone && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCustomWhatsAppMsg(WHATSAPP_VENDOR_TEMPLATES[0].template(vendor.name, "Form Factors Design Studio"));
-                                setShowWhatsAppModal(vendor);
-                              }}
-                              className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50"
-                              title="WhatsApp"
-                            >
-                              <MessageCircle className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(vendor)}
-                            className="p-1 rounded-md text-slate-400 hover:text-sky-600 hover:bg-sky-50"
-                            title="Edit"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirmId(vendor.id)}
-                            className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+            <div>
+              <span className={`${LABEL} block mb-1.5`}>What they supply</span>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="What they supply">
+                {(['material', 'labour', 'turnkey'] as POScope[]).map(scope => {
+                  const cur = form.supplies || [];
+                  const on = cur.includes(scope);
+                  return (
+                    <button key={scope} type="button" aria-pressed={on}
+                      onClick={() => { const next = on ? cur.filter(s => s !== scope) : [...cur, scope]; setEditingVendor(p => ({ ...p, supplies: next.length > 0 ? next : ['material'] })); }}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors motion-safe:active:scale-[0.97] ${on ? 'bg-[#3D52A0] border-[#3D52A0] text-white' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'}`}>
+                      {SCOPE_LABEL[scope]}
+                    </button>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1.5">A vendor may supply more than one. Turnkey means they supply and install.</p>
+            </div>
+
+            <div>
+              <span className={`${LABEL} block mb-1.5`}>Trades</span>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Trades">
+                {TRADE_CATEGORIES.map(cat => {
+                  const cur = form.categories || [];
+                  const on = cur.includes(cat);
+                  return (
+                    <button key={cat} type="button" aria-pressed={on}
+                      onClick={() => setEditingVendor(p => ({ ...p, categories: on ? cur.filter(c => c !== cat) : [...cur, cat] }))}
+                      className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-colors motion-safe:active:scale-[0.97] ${on ? 'bg-[#3D52A0]/10 border-[#3D52A0]/30 text-[#3D52A0]' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <label className="block">
+                <span className={`${LABEL} block mb-1.5`}>Phone</span>
+                <input type="tel" value={form.phone || ''} onChange={e => setEditingVendor(p => ({ ...p, phone: e.target.value }))} placeholder="+91 98200 00000" className={INPUT} />
+              </label>
+              <label className="block">
+                <span className={`${LABEL} block mb-1.5`}>Email</span>
+                <input type="email" value={form.email || ''} onChange={e => setEditingVendor(p => ({ ...p, email: e.target.value }))} placeholder="orders@vendor.com" className={INPUT} />
+              </label>
+              <label className="block">
+                <span className={`${LABEL} block mb-1.5`}>GSTIN</span>
+                <input type="text" value={form.gstin || ''} onChange={e => setEditingVendor(p => ({ ...p, gstin: e.target.value.toUpperCase() }))} placeholder="27AAAAA0000A1Z5" className={`${INPUT} uppercase tabular-nums`} />
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <label className="block">
+                <span className={`${LABEL} block mb-1.5`}>Lead time, days</span>
+                <input type="number" min="0" value={form.defaultLeadDays ?? ''} onChange={e => setEditingVendor(p => ({ ...p, defaultLeadDays: Math.max(0, parseInt(e.target.value) || 0) }))} className={`${INPUT} tabular-nums`} />
+              </label>
+              <div className="sm:col-span-2">
+                <label htmlFor="vendor-terms" className={`${LABEL} block mb-1.5`}>Payment terms</label>
+                <input id="vendor-terms" type="text" list="vendor-terms-usual" value={form.paymentTerms || ''} onChange={e => setEditingVendor(p => ({ ...p, paymentTerms: e.target.value }))}
+                  placeholder="Pick a usual one or type your own" className={INPUT} />
+                <datalist id="vendor-terms-usual">{PAYMENT_TERM_PRESETS.filter(t => t !== 'Custom Agreement').map(t => <option key={t} value={t} />)}</datalist>
+              </div>
+            </div>
+
+            <label className="block">
+              <span className={`${LABEL} flex items-center gap-1 mb-1.5`}><Lock className="w-3 h-3" aria-hidden />Notes for the studio</span>
+              <textarea rows={3} value={form.notes || ''} onChange={e => setEditingVendor(p => ({ ...p, notes: e.target.value }))}
+                placeholder="e.g. Speak to Mr. Sanjay. Dispatches on Saturdays." className={INPUT} />
+            </label>
+          </form>
+        </BankModal>
+      )}
+
+      {/* A vendor, opened: a drawer from the right, as the Item bank's recipe is. */}
+      {v0 && (
+        <div className="fixed inset-0 z-[300]" onKeyDown={(e) => { if (e.key === 'Escape') setSelectedVendor(null); }}>
+          <div className="absolute inset-0 phd-scrim bg-[#12182F]/40 backdrop-blur-sm" onClick={() => setSelectedVendor(null)} />
+          <aside className="absolute right-0 top-0 bottom-0 w-full max-w-[560px] bg-white shadow-2xl flex flex-col pg-slide" role="dialog" aria-modal="true" aria-label={v0.name}>
+            <div className="px-6 pt-5 pb-4 border-b border-slate-100 flex items-start gap-3">
+              {avatar(v0, 'w-12 h-12 text-base')}
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">Vendor directory</p>
+                <h2 className="text-lg font-bold text-slate-800 break-words">{v0.name}</h2>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <Chip tone={isActive(v0) ? 'good' : 'slate'}><StateDot tone={isActive(v0) ? 'good' : 'slate'} />{isActive(v0) ? 'Active' : 'Inactive'}</Chip>
+                  {(v0.supplies || []).map(s => <Chip key={s} tone="brand">{SCOPE_LABEL[s] || s}</Chip>)}
+                </div>
+              </div>
+              <button type="button" autoFocus onClick={() => setSelectedVendor(null)} aria-label="Close" className="p-2 rounded-xl text-slate-400 hover:bg-slate-100"><X className="w-4 h-4" aria-hidden /></button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6 space-y-5">
+              <div>
+                <span className={`${LABEL} block mb-1.5`}>How to reach them</span>
+                <dl className="rounded-xl border border-slate-200 divide-y divide-slate-100 text-sm">
+                  {([['Phone', v0.phone, Phone, 'phone number'], ['Email', v0.email, Mail, 'email'], ['GSTIN', v0.gstin, FileText, 'GSTIN']] as const).map(([label, value, Icon, what], i) => (
+                    <div key={label} className="hud-row-in flex items-center gap-3 px-3 py-2.5" style={{ animationDelay: `${i * 40}ms` }}>
+                      <Icon className="w-4 h-4 text-slate-400 shrink-0" aria-hidden />
+                      <dt className={`${LABEL} w-14 shrink-0`}>{label}</dt>
+                      <dd className={`flex-1 min-w-0 break-words ${value ? 'font-semibold text-slate-800' : 'text-slate-400'}`}>{value || 'Not set'}</dd>
+                      {value && copyable(value, `d-${label}`, what)}
+                    </div>
+                  ))}
+                </dl>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button size="sm" icon={MessageCircle} onClick={() => openMessage(v0)} disabled={!v0.phone} title={v0.phone ? undefined : 'Add a phone number to message this vendor'}>Message on WhatsApp</Button>
+                  {v0.phone && <a href={`tel:${v0.phone.replace(/[^0-9+]/g, '')}`} className="inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap transition-colors px-3 py-1.5 text-xs bg-white text-slate-700 hover:bg-slate-50 border border-slate-300"><Phone className="w-3.5 h-3.5" aria-hidden />Call</a>}
+                  {v0.email && <a href={`mailto:${v0.email}`} className="inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap transition-colors px-3 py-1.5 text-xs bg-white text-slate-700 hover:bg-slate-50 border border-slate-300"><Mail className="w-3.5 h-3.5" aria-hidden />Email</a>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200 px-4 py-3">
+                  <span className={`${LABEL} flex items-center gap-1.5`}><Clock className="w-3 h-3" aria-hidden />Lead time</span>
+                  <span className="mt-1 block text-xl font-black text-slate-800 tabular-nums leading-tight">{v0.defaultLeadDays ? <><CountUp value={v0.defaultLeadDays} /> <span className="text-sm font-bold text-slate-500">{v0.defaultLeadDays === 1 ? 'day' : 'days'}</span></> : <span className="text-sm font-semibold text-slate-400">Not set</span>}</span>
+                </div>
+                <div className="rounded-xl border border-slate-200 px-4 py-3">
+                  <span className={`${LABEL} flex items-center gap-1.5`}><CreditCard className="w-3 h-3" aria-hidden />Payment terms</span>
+                  <span className={`mt-1 block text-sm break-words ${v0.paymentTerms ? 'font-semibold text-slate-800' : 'text-slate-400'}`}>{v0.paymentTerms || 'Not set'}</span>
+                </div>
+              </div>
+
+              <div>
+                <span className={`${LABEL} block mb-1.5`}>Trades</span>
+                {(v0.categories || []).length > 0
+                  ? <div className="flex flex-wrap gap-1.5">{(v0.categories || []).map(c => <span key={c} className="px-2.5 py-1 rounded-full border border-slate-200 text-xs font-semibold text-slate-700">{c}</span>)}</div>
+                  : <p className="text-xs text-slate-500">No trade set.</p>}
+              </div>
+
+              {v0.notes && (
+                <div>
+                  <span className={`${LABEL} flex items-center gap-1 mb-1.5`}><Lock className="w-3 h-3" aria-hidden />Notes for the studio</span>
+                  <p className="text-sm text-slate-700 whitespace-pre-line">{v0.notes}</p>
+                </div>
+              )}
+
+              {/* Where the projects name this vendor. Every selection, not the first three. */}
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className={LABEL}>In projects' material selections</span>
+                  <Chip tone="slate">{usageOf(v0).projectCount} {usageOf(v0).projectCount === 1 ? 'project' : 'projects'}</Chip>
+                </div>
+                {usageOf(v0).projectCount === 0 ? (
+                  <p className="text-xs text-slate-500 rounded-xl border border-dashed border-slate-300 px-3 py-3">No project's material selections name this vendor yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {projects.map(p => {
+                      const matched = (p.context?.materialSelections || []).filter(s => nameKey(s.vendor) === nameKey(v0.name));
+                      if (matched.length === 0) return null;
+                      return (
+                        <div key={p.id} className="rounded-xl border border-slate-200">
+                          <div className="flex items-center justify-between gap-2 px-3 py-2 bg-slate-50 border-b border-slate-100 rounded-t-xl">
+                            <span className="text-xs font-semibold text-slate-800 break-words">{p.context?.name || p.context?.clientName || 'Untitled project'}</span>
+                            <Chip tone="slate">{matched.length} {matched.length === 1 ? 'item' : 'items'}</Chip>
+                          </div>
+                          <ul className="divide-y divide-slate-100">
+                            {matched.map((item, idx) => (
+                              <li key={idx} className="px-3 py-1.5 flex items-start justify-between gap-3 text-xs">
+                                <span className="min-w-0 break-words text-slate-700">{item.itemName || 'Material'}</span>
+                                {item.quotedPrice != null && <span className="font-semibold text-slate-800 tabular-nums shrink-0">₹{item.quotedPrice.toLocaleString('en-IN')}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+              <Button variant="danger" icon={Trash2} onClick={() => { setSelectedVendor(null); setDeleteConfirmId(v0.id); }}>Delete</Button>
+              <Button variant="primary" icon={Edit3} onClick={() => { setSelectedVendor(null); openEditModal(v0); }}>Edit</Button>
+            </div>
+          </aside>
         </div>
       )}
 
-      {/* 5. ADD / EDIT VENDOR MODAL */}
-      <AnimatePresence>
-        {showAddModal && editingVendor && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"
-            >
-              {/* Modal Header */}
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center font-bold">
-                    <Store className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-lg">
-                      {editingVendor.id ? "Edit Vendor Profile" : "Register New Vendor"}
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Configure supplier credentials, trade scope, payment terms & lead times.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setShowAddModal(false); setEditingVendor(null); }}
-                  className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Modal Form Content */}
-              <form onSubmit={handleSaveVendor} className="p-6 overflow-y-auto space-y-5">
-                
-                {/* 1. Name & Active Status */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                      Company / Vendor Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={editingVendor.name || ''}
-                      onChange={e => setEditingVendor(p => ({ ...p, name: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 font-semibold text-slate-900"
-                      placeholder="e.g. Italian Marble Hub / Hafele Solutions"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                      Status
-                    </label>
-                    <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200">
-                      <button
-                        type="button"
-                        onClick={() => setEditingVendor(p => ({ ...p, active: true }))}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          editingVendor.active !== false ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600'
-                        }`}
-                      >
-                        Active
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingVendor(p => ({ ...p, active: false }))}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          editingVendor.active === false ? 'bg-slate-700 text-white shadow-xs' : 'text-slate-600'
-                        }`}
-                      >
-                        Inactive
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Primary Supply Scope */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                    What does this partner supply? *
-                  </label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {(['material', 'labour', 'turnkey'] as POScope[]).map(scope => {
-                      const currentScopes = editingVendor.supplies || [];
-                      const isSelected = currentScopes.includes(scope);
-                      return (
-                        <button
-                          key={scope}
-                          type="button"
-                          onClick={() => {
-                            const nextScopes = isSelected
-                              ? currentScopes.filter(s => s !== scope)
-                              : [...currentScopes, scope];
-                            setEditingVendor(p => ({ ...p, supplies: nextScopes.length > 0 ? nextScopes : ['material'] }));
-                          }}
-                          className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                            isSelected
-                              ? scope === 'material' ? 'bg-sky-50/80 border-sky-300 ring-2 ring-sky-400/20 text-sky-950' :
-                                scope === 'labour' ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400/20 text-amber-950' :
-                                'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-400/20 text-indigo-950'
-                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-bold uppercase tracking-wider">{scope}</span>
-                            {isSelected && <Check className="w-4 h-4 text-emerald-600 stroke-[3]" />}
-                          </div>
-                          <span className="text-[10px] text-slate-500">
-                            {scope === 'material' ? 'Raw materials & fittings' : scope === 'labour' ? 'Skilled craftsmanship' : 'Full turnkey delivery'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 3. Trade Categories Selection */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                    Specialist Trade Categories
-                  </label>
-                  <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
-                    {TRADE_CATEGORIES.map(cat => {
-                      const currentCats = editingVendor.categories || [];
-                      const isSelected = currentCats.includes(cat);
-                      return (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => {
-                            const next = isSelected
-                              ? currentCats.filter(c => c !== cat)
-                              : [...currentCats, cat];
-                            setEditingVendor(p => ({ ...p, categories: next }));
-                          }}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                            isSelected
-                              ? 'bg-sky-600 text-white shadow-xs'
-                              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          {cat}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 4. Phone, Email & GSTIN */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                      Phone Number
-                    </label>
-                    <input
-                      type="tel"
-                      value={editingVendor.phone || ''}
-                      onChange={e => setEditingVendor(p => ({ ...p, phone: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-sky-500 font-mono text-slate-900"
-                      placeholder="+91 98765 43210"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      value={editingVendor.email || ''}
-                      onChange={e => setEditingVendor(p => ({ ...p, email: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-sky-500 text-slate-900"
-                      placeholder="orders@vendor.com"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                      GSTIN Number
-                    </label>
-                    <input
-                      type="text"
-                      value={editingVendor.gstin || ''}
-                      onChange={e => setEditingVendor(p => ({ ...p, gstin: e.target.value.toUpperCase() }))}
-                      className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-sky-500 font-mono uppercase text-slate-900"
-                      placeholder="27AAAAA1234A1Z1"
-                    />
-                  </div>
-                </div>
-
-                {/* 5. Lead Time & Payment Terms */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                      Lead Time (Days)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={editingVendor.defaultLeadDays ?? 7}
-                      onChange={e => setEditingVendor(p => ({ ...p, defaultLeadDays: Math.max(0, parseInt(e.target.value) || 0) }))}
-                      className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-sky-500 font-semibold text-slate-900"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                      Payment Terms
-                    </label>
-                    <div className="space-y-2">
-                      <select
-                        value={PAYMENT_TERM_PRESETS.includes(editingVendor.paymentTerms || '') ? editingVendor.paymentTerms : 'custom'}
-                        onChange={e => {
-                          if (e.target.value === 'custom') {
-                            setEditingVendor(p => ({ ...p, paymentTerms: '' }));
-                          } else {
-                            setEditingVendor(p => ({ ...p, paymentTerms: e.target.value }));
-                          }
-                        }}
-                        className="w-full px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:border-sky-500"
-                      >
-                        {PAYMENT_TERM_PRESETS.map(preset => (
-                          <option key={preset} value={preset}>{preset}</option>
-                        ))}
-                        <option value="custom">-- Custom Terms Text --</option>
-                      </select>
-
-                      <input
-                        type="text"
-                        value={editingVendor.paymentTerms || ''}
-                        onChange={e => setEditingVendor(p => ({ ...p, paymentTerms: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-sky-500 text-slate-900"
-                        placeholder="e.g. 50% Advance, 50% on site delivery"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 6. Notes */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                    Internal Studio Notes / POC Details
-                  </label>
-                  <textarea
-                    value={editingVendor.notes || ''}
-                    onChange={e => setEditingVendor(p => ({ ...p, notes: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-sky-500 font-medium text-slate-800 leading-relaxed"
-                    rows={2}
-                    placeholder="e.g. Main contact is Mr. Sanjay (Director). Provides priority dispatch on Saturday."
-                  />
-                </div>
-
-                {/* Modal Footer Actions */}
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => { setShowAddModal(false); setEditingVendor(null); }}
-                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-sky-600/20 transition-all"
-                  >
-                    {editingVendor.id ? "Save Changes" : "Create Vendor"}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* 6. VENDOR DOSSIER DETAIL DRAWER / SLIDE-OVER */}
-      <AnimatePresence>
-        {selectedVendor && (
-          <div className="fixed inset-0 z-50 flex items-center justify-end bg-slate-950/60 backdrop-blur-xs">
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="bg-white w-full max-w-xl h-full shadow-2xl flex flex-col overflow-hidden"
-            >
-              {/* Drawer Top Header */}
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-900 to-slate-800 text-white">
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${getAvatarGradient(selectedVendor.name, selectedVendor.supplies)} flex items-center justify-center font-black text-base shadow-md`}>
-                    {getInitials(selectedVendor.name)}
-                  </div>
-                  <div>
-                    <h2 className="font-bold text-lg leading-tight text-white">{selectedVendor.name}</h2>
-                    <p className="text-xs text-sky-300 font-medium mt-0.5">
-                      {(selectedVendor.supplies || []).join(' · ').toUpperCase()} PARTNER
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedVendor(null)}
-                  className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Drawer Body Scroll */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {/* 1. Status & Quick Communication */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                    selectedVendor.active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    <span className={`w-2 h-2 rounded-full ${selectedVendor.active ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                    {selectedVendor.active ? 'Active Studio Supplier' : 'Inactive'}
-                  </span>
-
-                  {selectedVendor.phone && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCustomWhatsAppMsg(WHATSAPP_VENDOR_TEMPLATES[0].template(selectedVendor.name, "Form Factors Design Studio"));
-                        setShowWhatsAppModal(selectedVendor);
-                      }}
-                      className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200 flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>WhatsApp Launch</span>
+      {/* A WhatsApp message to a vendor. */}
+      {showWhatsAppModal && (
+        <BankModal label="Message a vendor" eyebrow="Vendor directory" title={`Message ${showWhatsAppModal.name}`}
+          blurb={`Opens WhatsApp with this message, to ${showWhatsAppModal.phone}. Nothing is sent until you press send there.`} size="md" onClose={() => setShowWhatsAppModal(null)}
+          footer={
+            <>
+              <Button onClick={() => setShowWhatsAppModal(null)}>Cancel</Button>
+              <Button variant="primary" icon={Send} onClick={() => sendWhatsApp(showWhatsAppModal, customWhatsAppMsg)} disabled={!customWhatsAppMsg.trim()}>Open in WhatsApp</Button>
+            </>
+          }>
+          <div className="space-y-4">
+            <div>
+              <span className={`${LABEL} block mb-1.5`}>Start from</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {WHATSAPP_VENDOR_TEMPLATES.map((t, i) => {
+                  const text = t.template(showWhatsAppModal.name, studioName);
+                  const on = customWhatsAppMsg === text;
+                  return (
+                    <button key={t.id} type="button" aria-pressed={on} onClick={() => setCustomWhatsAppMsg(text)}
+                      className={`hud-row-in p-2.5 rounded-xl border text-left transition-colors ${on ? 'border-[#3D52A0] ring-2 ring-[#3D52A0]/15 bg-[#3D52A0]/[0.03]' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+                      style={{ animationDelay: `${i * 30}ms` }}>
+                      <span className="block text-xs font-semibold text-slate-800">{t.title}</span>
+                      <span className="block text-[11px] text-slate-500 mt-0.5">{t.description}</span>
                     </button>
-                  )}
-                </div>
-
-                {/* 2. Contact Credentials */}
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2.5">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Contact & Tax Info</h4>
-                  
-                  {selectedVendor.phone && (
-                    <div className="flex items-center justify-between text-xs font-medium">
-                      <span className="text-slate-400">Phone:</span>
-                      <div className="flex items-center gap-2">
-                        <a href={`tel:${selectedVendor.phone}`} className="font-mono font-bold text-slate-800 hover:text-sky-600">{selectedVendor.phone}</a>
-                        <button 
-                          type="button"
-                          onClick={() => handleCopy(selectedVendor.phone || '', 'drawer_phone')}
-                          className="text-slate-400 hover:text-slate-700"
-                        >
-                          {copiedId === 'drawer_phone' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedVendor.email && (
-                    <div className="flex items-center justify-between text-xs font-medium">
-                      <span className="text-slate-400">Email:</span>
-                      <div className="flex items-center gap-2">
-                        <a href={`mailto:${selectedVendor.email}`} className="font-semibold text-slate-800 hover:text-sky-600">{selectedVendor.email}</a>
-                        <button 
-                          type="button"
-                          onClick={() => handleCopy(selectedVendor.email || '', 'drawer_email')}
-                          className="text-slate-400 hover:text-slate-700"
-                        >
-                          {copiedId === 'drawer_email' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedVendor.gstin && (
-                    <div className="flex items-center justify-between text-xs font-medium">
-                      <span className="text-slate-400">GSTIN:</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-slate-800 uppercase">{selectedVendor.gstin}</span>
-                        <button 
-                          type="button"
-                          onClick={() => handleCopy(selectedVendor.gstin || '', 'drawer_gst')}
-                          className="text-slate-400 hover:text-slate-700"
-                        >
-                          {copiedId === 'drawer_gst' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. Commercials & Lead Time */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3.5 rounded-2xl bg-white border border-slate-200">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Lead Time</span>
-                    <p className="text-base font-black text-slate-900 mt-0.5">
-                      {selectedVendor.defaultLeadDays || 0} <span className="text-xs font-semibold text-slate-500">Days</span>
-                    </p>
-                  </div>
-                  <div className="p-3.5 rounded-2xl bg-white border border-slate-200">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Payment Terms</span>
-                    <p className="text-xs font-bold text-slate-800 mt-0.5 line-clamp-2">
-                      {selectedVendor.paymentTerms || 'Standard Terms'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* 4. Trade Categories */}
-                {selectedVendor.categories && selectedVendor.categories.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Trade Categories</h4>
-                    <div className="flex flex-wrap gap-1.5">
-                      {selectedVendor.categories.map(cat => (
-                        <span key={cat} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-50 text-sky-800 border border-sky-200/80">
-                          {cat}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 5. Notes */}
-                {selectedVendor.notes && (
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Internal Studio Notes</h4>
-                    <div className="p-3.5 rounded-2xl bg-amber-50/50 border border-amber-200/60 text-xs text-amber-950 leading-relaxed italic">
-                      "{selectedVendor.notes}"
-                    </div>
-                  </div>
-                )}
-
-                {/* 6. Linked Project Selections */}
-                <div className="space-y-3 border-t border-slate-100 pt-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Project Material Selections</h4>
-                    <span className="text-xs font-semibold text-slate-400">
-                      {vendorUsageMap.get(selectedVendor.name.toLowerCase().trim())?.projectCount || 0} Projects Linked
-                    </span>
-                  </div>
-
-                  {projects.filter(p => (p.context?.materialSelections || []).some(s => s.vendor?.toLowerCase().trim() === selectedVendor.name.toLowerCase().trim())).length === 0 ? (
-                    <p className="text-xs text-slate-400 italic bg-slate-50 p-4 rounded-xl text-center">
-                      No active project material selections have referenced this vendor yet.
-                    </p>
-                  ) : (
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {projects.map(p => {
-                        const projName = p.context?.name || p.context?.clientName || "Untitled Project";
-                        const matched = (p.context?.materialSelections || []).filter(s => s.vendor?.toLowerCase().trim() === selectedVendor.name.toLowerCase().trim());
-                        if (matched.length === 0) return null;
-
-                        return (
-                          <div key={p.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-slate-900">{projName}</span>
-                              <span className="text-[10px] font-bold bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full">
-                                {matched.length} Item{matched.length > 1 ? 's' : ''}
-                              </span>
-                            </div>
-                            <div className="space-y-1 text-[11px] text-slate-600">
-                              {matched.slice(0, 3).map((item, idx) => (
-                                <div key={idx} className="flex items-center justify-between truncate">
-                                  <span className="truncate">{item.itemName || 'Selected Material'}</span>
-                                  {item.quotedPrice != null && (
-                                    <span className="font-mono text-slate-500 shrink-0">₹{item.quotedPrice.toLocaleString('en-IN')}</span>
-                                  )}
-                                </div>
-                              ))}
-                              {matched.length > 3 && (
-                                <p className="text-[10px] text-slate-400 italic">+ {matched.length - 3} more items...</p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                  );
+                })}
               </div>
-
-              {/* Drawer Footer Actions */}
-              <div className="p-5 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const v = selectedVendor;
-                    setSelectedVendor(null);
-                    setDeleteConfirmId(v.id);
-                  }}
-                  className="p-2.5 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-bold flex items-center gap-1.5 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>Delete Vendor</span>
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const v = selectedVendor;
-                      setSelectedVendor(null);
-                      openEditModal(v);
-                    }}
-                    className="px-5 py-2.5 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    <span>Edit Profile</span>
-                  </button>
-                </div>
-              </div>
-            </motion.div>
+            </div>
+            <label className="block">
+              <span className={`${LABEL} block mb-1.5`}>Message</span>
+              <textarea rows={6} value={customWhatsAppMsg} onChange={e => setCustomWhatsAppMsg(e.target.value)} className={INPUT} />
+            </label>
           </div>
-        )}
-      </AnimatePresence>
+        </BankModal>
+      )}
 
-      {/* 7. WHATSAPP TEMPLATE DISPATCH MODAL */}
-      <AnimatePresence>
-        {showWhatsAppModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col"
-            >
-              <div className="p-5 border-b border-slate-100 bg-emerald-600 text-white flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <MessageCircle className="w-5 h-5" />
-                  <div>
-                    <h3 className="font-bold text-base">Direct WhatsApp Message</h3>
-                    <p className="text-xs text-emerald-100">Send direct dispatch or RFQ to {showWhatsAppModal.name}</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowWhatsAppModal(null)}
-                  className="p-1.5 rounded-lg text-emerald-100 hover:text-white hover:bg-white/10"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="p-6 space-y-4">
-                {/* Template Chips */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    Quick Studio Message Templates
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {WHATSAPP_VENDOR_TEMPLATES.map(tpl => (
-                      <button
-                        key={tpl.id}
-                        type="button"
-                        onClick={() => setCustomWhatsAppMsg(tpl.template(showWhatsAppModal.name, "Form Factors Design Studio"))}
-                        className="p-2.5 rounded-xl border border-slate-200 text-left hover:bg-emerald-50 hover:border-emerald-300 transition-all text-xs"
-                      >
-                        <span className="font-bold text-slate-900 block truncate">{tpl.title}</span>
-                        <span className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">{tpl.description}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Message Textarea */}
-                <div>
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                    Message Preview
-                  </label>
-                  <textarea
-                    rows={5}
-                    value={customWhatsAppMsg}
-                    onChange={e => setCustomWhatsAppMsg(e.target.value)}
-                    className="w-full p-3 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 font-medium text-slate-800 leading-relaxed"
-                  />
-                </div>
-              </div>
-
-              <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowWhatsAppModal(null)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => sendWhatsApp(showWhatsAppModal, customWhatsAppMsg)}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/20 flex items-center gap-2"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>Launch WhatsApp Web</span>
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* 8. DELETE CONFIRMATION DIALOG */}
-      <AnimatePresence>
-        {deleteConfirmId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-sm p-6 space-y-4 text-center"
-            >
-              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
-                <Trash2 className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="font-bold text-slate-900 text-base">Delete Vendor Record?</h3>
-                <p className="text-xs text-slate-500">
-                  This will remove this vendor from your directory. Existing BOQ items and project material records will retain their text history.
-                </p>
-              </div>
-              <div className="flex items-center justify-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setDeleteConfirmId(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteVendor(deleteConfirmId)}
-                  className="px-5 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20"
-                >
-                  Confirm Delete
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Deleting asks first. */}
+      {deleteConfirmId && (() => {
+        const doomed = vendors.find(v => v.id === deleteConfirmId);
+        return (
+          <BankModal label="Delete a vendor" eyebrow="Vendor directory" title={`Delete ${doomed?.name || 'this vendor'}?`}
+            blurb="It is removed from the directory. Projects that name it in their material selections keep the name as text." size="md" onClose={() => setDeleteConfirmId(null)}
+            footer={
+              <>
+                <Button onClick={() => setDeleteConfirmId(null)}>Keep</Button>
+                <Button variant="danger" icon={Trash2} onClick={() => handleDeleteVendor(deleteConfirmId)}>Delete vendor</Button>
+              </>
+            }>
+            <p className="text-xs text-slate-600">
+              {doomed && usageOf(doomed).projectCount > 0
+                ? `${usageOf(doomed).projectCount} ${usageOf(doomed).projectCount === 1 ? 'project names' : 'projects name'} this vendor. This cannot be undone.`
+                : 'No project names this vendor. This cannot be undone.'}
+            </p>
+          </BankModal>
+        );
+      })()}
     </div>
   );
 }

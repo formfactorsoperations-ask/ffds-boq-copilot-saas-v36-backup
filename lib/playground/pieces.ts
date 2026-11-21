@@ -44,11 +44,13 @@ const D = (kind: PieceKind, w: number, h: number, d: number, mount?: PieceMount)
   tall unit" before "unit", "overhead" before "cabinet".
 */
 const DEFAULTS: [RegExp, PieceDraw][] = [
+  /* A wardrobe first: "Wardrobe with loft" is a wardrobe, not a loft, and was drawn 6′ × 2′ while it
+     was billed by the room. "Wardobe" is how the studio's own bank spells it. */
+  [/\bwardr?obe/i, D('wardrobe', 6, 7, 2)],
   [/\b(loft)\b/i, D('loft', 6, 2, 2)],
   [/\b(overhead|wall\s*unit|upper\s*cabinet|wall\s*cabinet)/i, D('wallunit', 6, 2.5, 1.17)],
   [/\b(base\s*unit|base\s*cabinet|kitchen\s*base|lower\s*cabinet|below\s*(the\s*)?counter)/i, D('base', 6, 2.83, 2)],
   [/\b(tall\s*unit|pantry)/i, D('cabinet', 2, 7, 2)],
-  [/\bwardrobe/i, D('wardrobe', 6, 7, 2)],
   [/\b(tv\s*unit|tv\s*console|entertainment\s*unit|media\s*unit)/i, D('tv', 5, 2.25, 1.5)],
   [/\b(vanity)/i, D('vanity', 2.5, 2.75, 1.75)],
   [/\b(shower\s*partition|shower\s*glass|glass\s*partition)/i, D('glass', 3, 7, 0.12)],
@@ -125,6 +127,42 @@ export function pieceSize(line: Partial<BoqItem>, item: Pick<Item, 'unit'> | nul
 }
 
 export const footprintOf = (s: PieceSize): Footprint => ({ w: s.w, d: s.d });
+
+/**
+ * The size and quantity a new line starts with, from the item's standard size
+ * (its `draw`): one wardrobe is the same wardrobe in every flat, and the
+ * designer fits it to the wall on the plan afterwards. Null for an item that
+ * does not draw, or that is counted or a lump sum: its quantity is not a size.
+ */
+export function standardSizeOf(item: Pick<Item, 'name' | 'cat' | 'draw' | 'unit'> | null | undefined): Partial<BoqItem> | null {
+  const draw = drawOf(item);
+  if (!draw || !item) return null;
+  const basis = basisOfUnit(item.unit);
+  if (basis !== 'area' && basis !== 'length') return null;
+  const u = sizeUpdates({ a: draw.w, b: basis === 'area' ? draw.h : undefined, nos: 1, unit: 'ft' }, item.unit);
+  return typeof u.qty === 'number' && u.qty > 0 ? u : null;
+}
+
+/**
+ * True when an item can be given a standard size: it is measured by area or
+ * running length and is a thing that is made, not a surface or a service. A
+ * false ceiling, painting, tiling and wiring are measured from the plan; a size
+ * typed for one would be wrong for every flat but one.
+ */
+export function canHaveSize(item: Pick<Item, 'name' | 'cat' | 'unit'> | null | undefined): boolean {
+  if (!item) return false;
+  const basis = basisOfUnit(item.unit);
+  if (basis !== 'area' && basis !== 'length') return false;
+  return !NEVER_DRAWN_CATS.test((item.cat || '').trim()) && !NEVER_DRAWN.test(item.name || '');
+}
+
+/** The item with a standard size typed by the owner (Item Bank, "On the plan"). */
+export function withStandardSize(item: Item, size: { w: number; h: number; d: number; kind?: PieceKind }): Item {
+  const cur = drawOf(item);
+  const kind = size.kind || cur?.kind || 'generic';
+  const pos = (v: number, min: number) => round2(Math.max(min, Number(v) || 0));
+  return { ...item, draw: { kind, w: pos(size.w, 0.5), h: pos(size.h, 0.5), d: pos(size.d, 0.12), mount: PIECE_KINDS[kind].mount } };
+}
 
 /** How the quantity follows from a piece's size, by the item's unit. */
 export function sizeBasis(unit?: string): QtyBasis {
