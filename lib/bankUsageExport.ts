@@ -83,8 +83,6 @@ export interface BankUsageExport {
   version: number;
   exportedAt: number;
   studio: string;
-  /** True when the bank shown was the draft bank, not the live one. */
-  draftBank: boolean;
   bank: Item[];
   projects: UsageProject[];
 }
@@ -214,13 +212,12 @@ export function usageProject(project: FullProjectData, bank: Item[]): UsageProje
   };
 }
 
-export function buildBankUsageExport(bank: Item[], projects: FullProjectData[], meta: { studio?: string; draftBank?: boolean; at?: number } = {}): BankUsageExport {
+export function buildBankUsageExport(bank: Item[], projects: FullProjectData[], meta: { studio?: string; at?: number } = {}): BankUsageExport {
   return {
     kind: BANK_USAGE_KIND,
     version: BANK_USAGE_VERSION,
     exportedAt: meta.at ?? Date.now(),
     studio: meta.studio || 'Studio',
-    draftBank: !!meta.draftBank,
     bank: bank || [],
     projects: (projects || []).filter(p => p && p.id).map(p => usageProject(p, bank || [])),
   };

@@ -65,11 +65,9 @@ interface BankTabProps {
   /** BOQ Playground S2: the Material specs bank. With it, items show their recipe and the No recipe filter appears. */
   specs?: MaterialSpecsBank;
   onOpenRecipe?: (id: string) => void;
-  /** The bank shown is the draft sandbox, not the live bank. Noted in the usage export. */
-  isDraftBank?: boolean;
-  /** Lock prices (lib/priceLock.ts). Given to the owner on the live bank; without it the button is not drawn. */
+  /** Lock prices (lib/priceLock.ts). Given to the owner; without it the button is not drawn. */
   priceLock?: { read: (stored?: boolean) => Promise<FullProjectData[]>; save: (project: FullProjectData) => Promise<void> };
-  /** Repeated items (lib/bankDuplicates.ts): the owner may pick the one item kept for a name, on the live bank. */
+  /** Repeated items (lib/bankDuplicates.ts): the owner may pick the one item kept for a name. */
   canSettle?: boolean;
 }
 
@@ -82,7 +80,6 @@ const BankTab: React.FC<BankTabProps> = ({
   projects = [],
   specs,
   onOpenRecipe,
-  isDraftBank = false,
   priceLock,
   canSettle = false,
 }) => {
@@ -430,7 +427,7 @@ const BankTab: React.FC<BankTabProps> = ({
   const handleExportUsage = () => {
     try {
       const studio = orgData?.orgName || 'Studio';
-      const data = buildBankUsageExport(wholeBank, projects, { studio, draftBank: isDraftBank });
+      const data = buildBankUsageExport(wholeBank, projects, { studio });
       const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

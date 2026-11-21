@@ -162,7 +162,6 @@ import { isPlaygroundTier, docPricingOf } from "./lib/playground/pricing";
 import { playgroundTierSummary } from "./lib/playground/versions";
 import { designFeeFor, holdPrice, isAsActuals } from "./lib/boqPricing";
 import { addToBank, masterFor } from "./lib/bankMatch";
-import { planPublish, publishQuestion, NOTHING_TO_PUBLISH } from "./lib/bankPublish";
 import { INITIAL_TEMPLATES } from "./lib/standardPackages";
 import { INITIAL_BANK } from "./constants";
 import { SaveIcon, UploadIcon, NewFileIcon } from "./components/Icons";
@@ -273,8 +272,6 @@ export default function App() {
     })));
   }, [projectLibrary]);
   const [bank, setBank] = useState<Item[]>([]);
-  const [draftBank, setDraftBank] = useState<Item[]>([]);
-  const [isDraftBankMode, setIsDraftBankMode] = useState(false);
   const [templates, setTemplates] = useState(INITIAL_TEMPLATES);
 
   // Active Project State
@@ -784,15 +781,13 @@ export default function App() {
       };
 
       let storedBank = INITIAL_BANK;
-      let storedDraftBank = INITIAL_BANK;
       let storedTemplates = INITIAL_TEMPLATES;
 
       try {
         /* The projects load alongside, without holding the app; see loadLibrary. */
         loadLibrary();
-        const [bankResult, draftBankResult, templatesResult] = await Promise.allSettled([
+        const [bankResult, templatesResult] = await Promise.allSettled([
           timeoutWrapper(db.getBank(), 5000),
-          timeoutWrapper(db.getDraftBank(), 5000),
           timeoutWrapper(db.getTemplates(), 5000),
         ]);
 
@@ -802,13 +797,6 @@ export default function App() {
           console.warn("Bank fetch timeout or error, falling back locally");
           const p = localStorage.getItem("ffds_item_bank");
           storedBank = p ? JSON.parse(p) : INITIAL_BANK;
-        }
-
-        if (draftBankResult.status === 'fulfilled') {
-          storedDraftBank = draftBankResult.value;
-        } else {
-          const p = localStorage.getItem("ffds_draft_item_bank");
-          storedDraftBank = p ? JSON.parse(p) : storedBank;
         }
 
         if (templatesResult.status === 'fulfilled') {
@@ -871,7 +859,6 @@ export default function App() {
       // --------------------------------------------------------------------------------
 
       setBank(storedBank);
-      setDraftBank(storedDraftBank);
       setTemplates(storedTemplates);
 
       setIsDataLoaded(true);
@@ -1092,14 +1079,12 @@ export default function App() {
       console.log(`Tenant changed to ${orgData?.tenantId} - reloading library...`);
       try {
         loadLibrary();
-        const [bankResult, draftBankResult, templatesResult] = await Promise.allSettled([
+        const [bankResult, templatesResult] = await Promise.allSettled([
           db.getBank(),
-          db.getDraftBank(),
           db.getTemplates(),
         ]);
 
         if (bankResult.status === 'fulfilled') setBank(bankResult.value);
-        if (draftBankResult.status === 'fulfilled') setDraftBank(draftBankResult.value);
         if (templatesResult.status === 'fulfilled') setTemplates(templatesResult.value || INITIAL_TEMPLATES);
       } catch (err) {
         console.error("Error reloading tenant data:", err);
@@ -1153,15 +1138,6 @@ export default function App() {
       return () => clearTimeout(timeout);
     }
   }, [bank, isDataLoaded]);
-
-  useEffect(() => {
-    if (isDataLoaded && draftBank.length > 0) {
-      const timeout = setTimeout(() => {
-        db.saveDraftBank(draftBank);
-      }, 1000);
-      return () => clearTimeout(timeout);
-    }
-  }, [draftBank, isDataLoaded]);
 
   /*
     A project's own items are kept in the Item Bank too, so every screen that
@@ -3415,10 +3391,6 @@ export default function App() {
                       setBank={setBank}
                       templates={templates}
                       setTemplates={setTemplates}
-                      isDraftBankMode={isDraftBankMode}
-                      setIsDraftBankMode={setIsDraftBankMode}
-                      draftBank={draftBank}
-                      setDraftBank={setDraftBank}
                       aiStrategy={aiStrategy}
                       highlightedBankItemId={highlightedBankItemId}
                       setHighlightedBankItemId={setHighlightedBankItemId}
@@ -3441,70 +3413,9 @@ export default function App() {
 
 {activeTab === "bank" && (
                     <div className="space-y-4">
-                      {/* ACTIVE_BANK */}
-                      <div className="flex justify-end gap-3 items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full">
-                        <div className="text-sm font-medium text-slate-700">
-                          Currently Editing:{" "}
-                          <span
-                            className={
-                              isDraftBankMode
-                                ? "text-amber-600 font-bold"
-                                : "text-emerald-600 font-bold"
-                            }
-                          >
-                            {isDraftBankMode
-                              ? "Draft Sandbox"
-                              : "Live Item Bank"}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setIsDraftBankMode(!isDraftBankMode)}
-                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${isDraftBankMode ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"}`}
-                        >
-                          Switch to{" "}
-                          {isDraftBankMode ? "Live Bank" : "Draft Sandbox"}
-                        </button>
-                        {isDraftBankMode && (
-                          <button
-                            onClick={() => {
-                              /* The draft's edits go into the live bank; it is not replaced by the draft (lib/bankPublish.ts). */
-                              const plan = planPublish(bank, draftBank);
-                              if (plan.nothing) { alert(NOTHING_TO_PUBLISH); return; }
-                              if (confirm(publishQuestion(plan))) {
-                                setBank(plan.bank);
-                                setDraftBank(plan.bank);
-                                setIsDraftBankMode(false);
-                                alert(
-                                  "Draft successfully published to Live Bank!",
-                                );
-                              }
-                            }}
-                            className="px-4 py-2 bg-[#3D52A0] text-white rounded-lg text-sm font-bold hover:bg-[#334486] shadow-sm transition-colors"
-                          >
-                            Publish Draft to Live
-                          </button>
-                        )}
-                        {!isDraftBankMode && (
-                          <button
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  "This will wipe your current Sandbox Draft and mirror the Live Bank. Continue?",
-                                )
-                              ) {
-                                setDraftBank(bank);
-                                setIsDraftBankMode(true);
-                              }
-                            }}
-                            className="px-4 py-2 bg-[#3D52A0]/90 text-white rounded-lg text-sm font-bold hover:bg-[#334486] backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 transition-all"
-                          >
-                            Sync Draft from Live
-                          </button>
-                        )}
-                      </div>
                       <BankTab
-                        bank={isDraftBankMode ? draftBank : bank}
-                        setBank={isDraftBankMode ? setDraftBank : setBank}
+                        bank={bank}
+                        setBank={setBank}
                         aiStrategy={aiStrategy}
                         highlightedBankItemId={highlightedBankItemId}
                         onHighlightClear={() => setHighlightedBankItemId(null)}
@@ -4142,10 +4053,6 @@ export default function App() {
                       setBank={setBank}
                       templates={templates}
                       setTemplates={setTemplates}
-                      isDraftBankMode={isDraftBankMode}
-                      setIsDraftBankMode={setIsDraftBankMode}
-                      draftBank={draftBank}
-                      setDraftBank={setDraftBank}
                       aiStrategy={aiStrategy}
                       highlightedBankItemId={highlightedBankItemId}
                       setHighlightedBankItemId={setHighlightedBankItemId}
@@ -4167,69 +4074,9 @@ export default function App() {
 
 {activeTab === "bank" && (
                     <div className="space-y-4">
-                      <div className="flex justify-end gap-3 items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full">
-                        <div className="text-sm font-medium text-slate-700">
-                          Currently Editing:{" "}
-                          <span
-                            className={
-                              isDraftBankMode
-                                ? "text-amber-600 font-bold"
-                                : "text-emerald-600 font-bold"
-                            }
-                          >
-                            {isDraftBankMode
-                              ? "Draft Sandbox"
-                              : "Live Item Bank"}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setIsDraftBankMode(!isDraftBankMode)}
-                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${isDraftBankMode ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"}`}
-                        >
-                          Switch to{" "}
-                          {isDraftBankMode ? "Live Bank" : "Draft Sandbox"}
-                        </button>
-                        {isDraftBankMode && (
-                          <button
-                            onClick={() => {
-                              /* The draft's edits go into the live bank; it is not replaced by the draft (lib/bankPublish.ts). */
-                              const plan = planPublish(bank, draftBank);
-                              if (plan.nothing) { alert(NOTHING_TO_PUBLISH); return; }
-                              if (confirm(publishQuestion(plan))) {
-                                setBank(plan.bank);
-                                setDraftBank(plan.bank);
-                                setIsDraftBankMode(false);
-                                alert(
-                                  "Draft successfully published to Live Bank!",
-                                );
-                              }
-                            }}
-                            className="px-4 py-2 bg-[#3D52A0] text-white rounded-lg text-sm font-bold hover:bg-[#334486] shadow-sm transition-colors"
-                          >
-                            Publish Draft to Live
-                          </button>
-                        )}
-                        {!isDraftBankMode && (
-                          <button
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  "This will wipe your current Sandbox Draft and mirror the Live Bank. Continue?",
-                                )
-                              ) {
-                                setDraftBank(bank);
-                                setIsDraftBankMode(true);
-                              }
-                            }}
-                            className="px-4 py-2 bg-[#3D52A0]/90 text-white rounded-lg text-sm font-bold hover:bg-[#334486] backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 transition-all"
-                          >
-                            Sync Draft from Live
-                          </button>
-                        )}
-                      </div>
                       <BankTab
-                        bank={isDraftBankMode ? draftBank : bank}
-                        setBank={isDraftBankMode ? setDraftBank : setBank}
+                        bank={bank}
+                        setBank={setBank}
                         aiStrategy={aiStrategy}
                         highlightedBankItemId={highlightedBankItemId}
                         onHighlightClear={() => setHighlightedBankItemId(null)}

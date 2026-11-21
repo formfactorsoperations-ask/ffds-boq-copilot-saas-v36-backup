@@ -52,7 +52,6 @@ describe('Item Bank usage export', () => {
   it('carries the bank whole and names what it is', () => {
     expect(out.kind).toBe(BANK_USAGE_KIND);
     expect(out.bank).toHaveLength(3);
-    expect(out.draftBank).toBe(false);
     expect(bankUsageFileName('Form Factors', Date.UTC(2026, 10, 20))).toBe('Form_Factors_Item_Bank_Usage_2026-11-20.json');
   });
 
