@@ -16,7 +16,7 @@ import { CountUp, Dot } from '../ui/HudBits';
 import MyDayCard from './MyDayCard';
 import { LeaveSheet, CorrectionSheet } from './PeopleSheets';
 import { Ring, Avatar, Skeleton, Glide, Notice, IconTile, Tilt, Panel, Empty, LEAVE_ICON, MODE_ICON, initials, listV, rowV, sectionV, EASE } from './PeopleBits';
-import { StudioPulse, ArrivalToasts, useToday } from './Arrivals';
+import { StudioPulse, StaffPulse, ArrivalToasts, useToday } from './Arrivals';
 import PeopleCalendar from './PeopleCalendar';
 import { useGuide, kudosSeenAt, markKudosSeen } from '../../services/peopleGuideService';
 import { wantedPeopleSection, clearPeopleSection, onPeopleSection } from '../../lib/peopleSection';
@@ -230,7 +230,8 @@ function TodaySection({ s, sites, onCorrect, onLeave, onGo, waiting }: { s: Snap
   return (
     <>
       <MyDayCard sites={sites} onCorrect={onCorrect} />
-      {s.me.accessRole !== 'employee' && <StudioPulse s={s} />}
+      {/* Staff see who's in, without times, once the server sends it (`present`). */}
+      {s.me.accessRole !== 'employee' ? <StudioPulse s={s} /> : s.present && <StaffPulse s={s} />}
       {waiting > 0 && (
         <motion.button type="button" onClick={() => onGo('approvals')} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
           className="w-full flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left pp-lift">
