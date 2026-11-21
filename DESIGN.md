@@ -928,8 +928,26 @@ and names were cut with an ellipsis.
   room is ticked. It stays beside the room while the room scrolls (`lg:sticky`).
 - Suggestions sit under the room's header as white pills on `bg-slate-50`, not on a tinted gradient.
 - Rows rise in and fold away (framer-motion, as before); a room or typology arrives with `hud-swap`.
-- Both files are at zero in the design guard. The windows this screen opens (New typology, Add room,
-  AI architect, AI audit, Preview the options) have not been redone.
+- Both files are at zero in the design guard.
+
+Its windows (`components/templates/`, the same day: "the same for the modals this screen opens"). Add a
+room, New typology, AI architect, AI audit and Preview the options each had a dark gradient header with
+tinted icon tiles. They open in `components/bank/BankModal.tsx` now, like the Item bank's. Option setup
+was already on the pattern.
+
+- A problem with what is typed is said under the field as it is typed, and the primary button is
+  disabled with the reason as its title. No alert, no error banner after the click.
+- AI working is one line in a `hud-scanning` box, and the window cannot be closed while it works. An AI
+  failure is a rose line with `role="alert"`; the audit used to fail to an empty window.
+- AI audit: the score is a `Ring` with `CountUp`, emerald from 85 and amber below. Gaps are rows in one
+  list with a trade chip; "Add to the room" turns into "Added". The three options' advice sits in three
+  cards named by `GRADE_TIER`, Comfort on the brand tint, as in the recipe drawer.
+- AI architect: the draft's rooms list every item with nothing cut and no box to scroll inside.
+- Preview the options: three cards with the Pricing & Tiers medals (sprout, gem, crown) on `IconTile`,
+  Comfort with the brand border and top rule; quotes count up; margin coloured by the three states. A
+  room opens to its lines (the chevron turns); names wrap.
+- No model name is shown on an AI window: the badge that read "Gemini 3.7" was not read from anything.
+- All five files are at zero in the design guard.
 
 ### Notifications motion (approved 22 Oct 2026)
 

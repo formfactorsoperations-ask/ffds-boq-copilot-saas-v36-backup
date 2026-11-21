@@ -1,10 +1,18 @@
 import React, { useState } from 'react';
 import { Item, AIStrategy } from '../../types';
 import { generateAiTemplate, AiGeneratedTemplateResult } from '../../services/geminiService';
-import { Sparkles, Wand2, Plus, Check, Loader2, X, AlertCircle, Layers, Building, RefreshCw, FileCheck } from 'lucide-react';
+import { Sparkles, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { formatINR } from '../../lib/utils';
-
 import { pickable } from '../../lib/bankMatch';
+import BankModal from '../bank/BankModal';
+import { Button, Chip, SummaryStrip, INPUT, LABEL } from '../ui/kit';
+
+/*
+  Standard templates → AI architect: describe a home, and AI drafts a typology
+  from the Item bank: the rooms, the items in each, and any item the bank lacks.
+  Nothing is added until "Add to templates".
+*/
+
 interface AiTemplateArchitectModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -79,7 +87,7 @@ export const AiTemplateArchitectModal: React.FC<AiTemplateArchitectModalProps> =
       setGeneratedResult(result);
     } catch (err: any) {
       console.error("AI Template Architect error:", err);
-      setErrorMessage(err?.message || "Failed to generate template with AI. Please try again.");
+      setErrorMessage(err?.message || "AI could not draft the typology. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -91,245 +99,156 @@ export const AiTemplateArchitectModal: React.FC<AiTemplateArchitectModalProps> =
     onClose();
   };
 
+  const rooms = generatedResult ? Object.entries(generatedResult.rooms) : [];
+  const newItems = generatedResult?.newItemsNeeded || [];
+  const itemCount = rooms.reduce((n, [, ids]) => n + (Array.isArray(ids) ? ids.length : 0), 0);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-sky-950 to-slate-900 p-6 text-white flex items-center justify-between border-b border-sky-800 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-amber-400/20 text-amber-300 rounded-xl border border-amber-400/30">
-              <Wand2 className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-xl font-bold tracking-tight">AI Template Architect</h3>
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-400 text-slate-950 uppercase tracking-wider">
-                  Gemini 3.7
-                </span>
-              </div>
-              <p className="text-xs text-sky-200 mt-0.5">
-                Describe your target apartment typology or commercial space to construct a standard BOQ package.
-              </p>
-            </div>
+    <BankModal
+      label="AI architect" eyebrow="Standard templates" title="AI architect"
+      blurb="Describe the home. AI drafts a typology from your Item bank: the rooms, and the items in each. Nothing is added until you say so."
+      size="2xl" onClose={onClose} locked={isGenerating}
+      footer={
+        <>
+          <Button onClick={onClose} disabled={isGenerating}>Cancel</Button>
+          <span className="flex items-center gap-2">
+            {generatedResult && <Button icon={RefreshCw} onClick={() => handleGenerate()} disabled={isGenerating}>Draft again</Button>}
+            <Button variant="primary" icon={Check} onClick={handleApply} disabled={!generatedResult || isGenerating}
+              title={!generatedResult ? 'Draft a typology first' : undefined}>Add to templates</Button>
+          </span>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <div>
+          <label htmlFor="architect-brief" className={`${LABEL} block mb-1.5`}>The home, in your words</label>
+          <textarea id="architect-brief" value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={3}
+            placeholder="e.g. 3-BHK apartment for a young family. Full modular kitchen in acrylic, floor-to-ceiling wardrobe in the master bedroom, fluted TV unit, false ceiling in the dry areas."
+            className={INPUT} />
+          <div className="mt-2 flex justify-end">
+            <Button variant="primary" onClick={() => handleGenerate()} disabled={isGenerating || !promptText.trim()}>
+              <Sparkles className={`w-4 h-4 ${isGenerating ? 'motion-safe:animate-pulse' : ''}`} aria-hidden />
+              {isGenerating ? 'Drafting…' : 'Draft the typology'}
+            </Button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
-        {/* Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
-          {/* Prompt Section */}
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                1. Specify Typology & Design Scope
-              </label>
-              <span className="text-[11px] text-slate-400">Natural language prompt or choose preset</span>
-            </div>
-
-            <div className="relative">
-              <textarea
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                placeholder="e.g. 3-BHK luxury apartment in Whitefield for high-income couple. Needs full modular kitchen with acrylic finish, floor to ceiling master wardrobe, fluted TV console, false ceiling in all dry areas, and smart electrical provisions..."
-                rows={3}
-                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3D52A0] focus:border-transparent transition-all"
-              />
-              <button
-                onClick={() => handleGenerate()}
-                disabled={isGenerating || !promptText.trim()}
-                className="absolute bottom-3 right-3 px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-md transition-all"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Synthesizing...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 text-amber-300" />
-                    Build Template
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Presets */}
-            <div>
-              <p className="text-[11px] font-semibold text-slate-500 mb-2">Or pick a studio architectural preset:</p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {INDUSTRY_PRESETS.map((preset) => (
-                  <button
-                    key={preset.label}
-                    onClick={() => {
-                      setPromptText(preset.prompt);
-                      handleGenerate(preset.prompt);
-                    }}
-                    disabled={isGenerating}
-                    className="p-2.5 text-left border border-slate-200 rounded-xl bg-white hover:border-[#3D52A0] hover:bg-sky-50/50 transition-all text-xs group"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-slate-800 group-hover:text-[#3D52A0]">{preset.label}</span>
-                      <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-medium">{preset.category}</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">{preset.prompt}</p>
-                  </button>
-                ))}
-              </div>
+        {!generatedResult && (
+          <div>
+            <span className={`${LABEL} block mb-1.5`}>Or start from one of these</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {INDUSTRY_PRESETS.map((preset, i) => (
+                <button key={preset.label} type="button" disabled={isGenerating}
+                  onClick={() => { setPromptText(preset.prompt); handleGenerate(preset.prompt); }}
+                  className="group hud-row-in p-3 text-left rounded-xl border border-slate-200 bg-white transition-colors hover:border-[#3D52A0]/40 hover:bg-[#3D52A0]/5 disabled:opacity-50 motion-safe:active:scale-[0.98]"
+                  style={{ animationDelay: `${i * 30}ms` }}>
+                  <span className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-slate-800 group-hover:text-[#3D52A0]">{preset.label}</span>
+                    <Chip tone="slate">{preset.category}</Chip>
+                  </span>
+                  <span className="mt-1 block text-[11px] text-slate-500 line-clamp-3">{preset.prompt}</span>
+                </button>
+              ))}
             </div>
           </div>
+        )}
 
-          {/* Error Notice */}
-          {errorMessage && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-sm text-red-700">
-              <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-              <span>{errorMessage}</span>
+        {isGenerating && (
+          <div className="rounded-xl border border-slate-200 p-4 flex items-center gap-3 hud-scanning" role="status">
+            <span className="w-4 h-4 border-2 border-[#3D52A0] border-t-transparent rounded-full motion-safe:animate-spin shrink-0" />
+            <span className="text-xs text-slate-600">Choosing rooms and items from the Item bank. This can take a little while.</span>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="p-3 rounded-xl border border-rose-200 bg-rose-50 flex items-start gap-2 text-xs text-rose-800" role="alert">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" aria-hidden />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {generatedResult && (
+          <div className="space-y-4 pt-5 border-t border-slate-100 hud-panel-in">
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">The draft</p>
+              <h4 className="font-bold text-slate-800 mt-1">{generatedResult.configName}</h4>
+              {generatedResult.description && <p className="text-xs text-slate-500 mt-0.5">{generatedResult.description}</p>}
             </div>
-          )}
 
-          {/* Generated Result Preview */}
-          {generatedResult && (
-            <div className="space-y-4 pt-4 border-t border-slate-200 animate-in fade-in-50 duration-300">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-base font-black text-slate-800 flex items-center gap-2">
-                    <Check className="w-5 h-5 text-emerald-500" />
-                    Generated Package: {generatedResult.configName}
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">{generatedResult.description}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold">
-                    Trade Coverage: {generatedResult.tradeCoverageScore}%
-                  </span>
-                  <span className="px-3 py-1 bg-sky-50 text-[#334486] border border-sky-200 rounded-full text-xs font-bold">
-                    {Object.keys(generatedResult.rooms).length} Room Scopes
-                  </span>
-                </div>
+            <SummaryStrip stats={[
+              { label: 'Rooms', value: rooms.length, sub: `${itemCount} items in all` },
+              { label: 'Trades covered', value: `${generatedResult.tradeCoverageScore}%`, sub: 'As AI judges it', tone: generatedResult.tradeCoverageScore >= 80 ? 'good' : 'warn' },
+              { label: 'New for the bank', value: newItems.length, sub: newItems.length ? 'Items the bank does not have' : 'Everything is in the bank', tone: newItems.length ? 'warn' : 'good' },
+            ]} />
+
+            {generatedResult.designRationale && (
+              <div>
+                <span className={`${LABEL} block mb-1`}>Why it is built this way</span>
+                <p className="text-xs text-slate-600">{generatedResult.designRationale}</p>
               </div>
-
-              {/* Design Rationale */}
-              <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs text-amber-900 leading-relaxed">
-                <span className="font-bold">Architectural Strategy: </span>
-                {generatedResult.designRationale}
-              </div>
-
-              {/* Room Scopes Breakdown */}
-              <div className="space-y-3">
-                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Configured Room Item Mappings
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {Object.entries(generatedResult.rooms).map(([roomName, rawIds]) => {
-                    const itemIds = (Array.isArray(rawIds) ? rawIds : []) as string[];
-                    return (
-                      <div key={roomName} className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold text-xs text-slate-800 uppercase tracking-wider">
-                            {roomName} Scope
-                          </span>
-                          <span className="text-[10px] font-semibold bg-white border px-1.5 py-0.5 rounded text-slate-600">
-                            {itemIds.length} items
-                          </span>
-                        </div>
-                        <div className="space-y-1 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
-                          {itemIds.map((id: string) => {
-                            const item = bankMap.get(id);
-                            return (
-                              <div key={id} className="text-xs bg-white p-1.5 rounded border border-slate-100 flex items-center justify-between">
-                                <span className="font-medium text-slate-700 truncate mr-2">
-                                  {item ? item.name : id}
-                                </span>
-                                <span className="text-[10px] text-slate-400 shrink-0">
-                                  {item?.cat || 'Item'}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* New Bank Items Needed */}
-              {generatedResult.newItemsNeeded && generatedResult.newItemsNeeded.length > 0 && (
-                <div className="p-4 bg-sky-50 border border-sky-200 rounded-xl space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-sky-900">
-                        Recommended New Master Bank Items ({generatedResult.newItemsNeeded.length})
-                      </p>
-                      <p className="text-[11px] text-sky-700">
-                        The AI identified items missing from your Master Bank that this typology requires:
-                      </p>
-                    </div>
-                    <label className="flex items-center gap-2 text-xs font-medium text-sky-900 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={autoAddMissingItems}
-                        onChange={(e) => setAutoAddMissingItems(e.target.checked)}
-                        className="rounded text-[#3D52A0] focus:ring-sky-400"
-                      />
-                      Auto-create in Item Bank
-                    </label>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {generatedResult.newItemsNeeded.map((newItem, idx) => (
-                      <div key={idx} className="bg-white p-2.5 rounded-lg border border-sky-100 text-xs flex justify-between items-center">
-                        <div>
-                          <p className="font-bold text-slate-800">{newItem.name}</p>
-                          <p className="text-[10px] text-slate-500">{newItem.cat} • {newItem.unit}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-slate-700">{formatINR(newItem.materials + newItem.labor)}</p>
-                          <p className="text-[10px] text-emerald-600 font-medium">+{newItem.margin}% margin</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center shrink-0">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-200 transition-colors"
-          >
-            Cancel
-          </button>
-          <div className="flex gap-3">
-            {generatedResult && (
-              <button
-                onClick={() => handleGenerate()}
-                disabled={isGenerating}
-                className="px-3 py-2 border border-slate-300 text-slate-700 hover:bg-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Regenerate
-              </button>
             )}
-            <button
-              onClick={handleApply}
-              disabled={!generatedResult || isGenerating}
-              className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-md shadow-emerald-700/20 transition-all"
-            >
-              <FileCheck className="w-4 h-4" />
-              Adopt Template into Studio Library
-            </button>
+
+            {/* Every room and every item: nothing is cut, and no box to scroll inside. */}
+            <div>
+              <span className={`${LABEL} block mb-1.5`}>Rooms and their items</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                {rooms.map(([roomName, rawIds], i) => {
+                  const itemIds = (Array.isArray(rawIds) ? rawIds : []) as string[];
+                  return (
+                    <div key={roomName} className="hud-row-in rounded-xl border border-slate-200" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-slate-50 border-b border-slate-100 rounded-t-xl">
+                        <span className="text-sm font-semibold text-slate-800 capitalize">{roomName.replace(/_/g, ' ')}</span>
+                        <Chip tone="slate">{itemIds.length} {itemIds.length === 1 ? 'item' : 'items'}</Chip>
+                      </div>
+                      <ul className="divide-y divide-slate-100">
+                        {itemIds.map((id) => {
+                          const item = bankMap.get(id);
+                          return (
+                            <li key={id} className="px-3 py-1.5 flex items-start justify-between gap-3 text-xs">
+                              <span className={`min-w-0 break-words font-semibold ${item ? 'text-slate-700' : 'text-rose-700'}`}>{item ? item.name : `Not in the bank: ${id}`}</span>
+                              <span className="text-[11px] text-slate-500 shrink-0">{item?.cat || ''}</span>
+                            </li>
+                          );
+                        })}
+                        {itemIds.length === 0 && <li className="px-3 py-2 text-xs text-slate-500">No items.</li>}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {newItems.length > 0 && (
+              <div className="rounded-xl border border-slate-200">
+                <div className="px-3 py-2.5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">Items the bank does not have</p>
+                    <p className="text-[11px] text-slate-500">AI's rates are a starting point. Check them in the Item bank before pricing with them.</p>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                    <input type="checkbox" checked={autoAddMissingItems} onChange={(e) => setAutoAddMissingItems(e.target.checked)} className="accent-[#3D52A0]" />
+                    Add them to the Item bank
+                  </label>
+                </div>
+                <ul className="divide-y divide-slate-100">
+                  {newItems.map((newItem, idx) => (
+                    <li key={idx} className="px-3 py-2 flex items-start justify-between gap-3 text-xs">
+                      <span className="min-w-0">
+                        <span className="block font-semibold text-slate-800 break-words">{newItem.name}</span>
+                        <span className="block text-[11px] text-slate-500">{newItem.cat} · per {newItem.unit}</span>
+                      </span>
+                      <span className="text-right shrink-0">
+                        <span className="block font-bold text-slate-800 tabular-nums">{formatINR(newItem.materials + newItem.labor)}</span>
+                        <span className="block text-[11px] text-slate-500 tabular-nums">{newItem.margin}% margin</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
-    </div>
+    </BankModal>
   );
 };

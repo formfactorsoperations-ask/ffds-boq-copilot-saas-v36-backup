@@ -716,22 +716,6 @@
     "offPalette": 3,
     "mono": 4
   },
-  "components/templates/AddRoomScopeModal.tsx": {
-    "offPalette": 6
-  },
-  "components/templates/AddTypologyModal.tsx": {
-    "offPalette": 7
-  },
-  "components/templates/AiTemplateArchitectModal.tsx": {
-    "tinyPx": 1,
-    "offPalette": 13
-  },
-  "components/templates/AiTemplateAuditDrawer.tsx": {
-    "offPalette": 10
-  },
-  "components/templates/TemplateThreeTierPreviewModal.tsx": {
-    "offPalette": 12
-  },
   "components/ui/3d-pin.tsx": {
     "offPalette": 16,
     "mono": 1

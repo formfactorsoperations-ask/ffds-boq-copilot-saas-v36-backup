@@ -4,7 +4,7 @@ import { X } from '@/lib/lucide-shim';
 import '../projectHeader/projectHeader.css';
 
 /*
-  The window every Item bank dialog opens in (DESIGN.md "Modals", copied from
+  The window every Item bank and Standard templates dialog opens in (DESIGN.md "Modals", copied from
   AssignProjectsModal): the navy scrim, a white card that pops in, a brand
   eyebrow over the title, a body that scrolls and a footer strip.
 
@@ -13,7 +13,7 @@ import '../projectHeader/projectHeader.css';
   Esc and a click outside close it, unless `locked` (while work is running).
 */
 
-const WIDTH = { md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-3xl', '2xl': 'max-w-4xl' } as const;
+const WIDTH = { md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-3xl', '2xl': 'max-w-4xl', '3xl': 'max-w-6xl' } as const;
 
 export interface BankModalProps {
   /** Names the window for screen readers; usually the title. */
