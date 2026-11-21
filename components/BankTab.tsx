@@ -40,7 +40,7 @@ interface BankTabProps {
   projects?: FullProjectData[];
   /** BOQ Playground S2: the Material specs bank. With it, items show their recipe and the No recipe filter appears. */
   specs?: MaterialSpecsBank;
-  onOpenRecipe?: (id: string) => void;
+  onOpenRecipe?: (id: string, section?: 'size') => void;
   /** Lock prices (lib/priceLock.ts). Given to the owner; without it the button is not drawn. */
   priceLock?: { read: (stored?: boolean) => Promise<FullProjectData[]>; save: (project: FullProjectData) => Promise<void> };
   /** Repeated items (lib/bankDuplicates.ts): the owner may pick the one item kept for a name. */
@@ -360,7 +360,7 @@ const BankTab: React.FC<BankTabProps> = ({
   /* The screen above passes a new function each time it draws; the cards are given one that stays. */
   const openRecipeRef = useRef(onOpenRecipe);
   openRecipeRef.current = onOpenRecipe;
-  const openRecipe = useCallback((id: string) => openRecipeRef.current?.(id), []);
+  const openRecipe = useCallback((id: string, section?: 'size') => openRecipeRef.current?.(id, section), []);
 
   const handleDuplicateItem = useCallback((item: Item) => {
     const dup: Item = {

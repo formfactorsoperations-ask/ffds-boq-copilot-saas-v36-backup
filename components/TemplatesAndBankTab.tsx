@@ -69,6 +69,8 @@ export default function TemplatesAndBankTab({
     [currentRole, currentRoles, onReadProjects, onSaveProject],
   );
   const [recipeItemId, setRecipeItemId] = useState<string | null>(null);
+  /* Opened from a card's size chip: the drawer shows its standard size first. */
+  const [recipeFocus, setRecipeFocus] = useState<'size' | undefined>(undefined);
   const [addMaterialSignal, setAddMaterialSignal] = useState(0);
   const tabs = [...TABS.slice(0, 1), MATERIALS_TAB, ...TABS.slice(1)];
   /*
@@ -250,7 +252,7 @@ export default function TemplatesAndBankTab({
               priceLock={priceLock}
               canSettle={canLockPrices(currentRoles?.length ? currentRoles : currentRole)}
               specs={specs.bank}
-              onOpenRecipe={(id: string) => setRecipeItemId(id)}
+              onOpenRecipe={(id: string, section?: 'size') => { setRecipeFocus(section); setRecipeItemId(id); }}
             />
           )}
         </div>
@@ -258,6 +260,7 @@ export default function TemplatesAndBankTab({
         {recipeItem && (
           <RecipeDrawer
             item={recipeItem}
+            focus={recipeFocus}
             specs={specs.bank}
             canEditRecipes={canEditSpecs}
             canEditItem

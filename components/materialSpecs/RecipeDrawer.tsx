@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Plus, Check, Lock } from 'lucide-react';
 import { Button, Chip, LABEL, INPUT } from '../ui/kit';
 import NumberField from '../NumberField';
@@ -35,7 +35,9 @@ const KINDS: [PieceKind, string][] = [
   ['glass', 'Glass'], ['sofa', 'Sofa'], ['dtable', 'Dining table'], ['generic', 'Other piece'],
 ];
 
-export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem, projects, sharedBy, onSave, onClose }: {
+export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem, projects, sharedBy, onSave, onClose, focus }: {
+  /** 'size' opens the drawer at the standard size ("On the plan"). */
+  focus?: 'size';
   item: Item;
   specs: MaterialSpecsBank;
   canEditRecipes: boolean;
@@ -65,6 +67,10 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
   const starts = standardSizeOf(sized);
   const editSize = (patch: Partial<{ w: number; h: number; d: number; kind: PieceKind }>) =>
     setSize(s => ({ w: draw?.w || 0, h: draw?.h || 0, d: draw?.d || 2, kind: draw?.kind || 'generic', ...(s || {}), ...patch }));
+  const sizeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focus === 'size') sizeRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [focus, item.id]);
   const [startFrom, setStartFrom] = useState<string>('');
   const recipeChanged = bank !== specs;
   const itemChanged = recipeId !== undefined;
@@ -192,7 +198,7 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
           )}
 
           {(draw || (canEditItem && measured)) && (
-            <div>
+            <div ref={sizeRef}>
               <div className="font-bold text-slate-800">On the plan</div>
               <p className="text-xs text-slate-500 mb-2">
                 {canEditItem
