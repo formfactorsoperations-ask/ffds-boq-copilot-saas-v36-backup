@@ -6,6 +6,7 @@ import { awayOn, duration, minutesWorked, todayOf } from '../../lib/peopleView';
 import { CountUp, Dot } from '../ui/HudBits';
 import { TeamLanyardRail, type LanyardFact, type LanyardMember } from '../ui/team-lanyard-rail';
 import { Avatar, Coin, Confetti, Glide, IconTile, MODE_ICON, Ring, initials, EASE } from './PeopleBits';
+import { TEAM_LABEL } from './GuideBits';
 
 /*
   WHO'S IN (for those who approve: managers, Ops and admins).
@@ -91,6 +92,71 @@ export function lanyardsFor(s: Snapshot, { scope, arrivals, away }: Pick<Today, 
       ],
     } satisfies LanyardMember;
   });
+}
+
+/* ── For staff: who is in, without times ─────────────────────────────────── */
+
+export interface StaffToday { badges: LanyardMember[]; inN: number; homeN: number; awayN: number; total: number }
+
+/**
+ * Who's in today as staff see it (owner, 21 Nov 2026): everyone in the studio,
+ * you first. A colleague shows In, On site, From home, Left, Away or Not yet,
+ * from the server's `present` list: never a time, a late mark or hours. Your
+ * own badge has your times, as on My day.
+ */
+export function staffToday(s: Snapshot): StaffToday {
+  const today = todayOf(s);
+  const others = s.people.filter((p) => p.active && p.id !== s.me.id).sort((a, b) => a.name.localeCompare(b.name));
+  const present = new Map((s.present || []).filter((x) => x.employeeId !== s.me.id).map((x) => [x.employeeId, x]));
+  const away = new Map(awayOn(s, today).map((a) => [a.personId, { mode: a.mode, pending: a.pending }]));
+  const mine = s.attendance.find((a) => a.date === today && a.employeeId === s.me.id);
+  const own = lanyardsFor(s, { scope: [s.me], arrivals: mine ? [{ person: s.me, session: mine, late: isLate(mine, s.policy) }] : [], away })[0];
+  let inN = mine && !mine.checkOut && mine.mode !== 'WFH' ? 1 : 0;
+  let homeN = mine && !mine.checkOut && mine.mode === 'WFH' ? 1 : 0;
+  let awayN = 0;
+  const badges = [own, ...others.map((p): LanyardMember => {
+    const here = present.get(p.id);
+    const off = away.get(p.id);
+    const team = TEAM_LABEL[p.teamId];
+    const teamFact: LanyardFact[] = team ? [{ label: 'Team', value: team }] : [];
+    const base = { id: p.id, name: p.name, role: p.title || 'Team' };
+    if (here) {
+      if (!here.left) { if (here.mode === 'WFH') homeN++; else inN++; }
+      const status = here.left ? 'Left' : here.mode === 'WFH' ? 'From home' : here.mode === 'Site' ? 'On site' : 'In';
+      const place = here.left ? 'Left for the day' : here.mode === 'WFH' ? 'From home' : here.mode === 'Site' ? 'On site' : 'In the office';
+      return { ...base, tone: here.left ? 'slate' : here.mode === 'WFH' ? 'brand' : 'ok', status, facts: [{ label: 'Today', value: place, tone: here.left ? 'slate' : here.mode === 'WFH' ? 'brand' : 'ok' }, ...teamFact] };
+    }
+    if (off?.mode === 'Away' && !off.pending) awayN++;
+    if (off?.mode === 'WFH' && !off.pending) homeN++;
+    const status = off ? (off.mode === 'WFH' ? 'From home' : off.pending ? 'Asked off' : 'Away') : 'Not yet';
+    return { ...base, tone: off?.mode === 'WFH' ? 'brand' : 'slate', status, facts: [{ label: 'Today', value: off ? status : 'Not in yet' }, ...teamFact] };
+  })];
+  return { badges, inN, homeN, awayN, total: 1 + others.length };
+}
+
+/** Who's in today for staff: the rail alone, with no times on anyone else's badge. */
+export function StaffPulse({ s }: { s: Snapshot }) {
+  const t = useMemo(() => staffToday(s), [s]);
+  const chips: [string, number, string][] = [['In', t.inN, 'bg-emerald-100 text-emerald-700'], ['From home', t.homeN, 'bg-[#3D52A0]/10 text-[#3D52A0]'], ['Away', t.awayN, 'bg-slate-100 text-slate-600']];
+  return (
+    <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in overflow-hidden">
+      <div className="flex flex-wrap items-start gap-3 mb-5">
+        <IconTile icon={DoorOpen} />
+        <div className="min-w-0 flex-1">
+          <h2 className="font-bold text-slate-800 flex items-center gap-2">Who's in today <Dot tone="ok" live /></h2>
+          <p className="text-xs text-slate-500 mt-0.5">Everyone in the studio, and where they are today. Turn a badge over for more.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {chips.map(([k, n, tint]) => <span key={k} className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${tint}`}>{k} {n}</span>)}
+        </div>
+      </div>
+      <div className="-mx-6 -mb-2">
+        <TeamLanyardRail items={t.badges} aria-label="Who's in today" autoplay
+          caption={`${t.inN + t.homeN} of ${t.total} working today. Point at a badge to bring it forward; click it to turn it over.`}
+          labels={{ flip: 'Click or press Enter to turn it over', back: 'Click again or press Esc to turn it back', show: 'Show' }} />
+      </div>
+    </section>
+  );
 }
 
 type PulseView = 'lanyards' | 'faces';

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import { DEFAULT_POLICY, type Attendance, type Snapshot } from '../../lib/peopleDesk';
-import { lanyardsFor } from '../../components/people/Arrivals';
+import { DEFAULT_POLICY, scopeSnapshot, type Attendance, type Snapshot, type Store } from '../../lib/peopleDesk';
+import { lanyardsFor, staffToday } from '../../components/people/Arrivals';
 import { TeamLanyardRail } from '../../components/ui/team-lanyard-rail';
 
 /*
@@ -70,6 +70,52 @@ describe('the badges', () => {
   it('marks your own badge', () => {
     expect(badges[0].team).toBe('You');
     expect(badges[1].team).toBe('Harmony 704');
+  });
+});
+
+describe('staff see who is in, never times (owner, 21 Nov 2026)', () => {
+  const staff = (id: string, over: any = {}) => person(id, { managerId: 'boss', ...over });
+  const store: Store = {
+    people: [staff('boss', { accessRole: 'manager', managerId: '' }), staff('me'), staff('a'), staff('b', { teamId: 'site' }), staff('c'), staff('d'), staff('gone', { active: false })],
+    policy: DEFAULT_POLICY,
+    attendance: [
+      session({ employeeId: 'me' }),
+      session({ employeeId: 'a', checkIn: '2026-10-07T07:00:00.000Z' }), // late
+      session({ employeeId: 'b', mode: 'Site', site: 'Harmony 704' }),
+      session({ employeeId: 'c', mode: 'WFH', checkOut: '2026-10-07T07:30:00.000Z' }),
+      session({ employeeId: 'a', id: 'old', date: '2026-10-06' }),
+      session({ employeeId: 'gone' }),
+    ],
+    requests: [], events: [],
+  };
+  const snap = scopeSnapshot(store, 'me', '2026-10-07T08:00:00.000Z');
+
+  it('sends staff where everyone is today, and nothing else of theirs', () => {
+    expect(snap.present).toEqual([
+      { employeeId: 'me', mode: 'Office', left: false },
+      { employeeId: 'a', mode: 'Office', left: false },
+      { employeeId: 'b', mode: 'Site', left: false },
+      { employeeId: 'c', mode: 'WFH', left: true },
+    ]);
+    /* No time, site or session id reaches them through it. */
+    expect(JSON.stringify(snap.present)).not.toMatch(/T\d\d:|Harmony|at-/);
+    /* Their own sessions only, as before. */
+    expect(snap.attendance.map((x) => x.employeeId)).toEqual(['me']);
+  });
+
+  it('draws everyone, you first, with no time on anyone else', () => {
+    const t = staffToday(snap);
+    expect(t.badges.map((b) => [b.id, b.tone, b.status])).toEqual([
+      ['me', 'ok', 'In 10:30 AM'],
+      ['a', 'ok', 'In'],
+      ['b', 'ok', 'On site'],
+      ['boss', 'slate', 'Not yet'],
+      ['c', 'slate', 'Left'],
+      ['d', 'slate', 'Not yet'],
+    ]);
+    expect(t.badges[2].facts).toEqual([{ label: 'Today', value: 'On site', tone: 'ok' }, { label: 'Team', value: 'Site' }]);
+    expect(JSON.stringify(t.badges.slice(1))).not.toMatch(/\d:\d\d|Late|Harmony|Worked|So far/);
+    expect({ in: t.inN, home: t.homeN, away: t.awayN, total: t.total }).toEqual({ in: 3, home: 0, away: 0, total: 6 });
   });
 });
 

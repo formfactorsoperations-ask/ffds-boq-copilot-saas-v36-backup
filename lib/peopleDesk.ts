@@ -320,8 +320,21 @@ export interface HistoricalRecord {
   flags: string[];
   fields: { label: string; value: string }[];
 }
+/**
+ * Who is in today, for everyone in the studio to see (owner, 21 Nov 2026: the
+ * lanyard rail for staff). Where they are working and whether they have left:
+ * never a time, a late mark or hours. Times stay in `attendance`, which only
+ * carries what the person may see.
+ */
+export interface Presence {
+  employeeId: string;
+  mode: Mode;
+  left: boolean;
+}
 export interface Snapshot {
   history?: HistoricalRecord[];
+  /** Today's check-ins across the studio, without times (scopeSnapshot). Missing from an older server. */
+  present?: Presence[];
   me: Person;
   people: Person[];
   policy: Policy;
@@ -607,6 +620,10 @@ export function scopeSnapshot(
       .map(publicPerson),
     policy: store.policy,
     attendance: store.attendance.filter((a) => allowed.has(a.employeeId)),
+    /* Everyone's check-in today, stripped to where and whether they have left: no times. */
+    present: store.attendance
+      .filter((a) => a.date === today && store.people.some((p) => p.id === a.employeeId && p.active))
+      .map((a) => ({ employeeId: a.employeeId, mode: a.mode, left: !!a.checkOut })),
     requests: store.requests.filter((r) => allowed.has(r.employeeId)),
     availability: store.requests.map(availabilityOf).filter((a): a is Availability => !!a),
     balances,

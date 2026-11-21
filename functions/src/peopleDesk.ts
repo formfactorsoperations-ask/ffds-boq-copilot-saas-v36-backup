@@ -36,6 +36,8 @@ import {
     database. In us-central1 every read crossed the Pacific and back.
   - A snapshot reads only what the person may see: their own attendance and
     their reports' for a manager, the whole studio only for Ops and admins.
+    Everyone also reads today's check-ins, which reach them only as who is
+    in (`present`), with no times.
     Everyone's leave is read only for the calendar window.
   - A refresh names the version it already has; when nothing has changed the
     answer is "unchanged" rather than the whole snapshot again.
@@ -168,15 +170,18 @@ async function snapshotFor(ctx: Ctx, now: string, month = "", since = ""): Promi
   };
   const scoped = async () => {
     const att = db().collection(`${root}/attendance`), req = db().collection(`${root}/requests`);
-    const [attendance, mine, around, past] = await Promise.all([
+    const [attendance, mine, around, past, todays] = await Promise.all([
       byEmployees(seen, (c) => att.where("employeeId", "in", c).where("date", ">=", from)),
       byEmployees(seen, (c) => req.where("employeeId", "in", c).where("createdAt", ">=", requestsFrom)),
       /* Everyone else's leave, for the calendar and who is away: only what reaches into the window. */
       req.where("end", ">=", from).get().then((r) => r.docs),
       older ? byEmployees(seen, (c) => att.where("employeeId", "in", c).where("date", ">=", `${month}-01`).where("date", "<=", `${month}-31`)) : [],
+      /* Everyone's check-in today, for who is in (scopeSnapshot strips it to `present`: no times). One day, a single-field index. */
+      att.where("date", "==", today).get().then((r) => r.docs),
     ]);
     const byId = new Map([...around, ...mine].map((d) => [d.id, d]));
-    return { attendance: [...attendance, ...past], requests: [...byId.values()] };
+    const sessions = new Map([...attendance, ...past, ...todays].map((d) => [d.id, d]));
+    return { attendance: [...sessions.values()], requests: [...byId.values()] };
   };
 
   let docs: { attendance: FirebaseFirestore.QueryDocumentSnapshot[]; requests: FirebaseFirestore.QueryDocumentSnapshot[] };
