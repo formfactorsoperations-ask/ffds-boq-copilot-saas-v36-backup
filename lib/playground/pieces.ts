@@ -51,7 +51,8 @@ const DEFAULTS: [RegExp, PieceDraw][] = [
   [/\b(overhead|wall\s*unit|upper\s*cabinet|wall\s*cabinet)/i, D('wallunit', 6, 2.5, 1.17)],
   [/\b(base\s*unit|base\s*cabinet|kitchen\s*base|lower\s*cabinet|below\s*(the\s*)?counter)/i, D('base', 6, 2.83, 2)],
   [/\b(tall\s*unit|pantry)/i, D('cabinet', 2, 7, 2)],
-  [/\b(tv\s*unit|tv\s*console|entertainment\s*unit|media\s*unit)/i, D('tv', 5, 2.25, 1.5)],
+  /* "T.V. unit" is how the studio's bank writes it. */
+  [/\b(t\.?\s?v\.?\s*unit|tv\s*console|entertainment\s*unit|media\s*unit)/i, D('tv', 5, 2.25, 1.5)],
   [/\b(vanity)/i, D('vanity', 2.5, 2.75, 1.75)],
   [/\b(shower\s*partition|shower\s*glass|glass\s*partition)/i, D('glass', 3, 7, 0.12)],
   [/\b(bed\s*back|headboard\s*panel|back\s*panel)/i, D('panel', 6, 4, 0.33)],
@@ -72,8 +73,8 @@ const DEFAULTS: [RegExp, PieceDraw][] = [
 ];
 
 /** Lines that are measured, or finish a wall or window, never drawn, whatever their name says ("wallpaper on the bed wall" is not a bed). */
-const NEVER_DRAWN = /\b(paint|putty|primer|false\s*ceiling|gypsum|pop\s*ceiling|electrical|wiring|plumbing|tiles?|flooring|demolition|debris|waterproof|civil|cleaning|light\s*fitting|wall\s*paper|wallpaper|curtains?|blinds?|tracks?|cladding|upholstery|soft\s*furnishing)/i;
-const NEVER_DRAWN_CATS = /^(painting|electrical|plumbing|civil|flooring|tiling|ceiling|services)$/i;
+const NEVER_DRAWN = /\b(paint|putty|primer|false\s*ceiling|gypsum|pop\s*ceiling|electrical|wiring|plumbing|tiles?|flooring|demolition|debris|waterproof|civil|cleaning|light\s*fitting|wall\s*paper|wallpaper|curtains?|blinds?|tracks?|cladding|upholstery|soft\s*furnishing|piping|pipes?|ducting|ducts?|conduits?|cabling|cables?)/i;
+const NEVER_DRAWN_CATS = /^(painting|electrical|plumbing|civil|flooring|tiling|ceiling|services|hvac)$/i;
 
 /** The draw an item uses: its own, else one inferred from its name, else null (not drawable). */
 export function drawOf(item: Pick<Item, 'name' | 'cat' | 'draw'> | null | undefined): PieceDraw | null {

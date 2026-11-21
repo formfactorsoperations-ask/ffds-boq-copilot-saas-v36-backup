@@ -6,6 +6,9 @@ import { calculateSellPrice } from '../../lib/utils';
 import { splitCost, isAiAvailable } from '../../services/geminiService';
 import { bankUsageIndex, projectsUsingItem } from '../../lib/bankUsage';
 import { LABEL } from '../ui/kit';
+import { drawOf, standardSizeOf, canHaveSize } from '../../lib/playground/pieces';
+import { ftin } from '../../lib/playground/geometry';
+import { basisOfUnit } from '../../lib/boqSize';
 import { EASE } from '../people/PeopleBits';
 import { Trash2, Copy, Sparkles, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown, Building2, Lock } from '@/lib/lucide-shim';
 
@@ -42,6 +45,8 @@ interface BankSpreadsheetTableProps {
   onViewProjectUsage?: (item: Item) => void;
   /** How many projects use each item, when the screen has already counted. Without it the sheet counts for itself. */
   projectCounts?: Map<string, number>;
+  /** Opens the item's drawer at its standard size ("On the plan"). Without it the sheet shows the size and does not open it. */
+  onOpenSize?: (id: string) => void;
 }
 
 export type SortField = 'name' | 'cat' | 'unit' | 'materials' | 'labor' | 'totalCost' | 'margin' | 'sellPrice' | 'areaMultiplierCoefficient' | 'projectUsage';
@@ -93,6 +98,8 @@ interface RowActions {
   toggleExpand: (id: string) => void;
   usage: (item: Item) => void;
   split: (item: Item) => void;
+  /** Opens the item's standard size; absent where the screen has no drawer. */
+  size?: (id: string) => void;
 }
 
 interface RowProps {
@@ -115,6 +122,12 @@ const Row = React.memo<RowProps>(({ item, selected, highlighted, expanded, proje
   const margin = Number(item.margin) || 0;
   const set = (field: keyof Item, val: any) => act.update(item.id, { ...item, [field]: val });
   const name = item.name || 'this item';
+  /* The standard size (lib/playground/pieces): shown in place of the room factor, which a sized item does not use. */
+  const standard = standardSizeOf(item);
+  const draw = standard ? drawOf(item) : null;
+  const sizeLabel = standard && draw
+    ? `${ftin(draw.w)}${basisOfUnit(item.unit) === 'area' ? ` × ${ftin(draw.h)}` : ''}`
+    : canHaveSize(item) ? 'Set size' : null;
 
   return (
     <>
@@ -255,7 +268,16 @@ const Row = React.memo<RowProps>(({ item, selected, highlighted, expanded, proje
           />
         </td>
 
-        <td className="py-2 px-2">
+        <td className="py-2 px-2 text-center">
+          {/* A thing that is made starts at its standard size; only a surface or a service is sized by a factor on the room. */}
+          {sizeLabel ? (
+            <button type="button" onClick={() => act.size?.(item.id)}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-colors ${standard ? 'bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/20' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
+              title={standard ? `The standard size every new BOQ starts ${name} at. Open it to change` : `No standard size yet: a new BOQ sizes ${name} from the room. Open it to set one`}
+              aria-label={standard ? `Standard size of ${name}: ${sizeLabel}` : `Set the standard size of ${name}`}>
+              {sizeLabel}
+            </button>
+          ) : (
           <NumCell
             col="coeff"
             label="Area factor"
@@ -267,6 +289,7 @@ const Row = React.memo<RowProps>(({ item, selected, highlighted, expanded, proje
             title="Multiplies the quantity worked out from a room's size"
             className="text-center font-semibold text-slate-600"
           />
+          )}
         </td>
 
         <td className="py-2 pl-1 pr-3">
@@ -386,6 +409,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = (props) => {
     duplicate: (item) => latest.current.onDuplicateItem(item),
     toggleSelect: (id) => latest.current.onToggleSelectItem(id),
     usage: (item) => latest.current.onViewProjectUsage?.(item),
+    size: (id) => latest.current.onOpenSize?.(id),
     toggleExpand: (id) => setExpandedItemIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -465,7 +489,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = (props) => {
     <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
         {/* Fixed columns: the name takes what is left, and nothing is cut off at a laptop's width. */}
-        <table className="w-full table-fixed text-left border-collapse min-w-[1180px]">
+        <table className="w-full table-fixed text-left border-collapse min-w-[1204px]">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 select-none">
               <th scope="col" className="py-3 px-3 w-10 text-center">
@@ -487,7 +511,7 @@ const BankSpreadsheetTable: React.FC<BankSpreadsheetTableProps> = (props) => {
               <Head sort={sort} field="totalCost" align="right" className="w-24" title="Material plus labour">Cost ₹</Head>
               <Head sort={sort} field="margin" align="right" className="w-[92px]">Margin</Head>
               <Head sort={sort} field="sellPrice" align="right" className="w-[104px]" title="Cost plus margin">Sell price ₹</Head>
-              <Head sort={sort} field="areaMultiplierCoefficient" align="center" className="w-[68px]" title="Multiplies the quantity worked out from a room's size">Factor</Head>
+              <Head sort={sort} field="areaMultiplierCoefficient" align="center" className="w-[92px]" title="The standard size a new BOQ starts the item at. For a surface or a service, the factor on the quantity worked out from a room's size">Size / factor</Head>
               <th scope="col" className="w-[104px] px-3"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
