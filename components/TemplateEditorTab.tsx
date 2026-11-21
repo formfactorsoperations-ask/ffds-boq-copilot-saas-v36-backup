@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item, AIStrategy } from '../types';
 import { TemplateData, INITIAL_TEMPLATES, getSmartDefaultCoefficient } from '../lib/standardPackages';
+import { drawOf, standardSizeOf } from '../lib/playground/pieces';
+import { ftin } from '../lib/playground/geometry';
+import { basisOfUnit } from '../lib/boqSize';
 import { formatINR, calculateSellPrice, id as generateId } from '../lib/utils';
 import { AiGeneratedTemplateResult, aiSuggestRoomItems } from '../services/geminiService';
 import { AiTemplateArchitectModal } from './templates/AiTemplateArchitectModal';
@@ -625,6 +628,11 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                   const baseCost = (item.materials || 0) + (item.labor || 0);
                   const sellRate = calculateSellPrice(item.materials, item.labor, item.margin || 20);
                   const smartCoeff = getSmartDefaultCoefficient(item);
+                  /* The size a new BOQ starts this item at (Item bank, "On the plan"). */
+                  const draw = drawOf(item);
+                  const standard = standardSizeOf(item);
+                  const basisOf = basisOfUnit(item.unit);
+                  const measuredItem = basisOf === 'area' || basisOf === 'length';
 
                   return (
                     <motion.div
@@ -657,6 +665,15 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                             <span className="text-[10px] font-black text-slate-900">
                               {formatINR(sellRate)}
                             </span>
+                            {standard ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#3D52A0]/10 text-[#3D52A0]" title="The standard size from the Item bank: every new BOQ starts this item at it.">
+                                {ftin(draw!.w)}{basisOfUnit(item.unit) === 'area' ? ` × ${ftin(draw!.h)}` : ''} · {standard.qty} {item.unit}
+                              </span>
+                            ) : measuredItem && smartCoeff === undefined ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700" title="Set its standard size in the Item bank. Until then a new BOQ sizes it from the room.">
+                                No standard size yet
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                       </div>

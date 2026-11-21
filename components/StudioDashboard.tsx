@@ -12,6 +12,7 @@ import BulkImportModal from './BulkImportModal';
 import PlaygroundScreen, { type SignedPlayground } from './playground/PlaygroundScreen';
 import { useMaterialSpecs } from './materialSpecs/useMaterialSpecs';
 import { canEditMaterialSpecs } from '../lib/materialSpecs';
+import type { TemplateData } from '../lib/standardPackages';
 import { withRecipeSpecs, gradeOf } from '../lib/lineSpecs';
 import { isPlaygroundTier } from '../lib/playground/pricing';
 import { makePlaygroundVersion, nextVersionOf, versionPlace, boqFormatOf } from '../lib/playground/versions';
@@ -52,6 +53,8 @@ interface StudioDashboardProps {
     onStartRevision?: () => void;
     /** Puts the project's documents in the client's portal (a revision issued from the BOQ Playground, PR R2). */
     onReleasePortal?: (ctx: ProjectContext) => Promise<any>;
+    /** The studio's Standard templates: the BOQ Playground's quick build fills the rooms from them. */
+    templates?: TemplateData;
     /** The lead profile's main concern: the order of the first proposal's pages (PR P). */
     leadConcern?: string | null;
     /** Who else decides, from the lead profile: the proposal's one-page summary (PR B). */
@@ -64,7 +67,7 @@ interface StudioDashboardProps {
 
 import { INITIAL_BANK } from '../constants';
 
-const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision, focusLines, onSelectTier, onReleasePortal, leadConcern, decisionMakers }) => {
+const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setProjectContext, tiers, setTiers: setTiersRaw, activeTierId, bank, aiStrategy, onViewInBank, onSaveProject, projectId, projectArchitecture, onUpgradeArchitecture, onStartRevision, focusLines, onSelectTier, onReleasePortal, leadConcern, decisionMakers, templates }) => {
   /* Signed scope: the version the client signed is shown but never changed
      here. Every edit path below goes through setTiers, so it is guarded once. */
   const signedTierId = lockedTierId(projectContext);
@@ -605,6 +608,7 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
               onSaveSpecs={materialSpecs.save}
               marginFloors={(orgData as any)?.settings?.marginFloors}
               roomStandards={(orgData as any)?.settings?.roomStandards}
+              templates={templates}
               studioName={(orgData as any)?.orgName || undefined}
               isOwner={canEditMaterialSpecs(currentRole, currentRoles as any)}
               userName={currentUserAuth?.displayName || undefined}

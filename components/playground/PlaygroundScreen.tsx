@@ -49,7 +49,9 @@ import { artOfSpecs } from './pieceArt';
 import type { MaterialSpecsBank } from '../../lib/materialSpecs';
 import { gradeOf, offersUpdates, withRecipeSpecs, updatedLine, recipeOf, specsFromRecipe } from '../../lib/lineSpecs';
 import { kitsOf, kitStartRooms, kitApply, kitAddsDebris, kitEstimate, kitFits, roomAsKit, type BundleLike, type SavedKit } from '../../lib/playground/kits';
-import { ADDON_BUNDLES } from '../../lib/standardPackages';
+import { ADDON_BUNDLES, type TemplateData } from '../../lib/standardPackages';
+import { templateLines } from '../../lib/playground/templateBuild';
+import type { Grade } from '../../lib/materialSpecs';
 import { lineAmount } from '../../lib/playground/pricing';
 import { KitModal, KIT_DRAG } from './KitParts';
 import { ChangesPanel } from './ChangesParts';
@@ -168,6 +170,8 @@ interface Props {
   marginFloors?: MarginFloors | null;
   /** Studio settings `roomStandards`: each room kind's standard pieces, for the quick build (PR 5). */
   roomStandards?: RoomStandards | null;
+  /** The studio's Standard templates: what the quick build fills the rooms with, as the setup wizard does. */
+  templates?: TemplateData | null;
   /** Who is working, for the plan history. */
   userName?: string;
   /** The studio's name, on the client copy. */
@@ -194,7 +198,7 @@ interface Props {
 
 export default function PlaygroundScreen(props: Props) {
   const { projectContext: ctx, setProjectContext, tiers, setTiers, tier, bank, bankMap, readOnly: readOnlyProp, currentRoles, tenantId, onBoq: onBoqProp, newId,
-    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, lastSaved, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, userName, studioName, isOwner, onSaveKit, paymentStructure, termsSettings, leadConcern, journey, decisionMakers, programme } = props;
+    onSelectTier, onMakePlaygroundVersion, onNewVersion, signed, onSave, saveState, lastSaved, onImport, onExportExcel, onExportPdf, onAddFromBank, focusLineId, renderFullGrid, specBank, canEditRecipes, onSaveSpecs, marginFloors, roomStandards, templates, userName, studioName, isOwner, onSaveKit, paymentStructure, termsSettings, leadConcern, journey, decisionMakers, programme } = props;
   /* A signed version (PR R2) is read-only; a revision of it is drawn and edited here, against it. */
   const revRec = signed?.rec || null;
   const revDraft = !!revRec && signed?.revState === 'draft';
@@ -461,16 +465,25 @@ export default function PlaygroundScreen(props: Props) {
     setSketching(false);
     setNote(`Saved as the project’s plan (source: sketch). Room sizes feed the takeoff; site measurement replaces them later.${np.needsPlace ? ` ${np.needsPlace} piece${np.needsPlace === 1 ? '' : 's'} no longer fit and wait under Needs a place.` : ''}`);
   };
+  /* The quick build's preview: the rooms filled from the Standard templates at a grade. */
+  const quickFill = useCallback((rs: Room[], g: Grade) => {
+    let n = 0;
+    return templateLines({ ctx, rooms: rs, bank, templates, grade: g, boq, newId: () => `t${++n}` });
+  }, [ctx, bank, templates, boq]);
   const runQuickBuild = (c: QuickBuildChoice) => {
     const qb = quickBuild({ size: c.size, carpet: c.carpet, own: rooms, bank, boq, standards: roomStandards, newId: () => '' });
     let placed = 0, waiting = 0;
     applyPlan(qb.rects, 'blocks', (active, nextRooms) => {
-      const std = standardLines({ rooms: nextRooms.filter(r => r.plan), bank, boq: active, standards: roomStandards, newId });
+      /* The studio's Standard templates, as the setup wizard fills an option (lib/playground/templateBuild);
+         the room standards only when the templates name nothing in this Item Bank. */
+      const fromTemplates = templateLines({ ctx, rooms: nextRooms.filter(r => r.plan), bank, templates, grade: c.grade, boq: active, newId });
+      const std = fromTemplates || standardLines({ rooms: nextRooms.filter(r => r.plan), bank, boq: active, standards: roomStandards, newId });
       placed = std.placed; waiting = std.waiting.length;
-      const paint = active.some(l => l.byRoom?.basis === 'wallPaint' || inferBasis(bankMap.get(l.bankId)?.name || '', bankMap.get(l.bankId)?.unit) === 'wallPaint')
+      const paint = [...active, ...std.lines].some(l => l.byRoom?.basis === 'wallPaint' || inferBasis(bankMap.get(l.bankId)?.name || '', bankMap.get(l.bankId)?.unit) === 'wallPaint')
         ? null : paintingFromPlan(bank, nextRooms, newId);
       const lines = [...std.lines, ...(paint?.lines || [])]
-        .map(l => (format === 'playground' ? withRecipeSpecs(l, bankMap.get(l.bankId), specBank, c.grade) : l));
+        /* A template line is already priced at its grade, as the wizard prices it: a recipe on top would charge the grade twice. */
+        .map(l => (format === 'playground' && !fromTemplates ? withRecipeSpecs(l, bankMap.get(l.bankId), specBank, c.grade) : l));
       return { lines, ...(c.grade !== gradeOf(tier) ? { specGrade: c.grade } : {}) };
     });
     setProjectContext(p => ({ ...p, ...(!(Number(p.area) > 0) ? { area: c.carpet } : {}), ...(!p.config ? { config: c.size } : {}) }));
@@ -1213,6 +1226,7 @@ export default function PlaygroundScreen(props: Props) {
       {building && (
         <QuickBuildModal project={(ctx.name || 'Project').split(/[(]/)[0].trim()} size={sizeOf(ctx.config)} carpet={Number(ctx.area) || 0} grade={gradeOf(tier)}
           own={rooms} bank={bank} boq={boq} standards={roomStandards}
+          fill={quickFill}
           paints={!boq.some(l => l.byRoom?.basis === 'wallPaint') && !!paintingFromPlan(bank, rooms.length ? rooms : [{ name: 'x', size: 100, unit: 'sq ft' }], () => 'probe')}
           onBuild={runQuickBuild} onClose={() => setBuilding(false)} />
       )}

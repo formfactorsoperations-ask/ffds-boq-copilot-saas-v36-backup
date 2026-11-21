@@ -2870,6 +2870,7 @@ export default function App() {
   /* The BOQ Editor, on its own tab and in Pricing & Tiers' slide-over (components/pricing/BoqSlideOver). */
   const renderBoqEditor = () => (
                         <StudioDashboard
+                          templates={templates}
                           onStartRevision={() => setActiveTab("revision-studio")}
                           onReleasePortal={releasePortalNow}
                           leadConcern={leadProfile?.primaryFrictionPoint}

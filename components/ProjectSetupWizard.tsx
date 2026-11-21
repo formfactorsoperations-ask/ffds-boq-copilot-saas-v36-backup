@@ -6,7 +6,7 @@ import { showSuccessWithNext } from './SuccessWithNextToast';
 import { Item, ProjectContext, ProposalTier, AIStrategy, MaterialSuggestion, TimelinePhase, LeadProfile, DecisionBrainOutput } from '../types';
 import { generateStandardPackages, TemplateData } from '../lib/standardPackages';
 import ProjectContextCard from './ProjectContextCard';
-import { isAiAvailable, generateProjectTimeline, generateMaterialMoodBoard, generateTieredBoqPackages } from '../services/geminiService';
+import { isAiAvailable, generateProjectTimeline, generateMaterialMoodBoard } from '../services/geminiService';
 import { readPlanOntoSheet } from '../services/planRooms';
 import { asNewPlaygroundOption } from '../lib/playground/versions';
 import { optionsWaitForPlan, OPTIONS_NEED_PLAN } from '../lib/briefRead';
@@ -14,7 +14,6 @@ import { planImageFromFile } from '../services/planImage';
 import { buildBankMap } from '../lib/boqPricing';
 import { PLAYGROUND_PRICING } from '../lib/playground/pricing';
 import { id as generateId } from '../lib/utils';
-import { AI_STRATEGIES } from '../constants';
 import { FullBoqItem, BoqItem } from '../types'; // Import necessary types
 import { Panel, Button, Chip, Segmented, IconChip, LABEL, INPUT } from './ui/kit';
 import { Rocket, Sparkles, Pencil, Upload, Layers, List, ArrowRight } from '@/lib/lucide-shim';
@@ -43,8 +42,6 @@ type SetupMethod = 'manual' | 'floorplan';
 import { useOrg } from '../contexts/OrgContext';
 import { engagementOf, isFeeOnly } from '../lib/engagement';
 
-import { pickable } from '../lib/bankMatch';
-import { holdPrice } from '../lib/boqPricing';
 const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
   const { orgData } = useOrg();
   // Correctly destructure props with initializer
@@ -265,58 +262,6 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
     await finalizeGeneration(newTiers);
   };
 
-  const handleGenerateAI = async () => {
-      setIsLoading(true);
-      setLoadingMessage('AI: Thinking & Generating...');
-      
-      const updatedContext = { ...projectContext, theme, proposalMode };
-      setProjectContext(updatedContext);
-      if (setAiStrategy) setAiStrategy(selectedStrategy);
-
-      try {
-          // Chosen from the items, never a copy of one (lib/bankMatch.ts).
-          const rawPackages = await generateTieredBoqPackages(updatedContext, theme, pickable(bank), selectedStrategy);
-          
-          const mapToTier = (name: string, items: any[]): ProposalTier => {
-              // Each line holds its item's price from the start (lib/boqPricing.ts holdPrice).
-              const boqItems: BoqItem[] = items.map(i => holdPrice({
-                  id: generateId(),
-                  bankId: i.id,
-                  qty: i.qty,
-                  marginOverride: i.margin,
-                  roomId: i.roomId,
-                  rationale: i.rationale,
-                  optional: i.optional
-              }, bank.find((b: Item) => b.id === i.id)));
-              
-              return {
-                  id: generateId(),
-                  name,
-                  timestamp: Date.now(),
-                  boq: boqItems,
-                  projectContext: updatedContext,
-                  summary: { totalSell: 0, totalCost: 0, totalGm: 0, itemCount: boqItems.length, totalRevenue: 0, designFee: 0, blendedGm: 0 }
-              };
-          };
-
-          const newTiers = proposalMode === 'single' ? [
-              mapToTier("Comfort Upgrade", rawPackages.premium)
-          ] : [
-              mapToTier("Essential Elegance", rawPackages.essential),
-              mapToTier("Comfort Upgrade", rawPackages.premium),
-              mapToTier("Complete Harmony", rawPackages.luxury)
-          ];
-
-          await finalizeGeneration(newTiers);
-
-      } catch (e) {
-          console.error(e);
-          alert("AI Generation failed. Falling back to templates.");
-          handleGenerateTemplates();
-      }
-  };
-
-
   /*
     The wizard in the console's own look (DESIGN.md "Screen kit",
     standardisation PR 10). It used to be a world of its own: the studio logo
@@ -441,8 +386,8 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
       {/* STEP 3 (the second step the user sees): the first options */}
       {step === 3 && (
         <div className="space-y-4">
-          <Panel icon={Layers} title="Generate the options" blurb="Choose how the proposal's options are built. Every line can be edited afterwards in the BOQ Editor.">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Panel icon={Layers} title="Generate the options" blurb="The options are built from the studio's Standard templates. Every line can be edited afterwards in the BOQ Editor.">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className={LABEL}>Proposal</p>
                 <div className="mt-1.5">
@@ -464,35 +409,14 @@ const ProjectSetupWizard: React.FC<ProjectSetupWizardProps> = (props) => {
                   {['modern', 'minimalist', 'classic', 'industrial', 'bohemian', 'luxury'].map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
                 </select>
               </div>
-              <div>
-                <p className={LABEL}>AI persona, for AI options</p>
-                <div className="mt-1.5">
-                  <Segmented
-                    label="AI persona"
-                    size="sm"
-                    value={selectedStrategy}
-                    options={AI_STRATEGIES.map(s => ({ id: s.id, label: s.name }))}
-                    onChange={(id) => setSelectedStrategy(id as AIStrategy)}
-                  />
-                </div>
-              </div>
             </div>
 
             <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
               <button type="button" onClick={handleGenerateTemplates} disabled={isLoading || waitsForPlan} className={`${CHOICE} hud-row-in`}>
-                <span className="absolute top-4 right-4"><Chip tone="brand">Fastest · recommended</Chip></span>
                 <IconChip icon={List} />
                 <h3 className="mt-4 font-bold text-slate-800">Use the standard templates</h3>
                 <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-                  Makes {proposalMode === 'single' ? 'one option (Comfort Upgrade)' : 'three tiers (Essential, Comfort, Harmony)'} straight away from the studio's standard specifications for {projectContext.config}.
-                </p>
-              </button>
-              <button type="button" onClick={handleGenerateAI} disabled={isLoading || !isAiAvailable() || waitsForPlan} className={`${CHOICE} hud-row-in`} style={{ animationDelay: '40ms' }}>
-                <span className="absolute top-4 right-4"><Chip tone="slate">Flexible · tailored</Chip></span>
-                <IconChip icon={Sparkles} />
-                <h3 className="mt-4 font-bold text-slate-800">Ask AI to build them</h3>
-                <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-                  Gemini reads this room list and the client's brief and builds {proposalMode === 'single' ? 'one custom option' : 'three custom packages'} from scratch.
+                  Makes {proposalMode === 'single' ? 'one option (Comfort Upgrade)' : 'three tiers (Essential, Comfort, Harmony)'} straight away from the studio's Standard templates for {projectContext.config}, each piece at its Item Bank standard size.
                 </p>
               </button>
             </div>

@@ -1223,6 +1223,8 @@ export const generateStandardPackages = (
         return {
             id: generateId(),
             name: tier.name,
+            /* The grade is saved, not read back from the name: a renamed option keeps it. */
+            specGrade: tier.filterType === 'base' ? 'E' : tier.filterType === 'top' ? 'P' : 'C',
             timestamp: Date.now(),
             /* Every line holds its item's price from the start (lib/boqPricing.ts holdPrice): the
                option sells at what it was made at, whatever the bank says later. */
