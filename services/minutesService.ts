@@ -1,6 +1,7 @@
 import { collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, runTransaction, setDoc, updateDoc, deleteField, where } from 'firebase/firestore';
 import { db } from './firebaseClient';
 import { apiFetch } from './apiFetch';
+import type { KeptCloud } from '../lib/minutesKept';
 import { calculateTimestamp } from './momService';
 import {
   toLegacy, withStep, openFromEarlier, fromStructured, queueScopeLines, withQueueState, splitPrivate, outboxOf,
@@ -68,6 +69,25 @@ async function writePrivate(studioId: string, projectId: string, momId: string, 
 */
 export const revisionDoc = (studioId: string, projectId: string, momId: string) =>
   doc(db, `${momPath(studioId, projectId)}/${momId}/private`, 'revision');
+
+/*
+  What someone was typing on the minutes and has not sent yet (lib/minutesKept),
+  kept beside the minutes so it follows them to another device:
+  moms/{id}/private/kept-<kind>-<their uid>. `scope` names the round of work it
+  belongs to; a copy from another round is not read back.
+*/
+export function keptInCloud<T>(studioId: string, projectId: string, momId: string | null | undefined, kind: 'review' | 'rough', uid: string | null | undefined, scope: string): KeptCloud<T> | null {
+  if (!studioId || !projectId || !momId || !uid) return null;
+  const ref = doc(db, `${momPath(studioId, projectId)}/${momId}/private`, `kept-${kind}-${uid}`);
+  return {
+    read: async () => {
+      const s = await getDoc(ref);
+      const d: any = s.exists() ? s.data() : null;
+      return d && d.scope === scope && typeof d.at === 'number' && 'value' in d ? { value: d.value as T, at: d.at } : null;
+    },
+    write: (k) => setDoc(ref, { scope, at: k.at, value: JSON.parse(JSON.stringify(k.value)), updatedAt: Date.now() }),
+  };
+}
 
 export interface RevisionPart { content?: MinutesContent | null; reviewNotes?: ReviewNote[]; reviewedTopics?: MinutesTopic[] | null }
 
