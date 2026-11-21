@@ -523,6 +523,14 @@ opens on it (`components/ui/team-lanyard-rail.tsx`, badges from `lanyardsFor` in
 - The motion is a small spring simulation on `requestAnimationFrame`, no keyframes.
   Under `prefers-reduced-motion` nothing swings or sways: badges snap to their place
   and turn over at once.
+- **Staff see it too** (owner, 21 Nov 2026: "who's in, no times"). For an employee the card
+  is the rail alone (`StaffPulse`, `staffToday` in `Arrivals.tsx`): everyone in the studio,
+  you first. A colleague's badge says In, On site, From home, Left, Away or Not yet, with
+  Today and Team on the back: never a time, a late mark or hours. Their own badge keeps
+  their times. Chips: In, From home, Away; no Lanyards / Faces switch. The server sends
+  this as `present` (`scopeSnapshot`): today only, where and whether they left, no times;
+  `attendance` still carries only what the person may see. The card stays hidden until
+  the server sends `present`.
 - Only on Who's in today (owner, 20 Nov 2026): the Office guide and Home's Team today pin
   were tried with the rail and taken back off; they keep their own views.
 - When the badges do not fill the carousel enough to wrap round, the row keeps to its edges,
