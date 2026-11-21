@@ -7,6 +7,10 @@ import { UOM_OPTIONS } from '../constants';
 import { Sparkles, Copy, Trash2, Building2, Lock } from '@/lib/lucide-shim';
 import type { MaterialSpecsBank } from '../lib/materialSpecs';
 import { recipeOf, specsFromRecipe, composeWords } from '../lib/lineSpecs';
+import { drawOf, standardSizeOf } from '../lib/playground/pieces';
+import { ftin } from '../lib/playground/geometry';
+import { basisOfUnit } from '../lib/boqSize';
+import { getSmartDefaultCoefficient } from '../lib/standardPackages';
 import Swatch from './materialSpecs/Swatch';
 import { Chip, LABEL } from './ui/kit';
 import { bankUsageIndex, projectsUsingItem } from '../lib/bankUsage';
@@ -30,7 +34,8 @@ interface BankItemCardProps {
   projectCount?: number;
   /** BOQ Playground S2: the Material specs bank. With it, the card shows the item's recipe and opens its drawer. */
   specBank?: MaterialSpecsBank;
-  onOpenRecipe?: (id: string) => void;
+  /** Opens the item's drawer; 'size' at its standard size ("On the plan"). */
+  onOpenRecipe?: (id: string, section?: 'size') => void;
 }
 
 const FastInput: React.FC<{
@@ -113,6 +118,13 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
   /* The recipe and what it makes at Comfort, as the mockup's card shows them. */
   const recipe = specBank ? recipeOf(item, specBank) : null;
   const recipeSpecs = recipe && specBank ? specsFromRecipe(specBank, recipe, 'C') : null;
+  /* The standard size, for an item measured by area or length that is not a surface measured from the plan. */
+  const standard = standardSizeOf(item);
+  const sizeBasis = basisOfUnit(item.unit);
+  const sizeDraw = drawOf(item);
+  const sizeChip = standard && sizeDraw
+    ? `Size ${ftin(sizeDraw.w)}${sizeBasis === 'area' ? ` × ${ftin(sizeDraw.h)}` : ''}`
+    : (sizeBasis === 'area' || sizeBasis === 'length') && getSmartDefaultCoefficient(item) === undefined ? 'Set size' : null;
   const recipeWords = recipeSpecs && specBank ? composeWords(specBank, recipeSpecs) : '';
   const [isSplitting, setIsSplitting] = useState(false);
   const aiOn = isAiAvailable();
@@ -185,6 +197,14 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors ${recipe ? 'bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/20' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
               title={recipe ? `Recipe: ${recipe.name}. Open it` : 'No recipe yet. Open the item to start one'}>
               {recipe ? 'Recipe' : 'No recipe'}
+            </button>
+          )}
+          {/* The standard size every new BOQ starts the item at; set in the drawer, "On the plan". */}
+          {specBank && sizeChip && (
+            <button type="button" onClick={() => onOpenRecipe?.(item.id, 'size')}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors ${standard ? 'bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/20' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
+              title={standard ? 'The standard size every new BOQ starts this item at. Open it to change' : 'No standard size yet: a new BOQ sizes it from the room. Open it to set one'}>
+              {sizeChip}
             </button>
           )}
           {supply && <Chip tone="warn">{SUPPLY_LABEL[supply]}</Chip>}

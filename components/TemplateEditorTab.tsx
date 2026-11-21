@@ -41,7 +41,8 @@ import {
   CheckCircle2,
   Copy,
   Download,
-  Upload
+  Upload,
+  SlidersHorizontal
 } from '@/lib/lucide-shim';
 import { addToBank, pickable } from '../lib/bankMatch';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -52,6 +53,8 @@ interface TemplateEditorTabProps {
   templates: TemplateData;
   setTemplates: React.Dispatch<React.SetStateAction<TemplateData>>;
   aiStrategy?: AIStrategy;
+  /** Opens an item's drawer from the Item bank, at its standard size ("On the plan"). */
+  onOpenItem?: (itemId: string) => void;
 }
 
 export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
@@ -59,7 +62,8 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
   setBank,
   templates = INITIAL_TEMPLATES,
   setTemplates,
-  aiStrategy = 'balanced'
+  aiStrategy = 'balanced',
+  onOpenItem
 }) => {
   /* The typologies: the studio's option setup is saved beside them (lib/optionSetup). */
   const configOptions = Object.keys(typologiesOf(templates || {}));
@@ -549,10 +553,19 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                           <Chip tone="slate">{r.item.cat || 'General'}</Chip>
                           <span>per {r.item.unit}</span>
                           <span className="font-bold text-slate-800 tabular-nums">{formatINR(r.rate)}</span>
+                          {/* The size the item starts a BOQ at. With the Item bank's drawer to hand, the chip opens it there. */}
                           {r.size ? (
-                            <Chip tone="brand" title="The standard size from the Item bank: every new BOQ starts this item at it.">{r.size}</Chip>
+                            <button type="button" disabled={!onOpenItem} onClick={() => onOpenItem?.(r.item.id)}
+                              className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap bg-[#3D52A0]/10 text-[#3D52A0] enabled:hover:bg-[#3D52A0]/20 transition-colors"
+                              title={onOpenItem ? 'The standard size every new BOQ starts this item at. Open it to change' : 'The standard size from the Item bank: every new BOQ starts this item at it.'}>
+                              {r.size}
+                            </button>
                           ) : r.noSize ? (
-                            <Chip tone="warn" title="Set its standard size in the Item bank. Until then a new BOQ sizes it from the room.">No standard size yet</Chip>
+                            <button type="button" disabled={!onOpenItem} onClick={() => onOpenItem?.(r.item.id)}
+                              className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap bg-amber-100 text-amber-700 enabled:hover:bg-amber-200 transition-colors"
+                              title={onOpenItem ? 'No standard size yet: a new BOQ sizes it from the room. Open it to set one' : 'Set its standard size in the Item bank. Until then a new BOQ sizes it from the room.'}>
+                              {onOpenItem ? 'Set standard size' : 'No standard size yet'}
+                            </button>
                           ) : null}
                           {r.coeff !== undefined && <span title="Sized as this share of the room's floor area">{r.coeff}× room area</span>}
                         </div>
@@ -578,6 +591,12 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                             );
                           })}
                         </div>
+                        {onOpenItem && (
+                          <button type="button" onClick={() => onOpenItem(r.item.id)} className={iconButton}
+                            title="Open this item: its standard size and recipe" aria-label={`Open ${r.item.name}: standard size and recipe`}>
+                            <SlidersHorizontal className="w-4 h-4" />
+                          </button>
+                        )}
                         <button type="button" onClick={() => handleRemoveItem(r.item.id)} className={`${iconButton} hover:!text-rose-600 hover:!bg-rose-50`}
                           title="Take out of this room" aria-label={`Take ${r.item.name} out of ${roomLabel(activeRoomType)}`}>
                           <Trash2 className="w-4 h-4" />
