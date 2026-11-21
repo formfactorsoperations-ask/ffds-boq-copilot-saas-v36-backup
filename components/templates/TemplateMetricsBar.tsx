@@ -1,4 +1,5 @@
 import React from 'react';
+import { roomScopesOf } from '../../lib/templateOptions';
 import { Item } from '../../types';
 import { TemplateData } from '../../lib/standardPackages';
 import { formatINR, calculateSellPrice } from '../../lib/utils';
@@ -30,7 +31,7 @@ export const TemplateMetricsBar: React.FC<TemplateMetricsBarProps> = ({
   onImportTemplates
 }) => {
   const bankMap = new Map<string, Item>(bank.map(i => [i.id, i]));
-  const currentConfigRooms = templates[activeConfig] || {};
+  const currentConfigRooms = roomScopesOf(templates[activeConfig] || {});
   
   // Compute aggregate stats for current template
   const allItemIds = (Object.values(currentConfigRooms).flat() as unknown as string[]);

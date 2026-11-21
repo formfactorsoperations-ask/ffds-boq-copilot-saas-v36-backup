@@ -4,6 +4,8 @@ import { TemplateData, INITIAL_TEMPLATES, getSmartDefaultCoefficient } from '../
 import { drawOf, standardSizeOf } from '../lib/playground/pieces';
 import { ftin } from '../lib/playground/geometry';
 import { basisOfUnit } from '../lib/boqSize';
+import { roomScopesOf, gradesFor, withGrades, prunedMarks, roleOf } from '../lib/templateOptions';
+import { GRADES, GRADE_TIER, type Grade } from '../lib/materialSpecs';
 import { formatINR, calculateSellPrice, id as generateId } from '../lib/utils';
 import { AiGeneratedTemplateResult, aiSuggestRoomItems } from '../services/geminiService';
 import { AiTemplateArchitectModal } from './templates/AiTemplateArchitectModal';
@@ -65,7 +67,8 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
   }, [templates, activeConfig, configOptions]);
 
   // Current room types for the active configuration
-  const currentConfigRooms = templates[activeConfig] || {};
+  /* The room scopes; which options take each item is saved beside them (lib/templateOptions). */
+  const currentConfigRooms = roomScopesOf(templates[activeConfig] || {});
   const currentRoomKeys = Object.keys(currentConfigRooms);
   
   const [activeRoomType, setActiveRoomType] = useState<string>(currentRoomKeys[0] || 'living');
@@ -154,11 +157,20 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
   const handleRemoveItem = (itemId: string) => {
     setTemplates(prev => ({
       ...prev,
-      [activeConfig]: {
+      [activeConfig]: prunedMarks({
         ...(prev[activeConfig] || {}),
         [activeRoomType]: (prev[activeConfig]?.[activeRoomType] || []).filter(id => id !== itemId)
-      }
+      })
     }));
+  };
+
+  /* Which options take an item: all three is a must-have, fewer an extra. */
+  const handleToggleGrade = (itemId: string, grade: Grade) => {
+    setTemplates(prev => {
+      const cur = gradesFor(prev[activeConfig], activeRoomType, itemId);
+      const next = cur.includes(grade) ? cur.filter(g => g !== grade) : [...cur, grade];
+      return { ...prev, [activeConfig]: withGrades(prev[activeConfig] || {}, activeRoomType, itemId, next) };
+    });
   };
 
   // Clear all items in active room
@@ -166,10 +178,10 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
     if (window.confirm(`Clear all items from "${activeRoomType}" scope?`)) {
       setTemplates(prev => ({
         ...prev,
-        [activeConfig]: {
+        [activeConfig]: prunedMarks({
           ...(prev[activeConfig] || {}),
           [activeRoomType]: []
-        }
+        })
       }));
     }
   };
@@ -219,7 +231,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
         delete copy[roomKey];
         return {
           ...prev,
-          [activeConfig]: copy
+          [activeConfig]: prunedMarks(copy)
         };
       });
       const remaining = currentRoomKeys.filter(k => k !== roomKey);
@@ -553,7 +565,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                   {activeConfig} &gt; {activeRoomType.replace(/_/g, ' ')} Scope
                 </span>
                 <p className="text-[11px] text-slate-500">
-                  Fully loaded deliverables for this room in the Master Top Model.
+                  Everything this room can get. E, C and H mark the options that take each item: Essential, Comfort, Harmony.
                 </p>
               </div>
             </div>
@@ -633,6 +645,9 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                   const standard = standardSizeOf(item);
                   const basisOf = basisOfUnit(item.unit);
                   const measuredItem = basisOf === 'area' || basisOf === 'length';
+                  /* The options that take it: all three unless marked. */
+                  const itemGrades = gradesFor(templates[activeConfig], activeRoomType, itemId);
+                  const role = roleOf(itemGrades);
 
                   return (
                     <motion.div
@@ -675,6 +690,26 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                               </span>
                             ) : null}
                           </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 ml-auto mr-2">
+                        {role !== 'must' && (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${role === 'none' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>
+                            {role === 'none' ? 'In no option' : 'Extra'}
+                          </span>
+                        )}
+                        <div className="inline-flex gap-1" role="group" aria-label={`Options that take ${item.name}`}>
+                          {GRADES.map(g => {
+                            const on = itemGrades.includes(g);
+                            return (
+                              <button key={g} type="button" aria-pressed={on} title={`${GRADE_TIER[g]}: ${on ? 'takes this item' : 'does not take this item'}`}
+                                onClick={() => handleToggleGrade(itemId, g)}
+                                className={`w-7 h-7 rounded-lg text-[10px] font-bold border transition-colors ${on ? 'bg-[#3D52A0] border-[#3D52A0] text-white' : 'bg-white border-slate-300 text-slate-400 hover:bg-slate-50'}`}>
+                                {g === 'P' ? 'H' : g}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 

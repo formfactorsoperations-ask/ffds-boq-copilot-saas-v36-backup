@@ -6,6 +6,8 @@ import { computeTakeoff, classifyRoom, defaultCeiling, DEFAULT_CONVENTIONS, Room
 import { id as generateId, calculateSellPrice } from './utils';
 import { holdPrices } from './boqPricing';
 import { standardSizeOf } from './playground/pieces';
+import { roomScopesOf, optionMarks, takes } from './templateOptions';
+import type { Grade } from './materialSpecs';
 
 // Define the structure for templates
 export type TemplateData = Record<string, Record<string, string[]>>;
@@ -978,7 +980,12 @@ export const generateStandardPackages = (
     const bankMap = new Map<string, Item>(bank.map(i => [i.id, i]));
     
     // 1. Resolve exact template
-    const { configKey, activeTemplate } = resolveActiveTemplate(templates, projectContext.config);
+    const { configKey, activeTemplate: marked } = resolveActiveTemplate(templates, projectContext.config);
+    /* The room scopes, and which options take each item (lib/templateOptions): unmarked means all three. */
+    const activeTemplate = roomScopesOf(marked);
+    const marks = optionMarks(marked);
+    /* An item the studio lists in this typology is the template's to place: the built-in extras below leave it alone. */
+    const listed = new Set(Object.values(activeTemplate).flat());
     
     /*
       2. Rooms — the real ones only.
@@ -1011,6 +1018,7 @@ export const generateStandardPackages = (
 
     return activeTiers.map(tier => {
         const boqItems: BoqItem[] = [];
+        const grade: Grade = tier.filterType === 'base' ? 'E' : tier.filterType === 'top' ? 'P' : 'C';
 
         /*
           1. PROCESS ROOM ITEMS
@@ -1029,6 +1037,7 @@ export const generateStandardPackages = (
             itemIds.forEach(bankId => {
                 const bankItem = bankMap.get(bankId);
                 if (!bankItem) return;
+                if (!takes(marks, roomKey, bankId, grade)) return;
 
                 if (NEVER_AUTO_PRICED.has(bankItem.id)) return;
 
@@ -1065,6 +1074,7 @@ export const generateStandardPackages = (
         templateGeneralIds.forEach(bankId => {
             const bankItem = bankMap.get(bankId);
             if (!bankItem) return;
+            if (!takes(marks, 'general', bankId, grade)) return;
             const itemName = (bankItem.name || '').toLowerCase();
             const itemCat = bankItem.cat;
 
@@ -1149,7 +1159,7 @@ export const generateStandardPackages = (
         const enhanced = new Set(boqItems.map(i => `${i.bankId}@${i.roomId}`));
         tier.enhancements.forEach(enh => {
             const bankItem = bankMap.get(enh.bankId);
-            if (!bankItem || NEVER_AUTO_PRICED.has(enh.bankId)) return;
+            if (!bankItem || NEVER_AUTO_PRICED.has(enh.bankId) || listed.has(enh.bankId)) return;
             roomsForEnhancement(enh.rooms, activeRooms).forEach(room => {
                 const key = `${enh.bankId}@${room.name}`;
                 if (enhanced.has(key)) return;
@@ -1224,7 +1234,7 @@ export const generateStandardPackages = (
             id: generateId(),
             name: tier.name,
             /* The grade is saved, not read back from the name: a renamed option keeps it. */
-            specGrade: tier.filterType === 'base' ? 'E' : tier.filterType === 'top' ? 'P' : 'C',
+            specGrade: grade,
             timestamp: Date.now(),
             /* Every line holds its item's price from the start (lib/boqPricing.ts holdPrice): the
                option sells at what it was made at, whatever the bank says later. */

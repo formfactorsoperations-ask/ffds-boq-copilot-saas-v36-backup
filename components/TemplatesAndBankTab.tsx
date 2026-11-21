@@ -23,6 +23,7 @@ import { Layers, Boxes, Store } from '@/lib/lucide-shim';
 import { Layers3 } from 'lucide-react';
 import MaterialSpecsTab from './materialSpecs/MaterialSpecsTab';
 import RecipeDrawer from './materialSpecs/RecipeDrawer';
+import { roomScopesOf } from '../lib/templateOptions';
 import { useMaterialSpecs } from './materialSpecs/useMaterialSpecs';
 import { ArtDefs } from './playground/pieceArt';
 import { Plus } from 'lucide-react';
@@ -128,7 +129,7 @@ export default function TemplatesAndBankTab({
       templates && typeof templates === 'object' && !Array.isArray(templates) ? templates : {};
     const configs = Object.keys(map);
     const filled = configs.filter((config) =>
-      Object.values(map[config] || {}).some((items: any) => Array.isArray(items) && items.length > 0),
+      Object.values(roomScopesOf(map[config] || {})).some((items: any) => Array.isArray(items) && items.length > 0),
     ).length;
     return { total: configs.length, filled, pct: configs.length ? Math.round((filled / configs.length) * 100) : 0 };
   }, [templates]);
