@@ -261,9 +261,11 @@ export default function TemplatesAndBankTab({
             canEditItem
             projects={projectsUsing(recipeItem.id)}
             sharedBy={(rid) => (activeBank || []).filter((i: any) => recipeOf(i, specs.bank)?.id === rid).length}
-            onSave={async ({ recipeId, bank: nextBank }) => {
+            onSave={async ({ recipeId, bank: nextBank, draw }) => {
               if (nextBank) await specs.save(nextBank);
-              if (recipeId !== undefined) setActiveBank((items: any[]) => items.map((i) => (i.id === recipeItem.id ? { ...i, recipeId } : i)));
+              if (recipeId !== undefined || draw) {
+                setActiveBank((items: any[]) => items.map((i) => (i.id === recipeItem.id ? { ...i, ...(recipeId !== undefined ? { recipeId } : {}), ...(draw ? { draw } : {}) } : i)));
+              }
             }}
             onClose={() => setRecipeItemId(null)}
           />

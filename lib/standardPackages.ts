@@ -5,6 +5,7 @@ import { realRooms, bucketForItem, ensureScopeRooms, uniqueRoomNames, ScopeBucke
 import { computeTakeoff, classifyRoom, defaultCeiling, DEFAULT_CONVENTIONS, RoomGeometry, TakeoffTotals } from './takeoff';
 import { id as generateId, calculateSellPrice } from './utils';
 import { holdPrices } from './boqPricing';
+import { standardSizeOf } from './playground/pieces';
 
 // Define the structure for templates
 export type TemplateData = Record<string, Record<string, string[]>>;
@@ -1034,11 +1035,21 @@ export const generateStandardPackages = (
                 const newMargin = Math.max(10, Math.min(45, Number((bankItem.margin * tier.marginMod).toFixed(1))));
                 const specMaterials = specRate(bankItem, tier.materialMod) ?? (bankItem.materials || 0);
                 const sellRate = calculateSellPrice(specMaterials, bankItem.labor || 0, newMargin);
-                const qty = capQuantity(bankItem, calculateQuantity(bankItem, matchingRoom.size, ceilingHeight), sellRate);
+                /*
+                  A piece comes in at the Item Bank's standard size, whatever the room.
+                  It used to be sized by a formula on the room's area, so one flat's
+                  three wardrobes were 81, 63 and 45 sq ft and no two projects started
+                  alike, while the plan drew each of them at the standard size: a line
+                  read "6′ × 2′ = 81 sq ft". The size and the quantity are now one
+                  thing; the designer fits the piece to the wall in the Playground.
+                */
+                const standard = standardSizeOf(bankItem);
+                const qty = standard?.qty ?? capQuantity(bankItem, calculateQuantity(bankItem, matchingRoom.size, ceilingHeight), sellRate);
 
                 boqItems.push({
                     id: generateId(),
                     bankId: bankItem.id,
+                    ...(standard || {}),
                     qty: qty,
                     roomId: matchingRoom.name,
                     marginOverride: newMargin,
@@ -1148,10 +1159,12 @@ export const generateStandardPackages = (
                     specRate(bankItem, tier.materialMod) ?? (bankItem.materials || 0),
                     bankItem.labor || 0,
                     newMargin);
+                const standard = standardSizeOf(bankItem);
                 boqItems.push({
                     id: generateId(),
                     bankId: enh.bankId,
-                    qty: capQuantity(bankItem, calculateQuantity(bankItem, room.size, ceilingHeight), enhRate),
+                    ...(standard || {}),
+                    qty: standard?.qty ?? capQuantity(bankItem, calculateQuantity(bankItem, room.size, ceilingHeight), enhRate),
                     roomId: room.name,
                     marginOverride: newMargin,
                     baseRate: specRate(bankItem, tier.materialMod),
