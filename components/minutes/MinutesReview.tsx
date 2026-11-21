@@ -4,6 +4,7 @@ import {
   allLines, checksOf, diffTopics, flaggedCount, newId, lineRefs, fmtShortDay, needsOwner,
   type MinutesContent, type MinutesTopic, type ReviewNote, type CorrectionLine, type DesignReviewRecord,
 } from '../../lib/minutes';
+import { useKept } from '../../lib/minutesKept';
 import { DesignReviewRooms } from './DesignReviewRooms';
 import { Panel, Seg, KindChip, Avatar, Chip, CheckRow, EYEBROW, input, btnPri, btnSec, btnSm, linkBtn } from './MinutesBits';
 
@@ -14,7 +15,15 @@ import { Panel, Seg, KindChip, Avatar, Chip, CheckRow, EYEBROW, input, btnPri, b
   the line he means, and either approves or returns them with notes. When
   minutes come back a second time -- or a revision answers a client's
   correction -- "Changes only" shows just what is new or different.
+
+  His notes, the note on the minutes as a whole and a comment he is half way
+  through are kept on his device as he types (lib/minutesKept), so closing the
+  window or clicking outside it does not lose them. They are dropped once the
+  minutes are returned or approved.
 */
+
+interface KeptReview { notes: ReviewNote[]; general: string; lineId: string | null; line: string }
+const NOTHING_KEPT: KeptReview = { notes: [], general: '', lineId: null, line: '' };
 
 export interface QueueRow { key: string; projectName: string; title: string; who: string; when: string; chip?: React.ReactNode; on: boolean; onOpen: () => void }
 
@@ -32,6 +41,8 @@ export interface ReviewProps {
   designReview?: DesignReviewRecord | null;
   queue: QueueRow[];
   me: { email: string; name: string };
+  /** Where this reviewer's unsent notes on these minutes are kept on the device. */
+  keptKey?: string | null;
   onReturn: (notes: ReviewNote[]) => Promise<void>;
   onApprove: (sendMyself: boolean) => Promise<void>;
   onEdit: () => void;
@@ -40,10 +51,17 @@ export interface ReviewProps {
 export default function MinutesReview(p: ReviewProps) {
   const diff = useMemo(() => (p.before ? diffTopics(p.before, p.content.topics) : null), [p.before, p.content.topics]);
   const [view, setView] = useState<'all' | 'changes'>(diff && (diff.changed.size || diff.removed.length) ? 'changes' : 'all');
-  const [notes, setNotes] = useState<ReviewNote[]>([]);
-  const [commenting, setCommenting] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
-  const [general, setGeneral] = useState('');
+  const [kept, setKept, clearKept, broughtBack] = useKept<KeptReview>(p.keptKey, NOTHING_KEPT);
+  /* A note kept on a line that has since been taken out has nowhere to show. */
+  const lineIds = useMemo(() => new Set(allLines(p.content.topics).map((x) => x.line.id)), [p.content.topics]);
+  const notes = useMemo(() => kept.notes.filter((n) => !n.lineId || lineIds.has(n.lineId)), [kept.notes, lineIds]);
+  const setNotes = (fn: (n: ReviewNote[]) => ReviewNote[]) => setKept((k) => ({ ...k, notes: fn(k.notes) }));
+  const commenting = kept.lineId && lineIds.has(kept.lineId) ? kept.lineId : null;
+  const draft = commenting ? kept.line : '';
+  const setCommenting = (lineId: string | null) => setKept((k) => ({ ...k, lineId, line: '' }));
+  const setDraft = (line: string) => setKept((k) => ({ ...k, line }));
+  const general = kept.general;
+  const setGeneral = (text: string) => setKept((k) => ({ ...k, general: text }));
   const [sendMyself, setSendMyself] = useState(false);
   const [busy, setBusy] = useState<'return' | 'approve' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +94,7 @@ export default function MinutesReview(p: ReviewProps) {
         const all = general.trim() ? [...notes, { id: newId('rn'), lineId: null, text: general.trim(), by: p.me.email, byName: p.me.name, at: Date.now() }] : notes;
         await p.onReturn(all);
       } else await p.onApprove(sendMyself);
+      clearKept();
     } catch (e: any) {
       setError(e?.message || 'That did not go through. Check your connection and try again.');
       setBusy(null);
@@ -124,7 +143,7 @@ export default function MinutesReview(p: ReviewProps) {
                     const changed = diff?.changed.has(l.id) && view === 'all';
                     return (
                       <div key={l.id} className={`rounded-xl border bg-white px-3 py-2.5 ${changed ? 'border-[#3D52A0]/40' : 'border-slate-200'}`}>
-                        <button type="button" onClick={() => { setCommenting(l.id); setDraft(''); }} className="w-full flex items-start gap-2.5 text-left group" aria-label="Comment on this line">
+                        <button type="button" onClick={() => { if (commenting !== l.id) setCommenting(l.id); }} className="w-full flex items-start gap-2.5 text-left group" aria-label="Comment on this line">
                           {refs[l.id] && <span className="text-[11px] font-bold text-slate-400 w-6 mt-0.5 tabular-nums shrink-0">{refs[l.id]}</span>}
                           <KindChip kind={l.kind} />
                           <span className="text-sm text-slate-800 flex-1">{l.text}</span>
@@ -178,6 +197,11 @@ export default function MinutesReview(p: ReviewProps) {
             <ul className="space-y-2">{notes.map((n) => <li key={n.id} className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900"><b>{lineText(n.lineId)}:</b> {n.text}</li>)}</ul>
           ) : <p className="text-xs text-slate-500">None yet. Click a line to add one.</p>}
           <textarea className={`${input} mt-3 min-h-[56px] text-xs`} value={general} onChange={(e) => setGeneral(e.target.value)} placeholder="A note on the minutes as a whole (optional)" aria-label="A note on the minutes as a whole" />
+          {p.keptKey && (noteCount > 0 || !!draft.trim()) && (
+            <p className="text-[11px] text-slate-500 mt-2" aria-live="polite">
+              {broughtBack ? 'Your notes from last time are back. ' : ''}Kept on this device until you return or approve the minutes.
+            </p>
+          )}
         </Panel>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2.5 hud-panel-in">
           <button type="button" className={`${btnSec} w-full`} disabled={!noteCount || !!busy} onClick={() => run('return')}>
