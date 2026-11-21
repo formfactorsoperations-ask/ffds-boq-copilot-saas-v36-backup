@@ -30,10 +30,6 @@
     "offPalette": 1,
     "mono": 2
   },
-  "components/BulkImportModal.tsx": {
-    "offPalette": 1,
-    "mono": 2
-  },
   "components/CashFlowForecastDashboard.tsx": {
     "tinyPx": 3,
     "offPalette": 3
@@ -244,15 +240,6 @@
   },
   "components/background-beams-with-collision-demo.tsx": {
     "offPalette": 6
-  },
-  "components/bank/BankBulkActionModal.tsx": {
-    "tinyPx": 1,
-    "offPalette": 9,
-    "mono": 1
-  },
-  "components/bank/BankItemProjectUsageModal.tsx": {
-    "offPalette": 8,
-    "mono": 4
   },
   "components/client/BoqVersionCompare.tsx": {
     "tinyPx": 2,

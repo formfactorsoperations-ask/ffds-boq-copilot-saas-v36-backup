@@ -874,6 +874,22 @@ The same day the owner asked for "the same for the item cards and spreadsheet"
   Enter moves down a column and Shift+Enter up. Columns are fixed so nothing is cut off at 1280px.
 - Both files are at zero in the design guard.
 
+And then "the same for room kits and the modals":
+
+- Every Item bank window opens in `components/bank/BankModal.tsx`, which is the "Modals" pattern above
+  as a component (scrim, `phd-pop`, brand eyebrow, title, a scrolling body, a `bg-slate-50` footer; Esc
+  and a click outside close it unless it is working). Change the selected items, Where an item is used,
+  Import from Excel (`components/BulkImportModal.tsx`, which Studio also opens), AI room kits and
+  Create a room kit use it. Lock prices, Repeated items and Specs from Excel were already on the pattern.
+- A window with several actions switches between them with the same gliding pill as the view switch;
+  its body arrives with `hud-swap`. A choice among a few is a white pill that turns brand. What a change
+  will do is shown first: old value struck through, an arrow, the new value in brand.
+- What stops a primary button is said on the button (disabled, with a title), not in an alert after it.
+- Room kits (`components/bank/BankRoomKits.tsx`): a card per kit with an `IconTile`, an item chip and a
+  base cost that counts up. The card lifts on hover and arrives with `hud-row-in`; its items open by
+  height. Add an item is a search that stays open so several go in; deleting a kit asks on the card.
+- All of these files are at zero in the design guard.
+
 ### Notifications motion (approved 22 Oct 2026)
 
 The owner chose four of the fifteen notification patterns in the round-two

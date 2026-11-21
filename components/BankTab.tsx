@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { AIStrategy, Item, FullProjectData } from '../types';
-import { id as generateId, formatCurrency } from '../lib/utils';
+import { id as generateId } from '../lib/utils';
 import { useOrg } from '../contexts/OrgContext';
 import { useStudioSettings, CustomBundle } from '../hooks/useStudioSettings';
 import { INITIAL_BANK, UOM_OPTIONS } from '../constants';
@@ -9,8 +9,10 @@ import BankSpecImportModal from './bank/BankSpecImportModal';
 import { applySpecs, buildSpecSheetWorkbook, specSheetName } from '../lib/bankSpecs';
 import { downloadWorkbook } from '../lib/scopeWorkbook';
 import { buildBankUsageExport, bankUsageFileName } from '../lib/bankUsageExport';
-import { Button, EmptyState, PanelHead } from './ui/kit';
+import { Button, EmptyState } from './ui/kit';
 import BankCommandBar from './bank/BankCommandBar';
+import BankRoomKits from './bank/BankRoomKits';
+import BankModal from './bank/BankModal';
 import { CountUp } from './ui/HudBits';
 import { addToBank, isMergedCopy } from '../lib/bankMatch';
 import { bankUsageIndex, projectsUsingItem } from '../lib/bankUsage';
@@ -26,7 +28,7 @@ import type { MaterialSpecsBank } from '../lib/materialSpecs';
 import { recipeOf } from '../lib/lineSpecs';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, Plus, Download, Sparkles, PackageCheck, Percent, TrendingUp, Trash2, X, FolderEdit, Ruler, Edit2, PackagePlus, Filter, Lock,
+  Search, Plus, Download, Percent, TrendingUp, Trash2, X, FolderEdit, Ruler, PackagePlus, Filter, Lock,
 } from '@/lib/lucide-shim';
 
 interface BankTabProps {
@@ -129,19 +131,6 @@ const BankTab: React.FC<BankTabProps> = ({
   const [isAiSynthesizing, setIsAiSynthesizing] = useState(false);
   const [aiLogMessages, setAiLogMessages] = useState<string[]>([]);
   const [showAiConsole, setShowAiConsole] = useState(false);
-
-  // Bundle creation & editing states
-  const [isCreatingBundle, setIsCreatingBundle] = useState(false);
-  const [newBundleName, setNewBundleName] = useState('');
-  const [newBundleDesc, setNewBundleDesc] = useState('');
-  const [tempBundleItemIds, setTempBundleItemIds] = useState<Set<string>>(new Set());
-  const [bundleItemSearchTerm, setBundleItemSearchTerm] = useState('');
-  const [editingBundleId, setEditingBundleId] = useState<string | null>(null);
-  const [editingBundleName, setEditingBundleName] = useState('');
-  const [editingBundleDesc, setEditingBundleDesc] = useState('');
-  const [expandedBundleIds, setExpandedBundleIds] = useState<Set<string>>(new Set());
-  const [isAddingItemToBundleId, setIsAddingItemToBundleId] = useState<string | null>(null);
-  const [addItemSearchQuery, setAddItemSearchQuery] = useState('');
 
   // Clear highlight on unmount
   useEffect(() => {
@@ -512,79 +501,9 @@ const BankTab: React.FC<BankTabProps> = ({
     }
   };
 
-  const handleCreateBundle = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newBundleName.trim()) {
-      alert('Please enter a name for the bundle.');
-      return;
-    }
-    if (tempBundleItemIds.size === 0) {
-      alert('Please select at least one item from the list.');
-      return;
-    }
-
-    const newBundle: CustomBundle = {
-      id: `custom-bundle-${Date.now()}`,
-      name: newBundleName.trim(),
-      description: newBundleDesc.trim(),
-      itemIds: Array.from(tempBundleItemIds),
-    };
-
-    const updated = [...customBundles, newBundle];
-    await saveBundlesToDb(updated);
-
-    setIsCreatingBundle(false);
-    setNewBundleName('');
-    setNewBundleDesc('');
-    setTempBundleItemIds(new Set());
-    setBundleItemSearchTerm('');
-  };
-
   const handleBulkCreatedBundle = async (newBundle: CustomBundle) => {
     const updated = [...customBundles, newBundle];
     await saveBundlesToDb(updated);
-  };
-
-  const handleDeleteBundle = async (bundleId: string) => {
-    if (!window.confirm('Are you sure you want to delete this custom room bundle?')) return;
-    const updated = customBundles.filter((b) => b.id !== bundleId);
-    await saveBundlesToDb(updated);
-  };
-
-  const handleSaveEditBundle = async (bundleId: string) => {
-    if (!editingBundleName.trim()) {
-      alert('Bundle name cannot be empty.');
-      return;
-    }
-    const updated = customBundles.map((b) =>
-      b.id === bundleId
-        ? { ...b, name: editingBundleName.trim(), description: editingBundleDesc.trim() }
-        : b
-    );
-    await saveBundlesToDb(updated);
-    setEditingBundleId(null);
-  };
-
-  const handleRemoveItemFromBundle = async (bundleId: string, itemId: string) => {
-    const updated = customBundles.map((b) => {
-      if (b.id === bundleId) {
-        return { ...b, itemIds: b.itemIds.filter((id) => id !== itemId) };
-      }
-      return b;
-    });
-    await saveBundlesToDb(updated);
-  };
-
-  const handleAddItemToBundle = async (bundleId: string, itemId: string) => {
-    const updated = customBundles.map((b) => {
-      if (b.id === bundleId && !b.itemIds.includes(itemId)) {
-        return { ...b, itemIds: [...b.itemIds, itemId] };
-      }
-      return b;
-    });
-    await saveBundlesToDb(updated);
-    setIsAddingItemToBundleId(null);
-    setAddItemSearchQuery('');
   };
 
   // AI Bundle Synthesis
@@ -776,299 +695,8 @@ const BankTab: React.FC<BankTabProps> = ({
         </div>
       )}
 
-      {/* VIEW: ROOM BUNDLES & KITS */}
-      {viewMode === 'bundles' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
-            <PanelHead
-              icon={PackageCheck}
-              title="Room kits"
-              blurb="Items that go into a room together, so a whole room is added to a proposal in one click."
-              aside={<Button size="sm" variant="primary" icon={Plus} onClick={() => setIsCreatingBundle(true)}>Create kit</Button>}
-            />
-
-            {/* Create Bundle Drawer/Modal */}
-            <AnimatePresence>
-              {isCreatingBundle && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4"
-                >
-                  <div className="flex justify-between items-center">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                      Create New Custom Room Bundle
-                    </h4>
-                    <button
-                      onClick={() => setIsCreatingBundle(false)}
-                      className="p-1 text-slate-400 hover:text-slate-600 rounded"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input
-                      type="text"
-                      placeholder="Bundle Name (e.g. Master Bedroom Luxury Kit)"
-                      value={newBundleName}
-                      onChange={(e) => setNewBundleName(e.target.value)}
-                      className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Description (Optional summary of items)"
-                      value={newBundleDesc}
-                      onChange={(e) => setNewBundleDesc(e.target.value)}
-                      className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#3D52A0]"
-                    />
-                  </div>
-
-                  {/* Pick items for bundle */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[11px] font-bold text-slate-600 uppercase">
-                        Select Items to Include ({tempBundleItemIds.size} selected)
-                      </span>
-                      <input
-                        type="text"
-                        placeholder="Search items..."
-                        value={bundleItemSearchTerm}
-                        onChange={(e) => setBundleItemSearchTerm(e.target.value)}
-                        className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs w-48"
-                      />
-                    </div>
-
-                    <div className="max-h-48 overflow-y-auto bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-                      {bank
-                        .filter((i) =>
-                          (i.name || '').toLowerCase().includes(bundleItemSearchTerm.toLowerCase()) ||
-                          (i.cat || '').toLowerCase().includes(bundleItemSearchTerm.toLowerCase())
-                        )
-                        .map((item) => {
-                          const isPicked = tempBundleItemIds.has(item.id);
-                          return (
-                            <div
-                              key={item.id}
-                              onClick={() => {
-                                setTempBundleItemIds((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(item.id)) next.delete(item.id);
-                                  else next.add(item.id);
-                                  return next;
-                                });
-                              }}
-                              className={`p-2.5 text-xs flex items-center justify-between cursor-pointer transition-colors ${
-                                isPicked ? 'bg-[#3D52A0]/10 text-[#3D52A0] font-bold' : 'hover:bg-slate-50 text-slate-700'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={isPicked}
-                                  onChange={() => {}}
-                                  className="rounded text-[#3D52A0]"
-                                />
-                                <span>{item.name}</span>
-                              </div>
-                              <span className="text-[10px] text-slate-400 tabular-nums">
-                                {item.cat} · {item.unit}
-                              </span>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsCreatingBundle(false)}
-                      className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200/60 rounded-xl"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCreateBundle}
-                      className="px-5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm cursor-pointer"
-                    >
-                      Save Room Kit
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Bundles List */}
-            {customBundles.length === 0 ? (
-              <EmptyState
-                icon={PackageCheck}
-                title="No room kits yet"
-                text="Make one from items you pick, or let AI room kits put the first few together."
-                action={<Button size="sm" icon={Plus} onClick={() => setIsCreatingBundle(true)}>Create kit</Button>}
-              />
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {customBundles.map((bundle, bundleIndex) => {
-                  const isEditing = editingBundleId === bundle.id;
-                  const isExpanded = expandedBundleIds.has(bundle.id);
-                  const bundleItems = bank.filter((i) => bundle.itemIds.includes(i.id));
-                  const bundleTotalCost = bundleItems.reduce((sum, i) => sum + (i.materials || 0) + (i.labor || 0), 0);
-
-                  return (
-                    <div
-                      key={bundle.id}
-                      className="bg-white rounded-xl border border-slate-200 p-5 space-y-4 pp-lift hud-row-in hover:border-[#3D52A0]/40 flex flex-col justify-between"
-                      style={{ animationDelay: `${Math.min(bundleIndex, 11) * 30}ms` }}
-                    >
-                      <div className="space-y-2">
-                        {isEditing ? (
-                          <div className="space-y-2">
-                            <input
-                              type="text"
-                              value={editingBundleName}
-                              onChange={(e) => setEditingBundleName(e.target.value)}
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold"
-                            />
-                            <textarea
-                              value={editingBundleDesc}
-                              onChange={(e) => setEditingBundleDesc(e.target.value)}
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs resize-none h-14"
-                            />
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => setEditingBundleId(null)}
-                                className="px-3 py-1 text-xs font-bold text-slate-500"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={() => handleSaveEditBundle(bundle.id)}
-                                className="px-3 py-1 bg-[#3D52A0] text-white rounded-lg text-xs font-bold"
-                              >
-                                Save
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                {bundle.name}
-                                <button
-                                  onClick={() => {
-                                    setEditingBundleId(bundle.id);
-                                    setEditingBundleName(bundle.name);
-                                    setEditingBundleDesc(bundle.description || '');
-                                  }}
-                                  className="p-1 text-slate-400 hover:text-slate-700"
-                                >
-                                  <Edit2 className="w-3 h-3" />
-                                </button>
-                              </h4>
-                              {bundle.description && (
-                                <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">
-                                  {bundle.description}
-                                </p>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => handleDeleteBundle(bundle.id)}
-                              className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                              title="Delete Bundle"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Bundle Stats Pill */}
-                        <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500 pt-1">
-                          <span>{bundleItems.length} {bundleItems.length === 1 ? 'item' : 'items'}</span>
-                          <span>•</span>
-                          <span>Base cost {formatCurrency(bundleTotalCost)}</span>
-                        </div>
-
-                        {/* Items in bundle list */}
-                        <div className="bg-slate-50 rounded-xl p-3 space-y-1.5 max-h-36 overflow-y-auto">
-                          {bundleItems.map((item) => (
-                            <div
-                              key={item.id}
-                              className="flex items-center justify-between text-[11px] text-slate-700 py-0.5 group/item"
-                            >
-                              <span className="truncate pr-2 font-medium">{item.name}</span>
-                              <button
-                                onClick={() => handleRemoveItemFromBundle(bundle.id, item.id)}
-                                className="text-slate-300 hover:text-rose-600 opacity-0 group-item:opacity-100 transition-opacity"
-                                title="Remove from bundle"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Add item to bundle dropdown */}
-                      {isAddingItemToBundleId === bundle.id ? (
-                        <div className="space-y-2 p-2 bg-[#3D52A0]/5 rounded-xl border border-[#3D52A0]/20">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-bold uppercase text-[#3D52A0]">
-                              Add Item to {bundle.name}
-                            </span>
-                            <button
-                              onClick={() => setIsAddingItemToBundleId(null)}
-                              className="text-slate-400 hover:text-slate-600"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                          <input
-                            type="text"
-                            placeholder="Search catalog item..."
-                            value={addItemSearchQuery}
-                            onChange={(e) => setAddItemSearchQuery(e.target.value)}
-                            className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs"
-                          />
-                          <div className="max-h-28 overflow-y-auto divide-y divide-slate-100 bg-white rounded-lg border border-slate-200">
-                            {bank
-                              .filter(
-                                (i) =>
-                                  !bundle.itemIds.includes(i.id) &&
-                                  (i.name || '').toLowerCase().includes(addItemSearchQuery.toLowerCase())
-                              )
-                              .slice(0, 8)
-                              .map((item) => (
-                                <div
-                                  key={item.id}
-                                  onClick={() => handleAddItemToBundle(bundle.id, item.id)}
-                                  className="p-1.5 text-[11px] hover:bg-[#3D52A0]/10 cursor-pointer flex justify-between"
-                                >
-                                  <span>{item.name}</span>
-                                  <Plus className="w-3 h-3 text-[#3D52A0]" />
-                                </div>
-                              ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setIsAddingItemToBundleId(bundle.id)}
-                          className="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                        >
-                          Add item to kit
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
+      {/* Room kits */}
+      {viewMode === 'bundles' && <BankRoomKits bank={bank} kits={customBundles} onSave={saveBundlesToDb} />}
       </div>
 
       {/* 5. The selection bar: rises from the foot of the screen while items are ticked. */}
@@ -1144,6 +772,7 @@ const BankTab: React.FC<BankTabProps> = ({
         allCategories={categories}
         onApplyBulkUpdate={handleApplyBulkUpdate}
         onCreateCustomBundle={handleBulkCreatedBundle}
+        initialTab={bulkModalInitialTab}
       />
 
       {/* 7. PROJECT USAGE DETAILS MODAL */}
@@ -1194,66 +823,36 @@ const BankTab: React.FC<BankTabProps> = ({
         isOwner={true}
       />
 
-      {/* 9. AI SYNTHESIS CONSOLE MODAL */}
-      <AnimatePresence>
-        {showAiConsole && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-              onClick={() => !isAiSynthesizing && setShowAiConsole(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 1, y: 0 }}
-              className="relative w-full max-w-lg bg-slate-900 text-white rounded-3xl shadow-2xl border border-slate-700 overflow-hidden flex flex-col"
-            >
-              <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-slate-300" />
-                  <h3 className="text-sm font-black text-white">AI Room Kit Synthesizer</h3>
-                </div>
-                {!isAiSynthesizing && (
-                  <button
-                    onClick={() => setShowAiConsole(false)}
-                    className="p-1 text-slate-400 hover:text-white"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-
-              <div className="p-5 space-y-2 max-h-72 overflow-y-auto text-xs text-slate-300">
-                {aiLogMessages.map((msg, idx) => (
-                  <div key={idx} className="leading-relaxed">
-                    {msg}
-                  </div>
-                ))}
-                {isAiSynthesizing && (
-                  <div className="flex items-center gap-2 text-slate-300 pt-2">
-                    <div className="w-3 h-3 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
-                    <span>Synthesizing recipes...</span>
-                  </div>
-                )}
-              </div>
-
-              {!isAiSynthesizing && (
-                <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-end">
-                  <button
-                    onClick={() => setShowAiConsole(false)}
-                    className="px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-xl text-xs font-bold uppercase tracking-wider"
-                  >
-                    View Synthesized Kits
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* 9. AI room kits: what it is doing, a line at a time */}
+      {showAiConsole && (
+        <BankModal
+          label="AI room kits"
+          eyebrow="Room kits"
+          title="AI room kits"
+          blurb={isAiSynthesizing ? 'Putting room kits together from the bank.' : 'Done. The kits are under Room kits.'}
+          size="md"
+          locked={isAiSynthesizing}
+          onClose={() => setShowAiConsole(false)}
+          footer={!isAiSynthesizing ? (
+            <>
+              <span />
+              <Button variant="primary" onClick={() => { setShowAiConsole(false); setViewMode('bundles'); }}>View room kits</Button>
+            </>
+          ) : undefined}
+        >
+          <ul className="space-y-2 text-xs text-slate-600" aria-live="polite">
+            {aiLogMessages.map((msg, idx) => (
+              <li key={idx} className="hud-row-in leading-relaxed">{msg}</li>
+            ))}
+            {isAiSynthesizing && (
+              <li className="flex items-center gap-2 text-slate-500 pt-1">
+                <span className="w-3 h-3 border-2 border-[#3D52A0] border-t-transparent rounded-full motion-safe:animate-spin" />
+                Working…
+              </li>
+            )}
+          </ul>
+        </BankModal>
+      )}
     </div>
   );
 };
