@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { AIStrategy, Item, FullProjectData } from '../types';
 import { id as generateId, formatCurrency } from '../lib/utils';
 import { useOrg } from '../contexts/OrgContext';
@@ -13,6 +13,7 @@ import { Button, EmptyState, PanelHead } from './ui/kit';
 import BankCommandBar from './bank/BankCommandBar';
 import { CountUp } from './ui/HudBits';
 import { addToBank, isMergedCopy } from '../lib/bankMatch';
+import { bankUsageIndex, projectsUsingItem } from '../lib/bankUsage';
 import PriceLockModal from './bank/PriceLockModal';
 import RepeatedItemsModal from './bank/RepeatedItemsModal';
 import { duplicateGroups } from '../lib/bankMatch';
@@ -152,43 +153,23 @@ const BankTab: React.FC<BankTabProps> = ({
   // All unique categories
   const categories = useMemo(() => ['All', ...Array.from(new Set(bank.map((item) => item.cat || 'General')))], [bank]);
 
-  // Project Item ID usage sets
+  /*
+    Which projects use each item. The projects' lines are walked once, when the
+    projects change (lib/bankUsage.ts); a change to the bank, which is every
+    keystroke in it, then costs one lookup an item.
+  */
+  const usageIndex = useMemo(() => bankUsageIndex(projects), [projects]);
   const projectItemUsageMap = useMemo(() => {
-    const map = new Map<string, Set<string>>(); // itemId -> Set<projectId>
-    if (!projects || projects.length === 0) return map;
-
-    bank.forEach((item) => {
-      const targetId = item.id;
-      const targetName = (item.name || '').trim().toLowerCase();
-      const matched = new Set<string>();
-
-      projects.forEach((proj) => {
-        proj.tiers?.forEach((tier) => {
-          tier.boq?.forEach((boqItem) => {
-            if (
-              (boqItem.bankId && boqItem.bankId === targetId) ||
-              (boqItem.name && boqItem.name.trim().toLowerCase() === targetName)
-            ) {
-              matched.add(proj.id);
-            }
-          });
-        });
-
-        proj.canonical?.boq?.items?.forEach((cItem) => {
-          if (
-            (cItem.bankId && cItem.bankId === targetId) ||
-            (cItem.name && cItem.name.trim().toLowerCase() === targetName)
-          ) {
-            matched.add(proj.id);
-          }
-        });
-      });
-
-      map.set(item.id, matched);
-    });
-
+    const map = new Map<string, ReadonlySet<string>>(); // itemId -> Set<projectId>
+    bank.forEach((item) => map.set(item.id, projectsUsingItem(usageIndex, item)));
     return map;
-  }, [bank, projects]);
+  }, [bank, usageIndex]);
+  /* The same, as the count each row and card shows. */
+  const projectCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    projectItemUsageMap.forEach((set, id) => map.set(id, set.size));
+    return map;
+  }, [projectItemUsageMap]);
 
   // Filtered bank list
   const filteredBank = useMemo(() => {
@@ -274,14 +255,19 @@ const BankTab: React.FC<BankTabProps> = ({
   // ==========================================
   // SELECTION HANDLERS
   // ==========================================
-  const handleToggleSelectItem = (id: string) => {
+  /*
+    These four are handed to every row and card. They are kept the same from
+    one render to the next (useCallback), so a row that is remembered is not
+    drawn again when a different one is edited.
+  */
+  const handleToggleSelectItem = useCallback((id: string) => {
     setSelectedItemIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  };
+  }, []);
 
   const handleToggleSelectAll = () => {
     if (selectedItemIds.size === filteredBank.length && filteredBank.length > 0) {
@@ -369,27 +355,32 @@ const BankTab: React.FC<BankTabProps> = ({
     listTopRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   };
 
-  const handleUpdateItem = (id: string, updatedItem: Item) => {
+  const handleUpdateItem = useCallback((id: string, updatedItem: Item) => {
     setBank((prev) => prev.map((item) => (item.id === id ? updatedItem : item)));
-  };
+  }, [setBank]);
 
-  const handleDeleteItem = (id: string) => {
+  const handleDeleteItem = useCallback((id: string) => {
     setBank((prev) => prev.filter((item) => item.id !== id));
     setSelectedItemIds((prev) => {
       const next = new Set(prev);
       next.delete(id);
       return next;
     });
-  };
+  }, [setBank]);
 
-  const handleDuplicateItem = (item: Item) => {
+  /* The screen above passes a new function each time it draws; the cards are given one that stays. */
+  const openRecipeRef = useRef(onOpenRecipe);
+  openRecipeRef.current = onOpenRecipe;
+  const openRecipe = useCallback((id: string) => openRecipeRef.current?.(id), []);
+
+  const handleDuplicateItem = useCallback((item: Item) => {
     const dup: Item = {
       ...item,
       id: generateId(),
       name: `${item.name} (Copy)`,
     };
     setBank((prev) => [dup, ...prev]);
-  };
+  }, [setBank]);
 
   // Bulk update apply
   const handleApplyBulkUpdate = (updatedItems: Item[]) => {
@@ -716,7 +707,8 @@ const BankTab: React.FC<BankTabProps> = ({
           categories={categories}
           highlightedBankItemId={highlightedBankItemId}
           projects={projects}
-          onViewProjectUsage={(item) => setUsageModalItem(item)}
+          onViewProjectUsage={setUsageModalItem}
+          projectCounts={projectCounts}
         />
       )}
 
@@ -734,7 +726,8 @@ const BankTab: React.FC<BankTabProps> = ({
           highlightedBankItemId={highlightedBankItemId}
           onOpenBulkModalForCategory={handleOpenBulkModalForCategory}
           projects={projects}
-          onViewProjectUsage={(item) => setUsageModalItem(item)}
+          onViewProjectUsage={setUsageModalItem}
+          projectCounts={projectCounts}
         />
       )}
 
@@ -754,9 +747,10 @@ const BankTab: React.FC<BankTabProps> = ({
               onToggleSelect={handleToggleSelectItem}
               viewMode="grid"
               projects={projects}
-              onViewProjectUsage={(item) => setUsageModalItem(item)}
+              onViewProjectUsage={setUsageModalItem}
+              projectCount={projectCounts.get(item.id) || 0}
               specBank={specs}
-              onOpenRecipe={onOpenRecipe}
+              onOpenRecipe={openRecipe}
             />
             </div>
           ))}

@@ -30,11 +30,6 @@
     "offPalette": 1,
     "mono": 2
   },
-  "components/BankItemCard.tsx": {
-    "tinyPx": 5,
-    "offPalette": 14,
-    "mono": 4
-  },
   "components/BulkImportModal.tsx": {
     "offPalette": 1,
     "mono": 2
@@ -258,10 +253,6 @@
   "components/bank/BankItemProjectUsageModal.tsx": {
     "offPalette": 8,
     "mono": 4
-  },
-  "components/bank/BankSpreadsheetTable.tsx": {
-    "offPalette": 16,
-    "mono": 6
   },
   "components/client/BoqVersionCompare.tsx": {
     "tinyPx": 2,

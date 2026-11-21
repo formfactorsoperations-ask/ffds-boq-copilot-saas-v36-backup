@@ -856,6 +856,24 @@ and fluid to use. It uses the kits already approved (the People kit's `IconTile`
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel
   sizes; the file is at zero in the design guard.
 
+The same day the owner asked for "the same for the item cards and spreadsheet"
+(`components/BankItemCard.tsx`, `components/bank/BankSpreadsheetTable.tsx`, which By category also draws):
+
+- A card: kit chips for category, recipe and supply; the name; the specification; internal notes behind
+  a lock; a well with Cost, Margin and Factor and a margin bar that grows in and follows the figure
+  (emerald from 20%, amber from 15%, rose below; full at 40%); then Unit, Supplied and Sell price. It
+  lifts on hover (`pp-lift`) and takes the brand border; a ticked card takes the brand ring.
+- The sheet: column heads are the field-label class and are buttons that sort, the sorted one in brand
+  with its arrow. A field has no box until it is pointed at or typed in. Margin is tinted by the same
+  three states. A ticked row takes the brand tint and a brand rule down its left edge. Rows arrive with
+  `hud-row-in`; the specification opens under its row by height and the chevron turns.
+- Row and card buttons (AI split, Duplicate, Delete) are dim until pointed at, never hidden, because a
+  tablet has no hover. AI split is drawn only where AI is available.
+- Fluid to work in: a row or card is drawn again only when its own item changes; the order of rows is
+  held while typing and set again when a column head is clicked; a number can be emptied and retyped;
+  Enter moves down a column and Shift+Enter up. Columns are fixed so nothing is cut off at 1280px.
+- Both files are at zero in the design guard.
+
 ### Notifications motion (approved 22 Oct 2026)
 
 The owner chose four of the fifteen notification patterns in the round-two
