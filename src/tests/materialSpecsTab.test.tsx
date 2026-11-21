@@ -105,6 +105,41 @@ describe('the Material specs screen', () => {
   });
 });
 
+describe('the Material specs screen, round two', () => {
+  it('searches every family, not only the open one', () => {
+    role.current = 'Owner';
+    render(<MaterialSpecsTab specs={specs()} items={items} projects={projects} />);
+    // Plywood & boards is open; Hettich is under Hardware.
+    expect(screen.queryByRole('button', { name: /Hettich soft-close system/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Search materials'), { target: { value: 'hettich' } });
+    expect(screen.getByText('Search results')).toBeTruthy();
+    const card = screen.getByRole('button', { name: /Hettich soft-close system/ });
+    expect(within(card).getByText(/^Hardware · /)).toBeTruthy();
+    fireEvent.click(card);
+    // The panel is the Hardware material's, though Hardware was never opened.
+    expect((screen.getByLabelText('Words the client reads') as HTMLTextAreaElement).value).toBe(currentVersion(std, 'hw-hettich')!.words);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(screen.queryByText('Search results')).toBeNull();
+  });
+
+  it('keeps a change that is not saved while another material is looked at', () => {
+    role.current = 'Owner';
+    render(<MaterialSpecsTab specs={specs()} items={items} projects={projects} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Hardware/ }));
+    fireEvent.change(screen.getByLabelText('Words the client reads'), { target: { value: 'soft-close hinges and Hafele channels' } });
+    fireEvent.click(screen.getByRole('button', { name: /Hettich soft-close system/ }));
+    expect(screen.queryByText('This becomes version 2')).toBeNull();
+    // Its card says so, and going back finds the words as they were typed.
+    const first = screen.getByRole('button', { name: /Soft-close hinges and channels/ });
+    expect(within(first).getByText('Not saved')).toBeTruthy();
+    fireEvent.click(first);
+    expect((screen.getByLabelText('Words the client reads') as HTMLTextAreaElement).value).toBe('soft-close hinges and Hafele channels');
+    expect(screen.getByText('This becomes version 2')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(within(screen.getByRole('button', { name: /Soft-close hinges and channels/ })).queryByText('Not saved')).toBeNull();
+  });
+});
+
 describe('the item’s recipe drawer', () => {
   it('shows the recipe by option and what the client reads; the Owner changes a part', async () => {
     const onSave = vi.fn(async () => undefined);

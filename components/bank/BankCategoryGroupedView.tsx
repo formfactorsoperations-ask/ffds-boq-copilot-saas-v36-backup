@@ -27,6 +27,8 @@ interface BankCategoryGroupedViewProps {
   onOpenBulkModalForCategory: (category: string) => void;
   projects?: FullProjectData[];
   onViewProjectUsage?: (item: Item) => void;
+  /** How many projects use each item, counted once by the screen. */
+  projectCounts?: Map<string, number>;
 }
 
 const BankCategoryGroupedView: React.FC<BankCategoryGroupedViewProps> = ({
@@ -43,6 +45,7 @@ const BankCategoryGroupedView: React.FC<BankCategoryGroupedViewProps> = ({
   onOpenBulkModalForCategory,
   projects = [],
   onViewProjectUsage,
+  projectCounts,
 }) => {
   // Collapsed categories state (all expanded by default)
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
@@ -169,6 +172,7 @@ const BankCategoryGroupedView: React.FC<BankCategoryGroupedViewProps> = ({
                 highlightedBankItemId={highlightedBankItemId}
                 projects={projects}
                 onViewProjectUsage={onViewProjectUsage}
+                projectCounts={projectCounts}
               />
             )}
           </div>

@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { BoqItem } from '../types';
 import { id as generateId } from '../lib/utils';
-import { X } from '@/lib/lucide-shim';
+import { Upload, AlertTriangle, Check } from '@/lib/lucide-shim';
+import BankModal from './bank/BankModal';
+import { Button, Chip, SummaryStrip, StateDot, INPUT, LABEL } from './ui/kit';
 
 interface BulkImportModalProps {
     isOpen: boolean;
@@ -151,149 +152,149 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClose, onIm
 
     if (!isOpen) return null;
 
+    const STEPS = ['Choose a file', 'Match columns', 'Check and import'];
+
     return (
-        <AnimatePresence>
-            <div className="fixed inset-0 bg-[#3D52A0]/90 backdrop-blur-md border border-white/20/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
-                <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-auto flex flex-col max-h-[90vh]">
-                    <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl">
+        <BankModal
+            label="Import from Excel"
+            eyebrow="Import"
+            title="Import from Excel"
+            blurb="Bring items in from a sheet: choose the file, match its columns, then check what will come in."
+            size="2xl"
+            onClose={onClose}
+            tools={!frozen ? (
+                /* Where you are in the three steps. */
+                <ol className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    {STEPS.map((label, i) => {
+                        const n = i + 1;
+                        const done = step > n;
+                        const on = step === n;
+                        return (
+                            <li key={label} aria-current={on ? 'step' : undefined} className={`flex items-center gap-2 text-xs font-semibold ${on ? 'text-slate-800' : 'text-slate-400'}`}>
+                                <span className={`w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold transition-colors ${done ? 'bg-emerald-100 text-emerald-700' : on ? 'bg-[#3D52A0] text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                    {done ? <Check className="w-3 h-3" /> : n}
+                                </span>
+                                {label}
+                            </li>
+                        );
+                    })}
+                </ol>
+            ) : undefined}
+            footer={
+                <>
+                    <Button onClick={onClose}>Cancel</Button>
+                    {!frozen && step === 2 && <Button variant="primary" onClick={validateAndProcess}>Check the rows</Button>}
+                    {!frozen && step === 3 && validItems.length > 0 && (
+                        <Button variant="primary" icon={Check} onClick={commitImport}>Import {validItems.length} {validItems.length === 1 ? 'item' : 'items'}</Button>
+                    )}
+                </>
+            }
+        >
+            <div key={frozen ? 'frozen' : step} className="hud-swap">
+                {frozen ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-4 flex items-start gap-3" role="alert">
+                        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-rose-600" aria-hidden />
                         <div>
-                            <h2 className="text-xl font-bold text-slate-800">Bulk Import from Excel</h2>
-                            <p className="text-sm text-slate-500 font-medium">Standardize and ingest external scopes rapidly.</p>
+                            <p className="text-sm font-semibold text-rose-800">Import is blocked</p>
+                            <p className="text-xs text-rose-700 mt-0.5">The Operative BOQ is frozen. Adding items in bulk after the freeze would skip the Change Order flow. Use Scope Additions instead.</p>
                         </div>
-                        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 bg-white shadow-sm border border-slate-200 p-2 rounded-xl transition-all">
-                            <X className="w-5 h-5" />
-                        </button>
                     </div>
+                ) : step === 1 ? (
+                    <label className="group relative block rounded-xl border-2 border-dashed border-slate-300 px-6 py-12 text-center cursor-pointer transition-colors hover:border-[#3D52A0]/50 hover:bg-slate-50 focus-within:border-[#3D52A0]">
+                        <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                        <span className="mx-auto mb-3 w-12 h-12 rounded-2xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center transition-transform duration-300 motion-safe:group-hover:-translate-y-1">
+                            <Upload className="w-5 h-5" aria-hidden />
+                        </span>
+                        <span className="block text-sm font-semibold text-slate-700">Drop the file here, or click to choose one</span>
+                        <span className="block text-xs text-slate-500 mt-0.5">.xlsx, .xls or .csv. The first row should be the column names.</span>
+                    </label>
+                ) : step === 2 ? (
+                    <div className="space-y-5">
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">Match the columns</p>
+                            <p className="text-xs text-slate-500 mt-0.5">Say which column of the sheet holds each field. The ones we could guess are filled in.</p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {MAPPABLE_FIELDS.map((f, i) => (
+                                <label key={f.key} className="block hud-row-in" style={{ animationDelay: `${i * 30}ms` }}>
+                                    <span className={`${LABEL} flex items-center gap-1.5 mb-1.5`}>
+                                        {f.label}
+                                        {f.required && (mapping[f.key] ? <StateDot tone="good" /> : <Chip tone="warn">Needed</Chip>)}
+                                    </span>
+                                    <select
+                                        value={mapping[f.key] || ''}
+                                        onChange={(e) => setMapping(prev => ({ ...prev, [f.key]: e.target.value }))}
+                                        className={`${INPUT} bg-white`}
+                                    >
+                                        <option value="">Not in the sheet</option>
+                                        {headers.map((h, idx) => (
+                                            <option key={idx} value={String(idx)}>{h || `Column ${idx + 1}`}</option>
+                                        ))}
+                                    </select>
+                                </label>
+                            ))}
+                        </div>
 
-                    <div className="flex-1 overflow-y-auto p-6 bg-white">
-                        {frozen ? (
-                            <div className="p-8 text-center text-rose-600 bg-rose-50 rounded-xl border border-rose-100 flex flex-col items-center">
-                                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4 text-rose-500 font-bold text-2xl">!</div>
-                                <h3 className="text-lg font-bold mb-2">Import Blocked</h3>
-                                <p className="font-medium max-w-md mx-auto">The Operative BOQ is frozen. Bulk adding items post-freeze bypasses the Change Order flow and exposes the firm to scope creep. Use the Scope Addition module to add new items safely.</p>
-                            </div>
-                        ) : step === 1 ? (
-                            <div className="border-2 border-dashed border-slate-300 rounded-2xl p-12 text-center bg-slate-50 hover:bg-slate-100 transition-colors relative cursor-pointer group">
-                                <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                                <div className="w-20 h-20 bg-white rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform text-[#3D52A0] font-bold text-xl">
-                                    XLSX
-                                </div>
-                                <h3 className="text-lg font-bold text-slate-700 mb-2">Drop your BOQ file here, or click to browse</h3>
-                                <p className="text-sm text-slate-500 font-medium">Supports .xlsx and .csv formats.</p>
-                            </div>
-                        ) : step === 2 ? (
-                            <div>
-                                <div className="mb-6">
-                                    <h3 className="font-bold text-slate-800 mb-2">Map Columns</h3>
-                                    <p className="text-sm text-slate-500">Match your Excel columns to the system fields.</p>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {MAPPABLE_FIELDS.map(f => (
-                                        <div key={f.key} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                                {f.label} {f.required && <span className="text-red-500">*</span>}
-                                            </label>
-                                            <select 
-                                                value={mapping[f.key] || ''}
-                                                onChange={(e) => setMapping(prev => ({ ...prev, [f.key]: e.target.value }))}
-                                                className="w-full bg-white border border-slate-300 p-2.5 rounded-lg text-sm font-medium focus:ring-2 focus:ring-[#3D52A0] focus:outline-none"
-                                            >
-                                                <option value="">-- Ignore / Not Mapped --</option>
-                                                {headers.map((h, i) => (
-                                                    <option key={i} value={String(i)}>{h || `Column ${i+1}`}</option>
+                        <div>
+                            <p className={`${LABEL} mb-1.5`}>First rows of the sheet ({parsedData.length} in all)</p>
+                            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                                <table className="w-full text-left text-xs whitespace-nowrap">
+                                    <thead className="bg-slate-50 border-b border-slate-200">
+                                        <tr>
+                                            {headers.map((h, i) => <th key={i} scope="col" className={`${LABEL} px-3 py-2.5`}>{h || `Column ${i + 1}`}</th>)}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {parsedData.slice(0, 5).map((row, i) => (
+                                            <tr key={i} className="hover:bg-slate-50 transition-colors">
+                                                {headers.map((_, colIdx) => (
+                                                    <td key={colIdx} className="px-3 py-2 text-slate-600">{row[colIdx]}</td>
                                                 ))}
-                                            </select>
-                                        </div>
-                                    ))}
-                                </div>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-5">
+                        <SummaryStrip stats={[
+                            { label: 'Ready to import', value: validItems.length, sub: 'These rows pass every check', tone: validItems.length > 0 ? 'good' : 'slate' },
+                            { label: 'Rows with a problem', value: errors.length, sub: errors.length > 0 ? 'Left out of the import' : 'Nothing is left out', tone: errors.length > 0 ? 'bad' : 'good' },
+                            { label: 'Rows in the sheet', value: parsedData.length, sub: 'Not counting the heading' },
+                        ]} />
 
-                                <h3 className="font-bold text-slate-800 mt-10 mb-4">Data Preview ({parsedData.length} rows detected)</h3>
+                        {errors.length > 0 && (
+                            <div>
+                                <p className={`${LABEL} mb-1.5`}>What is wrong</p>
                                 <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                                    <table className="w-full text-left text-sm whitespace-nowrap">
-                                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-medium">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="bg-slate-50 border-b border-slate-200">
                                             <tr>
-                                                {headers.map((h, i) => <th key={i} className="p-3">{h || `Col ${i+1}`}</th>)}
+                                                <th scope="col" className={`${LABEL} px-3 py-2.5 w-16`}>Row</th>
+                                                <th scope="col" className={`${LABEL} px-3 py-2.5`}>Problem</th>
+                                                <th scope="col" className={`${LABEL} px-3 py-2.5`}>What the row says</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
-                                            {parsedData.slice(0, 5).map((row, i) => (
-                                                <tr key={i} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-                                                    {headers.map((_, colIdx) => (
-                                                        <td key={colIdx} className="p-3 text-slate-600">{row[colIdx]}</td>
-                                                    ))}
+                                        <tbody className="divide-y divide-slate-100">
+                                            {errors.slice(0, 10).map((err, i) => (
+                                                <tr key={i} className="hud-row-in" style={{ animationDelay: `${i * 25}ms` }}>
+                                                    <td className="px-3 py-2 font-bold tabular-nums text-slate-800">{err.rowIndex}</td>
+                                                    <td className="px-3 py-2 font-semibold text-rose-700">{err.errors.join(', ')}</td>
+                                                    <td className="px-3 py-2 text-slate-500 truncate max-w-md">{err.data?.slice(0, 5).join(' | ')}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
+                                    {errors.length > 10 && <div className="px-3 py-2 text-[11px] text-slate-500 bg-slate-50 border-t border-slate-100">The first 10 of {errors.length}.</div>}
                                 </div>
-                            </div>
-                        ) : (
-                            <div>
-                                <div className="mb-8 grid grid-cols-2 gap-6">
-                                    <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl flex items-center justify-between">
-                                        <div>
-                                            <div className="text-emerald-700 font-bold text-lg mb-1">Ready to Import</div>
-                                            <div className="text-emerald-600/80 text-sm font-medium">These lines pass all checks.</div>
-                                        </div>
-                                        <div className="text-4xl shadow-[inset_0_-8px_0_rgba(16,185,129,0.2)] font-black text-emerald-600">{validItems.length}</div>
-                                    </div>
-                                    <div className="bg-rose-50 border border-rose-200 p-6 rounded-2xl flex items-center justify-between">
-                                        <div>
-                                            <div className="text-rose-700 font-bold text-lg mb-1">Row Errors</div>
-                                            <div className="text-rose-600/80 text-sm font-medium">Will be skipped.</div>
-                                        </div>
-                                        <div className="text-4xl shadow-[inset_0_-8px_0_rgba(244,63,94,0.2)] font-black text-rose-600">{errors.length}</div>
-                                    </div>
-                                </div>
-
-                                {errors.length > 0 && (
-                                    <div>
-                                        <h3 className="font-bold text-slate-800 mb-4">Error Log</h3>
-                                        <div className="overflow-x-auto border border-rose-200 rounded-xl bg-rose-50/50">
-                                            <table className="w-full text-left text-sm text-rose-900">
-                                                <thead className="bg-rose-100/50 border-b border-rose-200 font-bold text-rose-700">
-                                                    <tr>
-                                                        <th className="p-3 w-20">Row</th>
-                                                        <th className="p-3">Issue(s)</th>
-                                                        <th className="p-3">Row Summary</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {errors.slice(0, 10).map((err, i) => (
-                                                        <tr key={i} className="border-b border-rose-100 last:border-0 hover:bg-rose-50 transition-colors">
-                                                            <td className="p-3 font-mono font-bold text-rose-600">{err.rowIndex}</td>
-                                                            <td className="p-3 font-medium">{err.errors.join(', ')}</td>
-                                                            <td className="p-3 font-mono text-xs opacity-70 truncate max-w-md">{err.data?.slice(0,5).join(' | ')}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                            {errors.length > 10 && <div className="p-3 text-center text-rose-500 text-xs font-bold bg-white/50 border-t border-rose-100">Showing first 10 errors.</div>}
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>
-
-                    <div className="p-6 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-between items-center">
-                        <button onClick={onClose} className="px-6 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors">
-                            Cancel
-                        </button>
-                        {!frozen && step === 2 && (
-                            <button onClick={validateAndProcess} className="px-6 py-2.5 rounded-xl font-bold bg-[#3D52A0] hover:bg-[#334486] text-white shadow-md transition-all hover:shadow-sky-200 hover:-translate-y-0.5">
-                                Validate Data
-                            </button>
-                        )}
-                        {!frozen && step === 3 && validItems.length > 0 && (
-                            <button onClick={commitImport} className="px-6 py-2.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition-all hover:shadow-emerald-200 hover:-translate-y-0.5">
-                                Import {validItems.length} Items
-                            </button>
-                        )}
-                    </div>
-                </motion.div>
+                )}
             </div>
-        </AnimatePresence>
+        </BankModal>
     );
 };
 
