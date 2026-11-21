@@ -8,8 +8,9 @@ import React, { useState } from 'react';
 import { render, screen, fireEvent, cleanup, within, act } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
+const studio: { org: any } = { org: { tenantId: 'test-tenant', orgName: 'Test Studio' } };
 vi.mock('../../contexts/OrgContext', () => ({
-  useOrg: () => ({ orgData: { tenantId: 'test-tenant', orgName: 'Test Studio' }, currentRole: 'Super Admin', currentRoles: ['Super Admin'], currentUserAuth: { displayName: 'Priya Shah' } }),
+  useOrg: () => ({ orgData: studio.org, currentRole: 'Super Admin', currentRoles: ['Super Admin'], currentUserAuth: { displayName: 'Priya Shah' } }),
 }));
 vi.mock('../../hooks/useStudioSettings', () => ({ useStudioSettings: () => ({ settings: {}, loading: false, updateSettings: vi.fn() }) }));
 vi.mock('../../services/firebaseClient', () => ({ db: null, functions: null, auth: null, storage: null }));
@@ -31,7 +32,7 @@ import { specTable } from '../../lib/playground/proposal';
 import { studioStandard, saveNewVersion, currentVersion } from '../../lib/materialSpecs';
 import { withRecipeSpecs } from '../../lib/lineSpecs';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); studio.org = { tenantId: 'test-tenant', orgName: 'Test Studio' }; });
 
 const bank: any[] = [
   { id: 'w', name: 'Sliding wardrobe', cat: 'Carpentry', unit: 'sq ft', specs: 'Walnut', materials: 1000, labor: 400, margin: 20 },
@@ -158,5 +159,41 @@ describe('the material specifications, built from the BOQ', () => {
     expect(cell.versions).toEqual([ply.v]);
     expect(cell.current).toBe(currentVersion(specs, ply.id)!.v);
     expect(specTable(null, t, bankMap)).toBeNull();
+  });
+});
+
+describe('the studio on the proposal, from Studio settings', () => {
+  it('its logo on the cover, and its details on the closing page, last', async () => {
+    studio.org = {
+      tenantId: 'test-tenant', orgName: 'Form Factors Design Studio', legalName: 'Form Factors Design LLP', tagline: 'Interiors that work',
+      orgLogo: 'data:image/png;base64,iVBORw0KGgo=', officeAddress: 'Kamala Mills, Lower Parel', cityState: 'Mumbai, Maharashtra',
+      contactPhone: '+91 98200 12345', contactEmail: 'studio@formfactors.in', website: 'https://www.formfactors.in', gstin: '27ABCDE1234F1Z5',
+      signatoryName: 'Anish K', signatoryTitle: 'Principal', credentials: ['IIID'],
+    };
+    render(<Harness extra={{ clientName: 'Meera Shah' }} />);
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' })); });
+    const d = pdf();
+    const pages = [...d.querySelectorAll('[data-pdf-page]')];
+    const logo = pages[0].querySelector('[data-pdf-logo]') as HTMLImageElement;
+    expect(logo.getAttribute('src')).toBe(studio.org.orgLogo);
+    expect(logo.getAttribute('alt')).toBe('Form Factors Design Studio');
+    expect(pages[0].textContent).toContain('Interiors that work');
+    const last = pages.at(-1)!;
+    expect(last.querySelector('[data-pdf-studio]')).toBeTruthy();
+    const t = last.textContent || '';
+    for (const x of ['Meera Shah, thank you for considering Form Factors Design Studio', 'Form Factors Design LLP', 'Kamala Mills, Lower Parel', 'Mumbai, Maharashtra', '+91 98200 12345', 'studio@formfactors.in', 'formfactors.in', '27ABCDE1234F1Z5', 'Anish K, Principal', 'IIID']) expect(t).toContain(x);
+    // The annexure is signed for the studio, by its signatory.
+    expect(pages.at(-2)!.textContent).toMatch(/For Form Factors Design StudioAnish K, Principal/);
+  });
+
+  it('with no logo the studio’s name stands on the cover; with no way to reach it, there is no closing page', async () => {
+    studio.org = { tenantId: 'test-tenant', orgName: 'Test Studio', contactEmail: 'hello@interiorops.com' };
+    render(<Harness />);
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' })); });
+    const d = pdf();
+    expect(d.querySelector('[data-pdf-logo]')).toBeNull();
+    expect(d.querySelector('[data-pdf-wordmark]')!.textContent).toBe('Test Studio');
+    expect(d.querySelector('[data-pdf-studio]')).toBeNull();
+    expect(d.textContent).not.toContain('hello@interiorops.com');
   });
 });

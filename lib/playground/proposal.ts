@@ -33,7 +33,7 @@ import { clampDays } from './deal';
 
 /* ───────────────────────────── the pages and their order ───────────────────────────── */
 
-export type PageKey = 'cover' | 'sum' | 'brief' | 'how' | 'home' | 'items' | 'sep' | 'mat' | 'inv' | 'next' | 'annex';
+export type PageKey = 'cover' | 'sum' | 'brief' | 'how' | 'home' | 'items' | 'sep' | 'mat' | 'inv' | 'next' | 'annex' | 'studio';
 
 /** The lead profile's main concerns: each shapes the page order. */
 export const CONCERNS = ['Itemized Costs', 'Overall Budget', 'Timeline', 'Design Details', 'Trust'] as const;
@@ -50,7 +50,8 @@ export function pageOrder(concern: string | null | undefined, summary: boolean):
     : concern === 'Trust' ? ['cover', 'sum', 'how', 'brief', 'home', 'items', 'sep', 'mat', 'inv', 'next', 'annex']
     : concern === 'Design Details' ? ['cover', 'sum', 'brief', 'how', 'home', 'mat', 'items', 'sep', 'inv', 'next', 'annex']
     : ['cover', 'sum', 'brief', 'how', 'home', 'items', 'sep', 'mat', 'inv', 'next', 'annex'];
-  return summary ? order : order.filter(k => k !== 'sum');
+  /* The studio, from Studio settings, always closes the proposal. */
+  return [...(summary ? order : order.filter(k => k !== 'sum')), 'studio'];
 }
 
 /* ───────────────────────────── room by room ───────────────────────────── */

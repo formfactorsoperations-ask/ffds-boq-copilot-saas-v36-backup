@@ -36,14 +36,14 @@ const ctx: any = { name: 'Palacia', rooms, designFeeType: 'percentage', designFe
 const pricing = splitPricingOf(tier, rooms, bankMap);
 
 describe('the page order', () => {
-  it('follows the main concern, Annexure A always last, the summary only with other decision makers', () => {
-    expect(pageOrder('Itemized Costs', false)).toEqual(['cover', 'brief', 'how', 'home', 'items', 'sep', 'mat', 'inv', 'next', 'annex']);
+  it('follows the main concern, Annexure A then the studio last, the summary only with other decision makers', () => {
+    expect(pageOrder('Itemized Costs', false)).toEqual(['cover', 'brief', 'how', 'home', 'items', 'sep', 'mat', 'inv', 'next', 'annex', 'studio']);
     expect(pageOrder('Overall Budget', false).slice(0, 3)).toEqual(['cover', 'brief', 'inv']);
     expect(pageOrder('Trust', false).slice(0, 2)).toEqual(['cover', 'how']);
     const d = pageOrder('Design Details', false);
     expect(d.indexOf('mat')).toBeLessThan(d.indexOf('items'));
     expect(pageOrder('Timeline', true)[1]).toBe('sum');
-    for (const c of ['Itemized Costs', 'Overall Budget', 'Trust', 'Design Details', 'Timeline', null]) expect(pageOrder(c, true).at(-1)).toBe('annex');
+    for (const c of ['Itemized Costs', 'Overall Budget', 'Trust', 'Design Details', 'Timeline', null]) expect(pageOrder(c, true).slice(-2)).toEqual(['annex', 'studio']);
   });
 });
 
