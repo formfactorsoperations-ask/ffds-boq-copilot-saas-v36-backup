@@ -49,9 +49,9 @@ import { artOfSpecs } from './pieceArt';
 import type { MaterialSpecsBank } from '../../lib/materialSpecs';
 import { gradeOf, offersUpdates, withRecipeSpecs, updatedLine, recipeOf, specsFromRecipe } from '../../lib/lineSpecs';
 import { kitsOf, kitStartRooms, kitApply, kitAddsDebris, kitEstimate, kitFits, roomAsKit, type BundleLike, type SavedKit } from '../../lib/playground/kits';
-import { ADDON_BUNDLES, calculateQuantity, type TemplateData } from '../../lib/standardPackages';
+import { ADDON_BUNDLES, type TemplateData } from '../../lib/standardPackages';
 import { templateLines } from '../../lib/playground/templateBuild';
-import { basisOfUnit } from '../../lib/boqSize';
+import { workLine, measureWork } from '../../lib/playground/works';
 import type { Grade } from '../../lib/materialSpecs';
 import { lineAmount } from '../../lib/playground/pricing';
 import { KitModal, KIT_DRAG } from './KitParts';
@@ -418,19 +418,20 @@ export default function PlaygroundScreen(props: Props) {
     commit([...boq, line], probe && planRoom ? `${item.name} added to ${roomName}. No free wall fits it: drag it into place.` : `${item.name} added to ${roomName}.`);
     setSel(line.id);
   };
-  /* A work from the library (civil, plumbing, electrical…): not drawn, so it joins the room's list, sized from the room
-     as the Standard templates size a surface (lib/standardPackages calculateQuantity); a counted one or a lump sum is one. */
-  const addWork = (item: Item, roomName: string) => {
+  /* A work from the library (civil, plumbing, electrical…): not drawn, so it joins the room it is dropped on, its
+     quantity measured from that room and the sum said (lib/playground/works). */
+  const addWork = (item: Item, roomName: string | null) => {
     if (readOnly) { setNote('This option is locked: nothing can be added.'); return; }
-    const room = rooms.find(r => r.name === roomName);
-    const basis = basisOfUnit(item.unit);
-    const sized = room && Number(room.size) > 0 && (basis === 'area' || basis === 'length')
-      ? calculateQuantity(item, Number(room.size), Number(room.height) || Number(ctx.ceilingHeight) || 9.5) : 1;
-    const qty = sized > 0 ? Math.round(sized * 100) / 100 : 1;
-    const line: BoqItem = prepareNew({ id: newId(), bankId: item.id, qty, roomId: roomName, baseRate: item.materials });
-    commit([...boq, line], `${item.name} added to ${roomName}${qty !== 1 ? `, ${qty} ${item.unit} from the room’s size` : ''}. It is marked on the plan.`);
+    if (!roomName) { setNote('Click a room on the plan first, or drag the work onto a room.'); return; }
+    const r = workLine(item, rooms.find(x => x.name === roomName), boq, newId);
+    if ('problem' in r) { setNote(r.problem); if (r.existing) setSel(r.existing); return; }
+    const line = prepareNew(r.line);
+    commit([...boq, line], `${item.name} added to ${roomName}: ${line.qty} ${item.unit}, ${r.how}.`);
     setSel(line.id);
   };
+  /* The room a work's + goes to: the one in hand on the plan. Never a room nobody chose. */
+  const workRoom = selRoom || (sel ? byId.get(sel)?.room : null) || null;
+  const workRoomReal = workRoom && rooms.some(x => x.name === workRoom) ? workRoom : null;
   const libTarget = selRoom || (sel ? byId.get(sel)?.room : null) || planRooms[0]?.name || rooms[0]?.name || 'Others';
   const placeLine = (line: BoqItem) => {
     const item = pieceItemOf(line, bankMap);
@@ -1001,7 +1002,7 @@ export default function PlaygroundScreen(props: Props) {
                   readOnly={readOnly} sel={sel} onSel={pickLine} selRoom={selRoom} onSelRoom={pickRoom}
                   commit={commit} newId={newId} libOpen={showLib} hideFigures={hideFigures} fitSignal={fitSignal} prepareNew={prepareNew}
                   onRooms={resizeRooms}
-                  layer={layer} civilTool={civilTool} onCivilRoom={civilRoom} onCivilWall={civilWall} onNote={setNote} onDropKit={(id, room) => openKit(id, room)} changes={changes} fresh={fresh}
+                  layer={layer} civilTool={civilTool} onCivilRoom={civilRoom} onCivilWall={civilWall} onNote={setNote} onDropWork={(it, room) => addWork(it, room)} onDropKit={(id, room) => openKit(id, room)} changes={changes} fresh={fresh}
                 />
               ) : (
                 <div className="absolute inset-0 grid place-items-center p-6" style={{ paddingLeft: showLib && wide ? 260 : undefined }}>
@@ -1035,7 +1036,7 @@ export default function PlaygroundScreen(props: Props) {
                     onSel={pickLine} onRoom={pickRoom} onAdd={onAddFromBank}
                     onShowOnPlan={name => { setLens('plan'); pickRoom(name); setFitSignal(s => s + 1); }}
                     changes={changes} baseName={prevName}
-                    onDropItem={(id, room) => { if (id.startsWith(KIT_DRAG)) { openKit(id.slice(KIT_DRAG.length), room); return; } const it = bank.find(i => i.id === id); if (it) addToRoom(it, room); }}
+                    onDropItem={(id, room) => { if (id.startsWith(KIT_DRAG)) { openKit(id.slice(KIT_DRAG.length), room); return; } const it = bank.find(i => i.id === id); if (it) { if (drawOf(it)) addToRoom(it, room); else addWork(it, room); } }}
                     onReplaceMany={replaceMany} />
                 )}
                 {lens === 'sheet' && fullGrid && renderFullGrid && (
@@ -1081,7 +1082,8 @@ export default function PlaygroundScreen(props: Props) {
               <div className="absolute left-2 top-2 bottom-2 z-20 w-[232px] flex pg-slide">
                 <Catalogue bank={bank} readOnly={readOnly} onClose={() => setLibOpen(false)} onAdd={it => addToRoom(it, libTarget)} addLabel={`to ${libTarget}`}
                   kits={kits} bankMap={bankMap} hideFigures={hideFigures} kitEstimate={kitCardEstimate} onKit={id => openKit(id)}
-                  places={supplyPlaces} onAddSupplied={addSupplied} onAddWork={it => addWork(it, libTarget)}
+                  places={supplyPlaces} onAddSupplied={addSupplied} onAddWork={it => addWork(it, workRoomReal)} workRoom={workRoomReal}
+                  measureWork={it => (workRoomReal ? measureWork(it, rooms.find(x => x.name === workRoomReal)) : null)}
                   artOf={specBank ? (it => { const r = recipeOf(it, specBank); return r ? artOfSpecs(specsFromRecipe(specBank, r, grade), specBank.materials) : {}; }) : undefined} />
               </div>
             )}

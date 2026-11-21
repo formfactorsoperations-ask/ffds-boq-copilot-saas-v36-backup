@@ -16,6 +16,7 @@ import { pickable } from '../../lib/bankMatch';
 import { drawOf } from '../../lib/playground/pieces';
 import { supplyOf } from '../../lib/playground/supply';
 import { tradeIcon } from '../ui/tradeIcon';
+import { WORK_TYPE } from '../../lib/playground/works';
 
 /*
   The studio design library (the approved mockup's catalogue), over the left of
@@ -39,7 +40,7 @@ const CAT_OF: Record<PieceKind, Cat> = {
 };
 type Tab = 'pieces' | 'works' | 'kits' | 'client';
 
-export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, artOf, kits = [], bankMap, hideFigures = false, kitEstimate, onKit, places = [], onAddSupplied, onAddWork }: {
+export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, artOf, kits = [], bankMap, hideFigures = false, kitEstimate, onKit, places = [], onAddSupplied, onAddWork, workRoom = null, measureWork }: {
   bank: Item[];
   readOnly: boolean;
   onClose: () => void;
@@ -60,6 +61,10 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
   onAddSupplied?: (item: Item, room: string) => void;
   /** The + on a Works tile: adds the item to the room the screen says, sized from it. Without it there is no Works tab. */
   onAddWork?: (item: Item) => void;
+  /** The room a work's + goes to: the one in hand on the plan, or none. */
+  workRoom?: string | null;
+  /** What a work comes to in that room, and how (lib/playground/works). */
+  measureWork?: (item: Item) => { qty: number; how: string } | null;
 }) {
   const [dest, setDest] = useState('Whole flat');
   /* What is offered: the items, never a copy of one (lib/bankMatch.ts). */
@@ -98,7 +103,10 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
         </div>
         {tab === 'kits' && <div className="text-[11px] text-slate-500 mt-1.5">From the Item Bank’s bundles. Drop a kit on a room: every line is sized from that room.</div>}
         {tab === 'works' && <>
-          <div className="text-[11px] text-slate-500 mt-1.5">Everything that is not drawn: civil, plumbing, electrical, site work. Each is marked in its room on the plan. Press + to add one {addLabel}.</div>
+          <div className="text-[11px] text-slate-500 mt-1.5">Civil, plumbing, electrical and site work. Drag one onto a room: its quantity is measured from that room.</div>
+          <div className={`mt-1.5 text-[11px] font-semibold ${workRoom ? 'text-[#3D52A0]' : 'text-amber-700'}`} role="status">
+            {workRoom ? `+ adds to ${workRoom}, with the quantity shown.` : 'Click a room on the plan to use +.'}
+          </div>
           <div className="relative mt-2">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" aria-hidden />
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter works by name…" aria-label="Filter the works" className={`${INPUT} !pl-8 !py-1.5`} />
@@ -146,14 +154,19 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
         <div key="works" className="hud-swap flex-1 overflow-auto p-3 grid grid-cols-2 gap-2 content-start">
           {workList.map((item, i) => {
             const Icon = tradeIcon(`${item.name} ${item.cat}`);
+            const m = workRoom ? measureWork?.(item) : null;
             return (
-              <React.Fragment key={item.id}><LibTile i={i} readOnly title={item.name} onDragStart={e => e.preventDefault()}
+              <React.Fragment key={item.id}><LibTile i={i} readOnly={readOnly} title={readOnly ? item.name : `Drag ${item.name} onto a room`}
+                onDragStart={e => { e.dataTransfer.setData('text/plain', item.id); e.dataTransfer.setData(WORK_TYPE, '1'); e.dataTransfer.effectAllowed = 'copy'; }}
                 thumb={<span className="w-full h-12 rounded-lg bg-slate-50 grid place-items-center text-slate-400"><Icon className="w-5 h-5" aria-hidden /></span>}>
                 <span className="block text-[11px] font-semibold text-slate-800 leading-tight mt-1 line-clamp-2">{item.name}</span>
                 <span className="block text-[10px] font-bold text-slate-500 tabular-nums">{inr(calculateSellPrice(item.materials, item.labor, item.margin))}/{item.unit}</span>
+                {m && <span className="block text-[10px] font-semibold text-[#3D52A0] tabular-nums" title={`In ${workRoom}: ${m.how}`}>{m.qty} {item.unit} here</span>}
                 {!readOnly && (
-                  <button type="button" onClick={() => onAddWork?.(item)} aria-label={`Add ${item.name} ${addLabel}`} title={`Add ${addLabel}`}
-                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-lg bg-white/90 border border-slate-200 text-slate-600 hover:bg-[#3D52A0] hover:text-white hover:border-transparent hover:scale-110 active:scale-95 transition-all duration-150 grid place-items-center">
+                  <button type="button" onClick={() => onAddWork?.(item)} disabled={!workRoom}
+                    aria-label={workRoom ? `Add ${item.name} to ${workRoom}` : `Add ${item.name}: click a room on the plan first`}
+                    title={workRoom ? `Add to ${workRoom}${m ? `: ${m.qty} ${item.unit}, ${m.how}` : ''}` : 'Click a room on the plan first, or drag this onto a room'}
+                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-lg bg-white/90 border border-slate-200 text-slate-600 enabled:hover:bg-[#3D52A0] enabled:hover:text-white enabled:hover:border-transparent enabled:hover:scale-110 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 grid place-items-center">
                     <Plus className="w-3 h-3" aria-hidden />
                   </button>
                 )}

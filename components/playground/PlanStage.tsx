@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { WORK_TYPE } from '../../lib/playground/works';
 import { tradeIcon } from '../ui/tradeIcon';
 import { Minus, Plus, Maximize } from 'lucide-react';
 import type { ProjectContext, Item, BoqItem, Room } from '../../types';
@@ -79,6 +80,8 @@ interface Props {
   onNote?: (msg: string) => void;
   /** A room kit dropped on a room (PR K): its preview opens for that room. */
   onDropKit?: (kitId: string, room: string) => void;
+  /** A work from the library (an item that is not drawn) dropped on a room. */
+  onDropWork?: (item: Item, room: string) => void;
   /** Show changes since the version before (PR R): each changed piece outlined and tagged, the ones taken out drawn faint. */
   changes?: Changes | null;
   /** What the last edit did (PR 7): pieces drop in, the room glows, the price change floats up. */
@@ -211,7 +214,8 @@ export default function PlanStage(props: Props) {
   const [kitOver, setKitOver] = useState<string | null>(null);
   const roomUnder = (at: [number, number] | null) =>
     at ? planRooms.find(r => at[0] >= r.plan!.x && at[0] <= r.plan!.x + r.plan!.w && at[1] >= r.plan!.y && at[1] <= r.plan!.y + r.plan!.h) || null : null;
-  const isKitDrag = (e: React.DragEvent) => Array.from(e.dataTransfer?.types || []).includes(KIT_TYPE);
+  /* A kit and a work both land on a whole room, so the room under the pointer lights up for either. */
+  const isKitDrag = (e: React.DragEvent) => { const t = Array.from(e.dataTransfer?.types || []); return t.includes(KIT_TYPE) || t.includes(WORK_TYPE); };
   const onDragOver = (e: React.DragEvent) => {
     if (readOnly) return;
     e.preventDefault();
@@ -232,6 +236,12 @@ export default function PlanStage(props: Props) {
     const item = bank.find(i => i.id === text);
     const at = pt(e);
     const draw = drawOf(item);
+    if (item && !draw) {
+      const room = roomUnder(at);
+      if (room) props.onDropWork?.(item, room.name);
+      else onNote?.('Drop the work inside a room: it is measured from that room.');
+      return;
+    }
     if (!item || !at || !draw) return;
     const probe: PlacedPiece = { id: '__new', fp: { w: draw.w, d: draw.d }, place: { x: at[0], y: at[1], rot: 0 }, high: isHigh(draw), wallBacked: isWallBacked(draw) };
     const p = placeAt(probe, at[0], at[1], planRooms, { free: e.altKey });
