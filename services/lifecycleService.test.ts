@@ -35,7 +35,7 @@ describe('Lifecycle Service', () => {
         (runTransaction as any).mockImplementation((db: any, callback: any) => callback(mockTransaction));
     });
 
-    it('should reject illegal transitions (e.g. stage 5 to 6 without designGateActive)', async () => {
+    it('should open the design gate by itself when a project advances to stage 6', async () => {
         mockSnap.data = () => ({
             context: {
                 lifecycle: {
@@ -45,8 +45,25 @@ describe('Lifecycle Service', () => {
             }
         });
 
+        const lifecycle = await advance('org1', 'proj1', { type: 'ADVANCE', toStage: 6 });
+        expect(lifecycle.stage).toBe(6);
+        expect(lifecycle.gates.designGateActive).toMatchObject({ done: true, reference: 'auto-activated-on-advance' });
+    });
+
+    it('should reject stage 5 to 6 while nothing in the Ops Matrix execution phase is done', async () => {
+        const context = (done: number) => ({
+            context: {
+                lifecycle: { ...getInitialLifecycle(), stage: 5 },
+                journeySummary: { phaseProgress: { 4: { done, total: 6 } } }
+            }
+        });
+
+        mockSnap.data = () => context(0);
         await expect(advance('org1', 'proj1', { type: 'ADVANCE', toStage: 6 }))
             .rejects.toThrowError(LifecycleError);
+
+        mockSnap.data = () => context(1);
+        expect((await advance('org1', 'proj1', { type: 'ADVANCE', toStage: 6 })).stage).toBe(6);
     });
 
     it('should allow legal path 1 to 6', async () => {
@@ -62,15 +79,13 @@ describe('Lifecycle Service', () => {
         lifecycle = await advance('org1', 'proj1', { type: 'ADVANCE', toStage: 5 });
         expect(lifecycle.stage).toBe(5);
 
-        // Try 5 to 6 without gate (fails)
-        mockSnap.data = () => ({ context: { lifecycle } });
-        await expect(advance('org1', 'proj1', { type: 'ADVANCE', toStage: 6 })).rejects.toThrowError();
-
-        // Activate gate
-        lifecycle = await advance('org1', 'proj1', { type: 'GATE_ACTIVATE', gate: 'designGateActive' });
+        // Advancing to 5 opened the design gate by itself, and activating it again changes nothing
         expect(lifecycle.gates.designGateActive.done).toBe(true);
+        mockSnap.data = () => ({ context: { lifecycle } });
+        lifecycle = await advance('org1', 'proj1', { type: 'GATE_ACTIVATE', gate: 'designGateActive' });
+        expect(lifecycle.gates.designGateActive).toMatchObject({ done: true, reference: 'auto-activated-on-advance' });
 
-        // Try 5 to 6 with gate (succeeds)
+        // 5 to 6
         mockSnap.data = () => ({ context: { lifecycle } });
         lifecycle = await advance('org1', 'proj1', { type: 'ADVANCE', toStage: 6 });
         expect(lifecycle.stage).toBe(6);
