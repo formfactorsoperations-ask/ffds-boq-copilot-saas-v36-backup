@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item, AIStrategy } from '../types';
 import { TemplateData, INITIAL_TEMPLATES, getSmartDefaultCoefficient } from '../lib/standardPackages';
-import { drawOf, standardSizeOf } from '../lib/playground/pieces';
+import { drawOf, standardSizeOf, canHaveSize } from '../lib/playground/pieces';
 import { ftin } from '../lib/playground/geometry';
 import { basisOfUnit } from '../lib/boqSize';
 import { roomScopesOf, gradesFor, withGrades, prunedMarks, roleOf } from '../lib/templateOptions';
@@ -653,8 +653,6 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                   /* The size a new BOQ starts this item at (Item bank, "On the plan"). */
                   const draw = drawOf(item);
                   const standard = standardSizeOf(item);
-                  const basisOf = basisOfUnit(item.unit);
-                  const measuredItem = basisOf === 'area' || basisOf === 'length';
                   /* The options that take it: all three unless marked. */
                   const itemGrades = gradesFor(templates[activeConfig], activeRoomType, itemId);
                   const role = roleOf(itemGrades);
@@ -697,7 +695,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                                 title={onOpenItem ? 'The standard size every new BOQ starts this item at. Open it to change' : 'The standard size from the Item bank: every new BOQ starts this item at it.'}>
                                 {ftin(draw!.w)}{basisOfUnit(item.unit) === 'area' ? ` × ${ftin(draw!.h)}` : ''} · {standard.qty} {item.unit}
                               </button>
-                            ) : measuredItem && smartCoeff === undefined ? (
+                            ) : canHaveSize(item) ? (
                               <button type="button" disabled={!onOpenItem} onClick={() => onOpenItem?.(itemId)}
                                 className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 enabled:hover:bg-amber-200 transition-colors"
                                 title={onOpenItem ? 'No standard size yet: a new BOQ sizes it from the room. Open it to set one' : 'Set its standard size in the Item bank. Until then a new BOQ sizes it from the room.'}>

@@ -143,6 +143,19 @@ export function standardSizeOf(item: Pick<Item, 'name' | 'cat' | 'draw' | 'unit'
   return typeof u.qty === 'number' && u.qty > 0 ? u : null;
 }
 
+/**
+ * True when an item can be given a standard size: it is measured by area or
+ * running length and is a thing that is made, not a surface or a service. A
+ * false ceiling, painting, tiling and wiring are measured from the plan; a size
+ * typed for one would be wrong for every flat but one.
+ */
+export function canHaveSize(item: Pick<Item, 'name' | 'cat' | 'unit'> | null | undefined): boolean {
+  if (!item) return false;
+  const basis = basisOfUnit(item.unit);
+  if (basis !== 'area' && basis !== 'length') return false;
+  return !NEVER_DRAWN_CATS.test((item.cat || '').trim()) && !NEVER_DRAWN.test(item.name || '');
+}
+
 /** The item with a standard size typed by the owner (Item Bank, "On the plan"). */
 export function withStandardSize(item: Item, size: { w: number; h: number; d: number; kind?: PieceKind }): Item {
   const cur = drawOf(item);

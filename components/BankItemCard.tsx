@@ -7,10 +7,9 @@ import { UOM_OPTIONS } from '../constants';
 import { Sparkles, Copy, Trash2, Building2, Lock } from '@/lib/lucide-shim';
 import type { MaterialSpecsBank } from '../lib/materialSpecs';
 import { recipeOf, specsFromRecipe, composeWords } from '../lib/lineSpecs';
-import { drawOf, standardSizeOf } from '../lib/playground/pieces';
+import { drawOf, standardSizeOf, canHaveSize } from '../lib/playground/pieces';
 import { ftin } from '../lib/playground/geometry';
 import { basisOfUnit } from '../lib/boqSize';
-import { getSmartDefaultCoefficient } from '../lib/standardPackages';
 import Swatch from './materialSpecs/Swatch';
 import { Chip, LABEL } from './ui/kit';
 import { bankUsageIndex, projectsUsingItem } from '../lib/bankUsage';
@@ -118,13 +117,13 @@ const BankItemCard: React.FC<BankItemCardProps> = ({
   /* The recipe and what it makes at Comfort, as the mockup's card shows them. */
   const recipe = specBank ? recipeOf(item, specBank) : null;
   const recipeSpecs = recipe && specBank ? specsFromRecipe(specBank, recipe, 'C') : null;
-  /* The standard size, for an item measured by area or length that is not a surface measured from the plan. */
+  /* The standard size, for an item that is made and measured by area or length (not a surface or a service). */
   const standard = standardSizeOf(item);
   const sizeBasis = basisOfUnit(item.unit);
   const sizeDraw = drawOf(item);
   const sizeChip = standard && sizeDraw
     ? `Size ${ftin(sizeDraw.w)}${sizeBasis === 'area' ? ` × ${ftin(sizeDraw.h)}` : ''}`
-    : (sizeBasis === 'area' || sizeBasis === 'length') && getSmartDefaultCoefficient(item) === undefined ? 'Set size' : null;
+    : canHaveSize(item) ? 'Set size' : null;
   const recipeWords = recipeSpecs && specBank ? composeWords(specBank, recipeSpecs) : '';
   const [isSplitting, setIsSplitting] = useState(false);
   const aiOn = isAiAvailable();

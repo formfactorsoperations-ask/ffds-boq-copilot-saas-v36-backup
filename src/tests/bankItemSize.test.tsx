@@ -46,6 +46,9 @@ describe('the standard size on an Item Bank card', () => {
     card(item('Queen bed', 'nos'));
     card(item('Interior painting', 'sq ft', { cat: 'Painting' }));
     card(item('Debris removal', 'lumpsum', { cat: 'Site Services' }));
+    card(item('POP FALSE CEILING (Standard)', 'sq ft', { cat: 'Functional' }));
+    card(item('Wall tiles', 'sq ft', { cat: 'Functional' }));
+    card(item('Electrical wiring', 'rft', { cat: 'Functional' }));
     expect(screen.queryByRole('button', { name: /^Size|^Set size/ })).toBeNull();
   });
 });

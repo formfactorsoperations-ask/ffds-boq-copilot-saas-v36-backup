@@ -4,7 +4,7 @@ import { Button, Chip, LABEL, INPUT } from '../ui/kit';
 import NumberField from '../NumberField';
 import type { Item, PieceDraw, PieceKind } from '../../types';
 import { basisOfUnit } from '../../lib/boqSize';
-import { drawOf, withStandardSize, standardSizeOf } from '../../lib/playground/pieces';
+import { drawOf, withStandardSize, standardSizeOf, canHaveSize } from '../../lib/playground/pieces';
 import { ftin } from '../../lib/playground/geometry';
 import { GRADES, GRADE_TIER, currentVersion, materialsIn, setRecipePart, type Grade, type MaterialSpecsBank } from '../../lib/materialSpecs';
 import { recipeOf, suggestedRecipeId, specsFromRecipe, composeWords } from '../../lib/lineSpecs';
@@ -197,7 +197,7 @@ export default function RecipeDrawer({ item, specs, canEditRecipes, canEditItem,
             </div>
           )}
 
-          {(draw || (canEditItem && measured)) && (
+          {(draw || (canEditItem && canHaveSize(item))) && (
             <div ref={sizeRef}>
               <div className="font-bold text-slate-800">On the plan</div>
               <p className="text-xs text-slate-500 mb-2">
