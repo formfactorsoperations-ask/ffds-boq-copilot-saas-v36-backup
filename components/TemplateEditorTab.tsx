@@ -38,7 +38,8 @@ import {
   CheckCircle2,
   Copy,
   Download,
-  Upload
+  Upload,
+  SlidersHorizontal
 } from '@/lib/lucide-shim';
 import { addToBank, pickable } from '../lib/bankMatch';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -49,6 +50,8 @@ interface TemplateEditorTabProps {
   templates: TemplateData;
   setTemplates: React.Dispatch<React.SetStateAction<TemplateData>>;
   aiStrategy?: AIStrategy;
+  /** Opens an item's drawer from the Item bank, at its standard size ("On the plan"). */
+  onOpenItem?: (itemId: string) => void;
 }
 
 export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
@@ -56,7 +59,8 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
   setBank,
   templates = INITIAL_TEMPLATES,
   setTemplates,
-  aiStrategy = 'balanced'
+  aiStrategy = 'balanced',
+  onOpenItem
 }) => {
   /* The typologies: the studio's option setup is saved beside them (lib/optionSetup). */
   const configOptions = Object.keys(typologiesOf(templates || {}));
@@ -686,14 +690,19 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                             <span className="text-[10px] font-black text-slate-900">
                               {formatINR(sellRate)}
                             </span>
+                            {/* The size the item starts a BOQ at. With the Item bank's drawer to hand, the chip opens it there. */}
                             {standard ? (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#3D52A0]/10 text-[#3D52A0]" title="The standard size from the Item bank: every new BOQ starts this item at it.">
+                              <button type="button" disabled={!onOpenItem} onClick={() => onOpenItem?.(itemId)}
+                                className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#3D52A0]/10 text-[#3D52A0] enabled:hover:bg-[#3D52A0]/20 transition-colors"
+                                title={onOpenItem ? 'The standard size every new BOQ starts this item at. Open it to change' : 'The standard size from the Item bank: every new BOQ starts this item at it.'}>
                                 {ftin(draw!.w)}{basisOfUnit(item.unit) === 'area' ? ` × ${ftin(draw!.h)}` : ''} · {standard.qty} {item.unit}
-                              </span>
+                              </button>
                             ) : measuredItem && smartCoeff === undefined ? (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700" title="Set its standard size in the Item bank. Until then a new BOQ sizes it from the room.">
-                                No standard size yet
-                              </span>
+                              <button type="button" disabled={!onOpenItem} onClick={() => onOpenItem?.(itemId)}
+                                className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 enabled:hover:bg-amber-200 transition-colors"
+                                title={onOpenItem ? 'No standard size yet: a new BOQ sizes it from the room. Open it to set one' : 'Set its standard size in the Item bank. Until then a new BOQ sizes it from the room.'}>
+                                {onOpenItem ? 'Set standard size' : 'No standard size yet'}
+                              </button>
                             ) : null}
                           </div>
                         </div>
@@ -718,6 +727,14 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
                           })}
                         </div>
                       </div>
+
+                      {onOpenItem && (
+                        <button type="button" onClick={() => onOpenItem(itemId)}
+                          className="p-2 text-slate-400 hover:text-[#3D52A0] hover:bg-slate-100 rounded-lg transition-colors shrink-0"
+                          title="Open this item: its standard size and recipe" aria-label={`Open ${item.name}: standard size and recipe`}>
+                          <SlidersHorizontal className="w-4 h-4" />
+                        </button>
+                      )}
 
                       <button
                         onClick={() => handleRemoveItem(itemId)}

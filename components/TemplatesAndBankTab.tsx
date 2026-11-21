@@ -233,10 +233,11 @@ export default function TemplatesAndBankTab({
               templates={templates}
               setTemplates={setTemplates}
               aiStrategy={aiStrategy}
+              onOpenItem={(id) => { setRecipeFocus('size'); setRecipeItemId(id); }}
             />
           )}
           {deferredTab === 'materials' && (
-            <MaterialSpecsTab specs={specs} items={activeBank || []} projects={projects} addSignal={addMaterialSignal} onOpenItem={(it) => setRecipeItemId(it.id)} />
+            <MaterialSpecsTab specs={specs} items={activeBank || []} projects={projects} addSignal={addMaterialSignal} onOpenItem={(it) => { setRecipeFocus(undefined); setRecipeItemId(it.id); }} />
           )}
           {deferredTab === 'vendors' && (
             <VendorsManager projects={projects} onStats={handleVendorStats} />
