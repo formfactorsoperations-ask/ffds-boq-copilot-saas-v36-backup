@@ -7,6 +7,7 @@ import { id as generateId, calculateSellPrice } from './utils';
 import { holdPrices } from './boqPricing';
 import { standardSizeOf } from './playground/pieces';
 import { roomScopesOf, optionMarks, takes } from './templateOptions';
+import { typologiesOf, optionSetupOf } from './optionSetup';
 import type { Grade } from './materialSpecs';
 
 // Define the structure for templates
@@ -459,7 +460,8 @@ export const resolveActiveTemplate = (
     templates: TemplateData | undefined,
     configStr: string
 ): { configKey: string; activeTemplate: Record<string, string[]> } => {
-    const all = templates || INITIAL_TEMPLATES;
+    /* The typologies only: the studio's option setup is saved beside them (lib/optionSetup). */
+    const all = typologiesOf(templates || INITIAL_TEMPLATES);
     const cleanConfig = (configStr || '').trim();
 
     // 1. Exact match
@@ -927,6 +929,8 @@ export const generateStandardPackages = (
 
       Margin still moves, but it is no longer carrying the whole difference.
     */
+    /* The owner's figures for each option, or the standard ones (lib/optionSetup). */
+    const setup = optionSetupOf(templates);
     const tiers: {
         name: string;
         marginMod: number;
@@ -941,37 +945,37 @@ export const generateStandardPackages = (
     }[] = [
         {
             name: "Essential Elegance",
-            marginMod: 0.85,
-            materialMod: 0.88,
+            marginMod: setup.E.margin,
+            materialMod: setup.E.material,
             enhancements: [],
-            ceilingShare: 0.35,
+            ceilingShare: setup.E.ceiling,
             rationalePrefix: "Base spec: 0.8mm laminate, standard hardware",
             desc: "Core Functional Package",
             filterType: 'base'
         },
         {
             name: "Comfort Upgrade",
-            marginMod: 1.0,
-            materialMod: 1.0,
+            marginMod: setup.C.margin,
+            materialMod: setup.C.material,
             enhancements: [
                 { bankId: 'gen-017', rooms: 'bedrooms' }, // dressing mirrors
             ],
-            ceilingShare: 0.60,
+            ceilingShare: setup.C.ceiling,
             rationalePrefix: "Mid spec: 1mm laminate, soft-close hardware",
             desc: "Standard Turnkey Interiors",
             filterType: 'mid'
         },
         {
             name: "Complete Harmony",
-            marginMod: 1.25,
-            materialMod: 1.35,
+            marginMod: setup.P.margin,
+            materialMod: setup.P.material,
             enhancements: [
                 { bankId: 'gen-017', rooms: 'bedrooms' },  // dressing mirrors
                 { bankId: 'gen-002', rooms: 'living' },    // wall panelling
                 { bankId: 'gen-044', rooms: 'bedrooms' },  // feature wallpaper
                 { bankId: 'gen-045', rooms: 'habitable' },   // curtains and blinds
             ],
-            ceilingShare: 0.85,
+            ceilingShare: setup.P.ceiling,
             rationalePrefix: "Top spec: acrylic/PU finish, premium hardware",
             desc: "Fully Loaded Luxury Package",
             filterType: 'top'

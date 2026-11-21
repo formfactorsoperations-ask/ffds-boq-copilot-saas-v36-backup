@@ -1,9 +1,10 @@
 import React from 'react';
 import { roomScopesOf } from '../../lib/templateOptions';
+import { typologiesOf } from '../../lib/optionSetup';
 import { Item } from '../../types';
 import { TemplateData } from '../../lib/standardPackages';
 import { formatINR, calculateSellPrice } from '../../lib/utils';
-import { Sparkles, ShieldCheck, Layers, Eye, Copy, Trash2, Download, Upload, CheckCircle2 } from 'lucide-react';
+import { Sparkles, ShieldCheck, Layers, Eye, Copy, Trash2, Download, Upload, CheckCircle2, SlidersHorizontal } from 'lucide-react';
 
 interface TemplateMetricsBarProps {
   activeConfig: string;
@@ -12,6 +13,10 @@ interface TemplateMetricsBarProps {
   onOpenAiArchitect: () => void;
   onOpenAiAudit: () => void;
   onOpenTierPreview: () => void;
+  /** Opens Option setup: the figures that separate the three options (lib/optionSetup). */
+  onOpenOptionSetup?: () => void;
+  /** The studio has changed a figure from the standard. */
+  setupChanged?: boolean;
   onDuplicateConfig: () => void;
   onDeleteConfig: () => void;
   onExportTemplates: () => void;
@@ -25,6 +30,8 @@ export const TemplateMetricsBar: React.FC<TemplateMetricsBarProps> = ({
   onOpenAiArchitect,
   onOpenAiAudit,
   onOpenTierPreview,
+  onOpenOptionSetup,
+  setupChanged,
   onDuplicateConfig,
   onDeleteConfig,
   onExportTemplates,
@@ -135,6 +142,17 @@ export const TemplateMetricsBar: React.FC<TemplateMetricsBarProps> = ({
             3-Tier Simulation
           </button>
 
+          {onOpenOptionSetup && (
+            <button
+              onClick={onOpenOptionSetup}
+              className="px-3 py-1.5 bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
+              Option setup
+              {setupChanged && <span className="w-1.5 h-1.5 rounded-full bg-[#3D52A0]" title="Changed from the standard" />}
+            </button>
+          )}
+
           <div className="h-4 w-px bg-slate-200 mx-1" />
 
           <button
@@ -161,7 +179,7 @@ export const TemplateMetricsBar: React.FC<TemplateMetricsBarProps> = ({
             <Upload className="w-4 h-4" />
           </button>
 
-          {Object.keys(templates).length > 1 && (
+          {Object.keys(typologiesOf(templates)).length > 1 && (
             <button
               onClick={onDeleteConfig}
               title="Delete this template"

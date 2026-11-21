@@ -24,6 +24,7 @@ import { Layers3 } from 'lucide-react';
 import MaterialSpecsTab from './materialSpecs/MaterialSpecsTab';
 import RecipeDrawer from './materialSpecs/RecipeDrawer';
 import { roomScopesOf } from '../lib/templateOptions';
+import { typologiesOf } from '../lib/optionSetup';
 import { useMaterialSpecs } from './materialSpecs/useMaterialSpecs';
 import { ArtDefs } from './playground/pieceArt';
 import { Plus } from 'lucide-react';
@@ -127,7 +128,7 @@ export default function TemplatesAndBankTab({
   const templateStats = useMemo(() => {
     const map: Record<string, any> =
       templates && typeof templates === 'object' && !Array.isArray(templates) ? templates : {};
-    const configs = Object.keys(map);
+    const configs = Object.keys(typologiesOf(map));
     const filled = configs.filter((config) =>
       Object.values(roomScopesOf(map[config] || {})).some((items: any) => Array.isArray(items) && items.length > 0),
     ).length;

@@ -6,6 +6,8 @@ import { ftin } from '../lib/playground/geometry';
 import { basisOfUnit } from '../lib/boqSize';
 import { roomScopesOf, gradesFor, withGrades, prunedMarks, roleOf } from '../lib/templateOptions';
 import { GRADES, GRADE_TIER, type Grade } from '../lib/materialSpecs';
+import { typologiesOf, optionSetupOf, withOptionSetup, isStandardSetup } from '../lib/optionSetup';
+import OptionSetupModal from './templates/OptionSetupModal';
 import { formatINR, calculateSellPrice, id as generateId } from '../lib/utils';
 import { AiGeneratedTemplateResult, aiSuggestRoomItems } from '../services/geminiService';
 import { AiTemplateArchitectModal } from './templates/AiTemplateArchitectModal';
@@ -56,7 +58,9 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
   setTemplates,
   aiStrategy = 'balanced'
 }) => {
-  const configOptions = Object.keys(templates || {});
+  /* The typologies: the studio's option setup is saved beside them (lib/optionSetup). */
+  const configOptions = Object.keys(typologiesOf(templates || {}));
+  const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [activeConfig, setActiveConfig] = useState<string>(configOptions[0] || '2-BHK');
 
   // Ensure activeConfig is valid if templates change
@@ -396,6 +400,8 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
         onOpenAiArchitect={() => setIsAiArchitectOpen(true)}
         onOpenAiAudit={() => setIsAiAuditOpen(true)}
         onOpenTierPreview={() => setIsTierPreviewOpen(true)}
+        onOpenOptionSetup={() => setIsSetupOpen(true)}
+        setupChanged={!isStandardSetup(optionSetupOf(templates))}
         onDuplicateConfig={handleDuplicateConfig}
         onDeleteConfig={handleDeleteConfig}
         onExportTemplates={handleExportTemplates}
@@ -730,6 +736,11 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
       </div>
 
       {/* Modals & Drawers */}
+      {isSetupOpen && (
+        <OptionSetupModal setup={optionSetupOf(templates)} onClose={() => setIsSetupOpen(false)}
+          onSave={(next) => setTemplates(prev => withOptionSetup(prev, next))} />
+      )}
+
       <AiTemplateArchitectModal
         isOpen={isAiArchitectOpen}
         onClose={() => setIsAiArchitectOpen(false)}
