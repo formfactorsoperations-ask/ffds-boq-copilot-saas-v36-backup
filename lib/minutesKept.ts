@@ -47,9 +47,10 @@ export function readKept<T>(key: string | null | undefined, s: Store | null = st
   }
 }
 
-export function writeKept<T>(key: string | null | undefined, value: T, s: Store | null = store(), now = Date.now()) {
-  if (!key || !s) return;
-  try { s.setItem(PREFIX + key, JSON.stringify({ value, at: now })); } catch { /* storage full or switched off: nothing to keep */ }
+/** True when it was kept; false when the browser's storage is full or switched off. */
+export function writeKept<T>(key: string | null | undefined, value: T, s: Store | null = store(), now = Date.now()): boolean {
+  if (!key || !s) return false;
+  try { s.setItem(PREFIX + key, JSON.stringify({ value, at: now })); return true; } catch { return false; }
 }
 
 export function dropKept(key: string | null | undefined, s: Store | null = store()) {
@@ -91,9 +92,10 @@ let swept = false;
 /**
  * State that is kept on the device under `key` as it changes. `clear` empties
  * it and forgets it; a value equal to `empty` is not kept at all. `found` is
- * true when something from an earlier visit was read back.
+ * true when something from an earlier visit was read back; `safe` is false
+ * when the browser would not keep the latest value.
  */
-export function useKept<T>(key: string | null | undefined, empty: T): [T, Dispatch<SetStateAction<T>>, () => void, boolean] {
+export function useKept<T>(key: string | null | undefined, empty: T): [T, Dispatch<SetStateAction<T>>, () => void, boolean, boolean] {
   const start = useRef<Kept<T> | null | undefined>(undefined);
   if (start.current === undefined) {
     if (!swept) { swept = true; sweepKept(); }
@@ -102,9 +104,10 @@ export function useKept<T>(key: string | null | undefined, empty: T): [T, Dispat
   const [value, setValue] = useState<T>(() => (start.current ? start.current.value : empty));
   const blank = useRef(JSON.stringify(empty));
 
+  const [safe, setSafe] = useState(true);
+
   useEffect(() => {
-    if (JSON.stringify(value) === blank.current) dropKept(key);
-    else writeKept(key, value);
+    if (JSON.stringify(value) === blank.current) { dropKept(key); setSafe(true); } else setSafe(writeKept(key, value));
   }, [key, value]);
 
   const clear = useCallback(() => {
@@ -113,5 +116,5 @@ export function useKept<T>(key: string | null | undefined, empty: T): [T, Dispat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return [value, setValue, clear, !!start.current];
+  return [value, setValue, clear, !!start.current, safe];
 }

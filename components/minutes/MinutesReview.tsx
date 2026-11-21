@@ -51,7 +51,7 @@ export interface ReviewProps {
 export default function MinutesReview(p: ReviewProps) {
   const diff = useMemo(() => (p.before ? diffTopics(p.before, p.content.topics) : null), [p.before, p.content.topics]);
   const [view, setView] = useState<'all' | 'changes'>(diff && (diff.changed.size || diff.removed.length) ? 'changes' : 'all');
-  const [kept, setKept, clearKept, broughtBack] = useKept<KeptReview>(p.keptKey, NOTHING_KEPT);
+  const [kept, setKept, clearKept, broughtBack, safe] = useKept<KeptReview>(p.keptKey, NOTHING_KEPT);
   /* A note kept on a line that has since been taken out has nowhere to show. */
   const lineIds = useMemo(() => new Set(allLines(p.content.topics).map((x) => x.line.id)), [p.content.topics]);
   const notes = useMemo(() => kept.notes.filter((n) => !n.lineId || lineIds.has(n.lineId)), [kept.notes, lineIds]);
@@ -198,8 +198,11 @@ export default function MinutesReview(p: ReviewProps) {
           ) : <p className="text-xs text-slate-500">None yet. Click a line to add one.</p>}
           <textarea className={`${input} mt-3 min-h-[56px] text-xs`} value={general} onChange={(e) => setGeneral(e.target.value)} placeholder="A note on the minutes as a whole (optional)" aria-label="A note on the minutes as a whole" />
           {p.keptKey && (noteCount > 0 || !!draft.trim()) && (
-            <p className="text-[11px] text-slate-500 mt-2" aria-live="polite">
-              {broughtBack ? 'Your notes from last time are back. ' : ''}Kept on this device until you return or approve the minutes.
+            <p className="text-xs text-slate-500 mt-2 flex items-start gap-1.5" aria-live="polite">
+              <span className={`w-2 h-2 rounded-full mt-1 shrink-0 ${safe ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+              <span>{safe
+                ? <><b className="font-semibold text-slate-600">Saved</b> on this device until you return or approve the minutes.{broughtBack ? ' Your notes from last time are back.' : ''}</>
+                : 'Not saved: this browser is not keeping your notes. Return the minutes before you close this window.'}</span>
             </p>
           )}
         </Panel>

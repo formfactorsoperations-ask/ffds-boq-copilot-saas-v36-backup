@@ -47,6 +47,19 @@ describe('reviewing minutes', () => {
     expect(screen.getByText(/Return with 2 notes/)).toBeTruthy();
   });
 
+  it('says the notes are saved once something is typed, and says so when they are not', () => {
+    render(review());
+    expect(screen.queryByText('Saved')).toBeNull();
+    fireEvent.change(screen.getByLabelText('A note on the minutes as a whole'), { target: { value: 'Tighten the wording' } });
+    expect(screen.getByText('Saved')).toBeTruthy();
+
+    const full = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError'); });
+    try {
+      fireEvent.change(screen.getByLabelText('A note on the minutes as a whole'), { target: { value: 'Tighten the wording, please' } });
+      expect(screen.getByText(/Not saved: this browser is not keeping your notes/)).toBeTruthy();
+    } finally { full.mockRestore(); }
+  });
+
   it('forgets them once the minutes are returned', async () => {
     const onReturn = vi.fn(async () => undefined);
     render(review({ onReturn }));
