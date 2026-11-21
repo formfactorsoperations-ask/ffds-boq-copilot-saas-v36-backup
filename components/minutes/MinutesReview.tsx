@@ -4,7 +4,7 @@ import {
   allLines, checksOf, diffTopics, flaggedCount, newId, lineRefs, fmtShortDay, needsOwner,
   type MinutesContent, type MinutesTopic, type ReviewNote, type CorrectionLine, type DesignReviewRecord,
 } from '../../lib/minutes';
-import { useKept } from '../../lib/minutesKept';
+import { useKept, type KeptCloud } from '../../lib/minutesKept';
 import { DesignReviewRooms } from './DesignReviewRooms';
 import { Panel, Seg, KindChip, Avatar, Chip, CheckRow, EYEBROW, input, btnPri, btnSec, btnSm, linkBtn } from './MinutesBits';
 
@@ -18,8 +18,9 @@ import { Panel, Seg, KindChip, Avatar, Chip, CheckRow, EYEBROW, input, btnPri, b
 
   His notes, the note on the minutes as a whole and a comment he is half way
   through are kept on his device as he types (lib/minutesKept), so closing the
-  window or clicking outside it does not lose them. They are dropped once the
-  minutes are returned or approved.
+  window or clicking outside it does not lose them, and beside the minutes a
+  moment later, so they are there on another device too. They are dropped once
+  the minutes are returned or approved.
 */
 
 interface KeptReview { notes: ReviewNote[]; general: string; lineId: string | null; line: string }
@@ -43,6 +44,8 @@ export interface ReviewProps {
   me: { email: string; name: string };
   /** Where this reviewer's unsent notes on these minutes are kept on the device. */
   keptKey?: string | null;
+  /** The same notes kept with the minutes, so they follow the reviewer to another device. */
+  keptCloud?: KeptCloud<any> | null;
   onReturn: (notes: ReviewNote[]) => Promise<void>;
   onApprove: (sendMyself: boolean) => Promise<void>;
   onEdit: () => void;
@@ -51,7 +54,7 @@ export interface ReviewProps {
 export default function MinutesReview(p: ReviewProps) {
   const diff = useMemo(() => (p.before ? diffTopics(p.before, p.content.topics) : null), [p.before, p.content.topics]);
   const [view, setView] = useState<'all' | 'changes'>(diff && (diff.changed.size || diff.removed.length) ? 'changes' : 'all');
-  const [kept, setKept, clearKept, broughtBack, safe] = useKept<KeptReview>(p.keptKey, NOTHING_KEPT);
+  const [kept, setKept, clearKept, broughtBack, safe, synced] = useKept<KeptReview>(p.keptKey, NOTHING_KEPT, p.keptCloud);
   /* A note kept on a line that has since been taken out has nowhere to show. */
   const lineIds = useMemo(() => new Set(allLines(p.content.topics).map((x) => x.line.id)), [p.content.topics]);
   const notes = useMemo(() => kept.notes.filter((n) => !n.lineId || lineIds.has(n.lineId)), [kept.notes, lineIds]);
@@ -201,7 +204,7 @@ export default function MinutesReview(p: ReviewProps) {
             <p className="text-xs text-slate-500 mt-2 flex items-start gap-1.5" aria-live="polite">
               <span className={`w-2 h-2 rounded-full mt-1 shrink-0 ${safe ? 'bg-emerald-500' : 'bg-rose-500'}`} />
               <span>{safe
-                ? <><b className="font-semibold text-slate-600">Saved</b> on this device until you return or approve the minutes.{broughtBack ? ' Your notes from last time are back.' : ''}</>
+                ? <><b className="font-semibold text-slate-600">Saved</b> {synced ? 'to your account, on any device you sign in on,' : 'on this device'} until you return or approve the minutes.{broughtBack ? ' Your notes from last time are back.' : ''}</>
                 : 'Not saved: this browser is not keeping your notes. Return the minutes before you close this window.'}</span>
             </p>
           )}

@@ -220,6 +220,25 @@ describe('part 3: a revision is written where the client cannot read it', () => 
   });
 });
 
+describe('part 4: unsent notes follow the person to another device', () => {
+  const K = (id: string, kind: string, uid: string) => `${M(id)}/private/kept-${kind}-${uid}`;
+  const kept = { scope: 'review:studio_a:od@a.com:p1:waiting:1', at: 9, value: { notes: [], general: 'Tighten the wording', lineId: null, line: '' }, updatedAt: 9 };
+  it('a lead keeps review notes beside the minutes, and reads them back', async () => {
+    await assertSucceeds(getDoc(doc(od(), K('waiting', 'review', 'od'))));
+    await assertSucceeds(setDoc(doc(od(), K('waiting', 'review', 'od')), kept));
+    await assertSucceeds(getDoc(doc(od(), K('waiting', 'review', 'od'))));
+  });
+  it('Client Relations keeps rough notes on an assigned project', async () => {
+    await assertSucceeds(setDoc(doc(cr(), K('draft', 'rough', 'cr')), { scope: 's', at: 9, value: 'kitchen L shape ok', updatedAt: 9 }));
+    await assertSucceeds(getDoc(doc(cr(), K('draft', 'rough', 'cr'))));
+  });
+  it('the client never reads or writes them', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), K('sent', 'review', 'od')), kept); });
+    await assertFails(getDoc(doc(client(), K('sent', 'review', 'od'))));
+    await assertFails(setDoc(doc(client(), K('sent', 'review', 'client')), kept));
+  });
+});
+
 describe('part 3: bringing older minutes across', () => {
   const marked = { format: 2, topics, carried: [], trail: [step('written')], approvedBy: { email: '', name: 'Approved before the new process', role: null, at: 1 }, migratedAt: 9, migrationRun: 'r1' };
   it('a lead brings them across, keeps the original, and can undo', async () => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import MinutesReview from '../../components/minutes/MinutesReview';
 import MinutesComposer from '../../components/minutes/MinutesComposer';
@@ -89,6 +89,88 @@ describe('reviewing minutes', () => {
   });
 });
 
+/* The database, as two devices signed in as the same person see it. */
+const fakeCloud = () => {
+  let held: any = null;
+  return {
+    read: vi.fn(async () => held),
+    write: vi.fn(async (k: any) => { held = JSON.parse(JSON.stringify(k)); }),
+    held: () => held,
+  };
+};
+const settle = async (ms = 0) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
+
+describe('reviewing minutes on another device', () => {
+  beforeEach(() => { cleanup(); window.localStorage.clear(); vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('brings the notes back on a device that has never seen them', async () => {
+    const cloud = fakeCloud();
+    render(review({ keptCloud: cloud }));
+    await settle();
+    fireEvent.click(screen.getByLabelText('Comment on this line'));
+    fireEvent.change(screen.getByLabelText('Your note'), { target: { value: 'Say which drawer' } });
+    fireEvent.click(screen.getByText('Add'));
+    expect(screen.getByText(/on this device until/)).toBeTruthy();
+    await settle(1100);
+    expect(screen.getByText(/to your account, on any device/)).toBeTruthy();
+    cleanup();
+
+    window.localStorage.clear(); // another device
+    render(review({ keptCloud: cloud }));
+    await settle();
+    expect(screen.getAllByText(/Say which drawer/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Your notes from last time are back/)).toBeTruthy();
+  });
+
+  it('sends what was typed when the window is closed at once', async () => {
+    const cloud = fakeCloud();
+    render(review({ keptCloud: cloud }));
+    await settle();
+    fireEvent.change(screen.getByLabelText('A note on the minutes as a whole'), { target: { value: 'Tighten the wording' } });
+    cleanup();
+    await settle();
+    expect(cloud.held().value.general).toBe('Tighten the wording');
+  });
+
+  it('does not bring notes back from another device once the minutes are returned', async () => {
+    const cloud = fakeCloud();
+    render(review({ keptCloud: cloud }));
+    await settle();
+    fireEvent.change(screen.getByLabelText('A note on the minutes as a whole'), { target: { value: 'Tighten the wording' } });
+    await settle(1100);
+    const other = window.localStorage.getItem('ffds:minutes-kept:v1:review:test:m1'); // a second device still holding them
+    await act(async () => { fireEvent.click(screen.getByText(/Return with 1 note/)); });
+    await settle();
+    cleanup();
+
+    await settle(50);
+    window.localStorage.setItem('ffds:minutes-kept:v1:review:test:m1', other!);
+    render(review({ keptCloud: cloud }));
+    await settle();
+    expect((screen.getByLabelText('A note on the minutes as a whole') as HTMLTextAreaElement).value).toBe('');
+  });
+
+  it('keeps what is typed here over an older copy in the database', async () => {
+    const cloud = fakeCloud();
+    await cloud.write({ value: { notes: [], general: 'old', lineId: null, line: '' }, at: Date.now() - 60000 });
+    render(review({ keptCloud: cloud }));
+    fireEvent.change(screen.getByLabelText('A note on the minutes as a whole'), { target: { value: 'newer' } });
+    await settle(1100);
+    expect((screen.getByLabelText('A note on the minutes as a whole') as HTMLTextAreaElement).value).toBe('newer');
+    expect(cloud.held().value.general).toBe('newer');
+  });
+
+  it('carries on, on the device alone, when the database refuses', async () => {
+    const cloud = { read: async () => { throw new Error('permission-denied'); }, write: async () => { throw new Error('permission-denied'); } };
+    render(review({ keptCloud: cloud }));
+    await settle();
+    fireEvent.change(screen.getByLabelText('A note on the minutes as a whole'), { target: { value: 'Tighten the wording' } });
+    await settle(1100);
+    expect(screen.getByText(/on this device until/)).toBeTruthy();
+  });
+});
+
 describe('writing minutes', () => {
   beforeEach(() => { cleanup(); window.localStorage.clear(); });
 
@@ -140,5 +222,21 @@ describe('writing minutes', () => {
     render(composer());
     expect((screen.getByLabelText('Rough notes') as HTMLTextAreaElement).value).toBe('kitchen L shape ok');
     expect((screen.getByLabelText('Add a point') as HTMLInputElement).value).toBe('Client to send tile');
+  });
+
+  it('brings rough notes back on another device', async () => {
+    vi.useFakeTimers();
+    try {
+      const cloud = fakeCloud();
+      render(composer({ roughCloud: cloud }));
+      await settle();
+      fireEvent.change(screen.getByLabelText('Rough notes'), { target: { value: 'kitchen L shape ok' } });
+      await settle(1100);
+      cleanup();
+      window.localStorage.clear();
+      render(composer({ roughCloud: cloud }));
+      await settle();
+      expect((screen.getByLabelText('Rough notes') as HTMLTextAreaElement).value).toBe('kitchen L shape ok');
+    } finally { vi.useRealTimers(); }
   });
 });

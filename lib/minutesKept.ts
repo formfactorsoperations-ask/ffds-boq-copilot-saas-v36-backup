@@ -12,8 +12,9 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
   when the same person opens the same minutes again, and dropped once the work
   has reached the database (saved, returned or approved).
 
-  It never leaves the device: another person, or the same person on another
-  computer, does not see it.
+  A reviewer's notes and a writer's rough notes are also written beside the
+  minutes in the database a moment later (useKept's `cloud`), so they follow
+  the person to another device. The rest stays on the device.
 */
 
 const PREFIX = 'ffds:minutes-kept:v1:';
@@ -90,31 +91,106 @@ export function sweepKept(s: Store | null = store(), now = Date.now()) {
 let swept = false;
 
 /**
- * State that is kept on the device under `key` as it changes. `clear` empties
- * it and forgets it; a value equal to `empty` is not kept at all. `found` is
- * true when something from an earlier visit was read back; `safe` is false
- * when the browser would not keep the latest value.
+ * The same work kept with the minutes in the database, so it follows the
+ * person to another device (services/minutesService keptInCloud).
  */
-export function useKept<T>(key: string | null | undefined, empty: T): [T, Dispatch<SetStateAction<T>>, () => void, boolean, boolean] {
+export interface KeptCloud<T> { read: () => Promise<Kept<T> | null>; write: (k: Kept<T>) => Promise<void> }
+
+/**
+ * State that is kept on the device under `key` as it changes, and in `cloud`
+ * a moment later when one is given. `clear` empties it and forgets it; a
+ * value equal to `empty` is not kept on the device at all.
+ *
+ * Returns the value, its setter, `clear`, then:
+ *   found   something from an earlier visit (here or on another device) was read back
+ *   safe    false when the browser would not keep the latest value
+ *   synced  the latest value has reached the database
+ *
+ * Whichever copy was typed last wins. Emptying it is written to the database
+ * too, so notes already sent do not come back from another device.
+ */
+export function useKept<T>(key: string | null | undefined, empty: T, cloud?: KeptCloud<T> | null): [T, Dispatch<SetStateAction<T>>, () => void, boolean, boolean, boolean] {
   const start = useRef<Kept<T> | null | undefined>(undefined);
   if (start.current === undefined) {
     if (!swept) { swept = true; sweepKept(); }
     start.current = readKept<T>(key);
   }
   const [value, setValue] = useState<T>(() => (start.current ? start.current.value : empty));
-  const blank = useRef(JSON.stringify(empty));
-
+  const [found, setFound] = useState(!!start.current);
   const [safe, setSafe] = useState(true);
+  const [synced, setSynced] = useState(false);
+  const blank = useRef(JSON.stringify(empty));
+  const at = useRef(start.current?.at || 0);
+  const first = useRef(true);
+  const typed = useRef(false);
+  const fromCloud = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef(value);
+  latest.current = value;
+  const cloudNow = useRef(cloud);
+  cloudNow.current = cloud;
+
+  const push = () => {
+    timer.current = null;
+    const c = cloudNow.current;
+    if (!c) return;
+    c.write({ value: latest.current, at: at.current }).then(() => setSynced(true)).catch(() => setSynced(false));
+  };
+  const keepHere = (v: T) => {
+    if (JSON.stringify(v) === blank.current) { dropKept(key); setSafe(true); } else setSafe(writeKept(key, v, undefined, at.current));
+  };
 
   useEffect(() => {
-    if (JSON.stringify(value) === blank.current) { dropKept(key); setSafe(true); } else setSafe(writeKept(key, value));
+    if (first.current) { first.current = false; return; }
+    /* Read from the database: it keeps the time it was typed. */
+    if (fromCloud.current) { fromCloud.current = false; keepHere(value); return; }
+    typed.current = true;
+    at.current = Date.now();
+    keepHere(value);
+    if (cloudNow.current) {
+      setSynced(false);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(push, 1000);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, value]);
+
+  /* What the database holds, when it is newer than what this device has. */
+  const hasCloud = !!cloud;
+  useEffect(() => {
+    const c = cloudNow.current;
+    if (!c) return;
+    let live = true;
+    c.read().then((hit) => {
+      if (!live || typed.current) return;
+      if (hit && hit.at > at.current) {
+        at.current = hit.at;
+        if (JSON.stringify(hit.value) !== JSON.stringify(latest.current)) {
+          fromCloud.current = true;
+          setFound(JSON.stringify(hit.value) !== blank.current);
+          setValue(hit.value);
+        }
+        setSynced(true);
+      } else if (at.current > (hit?.at || 0)) push();
+      else if (hit) setSynced(true);
+    }).catch(() => undefined);
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, hasCloud]);
+
+  /* Closed before the moment passed: send it now. */
+  useEffect(() => () => { if (timer.current) { clearTimeout(timer.current); push(); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clear = useCallback(() => {
     dropKept(key);
+    /* Told to the database at once: the screen is often gone before a later write could be made. */
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    at.current = Date.now();
+    cloudNow.current?.write({ value: empty, at: at.current }).then(() => setSynced(true)).catch(() => undefined);
+    fromCloud.current = JSON.stringify(latest.current) !== blank.current;
     setValue(empty);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return [value, setValue, clear, !!start.current, safe];
+  return [value, setValue, clear, found, safe, synced];
 }
