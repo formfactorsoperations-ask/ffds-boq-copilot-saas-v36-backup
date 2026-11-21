@@ -155,7 +155,7 @@ export interface Lead {
   know: LeadKnow;
   next: LeadNext | null;
   touches: LeadTouch[];
-  /** Notes kept on the lead, newest last. Missing on older leads and on ones from the website form. */
+  /** Notes kept on the lead, newest last. Missing on older leads. */
   notes?: LeadNote[];
   /** Meetings that are over, newest last. Missing until one is closed out. */
   meetings?: LeadMeetingLog[];

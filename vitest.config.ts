@@ -1,5 +1,5 @@
 import path from 'path';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
@@ -13,5 +13,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    /* Scripts to run by hand against the emulator, and their compiled copies: not test suites. */
+    exclude: [...configDefaults.exclude, 'functions/lib/**', 'functions/src/integration.spec.ts'],
   },
 });

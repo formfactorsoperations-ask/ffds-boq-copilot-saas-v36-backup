@@ -19,8 +19,13 @@ describe('Firestore Security Rules for Settings & Engagement', () => {
         await testEnv.cleanup();
     });
 
+    /* The rules read a person's studio and role from their profile (users/{uid}), not from their token. */
     beforeEach(async () => {
         await testEnv.clearFirestore();
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await context.firestore().doc('users/owner1').set({ tenantId: 'tenantA', role: 'Owner' });
+            await context.firestore().doc('users/designer1').set({ tenantId: 'tenantA', role: 'Designer' });
+        });
     });
 
     const getContext = (uid: string, tenantId: string, role: string) => {
