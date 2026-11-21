@@ -49,8 +49,9 @@ import { artOfSpecs } from './pieceArt';
 import type { MaterialSpecsBank } from '../../lib/materialSpecs';
 import { gradeOf, offersUpdates, withRecipeSpecs, updatedLine, recipeOf, specsFromRecipe } from '../../lib/lineSpecs';
 import { kitsOf, kitStartRooms, kitApply, kitAddsDebris, kitEstimate, kitFits, roomAsKit, type BundleLike, type SavedKit } from '../../lib/playground/kits';
-import { ADDON_BUNDLES, type TemplateData } from '../../lib/standardPackages';
+import { ADDON_BUNDLES, calculateQuantity, type TemplateData } from '../../lib/standardPackages';
 import { templateLines } from '../../lib/playground/templateBuild';
+import { basisOfUnit } from '../../lib/boqSize';
 import type { Grade } from '../../lib/materialSpecs';
 import { lineAmount } from '../../lib/playground/pricing';
 import { KitModal, KIT_DRAG } from './KitParts';
@@ -415,6 +416,19 @@ export default function PlaygroundScreen(props: Props) {
     }
     const line: BoqItem = prepareNew({ id: newId(), bankId: item.id, qty: 1, roomId: roomName, baseRate: item.materials });
     commit([...boq, line], probe && planRoom ? `${item.name} added to ${roomName}. No free wall fits it: drag it into place.` : `${item.name} added to ${roomName}.`);
+    setSel(line.id);
+  };
+  /* A work from the library (civil, plumbing, electrical…): not drawn, so it joins the room's list, sized from the room
+     as the Standard templates size a surface (lib/standardPackages calculateQuantity); a counted one or a lump sum is one. */
+  const addWork = (item: Item, roomName: string) => {
+    if (readOnly) { setNote('This option is locked: nothing can be added.'); return; }
+    const room = rooms.find(r => r.name === roomName);
+    const basis = basisOfUnit(item.unit);
+    const sized = room && Number(room.size) > 0 && (basis === 'area' || basis === 'length')
+      ? calculateQuantity(item, Number(room.size), Number(room.height) || Number(ctx.ceilingHeight) || 9.5) : 1;
+    const qty = sized > 0 ? Math.round(sized * 100) / 100 : 1;
+    const line: BoqItem = prepareNew({ id: newId(), bankId: item.id, qty, roomId: roomName, baseRate: item.materials });
+    commit([...boq, line], `${item.name} added to ${roomName}${qty !== 1 ? `, ${qty} ${item.unit} from the room’s size` : ''}. It is marked on the plan.`);
     setSel(line.id);
   };
   const libTarget = selRoom || (sel ? byId.get(sel)?.room : null) || planRooms[0]?.name || rooms[0]?.name || 'Others';
@@ -1067,7 +1081,7 @@ export default function PlaygroundScreen(props: Props) {
               <div className="absolute left-2 top-2 bottom-2 z-20 w-[232px] flex pg-slide">
                 <Catalogue bank={bank} readOnly={readOnly} onClose={() => setLibOpen(false)} onAdd={it => addToRoom(it, libTarget)} addLabel={`to ${libTarget}`}
                   kits={kits} bankMap={bankMap} hideFigures={hideFigures} kitEstimate={kitCardEstimate} onKit={id => openKit(id)}
-                  places={supplyPlaces} onAddSupplied={addSupplied}
+                  places={supplyPlaces} onAddSupplied={addSupplied} onAddWork={it => addWork(it, libTarget)}
                   artOf={specBank ? (it => { const r = recipeOf(it, specBank); return r ? artOfSpecs(specsFromRecipe(specBank, r, grade), specBank.materials) : {}; }) : undefined} />
               </div>
             )}
