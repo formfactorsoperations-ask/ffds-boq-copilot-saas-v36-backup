@@ -827,6 +827,35 @@ colours (brand, slate, rose/amber/emerald). Only the Money screen (`components/m
   % / ₹ choice on each row glides (`layoutId`).
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel sizes.
 
+### Item bank motion (asked for 21 Nov 2026)
+
+The owner sent a screenshot of the Item bank with its nine buttons running off the side of the screen
+and its status pills stacked in a column, and asked for it to be "modern and immersive, with motions",
+and fluid to use. It uses the kits already approved (the People kit's `IconTile`, `listV`/`rowV` and
+`pp-lift`; the Pricing view switch), with the same fonts and colours. Only the Item bank's own screen
+(`components/BankTab.tsx`, `components/bank/BankCommandBar.tsx`) uses it.
+
+- Top to bottom: five figures, then one card with the view switch and the actions, search, and the
+  filters. Nothing scrolls sideways; pills wrap.
+- Figures are white tiles with an `IconTile` and a `CountUp`. In project BOQs, Low margin and No recipe
+  yet (Missing specs where the studio has no Material specs) are buttons: one click filters the list,
+  a second click clears it. The one that is on takes the brand border. They lift on hover (`pp-lift`)
+  and rise in one after another (`listV`, `rowV`).
+- The view switch's white pill glides to the chosen view (`layoutId`), and its icon tips on hover. A
+  view arrives with `hud-swap`; cards arrive with `hud-row-in`, a row at a time.
+- Import (Excel/CSV, specs, JSON) and Export (JSON, usage) are two menus that open with `phd-pop`;
+  the chevron turns. Lock prices, Repeated items and AI room kits stay as buttons, and Add item is the
+  one primary, last in the row; its plus turns a quarter on hover.
+- Filter and category pills are white with a `StateDot` for state; the brand fill glides to the one
+  picked (`layoutId`). Every pill carries its count. The count of matching items and Clear filters sit
+  beside search. `/` puts the cursor in search and Esc empties it.
+- In Room kits the search and filters fold away by height.
+- Reaching the end of the list brings in the next sixty items; Show more and Show all stay.
+- The selection bar rises from the foot of the screen on a spring, on the modal scrim's navy
+  (`#12182F`), with every action in the same quiet style and its count through `CountUp`.
+- Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel
+  sizes; the file is at zero in the design guard.
+
 ### Notifications motion (approved 22 Oct 2026)
 
 The owner chose four of the fifteen notification patterns in the round-two

@@ -53,7 +53,9 @@ describe('Item Bank: Export usage', () => {
     const setBank = vi.fn();
 
     render(<BankTab bank={bank} setBank={setBank} aiStrategy={'balanced' as any} highlightedBankItemId={null} onHighlightClear={vi.fn()} projects={projects} />);
-    const button = screen.getByRole('button', { name: 'Export usage' });
+    /* Export usage sits in the Export menu, beside Export JSON. */
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+    const button = screen.getByRole('menuitem', { name: 'Export usage' });
     expect(button.getAttribute('title')).toContain('across 1 project.');
     fireEvent.click(button);
 

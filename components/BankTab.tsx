@@ -9,7 +9,9 @@ import BankSpecImportModal from './bank/BankSpecImportModal';
 import { applySpecs, buildSpecSheetWorkbook, specSheetName } from '../lib/bankSpecs';
 import { downloadWorkbook } from '../lib/scopeWorkbook';
 import { buildBankUsageExport, bankUsageFileName } from '../lib/bankUsageExport';
-import { Button, Chip } from './ui/kit';
+import { Button, EmptyState, PanelHead } from './ui/kit';
+import BankCommandBar from './bank/BankCommandBar';
+import { CountUp } from './ui/HudBits';
 import { addToBank, isMergedCopy } from '../lib/bankMatch';
 import PriceLockModal from './bank/PriceLockModal';
 import RepeatedItemsModal from './bank/RepeatedItemsModal';
@@ -22,37 +24,8 @@ import BankItemCard from './BankItemCard';
 import type { MaterialSpecsBank } from '../lib/materialSpecs';
 import { recipeOf } from '../lib/lineSpecs';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Search, 
-  Plus, 
-  Download, 
-  Upload, 
-  Sparkles, 
-  Layers, 
-  Table, 
-  Grid, 
-  PackageCheck, 
-  Percent, 
-  TrendingUp, 
-  Trash2, 
-  CheckSquare, 
-  Square, 
-  AlertTriangle, 
-  X, 
-  FileText, 
-  RefreshCw, 
-  FolderEdit, 
-  Ruler, 
-  Check, 
-  Edit2, 
-  Briefcase, 
-  ArrowRight,
-  Info,
-  SlidersHorizontal,
-  PackagePlus,
-  Building2,
-  Filter,
-  Lock
+import {
+  Search, Plus, Download, Sparkles, PackageCheck, Percent, TrendingUp, Trash2, X, FolderEdit, Ruler, Edit2, PackagePlus, Filter, Lock,
 } from '@/lib/lucide-shim';
 
 interface BankTabProps {
@@ -148,6 +121,8 @@ const BankTab: React.FC<BankTabProps> = ({
     }
   };
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /* Where the list starts: Add item brings it into view. */
+  const listTopRef = useRef<HTMLDivElement>(null);
 
   // AI synthesis states
   const [isAiSynthesizing, setIsAiSynthesizing] = useState(false);
@@ -265,17 +240,36 @@ const BankTab: React.FC<BankTabProps> = ({
   const stats = useMemo(() => {
     const totalItems = bank.length;
     const totalCategories = new Set(bank.map((i) => i.cat || 'General')).size;
+    /* A margin typed into a sheet can arrive as text; one such item must not spoil the average. */
     const avgMargin = bank.length > 0
-      ? (bank.reduce((sum, i) => sum + (i.margin || 0), 0) / bank.length).toFixed(1)
-      : '0.0';
+      ? bank.reduce((sum, i) => sum + (Number(i.margin) || 0), 0) / bank.length
+      : 0;
     const lowMarginCount = bank.filter((i) => (i.margin || 0) < 15).length;
     const itemsInProjectsCount = bank.filter((i) => (projectItemUsageMap.get(i.id)?.size || 0) > 0).length;
-    const totalCatalogValue = bank.reduce(
-      (sum, i) => sum + (i.materials || 0) + (i.labor || 0),
-      0
-    );
-    return { totalItems, totalCategories, avgMargin, lowMarginCount, itemsInProjectsCount, totalCatalogValue };
+    /* Counted the way the filters below decide, so a pill's number is what picking it shows. */
+    const missingSpecsCount = bank.filter((i) => !(i.specs && i.specs.trim().length > 0)).length;
+    const multiplierCount = bank.filter((i) => !!i.areaMultiplierCoefficient && i.areaMultiplierCoefficient !== 1).length;
+    return { totalItems, totalCategories, avgMargin, lowMarginCount, itemsInProjectsCount, missingSpecsCount, multiplierCount };
   }, [bank, projectItemUsageMap]);
+
+  const categoryCounts = useMemo(() => {
+    const n = new Map<string, number>();
+    bank.forEach((i) => { const c = i.cat || 'General'; n.set(c, (n.get(c) || 0) + 1); });
+    return categories.map((name) => ({ name, count: name === 'All' ? bank.length : n.get(name) || 0 }));
+  }, [bank, categories]);
+
+  const projectOptions = useMemo(
+    () => projects.map((proj) => ({ id: proj.id, label: `${proj.context?.name || 'Untitled project'} (${proj.context?.clientName || 'Client'})` })),
+    [projects],
+  );
+
+  const filtersOn = !!searchTerm.trim() || selectedCategory !== 'All' || selectedProjectId !== 'All' || healthFilter !== 'all';
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('All');
+    setSelectedProjectId('All');
+    setHealthFilter('all');
+  };
 
   // ==========================================
   // SELECTION HANDLERS
@@ -323,6 +317,24 @@ const BankTab: React.FC<BankTabProps> = ({
     setVisibleCount(PAGE);
   }, [searchTerm, selectedCategory, selectedProjectId, healthFilter, viewMode]);
 
+  /*
+    Reaching the end of the list brings the next page in, so reading down the
+    bank is one scroll rather than a button every sixty rows. It is still a
+    page at a time: the cost that made the cap necessary is paid in small
+    pieces, and only by someone who scrolled that far. The buttons stay for
+    the keyboard, and where the browser cannot watch for it.
+  */
+  const moreRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = moreRef.current;
+    if (!el || hiddenCount <= 0 || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setVisibleCount((n) => n + PAGE);
+    }, { rootMargin: '0px 0px 400px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hiddenCount, viewMode, visibleCount]);
+
   // Selected items array
   const selectedItems = useMemo(() => {
     return bank.filter((item) => selectedItemIds.has(item.id));
@@ -345,6 +357,16 @@ const BankTab: React.FC<BankTabProps> = ({
       areaMultiplierCoefficient: 1.0,
     };
     setBank((prev) => [newItem, ...prev]);
+    /*
+      The new item goes first in the list. A search or a filter left on would
+      hide it (it has no name yet and a 20% margin), and Add would look as if
+      it did nothing; from the room kits there is no list at all.
+    */
+    setSearchTerm('');
+    setSelectedProjectId('All');
+    setHealthFilter('all');
+    if (viewMode === 'bundles') setViewMode(specs ? 'grid' : 'spreadsheet');
+    listTopRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   };
 
   const handleUpdateItem = (id: string, updatedItem: Item) => {
@@ -629,405 +651,58 @@ const BankTab: React.FC<BankTabProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 1. TOP EXECUTIVE COMMAND STRIP */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-6 sm:p-7 space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
-                {stats.totalItems} Active Items · {stats.totalCategories} Categories
-              </span>
-              {copyCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowCopies((v) => !v)}
-                  aria-pressed={showCopies}
-                  title="Copies of an item the bank already has. They are kept so older projects still find them, and are left out of this list, the pickers and imports."
-                  className="cursor-pointer"
-                >
-                  <Chip tone={showCopies ? 'brand' : 'slate'}>{copyCount} {copyCount === 1 ? 'copy' : 'copies'} {showCopies ? 'shown' : 'hidden'}</Chip>
-                </button>
-              )}
-              {stats.itemsInProjectsCount > 0 && (
-                <button
-                  onClick={() => { setHealthFilter('in-active-projects'); setViewMode('spreadsheet'); }}
-                  className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-sky-50 text-sky-800 border border-sky-200 flex items-center gap-1 hover:bg-sky-100 transition-colors cursor-pointer"
-                >
-                  <Building2 className="w-3 h-3 text-sky-600" />
-                  {stats.itemsInProjectsCount} Used in Projects
-                </button>
-              )}
-              {stats.lowMarginCount > 0 && (
-                <button
-                  onClick={() => { setHealthFilter('low-margin'); setViewMode('spreadsheet'); }}
-                  className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1 hover:bg-rose-100 transition-colors cursor-pointer"
-                >
-                  <AlertTriangle className="w-3 h-3 text-rose-600" />
-                  {stats.lowMarginCount} Low Margin (&lt;15%)
-                </button>
-              )}
-            </div>
-          </div>
+      <BankCommandBar
+        stats={stats}
+        noRecipeCount={specs ? noRecipeCount : null}
+        copyCount={copyCount}
+        showCopies={showCopies}
+        onToggleCopies={() => setShowCopies((v) => !v)}
+        view={viewMode}
+        onView={setViewMode}
+        bundleCount={customBundles.length}
+        health={healthFilter}
+        onHealth={setHealthFilter}
+        search={searchTerm}
+        onSearch={setSearchTerm}
+        categories={categoryCounts}
+        category={selectedCategory}
+        onCategory={setSelectedCategory}
+        projects={projectOptions}
+        projectId={selectedProjectId}
+        onProject={setSelectedProjectId}
+        matching={filteredBank.length}
+        filtersOn={filtersOn}
+        onClearFilters={clearFilters}
+        onImportSheet={() => setIsTextImportOpen(true)}
+        onImportSpecs={() => setIsSpecImportOpen(true)}
+        onImportJson={() => fileInputRef.current?.click()}
+        onExportJson={handleExportBank}
+        onExportUsage={handleExportUsage}
+        usageTitle={`Download which project lines use each item and at what price, across ${projects.length} project${projects.length === 1 ? '' : 's'}. Nothing is changed.`}
+        onLockPrices={priceLock ? () => setIsPriceLockOpen(true) : undefined}
+        onRepeated={canSettle && (repeatedCount > 0 || copyCount > 0) ? () => setIsRepeatedOpen(true) : undefined}
+        repeatedCount={repeatedCount}
+        onAiKits={handleAiSynthesis}
+        aiBusy={isAiSynthesizing}
+        onAdd={handleAddItem}
+      />
+      <input type="file" ref={fileInputRef} onChange={handleJsonUpload} accept=".json" className="hidden" />
 
-          {/* Quick Studio Actions */}
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            <button
-              onClick={() => setIsTextImportOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
-              title="Import items via Excel or CSV"
-            >
-              <Upload className="w-3.5 h-3.5 text-slate-500" />
-              Import Excel/CSV
-            </button>
-
-            <button
-              onClick={() => setIsSpecImportOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
-              title="Download the spec sheet, fill it in Excel and import it back"
-            >
-              <FileText className="w-3.5 h-3.5 text-slate-500" />
-              Specs from Excel
-            </button>
-
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
-              title="Upload JSON file"
-            >
-              <FileText className="w-3.5 h-3.5 text-slate-500" />
-              JSON Upload
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleJsonUpload}
-              accept=".json"
-              className="hidden"
-            />
-
-            <button
-              onClick={handleExportBank}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
-              title="Export catalog as JSON"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-500" />
-              Export JSON
-            </button>
-
-            <Button
-              size="sm"
-              icon={Briefcase}
-              onClick={handleExportUsage}
-              title={`Download which project lines use each item and at what price, across ${projects.length} project${projects.length === 1 ? '' : 's'}. Nothing is changed.`}
-            >
-              Export usage
-            </Button>
-
-            {priceLock && (
-              <Button
-                size="sm"
-                icon={Lock}
-                onClick={() => setIsPriceLockOpen(true)}
-                title="Make projects keep the prices they use today, so a change in the Item Bank no longer re-prices them. Shows every total before anything is saved."
-              >
-                Lock prices
-              </Button>
-            )}
-
-            {canSettle && (repeatedCount > 0 || copyCount > 0) && (
-              <Button
-                size="sm"
-                icon={Layers}
-                onClick={() => setIsRepeatedOpen(true)}
-                title="Names the bank holds more than once. Pick the one item to keep for each; the others are kept, hidden. No rate and no project is changed."
-              >
-                Repeated items{repeatedCount > 0 ? ` (${repeatedCount})` : ''}
-              </Button>
-            )}
-
-            <button
-              onClick={handleAiSynthesis}
-              disabled={isAiSynthesizing}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
-              title="Synthesize custom room kits with Gemini AI"
-            >
-              <Sparkles className={`w-3.5 h-3.5 text-purple-600 ${isAiSynthesizing ? 'animate-spin' : ''}`} />
-              AI Room Kits
-            </button>
-
-            <button
-              onClick={handleAddItem}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[#3D52A0] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Add Item
-            </button>
-          </div>
-        </div>
-
-        {/* Pulse Grid Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 hud-panel-in">
-          <div className="hud-well rounded-2xl border p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Items</div>
-            <div className="text-xl font-black text-slate-800 mt-1">{stats.totalItems}</div>
-            <div className="text-[10px] text-slate-500 font-medium mt-0.5">In Master Catalog</div>
-          </div>
-
-          <div className="hud-well rounded-2xl border p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Categories</div>
-            <div className="text-xl font-black text-slate-800 mt-1">{stats.totalCategories}</div>
-            <div className="text-[10px] text-slate-500 font-medium mt-0.5">Active Scope Trades</div>
-          </div>
-
-          <div className="hud-well rounded-2xl border p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Studio Avg Margin</div>
-            <div className="text-xl font-black text-slate-800 mt-1">{stats.avgMargin}%</div>
-            <div className="text-[10px] text-slate-500 font-medium mt-0.5">Markup over costs</div>
-          </div>
-
-          <div className="hud-well rounded-2xl border p-3.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">In Project BOQs</div>
-            <div className="text-xl font-black text-slate-800 mt-1">{stats.itemsInProjectsCount}</div>
-            <div className="text-[10px] text-slate-500 font-medium mt-0.5">Live project deployments</div>
-          </div>
-
-          <div className="hud-well rounded-2xl border p-3.5 col-span-2 sm:col-span-4 lg:col-span-1">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Catalog Footprint</div>
-            <div className="text-xl font-black text-slate-800 mt-1">{formatCurrency(stats.totalCatalogValue)}</div>
-            <div className="text-[10px] text-slate-500 font-medium mt-0.5">Aggregated Unit Base</div>
-          </div>
-        </div>
-
-        {/* 2. VIEW SWITCHER & HEALTH FILTERS */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2">
-          {/* Main View Mode Selector */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80">
-            <button
-              onClick={() => setViewMode('spreadsheet')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                viewMode === 'spreadsheet'
-                  ? 'bg-white text-[#3D52A0] shadow-xs border border-slate-200/60'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Table className="w-4 h-4" />
-              Spreadsheet Grid
-            </button>
-
-            <button
-              onClick={() => setViewMode('grouped')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                viewMode === 'grouped'
-                  ? 'bg-white text-[#3D52A0] shadow-xs border border-slate-200/60'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Layers className="w-4 h-4" />
-              Category Groups
-            </button>
-
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                viewMode === 'grid'
-                  ? 'bg-white text-[#3D52A0] shadow-xs border border-slate-200/60'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Grid className="w-4 h-4" />
-              Card Grid
-            </button>
-
-            <button
-              onClick={() => setViewMode('bundles')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                viewMode === 'bundles'
-                  ? 'bg-white text-[#3D52A0] shadow-xs border border-slate-200/60'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <PackageCheck className="w-4 h-4" />
-              Room Bundles & Kits ({customBundles.length})
-            </button>
-          </div>
-
-          {/* Quick Health Filters */}
-          {viewMode !== 'bundles' && (
-            <div className="flex items-center gap-2 overflow-x-auto text-xs">
-              <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] shrink-0">Filter:</span>
-              <button
-                onClick={() => setHealthFilter('all')}
-                className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors ${
-                  healthFilter === 'all'
-                    ? 'bg-[#3D52A0] text-white'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                All ({bank.length})
-              </button>
-
-              <button
-                onClick={() => setHealthFilter('in-active-projects')}
-                className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors flex items-center gap-1 ${
-                  healthFilter === 'in-active-projects'
-                    ? 'bg-sky-600 text-white'
-                    : 'bg-sky-50 border border-sky-200 text-sky-800 hover:bg-sky-100'
-                }`}
-              >
-                <Building2 className="w-3 h-3 text-sky-600" />
-                In Projects ({stats.itemsInProjectsCount})
-              </button>
-
-              <button
-                onClick={() => setHealthFilter('low-margin')}
-                className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors flex items-center gap-1 ${
-                  healthFilter === 'low-margin'
-                    ? 'bg-rose-600 text-white'
-                    : 'bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100'
-                }`}
-              >
-                <AlertTriangle className="w-3 h-3" />
-                Low Margin ({stats.lowMarginCount})
-              </button>
-
-              <button
-                onClick={() => setHealthFilter('missing-specs')}
-                className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors ${
-                  healthFilter === 'missing-specs'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100'
-                }`}
-              >
-                Missing Specs
-              </button>
-
-              {specs && (
-                <button
-                  onClick={() => setHealthFilter('no-recipe')}
-                  className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors ${
-                    healthFilter === 'no-recipe'
-                      ? 'bg-[#3D52A0] text-white'
-                      : 'bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100'
-                  }`}
-                >
-                  No recipe yet ({noRecipeCount})
-                </button>
-              )}
-
-              <button
-                onClick={() => setHealthFilter('multiplier')}
-                className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 transition-colors ${
-                  healthFilter === 'multiplier'
-                    ? 'bg-[#3D52A0] text-white'
-                    : 'bg-sky-50 border border-sky-200 text-[#3D52A0] hover:bg-sky-100'
-                }`}
-              >
-                Custom Area Coeff
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 3. SEARCH & CATEGORY BAR (For Item Views) */}
-      {viewMode !== 'bundles' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs space-y-3">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            {/* Search Input */}
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search by name, specs, internal execution notes, or category..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3D52A0] focus:bg-white transition-all"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Filter by Project Dropdown */}
-            {projects && projects.length > 0 && (
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1">
-                  <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                  Project:
-                </span>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="px-3 py-2 bg-slate-50 hover:bg-white border border-slate-200 focus:border-[#3D52A0] rounded-xl text-xs font-bold text-slate-800 outline-none cursor-pointer max-w-xs truncate"
-                >
-                  <option value="All">All Studio Projects</option>
-                  {projects.map((proj) => (
-                    <option key={proj.id} value={proj.id}>
-                      {proj.context?.name || 'Untitled Project'} ({proj.context?.clientName || 'Client'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Quick Bulk Trigger Button when items are selected */}
-            {selectedItemIds.size > 0 && (
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => openBulkModalWithTab('category')}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-                  title="Bulk Re-assign Category for selected items"
-                >
-                  <FolderEdit className="w-3.5 h-3.5" />
-                  Re-assign Category ({selectedItemIds.size})
-                </button>
-                <button
-                  onClick={() => openBulkModalWithTab('margin')}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#3D52A0] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-                >
-                  <Percent className="w-3.5 h-3.5" />
-                  Bulk Edit ({selectedItemIds.size})
-                </button>
-                <button
-                  onClick={() => setSelectedItemIds(new Set())}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"
-                  title="Clear selection"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Category Chips Bar */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-            {categories.map((cat) => {
-              const count = cat === 'All' ? bank.length : bank.filter((i) => (i.cat || 'General') === cat).length;
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-xl font-bold transition-all shrink-0 cursor-pointer ${
-                    selectedCategory === cat
-                      ? 'bg-[#3D52A0] text-white shadow-2xs'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  {cat} ({count})
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {/* 4. MAIN VIEWS RENDER. Keyed on the view, so one arrives (hud-swap) rather than cutting to the next. */}
+      <div ref={listTopRef} key={viewMode} className="hud-swap scroll-mt-4 space-y-6">
+      {viewMode !== 'bundles' && filteredBank.length === 0 && (
+        <EmptyState
+          icon={Search}
+          title={bank.length === 0 ? 'The bank is empty' : 'Nothing matches'}
+          text={bank.length === 0 ? 'Add the first item, or import a sheet of them.' : 'No item passes the search and filters that are on.'}
+          action={bank.length === 0
+            ? <Button size="sm" variant="primary" icon={Plus} onClick={handleAddItem}>Add item</Button>
+            : <Button size="sm" icon={X} onClick={clearFilters}>Clear filters</Button>}
+          className="bg-white hud-panel-in"
+        />
       )}
 
-      {/* 4. MAIN VIEWS RENDER */}
-      {viewMode === 'spreadsheet' && (
+      {viewMode === 'spreadsheet' && filteredBank.length > 0 && (
         <BankSpreadsheetTable
           items={visibleBank}
           selectedItemIds={selectedItemIds}
@@ -1045,7 +720,7 @@ const BankTab: React.FC<BankTabProps> = ({
         />
       )}
 
-      {viewMode === 'grouped' && (
+      {viewMode === 'grouped' && filteredBank.length > 0 && (
         <BankCategoryGroupedView
           items={visibleBank}
           selectedItemIds={selectedItemIds}
@@ -1063,11 +738,12 @@ const BankTab: React.FC<BankTabProps> = ({
         />
       )}
 
-      {viewMode === 'grid' && (
+      {viewMode === 'grid' && filteredBank.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {visibleBank.map((item) => (
+          {visibleBank.map((item, i) => (
+            /* Cards rise in a row at a time; a page loaded later starts its own count. */
+            <div key={item.id} className="hud-row-in min-w-0 grid" style={{ animationDelay: `${Math.min(i % PAGE, 11) * 25}ms` }}>
             <BankItemCard
-              key={item.id}
               item={item}
               onUpdate={handleUpdateItem}
               onDelete={handleDeleteItem}
@@ -1082,6 +758,7 @@ const BankTab: React.FC<BankTabProps> = ({
               specBank={specs}
               onOpenRecipe={onOpenRecipe}
             />
+            </div>
           ))}
         </div>
       )}
@@ -1092,53 +769,29 @@ const BankTab: React.FC<BankTabProps> = ({
         because it is the expensive one.
       */}
       {viewMode !== 'bundles' && hiddenCount > 0 && (
-        <div className="flex flex-wrap items-center justify-center gap-3 py-4">
-          <span className="text-xs font-semibold text-slate-500">
-            Showing {visibleBank.length} of {filteredBank.length} items
+        <div ref={moreRef} className="flex flex-wrap items-center justify-center gap-3 py-2">
+          <span className="text-xs text-slate-500">
+            Showing <span className="font-bold text-slate-800 tabular-nums">{visibleBank.length}</span> of {filteredBank.length} items
           </span>
-          <button
-            type="button"
-            onClick={() => setVisibleCount((n) => n + PAGE)}
-            className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486]"
-          >
+          <Button size="sm" variant="primary" onClick={() => setVisibleCount((n) => n + PAGE)}>
             Show {Math.min(PAGE, hiddenCount)} more
-          </button>
-          <button
-            type="button"
-            onClick={() => setVisibleCount(filteredBank.length)}
-            className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50"
-            title="Renders every row at once — slower on a large bank"
-          >
+          </Button>
+          <Button size="sm" onClick={() => setVisibleCount(filteredBank.length)} title="Draws every row at once, which is slower on a large bank">
             Show all {filteredBank.length}
-          </button>
+          </Button>
         </div>
       )}
 
       {/* VIEW: ROOM BUNDLES & KITS */}
       {viewMode === 'bundles' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-7 shadow-sm space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
-                  <PackageCheck className="w-5 h-5 text-[#3D52A0]" />
-                  Custom Room Bundles & Scope Kits
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Package common room recipes so your team can populate entire rooms in 1-click when building client proposals.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsCreatingBundle(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-[#3D52A0] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  Create Bundle
-                </button>
-              </div>
-            </div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
+            <PanelHead
+              icon={PackageCheck}
+              title="Room kits"
+              blurb="Items that go into a room together, so a whole room is added to a proposal in one click."
+              aside={<Button size="sm" variant="primary" icon={Plus} onClick={() => setIsCreatingBundle(true)}>Create kit</Button>}
+            />
 
             {/* Create Bundle Drawer/Modal */}
             <AnimatePresence>
@@ -1213,7 +866,7 @@ const BankTab: React.FC<BankTabProps> = ({
                                 });
                               }}
                               className={`p-2.5 text-xs flex items-center justify-between cursor-pointer transition-colors ${
-                                isPicked ? 'bg-sky-50 text-[#3D52A0] font-bold' : 'hover:bg-slate-50 text-slate-700'
+                                isPicked ? 'bg-[#3D52A0]/10 text-[#3D52A0] font-bold' : 'hover:bg-slate-50 text-slate-700'
                               }`}
                             >
                               <div className="flex items-center gap-2">
@@ -1225,7 +878,7 @@ const BankTab: React.FC<BankTabProps> = ({
                                 />
                                 <span>{item.name}</span>
                               </div>
-                              <span className="text-[10px] text-slate-400 font-mono">
+                              <span className="text-[10px] text-slate-400 tabular-nums">
                                 {item.cat} · {item.unit}
                               </span>
                             </div>
@@ -1245,7 +898,7 @@ const BankTab: React.FC<BankTabProps> = ({
                     <button
                       type="button"
                       onClick={handleCreateBundle}
-                      className="px-5 py-2 bg-[#3D52A0] hover:bg-[#0052A3] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm cursor-pointer"
+                      className="px-5 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm cursor-pointer"
                     >
                       Save Room Kit
                     </button>
@@ -1256,16 +909,15 @@ const BankTab: React.FC<BankTabProps> = ({
 
             {/* Bundles List */}
             {customBundles.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 space-y-2">
-                <PackageCheck className="w-10 h-10 mx-auto text-slate-300" />
-                <p className="text-xs font-bold text-slate-600">No Custom Room Kits Created Yet</p>
-                <p className="text-[11px] text-slate-400">
-                  Click "AI Room Kits" to auto-generate standard room bundles or create your own with "Create Bundle".
-                </p>
-              </div>
+              <EmptyState
+                icon={PackageCheck}
+                title="No room kits yet"
+                text="Make one from items you pick, or let AI room kits put the first few together."
+                action={<Button size="sm" icon={Plus} onClick={() => setIsCreatingBundle(true)}>Create kit</Button>}
+              />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {customBundles.map((bundle) => {
+                {customBundles.map((bundle, bundleIndex) => {
                   const isEditing = editingBundleId === bundle.id;
                   const isExpanded = expandedBundleIds.has(bundle.id);
                   const bundleItems = bank.filter((i) => bundle.itemIds.includes(i.id));
@@ -1274,7 +926,8 @@ const BankTab: React.FC<BankTabProps> = ({
                   return (
                     <div
                       key={bundle.id}
-                      className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 space-y-4 hover:border-sky-300 transition-all flex flex-col justify-between"
+                      className="bg-white rounded-xl border border-slate-200 p-5 space-y-4 pp-lift hud-row-in hover:border-[#3D52A0]/40 flex flex-col justify-between"
+                      style={{ animationDelay: `${Math.min(bundleIndex, 11) * 30}ms` }}
                     >
                       <div className="space-y-2">
                         {isEditing ? (
@@ -1308,7 +961,7 @@ const BankTab: React.FC<BankTabProps> = ({
                         ) : (
                           <div className="flex justify-between items-start">
                             <div>
-                              <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                              <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                                 {bundle.name}
                                 <button
                                   onClick={() => {
@@ -1339,9 +992,9 @@ const BankTab: React.FC<BankTabProps> = ({
 
                         {/* Bundle Stats Pill */}
                         <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500 pt-1">
-                          <span>{bundleItems.length} Deliverables</span>
+                          <span>{bundleItems.length} {bundleItems.length === 1 ? 'item' : 'items'}</span>
                           <span>•</span>
-                          <span>Base Cost: {formatCurrency(bundleTotalCost)}</span>
+                          <span>Base cost {formatCurrency(bundleTotalCost)}</span>
                         </div>
 
                         {/* Items in bundle list */}
@@ -1366,7 +1019,7 @@ const BankTab: React.FC<BankTabProps> = ({
 
                       {/* Add item to bundle dropdown */}
                       {isAddingItemToBundleId === bundle.id ? (
-                        <div className="space-y-2 p-2 bg-sky-50 rounded-xl border border-sky-200">
+                        <div className="space-y-2 p-2 bg-[#3D52A0]/5 rounded-xl border border-[#3D52A0]/20">
                           <div className="flex justify-between items-center">
                             <span className="text-[10px] font-bold uppercase text-[#3D52A0]">
                               Add Item to {bundle.name}
@@ -1397,7 +1050,7 @@ const BankTab: React.FC<BankTabProps> = ({
                                 <div
                                   key={item.id}
                                   onClick={() => handleAddItemToBundle(bundle.id, item.id)}
-                                  className="p-1.5 text-[11px] hover:bg-sky-50 cursor-pointer flex justify-between"
+                                  className="p-1.5 text-[11px] hover:bg-[#3D52A0]/10 cursor-pointer flex justify-between"
                                 >
                                   <span>{item.name}</span>
                                   <Plus className="w-3 h-3 text-[#3D52A0]" />
@@ -1410,7 +1063,7 @@ const BankTab: React.FC<BankTabProps> = ({
                           onClick={() => setIsAddingItemToBundleId(bundle.id)}
                           className="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                         >
-                          + Add Item to Kit
+                          Add item to kit
                         </button>
                       )}
                     </div>
@@ -1422,83 +1075,65 @@ const BankTab: React.FC<BankTabProps> = ({
         </div>
       )}
 
-      {/* 5. FLOATING STICKY BULK ACTION BAR (When items are selected) */}
+      </div>
+
+      {/* 5. The selection bar: rises from the foot of the screen while items are ticked. */}
       <AnimatePresence>
         {selectedItemIds.size > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 30 }}
-            className="fixed bottom-6 inset-x-4 max-w-4xl mx-auto z-40 bg-slate-900/95 backdrop-blur-md text-white rounded-3xl p-4 shadow-2xl border border-slate-700/80 flex flex-wrap items-center justify-between gap-4"
+            role="region"
+            aria-label="Selected items"
+            initial={{ opacity: 0, y: 28, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 28, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+            className="fixed bottom-6 inset-x-4 max-w-4xl mx-auto z-40 bg-[#12182F]/95 backdrop-blur-md text-white rounded-2xl px-4 py-3 shadow-2xl border border-white/10 flex flex-wrap items-center justify-between gap-3"
           >
-            {/* Selection info */}
             <div className="flex items-center gap-3">
-              <span className="w-7 h-7 bg-[#3D52A0] rounded-full flex items-center justify-center text-xs font-black">
-                {selectedItemIds.size}
+              <span className="min-w-8 h-8 px-2 bg-[#3D52A0] rounded-full flex items-center justify-center text-sm font-black tabular-nums">
+                <CountUp value={selectedItemIds.size} />
               </span>
               <div>
-                <div className="text-xs font-black tracking-wide">Items Selected</div>
-                <div className="text-[10px] text-slate-400">
-                  Ready for bulk category, pricing, or unit adjustments
-                </div>
+                <div className="text-sm font-bold">{selectedItemIds.size === 1 ? 'Item selected' : 'Items selected'}</div>
+                <div className="text-[11px] text-slate-400">Change them together</div>
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => openBulkModalWithTab('category')}
-                className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-sm"
-                title="Change Category in Bulk"
-              >
-                <FolderEdit className="w-3.5 h-3.5" />
-                Change Category
-              </button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([
+                ['category', 'Change category', FolderEdit],
+                ['margin', 'Revise margin', Percent],
+                ['cost', 'Rate inflation', TrendingUp],
+                ['uom', 'Set unit', Ruler],
+                ['bundle', 'Package to kit', PackagePlus],
+              ] as Array<[BulkActionType, string, React.ComponentType<any>]>).map(([tab, label, Icon]) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => openBulkModalWithTab(tab)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold transition-colors motion-safe:active:scale-[0.97]"
+                >
+                  <Icon className="w-3.5 h-3.5 text-slate-300" />
+                  {label}
+                </button>
+              ))}
 
               <button
-                onClick={() => openBulkModalWithTab('margin')}
-                className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-              >
-                <Percent className="w-3.5 h-3.5 text-emerald-400" />
-                Revise Margin
-              </button>
-
-              <button
-                onClick={() => openBulkModalWithTab('cost')}
-                className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-              >
-                <TrendingUp className="w-3.5 h-3.5 text-sky-400" />
-                Rate Inflation
-              </button>
-
-              <button
-                onClick={() => openBulkModalWithTab('uom')}
-                className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-              >
-                <Ruler className="w-3.5 h-3.5 text-purple-400" />
-                Set Unit
-              </button>
-
-              <button
-                onClick={() => openBulkModalWithTab('bundle')}
-                className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-              >
-                <PackagePlus className="w-3.5 h-3.5" />
-                Package to Kit
-              </button>
-
-              <button
+                type="button"
                 onClick={handleBulkDelete}
-                className="p-2 text-rose-400 hover:text-white hover:bg-rose-600 rounded-xl transition-colors cursor-pointer"
-                title="Delete Selected Items"
+                className="p-2 text-rose-400 hover:text-white hover:bg-rose-600 rounded-xl transition-colors"
+                title="Delete selected items"
+                aria-label="Delete selected items"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
 
               <button
+                type="button"
                 onClick={() => setSelectedItemIds(new Set())}
                 className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
-                title="Deselect All"
+                title="Clear selection"
+                aria-label="Clear selection"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1584,7 +1219,7 @@ const BankTab: React.FC<BankTabProps> = ({
             >
               <div className="p-5 border-b border-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <Sparkles className="w-4 h-4 text-slate-300" />
                   <h3 className="text-sm font-black text-white">AI Room Kit Synthesizer</h3>
                 </div>
                 {!isAiSynthesizing && (
@@ -1597,15 +1232,15 @@ const BankTab: React.FC<BankTabProps> = ({
                 )}
               </div>
 
-              <div className="p-5 space-y-2 max-h-72 overflow-y-auto font-mono text-xs text-slate-300">
+              <div className="p-5 space-y-2 max-h-72 overflow-y-auto text-xs text-slate-300">
                 {aiLogMessages.map((msg, idx) => (
                   <div key={idx} className="leading-relaxed">
                     {msg}
                   </div>
                 ))}
                 {isAiSynthesizing && (
-                  <div className="flex items-center gap-2 text-purple-400 pt-2">
-                    <div className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                  <div className="flex items-center gap-2 text-slate-300 pt-2">
+                    <div className="w-3 h-3 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
                     <span>Synthesizing recipes...</span>
                   </div>
                 )}
@@ -1615,7 +1250,7 @@ const BankTab: React.FC<BankTabProps> = ({
                 <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-end">
                   <button
                     onClick={() => setShowAiConsole(false)}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider"
+                    className="px-4 py-2 bg-[#3D52A0] hover:bg-[#334486] text-white rounded-xl text-xs font-bold uppercase tracking-wider"
                   >
                     View Synthesized Kits
                   </button>

@@ -35,10 +35,6 @@
     "offPalette": 14,
     "mono": 4
   },
-  "components/BankTab.tsx": {
-    "offPalette": 31,
-    "mono": 2
-  },
   "components/BulkImportModal.tsx": {
     "offPalette": 1,
     "mono": 2
