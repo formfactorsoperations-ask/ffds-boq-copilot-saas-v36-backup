@@ -18,6 +18,7 @@ import { versionNo, sameOption, optionChains, type OptionChain } from '../../lib
 import { IconTile, Ring, Tilt, DoneTick, Confetti, EASE, listV, rowV } from '../people/PeopleBits';
 import { cardV, deskSectionV } from '../opsDesk/DeskBits';
 import { CountUp } from '../ui/HudBits';
+import { budgetGap } from '../../lib/budgetFit';
 import { useFiguresHidden, Masked } from '../ui/HideFigures';
 
 /*
@@ -101,6 +102,12 @@ interface Props {
   /** "3 options · 4 versions", and the buttons that act on every option (Add option, Regenerate). */
   summary?: string;
   toolbar?: React.ReactNode;
+  /** The client's budget (lib/budgetFit.ts): each option says how far over or under it is. */
+  budget?: number | null;
+  /** The option that fits the budget best. */
+  bestFitId?: string | null;
+  /** Opens Fit to budget on an option that is over it. */
+  onFit?: (tierId: string) => void;
 }
 
 type Lens = 'money' | 'diff' | 'pay' | 'margin' | 'history';
@@ -634,6 +641,20 @@ export default function PricingGrid(props: Props) {
                             {area > 0 && <>₹{Math.round(c.price.total / area).toLocaleString('en-IN')}/sq ft</>}
                             {cheapest > 0 && c.price.total > cheapest && <span className="text-amber-700"> · +{Math.round((c.price.total / cheapest - 1) * 100)}% over the lowest</span>}
                           </p>
+                          {(() => {
+                            const gap = budgetGap(c.price.total, props.budget);
+                            if (!gap) return null;
+                            return (
+                              <p className={`text-[11px] font-semibold tabular-nums mt-1 flex flex-wrap items-center gap-1.5 ${gap.over > 0 ? 'text-rose-700' : 'text-emerald-700'}`} data-testid="option-budget">
+                                {gap.over > 0 ? `${money(gap.over)} over the client’s budget` : gap.over < 0 ? `${money(-gap.over)} under the client’s budget` : 'On the client’s budget'}
+                                {props.bestFitId === t.id && <span className={`${CHIP} bg-[#3D52A0]/10 text-[#3D52A0]`}>Fits the budget best</span>}
+                                {gap.over > 0 && props.onFit && (
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); props.onFit!(t.id); }}
+                                    className="px-2 py-0.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-[11px] font-bold hover:bg-slate-50">Fit to budget</button>
+                                )}
+                              </p>
+                            );
+                          })()}
                           {c.price.designFee > 0 && (
                             <p className="text-[11px] text-slate-500 tabular-nums" data-testid="option-split">
                               work {money(c.price.work)} + design fee {money(c.price.designFee)}

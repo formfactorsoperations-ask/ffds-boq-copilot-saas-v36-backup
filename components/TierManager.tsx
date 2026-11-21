@@ -26,6 +26,8 @@ import { useOrg } from '../contexts/OrgContext';
 import { contextWithTierRenamed, contextWithTierCopied } from '../lib/specOverrides';
 import { SparklesIcon } from './Icons';
 import { withDiscounts } from '../lib/playground/deal';
+import { bestFit, budgetGap, extrasOf, fitWithout, suggestedOut } from '../lib/budgetFit';
+import NumberField from './NumberField';
 
 interface TierManagerProps {
     tiers: ProposalTier[];
@@ -173,6 +175,27 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
 
     /* Tune margin: the old Systematic Margin Adjuster, now opened from an option's ⋯ menu. */
     const [tuneOpen, setTuneOpen] = useState(false);
+
+    /* ── The client's budget, and fitting an option to it (lib/budgetFit.ts) ── */
+    const budget = Number(projectContext.clientBudget) || 0;
+    const [fitTierId, setFitTierId] = useState<string | null>(null);
+    const [fitOut, setFitOut] = useState<string[]>([]);
+    const fitTier = fitTierId ? tiers.find(t => t.id === fitTierId) || null : null;
+    const fitExtras = useMemo(
+        () => (fitTier ? extrasOf(fitTier, { bankMap: buildBankMap(bank || [], projectContext?.adHocItems), rooms: projectContext.rooms, templates: templates || INITIAL_TEMPLATES, config: projectContext.config }) : []),
+        [fitTier, bank, projectContext?.adHocItems, projectContext.rooms, projectContext.config, templates],
+    );
+    const fitTotal = fitTier ? optionPrice(fitTier).total : 0;
+    /* A percentage design fee comes down with the work, so the new price is worked out with the fee on what is left. */
+    const feeFor = (t: ProposalTier) => (work: number) => designFeeForTier(projectContext, work, t.summary.asActualsTotal || 0, t.pricingRules);
+    const fit = fitWithout(fitTier ? optionPrice(fitTier).work : 0, budget, fitExtras, fitOut, fitTier ? feeFor(fitTier) : undefined);
+    const openFit = (tierId: string) => {
+        const t = tiers.find(x => x.id === tierId);
+        if (!t || !(budget > 0)) return;
+        const extras = extrasOf(t, { bankMap: buildBankMap(bank || [], projectContext?.adHocItems), rooms: projectContext.rooms, templates: templates || INITIAL_TEMPLATES, config: projectContext.config });
+        setFitOut(suggestedOut(optionPrice(t).work, budget, extras, feeFor(t)));
+        setFitTierId(tierId);
+    };
 
     const displayValue = activeTier ? (activeTier.summary.totalRevenue || activeTier.summary.totalSell) : 0;
 
@@ -376,6 +399,22 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         const n = chain ? chain.versions.length + 1 : 2;
         showSuccessWithNext(`v${n} of ${src.name} is ready to edit. v${n - 1} is kept as it was.`);
         return copy.id;
+    };
+
+    /* Fit to budget: the option's next version, without the extras the designer ticked. The option as it was is kept. */
+    const handleApplyFit = () => {
+        if (!fitTier || !fitOut.length) return;
+        const out = new Set(fitOut);
+        const src = fitTier;
+        const copy = draftCopyOf(src, { parentTierId: src.id, name: src.name });
+        copy.boq = (copy.boq || []).filter(l => !out.has(String(l.id)));
+        setTiers(prev => [...prev, copy]);
+        setProjectContext(prev => contextWithTierCopied(prev, src, copy.id));
+        setActiveTierId(copy.id);
+        const chain = chainOf(chains, src.id);
+        const n = chain ? chain.versions.length + 1 : 2;
+        showSuccessWithNext(`v${n} of ${src.name} is ready, without ${fitOut.length} ${fitOut.length === 1 ? 'extra' : 'extras'}. v${n - 1} is kept as it was.`);
+        setFitTierId(null);
     };
 
     /* A separate package that starts from this one: a column of its own, with this option's built-in specs. */
@@ -640,7 +679,18 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
             <PricingGrid
                 columns={visibleColumns}
                 summary={`${chains.length} ${chains.length === 1 ? 'option' : 'options'}${versionCount > chains.length ? ` · ${versionCount} versions` : ''}`}
+                budget={budget || null}
+                bestFitId={bestFit(visibleColumns.map(c => ({ id: c.tier.id, total: optionPrice(c.tier).total })), budget)}
+                onFit={openFit}
                 toolbar={<>
+                    <label className="block">
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Client’s budget</span>
+                        <NumberField aria-label="Client’s budget" allowEmpty live={false} min={0} decimals={0} placeholder="₹, before GST"
+                            value={budget || undefined}
+                            onCommit={(v) => setProjectContext(prev => ({ ...prev, clientBudget: v && v > 0 ? Math.round(v) : undefined }))}
+                            className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0] tabular-nums" />
+                        <span className="block text-[11px] text-slate-500 mt-1">Work and design fee, before GST. Each option says how it compares.</span>
+                    </label>
                     {waitsForPlan && (
                         <p className="text-xs font-semibold text-amber-700" role="status">
                             {OPTIONS_NEED_PLAN}{setActiveTab && <> <button type="button" onClick={() => setActiveTab('leadiq')} className="underline underline-offset-2 hover:text-amber-800">Upload it in Brief &amp; Site</button></>}
@@ -755,6 +805,71 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
                     saveDiscounts: (next) => setProjectContext(prev => withDiscounts(prev, next as any)),
                 }}
             />
+
+            {/* Fit to budget: which extras come out, what each frees, and the gap that is left (lib/budgetFit.ts). */}
+            {fitTier && createPortal(
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 no-print" role="dialog" aria-label={`Fit to budget: ${fitTier.name}`}>
+                    <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={() => setFitTierId(null)} />
+                    <div className="phd-pop relative w-full max-w-lg max-h-[88vh] flex flex-col bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
+                        <div className="px-6 pt-5 pb-4">
+                            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">Fit to budget</p>
+                            <h2 className="font-bold text-slate-800">{fitTier.name}</h2>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                                {formatCurrency(fitTotal)} against a budget of {formatCurrency(budget)}. Tick the extras to take out. The must-haves stay, and this version is kept as it is.
+                            </p>
+                        </div>
+                        <div className="px-6 pb-4 flex-1 min-h-0 overflow-y-auto">
+                            {fitExtras.length === 0 ? (
+                                <p className="text-sm text-slate-600 rounded-xl border border-slate-200 px-4 py-3">
+                                    This option has no extras to take out. Mark items as extras on the Standard templates screen, or bring the markups down with Tune in the BOQ.
+                                </p>
+                            ) : (
+                                <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                                    {fitExtras.map((e, i) => {
+                                        const on = fitOut.includes(e.id);
+                                        return (
+                                            <li key={e.id} className="hud-row-in" style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
+                                                <label className="px-4 py-2.5 flex items-center gap-3 cursor-pointer hover:bg-slate-50">
+                                                    <input type="checkbox" checked={on} className="w-4 h-4 accent-[#3D52A0]"
+                                                        onChange={() => setFitOut(prev => (on ? prev.filter(x => x !== e.id) : [...prev, e.id]))} />
+                                                    <span className="min-w-0 flex-1">
+                                                        <span className="block text-sm font-semibold text-slate-800 truncate">{e.name}</span>
+                                                        <span className="block text-[11px] text-slate-500">{e.room}</span>
+                                                    </span>
+                                                    <span className="text-sm font-black text-slate-800 tabular-nums">{formatCurrency(e.amount)}</span>
+                                                </label>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            )}
+                        </div>
+                        <div className="px-6 pb-4 grid grid-cols-3 gap-3">
+                            {[
+                                ['Taken out', formatCurrency(fit.freed)],
+                                ['New price', formatCurrency(fit.total)],
+                                [fit.remaining > 0 ? 'Still over' : 'Under budget', formatCurrency(fit.remaining > 0 ? fit.remaining : budget - fit.total)],
+                            ].map(([k, v]) => (
+                                <div key={k} className="rounded-xl border border-slate-200 px-3 py-2">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{k}</p>
+                                    <p className={`text-sm font-black tabular-nums ${k === 'Still over' ? 'text-rose-700' : 'text-slate-800'}`}>{v}</p>
+                                </div>
+                            ))}
+                        </div>
+                        {fit.remaining > 0 && (
+                            <p className="px-6 pb-4 text-xs text-slate-600">
+                                Extras alone do not reach the budget. The rest is a choice for you: a lower option, or the markups in the BOQ’s Tune, which stop at your margin floors.
+                            </p>
+                        )}
+                        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+                            <button type="button" onClick={() => setFitTierId(null)} className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50">Cancel</button>
+                            <button type="button" disabled={!fitOut.length} onClick={handleApplyFit}
+                                className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] disabled:opacity-50">Make a new version without them</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body,
+            )}
 
             {/* Tune margin: the old Systematic Margin Adjuster, for the option it was opened on. */}
             {tuneOpen && !marginsHidden && createPortal(

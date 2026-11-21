@@ -892,6 +892,9 @@ function planCivilItems(
   return out;
 }
 
+/** The items a higher option adds by the built-in rule (the `enhancements` below), unless the studio's template lists them. */
+export const BUILT_IN_EXTRAS: ReadonlySet<string> = new Set(['gen-017', 'gen-002', 'gen-044', 'gen-045']);
+
 export const generateStandardPackages = (
     projectContext: ProjectContext,
     bank: Item[],

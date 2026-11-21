@@ -862,6 +862,8 @@ export interface ProjectContext {
     /** When a design-only project's GFC set was released (GFC Release). */
     gfcReleasedAt?: number;
     proposalMode?: 'single' | 'tiered';
+    /** The client's budget for the work and design fee, before GST, in rupees (lib/budgetFit.ts). Studio only. */
+    clientBudget?: number;
     gstRate?: number;
     theme?: string; // e.g., 'Modern Minimalist', 'Japandi'
     clientName?: string;
