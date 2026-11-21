@@ -221,11 +221,6 @@
   "components/TierManager.tsx": {
     "offPalette": 3
   },
-  "components/VendorsManager.tsx": {
-    "tinyPx": 1,
-    "offPalette": 94,
-    "mono": 9
-  },
   "components/ZohoRaiseInvoiceDialog.tsx": {
     "mono": 2
   },

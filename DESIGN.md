@@ -949,6 +949,27 @@ was already on the pattern.
 - No model name is shown on an AI window: the badge that read "Gemini 3.7" was not read from anything.
 - All five files are at zero in the design guard.
 
+Vendor directory (`components/VendorsManager.tsx`; owner, 21 Nov 2026: "the same for vendor directory").
+It had gradient avatars in violet, orange and sky, tinted figure tiles, and four windows each with a look
+of its own.
+
+- Five figures: Vendors, Material, Labour, Turnkey, Average lead time. The three kinds of supplier are
+  buttons that filter the list, and clear on a second click.
+- One card: the Cards / Table switch, the actions (Add from projects, Export CSV, Add vendor last and
+  primary), search, the count, Clear filters, sort, then Show and Trade pills that wrap, each with its
+  count. Only trades a vendor is in are listed. What an action did is a line in this card, not an alert.
+- A vendor's avatar is its initials on the brand tint (slate when inactive). Colour never says what a
+  vendor supplies; a brand chip does.
+- A card: name and trades, supply chips, phone, email and GSTIN each with a copy button that turns to a
+  tick, lead time and payment terms in a well, notes, then Message and the edit and delete buttons. It
+  lifts on hover (`pp-lift`) and arrives with `hud-row-in`.
+- The table has the field-label heads and the same row buttons, dim until pointed at, never hidden.
+- A vendor opens in a drawer from the right (`pg-slide`, as the recipe drawer): how to reach them, lead
+  time and terms, trades, notes, and every project selection that names it.
+- Add or edit, Message and Delete open in `components/bank/BankModal.tsx`. What they supply and trades
+  are pills; payment terms is one field that suggests the usual ones.
+- At zero in the design guard.
+
 ### Notifications motion (approved 22 Oct 2026)
 
 The owner chose four of the fifteen notification patterns in the round-two
