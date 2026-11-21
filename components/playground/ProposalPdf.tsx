@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FileText, Download, Send, X, Globe } from 'lucide-react';
 import { Button, Chip } from '../ui/kit';
@@ -7,7 +7,7 @@ import { scopeSplit, splitPricingOf, dealFor, complimentaryKeys, type OfferDisco
 import { gstTermsOf, scheduleFor, type ScheduleStage } from '../../lib/paymentSchedule';
 import { playgroundTierSummary } from '../../lib/playground/versions';
 import { isPlaygroundTier } from '../../lib/playground/pricing';
-import { proposalValidity, discountsOf } from '../../lib/playground/deal';
+import { proposalValidity, discountsOf, bookingOf } from '../../lib/playground/deal';
 import { optionChains, latestOf } from '../../lib/optionChains';
 import { hasCivilWork } from '../../lib/annexure';
 import type { MaterialSpecsBank } from '../../lib/materialSpecs';
@@ -18,6 +18,8 @@ import {
 import { buildProposalPdf } from '../../lib/proposalPdf';
 import { proposalTimeline, civilDaysOf, briefHome, answersTo, othersDecide, roomIncludes } from '../../lib/playground/brief';
 import { inr } from './playgroundUi';
+import { useOrg } from '../../contexts/OrgContext';
+import { studioDetailsOf, logoForPdf, addressLines, hasContact, shortWeb, shortInstagram } from '../../lib/playground/studio';
 
 /*
   The first proposal, as a PDF (BOQ Playground PR P, as in the approved mockup).
@@ -180,6 +182,18 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
   const [busy, setBusy] = useState<null | 'download' | 'send'>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  /* The studio, from Studio settings: its logo on the cover, its details on the closing page. */
+  const { orgData } = useOrg();
+  const studio = useMemo(() => studioDetailsOf(orgData as any, studioName), [orgData, studioName]);
+  const [logo, setLogo] = useState(studio.logo);
+  const [logoOk, setLogoOk] = useState(true);
+  useEffect(() => {
+    let live = true;
+    setLogo(studio.logo); setLogoOk(true);
+    if (studio.logo) logoForPdf(studio.logo).then(l => { if (live) setLogo(l); });
+    return () => { live = false; };
+  }, [studio.logo]);
+  const studioLabel = studio.name || studioName;
 
   const m = useMemo(() => {
     const boq: BoqItem[] = tier.boq || [];
@@ -191,6 +205,8 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
     const deal = dealFor(summary, discounts, terms);
     const schedule = scheduleFor(ctx, { tierSummary: summary }, { paymentStructure });
     const validity = proposalValidity(ctx, termsSettings, Date.now(), tier.id);
+    /* How the client books, as Ops set it: the initiation fee, or D1 directly. */
+    const booking = bookingOf(ctx.proposal, schedule);
     const free = complimentaryKeys(discounts.filter(d => d.basis?.tierId === tier.id));
     const items = itemsOf({ boq, bankMap, pricing, rooms: ctx.rooms || [], free, specBank });
     const options = optionChains(tiers).map(latestOf).map(t => (t.id === tier.id ? tier : t));
@@ -200,22 +216,31 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
     /* From booking (the day the proposal holds until) to the keys (PR B). */
     const timeline = proposalTimeline({ start: validity.until, programme, config: ctx.config, civil, civilDays: civilDaysOf(termsSettings), target: (ctx as any).targetHandoverDate });
     return {
-      summary, deal, schedule, validity, items, options: optionRows, offers, civil, timeline,
+      summary, deal, schedule, validity, booking, items, options: optionRows, offers, civil, timeline,
       separate: separatePage(boq, bankMap),
       materials: materialsPage(specBank, options, tier.id),
       home: briefHome(ctx),
       answers: answersTo(ctx.clientBrief, boq, bankMap, ctx.rooms || []),
       annex: annexOf({
         terms: termsSettings, studioName, gstRate: terms.rate, after: Math.max(0, deal.sell - deal.execOff), fee: deal.fee - deal.designOff, gst: deal.gst, total: deal.clientPays,
-        initiationFee: schedule.initiationFee, boq, bankMap, validDays: validity.days, issued: validity.from,
+        initiationFee: booking.by === 'initiation' ? booking.fee : schedule.initiationFee, boq, bankMap, validDays: validity.days, issued: validity.from,
+        booking: { initiation: booking.initiation, code: booking.code },
         programme: { siteDays: timeline.siteDays, designDays: timeline.designDays, civilDays: timeline.civilDays },
       }),
     };
   }, [tier, tiers, ctx, bankMap, specBank, termsSettings, paymentStructure, studioName, programme]);
 
-  const { deal, schedule: sc, validity: v, items } = m;
+  const { deal, schedule: sc, validity: v, items, booking: bk } = m;
+  /* The booking, as Ops set it on the proposal (Deal lens, or Client Proposal → To book). */
+  const dueWith = bk.trigger ? `with ${bk.code} (${bk.trigger.replace(/\.$/, '').replace(/^./, c => c.toLowerCase())})` : `with ${bk.code}`;
+  const rest = bk.balance > 0 ? `: the rest of ${bk.code}, ${inr(bk.balance)}, is due ${dueWith}` : `, and covers it in full`;
+  const bookLine = bk.by === 'initiation'
+    ? (bk.amount > 0
+      ? `the Project Initiation Fee, ${inr(bk.amount)}${bk.paid > 0 ? ` (${inr(bk.fee)} less the ${inr(bk.paid)} you have paid)` : ''}. It is adjusted against ${bk.code}${rest}`
+      : `the Project Initiation Fee of ${inr(bk.fee)}, which you have paid. It is adjusted against ${bk.code}${rest}`)
+    : `${bk.code}, ${inr(bk.amount)}${bk.paid > 0 ? ` (${inr(bk.d1)} less the ${inr(bk.paid)} Project Initiation Fee you have paid)` : `, which is ${sc.design.stages[0]?.pct || 0}% of the design fee with GST`}`;
   const project = ctx.name || 'Your home';
-  const foot = `${studioName} · ${project} · First proposal`;
+  const foot = `${studioLabel} · ${project} · First proposal`;
   const after = Math.max(0, deal.sell - deal.execOff);
   const fee = deal.fee - deal.designOff;
   const roomNames = items.rooms.map(r => r.name);
@@ -223,18 +248,27 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
 
   /* Each page's content, by its key; a page with nothing to say is left out. */
   const pages: Partial<Record<PageKey, React.ReactNode[]>> = {};
+  const showLogo = !!logo && logoOk;
   pages.cover = [(
-    <div className="flex-1 flex flex-col justify-center" key="c">
+    <div className="flex-1 flex flex-col" key="c">
+    <div className="flex items-center justify-between gap-4" data-pdf-masthead>
+      {showLogo
+        ? <img src={logo} alt={studioLabel} data-pdf-logo className="h-14 max-w-[220px] object-contain object-left" onError={() => setLogoOk(false)} />
+        : <span className="text-xl font-extrabold tracking-tight text-slate-900" data-pdf-wordmark>{studioLabel}</span>}
+      {studio.tagline && <span className="text-[11px] text-slate-500 text-right max-w-[240px]">{studio.tagline}</span>}
+    </div>
+    <div className="flex-1 flex flex-col justify-center">
       <Kicker>Interior design proposal</Kicker>
       <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 mt-3">{project}</h1>
       <p className="text-lg text-slate-500 mt-2">{[ctx.location, ctx.config, Number(ctx.area) ? `${Number(ctx.area).toLocaleString('en-IN')} sq ft carpet` : ''].filter(Boolean).join(' · ')}</p>
       {(ctx as any).theme && <p className="mt-4 text-[13px] text-slate-600">Style: {(ctx as any).theme}</p>}
       <div className="mt-10 grid grid-cols-2 gap-6 text-sm">
-        {([['Prepared for', ctx.clientName || '—'], ['Prepared by', [userName, studioName].filter(Boolean).join(', ')], ['Date', dateOf(v.from)]] as [string, string][]).map(([a, b]) => (
+        {([['Prepared for', ctx.clientName || '—'], ['Prepared by', [userName, studioLabel].filter(Boolean).join(', ')], ['Date', dateOf(v.from)]] as [string, string][]).map(([a, b]) => (
           <div key={a}><div className={LABEL_SM}>{a}</div><div className="font-semibold text-slate-800 mt-1">{b}</div></div>
         ))}
         <div><div className={LABEL_SM}>Valid until</div><div className="font-semibold text-slate-800 mt-1">{dateOf(v.until)} <span className="font-normal text-slate-400">· {v.days} days</span></div></div>
       </div>
+    </div>
     </div>
   )];
   /* The brief (PR B): the client's words, how the proposal answers them, their home, what design includes, and the timeline. */
@@ -470,7 +504,7 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
             <tr className="border-t-2 border-slate-300"><td colSpan={3} className="py-1.5 font-bold text-slate-800 text-[12px]">Together</td><td className="py-1.5 text-right tabular-nums font-black text-[13px]">{inr(sc.total)}</td></tr>
           </tbody>
         </table>
-        <div className="mt-3 rounded-md bg-[#3D52A0]/[0.06] px-3 py-2 text-[12px] text-slate-700"><b>To book:</b> {sc.design.stages[0]?.code || 'D1'}, {inr(sc.booking)}{sc.initiationFee > 0 ? ` (${inr(sc.design.stages[0]?.amount || 0)} less the ${inr(sc.initiationFee)} Project Initiation Fee you have paid)` : `, which is ${sc.design.stages[0]?.pct || 0}% of the design fee with GST`}. Your portal login follows the booking.</div>
+        <div className="mt-3 rounded-md bg-[#3D52A0]/[0.06] px-3 py-2 text-[12px] text-slate-700"><b>To book:</b> {bookLine}. Your portal login follows the booking.</div>
         <p className="mt-2 text-[11px] text-slate-500">Design + PMC or Design only: the design-fee schedule applies and you pay your contractors directly; any PMC fee is set out in the agreement.</p>
       </div>
       <p className="mt-2 text-[11px] text-slate-400">Sizes are allowances from the brief. Final quantities follow site measurement and the approved design, in a Detailed BOQ you approve before work starts. Terms are in Annexure A.</p>
@@ -480,9 +514,57 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
   pages.annex = [
     <React.Fragment key="a1"><Kicker>Annexure A</Kicker><H2>Commercial terms and conditions</H2><p className="text-[11px] text-slate-500 mt-1">Part of this proposal. Where it differs from the studio’s general terms for this project, this annexure prevails.</p>{m.annex.slice(0, half).map(s => <React.Fragment key={s.n}><AnnexBlock s={s} /></React.Fragment>)}</React.Fragment>,
     <React.Fragment key="a2"><Kicker>Annexure A, continued</Kicker>{m.annex.slice(half).map(s => <React.Fragment key={s.n}><AnnexBlock s={s} /></React.Fragment>)}
-      <div className="mt-6 grid grid-cols-2 gap-8 text-[11px] text-slate-500"><div className="border-t border-slate-300 pt-1">{ctx.clientName || 'Client'} · date</div><div className="border-t border-slate-300 pt-1">For {studioName}</div></div>
+      <div className="mt-6 grid grid-cols-2 gap-8 text-[11px] text-slate-500"><div className="border-t border-slate-300 pt-1">{ctx.clientName || 'Client'} · date</div><div className="border-t border-slate-300 pt-1">For {studioLabel}{studio.signatory.name && <div className="text-slate-700 font-semibold mt-0.5">{studio.signatory.name}{studio.signatory.title ? `, ${studio.signatory.title}` : ''}</div>}</div></div>
     </React.Fragment>,
   ];
+  /* The studio closes the proposal: who it is and how to reach it, from Studio settings (Studio identity and Money). */
+  const contact: [string, React.ReactNode][] = ([
+    ['Phone', studio.phone],
+    ['Email', studio.email],
+    ['Website', studio.website && shortWeb(studio.website)],
+    ['Instagram', studio.instagram && shortInstagram(studio.instagram)],
+  ] as [string, string][]).filter(([, x]) => !!x);
+  const address = addressLines(studio);
+  if (studioLabel && (hasContact(studio) || showLogo)) pages.studio = [(
+    <div className="flex-1 flex flex-col" key="studio" data-pdf-studio>
+      <div className="flex-1 flex flex-col justify-center">
+        {showLogo
+          ? <img src={logo} alt={studioLabel} className="h-20 max-w-[280px] object-contain object-left" onError={() => setLogoOk(false)} />
+          : <div className="text-3xl font-extrabold tracking-tight text-slate-900">{studioLabel}</div>}
+        {studio.tagline && <p className="text-[15px] text-slate-500 mt-3">{studio.tagline}</p>}
+        <div className="mt-10"><Kicker>Thank you</Kicker></div>
+        <p className="text-[13px] text-slate-600 mt-2 max-w-[460px]">
+          {ctx.clientName ? `${ctx.clientName}, thank` : 'Thank'} you for considering {studioLabel} for {project}. We would be glad to talk it through, change what you would like changed, and begin when you are ready.
+        </p>
+        <div className="mt-8 grid grid-cols-2 gap-x-8 gap-y-5 text-[13px]">
+          {address.length > 0 && (
+            <div><div className={LABEL_SM}>Studio</div>
+              {studio.legalName && studio.legalName !== studioLabel && <div className="font-semibold text-slate-800 mt-1">{studio.legalName}</div>}
+              <div className="text-slate-700 mt-1 leading-snug">{address.map(l => <div key={l}>{l}</div>)}</div>
+            </div>
+          )}
+          {contact.length > 0 && (
+            <div><div className={LABEL_SM}>Reach us</div>
+              <div className="mt-1 space-y-0.5">{contact.map(([k, x]) => <div key={k} className="text-slate-700"><span className="text-slate-400">{k}</span> <span className="font-semibold text-slate-800">{x}</span></div>)}</div>
+            </div>
+          )}
+          {(studio.signatory.name || userName) && (
+            <div><div className={LABEL_SM}>Your contacts</div>
+              <div className="mt-1 space-y-0.5 text-slate-700">
+                {userName && <div><span className="font-semibold text-slate-800">{userName}</span>, who prepared this proposal</div>}
+                {studio.signatory.name && studio.signatory.name !== userName && <div><span className="font-semibold text-slate-800">{studio.signatory.name}</span>{studio.signatory.title ? `, ${studio.signatory.title}` : ''}</div>}
+              </div>
+            </div>
+          )}
+          {studio.gstin && <div><div className={LABEL_SM}>GSTIN</div><div className="font-semibold text-slate-800 mt-1 tabular-nums">{studio.gstin}</div></div>}
+        </div>
+        {studio.credentials.length > 0 && (
+          <div className="mt-6 flex flex-wrap gap-1.5">{studio.credentials.map(c => <span key={c} className="px-2 py-0.5 rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">{c}</span>)}</div>
+        )}
+      </div>
+      <p className="text-[11px] text-slate-400">This proposal holds until {dateOf(v.until)}. Its terms are in Annexure A.</p>
+    </div>
+  )];
 
   /* The one-page summary only when others decide too; the brief always (PR B). */
   const order = pageOrder(concern, othersDecide(decisionMakers));

@@ -63,7 +63,7 @@ import { optionChains, latestOf, sameOption } from '../../lib/optionChains';
 import { scopeSplit, splitPricingOf, splitLines } from '../../lib/offers';
 import { gstTermsOf, scheduleFor, contractInForce } from '../../lib/paymentSchedule';
 import { playgroundTierSummary } from '../../lib/playground/versions';
-import { proposalValidity, withValidDays, followBoq, discountsOf, withDiscounts, withInitiationFee } from '../../lib/playground/deal';
+import { proposalValidity, withValidDays, followBoq, discountsOf, withDiscounts, withInitiationFee, withBooking } from '../../lib/playground/deal';
 import { holdsFinanceRole } from '../../lib/roleAccess';
 import { DealLens } from './DealParts';
 import ProposalPdf from './ProposalPdf';
@@ -1072,6 +1072,8 @@ export default function PlaygroundScreen(props: Props) {
                       onFee={v => setProjectContext(prev => ({ ...prev, designFee: (prev.designFeeType || 'percentage') === 'percentage' ? Math.min(30, Math.max(0, v)) : Math.max(0, v) }))}
                       onDays={d => setProjectContext(prev => withValidDays(prev, d))}
                       onInitiation={v => setProjectContext(prev => withInitiationFee(prev, v))}
+                      proposal={ctx.proposal}
+                      onBooking={(by, fee) => setProjectContext(prev => withBooking(prev, by, fee))}
                       onNote={setNote} onPresent={isPlaygroundTier(tier) ? present : undefined} />
                   );
                 })()}

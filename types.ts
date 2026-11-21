@@ -414,6 +414,12 @@ export interface ProposalRecord {
     shapedFor?: string;
     /** The option version it was issued on. */
     tierId?: string;
+    /**
+     * How the client books, as Ops decides it (lib/playground/deal bookingOf):
+     * the Project Initiation Fee (`fee`, ₹4,999 unless set), adjusted against
+     * D1; or D1 directly. Absent: D1 directly, as before.
+     */
+    booking?: { by: 'initiation' | 'd1'; fee?: number };
 }
 
 export interface ProjectDiscount {

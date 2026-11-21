@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Target, Percent, Gift, Map as MapIcon, List, X, Plus, Clock, Lock, ArrowRight, Play } from 'lucide-react';
-import { Button, Chip } from '../ui/kit';
+import { Button, Chip, Segmented } from '../ui/kit';
 import {
   SCOPE_PARTS, offerDiscount, offerWhy, dealFor, complimentaryKeys,
   type OfferDiscount, type ScopeSplit, type SplitLine, type ScopePart,
 } from '../../lib/offers';
 import type { GstTerms, OneSchedule, ScheduleStage } from '../../lib/paymentSchedule';
-import { withComplimentary, withSpecial, type Validity } from '../../lib/playground/deal';
+import { withComplimentary, withSpecial, bookingOf, type Validity, type BookWith } from '../../lib/playground/deal';
+import type { ProposalRecord } from '../../types';
 import { inr } from './playgroundUi';
 
 /*
@@ -43,7 +44,7 @@ const amountOf = (d: OfferDiscount, sell: number, fee: number) =>
 
 export function DealLens({
   tierId, optionName, summary, lineCount, rounded, split, discounts, terms, schedule, validity, fee, floor, seesMargins, locked, lockedWhy,
-  rooms, pickLines, newId, onDiscounts, onFee, onDays, onInitiation, onNote, onPresent,
+  rooms, pickLines, newId, onDiscounts, onFee, onDays, onInitiation, onNote, onPresent, proposal, onBooking,
 }: {
   tierId: string;
   optionName: string;
@@ -74,6 +75,10 @@ export function DealLens({
   onDays: (days: number) => void;
   onInitiation: (value: number) => void;
   onNote: (msg: string) => void;
+  /** The proposal record: how the client books, as Ops set it. */
+  proposal?: ProposalRecord | null;
+  /** Ops' choice of how the client books: the initiation fee (with its amount), or D1 directly. */
+  onBooking?: (by: BookWith, fee?: number) => void;
   /** Opens what the client is shown: the first-proposal PDF until the layout is approved. */
   onPresent?: () => void;
 }) {
@@ -273,7 +278,7 @@ export function DealLens({
             <span className="text-[11px] text-slate-400">Studio default {validity.studioDays}, from Terms & Payment. The offers lapse with it.</span>
           </div>
         </section>
-        <PaymentPanel schedule={schedule} fee={deal.fee - deal.designOff} after={after} clientPays={deal.clientPays} locked={locked} onInitiation={onInitiation} />
+        <PaymentPanel schedule={schedule} fee={deal.fee - deal.designOff} after={after} clientPays={deal.clientPays} locked={locked} onInitiation={onInitiation} proposal={proposal} onBooking={onBooking} />
       </div>
     </div>
   );
@@ -307,7 +312,7 @@ function StageRows({ stages, tone }: { stages: ScheduleStage[]; tone: string }) 
   );
 }
 
-export function PaymentPanel({ schedule: s, fee, after, clientPays, locked, onInitiation }: {
+export function PaymentPanel({ schedule: s, fee, after, clientPays, locked, onInitiation, proposal, onBooking }: {
   schedule: OneSchedule;
   /** The design fee after any offer on it, ex-GST. */
   fee: number;
@@ -316,7 +321,10 @@ export function PaymentPanel({ schedule: s, fee, after, clientPays, locked, onIn
   clientPays: number;
   locked: boolean;
   onInitiation: (value: number) => void;
+  proposal?: ProposalRecord | null;
+  onBooking?: (by: BookWith, fee?: number) => void;
 }) {
+  const b = bookingOf(proposal, s);
   const box = (title: string, figures: React.ReactNode, stages: ScheduleStage[], tone: string) => (
     <div className="mt-2 rounded-xl border border-slate-200 px-3 py-1">
       <div className="py-1.5 flex justify-between gap-2 text-[11px] border-b border-slate-100">
@@ -326,7 +334,6 @@ export function PaymentPanel({ schedule: s, fee, after, clientPays, locked, onIn
       <StageRows stages={stages} tone={tone} />
     </div>
   );
-  const ret = Math.min(s.initiationFee, s.design.stages[0]?.amount || 0);
   const same = Math.abs(s.total - Math.round(clientPays)) <= 1;
   return (
     <section className="rounded-2xl bg-white border border-slate-200 p-5" aria-label="Payment schedule">
@@ -340,16 +347,34 @@ export function PaymentPanel({ schedule: s, fee, after, clientPays, locked, onIn
       {box('Design fee', <>{inr(fee)} + GST = <b className="text-slate-800">{inr(s.design.total)}</b></>, s.design.stages, 'bg-[#3D52A0]/10 text-[#3D52A0]')}
       {s.execution.stages.length > 0 && box('The work, after offers', <>{inr(after)} + GST = <b className="text-slate-800">{inr(s.execution.total)}</b></>, s.execution.stages, 'bg-slate-100 text-slate-600')}
       <div className="mt-3 flex items-center gap-2 text-xs flex-wrap">
-        <label htmlFor="deal-ret" className="text-slate-600">Initiation fee paid</label>
+        <span className="text-slate-600">To book, the client pays</span>
+        {locked || !onBooking
+          ? <Chip tone="slate">{b.by === 'initiation' ? 'Initiation fee' : `${b.code} directly`}</Chip>
+          : <Segmented<BookWith> size="sm" label="To book, the client pays" value={b.by} onChange={v => onBooking(v)}
+              options={[{ id: 'initiation', label: 'Initiation fee' }, { id: 'd1', label: `${b.code} directly` }]} />}
+        {b.by === 'initiation' && (
+          <>
+            <input aria-label="Initiation fee to book" key={`fee-${b.fee}`} defaultValue={b.fee.toLocaleString('en-IN')} disabled={locked || !onBooking} inputMode="numeric"
+              onBlur={e => { const v = Math.max(0, Math.round(digits(e.target.value))); if (v > 0 && v !== b.fee) onBooking?.('initiation', v); }}
+              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+              className="w-24 px-2 py-1 rounded-lg border border-slate-300 font-bold text-right tabular-nums disabled:bg-slate-50" />
+            <span className="text-[11px] text-slate-400">adjusted against {b.code}</span>
+          </>
+        )}
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-xs flex-wrap">
+        <label htmlFor="deal-ret" className="text-slate-600">Initiation fee already paid</label>
         <input id="deal-ret" key={s.initiationFee} defaultValue={s.initiationFee.toLocaleString('en-IN')} disabled={locked} inputMode="numeric"
           onBlur={e => { const v = Math.max(0, Math.round(digits(e.target.value))); if (v !== s.initiationFee) onInitiation(v); }}
           onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
           className="w-24 px-2 py-1 rounded-lg border border-slate-300 font-bold text-right tabular-nums disabled:bg-slate-50" />
-        <span className="text-[11px] text-slate-400">the Project Initiation Fee, adjusted against D1</span>
+        <span className="text-[11px] text-slate-400">as Money records it</span>
       </div>
       <div className="mt-2 rounded-xl bg-[#3D52A0]/[0.05] border border-[#3D52A0]/15 px-3 py-2 flex items-baseline justify-between gap-2">
-        <span className="text-xs text-slate-700"><b>Booking amount</b> · D1 with GST{ret ? `, less the ${inr(ret)} initiation fee` : ''}</span>
-        <b className="tabular-nums text-base" data-deal-booking>{inr(s.booking)}</b>
+        <span className="text-xs text-slate-700"><b>Booking amount</b> · {b.by === 'initiation'
+          ? `the Project Initiation Fee${b.paid ? `, less the ${inr(b.paid)} paid` : ''}; ${b.balance > 0 ? `the rest of ${b.code}, ${inr(b.balance)}, follows with ${b.code}` : `it covers ${b.code} in full`}`
+          : `${b.code} with GST${b.paid ? `, less the ${inr(Math.min(b.paid, b.d1))} initiation fee paid` : ''}`}</span>
+        <b className="tabular-nums text-base" data-deal-booking>{inr(b.amount)}</b>
       </div>
       <div className="mt-2 text-[11px] text-slate-500">
         Both schedules: <b className="text-slate-700 tabular-nums">{inr(s.total)}</b>{same ? ', the same as Client pays' : `; Client pays ${inr(clientPays)}`}

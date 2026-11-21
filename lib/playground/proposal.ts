@@ -33,7 +33,7 @@ import { clampDays } from './deal';
 
 /* ───────────────────────────── the pages and their order ───────────────────────────── */
 
-export type PageKey = 'cover' | 'sum' | 'brief' | 'how' | 'home' | 'items' | 'sep' | 'mat' | 'inv' | 'next' | 'annex';
+export type PageKey = 'cover' | 'sum' | 'brief' | 'how' | 'home' | 'items' | 'sep' | 'mat' | 'inv' | 'next' | 'annex' | 'studio';
 
 /** The lead profile's main concerns: each shapes the page order. */
 export const CONCERNS = ['Itemized Costs', 'Overall Budget', 'Timeline', 'Design Details', 'Trust'] as const;
@@ -50,7 +50,8 @@ export function pageOrder(concern: string | null | undefined, summary: boolean):
     : concern === 'Trust' ? ['cover', 'sum', 'how', 'brief', 'home', 'items', 'sep', 'mat', 'inv', 'next', 'annex']
     : concern === 'Design Details' ? ['cover', 'sum', 'brief', 'how', 'home', 'mat', 'items', 'sep', 'inv', 'next', 'annex']
     : ['cover', 'sum', 'brief', 'how', 'home', 'items', 'sep', 'mat', 'inv', 'next', 'annex'];
-  return summary ? order : order.filter(k => k !== 'sum');
+  /* The studio, from Studio settings, always closes the proposal. */
+  return [...(summary ? order : order.filter(k => k !== 'sum')), 'studio'];
 }
 
 /* ───────────────────────────── room by room ───────────────────────────── */
@@ -282,6 +283,13 @@ export interface AnnexInput {
   issued: Date;
   /** The programme the proposal's timeline states (lib/playground/brief proposalTimeline): clause 8 states the same days. */
   programme?: { siteDays: number; designDays: number; civilDays: number };
+  /**
+   * How the client books (lib/playground/deal bookingOf): with the Project
+   * Initiation Fee, or D1 directly. Booked with D1 and no fee paid, the
+   * initiation-fee wording (clause 4's sentence, clause 5) does not apply.
+   * Absent: the fee applies, as before.
+   */
+  booking?: { initiation: boolean; code: string };
 }
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -310,6 +318,9 @@ export function annexOf(a: AnnexInput): PdfAnnexSection[] {
   const tokens = { companyName: a.studioName, gstRate: String(a.gstRate), designFee: inr(a.fee), executionValue: inr(a.after), initiationFee: inr(a.initiationFee || STANDARD_INITIATION_FEE) };
   /* A clause written with its own ✕ or bullet (the booklet draws those by CSS) is printed without it: the list draws its own. */
   const fill = (list: { text: string }[]) => list.map(c => fillClause(c.text, tokens).replace(/^\s*[✕×•·-]\s*/, ''));
+  const fee = a.booking ? a.booking.initiation : true;
+  /* Booked with D1 directly: no sentence about an initiation fee adjusted against it. */
+  const payment = fee ? x.paymentTerms : x.paymentTerms.filter(c => !/\{\{initiationFee\}\}|initiation fee/i.test(c.text));
   const civil = hasCivilWork((a.boq || []).map(l => ({ ...l, name: resolveBoqLine(l, a.bankMap).name, cat: a.bankMap.get(l.bankId)?.cat })));
   const actuals = (a.boq || []).some(l => l.boqStatus === 'as_actuals' || l.boqStatus === 'client_procured');
   return [
@@ -320,8 +331,10 @@ export function annexOf(a: AnnexInput): PdfAnnexSection[] {
     ] },
     { n: 2, title: 'Commercial summary', table: [['The work, after offers', a.after], ['Design fee', a.fee], [`GST at ${a.gstRate}%`, a.gst], ['Total', a.total]] },
     { n: 3, title: 'Taxes', ordered: true, items: fill(x.taxes) },
-    { n: 4, title: 'Payment terms', ordered: true, items: fill(x.paymentTerms) },
-    { n: 5, title: 'Project initiation fee', pair: { a: ['Covered by the fee', fill(x.initiationCovered)], b: ['Not covered by the fee', fill(x.initiationNotCovered)] } },
+    { n: 4, title: 'Payment terms', ordered: true, items: fill(payment) },
+    fee
+      ? { n: 5, title: 'Project initiation fee', pair: { a: ['Covered by the fee', fill(x.initiationCovered)], b: ['Not covered by the fee', fill(x.initiationNotCovered)] } }
+      : { n: 5, title: 'Project initiation fee', text: `None. You book with ${a.booking?.code || 'D1'}, the first payment of the design fee, directly.` },
     { n: 6, title: 'Scope, quantities and variations', ordered: true, items: [
       ...fill(x.scope),
       ...(actuals ? ['Items listed under “Bought by you, and at actuals” are not in the total. Items at actuals are paid by you to the vendor at actual cost; their figures are estimates.'] : []),

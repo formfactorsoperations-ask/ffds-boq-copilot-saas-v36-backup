@@ -14,7 +14,7 @@ import {
   offerDiscount, staleOffer, refreshedOffer, specialAmount,
   type OfferDiscount, type ScopeSplit, type SplitLine, type ScopePart, type SpecialContext,
 } from '../offers';
-import { validityDaysOf, validUntil } from '../annexure';
+import { validityDaysOf, validUntil, STANDARD_INITIATION_FEE } from '../annexure';
 import { DEFAULT_FINANCIALS } from '../paymentSchedule';
 
 /** The longest a proposal may be held open for, in days. */
@@ -132,4 +132,62 @@ export function withSpecial(discounts: OfferDiscount[], tierId: string, target: 
   const amount = specialAmount(target, { ...special, others });
   if (amount === null) return null;
   return [...others, offerDiscount(newId(), { kind: 'special', target: Math.round(target), tierId }, split, { ...special, others })];
+}
+
+/* ───────────────────────────── how the client books ───────────────────────────── */
+
+export type BookWith = 'initiation' | 'd1';
+
+export interface BookingTerms {
+  by: BookWith;
+  /** What the client pays to book. */
+  amount: number;
+  /** D1, the design fee's first stage, with GST. */
+  d1: number;
+  /** D1's code ("D1") and when it falls due. */
+  code: string;
+  trigger: string;
+  /** The Project Initiation Fee asked for (when booking with it). */
+  fee: number;
+  /** The initiation fee Money records as already paid. */
+  paid: number;
+  /** D1 after the initiation fee: due at D1's own stage. */
+  balance: number;
+  /** An initiation fee is part of this deal (asked for, or already paid): Annexure A's clause 5 applies. */
+  initiation: boolean;
+}
+
+/**
+ * How the client books, as Ops decides it on the proposal (proposal.booking):
+ *
+ *   initiation  the Project Initiation Fee (₹4,999 unless Ops sets another),
+ *               adjusted against D1; the rest of D1 is due at D1's own stage.
+ *   d1          D1 directly, less any initiation fee already paid (as before).
+ *
+ * The schedule is Money's (scheduleFor): D1 and the fee already paid come from it.
+ */
+export function bookingOf(
+  proposal: ProposalRecord | null | undefined,
+  schedule: { design: { stages: { code?: string; trigger?: string; amount: number }[] }; initiationFee: number },
+): BookingTerms {
+  const by: BookWith = proposal?.booking?.by === 'initiation' ? 'initiation' : 'd1';
+  const first = schedule.design.stages[0];
+  const d1 = Math.max(0, Math.round(first?.amount || 0));
+  const paid = Math.max(0, Math.round(schedule.initiationFee || 0));
+  const code = first?.code || 'D1';
+  const trigger = String(first?.trigger || '').trim();
+  if (by === 'initiation') {
+    const asked = Number(proposal?.booking?.fee);
+    const fee = Math.max(0, Math.round(Number.isFinite(asked) && asked > 0 ? asked : paid || STANDARD_INITIATION_FEE));
+    return { by, amount: Math.max(0, fee - paid), d1, code, trigger, fee, paid, balance: Math.max(0, d1 - fee), initiation: true };
+  }
+  return { by, amount: Math.max(0, d1 - paid), d1, code, trigger, fee: 0, paid, balance: 0, initiation: paid > 0 };
+}
+
+/** The project with how its client books (Ops' choice on the proposal). */
+export function withBooking(prev: ProjectContext, by: BookWith, fee?: number): ProjectContext {
+  const was = prev.proposal?.booking;
+  const keep = fee ?? (was?.by === 'initiation' ? was.fee : undefined);
+  const booking = by === 'initiation' ? { by, ...(keep && keep > 0 ? { fee: Math.round(keep) } : {}) } : { by };
+  return { ...prev, proposal: { ...(prev.proposal || {}), booking } };
 }

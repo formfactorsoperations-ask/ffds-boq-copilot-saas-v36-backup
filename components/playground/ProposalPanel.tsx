@@ -6,7 +6,11 @@ import type { MaterialSpecsBank } from '../../lib/materialSpecs';
 import { gradeOf } from '../../lib/lineSpecs';
 import { specTable } from '../../lib/playground/proposal';
 import { issueProposal } from '../../lib/playground/proposal';
-import { proposalValidity } from '../../lib/playground/deal';
+import { proposalValidity, bookingOf, withBooking, type BookWith } from '../../lib/playground/deal';
+import { scheduleFor } from '../../lib/paymentSchedule';
+import { isPlaygroundTier } from '../../lib/playground/pricing';
+import { playgroundTierSummary } from '../../lib/playground/versions';
+import { inr } from './playgroundUi';
 import type { Journey } from '../../lib/playground/meeting';
 import ProposalPdf, { type PriceDetail } from './ProposalPdf';
 import MeetingView from './MeetingView';
@@ -65,6 +69,12 @@ export default function ProposalPanel({ ctx, setCtx, tier, tiers, bankMap, specB
     catch (e: any) { setNote({ ok: false, t: `The portal was not updated: ${e?.message || e}` }); }
   });
   const validity = proposalValidity(ctx, termsSettings, Date.now(), tier.id);
+  /* How the client books, as Ops decides it: the initiation fee, or D1 directly. The PDF's "To book" and Annexure A follow it. */
+  const booking = useMemo(() => {
+    const summary = isPlaygroundTier(tier) ? playgroundTierSummary(tier, bankMap, ctx) : tier.summary;
+    return bookingOf(ctx.proposal, scheduleFor(ctx, { tierSummary: summary }, { paymentStructure }));
+  }, [ctx, tier, bankMap, paymentStructure]);
+  const setBooking = (by: BookWith) => setCtx(prev => withBooking(prev, by));
 
   return (
     <div className="space-y-4 no-print" aria-label="Client proposal, built from the Playground" role="region">
@@ -101,6 +111,16 @@ export default function ProposalPanel({ ctx, setCtx, tier, tiers, bankMap, specB
           <Segmented size="sm" label="Price detail" value={detail} onChange={setDetail}
             options={[{ id: 'package', label: 'Package only' }, { id: 'rooms', label: 'Room totals' }, { id: 'lines', label: 'Every line' }]} />
           <span>One switch for how much price detail the client sees, in the PDF and the meeting.</span>
+        </div>
+        <div className="mt-3 flex items-center gap-3 flex-wrap text-xs text-slate-600">
+          <span className={LABEL}>To book</span>
+          <Segmented<BookWith> size="sm" label="To book, the client pays" value={booking.by} onChange={setBooking}
+            options={[{ id: 'initiation', label: 'Initiation fee' }, { id: 'd1', label: `${booking.code} directly` }]} />
+          <span data-booking-says>
+            {booking.by === 'initiation'
+              ? <>The client books with the Project Initiation Fee, <b className="text-slate-800 tabular-nums">{inr(booking.amount)}</b>; {booking.balance > 0 ? `the rest of ${booking.code}, ${inr(booking.balance)}, follows with ${booking.code}` : `it covers ${booking.code} in full`}. Set the amount in the Deal lens.</>
+              : <>The client books with {booking.code}, <b className="text-slate-800 tabular-nums">{inr(booking.amount)}</b>{booking.paid ? ` (${inr(booking.d1)} less the ${inr(booking.paid)} initiation fee paid)` : ''}.</>}
+          </span>
         </div>
       </section>
 

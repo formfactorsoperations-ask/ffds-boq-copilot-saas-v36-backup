@@ -3,7 +3,7 @@ import {
   scopeSplit, splitPricingOf, offerDiscount, offerValue, offerName, offerWhy, staleOffer, dealFor, specialAmount, complimentaryKeys,
   type OfferDiscount,
 } from '../../lib/offers';
-import { proposalValidity, withValidDays, followBoq, withComplimentary, withSpecial, clampDays, withDiscounts, withInitiationFee } from '../../lib/playground/deal';
+import { proposalValidity, withValidDays, followBoq, withComplimentary, withSpecial, clampDays, withDiscounts, withInitiationFee, bookingOf, withBooking } from '../../lib/playground/deal';
 import { PLAYGROUND_PRICING, playgroundTotals, measureOfBoq, docPricingOf } from '../../lib/playground/pricing';
 import { playgroundTierSummary } from '../../lib/playground/versions';
 import { scheduleFor, gstTermsOf } from '../../lib/paymentSchedule';
@@ -171,5 +171,33 @@ describe('writing the offers', () => {
     // A project that chose no GST on the work keeps that.
     const off: any = { ...bare, financials: { executionGstEnabled: false, billablePercent: 30 } };
     expect(withDiscounts(off, []).financials).toEqual({ executionGstEnabled: false, billablePercent: 30, discounts: [] });
+  });
+});
+
+describe('how the client books (Ops decides it on the proposal)', () => {
+  const sched = (d1: number, paid = 0) => ({ design: { stages: [{ code: 'D1', trigger: 'On signing', amount: d1 }] }, initiationFee: paid });
+
+  it('D1 directly, as before: D1 less any initiation fee already paid', () => {
+    expect(bookingOf(undefined, sched(29500))).toMatchObject({ by: 'd1', amount: 29500, initiation: false });
+    expect(bookingOf({ booking: { by: 'd1' } }, sched(29500, 4999))).toMatchObject({ by: 'd1', amount: 24501, initiation: true });
+  });
+
+  it('the initiation fee: ₹4,999 unless Ops sets another, adjusted against D1, the rest due with D1', () => {
+    expect(bookingOf({ booking: { by: 'initiation' } }, sched(29500))).toMatchObject({ by: 'initiation', amount: 4999, fee: 4999, balance: 24501, trigger: 'On signing', initiation: true });
+    expect(bookingOf({ booking: { by: 'initiation', fee: 10000 } }, sched(29500))).toMatchObject({ amount: 10000, balance: 19500 });
+    // Already paid: nothing more to book with; the fee paid is what was asked.
+    expect(bookingOf({ booking: { by: 'initiation' } }, sched(29500, 4999))).toMatchObject({ amount: 0, fee: 4999, balance: 24501 });
+    // A fee over D1 covers it.
+    expect(bookingOf({ booking: { by: 'initiation' } }, sched(3000))).toMatchObject({ amount: 4999, balance: 0 });
+  });
+
+  it('is saved on the proposal; switching back to the fee keeps the amount Ops set', () => {
+    const c0: any = { proposal: { validDays: 21 } };
+    let c = withBooking(c0, 'initiation', 7500);
+    expect(c.proposal).toEqual({ validDays: 21, booking: { by: 'initiation', fee: 7500 } });
+    c = withBooking(c, 'initiation');
+    expect(c.proposal!.booking).toEqual({ by: 'initiation', fee: 7500 });
+    c = withBooking(c, 'd1');
+    expect(c.proposal!.booking).toEqual({ by: 'd1' });
   });
 });
