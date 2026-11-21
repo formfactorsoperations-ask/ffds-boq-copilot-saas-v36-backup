@@ -130,9 +130,16 @@ export async function contextOf(request: any): Promise<Ctx> {
 }
 
 /** The version a snapshot is of: the studio's People revision, the team and policy, and the day. */
+/*
+  What a snapshot holds. Raise it whenever the snapshot gains or loses a field,
+  so a browser holding the old shape is sent the new one instead of "unchanged"
+  (21 Nov 2026: `present`, who is in for staff).
+*/
+const SNAPSHOT_SHAPE = "p1";
+
 async function versionOf(ctx: Ctx, today: string): Promise<string> {
   const meta = (await db().doc(`${base(ctx.tenantId)}/meta/state`).get()).data();
-  return `${Number(meta?.revision || 0)}.${ctx.print || ""}.${today}`;
+  return `${Number(meta?.revision || 0)}.${ctx.print || ""}.${today}.${SNAPSHOT_SHAPE}`;
 }
 
 /* Run one query per batch of IDs (`in` takes up to 30) and put the results together. */
