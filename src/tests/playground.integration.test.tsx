@@ -440,12 +440,37 @@ describe('Deal (PR P)', () => {
     expect(within(deal()).getByText(until.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))).toBeTruthy();
     const booking = () => Number(document.querySelector('[data-deal-booking]')!.textContent!.replace(/[^0-9]/g, ''));
     const b0 = booking();
-    const ret = screen.getByLabelText('Initiation fee paid');
+    const ret = screen.getByLabelText('Initiation fee already paid');
     fireEvent.change(ret, { target: { value: '1,000' } });
     fireEvent.blur(ret);
     expect(ctx.financials).toMatchObject({ initiationFeePaid: 1000, executionGstEnabled: true });
     expect(booking()).toBe(b0 - 1000);
     expect(within(screen.getByRole('region', { name: 'Payment schedule' })).getByText(/less the ₹1,000 initiation fee/)).toBeTruthy();
+  });
+
+  it('Ops decides how the client books: the ₹4,999 initiation fee, its own amount, or D1 directly', () => {
+    let ctx: any = null;
+    render(<Harness tier={PG} probeCtx={c => { ctx = c; }} />);
+    lens('Deal');
+    const pay = () => screen.getByRole('region', { name: 'Payment schedule' });
+    const booking = () => Number(document.querySelector('[data-deal-booking]')!.textContent!.replace(/[^0-9]/g, ''));
+    // As before: D1 directly.
+    expect(within(pay()).getByRole('radio', { name: 'D1 directly' }).getAttribute('aria-checked')).toBe('true');
+    const d1 = booking();
+    fireEvent.click(within(pay()).getByRole('radio', { name: 'Initiation fee' }));
+    expect(ctx.proposal.booking).toEqual({ by: 'initiation' });
+    expect(booking()).toBe(4999);
+    // Here D1 is under ₹4,999: the fee covers it in full.
+    expect(d1).toBeLessThan(4999);
+    expect(within(pay()).getByText(/it covers D1 in full/)).toBeTruthy();
+    const fee = within(pay()).getByLabelText('Initiation fee to book');
+    fireEvent.change(fee, { target: { value: '9,999' } });
+    fireEvent.blur(fee);
+    expect(ctx.proposal.booking).toEqual({ by: 'initiation', fee: 9999 });
+    expect(booking()).toBe(9999);
+    fireEvent.click(within(pay()).getByRole('radio', { name: 'D1 directly' }));
+    expect(ctx.proposal.booking).toEqual({ by: 'd1' });
+    expect(booking()).toBe(d1);
   });
 
   it('an issued proposal past its date shows as expired', () => {

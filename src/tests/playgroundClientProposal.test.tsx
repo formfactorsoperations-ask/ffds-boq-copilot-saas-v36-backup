@@ -197,3 +197,23 @@ describe('the studio on the proposal, from Studio settings', () => {
     expect(d.textContent).not.toContain('hello@interiorops.com');
   });
 });
+
+describe('how the client books, on the proposal', () => {
+  it('Ops picks the initiation fee or D1 on Client Proposal; the PDF’s To book and Annexure A follow', async () => {
+    let ctx: any = null;
+    render(<Harness probe={c => { ctx = c; }} />);
+    const toBook = () => [...pdf().querySelectorAll('[data-pdf-page]')].map(p => p.textContent || '').find(t => /To book:/.test(t))!;
+    // As before: D1 directly.
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' })); });
+    expect(toBook()).toMatch(/To book: D1, ₹[\d,]+, which is \d+% of the design fee with GST/);
+    expect(pdf().textContent).toContain('None. You book with D1, the first payment of the design fee, directly.');
+    fireEvent.click(within(pdf()).getByRole('button', { name: 'Close' }));
+    fireEvent.click(within(panel()).getByRole('radio', { name: 'Initiation fee' }));
+    expect(ctx.proposal.booking).toEqual({ by: 'initiation' });
+    expect(panel().querySelector('[data-booking-says]')!.textContent).toMatch(/Project Initiation Fee, ₹4,999/);
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' })); });
+    expect(toBook()).toMatch(/To book: the Project Initiation Fee, ₹4,999\. It is adjusted against D1/);
+    expect(pdf().textContent).toContain('Covered by the fee');
+    expect(pdf().textContent).toMatch(/Project Initiation Fee of ₹4,999 is adjusted against the Design 1 invoice/);
+  });
+});

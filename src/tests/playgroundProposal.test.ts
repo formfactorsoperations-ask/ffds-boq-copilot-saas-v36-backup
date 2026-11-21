@@ -114,6 +114,18 @@ describe('Annexure A', () => {
     // Items at actuals or bought by the client are named in the scope.
     expect(a[5].items!.some(x => /Bought by you, and at actuals/.test(x))).toBe(true);
   });
+  it('booked with D1 directly and no fee paid, no initiation-fee wording; booked with the fee, its amount', () => {
+    const args = { terms: null, studioName: 'F', gstRate: 18, after: 1, fee: 1, gst: 1, total: 3, boq, bankMap, validDays: 15, issued };
+    const d1 = annexOf({ ...args, initiationFee: 0, booking: { initiation: false, code: 'D1' } });
+    expect(d1[3].items!.some(x => /initiation fee/i.test(x))).toBe(false);
+    expect(d1[4]).toMatchObject({ n: 5, title: 'Project initiation fee', text: 'None. You book with D1, the first payment of the design fee, directly.' });
+    expect(d1[4].pair).toBeUndefined();
+    const fee = annexOf({ ...args, initiationFee: 9999, booking: { initiation: true, code: 'D1' } });
+    expect(fee[3].items!.some(x => /Project Initiation Fee of ₹9,999 is adjusted against the Design 1 invoice/.test(x))).toBe(true);
+    expect(fee[4].pair).toBeTruthy();
+    // Without a booking (older callers), as before.
+    expect(a[4].pair).toBeTruthy();
+  });
   it('the exclusions and assumptions follow the BOQ', () => {
     expect(exclusionsOf(boq, bankMap)).toContain('Flooring, tiling and stone work');
     const args = { terms: null, studioName: 'F', gstRate: 18, after: 1, fee: 1, gst: 1, total: 3, initiationFee: 0, bankMap, validDays: 15, issued };

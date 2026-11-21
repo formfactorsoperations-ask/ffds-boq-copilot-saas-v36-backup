@@ -7,7 +7,7 @@ import { scopeSplit, splitPricingOf, dealFor, complimentaryKeys, type OfferDisco
 import { gstTermsOf, scheduleFor, type ScheduleStage } from '../../lib/paymentSchedule';
 import { playgroundTierSummary } from '../../lib/playground/versions';
 import { isPlaygroundTier } from '../../lib/playground/pricing';
-import { proposalValidity, discountsOf } from '../../lib/playground/deal';
+import { proposalValidity, discountsOf, bookingOf } from '../../lib/playground/deal';
 import { optionChains, latestOf } from '../../lib/optionChains';
 import { hasCivilWork } from '../../lib/annexure';
 import type { MaterialSpecsBank } from '../../lib/materialSpecs';
@@ -205,6 +205,8 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
     const deal = dealFor(summary, discounts, terms);
     const schedule = scheduleFor(ctx, { tierSummary: summary }, { paymentStructure });
     const validity = proposalValidity(ctx, termsSettings, Date.now(), tier.id);
+    /* How the client books, as Ops set it: the initiation fee, or D1 directly. */
+    const booking = bookingOf(ctx.proposal, schedule);
     const free = complimentaryKeys(discounts.filter(d => d.basis?.tierId === tier.id));
     const items = itemsOf({ boq, bankMap, pricing, rooms: ctx.rooms || [], free, specBank });
     const options = optionChains(tiers).map(latestOf).map(t => (t.id === tier.id ? tier : t));
@@ -214,20 +216,29 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
     /* From booking (the day the proposal holds until) to the keys (PR B). */
     const timeline = proposalTimeline({ start: validity.until, programme, config: ctx.config, civil, civilDays: civilDaysOf(termsSettings), target: (ctx as any).targetHandoverDate });
     return {
-      summary, deal, schedule, validity, items, options: optionRows, offers, civil, timeline,
+      summary, deal, schedule, validity, booking, items, options: optionRows, offers, civil, timeline,
       separate: separatePage(boq, bankMap),
       materials: materialsPage(specBank, options, tier.id),
       home: briefHome(ctx),
       answers: answersTo(ctx.clientBrief, boq, bankMap, ctx.rooms || []),
       annex: annexOf({
         terms: termsSettings, studioName, gstRate: terms.rate, after: Math.max(0, deal.sell - deal.execOff), fee: deal.fee - deal.designOff, gst: deal.gst, total: deal.clientPays,
-        initiationFee: schedule.initiationFee, boq, bankMap, validDays: validity.days, issued: validity.from,
+        initiationFee: booking.by === 'initiation' ? booking.fee : schedule.initiationFee, boq, bankMap, validDays: validity.days, issued: validity.from,
+        booking: { initiation: booking.initiation, code: booking.code },
         programme: { siteDays: timeline.siteDays, designDays: timeline.designDays, civilDays: timeline.civilDays },
       }),
     };
   }, [tier, tiers, ctx, bankMap, specBank, termsSettings, paymentStructure, studioName, programme]);
 
-  const { deal, schedule: sc, validity: v, items } = m;
+  const { deal, schedule: sc, validity: v, items, booking: bk } = m;
+  /* The booking, as Ops set it on the proposal (Deal lens, or Client Proposal → To book). */
+  const dueWith = bk.trigger ? `with ${bk.code} (${bk.trigger.replace(/\.$/, '').replace(/^./, c => c.toLowerCase())})` : `with ${bk.code}`;
+  const rest = bk.balance > 0 ? `: the rest of ${bk.code}, ${inr(bk.balance)}, is due ${dueWith}` : `, and covers it in full`;
+  const bookLine = bk.by === 'initiation'
+    ? (bk.amount > 0
+      ? `the Project Initiation Fee, ${inr(bk.amount)}${bk.paid > 0 ? ` (${inr(bk.fee)} less the ${inr(bk.paid)} you have paid)` : ''}. It is adjusted against ${bk.code}${rest}`
+      : `the Project Initiation Fee of ${inr(bk.fee)}, which you have paid. It is adjusted against ${bk.code}${rest}`)
+    : `${bk.code}, ${inr(bk.amount)}${bk.paid > 0 ? ` (${inr(bk.d1)} less the ${inr(bk.paid)} Project Initiation Fee you have paid)` : `, which is ${sc.design.stages[0]?.pct || 0}% of the design fee with GST`}`;
   const project = ctx.name || 'Your home';
   const foot = `${studioLabel} · ${project} · First proposal`;
   const after = Math.max(0, deal.sell - deal.execOff);
@@ -493,7 +504,7 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
             <tr className="border-t-2 border-slate-300"><td colSpan={3} className="py-1.5 font-bold text-slate-800 text-[12px]">Together</td><td className="py-1.5 text-right tabular-nums font-black text-[13px]">{inr(sc.total)}</td></tr>
           </tbody>
         </table>
-        <div className="mt-3 rounded-md bg-[#3D52A0]/[0.06] px-3 py-2 text-[12px] text-slate-700"><b>To book:</b> {sc.design.stages[0]?.code || 'D1'}, {inr(sc.booking)}{sc.initiationFee > 0 ? ` (${inr(sc.design.stages[0]?.amount || 0)} less the ${inr(sc.initiationFee)} Project Initiation Fee you have paid)` : `, which is ${sc.design.stages[0]?.pct || 0}% of the design fee with GST`}. Your portal login follows the booking.</div>
+        <div className="mt-3 rounded-md bg-[#3D52A0]/[0.06] px-3 py-2 text-[12px] text-slate-700"><b>To book:</b> {bookLine}. Your portal login follows the booking.</div>
         <p className="mt-2 text-[11px] text-slate-500">Design + PMC or Design only: the design-fee schedule applies and you pay your contractors directly; any PMC fee is set out in the agreement.</p>
       </div>
       <p className="mt-2 text-[11px] text-slate-400">Sizes are allowances from the brief. Final quantities follow site measurement and the approved design, in a Detailed BOQ you approve before work starts. Terms are in Annexure A.</p>
