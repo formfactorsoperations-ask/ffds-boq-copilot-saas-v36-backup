@@ -80,7 +80,8 @@ export interface BankCommandBarProps {
 
 /* ── A figure ───────────────────────────────────────────────────────────── */
 
-const Tile: React.FC<{
+/** One figure above the work: an icon tile, a label, a number that counts up and a line. Material specs uses it too. */
+export const Tile: React.FC<{
   icon: React.ComponentType<any>;
   tone?: RingTone;
   label: string;

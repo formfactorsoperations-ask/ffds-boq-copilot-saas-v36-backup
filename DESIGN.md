@@ -890,6 +890,25 @@ And then "the same for room kits and the modals":
   height. Add an item is a search that stays open so several go in; deleting a kit asks on the card.
 - All of these files are at zero in the design guard.
 
+And "the same for material specs" (`components/materialSpecs/`). The screen keeps the approved mockup's
+three columns (families, materials, the picked material); this adds to it:
+
+- Four figures above the work, the Item bank's tiles: Materials, Priced as ranges, In an item's recipe,
+  Revised.
+- The family rail's brand pill glides to the family picked (`layoutId`). A family holding a change that
+  is not saved carries an amber dot.
+- Search looks in every family. While searching, the middle column is "Search results", each card names
+  its family, the rail shows how many match in each, and picking a family ends the search. `/` puts the
+  cursor in search and Esc empties it; nothing matching is an `EmptyState` with Clear search.
+- A change that is not saved stays with its material while another is looked at, and its card says
+  "Not saved". Picking another material used to discard it silently.
+- Material cards lift (`pp-lift`), take the brand border and tip their swatch on hover; a family or a
+  search arrives with `hud-swap`. Saving a version draws a `DoneTick`. History rows arrive one after
+  another.
+- The recipe drawer closes on Esc, says "Not saved yet" in its footer once something changed, and the
+  sentence a changed part alters arrives again (`hud-swap`). Its scrim is the modal navy.
+- Still at zero in the design guard, as "BOQ Playground" requires.
+
 ### Notifications motion (approved 22 Oct 2026)
 
 The owner chose four of the fifteen notification patterns in the round-two

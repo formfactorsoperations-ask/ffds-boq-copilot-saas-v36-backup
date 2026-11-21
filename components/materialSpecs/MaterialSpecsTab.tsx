@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Check, Lock, Info, X } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import { Search, Check, Lock, Info, X, Layers, SwatchBook, Package, History } from 'lucide-react';
 import { Button, Chip, EmptyState, LABEL, INPUT } from '../ui/kit';
 import { useOrg } from '../../contexts/OrgContext';
 import type { Item, FullProjectData } from '../../types';
@@ -10,6 +11,8 @@ import {
 import { recipeOf, sentTierIds } from '../../lib/lineSpecs';
 import type { MaterialSpecsState } from './useMaterialSpecs';
 import Swatch from './Swatch';
+import { Tile } from '../bank/BankCommandBar';
+import { DoneTick, listV } from '../people/PeopleBits';
 import '../playground/playground.css';
 
 /*
@@ -27,6 +30,11 @@ import '../playground/playground.css';
   A material priced as a range (PR M) shows the range: how many shades it
   holds, the examples clients see, and what it holds. The Owner adds or removes
   an example, which saves as a new version like any other change.
+
+  Round two (DESIGN.md "Item bank motion", Material specs): four figures above
+  the work; search looks in every family, not only the open one; and a change
+  that has not been saved stays with its material while another is looked at,
+  where picking another material used to throw it away without a word.
 */
 
 const GRADE_NAME: Record<Grade, string> = { E: 'Essential', C: 'Comfort', P: 'Premium' };
@@ -67,18 +75,53 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
   const [famId, setFamId] = useState<string>(bank.families[0]?.id || '');
   const [selMat, setSelMat] = useState<string>('');
   const [q, setQ] = useState('');
-  const [draft, setDraft] = useState<{ id: string; words: string; brand: string; note: string; factor: string; range?: MaterialRange } | null>(null);
+  /* What has been typed and not saved, by material: looking at another material keeps it. */
+  type Draft = { id: string; words: string; brand: string; note: string; factor: string; range?: MaterialRange };
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const searchRef = useRef<HTMLInputElement>(null);
   const [eg, setEg] = useState<{ name: string; hex: string; code: string } | null>(null);
   const [saved, setSaved] = useState<{ id: string; v: number } | null>(null);
   const [adding, setAdding] = useState(false);
   const [newMat, setNewMat] = useState({ name: '', words: '', brand: '', grades: [] as Grade[] });
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ tone: 'good' | 'bad'; text: string } | null>(null);
-  useEffect(() => { if (addSignal) { setAdding(true); setDraft(null); setSaved(null); } }, [addSignal]);
+  useEffect(() => { if (addSignal) { setAdding(true); setSaved(null); } }, [addSignal]);
+
+  /* "/" puts the cursor in search, as it does in the Item bank. */
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey || !searchRef.current) return;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      e.preventDefault();
+      searchRef.current.focus();
+    };
+    document.addEventListener('keydown', key);
+    return () => document.removeEventListener('keydown', key);
+  }, []);
 
   const fam = bank.families.find(f => f.id === famId) || bank.families[0];
-  const list = (fam ? materialsIn(bank, fam.id) : []).filter(m => !q.trim() || `${m.name} ${currentVersion(bank, m.id)?.words || ''}`.toLowerCase().includes(q.trim().toLowerCase()));
-  const mat = bank.materials.find(m => m.id === selMat && m.fam === fam?.id) || list[0];
+  /* A search looks in every family: the material wanted is often not in the one that is open. */
+  const needle = q.trim().toLowerCase();
+  const searching = !!needle;
+  const found = (m: Material) => `${m.name} ${currentVersion(bank, m.id)?.words || ''} ${currentVersion(bank, m.id)?.brand || ''}`.toLowerCase().includes(needle);
+  const list = searching ? bank.materials.filter(found) : fam ? materialsIn(bank, fam.id) : [];
+  const mat = bank.materials.find(m => m.id === selMat && (searching || m.fam === fam?.id)) || list[0];
+  /* The family of the material in the panel, which while searching need not be the open one. */
+  const matFam = bank.families.find(f => f.id === mat?.fam) || fam;
+  const famName = (id: string) => bank.families.find(f => f.id === id)?.name || '';
+
+  /* The figures above the work. */
+  const figures = useMemo(() => {
+    const ranges = bank.materials.map(m => currentVersion(bank, m.id)?.range).filter(Boolean) as MaterialRange[];
+    return {
+      materials: bank.materials.length,
+      families: bank.families.length,
+      ranges: ranges.length,
+      choices: ranges.reduce((a, r) => a + r.count, 0),
+      revised: bank.materials.filter(m => (currentVersion(bank, m.id)?.v || 1) > 1).length,
+    };
+  }, [bank]);
 
   /* Where each material is used: items whose recipe names it, and BOQ lines that do. */
   const usage = useMemo(() => {
@@ -100,6 +143,14 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
     return out;
   }, [items, projects, bank]);
   const use = (id: string) => usage.get(id) || { items: [], lines: 0, projects: 0 };
+  const usedCount = useMemo(() => bank.materials.filter(m => (usage.get(m.id)?.items.length || 0) > 0).length, [bank, usage]);
+  /* Whether a material has words, a brand, a cost or examples typed and not yet saved. */
+  const unsaved = (id: string) => {
+    const x = drafts[id];
+    const c = currentVersion(bank, id);
+    if (!x || !c) return false;
+    return x.words !== c.words || x.brand !== (c.brand || '') || Number(x.factor) !== Number(c.costFactor ?? 1) || !sameRange(x.range, c.range);
+  };
 
   const persist = async (next: MaterialSpecsBank) => {
     setBusy(true); setNote(null);
@@ -108,11 +159,18 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
 
   if (specs.error) return <EmptyState icon={Lock} title="The Material specs bank could not be read" text={specs.error} />;
 
-  const pick = (m: Material) => { setSelMat(m.id); setDraft(null); setSaved(null); setAdding(false); setNote(null); setEg(null); };
+  const pick = (m: Material) => { setSelMat(m.id); setSaved(null); setAdding(false); setNote(null); setEg(null); };
+  const draft = mat ? drafts[mat.id] || null : null;
+  const setDraft = (next: Draft | null) => setDrafts(prev => {
+    if (!mat) return prev;
+    const all = { ...prev };
+    if (next) all[mat.id] = next; else delete all[mat.id];
+    return all;
+  });
   const cur = mat ? currentVersion(bank, mat.id) : undefined;
   const d = draft && mat && draft.id === mat.id ? draft : mat ? { id: mat.id, words: cur?.words || '', brand: cur?.brand || '', note: '', factor: String(cur?.costFactor ?? 1), range: cur?.range } : null;
   const rangeChanged = !!(d && cur && !sameRange(d.range, cur.range));
-  const changed = !!(d && cur && (d.words !== cur.words || d.brand !== (cur.brand || '') || (fam?.finish && Number(d.factor) !== Number(cur.costFactor ?? 1)) || rangeChanged));
+  const changed = !!(d && cur && (d.words !== cur.words || d.brand !== (cur.brand || '') || (matFam?.finish && Number(d.factor) !== Number(cur.costFactor ?? 1)) || rangeChanged));
   /* The range as it would be saved: an example added or removed. */
   const setExamples = (examples: MaterialRange['examples']) => { if (d?.range) { setDraft({ ...d, range: { ...d.range, examples } }); setSaved(null); } };
   const addExample = () => {
@@ -124,7 +182,7 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
 
   const saveVersion = async () => {
     if (!mat || !d) return;
-    const next = { words: d.words, brand: d.brand, note: d.note || (rangeChanged ? 'Range examples changed' : 'Words or brand changed'), ...(fam?.finish ? { costFactor: Number(d.factor) || 1 } : {}), ...(rangeChanged ? { range: d.range } : {}) };
+    const next = { words: d.words, brand: d.brand, note: d.note || (rangeChanged ? 'Range examples changed' : 'Words or brand changed'), ...(matFam?.finish ? { costFactor: Number(d.factor) || 1 } : {}), ...(rangeChanged ? { range: d.range } : {}) };
     const problem = newVersionProblem(bank, mat.id, next);
     if (problem) { setNote({ tone: 'bad', text: problem }); return; }
     const v = (cur?.v || 0) + 1;
@@ -159,27 +217,41 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
   }).filter(r => r.n > 0) : [];
 
   return (
+    <div className="space-y-4">
+    {/* The figures. */}
+    <motion.div variants={listV} initial="hidden" animate="show" className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      <Tile icon={Layers} label="Materials" value={figures.materials} sub={`In ${figures.families} families`} />
+      <Tile icon={SwatchBook} label="Priced as ranges" value={figures.ranges} sub={`${figures.choices.toLocaleString('en-IN')}+ choices, one price each`} />
+      <Tile icon={Package} label="In an item's recipe" value={usedCount} sub={`${figures.materials - usedCount} not used by any item yet`} />
+      <Tile icon={History} label="Revised" value={figures.revised} sub="On version 2 or later" />
+    </motion.div>
+
     <div className="grid gap-4 grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_400px] items-start">
-      <nav className="rounded-3xl bg-white border border-slate-200 p-2 flex lg:flex-col gap-1 overflow-x-auto" aria-label="Material families">
+      <nav className="rounded-3xl bg-white border border-slate-200 p-2 flex lg:flex-col gap-1 overflow-x-auto hud-panel-in" aria-label="Material families">
         {bank.families.map(f => {
-          const on = f.id === fam?.id;
+          const on = !searching && f.id === fam?.id;
+          const inFam = materialsIn(bank, f.id);
+          const count = searching ? inFam.filter(found).length : inFam.length;
+          const waiting = inFam.some(m => unsaved(m.id));
           return (
-            <button key={f.id} type="button" onClick={() => { setFamId(f.id); setSelMat(''); setDraft(null); setSaved(null); setAdding(false); setQ(''); setEg(null); }}
+            <button key={f.id} type="button" onClick={() => { setFamId(f.id); setSelMat(''); setSaved(null); setAdding(false); setQ(''); setEg(null); }}
               aria-current={on ? 'true' : undefined}
-              className={`shrink-0 lg:w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-between gap-3 ${on ? 'bg-[#3D52A0] text-white shadow-sm hud-rail-active' : 'text-slate-700 hover:bg-slate-100'}`}>
-              <span className="whitespace-nowrap">{f.name}</span>
-              <span className={`text-[11px] tabular-nums ${on ? 'text-white/80' : 'text-slate-400'}`}>{materialsIn(bank, f.id).length}</span>
+              className={`group relative shrink-0 lg:w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-between gap-3 transition-colors ${on ? 'text-white' : searching && count === 0 ? 'text-slate-400 hover:bg-slate-100' : 'text-slate-700 hover:bg-slate-100'}`}>
+              {/* The brand pill glides to the family picked. */}
+              {on && <motion.span layoutId="ms-family" className="absolute inset-0 rounded-xl bg-[#3D52A0] shadow-sm" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
+              <span className="relative whitespace-nowrap flex items-center gap-1.5">{f.name}{waiting && <span title="Has a change that is not saved" className={`w-1.5 h-1.5 rounded-full ${on ? 'bg-white' : 'bg-amber-500'}`} />}</span>
+              <span className={`relative text-[11px] tabular-nums ${on ? 'text-white/80' : 'text-slate-400'}`}>{count}</span>
             </button>
           );
         })}
       </nav>
 
       {fam && (
-        <section key={fam.id} className="rounded-3xl bg-white border border-slate-200 p-4 min-w-0 hud-swap">
+        <section className="rounded-3xl bg-white border border-slate-200 p-4 min-w-0 hud-panel-in">
           <div className="flex items-center justify-between gap-2 px-1 mb-3 flex-wrap">
-            <div>
-              <h2 className="font-bold text-slate-800">{fam.name}</h2>
-              <p className="text-xs text-slate-500">{(() => {
+            <div className="min-w-0">
+              <h2 className="font-bold text-slate-800">{searching ? 'Search results' : fam.name}</h2>
+              <p className="text-xs text-slate-500">{searching ? `${list.length} of ${bank.materials.length} materials match, across every family` : (() => {
                 const all = materialsIn(bank, fam.id);
                 const rs = all.map(m => currentVersion(bank, m.id)?.range).filter(Boolean) as MaterialRange[];
                 return rs.length
@@ -187,12 +259,19 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
                   : `${all.length} materials · each line in a BOQ names one of these, at a version`;
               })()}</p>
             </div>
-            <div className="relative w-56">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" aria-hidden />
-              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search materials…" aria-label="Search materials" className={`${INPUT} !pl-8 !py-1.5`} />
+            <div className="relative w-64 max-w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" aria-hidden />
+              <input ref={searchRef} value={q} onChange={e => setQ(e.target.value)} placeholder="Search every family" aria-label="Search materials"
+                onKeyDown={e => { if (e.key === 'Escape' && q) { e.stopPropagation(); setQ(''); } }} className={`${INPUT} !pl-8 !pr-8 !py-1.5`} />
+              {q ? (
+                <button type="button" onClick={() => { setQ(''); searchRef.current?.focus(); }} aria-label="Clear search" className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100"><X className="w-3.5 h-3.5" aria-hidden /></button>
+              ) : (
+                <kbd aria-hidden className="hidden sm:block absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 rounded border border-slate-200 text-[10px] font-bold text-slate-400 pointer-events-none">/</kbd>
+              )}
             </div>
           </div>
-          <div className="grid sm:grid-cols-2 gap-3">
+          {/* Keyed on what is listed, so a family or a search arrives rather than cutting in. */}
+          <div key={searching ? 'search' : fam.id} className="grid sm:grid-cols-2 gap-3 hud-swap">
             {list.map((m, i) => {
               const h = currentVersion(bank, m.id);
               const u = use(m.id);
@@ -200,26 +279,30 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
               const factor = Number(h?.costFactor ?? 1);
               return (
                 <button key={m.id} type="button" onClick={() => pick(m)} aria-pressed={on}
-                  className={`hud-row-in text-left rounded-2xl border p-4 transition-colors ${on ? 'border-[#3D52A0] ring-2 ring-[#3D52A0]/20 bg-[#3D52A0]/[0.03]' : 'border-slate-200 hover:border-slate-300'}`}
-                  style={{ animationDelay: `${i * 30}ms` }}>
+                  className={`group hud-row-in pp-lift text-left rounded-2xl border p-4 transition-colors motion-safe:active:scale-[0.99] ${on ? 'border-[#3D52A0] ring-2 ring-[#3D52A0]/20 bg-[#3D52A0]/[0.03]' : 'border-slate-200 hover:border-[#3D52A0]/40'}`}
+                  style={{ animationDelay: `${Math.min(i, 11) * 30}ms` }}>
                   <div className="flex items-start gap-3">
-                    <Swatch mat={m} className="w-10 h-10 rounded-xl" />
+                    <Swatch mat={m} className="w-10 h-10 rounded-xl transition-transform duration-300 motion-safe:group-hover:scale-110 motion-safe:group-hover:-rotate-3" />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap"><span className="text-sm font-bold text-slate-800">{m.name}</span><Chip tone="brand">v{h?.v || 1}</Chip></div>
-                      <div className="text-xs text-slate-500 mt-0.5">{h?.brand}</div>
+                      <div className="flex items-center gap-2 flex-wrap"><span className="text-sm font-bold text-slate-800">{m.name}</span><Chip tone="brand">v{h?.v || 1}</Chip>{unsaved(m.id) && <Chip tone="warn">Not saved</Chip>}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{searching ? [famName(m.fam), h?.brand].filter(Boolean).join(' · ') : h?.brand}</div>
                     </div>
                   </div>
                   <p className="text-xs text-slate-600 mt-2 line-clamp-2">“{h?.words}”</p>
                   {h?.range && <RangeDots r={h.range} className="mt-2" />}
                   <div className="mt-3 flex items-center gap-2 flex-wrap">
                     {GRADES.map(g => <span key={g} className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${m.grades.includes(g) ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}>{GRADE_NAME[g]}</span>)}
-                    {fam.finish && factor !== 1 && <span className="text-[10px] font-bold text-slate-500">{factor > 1 ? '+' : '−'}{Math.round(Math.abs(factor - 1) * 100)}% on cost</span>}
+                    {bank.families.find(f => f.id === m.fam)?.finish && factor !== 1 && <span className="text-[10px] font-bold text-slate-500">{factor > 1 ? '+' : '−'}{Math.round(Math.abs(factor - 1) * 100)}% on cost</span>}
                     <span className="ml-auto text-[11px] text-slate-500 tabular-nums">{u.items.length} items · {u.lines} lines</span>
                   </div>
                 </button>
               );
             })}
-            {list.length === 0 && <p className="text-xs text-slate-500 px-1">No material in this family matches.</p>}
+            {list.length === 0 && (
+              <EmptyState icon={Search} className="sm:col-span-2" title={searching ? 'No material matches' : 'No materials in this family yet'}
+                text={searching ? 'Nothing in any family has those words in its name, wording or brand.' : undefined}
+                action={searching ? <Button size="sm" icon={X} onClick={() => setQ('')}>Clear search</Button> : undefined} />
+            )}
           </div>
         </section>
       )}
@@ -251,7 +334,7 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
               <div className="flex items-start gap-3">
                 <Swatch mat={mat} className="w-12 h-12 rounded-xl" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">{fam?.name}</div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">{matFam?.name}</div>
                   <h2 className="text-lg font-bold text-slate-800">{mat.name}</h2>
                   <div className="text-xs text-slate-500">Version {cur?.v} · {cur?.at ? `current since ${when(cur.at)}` : 'the studio standard'} · {use(mat.id).items.length} items, {use(mat.id).lines} BOQ lines in {use(mat.id).projects} projects</div>
                 </div>
@@ -294,7 +377,7 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
             <div className="p-5 space-y-4">
               {saved && saved.id === mat.id && (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 hud-panel-in">
-                  <div className="text-sm font-bold text-emerald-800 flex items-center gap-1.5"><Check className="w-4 h-4" aria-hidden />Saved as version {saved.v}</div>
+                  <div className="text-sm font-bold text-emerald-800 flex items-center gap-2"><DoneTick size={24} />Saved as version {saved.v}</div>
                   <p className="text-xs text-emerald-800/80 mt-1">Every line added from today uses v{saved.v}. Draft options can update when you say so. Options already sent to the client, signed or in execution stay on v{saved.v - 1}.</p>
                   {projectRows.length > 0 && (
                     <div className="mt-3 rounded-xl bg-white border border-emerald-100 divide-y divide-slate-100">
@@ -321,7 +404,7 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
                   <div className="flex flex-wrap gap-1">{GRADES.map(g => <span key={g} className={`px-2 py-1.5 rounded-lg text-xs font-bold ${mat.grades.includes(g) ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}>{GRADE_NAME[g]}</span>)}</div>
                 </div>
               </div>
-              {fam?.finish ? (
+              {matFam?.finish ? (
                 <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 flex items-center gap-3">
                   <span className={LABEL}>Cost effect</span>
                   {canEdit ? (
@@ -375,8 +458,8 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
               <div>
                 <div className={`${LABEL} mb-2`}>History</div>
                 <ol className="relative border-l-2 border-slate-200 ml-2 space-y-3" aria-label={`${mat.name}: versions`}>
-                  {[...versionsOf(bank, mat.id)].reverse().map(x => (
-                    <li key={x.v} className="pl-4 relative">
+                  {[...versionsOf(bank, mat.id)].reverse().map((x, i) => (
+                    <li key={x.v} className="pl-4 relative hud-row-in" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
                       <span className={`absolute -left-[7px] top-1 w-3 h-3 rounded-full ${x.v === cur?.v ? 'bg-[#3D52A0]' : 'bg-slate-300'} ring-2 ring-white`} />
                       <div className="text-xs font-bold text-slate-800">v{x.v}{x.v === cur?.v ? ' · current' : ''} <span className="font-semibold text-slate-500">· {x.at ? `${when(x.at)} · ${x.by}` : x.by}</span></div>
                       <div className="text-[11px] text-slate-600">{x.note}</div>
@@ -389,7 +472,7 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
                 <div className={`${LABEL} mb-2`}>Items built with it</div>
                 <div className="flex flex-wrap gap-1.5">
                   {use(mat.id).items.map(it => (
-                    <button key={it.id} type="button" onClick={() => onOpenItem?.(it)} className="px-2.5 py-1 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:border-[#3D52A0]/40">{it.name}</button>
+                    <button key={it.id} type="button" onClick={() => onOpenItem?.(it)} className="px-2.5 py-1 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 transition-colors hover:border-[#3D52A0]/40 hover:bg-[#3D52A0]/5 hover:text-[#3D52A0] motion-safe:active:scale-[0.97]">{it.name}</button>
                   ))}
                   {use(mat.id).items.length === 0 && <span className="text-xs text-slate-500">No item uses it yet.</span>}
                 </div>
@@ -398,6 +481,7 @@ export default function MaterialSpecsTab({ specs, items = [], projects = [], add
           </section>
         )}
       </div>
+    </div>
     </div>
   );
 }
