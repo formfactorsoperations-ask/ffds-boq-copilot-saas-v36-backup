@@ -33,6 +33,7 @@ import {
   Download,
   Upload
 } from '@/lib/lucide-shim';
+import { addToBank, pickable } from '../lib/bankMatch';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface TemplateEditorTabProps {
@@ -103,7 +104,7 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
 
   // Filtered Bank Items
   const filteredBank = useMemo(() => {
-    return bank.filter(item => {
+    return pickable(bank).filter(item => {
       const matchesSearch =
         (item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (item.cat || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -266,7 +267,8 @@ export const TemplateEditorTab: React.FC<TemplateEditorTabProps> = ({
         areaMultiplierCoefficient: newItem.areaMultiplierCoefficient
       }));
 
-      setBank(prev => [...prev, ...newBankItems]);
+      // One the bank already has by name and unit goes in as its copy (lib/bankMatch.ts).
+      setBank(prev => addToBank(prev, newBankItems));
     }
 
     // 2. Add template

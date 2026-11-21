@@ -65,6 +65,67 @@ export interface ResolvedBoqLine {
 }
 
 /**
+ * The sell rate of a line whose item is known: the line's own figures first,
+ * the item's for whatever the line does not hold.
+ *
+ * Every screen that prices such a line goes through this. Revision Studio and
+ * the proposal's options comparison each had their own reading that took
+ * labour (and, in the comparison, materials) from the bank whatever the line
+ * held, so they showed a rate the BOQ did not: ₹1,619 beside the BOQ's ₹1,750
+ * for one panelling line. It also meant a line whose price had been locked
+ * (lib/priceLock.ts) still moved there when the bank did.
+ */
+export function lineSellRate(b: any, item: Pick<Item, 'materials' | 'labor' | 'margin'>): number {
+  const effectiveMaterials = b.baseRate !== undefined ? b.baseRate : item.materials;
+  const effectiveLabor = b.labor !== undefined ? b.labor : item.labor;
+  const margin = b.marginOverride ?? item.margin;
+  return calculateSellPrice(effectiveMaterials, effectiveLabor, margin);
+}
+
+/**
+ * A new line holds its item's price from the moment it is added.
+ *
+ * A line used to take whatever it did not hold from the bank each time it was
+ * drawn, so a rate or margin edited in the bank re-priced every project that
+ * used the item, finished ones included. The figures the line would borrow are
+ * written onto it instead (`baseRate`, `labor`, `marginOverride`), which is
+ * what every pricing path reads first: it sells at exactly what it would have,
+ * and goes on doing so whatever the bank does later. Changing the line's price
+ * is done on the line.
+ *
+ * A figure the line already holds is kept. Two kinds of item are left to follow
+ * the bank: one with no cost yet (it is priced in the bank, and that price
+ * should reach its line), and one whose figures are not plain numbers.
+ */
+export function holdPrice<T extends Record<string, any>>(line: T, item: Pick<Item, 'materials' | 'labor' | 'margin'> | null | undefined): T {
+  if (!line || !item) return line;
+  const { materials, labor, margin } = item as any;
+  const plain = [materials, labor, margin].every(v => typeof v === 'number' && Number.isFinite(v));
+  if (!plain || materials + labor <= 0) return line;
+  const add: Record<string, number> = {};
+  if (line.baseRate === undefined) add.baseRate = materials;
+  if (line.labor === undefined) add.labor = labor;
+  if (line.marginOverride === undefined || line.marginOverride === null) add.marginOverride = margin;
+  return Object.keys(add).length ? { ...line, ...add } : line;
+}
+
+/**
+ * True when an item has no cost yet (it was added to the bank at ₹0 and is
+ * priced there later). A line for such an item must hold no figure of its own,
+ * or the price it is given in the bank never reaches the line.
+ */
+export function isUnpriced(item: Pick<Item, 'materials' | 'labor'> | null | undefined): boolean {
+  if (!item) return false;
+  const { materials, labor } = item as any;
+  return typeof materials === 'number' && typeof labor === 'number' && materials + labor <= 0;
+}
+
+/** `holdPrice` for every line of an option, each from the item it points at. */
+export function holdPrices<T extends Record<string, any>>(boq: T[], bankMap: Map<string, Item>): T[] {
+  return (boq || []).map(l => holdPrice(l, bankMap.get((l as any)?.bankId)));
+}
+
+/**
  * One line, priced exactly as the studio prices it.
  *
  * `bankMap` must include the project's own `adHocItems`, or lines added outside
@@ -76,10 +137,7 @@ export function resolveBoqLine(b: any, bankMap: Map<string, Item>): ResolvedBoqL
 
   let rate = 0;
   if (item) {
-    const effectiveMaterials = b.baseRate !== undefined ? b.baseRate : item.materials;
-    const effectiveLabor = b.labor !== undefined ? b.labor : item.labor;
-    const margin = b.marginOverride ?? item.margin;
-    rate = calculateSellPrice(effectiveMaterials, effectiveLabor, margin);
+    rate = lineSellRate(b, item);
   } else {
     // Not in the bank: price off whatever the line itself carries.
     const margin = b.marginOverride ?? 0;

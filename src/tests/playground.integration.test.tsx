@@ -1585,3 +1585,27 @@ describe('motion (PR 7, as the approved mockup)', () => {
     expect(document.querySelectorAll('tr.pg-print').length).toBe(1);
   });
 });
+
+/*
+  A line holds its item's price from the moment it is added (lib/boqPricing.ts
+  holdPrice), so a later change in the Item Bank does not re-price the option.
+  Only the line that is new in the edit: the ones already there are as they were.
+*/
+describe('A line added here holds its price', () => {
+  it('the library’s + writes the item’s materials, labour and markup onto the new line, and leaves the others alone', () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG }} probe={t => { latest = t; }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Sliding wardrobe to Bedroom' }));
+    const added = latest[0].boq.find((l: any) => !['l1', 'l2', 'l3'].includes(l.id));
+    expect(added).toMatchObject({ bankId: 'wardrobe', baseRate: 1000, labor: 400, marginOverride: 20 });
+    // The paint line was there before and still takes its price from the bank.
+    expect(latest[0].boq.find((l: any) => l.id === 'l2')).toEqual({ id: 'l2', bankId: 'paint', qty: 300, roomId: 'Bedroom' });
+  });
+
+  it('a dropped item is held too', () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} />);
+    fireEvent.drop(stage(), { ...at(11.5, 6), dataTransfer: { getData: () => 'wardrobe' } });
+    expect(latest[0].boq[0]).toMatchObject({ bankId: 'wardrobe', baseRate: 1000, labor: 400, marginOverride: 20 });
+  });
+});

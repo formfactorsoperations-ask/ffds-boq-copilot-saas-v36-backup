@@ -160,7 +160,8 @@ import { verifyApiKey } from "./services/geminiService";
 import { id as generateId, calculateSellPrice, calculateCostFromSell } from "./lib/utils";
 import { isPlaygroundTier, docPricingOf } from "./lib/playground/pricing";
 import { playgroundTierSummary } from "./lib/playground/versions";
-import { designFeeFor, isAsActuals } from "./lib/boqPricing";
+import { designFeeFor, holdPrice, isAsActuals } from "./lib/boqPricing";
+import { addToBank, masterFor } from "./lib/bankMatch";
 import { INITIAL_TEMPLATES } from "./lib/standardPackages";
 import { INITIAL_BANK } from "./constants";
 import { SaveIcon, UploadIcon, NewFileIcon } from "./components/Icons";
@@ -271,8 +272,6 @@ export default function App() {
     })));
   }, [projectLibrary]);
   const [bank, setBank] = useState<Item[]>([]);
-  const [draftBank, setDraftBank] = useState<Item[]>([]);
-  const [isDraftBankMode, setIsDraftBankMode] = useState(false);
   const [templates, setTemplates] = useState(INITIAL_TEMPLATES);
 
   // Active Project State
@@ -782,15 +781,13 @@ export default function App() {
       };
 
       let storedBank = INITIAL_BANK;
-      let storedDraftBank = INITIAL_BANK;
       let storedTemplates = INITIAL_TEMPLATES;
 
       try {
         /* The projects load alongside, without holding the app; see loadLibrary. */
         loadLibrary();
-        const [bankResult, draftBankResult, templatesResult] = await Promise.allSettled([
+        const [bankResult, templatesResult] = await Promise.allSettled([
           timeoutWrapper(db.getBank(), 5000),
-          timeoutWrapper(db.getDraftBank(), 5000),
           timeoutWrapper(db.getTemplates(), 5000),
         ]);
 
@@ -800,13 +797,6 @@ export default function App() {
           console.warn("Bank fetch timeout or error, falling back locally");
           const p = localStorage.getItem("ffds_item_bank");
           storedBank = p ? JSON.parse(p) : INITIAL_BANK;
-        }
-
-        if (draftBankResult.status === 'fulfilled') {
-          storedDraftBank = draftBankResult.value;
-        } else {
-          const p = localStorage.getItem("ffds_draft_item_bank");
-          storedDraftBank = p ? JSON.parse(p) : storedBank;
         }
 
         if (templatesResult.status === 'fulfilled') {
@@ -869,7 +859,6 @@ export default function App() {
       // --------------------------------------------------------------------------------
 
       setBank(storedBank);
-      setDraftBank(storedDraftBank);
       setTemplates(storedTemplates);
 
       setIsDataLoaded(true);
@@ -1090,14 +1079,12 @@ export default function App() {
       console.log(`Tenant changed to ${orgData?.tenantId} - reloading library...`);
       try {
         loadLibrary();
-        const [bankResult, draftBankResult, templatesResult] = await Promise.allSettled([
+        const [bankResult, templatesResult] = await Promise.allSettled([
           db.getBank(),
-          db.getDraftBank(),
           db.getTemplates(),
         ]);
 
         if (bankResult.status === 'fulfilled') setBank(bankResult.value);
-        if (draftBankResult.status === 'fulfilled') setDraftBank(draftBankResult.value);
         if (templatesResult.status === 'fulfilled') setTemplates(templatesResult.value || INITIAL_TEMPLATES);
       } catch (err) {
         console.error("Error reloading tenant data:", err);
@@ -1152,35 +1139,26 @@ export default function App() {
     }
   }, [bank, isDataLoaded]);
 
-  useEffect(() => {
-    if (isDataLoaded && draftBank.length > 0) {
-      const timeout = setTimeout(() => {
-        db.saveDraftBank(draftBank);
-      }, 1000);
-      return () => clearTimeout(timeout);
-    }
-  }, [draftBank, isDataLoaded]);
+  /*
+    A project's own items are kept in the Item Bank too, so every screen that
+    looks a line's item up there finds it (the client's BOQ is one).
 
-  // Sync AdHoc Items to Bank
+    They used to go in as items in their own right, checked by id alone, so a
+    project's own "KING SIZE BED WITH STORAGE" at its own rate became a second
+    item of that name; 153 of the bank's 223 repeated items came in this way.
+    addToBank (lib/bankMatch.ts) puts in something the bank already has as a
+    copy of that item: found by its id as before, not seen as another item.
+  */
   useEffect(() => {
     if (projectContext?.adHocItems && projectContext.adHocItems.length > 0) {
       setBank((prevBank) => {
-        const seenIds = new Set(prevBank.map((item) => item.id));
-        const uniqueNewItems: Item[] = [];
-        projectContext.adHocItems!.forEach((adHocItem) => {
-          if (!seenIds.has(adHocItem.id)) {
-            seenIds.add(adHocItem.id);
-            uniqueNewItems.push(adHocItem);
-          }
-        });
-        if (uniqueNewItems.length > 0) {
-          const updated = [...prevBank, ...uniqueNewItems];
+        const updated = addToBank(prevBank, projectContext.adHocItems!);
+        if (updated !== prevBank) {
           db.saveBank(updated).catch((err) =>
             console.error("Failed to sync adhoc items to DB:", err),
           );
-          return updated;
         }
-        return prevBank;
+        return updated;
       });
     }
   }, [projectContext?.adHocItems]);
@@ -2043,6 +2021,30 @@ export default function App() {
    * Minting a new token invalidates the previous link, which is what you want
    * if a client forwards one by mistake — reissuing is also the revoke button.
    */
+  /*
+    Item Bank → Lock prices (lib/priceLock.ts).
+
+    The projects as they are stored now, not as this session last saw them, each
+    with every option's lines loaded: a project too big for one document keeps
+    some options' lines aside until it is opened, and saving it without them
+    would write empty options over full ones. The open project is the copy on
+    screen when that is the newer one. `stored` skips that, to check a save.
+  */
+  const projectLibraryRef = useRef(projectLibrary);
+  projectLibraryRef.current = projectLibrary;
+  const readProjectsForLock = async (stored = false): Promise<FullProjectData[]> => {
+    const fetched = await db.getProjects();
+    const list = stored ? fetched : withOpenProject(projectLibraryRef.current, fetched);
+    return Promise.all(list.map((p) => ((p as any)?._failedHydration ? p : hydrateProjectDetail(p))));
+  };
+  const saveLockedProject = async (project: FullProjectData) => {
+    const updated: FullProjectData = { ...project, lastModified: Date.now() };
+    await db.saveProject(updated);
+    // The open project is saved from the screen: its lines there must be the locked ones too.
+    if (updated.id === activeIdRef.current) setTiers(updated.tiers);
+    setProjectLibrary((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+  };
+
   const handleRequestPortalLink = async (project: FullProjectData) => {
     const access = issuePortalAccess(project.id, project.context?.clientEmail);
     const updated: FullProjectData = {
@@ -2445,16 +2447,17 @@ export default function App() {
     });
 
     if (newBankItems.length > 0) {
-      setBank((prev) => [...prev, ...newBankItems]);
+      setBank((prev) => addToBank(prev, newBankItems));
     }
 
-    const newBoqItems: BoqItem[] = itemsToAdd.map(({ item, qty }) => ({
+    // Each line holds its item's price from now on (lib/boqPricing.ts holdPrice).
+    const newBoqItems: BoqItem[] = itemsToAdd.map(({ item, qty }) => holdPrice({
       id: generateId(),
       bankId: item.id,
       qty,
       roomId: "General", // Default room for prompt adds
       rationale: item.name || "Added via Prompt",
-    }));
+    }, item));
 
     setTiers((prev) =>
       prev.map((tier) => {
@@ -3388,14 +3391,12 @@ export default function App() {
                       setBank={setBank}
                       templates={templates}
                       setTemplates={setTemplates}
-                      isDraftBankMode={isDraftBankMode}
-                      setIsDraftBankMode={setIsDraftBankMode}
-                      draftBank={draftBank}
-                      setDraftBank={setDraftBank}
                       aiStrategy={aiStrategy}
                       highlightedBankItemId={highlightedBankItemId}
                       setHighlightedBankItemId={setHighlightedBankItemId}
                       projects={visibleProjects}
+                      onReadProjects={readProjectsForLock}
+                      onSaveProject={saveLockedProject}
                       // ACTIVE_ADMIN_TEMPLATES_BANK
                     />
                   )}
@@ -3412,70 +3413,9 @@ export default function App() {
 
 {activeTab === "bank" && (
                     <div className="space-y-4">
-                      {/* ACTIVE_BANK */}
-                      <div className="flex justify-end gap-3 items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full">
-                        <div className="text-sm font-medium text-slate-700">
-                          Currently Editing:{" "}
-                          <span
-                            className={
-                              isDraftBankMode
-                                ? "text-amber-600 font-bold"
-                                : "text-emerald-600 font-bold"
-                            }
-                          >
-                            {isDraftBankMode
-                              ? "Draft Sandbox"
-                              : "Live Item Bank"}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setIsDraftBankMode(!isDraftBankMode)}
-                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${isDraftBankMode ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"}`}
-                        >
-                          Switch to{" "}
-                          {isDraftBankMode ? "Live Bank" : "Draft Sandbox"}
-                        </button>
-                        {isDraftBankMode && (
-                          <button
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  "Are you sure you want to completely overwrite the LIVE item bank with your Draft sandbox? This will affect new projects and prices.",
-                                )
-                              ) {
-                                setBank(draftBank);
-                                setIsDraftBankMode(false);
-                                alert(
-                                  "Draft successfully published to Live Bank!",
-                                );
-                              }
-                            }}
-                            className="px-4 py-2 bg-[#3D52A0] text-white rounded-lg text-sm font-bold hover:bg-[#334486] shadow-sm transition-colors"
-                          >
-                            Publish Draft to Live
-                          </button>
-                        )}
-                        {!isDraftBankMode && (
-                          <button
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  "This will wipe your current Sandbox Draft and mirror the Live Bank. Continue?",
-                                )
-                              ) {
-                                setDraftBank(bank);
-                                setIsDraftBankMode(true);
-                              }
-                            }}
-                            className="px-4 py-2 bg-[#3D52A0]/90 text-white rounded-lg text-sm font-bold hover:bg-[#334486] backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 transition-all"
-                          >
-                            Sync Draft from Live
-                          </button>
-                        )}
-                      </div>
                       <BankTab
-                        bank={isDraftBankMode ? draftBank : bank}
-                        setBank={isDraftBankMode ? setDraftBank : setBank}
+                        bank={bank}
+                        setBank={setBank}
                         aiStrategy={aiStrategy}
                         highlightedBankItemId={highlightedBankItemId}
                         onHighlightClear={() => setHighlightedBankItemId(null)}
@@ -3920,7 +3860,10 @@ export default function App() {
                             roomId,
                           ) => {
                             if (!activeTierId) return;
-                            const newBankItem: Item = {
+                            /* The Item Bank's own item when it has one by this name and unit, at
+                               the bank's rate and held on the line; a new item only for a new thing. */
+                            const existing = masterFor({ name, unit }, bank);
+                            const newBankItem: Item = existing || {
                               id: generateId(),
                               name,
                               cat,
@@ -3930,15 +3873,15 @@ export default function App() {
                               labor: 0,
                               margin: 0,
                             };
-                            setBank((prev) => [...prev, newBankItem]);
+                            if (!existing) setBank((prev) => addToBank(prev, [newBankItem]));
 
-                            const newBoqItem: BoqItem = {
+                            const newBoqItem: BoqItem = holdPrice({
                               id: generateId(),
                               bankId: newBankItem.id,
                               qty,
                               roomId,
                               rationale: "Calculated value",
-                            };
+                            }, existing);
                             setTiers((prev) =>
                               prev.map((tier) => {
                                 if (tier.id !== activeTierId) return tier;
@@ -4110,14 +4053,12 @@ export default function App() {
                       setBank={setBank}
                       templates={templates}
                       setTemplates={setTemplates}
-                      isDraftBankMode={isDraftBankMode}
-                      setIsDraftBankMode={setIsDraftBankMode}
-                      draftBank={draftBank}
-                      setDraftBank={setDraftBank}
                       aiStrategy={aiStrategy}
                       highlightedBankItemId={highlightedBankItemId}
                       setHighlightedBankItemId={setHighlightedBankItemId}
                       projects={visibleProjects}
+                      onReadProjects={readProjectsForLock}
+                      onSaveProject={saveLockedProject}
                     />
                   )}
 
@@ -4133,69 +4074,9 @@ export default function App() {
 
 {activeTab === "bank" && (
                     <div className="space-y-4">
-                      <div className="flex justify-end gap-3 items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm w-full">
-                        <div className="text-sm font-medium text-slate-700">
-                          Currently Editing:{" "}
-                          <span
-                            className={
-                              isDraftBankMode
-                                ? "text-amber-600 font-bold"
-                                : "text-emerald-600 font-bold"
-                            }
-                          >
-                            {isDraftBankMode
-                              ? "Draft Sandbox"
-                              : "Live Item Bank"}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setIsDraftBankMode(!isDraftBankMode)}
-                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${isDraftBankMode ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"}`}
-                        >
-                          Switch to{" "}
-                          {isDraftBankMode ? "Live Bank" : "Draft Sandbox"}
-                        </button>
-                        {isDraftBankMode && (
-                          <button
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  "Are you sure you want to completely overwrite the LIVE item bank with your Draft sandbox? This will affect new projects and prices.",
-                                )
-                              ) {
-                                setBank(draftBank);
-                                setIsDraftBankMode(false);
-                                alert(
-                                  "Draft successfully published to Live Bank!",
-                                );
-                              }
-                            }}
-                            className="px-4 py-2 bg-[#3D52A0] text-white rounded-lg text-sm font-bold hover:bg-[#334486] shadow-sm transition-colors"
-                          >
-                            Publish Draft to Live
-                          </button>
-                        )}
-                        {!isDraftBankMode && (
-                          <button
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  "This will wipe your current Sandbox Draft and mirror the Live Bank. Continue?",
-                                )
-                              ) {
-                                setDraftBank(bank);
-                                setIsDraftBankMode(true);
-                              }
-                            }}
-                            className="px-4 py-2 bg-[#3D52A0]/90 text-white rounded-lg text-sm font-bold hover:bg-[#334486] backdrop-blur-md border border-white/20 shadow-md shadow-sky-600/20 transition-all"
-                          >
-                            Sync Draft from Live
-                          </button>
-                        )}
-                      </div>
                       <BankTab
-                        bank={isDraftBankMode ? draftBank : bank}
-                        setBank={isDraftBankMode ? setDraftBank : setBank}
+                        bank={bank}
+                        setBank={setBank}
                         aiStrategy={aiStrategy}
                         highlightedBankItemId={highlightedBankItemId}
                         onHighlightClear={() => setHighlightedBankItemId(null)}
@@ -4643,7 +4524,10 @@ export default function App() {
                             roomId,
                           ) => {
                             if (!activeTierId) return;
-                            const newBankItem: Item = {
+                            /* The Item Bank's own item when it has one by this name and unit, at
+                               the bank's rate and held on the line; a new item only for a new thing. */
+                            const existing = masterFor({ name, unit }, bank);
+                            const newBankItem: Item = existing || {
                               id: generateId(),
                               name,
                               cat,
@@ -4653,15 +4537,15 @@ export default function App() {
                               labor: 0,
                               margin: 0,
                             };
-                            setBank((prev) => [...prev, newBankItem]);
+                            if (!existing) setBank((prev) => addToBank(prev, [newBankItem]));
 
-                            const newBoqItem: BoqItem = {
+                            const newBoqItem: BoqItem = holdPrice({
                               id: generateId(),
                               bankId: newBankItem.id,
                               qty,
                               roomId,
                               rationale: "Calculated value",
-                            };
+                            }, existing);
                             setTiers((prev) =>
                               prev.map((tier) => {
                                 if (tier.id !== activeTierId) return tier;

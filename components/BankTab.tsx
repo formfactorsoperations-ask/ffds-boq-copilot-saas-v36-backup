@@ -8,6 +8,12 @@ import BulkImportModal from './BulkImportModal';
 import BankSpecImportModal from './bank/BankSpecImportModal';
 import { applySpecs, buildSpecSheetWorkbook, specSheetName } from '../lib/bankSpecs';
 import { downloadWorkbook } from '../lib/scopeWorkbook';
+import { buildBankUsageExport, bankUsageFileName } from '../lib/bankUsageExport';
+import { Button, Chip } from './ui/kit';
+import { addToBank, isMergedCopy } from '../lib/bankMatch';
+import PriceLockModal from './bank/PriceLockModal';
+import RepeatedItemsModal from './bank/RepeatedItemsModal';
+import { duplicateGroups } from '../lib/bankMatch';
 import BankSpreadsheetTable from './bank/BankSpreadsheetTable';
 import BankCategoryGroupedView from './bank/BankCategoryGroupedView';
 import BankBulkActionModal, { BulkActionType } from './bank/BankBulkActionModal';
@@ -45,7 +51,8 @@ import {
   SlidersHorizontal,
   PackagePlus,
   Building2,
-  Filter
+  Filter,
+  Lock
 } from '@/lib/lucide-shim';
 
 interface BankTabProps {
@@ -58,10 +65,14 @@ interface BankTabProps {
   /** BOQ Playground S2: the Material specs bank. With it, items show their recipe and the No recipe filter appears. */
   specs?: MaterialSpecsBank;
   onOpenRecipe?: (id: string) => void;
+  /** Lock prices (lib/priceLock.ts). Given to the owner; without it the button is not drawn. */
+  priceLock?: { read: (stored?: boolean) => Promise<FullProjectData[]>; save: (project: FullProjectData) => Promise<void> };
+  /** Repeated items (lib/bankDuplicates.ts): the owner may pick the one item kept for a name. */
+  canSettle?: boolean;
 }
 
 const BankTab: React.FC<BankTabProps> = ({
-  bank,
+  bank: wholeBank,
   setBank,
   aiStrategy,
   highlightedBankItemId,
@@ -69,8 +80,19 @@ const BankTab: React.FC<BankTabProps> = ({
   projects = [],
   specs,
   onOpenRecipe,
+  priceLock,
+  canSettle = false,
 }) => {
   const { orgData } = useOrg();
+  /*
+    The screen works on the items. A copy of another item (lib/bankMatch.ts)
+    stays in the bank, so old lines still find it, but is left off this list
+    unless asked for. Everything that saves works on the whole bank: setBank
+    takes the previous bank, and the exports and Lock prices are given it whole.
+  */
+  const [showCopies, setShowCopies] = useState(false);
+  const copyCount = useMemo(() => wholeBank.filter(isMergedCopy).length, [wholeBank]);
+  const bank = useMemo(() => (showCopies || !copyCount ? wholeBank : wholeBank.filter((i) => !isMergedCopy(i))), [wholeBank, showCopies, copyCount]);
   const { settings, updateSettings } = useStudioSettings(orgData?.tenantId || 'demo-tenant-01');
   const customBundles = useMemo(() => settings?.customBundles || [], [settings]);
 
@@ -384,7 +406,7 @@ const BankTab: React.FC<BankTabProps> = ({
   // EXPORT & IMPORT HANDLERS
   // ==========================================
   const handleExportBank = () => {
-    const exportList = selectedItems.length > 0 ? selectedItems : bank;
+    const exportList = selectedItems.length > 0 ? selectedItems : wholeBank;
     const dataStr = JSON.stringify(exportList, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -395,6 +417,30 @@ const BankTab: React.FC<BankTabProps> = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const [isPriceLockOpen, setIsPriceLockOpen] = useState(false);
+  const [isRepeatedOpen, setIsRepeatedOpen] = useState(false);
+  const repeatedCount = useMemo(() => (canSettle ? duplicateGroups(wholeBank).length : 0), [canSettle, wholeBank]);
+
+  /* Which project line uses which item, at what price (lib/bankUsageExport.ts). Reads only. */
+  const handleExportUsage = () => {
+    try {
+      const studio = orgData?.orgName || 'Studio';
+      const data = buildBankUsageExport(wholeBank, projects, { studio });
+      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = bankUsageFileName(studio);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Usage export failed:', err);
+      alert('The usage file could not be made. Please try again.');
+    }
   };
 
   const handleJsonUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -591,6 +637,17 @@ const BankTab: React.FC<BankTabProps> = ({
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
                 {stats.totalItems} Active Items · {stats.totalCategories} Categories
               </span>
+              {copyCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowCopies((v) => !v)}
+                  aria-pressed={showCopies}
+                  title="Copies of an item the bank already has. They are kept so older projects still find them, and are left out of this list, the pickers and imports."
+                  className="cursor-pointer"
+                >
+                  <Chip tone={showCopies ? 'brand' : 'slate'}>{copyCount} {copyCount === 1 ? 'copy' : 'copies'} {showCopies ? 'shown' : 'hidden'}</Chip>
+                </button>
+              )}
               {stats.itemsInProjectsCount > 0 && (
                 <button
                   onClick={() => { setHealthFilter('in-active-projects'); setViewMode('spreadsheet'); }}
@@ -656,6 +713,37 @@ const BankTab: React.FC<BankTabProps> = ({
               <Download className="w-3.5 h-3.5 text-slate-500" />
               Export JSON
             </button>
+
+            <Button
+              size="sm"
+              icon={Briefcase}
+              onClick={handleExportUsage}
+              title={`Download which project lines use each item and at what price, across ${projects.length} project${projects.length === 1 ? '' : 's'}. Nothing is changed.`}
+            >
+              Export usage
+            </Button>
+
+            {priceLock && (
+              <Button
+                size="sm"
+                icon={Lock}
+                onClick={() => setIsPriceLockOpen(true)}
+                title="Make projects keep the prices they use today, so a change in the Item Bank no longer re-prices them. Shows every total before anything is saved."
+              >
+                Lock prices
+              </Button>
+            )}
+
+            {canSettle && (repeatedCount > 0 || copyCount > 0) && (
+              <Button
+                size="sm"
+                icon={Layers}
+                onClick={() => setIsRepeatedOpen(true)}
+                title="Names the bank holds more than once. Pick the one item to keep for each; the others are kept, hidden. No rate and no project is changed."
+              >
+                Repeated items{repeatedCount > 0 ? ` (${repeatedCount})` : ''}
+              </Button>
+            )}
 
             <button
               onClick={handleAiSynthesis}
@@ -1450,12 +1538,27 @@ const BankTab: React.FC<BankTabProps> = ({
         />
       )}
 
+      {isPriceLockOpen && priceLock && (
+        <PriceLockModal
+          bank={wholeBank}
+          studio={orgData?.orgName || 'Studio'}
+          read={priceLock.read}
+          save={priceLock.save}
+          onClose={() => setIsPriceLockOpen(false)}
+        />
+      )}
+
+      {isRepeatedOpen && canSettle && (
+        <RepeatedItemsModal bank={wholeBank} projects={projects} setBank={setBank} read={priceLock?.read} onClose={() => setIsRepeatedOpen(false)} />
+      )}
+
       {/* 8. BULK IMPORT MODAL (CSV/Excel) */}
       <BulkImportModal
         isOpen={isTextImportOpen}
         onClose={() => setIsTextImportOpen(false)}
         onImport={(importedItems) => {
-          setBank((prev) => [...importedItems, ...prev]);
+          // One the bank already has by name and unit goes in as its copy, not as another item.
+          setBank((prev) => addToBank(prev, importedItems, 'start'));
           setIsTextImportOpen(false);
         }}
         rooms={[]}

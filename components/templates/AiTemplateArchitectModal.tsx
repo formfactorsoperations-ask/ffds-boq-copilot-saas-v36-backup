@@ -4,6 +4,7 @@ import { generateAiTemplate, AiGeneratedTemplateResult } from '../../services/ge
 import { Sparkles, Wand2, Plus, Check, Loader2, X, AlertCircle, Layers, Building, RefreshCw, FileCheck } from 'lucide-react';
 import { formatINR } from '../../lib/utils';
 
+import { pickable } from '../../lib/bankMatch';
 interface AiTemplateArchitectModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -73,7 +74,8 @@ export const AiTemplateArchitectModal: React.FC<AiTemplateArchitectModalProps> =
     setGeneratedResult(null);
 
     try {
-      const result = await generateAiTemplate(textToUse, bank, existingConfigs, aiStrategy as AIStrategy);
+      // Chosen from the items, never a copy of one (lib/bankMatch.ts).
+      const result = await generateAiTemplate(textToUse, pickable(bank), existingConfigs, aiStrategy as AIStrategy);
       setGeneratedResult(result);
     } catch (err: any) {
       console.error("AI Template Architect error:", err);

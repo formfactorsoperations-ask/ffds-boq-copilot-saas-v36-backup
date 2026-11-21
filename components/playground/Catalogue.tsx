@@ -12,6 +12,7 @@ import { KitLibrary } from './KitParts';
 import { SupplyLibrary } from './SupplyParts';
 import { suppliedItems } from '../../lib/playground/supply';
 import type { Kit } from '../../lib/playground/kits';
+import { pickable } from '../../lib/bankMatch';
 
 /*
   The studio design library (the approved mockup's catalogue), over the left of
@@ -53,11 +54,13 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
   onAddSupplied?: (item: Item, room: string) => void;
 }) {
   const [dest, setDest] = useState('Whole flat');
-  const supplied = useMemo(() => suppliedItems(bank), [bank]);
+  /* What is offered: the items, never a copy of one (lib/bankMatch.ts). */
+  const offered = useMemo(() => pickable(bank), [bank]);
+  const supplied = useMemo(() => suppliedItems(offered), [offered]);
   const [tab, setTab] = useState<Tab>('pieces');
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<Cat>('All');
-  const all = useMemo(() => drawableItems(bank), [bank]);
+  const all = useMemo(() => drawableItems(offered), [offered]);
   const list = all.filter(({ item, draw }) => (cat === 'All' || CAT_OF[draw.kind] === cat) && (!q.trim() || item.name.toLowerCase().includes(q.trim().toLowerCase())));
 
   return (

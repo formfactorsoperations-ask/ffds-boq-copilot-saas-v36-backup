@@ -10,6 +10,7 @@ import { INITIAL_BANK } from '../constants';
 import { useStudioSettings } from '../hooks/useStudioSettings';
 import { useOrg } from '../contexts/OrgContext';
 import NumberField from './NumberField';
+import { pickable } from '../lib/bankMatch';
 
 interface AddItemModalProps {
   isOpen: boolean;
@@ -47,16 +48,18 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, bank, onAd
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  const categories = useMemo(() => ['All', ...new Set(bank.map(item => item.cat))], [bank]);
+  /* What is offered: the items, never a copy of one (lib/bankMatch.ts). Lookups by id below still read the whole bank. */
+  const offered = useMemo(() => pickable(bank), [bank]);
+  const categories = useMemo(() => ['All', ...new Set(offered.map(item => item.cat))], [offered]);
   
   const filteredBank = useMemo(() => {
-    return bank.filter(item => {
+    return offered.filter(item => {
       const matchesCategory = selectedCategory === 'All' || item.cat === selectedCategory;
       const matchesSearch = (item.name || '').toLowerCase().includes((searchTerm || '').toLowerCase()) || 
                             (item.specs || '').toLowerCase().includes((searchTerm || '').toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [bank, searchTerm, selectedCategory]);
+  }, [offered, searchTerm, selectedCategory]);
 
   const toggleItemSelection = (itemId: string) => {
     setSelectedItems(prev => {

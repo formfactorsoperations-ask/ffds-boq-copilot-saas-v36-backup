@@ -1,6 +1,7 @@
 
 import { ProposalTier, AiComparisonResult } from '../types';
-import { calculateSellPrice, formatCurrency } from './utils';
+import { formatCurrency } from './utils';
+import { lineSellRate } from './boqPricing';
 
 const WET_AREAS = ['Kitchen', 'Bath', 'Toilet', 'Wash', 'Utility', 'Dining']; 
 
@@ -186,8 +187,8 @@ export const generateLocalComparison = (tiers: ProposalTier[], bankItems: any[])
                     const kws = extractUniqueKeywords(textToSearch, extractor.keywords);
                     kws.forEach(k => allKeywords.add(k));
 
-                    const effectiveMargin = boqItem.marginOverride ?? bankItem.margin;
-                    const rate = calculateSellPrice(bankItem.materials, bankItem.labor, effectiveMargin);
+                    // The rate this option's line sells at, not the bank's (lib/boqPricing.ts lineSellRate).
+                    const rate = lineSellRate(boqItem, bankItem);
                     if (rate < minRate) minRate = rate;
                     if (rate > maxRate) maxRate = rate;
                     unit = bankItem.unit;

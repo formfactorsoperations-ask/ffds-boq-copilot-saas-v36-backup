@@ -28,6 +28,7 @@ import { ArtDefs } from './playground/pieceArt';
 import { Plus } from 'lucide-react';
 import { Button } from './ui/kit';
 import { canEditMaterialSpecs } from '../lib/materialSpecs';
+import { canLockPrices } from '../lib/priceLock';
 import { recipeOf } from '../lib/lineSpecs';
 import { useOrg } from '../contexts/OrgContext';
 
@@ -49,14 +50,22 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<any> }[] = [
 const MATERIALS_TAB = { id: 'materials' as TabId, label: 'Material specs', icon: Layers3, badge: 'New' };
 
 export default function TemplatesAndBankTab({
-  bank, setBank, templates, setTemplates, isDraftBankMode, setIsDraftBankMode,
-  draftBank, setDraftBank, aiStrategy, highlightedBankItemId, setHighlightedBankItemId, projects = [],
+  bank, setBank, templates, setTemplates,
+  aiStrategy, highlightedBankItemId, setHighlightedBankItemId, projects = [],
+  onReadProjects, onSaveProject,
 }: any) {
   const [tab, setTab] = useState<TabId>('bank');
   const { orgData, currentRole, currentRoles } = useOrg() as any;
   /* BOQ Playground S2: the Material specs bank, read once for both the Material specs tab and the Item bank's recipes. */
   const specs = useMaterialSpecs(orgData?.tenantId, true);
   const canEditSpecs = canEditMaterialSpecs(currentRole, currentRoles);
+  /* Lock prices (lib/priceLock.ts): the owner's. */
+  const priceLock = useMemo(
+    () => (canLockPrices(currentRoles?.length ? currentRoles : currentRole) && onReadProjects && onSaveProject
+      ? { read: onReadProjects, save: onSaveProject }
+      : undefined),
+    [currentRole, currentRoles, onReadProjects, onSaveProject],
+  );
   const [recipeItemId, setRecipeItemId] = useState<string | null>(null);
   const [addMaterialSignal, setAddMaterialSignal] = useState(0);
   const tabs = [...TABS.slice(0, 1), MATERIALS_TAB, ...TABS.slice(1)];
@@ -84,8 +93,10 @@ export default function TemplatesAndBankTab({
     [],
   );
 
-  const activeBank = isDraftBankMode ? draftBank : bank;
-  const setActiveBank = isDraftBankMode ? setDraftBank : setBank;
+  /* There is one Item Bank. The draft sandbox and its "Publish draft to live" are gone: a second copy of the
+     bank went stale, and publishing it put the live bank back to what the copy held. */
+  const activeBank = bank;
+  const setActiveBank = setBank;
 
   /* Items whose words come from a recipe: the Material specs gauge. */
   const recipeStats = useMemo(() => {
@@ -137,8 +148,8 @@ export default function TemplatesAndBankTab({
       return (
         <ConsoleHeader
           title="Item bank"
-          state={isDraftBankMode ? 'Draft sandbox' : 'Live bank'}
-          tone={isDraftBankMode ? 'warn' : tone}
+          state={`${bankStats.total} items`}
+          tone={tone}
           blurb="Every rate the studio prices from. What is here decides what a BOQ can say."
           tabs={libraryTabs}
         gauge={{
@@ -146,51 +157,6 @@ export default function TemplatesAndBankTab({
             label: 'Rates set',
             sub: `${bankStats.priced} of ${bankStats.total} items carry a cost`,
           }}
-          actions={
-            <>
-              <span className="text-xs font-semibold text-slate-500">
-                Editing{' '}
-                <span className={isDraftBankMode ? 'text-amber-700 font-bold' : 'text-emerald-700 font-bold'}>
-                  {isDraftBankMode ? 'the draft sandbox' : 'the live bank'}
-                </span>
-              </span>
-              <button
-                onClick={() => setIsDraftBankMode(!isDraftBankMode)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold border transition-colors ${
-                  isDraftBankMode
-                    ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
-                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                Switch to {isDraftBankMode ? 'live bank' : 'draft sandbox'}
-              </button>
-              {isDraftBankMode ? (
-                <button
-                  onClick={() => {
-                    if (window.confirm('Overwrite the LIVE item bank with the draft sandbox? This changes the rates new projects are priced from.')) {
-                      setBank(draftBank);
-                      setIsDraftBankMode(false);
-                    }
-                  }}
-                  className="px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-xs font-bold hover:bg-[#334486]"
-                >
-                  Publish draft to live
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    if (window.confirm('This replaces your sandbox draft with a copy of the live bank. Continue?')) {
-                      setDraftBank(bank);
-                      setIsDraftBankMode(true);
-                    }
-                  }}
-                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50"
-                >
-                  Copy live into draft
-                </button>
-              )}
-            </>
-          }
         />
       );
     }
@@ -274,11 +240,13 @@ export default function TemplatesAndBankTab({
           {deferredTab === 'bank' && (
             <BankTab
               bank={activeBank}
-              setBank={isDraftBankMode ? setDraftBank : setBank}
+              setBank={setBank}
               aiStrategy={aiStrategy}
               highlightedBankItemId={highlightedBankItemId}
               onHighlightClear={() => setHighlightedBankItemId(null)}
               projects={projects}
+              priceLock={priceLock}
+              canSettle={canLockPrices(currentRoles?.length ? currentRoles : currentRole)}
               specs={specs.bank}
               onOpenRecipe={(id: string) => setRecipeItemId(id)}
             />

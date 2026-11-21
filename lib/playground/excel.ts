@@ -228,6 +228,7 @@ export function matchBankItem(name: string, bank: Item[]): Item | undefined {
   if (!ws.size) return undefined;
   let best: { item: Item; score: number; len: number } | null = null;
   bank.forEach(item => {
+    if ((item as any).mergedInto) return;   // a copy of another item is never the match (lib/bankMatch.ts)
     const bw = words(item.name);
     if (!bw.length) return;
     const shared = bw.filter(w => ws.has(w)).length;

@@ -1,7 +1,8 @@
 
 import React, { useMemo, useState } from 'react';
 import { ProposalTier, Item } from '../types';
-import { formatCurrency, calculateSellPrice } from '../lib/utils';
+import { formatCurrency } from '../lib/utils';
+import { lineSellRate } from '../lib/boqPricing';
 
 interface InternalComparisonTableProps {
     tiers: ProposalTier[];
@@ -64,7 +65,7 @@ const InternalComparisonTable: React.FC<InternalComparisonTableProps> = ({ tiers
                     // Use the first item's margin/price logic for display
                     const firstItem = matchingItems[0];
                     const margin = firstItem.marginOverride ?? bankItem.margin;
-                    const sell = calculateSellPrice(bankItem.materials, bankItem.labor, margin);
+                    const sell = lineSellRate(firstItem, bankItem);
                     
                     row.tiers[tier.id] = {
                         qty: totalQty,
