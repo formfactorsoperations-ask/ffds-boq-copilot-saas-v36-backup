@@ -65,7 +65,7 @@ describe('the Playground’s motion', () => {
   it('the Playground’s own keyframes all stop under reduced motion', () => {
     const css = fs.readFileSync(path.resolve(__dirname, '../../components/playground/playground.css'), 'utf8');
     const frames = [...css.matchAll(/@keyframes ([a-z-]+)/g)].map(m => m[1]);
-    expect(frames).toEqual(['pg-slide', 'pg-drop', 'pg-glow', 'pg-tag', 'pg-print']);
+    expect(frames).toEqual(['pg-slide', 'pg-drop', 'pg-glow', 'pg-tag', 'pg-print', 'pg-ripple', 'pg-beckon']);
     const reduced = css.slice(css.indexOf('prefers-reduced-motion'));
     frames.forEach(f => expect(reduced).toContain(`.${f}`));
   });

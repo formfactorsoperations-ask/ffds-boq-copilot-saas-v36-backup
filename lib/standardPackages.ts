@@ -644,6 +644,18 @@ const specRate = (item: Item, materialMod: number): number | undefined => {
 };
 
 /**
+ * An item priced for an option, as the generator prices it: the material rate
+ * at the option's grade (the spec-sensitive trades only) and the bank margin
+ * scaled by the option's margin factor, kept within 10–45%. Used when one edit
+ * adds an item to every option (lib/playground/allOptions).
+ */
+export function priceForOption(item: Item, setup: { material: number; margin: number }): { marginOverride: number; baseRate?: number } {
+  const marginOverride = Math.max(10, Math.min(45, Number(((item.margin || 0) * setup.margin).toFixed(1))));
+  const baseRate = specRate(item, setup.material);
+  return baseRate === undefined ? { marginOverride } : { marginOverride, baseRate };
+}
+
+/**
  * Which rooms a tier enhancement lands in.
  *
  * `habitable` exists because `dry` was putting curtains in the kitchen. A dry

@@ -49,17 +49,20 @@ import { artOfSpecs } from './pieceArt';
 import type { MaterialSpecsBank } from '../../lib/materialSpecs';
 import { gradeOf, offersUpdates, withRecipeSpecs, updatedLine, recipeOf, specsFromRecipe } from '../../lib/lineSpecs';
 import { kitsOf, kitStartRooms, kitApply, kitAddsDebris, kitEstimate, kitFits, roomAsKit, type BundleLike, type SavedKit } from '../../lib/playground/kits';
-import { ADDON_BUNDLES, type TemplateData } from '../../lib/standardPackages';
+import { ADDON_BUNDLES, priceForOption, type TemplateData } from '../../lib/standardPackages';
+import { optionSetupOf } from '../../lib/optionSetup';
+import { scopeEdit, isEmptyEdit, applyScopeEdit, namesOf } from '../../lib/playground/allOptions';
 import { templateLines } from '../../lib/playground/templateBuild';
 import { workLine, measureWork } from '../../lib/playground/works';
 import type { Grade } from '../../lib/materialSpecs';
 import { lineAmount } from '../../lib/playground/pricing';
 import { KitModal, KIT_DRAG } from './KitParts';
 import { ChangesPanel } from './ChangesParts';
+import { AllOptionsToggle } from './AllOptionsParts';
 import { RevisionIssueModal } from './RevisionParts';
 import { needingReason } from '../../lib/playground/revision';
 import type { ScopeRevisionRecord, RevisionResult } from '../../lib/scopeRevision';
-import { optionChains, latestOf, sameOption } from '../../lib/optionChains';
+import { optionChains, latestOf, sameOption, chainOf } from '../../lib/optionChains';
 import { scopeSplit, splitPricingOf, splitLines } from '../../lib/offers';
 import { gstTermsOf, scheduleFor, contractInForce } from '../../lib/paymentSchedule';
 import { playgroundTierSummary } from '../../lib/playground/versions';
@@ -102,6 +105,8 @@ const LENSES: [Lens, string, React.ElementType, string][] = [
   ['deal', 'Deal', Target, 'Offers, design fee, GST and what the client pays'],
 ];
 const HINT_KEY = 'ffds.playground.hintDone';
+/** The "Edit all 3" tip has been seen (once per browser). */
+const ALL_TIP_KEY = 'ffds.playground.allOptionsTip';
 
 /** A signed version, revised on the plan (PR R2): read-only, with its revision if one is open. */
 export interface SignedPlayground {
@@ -367,16 +372,73 @@ export default function PlaygroundScreen(props: Props) {
 
   /* ── writing, with undo ── */
 
+  /*
+    Edit: this option, or every option at once (lib/playground/allOptions). What
+    is in the flat (added, deleted, moved, resized, its quantity) reaches each
+    option's newest version; finish, rate and margin stay in the option edited.
+    An option sent to the client or signed is left as it is.
+  */
+  const [editAll, setEditAll] = useState(false);
+  const [allTip, setAllTip] = useState(() => { try { return !localStorage.getItem(ALL_TIP_KEY); } catch { return false; } });
+  const doneAllTip = () => { setAllTip(false); try { localStorage.setItem(ALL_TIP_KEY, '1'); } catch { /* private window */ } };
+  const optionSetup = useMemo(() => optionSetupOf(templates as any), [templates]);
+  const otherOptions = useMemo(() => {
+    const mine = chainOf(chains, tier.id);
+    const locked = lockedTierId(ctx), sent = sentProposalTier(ctx);
+    return chains.filter(c => c !== mine).map(latestOf).map(t => ({ t, held: t.id === locked ? 'signed' : t.id === sent ? 'sent to the client' : null }));
+  }, [chains, tier.id, ctx]);
+  const reachable = otherOptions.filter(o => !o.held);
+  const fanOn = editAll && !revRec && reachable.length > 0;
+  /* The Edit switch shows while there is another option to reach; the bar's longer labels then wait for a wider screen. */
+  const editSwitch = !readOnly && !revRec && otherOptions.length > 0 && lens !== 'deal';
+  /* An item added to every option is priced at each one's grade, as the generator prices it. */
+  const priceAt = useCallback((t: ProposalTier) => (line: BoqItem): BoqItem => {
+    const item = bankMap.get(line.bankId);
+    if (!item) return line;
+    const g = gradeOf(t);
+    const priced: BoqItem = { ...line, ...priceForOption(item, optionSetup[g]) };
+    const specd = boqFormatOf(t) === 'playground' ? withRecipeSpecs(priced, item, specBank, g) : priced;
+    return holdPrice(withSupply(specd, item), item);
+  }, [bankMap, optionSetup, specBank]);
+  /* What each fanned edit changed in the other options, so Undo puts them back too. */
+  const fanUndo = useRef<(Record<string, BoqItem[]> | null)[]>([]);
+
   const commit = useCallback((next: BoqItem[], msg?: string) => {
     if (readOnly) return;
     setHist(h => pushHistory(h, boq));
     pending.current = { boq, sell: totals.sell };
-    /* A line that is new in this edit holds its item's price from now on (lib/boqPricing.ts
-       holdPrice), however it came in: the catalogue, a kit, Quick Build, the brief, a sheet. */
     const had = new Set(boq.map(l => l.id));
-    onBoq(next.map(l => (had.has(l.id) ? l : holdPrice(l, bankMap.get(l.bankId)))));
-    if (msg) setNote(msg);
-  }, [boq, onBoq, readOnly, totals.sell, bankMap]);
+    const edit = fanOn ? scopeEdit(boq, next) : null;
+    const fan = !!edit && !isEmptyEdit(edit);
+    /* A line that is new in this edit holds its item's price from now on (lib/boqPricing.ts
+       holdPrice), however it came in: the catalogue, a kit, Quick Build, the brief, a sheet.
+       Made in every option, it is priced at this option's grade like the others. */
+    onBoq(next.map(l => (had.has(l.id) ? l : fan ? priceAt(tier)(l) : holdPrice(l, bankMap.get(l.bankId)))));
+    let also = '';
+    if (fan) {
+      const before: Record<string, BoqItem[]> = {};
+      const after = new Map<string, BoqItem[]>();
+      let missed = 0;
+      reachable.forEach(({ t }) => {
+        const r = applyScopeEdit(edit!, t.boq || [], priceAt(t), newId);
+        missed += r.missed;
+        if (r.applied) { before[t.id] = t.boq || []; after.set(t.id, r.boq); }
+      });
+      if (after.size) setTiers(ts => ts.map(t => (after.has(t.id) ? { ...t, boq: after.get(t.id)! } : t)));
+      fanUndo.current.push(after.size ? before : null);
+      const reached = reachable.filter(o => after.has(o.t.id)).map(o => o.t.name || 'Option');
+      const held = otherOptions.filter(o => o.held);
+      also = [
+        reached.length ? `Also in ${namesOf(reached)}.` : '',
+        held.length ? `${namesOf(held.map(o => `${o.t.name || 'Option'} (${o.held})`))} ${held.length === 1 ? 'is' : 'are'} left as ${held.length === 1 ? 'it is' : 'they are'}.` : '',
+        missed ? `${missed} change${missed === 1 ? '' : 's'} had no matching line in another option.` : '',
+      ].filter(Boolean).join(' ');
+    } else {
+      fanUndo.current.push(null);
+    }
+    if (fanUndo.current.length > 120) fanUndo.current.shift();
+    if (msg || also) setNote([msg, also].filter(Boolean).join(' '));
+  }, [boq, onBoq, readOnly, totals.sell, bankMap, fanOn, reachable, otherOptions, priceAt, tier, newId, setTiers]);
   /* Once the edit is in: new lines print in, new pieces drop, the room glows, the price change floats up. Undo shows nothing. */
   useEffect(() => {
     const p = pending.current;
@@ -396,7 +458,15 @@ export default function PlaygroundScreen(props: Props) {
   const replace = (line: BoqItem, msg?: string) => commit(boq.map(l => (l.id === line.id ? line : l)), msg);
   const replaceMany = (lines: BoqItem[]) => { const m = new Map(lines.map(l => [l.id, l])); commit(boq.map(l => m.get(l.id) || l)); };
   const remove = (ids: string[]) => { const s = new Set(ids); commit(boq.filter(l => !s.has(l.id)), `${ids.length === 1 ? 'Line' : `${ids.length} lines`} deleted. Undo puts ${ids.length === 1 ? 'it' : 'them'} back.`); if (sel && s.has(sel)) setSel(null); };
-  const undo = () => { const r = undoHistory(hist, boq); if (r) { setHist(r.h); onBoq(r.state); setNote('Undone.'); } };
+  const undo = () => {
+    const r = undoHistory(hist, boq);
+    if (!r) return;
+    setHist(r.h); onBoq(r.state);
+    /* An edit made in every option is undone in every option. */
+    const back = fanUndo.current.pop();
+    if (back) setTiers(ts => ts.map(t => (back[t.id] ? { ...t, boq: back[t.id] } : t)));
+    setNote(back ? `Undone in ${namesOf([tier.name || 'this option', ...otherOptions.filter(o => back[o.t.id]).map(o => o.t.name || 'Option')])}.` : 'Undone.');
+  };
 
   const probeOf = (item: Item, line?: BoqItem): PlacedPiece | null => {
     const draw = drawOf(item);
@@ -821,7 +891,7 @@ export default function PlaygroundScreen(props: Props) {
       )}
 
       {/* The bar */}
-      <div className="rounded-2xl bg-white border border-slate-200/90 p-2 flex items-center gap-2 flex-wrap shadow-sm">
+      <div className={`rounded-2xl bg-white border p-2 flex items-center gap-2 flex-wrap shadow-sm transition-[border-color,box-shadow] duration-300 ${fanOn ? 'border-[#3D52A0]/50 ring-2 ring-[#3D52A0]/15' : 'border-slate-200/90'}`} data-editing-all={fanOn || undefined}>
         <div className="flex items-center gap-2 pl-0.5">
           <span className="w-8 h-8 rounded-xl bg-[#3D52A0] text-white grid place-items-center shrink-0" title="BOQ Playground"><PenTool className="w-4 h-4" aria-hidden /></span>
           <div className="leading-tight hidden 2xl:block">
@@ -900,6 +970,19 @@ export default function PlaygroundScreen(props: Props) {
           )}
         </div>
 
+        {editSwitch && (
+          <AllOptionsToggle count={otherOptions.length + 1} on={editAll} coach={allTip && !editAll}
+            names={namesOf(otherOptions.map(o => o.t.name || 'Option'))} onCoachDone={doneAllTip}
+            onChange={on => {
+              setEditAll(on);
+              if (on) doneAllTip();
+              const held = otherOptions.filter(o => o.held);
+              setNote(!on ? `Edits stay in ${tier.name || 'this option'} again.` : reachable.length
+                ? `Editing all ${otherOptions.length + 1} options: what you add, delete, move or resize goes into ${namesOf(reachable.map(o => o.t.name || 'Option'))} too. Finish, rate and margin stay in each option.${held.length ? ` ${namesOf(held.map(o => `${o.t.name || 'Option'} (${o.held})`))} ${held.length === 1 ? 'is' : 'are'} left as ${held.length === 1 ? 'it is' : 'they are'}.` : ''}`
+                : 'The other options are sent or signed, so edits stay in this one.');
+            }} />
+        )}
+
         {signed && !revRec && !signed.elsewhere && !superseded && (
           <Button size="sm" variant="primary" icon={PenLine} onClick={signed.onStart}>Start revision {signed.nextNumber}</Button>
         )}
@@ -912,7 +995,7 @@ export default function PlaygroundScreen(props: Props) {
         {lens !== 'tune' && lens !== 'deal' && !readOnly && !classic && (
           <button type="button" onClick={() => setLibOpen(o => !o)} aria-pressed={libOpen}
             className={`${barBtn} px-3 border ${libOpen ? 'bg-[#3D52A0]/10 border-[#3D52A0]/30 text-[#3D52A0]' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-            <Plus className="w-3.5 h-3.5" aria-hidden /><span className="min-[1400px]:hidden">Add</span><span className="hidden min-[1400px]:inline">Add items</span>
+            <Plus className="w-3.5 h-3.5" aria-hidden /><span className={editSwitch ? 'min-[1800px]:hidden' : 'min-[1400px]:hidden'}>Add</span><span className={editSwitch ? 'hidden min-[1800px]:inline' : 'hidden min-[1400px]:inline'}>Add items</span>
           </button>
         )}
 
@@ -930,7 +1013,7 @@ export default function PlaygroundScreen(props: Props) {
 
         <button type="button" onClick={onSave} disabled={saveState === 'saving'} title="Saves now; edits also save on their own"
           className={`${barBtn} px-3 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60`}>
-          <Check className="w-3.5 h-3.5" aria-hidden /><span className="min-[1400px]:hidden">{saveState === 'saving' ? 'Saving…' : 'Save'}</span><span className="hidden min-[1400px]:inline">{saveState === 'saving' ? 'Saving…' : 'Save changes'}</span>
+          <Check className="w-3.5 h-3.5" aria-hidden /><span className={editSwitch ? 'min-[1800px]:hidden' : 'min-[1400px]:hidden'}>{saveState === 'saving' ? 'Saving…' : 'Save'}</span><span className={editSwitch ? 'hidden min-[1800px]:inline' : 'hidden min-[1400px]:inline'}>{saveState === 'saving' ? 'Saving…' : 'Save changes'}</span>
         </button>
         {saveState === 'saved' && lastSaved && (
           <span className="text-[11px] text-slate-500 whitespace-nowrap" data-saved>Saved {lastSaved.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -941,7 +1024,7 @@ export default function PlaygroundScreen(props: Props) {
         </button>
         {!readOnly && (
           <button type="button" onClick={classic ? onImport : () => setImporting(true)} disabled={readOnly && !classic} title="Import Excel" className={`${barBtn} bg-[#3D52A0]/[0.06] border border-[#3D52A0]/20 text-[#334486]`}>
-            <Upload className="w-3.5 h-3.5" aria-hidden /><span className="hidden 2xl:inline">Import Excel</span><span className="2xl:hidden">Import</span>
+            <Upload className="w-3.5 h-3.5" aria-hidden /><span className={editSwitch ? 'hidden min-[1800px]:inline' : 'hidden 2xl:inline'}>Import Excel</span><span className={editSwitch ? 'hidden' : '2xl:hidden'}>Import</span>
           </button>
         )}
         <div className="relative" data-pg-menu>
