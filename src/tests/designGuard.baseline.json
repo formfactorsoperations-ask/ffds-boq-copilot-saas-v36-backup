@@ -44,11 +44,6 @@
     "offPalette": 89,
     "mono": 1
   },
-  "components/ClientsDirectory.tsx": {
-    "halfPx": 1,
-    "tinyPx": 3,
-    "offPalette": 2
-  },
   "components/CloudConfigModal.tsx": {
     "tinyPx": 2,
     "offPalette": 11,

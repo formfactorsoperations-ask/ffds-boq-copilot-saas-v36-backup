@@ -21,7 +21,6 @@ import {
   Plus, 
   MessageCircle, 
   Download, 
-  ArrowUpDown, 
   Tag, 
   Building, 
   Star, 
@@ -33,13 +32,13 @@ import {
   Send, 
   Globe,
   KeyRound,
-  Pin,
-  Sparkles,
   Check,
   RefreshCw,
   AlertTriangle,
 } from '@/lib/lucide-shim';
 import { publicAppOrigin } from "../lib/publicUrl";
+import { Button, Chip, Segmented, StateDot, EmptyState, LABEL, INPUT, type Tone } from "./ui/kit";
+import { CountUp } from "./ui/HudBits";
 
 interface ClientsDirectoryProps {
   projects: FullProjectData[];
@@ -80,71 +79,33 @@ interface AggregatedClient {
   configs: string[];
 }
 
-const BUCKET_CONFIG: Record<
-  BucketType,
-  { label: string; color: string; bg: string; border: string; dot: string }
-> = {
-  all: {
-    label: "All Accounts",
-    color: "text-[#3A416B]",
-    bg: "bg-[#F6F7FB]",
-    border: "border-[#E2E5F0]",
-    dot: "bg-[#8E96B8]"
-  },
-  active: {
-    label: "Active Site",
-    color: "text-[#12182F]",
-    bg: "bg-[#EDE8F5]/80",
-    border: "border-[#ADBBDA]",
-    dot: "bg-[#3D52A0]"
-  },
-  pipeline: {
-    label: "In Pipeline",
-    color: "text-amber-900",
-    bg: "bg-amber-50/80",
-    border: "border-amber-200",
-    dot: "bg-amber-500"
-  },
-  delivered: {
-    label: "Delivered",
-    color: "text-emerald-900",
-    bg: "bg-emerald-50/80",
-    border: "border-emerald-200",
-    dot: "bg-emerald-600"
-  },
-  lost: {
-    label: "Dormant",
-    color: "text-[#5A628A]",
-    bg: "bg-[#F6F7FB]",
-    border: "border-[#E2E5F0]",
-    dot: "bg-[#8E96B8]"
-  }
+/* A status is a chip from the screen kit: brand, slate, or one of the three state colours. */
+const BUCKET_CONFIG: Record<BucketType, { label: string; tone: Tone }> = {
+  all: { label: "All accounts", tone: "slate" },
+  active: { label: "Active site", tone: "brand" },
+  pipeline: { label: "In pipeline", tone: "warn" },
+  delivered: { label: "Delivered", tone: "good" },
+  lost: { label: "Dormant", tone: "slate" },
 };
 
-/** The bucket colour as a value, for the rail down the edge of each card. */
-const RAIL: Record<BucketType, string> = {
-  all: '#ADBBDA',
-  pipeline: '#7091E6',
-  active: '#3D52A0',
-  delivered: '#2F9E6E',
-  lost: '#ADBBDA',
+const PROJECT_STATUS_CONFIG: Record<string, { label: string; tone: Tone }> = {
+  lead: { label: "Discovery", tone: "slate" },
+  draft: { label: "Drafting", tone: "slate" },
+  proposal_sent: { label: "Proposal", tone: "warn" },
+  negotiation: { label: "Negotiation", tone: "warn" },
+  won: { label: "Contracted", tone: "brand" },
+  execution: { label: "On site", tone: "brand" },
+  work_paused: { label: "Paused", tone: "bad" },
+  completed: { label: "Handed over", tone: "good" },
+  lost: { label: "Lost", tone: "slate" },
+  archived: { label: "Archived", tone: "slate" },
 };
 
-const PROJECT_STATUS_CONFIG: Record<
-  string,
-  { label: string; color: string; bg: string; border: string }
-> = {
-  lead: { label: "Discovery", color: "text-[#3A416B]", bg: "bg-[#EDEFF7]", border: "border-[#E2E5F0]" },
-  draft: { label: "Drafting", color: "text-[#3A416B]", bg: "bg-[#EDEFF7]", border: "border-[#E2E5F0]" },
-  proposal_sent: { label: "Proposal", color: "text-amber-800", bg: "bg-amber-50", border: "border-amber-200" },
-  negotiation: { label: "Negotiation", color: "text-amber-800", bg: "bg-amber-50", border: "border-amber-200" },
-  won: { label: "Contracted", color: "text-[#12182F]", bg: "bg-[#EDE8F5]", border: "border-[#ADBBDA]" },
-  execution: { label: "On Site", color: "text-[#12182F]", bg: "bg-[#EDE8F5]", border: "border-[#ADBBDA]" },
-  work_paused: { label: "Paused", color: "text-rose-800", bg: "bg-rose-50", border: "border-rose-200" },
-  completed: { label: "Handed Over", color: "text-emerald-800", bg: "bg-emerald-50", border: "border-emerald-200" },
-  lost: { label: "Lost", color: "text-[#5A628A]", bg: "bg-[#EDEFF7]", border: "border-[#E2E5F0]" },
-  archived: { label: "Archived", color: "text-[#8E96B8]", bg: "bg-[#F6F7FB]", border: "border-[#E2E5F0]" },
-};
+/* The content card, the figure and the roster's columns (DESIGN.md "Surfaces" and "Type"). */
+const CARD = "bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hud-panel-in min-w-0";
+const FIGURE = "text-2xl leading-none font-black text-slate-800 tabular-nums";
+/* The last column holds five 28px actions; at 116px they sat on top of the figure beside them. */
+const ROW_GRID = "lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)_112px_minmax(0,1.4fr)_128px_164px]";
 
 const LIFECYCLE_STAGES = [
   { id: 1, label: "Consult", short: "1. Brief" },
@@ -737,11 +698,11 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
       /* "Actual" is dropped: the toolbar toggle already states the split, and
          next to a scoped Accounts figure the two read as a contradiction. */
       { label: "Accounts", value: `${stats.total}` },
-      { label: "Active & Sites", value: `${stats.active}` },
+      { label: "Active sites", value: `${stats.active}` },
       { label: "Delivered", value: `${stats.delivered}` },
       { 
-        label: !isDesigner ? "Active Portfolio" : "Multi-Project", 
-        value: !isDesigner ? formatINR(stats.openValue) : `${stats.multiProjectCount} Accounts`,
+        label: !isDesigner ? "Active portfolio" : "Multi-project", 
+        value: !isDesigner ? formatINR(stats.openValue) : `${stats.multiProjectCount} accounts`,
         tone: stats.openValue > 0 ? "good" : undefined 
       }
     ]
@@ -840,7 +801,7 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
       swapped. Depth now comes from the ground and a soft shadow; most of the
       borders are gone.
     */
-    <div className="flex flex-col h-full bg-[#F1F3F9] text-[#12182F]">
+    <div className="flex flex-col h-full bg-slate-100 text-slate-800">
 
       {/* The password is shown exactly once. It is never stored anywhere this
           app can read it back -- Firebase Auth holds only a hash -- so if it is
@@ -861,39 +822,39 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
               exit={{ opacity: 0, scale: 0.97, y: 8 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              className="bg-white rounded-3xl border border-[#E2E5F0] shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
             >
               <div className="p-5 sm:p-6 space-y-4">
                 <div>
-                  <h4 className="font-extrabold text-[#12182F] text-[15px]">
+                  <h4 className="font-bold text-slate-800 text-sm">
                     {issuedLogin.reissued ? "New password for" : "Portal login for"} {issuedLogin.clientName}
                   </h4>
-                  <p className="text-[13px] text-[#5A628A] font-medium mt-1 leading-relaxed">
+                  <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
                     Send these to your client. They will be asked to choose their own password when they first sign in.
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-[#E2E5F0] divide-y divide-[#EDEFF7] overflow-hidden">
-                  <div className="px-3.5 py-2.5 bg-[#F6F7FB]">
-                    <p className="text-[10px] uppercase font-black tracking-wider text-[#8E96B8]">Email</p>
-                    <p className="text-[13px] font-bold text-[#252C4E] mt-0.5 break-all">{issuedLogin.email}</p>
+                <div className="rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                  <div className="px-3.5 py-2.5 bg-slate-50">
+                    <p className="text-[10px] uppercase font-black tracking-wider text-slate-500">Email</p>
+                    <p className="text-xs font-bold text-slate-800 mt-0.5 break-all">{issuedLogin.email}</p>
                   </div>
                   <div className="px-3.5 py-2.5">
-                    <p className="text-[10px] uppercase font-black tracking-wider text-[#8E96B8]">Temporary password</p>
-                    <p className="text-[15px] font-black text-[#12182F] mt-0.5 tabular-nums select-all">{issuedLogin.tempPassword}</p>
+                    <p className="text-[10px] uppercase font-black tracking-wider text-slate-500">Temporary password</p>
+                    <p className="text-sm font-black text-slate-800 mt-0.5 tabular-nums select-all">{issuedLogin.tempPassword}</p>
                   </div>
                 </div>
 
-                <p className="text-[11.5px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 font-medium">
+                <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 font-medium">
                   This password is shown once and cannot be looked up later. Copy it now.
                 </p>
               </div>
 
-              <div className="bg-[#F6F7FB] px-5 py-3.5 border-t border-[#E2E5F0] flex justify-end gap-2.5">
+              <div className="bg-slate-50 px-5 py-3.5 border-t border-slate-200 flex justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIssuedLogin(null)}
-                  className="px-4 py-2 bg-white hover:bg-[#EDEFF7] border border-[#E2E5F0] rounded-xl text-xs font-bold text-[#3A416B] transition"
+                  className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 transition"
                 >
                   Done
                 </button>
@@ -910,7 +871,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                       setCopiedPassword(false);
                     }
                   }}
-                  className="px-5 py-2 rounded-xl text-xs font-extrabold text-white bg-[#3D52A0] hover:bg-[#334486] transition"
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-[#3D52A0] hover:bg-[#334486] transition"
                 >
                   {copiedPassword ? "Copied" : "Copy both"}
                 </button>
@@ -935,292 +896,231 @@ Temporary password: ${issuedLogin.tempPassword}`
       </AnimatePresence>
 
       
-      {/* ── What the directory knows about itself ────────────────────── */}
+      {/* ── What the directory knows about itself ──────────────────────
+          Three figures, each a label, a number and one line. The stage
+          chart is the widest because it is the only one that is a chart. */}
       <div className="px-4 lg:px-8 pt-2">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4">
 
           {/* Where the money actually sits */}
-          <div className="relative bg-white rounded-3xl cd-panel p-5 overflow-hidden">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#5A628A]">Under management</h3>
+          <section className={`${CARD} xl:col-span-4`}>
+            <h3 className={LABEL}>Under management</h3>
             <div className="flex items-baseline gap-2 mt-2 flex-wrap">
-              <span className="text-[26px] leading-none font-bold text-[#12182F] tabular-nums">{formatINR(intel.book)}</span>
-              <span className="text-[11px] text-[#8E96B8]">across {inScope.length} {inScope.length === 1 ? 'account' : 'accounts'}</span>
+              <CountUp value={Math.round(intel.book)} format={formatINR} className={FIGURE} />
+              <span className="text-[11px] text-slate-500">across {inScope.length} {inScope.length === 1 ? 'account' : 'accounts'}</span>
             </div>
 
             {/* top three against the rest of the book */}
-            <div className="flex h-2 rounded-full overflow-hidden mt-4 bg-[#EDEFF7]">
-              <div className="mny-bar" style={{ width: `${intel.topThreePct}%`, background: 'linear-gradient(90deg,#7091E6,#3D52A0)' }} />
-              <div className="mny-bar flex-1" style={{ background: '#E2E5F0', animationDelay: '.1s' }} />
+            <div className="h-2 rounded-full overflow-hidden mt-4 bg-slate-100">
+              <div className="mny-bar h-full rounded-full bg-[#3D52A0]" style={{ width: `${intel.topThreePct}%` }} />
             </div>
-            <p className="text-[11px] text-[#8E96B8] mt-2 leading-snug">
-              Top 3 hold <b className="text-[#12182F] tabular-nums">{intel.topThreePct}%</b>
+            <p className="text-[11px] text-slate-500 mt-2 leading-snug">
+              Top 3 hold <b className="text-slate-800 tabular-nums">{intel.topThreePct}%</b>
               {intel.top && <> · biggest is {intel.top.clientName} at {intel.topPct}%</>}
               {intel.dormantCount > 0 && (
                 <> · <b className="text-amber-700 tabular-nums">{formatINR(intel.dormantValue)}</b> dormant</>
               )}
             </p>
-          </div>
+          </section>
 
           {/* Who is worth a call */}
-          <div className="relative bg-white rounded-3xl cd-panel p-5 overflow-hidden">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#5A628A] flex items-center justify-between gap-2">
-              <span>Who to call next</span>
+          <section className={`${CARD} xl:col-span-3`} style={{ animationDelay: '40ms' }}>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className={LABEL}>Who to call next</h3>
               {intel.toCallAll > 0 && (
                 <button
                   type="button"
                   onClick={() => setSelectedSmartTag(selectedSmartTag === 'followup' ? 'all' : 'followup')}
-                  className="text-[10px] font-semibold normal-case tracking-normal text-[#ADBBDA] hover:text-[#3D52A0] transition-colors"
+                  className="text-[11px] font-semibold text-[#3D52A0] hover:text-[#334486] transition-colors"
                 >
-                  {intel.toCallAll} due &rsaquo;
+                  {selectedSmartTag === 'followup' ? 'Show all' : `See all ${intel.toCallAll}`}
                 </button>
               )}
-            </h3>
+            </div>
             <div className="flex items-baseline gap-2 mt-2 flex-wrap">
-              <span className={`text-[26px] leading-none font-bold tabular-nums ${stats.followupCount > 0 ? 'text-[#12182F]' : 'text-[#8E96B8]'}`}>
-                {intel.toCallAll}
-              </span>
-              <span className="text-[11px] text-[#8E96B8]">
+              <CountUp value={intel.toCallAll} className={`${FIGURE} ${intel.toCallAll > 0 ? '' : '!text-slate-400'}`} />
+              <span className="text-[11px] text-slate-500">
                 {intel.toCallAll === 1 ? 'account has gone quiet' : 'accounts have gone quiet'}
               </span>
             </div>
             {intel.toCall.length === 0 ? (
-              <p className="text-[11px] text-[#8E96B8] mt-3 leading-snug">Every live account has been touched inside a fortnight.</p>
+              <p className="flex items-start gap-2 text-[11px] text-slate-500 mt-4 leading-snug">
+                <StateDot tone="good" className="mt-1" />
+                Every live account has been touched inside a fortnight
+              </p>
             ) : (
-              <ul className="mt-3 space-y-1">
-                {intel.toCall.map((c, i) => (
+              <ul className="mt-3 divide-y divide-slate-100">
+                {intel.toCall.map((c) => (
                   <li key={c.clientKey}>
                     <button
                       type="button"
                       onClick={() => setDossierClient(c)}
-                      className="w-full text-left flex items-center gap-2 rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[#F6F7FB] transition-colors"
+                      className="w-full text-left flex items-center gap-2 rounded-lg px-2 -mx-2 py-1.5 hover:bg-slate-50 transition-colors"
                     >
-                      <span className="text-[10px] font-black text-[#ADBBDA] tabular-nums w-3 shrink-0">{i + 1}</span>
-                      <span className="text-[12px] font-bold text-[#12182F] truncate flex-1 min-w-0">{c.clientName}</span>
-                      <span className="text-[10px] text-[#8E96B8] tabular-nums shrink-0">{c.daysIdle}d quiet</span>
-                      <span className="text-[11px] font-bold text-[#3A416B] tabular-nums shrink-0">{formatINR(c.totalValue)}</span>
+                      <span className="text-xs font-semibold text-slate-800 truncate flex-1 min-w-0">{c.clientName}</span>
+                      <span className="text-[11px] text-slate-500 tabular-nums shrink-0">{c.daysIdle}d quiet</span>
+                      {!isDesigner && <span className="text-[11px] font-bold text-slate-700 tabular-nums shrink-0">{formatINR(c.totalValue)}</span>}
                     </button>
                   </li>
                 ))}
               </ul>
             )}
-          </div>
+          </section>
 
-          {/* Where the book is stuck */}
-          <div className="relative bg-white rounded-3xl cd-panel p-5 overflow-hidden">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#5A628A]">Where the book sits</h3>
+          {/* Where the book is stuck: the busiest stage carries the brand, the rest stay grey */}
+          <section className={`${CARD} md:col-span-2 xl:col-span-5`} style={{ animationDelay: '80ms' }}>
+            <h3 className={LABEL}>Where the book sits</h3>
             {(() => {
               const busiest = intel.spread.reduce((a, b) => (b.n > a.n ? b : a), intel.spread[0]);
               return (
-                <div className="flex items-baseline gap-2 mt-2 flex-wrap">
-                  <span className="text-[26px] leading-none font-bold text-[#12182F] tabular-nums">{busiest.n}</span>
-                  <span className="text-[11px] text-[#8E96B8]">sitting at {busiest.label}</span>
-                </div>
+                <>
+                  <div className="flex items-baseline gap-2 mt-2 flex-wrap">
+                    <CountUp value={busiest.n} className={FIGURE} />
+                    <span className="text-[11px] text-slate-500">sitting at {busiest.label}</span>
+                  </div>
+                  <div className="flex items-end gap-1 sm:gap-2 mt-4 h-12 border-b border-slate-200">
+                    {intel.spread.map(st => (
+                      <div key={st.id} className="flex-1 min-w-0 flex flex-col justify-end h-full" title={`${st.n} in ${st.label}`}>
+                        <div
+                          className={`w-full rounded-t ${st.n === 0 ? 'bg-slate-100' : st.id === busiest.id ? 'bg-[#3D52A0]' : 'bg-slate-300'}`}
+                          style={{ height: `${st.n === 0 ? 2 : Math.max(4, Math.round((st.n / intel.peakStage) * 48))}px` }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-start gap-1 sm:gap-2 mt-2">
+                    {intel.spread.map(st => (
+                      <span key={st.id} className="flex-1 min-w-0 text-center">
+                        <span className={`block text-xs font-bold tabular-nums ${st.id === busiest.id ? 'text-[#3D52A0]' : st.n === 0 ? 'text-slate-400' : 'text-slate-700'}`}>{st.n}</span>
+                        <span className="block text-[10px] text-slate-500 truncate">{st.label}</span>
+                      </span>
+                    ))}
+                  </div>
+                </>
               );
             })()}
-            <div className="flex items-end gap-1.5 mt-4" style={{ height: '38px' }}>
-              {intel.spread.map(st => (
-                <div key={st.id} className="flex-1 min-w-0 flex flex-col justify-end h-full" title={`${st.n} in ${st.label}`}>
-                  <div
-                    className="w-full rounded-t"
-                    style={{
-                      height: `${st.n === 0 ? 2 : Math.max(4, (st.n / intel.peakStage) * 34)}px`,
-                      background: st.n === 0 ? '#EDEFF7' : '#3D52A0',
-                      opacity: st.n === 0 ? 1 : 0.35 + 0.65 * (st.n / intel.peakStage),
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="flex items-start gap-1.5 mt-1.5">
-              {intel.spread.map(st => (
-                <span key={st.id} className="flex-1 min-w-0 text-center">
-                  <span className="block text-[9px] text-[#8E96B8] truncate">{st.label}</span>
-                  <span className="block text-[10px] font-bold text-[#3A416B] tabular-nums">{st.n}</span>
-                </span>
-              ))}
-            </div>
-          </div>
+          </section>
         </div>
 
         {/* ── what is wrong with the directory itself ─────────────────── */}
         {(intel.sharedEmails.length > 0 || intel.noContact.length > 0 || intel.unnamed.length > 0) && (
-          <div className="mt-3 rounded-2xl border border-[#E2E5F0] bg-white px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-            <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-800">
-              <AlertTriangle className="w-3.5 h-3.5" /> Worth a look
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className={`flex items-center gap-2 ${LABEL}`}>
+              <StateDot tone="warn" /> Worth a look
             </span>
             {intel.sharedEmails.map(([email, names]) => (
-              <span key={email} className="text-[11px] text-amber-900">
-                <b className="tabular-nums">{names.size}</b> accounts share <b>{email}</b>
-                <span className="text-amber-700"> ({[...names].filter(Boolean).join(', ')})</span>
+              <span key={email} className="text-xs text-slate-500">
+                <b className="text-slate-800 tabular-nums">{names.size}</b> accounts share <b className="text-slate-800">{email}</b>
+                {' '}({[...names].filter(Boolean).join(', ')})
               </span>
             ))}
             {intel.noContact.length > 0 && (
-              <span className="text-[11px] text-amber-900"><b className="tabular-nums">{intel.noContact.length}</b> with no email or phone</span>
+              <span className="text-xs text-slate-500"><b className="text-slate-800 tabular-nums">{intel.noContact.length}</b> with no email or phone</span>
             )}
             {intel.unnamed.length > 0 && (
-              <span className="text-[11px] text-amber-900"><b className="tabular-nums">{intel.unnamed.length}</b> unnamed</span>
+              <span className="text-xs text-slate-500"><b className="text-slate-800 tabular-nums">{intel.unnamed.length}</b> unnamed</span>
             )}
           </div>
         )}
       </div>
 
-      {/* 1. FILTER & SEARCH TOOLBAR (Sky Blue Theme + Actual/Dummy Filter) */}
-      <div className="px-4 lg:px-8 pt-2 pb-4">
-        <div className="bg-white p-4 rounded-3xl cd-panel flex flex-col gap-3">
-          
-          {/* Row 1: Search + Actual/Dummy Switcher + Sort + View Mode */}
-          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8E96B8]">
-                <Search className="w-4 h-4" />
-              </span>
+      {/* 1. Search, the Actual / Dummy split, sort, view and the two actions */}
+      <div className="px-4 lg:px-8 pt-4 pb-4">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-3">
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative grow basis-64 min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden />
               <input
                 type="text"
-                placeholder="Search by client name, email, phone, city, or project..."
+                aria-label="Search clients"
+                placeholder="Search clients, places or projects"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9.5 pr-8 py-2 bg-[#F6F7FB]/60 border border-[#E2E5F0]/80 rounded-xl text-xs font-medium text-[#12182F] outline-none focus:bg-white focus:border-[#3D52A0] focus:ring-1 focus:ring-[#E2E5F0] transition-all placeholder:text-[#8E96B8]"
+                className={`${INPUT} pl-9 pr-8 placeholder:text-slate-400`}
               />
               {searchQuery && (
-                <button 
+                <button
+                  type="button"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8E96B8] hover:text-[#5A628A] p-0.5 cursor-pointer"
+                  title="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Actual vs Dummy Filter Pill */}
-            <div className="flex items-center bg-[#EDEFF7]/90 p-0.5 rounded-xl border border-[#E2E5F0]/70 shrink-0">
-              <button
-                type="button"
-                onClick={() => setSelectedProjectKind('all')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                  selectedProjectKind === 'all'
-                    ? 'bg-[#3D52A0] text-white shadow-2xs font-semibold'
-                    : 'text-[#5A628A] hover:text-[#12182F]'
-                }`}
-              >
-                All ({stats.allCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedProjectKind('actual')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-                  selectedProjectKind === 'actual'
-                    ? 'bg-[#3D52A0] text-white shadow-2xs font-semibold'
-                    : 'text-[#5A628A] hover:text-[#12182F]'
-                }`}
-              >
-                <Pin className="w-3 h-3 text-[#ADBBDA]" />
-                <span>Actual ({stats.actualCount})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedProjectKind('dummy')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-                  selectedProjectKind === 'dummy'
-                    ? 'bg-[#3D52A0] text-white shadow-2xs font-semibold'
-                    : 'text-[#5A628A] hover:text-[#12182F]'
-                }`}
-              >
-                <Sparkles className="w-3 h-3 text-amber-300" />
-                <span>Dummy ({stats.dummyCount})</span>
-              </button>
-            </div>
+            <Segmented<ProjectKindFilter>
+              label="Actual or dummy projects"
+              value={selectedProjectKind}
+              onChange={setSelectedProjectKind}
+              options={[
+                { id: 'all', label: 'All', count: stats.allCount },
+                { id: 'actual', label: 'Actual', count: stats.actualCount },
+                { id: 'dummy', label: 'Dummy', count: stats.dummyCount },
+              ]}
+            />
 
-            {/* Sort & View Mode */}
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="flex items-center gap-1.5 bg-[#F6F7FB]/80 border border-[#E2E5F0]/80 px-3 py-1.5 rounded-xl text-xs font-medium text-[#3A416B]">
-                <ArrowUpDown className="w-3.5 h-3.5 text-[#8E96B8] shrink-0" />
-                <span className="text-[10px] uppercase font-semibold text-[#8E96B8] tracking-wider">Sort:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className="bg-transparent text-xs font-medium text-[#252C4E] outline-none cursor-pointer hover:text-[#3D52A0] transition-colors"
-                >
-                  <option value="activity_desc">Recent Activity</option>
-                  {!isDesigner && <option value="value_desc">Portfolio Value</option>}
-                  <option value="projects_desc">Project Count</option>
-                  <option value="name_asc">Name (A-Z)</option>
-                </select>
-              </div>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              aria-label="Sort accounts"
+              title="Sort accounts"
+              className={`${INPUT} !w-auto font-semibold text-slate-700 cursor-pointer`}
+            >
+              <option value="activity_desc">Recent activity</option>
+              {!isDesigner && <option value="value_desc">Portfolio value</option>}
+              <option value="projects_desc">Project count</option>
+              <option value="name_asc">Name, A to Z</option>
+            </select>
 
-              {/* View Mode Toggle */}
-              <div className="flex items-center bg-[#EDEFF7]/80 p-0.5 rounded-xl border border-[#E2E5F0]/60">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${viewMode === 'grid' ? 'bg-white text-[#334486] shadow-2xs font-semibold' : 'text-[#8E96B8] hover:text-[#3A416B]'}`}
-                  title="Card Grid View"
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('table')}
-                  className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${viewMode === 'table' ? 'bg-white text-[#334486] shadow-2xs font-semibold' : 'text-[#8E96B8] hover:text-[#3A416B]'}`}
-                  title="List Table View"
-                >
-                  <List className="w-4 h-4" />
-                </button>
-              </div>
+            <Segmented<'grid' | 'table'>
+              label="View"
+              value={viewMode}
+              onChange={setViewMode}
+              options={[
+                { id: 'grid', label: <span title="Accounts with their next move" className="flex"><LayoutGrid className="w-4 h-4" aria-label="Accounts view" /></span> },
+                { id: 'table', label: <span title="Plain table" className="flex"><List className="w-4 h-4" aria-label="Table view" /></span> },
+              ]}
+            />
 
-              {/* Action Buttons inside Directory Toolbar */}
-              <div className="flex items-center gap-2 pl-1 border-l border-[#E2E5F0]/80">
-                <button
-                  onClick={handleExportCSV}
-                  title="Export client roster to CSV"
-                  className="px-3 py-1.5 bg-white hover:bg-[#F6F7FB] text-[#3A416B] hover:text-[#12182F] border border-[#E2E5F0] rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5 text-[#8E96B8]" />
-                  <span className="hidden sm:inline">Export CSV</span>
-                </button>
-
-                <button
-                  onClick={onCreateNew}
-                  className="btn-primary px-3.5 py-1.5 text-white rounded-xl text-xs font-semibold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                  <span>New Project</span>
-                </button>
-              </div>
+            <div className="flex items-center gap-2 ml-auto">
+              <Button icon={Download} onClick={handleExportCSV} title="Export the client list as a CSV file">Export CSV</Button>
+              <Button variant="primary" icon={Plus} onClick={onCreateNew}>New project</Button>
             </div>
           </div>
 
-          {/* Row 2: Lifecycle Tabs & Smart Studio Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-[#EDEFF7]">
-            
-            {/* Primary Lifecycle Tabs (Sky Blue theme) */}
-            <div className="flex flex-wrap gap-1.5 items-center">
+          {/* Row 2: where each account is in its life, and the occasional refinements */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
+
+            <div className="flex flex-wrap gap-2 items-center">
               {(['all', 'active', 'pipeline', 'delivered', 'lost'] as BucketType[]).map((bucket) => {
                 const isSelected = selectedBucket === bucket;
-                const count = bucket === 'all' 
-                  ? stats.total 
-                  : bucket === 'active' 
-                  ? stats.active 
-                  : bucket === 'pipeline' 
-                  ? stats.pipeline 
-                  : bucket === 'delivered' 
-                  ? stats.delivered 
+                const count = bucket === 'all'
+                  ? stats.total
+                  : bucket === 'active'
+                  ? stats.active
+                  : bucket === 'pipeline'
+                  ? stats.pipeline
+                  : bucket === 'delivered'
+                  ? stats.delivered
                   : stats.lost;
 
                 return (
                   <button
                     key={bucket}
+                    type="button"
+                    aria-pressed={isSelected}
                     onClick={() => setSelectedBucket(bucket)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer border ${
                       isSelected
-                        ? "bg-[#EDE8F5] text-[#2A3A73] border border-[#ADBBDA] font-semibold"
-                        : "bg-white hover:bg-[#F6F7FB] text-[#5A628A] border border-[#E2E5F0]"
+                        ? "bg-[#3D52A0]/10 text-[#3D52A0] border-[#3D52A0]/20"
+                        : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
                     }`}
                   >
                     <span>{BUCKET_CONFIG[bucket].label}</span>
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full tabular-nums ${
-                      isSelected ? "bg-white text-[#3D52A0] border border-[#ADBBDA]" : "bg-[#F6F7FB] text-[#8E96B8] border border-[#E2E5F0]"
-                    }`}>
+                    <span className={`text-[11px] font-bold tabular-nums ${isSelected ? "text-[#3D52A0]" : "text-slate-400"}`}>
                       {count}
                     </span>
                   </button>
@@ -1261,10 +1161,10 @@ Temporary password: ${issuedLogin.tempPassword}`
                   setFiltersOpen(o => !o);
                 }}
                 aria-expanded={filtersOpen}
-                className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold transition-colors border ${
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors border cursor-pointer ${
                   selectedSmartTag !== 'all'
-                    ? 'bg-[#EDE8F5] text-[#2A3A73] border-[#ADBBDA]'
-                    : 'bg-white text-[#5A628A] border-[#E2E5F0] hover:text-[#12182F]'
+                    ? 'bg-[#3D52A0]/10 text-[#3D52A0] border-[#3D52A0]/20'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                 }`}
               >
                 <Tag className="w-3.5 h-3.5" />
@@ -1285,13 +1185,13 @@ Temporary password: ${issuedLogin.tempPassword}`
                       exit={{ opacity: 0, y: -4 }}
                       transition={{ duration: 0.15 }}
                       style={{ position: 'fixed', top: filtersAt.top, left: filtersAt.left, width: 240, zIndex: 50 }}
-                      className="bg-white rounded-2xl cd-pop p-2"
+                      className="bg-white rounded-xl border border-slate-200 cd-pop p-2"
                     >
                       {[
                         { id: 'all', label: 'All accounts' },
-                        { id: 'vip', label: '★ High value (over ₹25L)' },
+                        { id: 'vip', label: 'High value, over ₹25L' },
                         { id: 'followup', label: `Touchpoint due (${stats.followupCount})` },
-                        { id: 'multiproject', label: 'Multi-project' },
+                        { id: 'multiproject', label: 'More than one project' },
                         { id: 'execution', label: 'Active site' },
                         { id: 'invoice_pending', label: 'Invoiced' },
                       ].map((chip) => {
@@ -1299,9 +1199,10 @@ Temporary password: ${issuedLogin.tempPassword}`
                         return (
                           <button
                             key={chip.id}
+                            type="button"
                             onClick={() => { setSelectedSmartTag(chip.id as SmartFilterTag); setFiltersOpen(false); }}
-                            className={`w-full text-left px-2.5 py-2 rounded-xl text-[11px] font-semibold transition-colors flex items-center justify-between ${
-                              isSelected ? 'bg-[#EDE8F5] text-[#2A3A73]' : 'text-[#5A628A] hover:bg-[#F6F7FB] hover:text-[#12182F]'
+                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center justify-between cursor-pointer ${
+                              isSelected ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : 'text-slate-700 hover:bg-slate-50'
                             }`}
                           >
                             {chip.label}
@@ -1321,38 +1222,33 @@ Temporary password: ${issuedLogin.tempPassword}`
       {/* 2. MAIN DIRECTORY ROSTER */}
       <div className="px-4 lg:px-8 pb-16 flex-1">
         {filteredAndSortedClients.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-[#E2E5F0] p-12 text-center max-w-xl mx-auto my-8 shadow-xs">
-            <div className="w-12 h-12 rounded-2xl bg-[#EDE8F5] text-[#3D52A0] flex items-center justify-center mx-auto mb-3.5 border border-[#ADBBDA]">
-              <Users className="w-5 h-5" />
-            </div>
-            <h3 className="text-sm font-semibold text-[#252C4E]">No client accounts found</h3>
-            <p className="text-xs text-[#5A628A] mt-1 mb-5">
-              {searchQuery || selectedBucket !== 'all' || selectedSmartTag !== 'all' || selectedProjectKind !== 'all'
-                ? "Try clearing your search query or adjusting your filters."
-                : "No client records exist in the studio yet."}
-            </p>
-            <div className="flex items-center justify-center gap-3">
-              {(searchQuery || selectedBucket !== 'all' || selectedSmartTag !== 'all' || selectedProjectKind !== 'all') && (
-                <button
-                  onClick={() => {
-                    setSearchQuery("");
-                    setSelectedBucket('all');
-                    setSelectedSmartTag('all');
-                    setSelectedProjectKind('all');
-                  }}
-                  className="px-3.5 py-1.5 bg-[#EDEFF7] hover:bg-[#E2E5F0] text-[#3A416B] rounded-xl text-xs font-semibold transition-all cursor-pointer"
-                >
-                  Reset Filters
-                </button>
-              )}
-              <button
-                onClick={onCreateNew}
-                className="btn-primary px-4 py-1.5 text-white rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                <span>Create New Project</span>
-              </button>
-            </div>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 max-w-2xl mx-auto my-8 hud-panel-in">
+            {(searchQuery || selectedBucket !== 'all' || selectedSmartTag !== 'all' || selectedProjectKind !== 'all') ? (
+              <EmptyState
+                icon={Users}
+                title="No accounts match"
+                text="Clear the search and filters to see every client again"
+                action={
+                  <Button
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSelectedBucket('all');
+                      setSelectedSmartTag('all');
+                      setSelectedProjectKind('all');
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={Users}
+                title="No clients yet"
+                text="A client appears here as soon as their first project is created"
+                action={<Button variant="primary" icon={Plus} onClick={onCreateNew}>New project</Button>}
+              />
+            )}
           </div>
         ) : viewMode === 'grid' ? (
           /*
@@ -1363,16 +1259,15 @@ Temporary password: ${issuedLogin.tempPassword}`
             already proved the shape that works here: a named column header, a
             dense row per record, the detail opening in place.
           */
-          <div className="bg-white rounded-3xl cd-panel overflow-hidden">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
-            <div className="hidden lg:grid grid-cols-[1.9fr_1fr_112px_1.4fr_112px_116px] gap-x-3 px-4 py-2.5 bg-[#F6F7FB] border-b border-[#E2E5F0]">
-              {['Account', 'Stage', 'Status', 'Next move', 'Portfolio', ''].map((h, i) => (
-                <span key={i} className={`text-[10px] font-black uppercase tracking-wider text-[#5A628A] ${i === 4 ? 'text-right' : ''}`}>{h}</span>
+            <div className={`hidden lg:grid ${ROW_GRID} gap-x-4 px-6 py-3 bg-slate-50 border-b border-slate-200`}>
+              {['Account', 'Stage', 'Status', 'Next move', !isDesigner ? 'Portfolio' : 'Projects', ''].map((h, i) => (
+                <span key={i} className={`${LABEL} ${i === 4 ? 'text-right' : ''}`}>{h}</span>
               ))}
             </div>
 
-            <div className="divide-y divide-[#EDEFF7]">
-              <AnimatePresence>
+            <div className="divide-y divide-slate-100">
                 {filteredAndSortedClients.map((client, index) => {
                   const clientKey = client.clientKey;
                   const isExpanded = expandedClients.has(clientKey);
@@ -1382,44 +1277,29 @@ Temporary password: ${issuedLogin.tempPassword}`
                   const act = nextAction(client);
 
                   return (
-                    <motion.div
+                    <div
                       key={clientKey}
-                      layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.14, delay: Math.min(index * 0.012, 0.18) }}
-                      className={`group relative transition-colors ${isExpanded ? 'bg-[#F6F7FB]' : 'hover:bg-[#F6F7FB]/70'}`}
+                      style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
+                      className={`group relative hud-row-in transition-colors ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50'}`}
                     >
-                      <span aria-hidden className="absolute left-0 inset-y-0 w-[3px]" style={{ background: RAIL[client.bucket] }} />
-
-                      <div className="grid grid-cols-[1fr_auto] lg:grid-cols-[1.9fr_1fr_112px_1.4fr_112px_116px] items-center gap-x-3 gap-y-2 px-4 pl-5 py-2.5">
+                      <div className={`grid grid-cols-[1fr_auto] ${ROW_GRID} items-center gap-x-4 gap-y-2 px-4 lg:px-6 py-3`}>
 
                         {/* who */}
                         <button
                           type="button"
                           onClick={(e) => toggleExpand(clientKey, e)}
-                          className="min-w-0 text-left flex items-center gap-2.5 cursor-pointer"
+                          className="min-w-0 text-left flex items-center gap-3 cursor-pointer"
                         >
-                          <span
-                            className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-[10px] shrink-0 text-white"
-                            style={{
-                              background: client.isVip
-                                ? 'linear-gradient(135deg,#D9A441,#B4791F)'
-                                : 'linear-gradient(135deg,#7091E6,#3D52A0)',
-                            }}
-                          >
+                          <span className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 bg-[#3D52A0]/10 text-[#3D52A0]">
                             {getInitials(client.clientName)}
                           </span>
                           <span className="min-w-0">
-                            <span className="flex items-center gap-1.5 min-w-0">
-                              <span className="font-bold text-[13px] text-[#12182F] truncate">{client.clientName}</span>
-                              {client.isVip && <Star className="w-3 h-3 fill-amber-400 text-amber-500 shrink-0" />}
-                              {client.isDummy && (
-                                <span className="text-[8px] font-black uppercase tracking-wider text-amber-800 bg-amber-50 border border-amber-200 rounded px-1 py-[1px] shrink-0">Dummy</span>
-                              )}
+                            <span className="flex items-center gap-2 min-w-0">
+                              <span className="font-semibold text-sm text-slate-800 truncate">{client.clientName}</span>
+                              {client.isVip && <span title="High value, over ₹25L" className="flex shrink-0"><Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /></span>}
+                              {client.isDummy && <Chip tone="warn" className="shrink-0">Dummy</Chip>}
                             </span>
-                            <span className="block text-[10px] text-[#8E96B8] truncate">
+                            <span className="block text-[11px] text-slate-500 truncate mt-0.5">
                               {[client.clientLocation, client.configs.join(', '), client.clientEmail || client.clientPhone].filter(Boolean).join(' · ') || 'No contact'}
                             </span>
                           </span>
@@ -1427,47 +1307,45 @@ Temporary password: ${issuedLogin.tempPassword}`
 
                         {/* how far along */}
                         <div className="hidden lg:block min-w-0">
-                          <div className="flex items-center gap-[3px]">
+                          <div className="flex items-center gap-1">
                             {LIFECYCLE_STAGES.map(stg => (
                               <span
                                 key={stg.id}
                                 title={`Stage ${stg.id}: ${stg.label}`}
-                                className="flex-1 h-1.5 rounded-full"
-                                style={{
-                                  background: stg.id === stageIndex ? '#3D52A0'
-                                    : stg.id < stageIndex ? '#ADBBDA' : '#EDEFF7',
-                                }}
+                                className={`flex-1 h-1.5 rounded-full ${
+                                  stg.id === stageIndex ? 'bg-[#3D52A0]' : stg.id < stageIndex ? 'bg-[#3D52A0]/30' : 'bg-slate-100'
+                                }`}
                               />
                             ))}
                           </div>
-                          <span className="block text-[10px] text-[#8E96B8] mt-1 truncate">
-                            {LIFECYCLE_STAGES[stageIndex - 1]?.label} · {stageIndex}/6
+                          <span className="block text-[11px] text-slate-500 mt-1.5 truncate tabular-nums">
+                            {LIFECYCLE_STAGES[stageIndex - 1]?.label} · {stageIndex} of 6
                           </span>
                         </div>
 
                         {/* what state */}
                         <div className="hidden lg:flex flex-col items-start gap-1 min-w-0">
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-bold text-[10px] border ${bConfig.bg} ${bConfig.color} ${bConfig.border}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${bConfig.dot}`} />
-                            {bConfig.label}
-                          </span>
-                          <span className="text-[10px] text-[#ADBBDA] truncate">{timeAgo(client.lastActivity)}</span>
+                          <Chip tone={bConfig.tone}>{bConfig.label}</Chip>
+                          <span className="text-[11px] text-slate-500 truncate">{timeAgo(client.lastActivity)}</span>
                         </div>
 
                         {/* what to do about it */}
-                        <p className={`hidden lg:block text-[11px] font-semibold leading-snug ${
-                          act.tone === 'warn' ? 'text-amber-700' : act.tone === 'go' ? 'text-[#3D52A0]' : 'text-[#8E96B8]'
+                        <p className={`hidden lg:flex items-start gap-2 text-xs leading-snug ${
+                          act.tone === 'plain' ? 'text-slate-500' : 'text-slate-700 font-semibold'
                         }`}>
+                          {act.tone === 'warn' && <StateDot tone="warn" className="mt-1" />}
                           {act.label}
                         </p>
 
                         {/* how much */}
                         <div className="hidden lg:block text-right">
-                          <span className="block text-[14px] font-black text-[#12182F] tabular-nums leading-none">
+                          <span className="block text-sm font-black text-slate-800 tabular-nums leading-none">
                             {!isDesigner ? formatINR(client.totalValue) : `${client.projects.length}`}
                           </span>
-                          <span className="block text-[10px] text-[#ADBBDA] mt-0.5">
-                            {client.projects.length} {client.projects.length === 1 ? 'project' : 'projects'}
+                          <span className="block text-[11px] text-slate-500 mt-1">
+                            {!isDesigner
+                              ? `${client.projects.length} ${client.projects.length === 1 ? 'project' : 'projects'}`
+                              : client.projects.length === 1 ? 'project' : 'projects'}
                             {notesCount > 0 && ` · ${notesCount} note${notesCount > 1 ? 's' : ''}`}
                           </span>
                         </div>
@@ -1480,7 +1358,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                               onClick={(e) => handleIssueClientLogin(client.projects[0], client.clientName, false, e)}
                               disabled={issuingLoginFor === client.projects[0].id}
                               title="Create or reset this client's portal login"
-                              className="p-1.5 rounded-lg text-[#8E96B8] hover:text-[#334486] hover:bg-[#EDE8F5] transition-colors cursor-pointer disabled:opacity-50"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-[#3D52A0] hover:bg-[#3D52A0]/10 transition-colors cursor-pointer disabled:opacity-50"
                             >
                               <KeyRound className="w-3.5 h-3.5" />
                             </button>
@@ -1490,7 +1368,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                               type="button"
                               onClick={(e) => handleCopyPortalUrl(client.projects[0].id, e)}
                               title="Copy client portal link"
-                              className="p-1.5 rounded-lg text-[#8E96B8] hover:text-[#334486] hover:bg-[#EDE8F5] transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-[#3D52A0] hover:bg-[#3D52A0]/10 transition-colors cursor-pointer"
                             >
                               {copiedId === 'portal-' + client.projects[0].id ? <Check className="w-3.5 h-3.5 text-emerald-600" />
                                 : copiedId === 'noportal-' + client.projects[0].id ? <X className="w-3.5 h-3.5 text-amber-600" />
@@ -1503,7 +1381,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                                 type="button"
                                 onClick={() => setActiveWhatsAppMenu(activeWhatsAppMenu === clientKey ? null : clientKey)}
                                 title="WhatsApp quick scripts"
-                                className="p-1.5 rounded-lg text-[#8E96B8] hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-[#3D52A0] hover:bg-[#3D52A0]/10 transition-colors cursor-pointer"
                               >
                                 <MessageCircle className="w-3.5 h-3.5" />
                               </button>
@@ -1517,16 +1395,16 @@ Temporary password: ${issuedLogin.tempPassword}`
                                       exit={{ opacity: 0, scale: 0.95, y: 5 }}
                                       className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl cd-pop p-2 z-50 text-left"
                                     >
-                                      <p className="text-[10px] font-bold text-[#8E96B8] uppercase tracking-wider px-2 py-1 border-b border-[#EDEFF7]">Send WhatsApp message</p>
+                                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2 py-1 border-b border-slate-100">Send WhatsApp message</p>
                                       <div className="space-y-1 mt-1">
                                         {WHATSAPP_TEMPLATES.map(tmpl => (
                                           <button
                                             key={tmpl.id}
                                             onClick={() => openWhatsAppWithTemplate(client, tmpl.template)}
-                                            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-[#F6F7FB] text-xs font-semibold text-[#3A416B] transition-colors flex items-center justify-between group/w cursor-pointer"
+                                            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors flex items-center justify-between group/w cursor-pointer"
                                           >
                                             <span>{tmpl.title}</span>
-                                            <Send className="w-3 h-3 text-[#8E96B8] group-hover/w:text-emerald-600 transition-colors" />
+                                            <Send className="w-3 h-3 text-slate-500 group-hover/w:text-emerald-600 transition-colors" />
                                           </button>
                                         ))}
                                       </div>
@@ -1540,7 +1418,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                             type="button"
                             onClick={() => setDossierClient(client)}
                             title="Open dossier and studio notes"
-                            className="p-1.5 rounded-lg text-[#8E96B8] hover:text-[#334486] hover:bg-[#EDE8F5] transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-[#3D52A0] hover:bg-[#3D52A0]/10 transition-colors cursor-pointer"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
@@ -1549,7 +1427,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                             onClick={(e) => toggleExpand(clientKey, e)}
                             aria-expanded={isExpanded}
                             title={isExpanded ? 'Hide projects' : 'Show projects'}
-                            className="p-1.5 rounded-lg text-[#8E96B8] hover:text-[#334486] transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-[#3D52A0] hover:bg-[#3D52A0]/10 transition-colors cursor-pointer"
                           >
                             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                           </button>
@@ -1557,13 +1435,13 @@ Temporary password: ${issuedLogin.tempPassword}`
                       </div>
 
                       {/* everything the row could not hold, on small screens */}
-                      <div className="lg:hidden px-4 pl-5 pb-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-bold text-[10px] border ${bConfig.bg} ${bConfig.color} ${bConfig.border}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${bConfig.dot}`} />
-                          {bConfig.label}
+                      <div className="lg:hidden px-4 pb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <Chip tone={bConfig.tone}>{bConfig.label}</Chip>
+                        {!isDesigner && <span className="text-xs font-black text-slate-800 tabular-nums">{formatINR(client.totalValue)}</span>}
+                        <span className={`flex items-center gap-2 text-[11px] ${act.tone === 'plain' ? 'text-slate-500' : 'text-slate-700 font-semibold'}`}>
+                          {act.tone === 'warn' && <StateDot tone="warn" />}
+                          {act.label}
                         </span>
-                        <span className="text-[13px] font-black text-[#12182F] tabular-nums">{formatINR(client.totalValue)}</span>
-                        <span className={`text-[11px] font-semibold ${act.tone === 'warn' ? 'text-amber-700' : act.tone === 'go' ? 'text-[#3D52A0]' : 'text-[#8E96B8]'}`}>{act.label}</span>
                       </div>
 
                       <AnimatePresence initial={false}>
@@ -1575,28 +1453,26 @@ Temporary password: ${issuedLogin.tempPassword}`
                             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                             className="overflow-hidden"
                           >
-                            <div className="px-4 pl-5 pb-3 space-y-1.5">
+                            <div className="px-4 lg:px-6 lg:pl-[72px] pb-4 space-y-2">
                               {client.projects.map(proj => {
                                 const pVal = getSingleProjectValue(proj);
                                 const pStatus = proj.context?.status || 'draft';
-                                const pConfig = PROJECT_STATUS_CONFIG[pStatus] || { label: pStatus, color: 'text-[#3A416B]', bg: 'bg-[#EDEFF7]', border: 'border-[#E2E5F0]' };
+                                const pConfig = PROJECT_STATUS_CONFIG[pStatus] || { label: pStatus, tone: 'slate' as Tone };
                                 return (
                                   <button
                                     key={proj.id}
                                     type="button"
                                     onClick={() => onOpenProject(proj)}
-                                    className="w-full text-left px-3 py-2 bg-white border border-[#E2E5F0] rounded-xl hover:border-[#ADBBDA] cursor-pointer transition-colors flex items-center justify-between gap-2 group/item"
+                                    className="w-full text-left px-3 py-2 bg-white border border-slate-200 rounded-xl hover:border-[#3D52A0]/20 cursor-pointer transition-colors flex items-center justify-between gap-2 group/item"
                                   >
                                     <span className="min-w-0 flex-1 flex items-center gap-2">
-                                      <span className="font-bold text-[12px] text-[#12182F] group-hover/item:text-[#3D52A0] truncate transition-colors">
+                                      <span className="font-bold text-xs text-slate-800 group-hover/item:text-[#3D52A0] truncate transition-colors">
                                         {proj.context?.name || 'Untitled project'}
                                       </span>
-                                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border shrink-0 ${pConfig.bg} ${pConfig.color} ${pConfig.border}`}>
-                                        {pConfig.label}
-                                      </span>
-                                      {proj.context?.config && <span className="text-[10px] text-[#8E96B8] shrink-0">{proj.context.config}</span>}
+                                      <Chip tone={pConfig.tone} className="shrink-0">{pConfig.label}</Chip>
+                                      {proj.context?.config && <span className="text-[10px] text-slate-500 shrink-0">{proj.context.config}</span>}
                                     </span>
-                                    <span className="tabular-nums text-[12px] font-bold text-[#3A416B] shrink-0">{formatINR(pVal)}</span>
+                                    <span className="tabular-nums text-xs font-bold text-slate-700 shrink-0">{formatINR(pVal)}</span>
                                   </button>
                                 );
                               })}
@@ -1604,18 +1480,17 @@ Temporary password: ${issuedLogin.tempPassword}`
                           </motion.div>
                         )}
                       </AnimatePresence>
-                    </motion.div>
+                    </div>
                   );
                 })}
-              </AnimatePresence>
             </div>
           </div>
         ) : (
-          /* --- LIST TABLE VIEW (Sky Blue) --- */
-          <div className="bg-white rounded-2xl border border-[#E2E5F0]/80 shadow-xs overflow-hidden">
+          /* The plain table: every account on one line, nothing opening in place. */
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hud-panel-in">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-[#3A416B]">
-                <thead className="bg-[#F6F7FB] text-[10px] uppercase font-semibold text-[#8E96B8] border-b border-[#E2E5F0]/80">
+              <table className="w-full text-left text-xs text-slate-700">
+                <thead className={`bg-slate-50 border-b border-slate-200 ${LABEL}`}>
                   <tr>
                     <th className="px-5 py-3">Client</th>
                     <th className="px-4 py-3">Type</th>
@@ -1623,50 +1498,40 @@ Temporary password: ${issuedLogin.tempPassword}`
                     <th className="px-4 py-3">Location</th>
                     <th className="px-4 py-3">Stage</th>
                     <th className="px-4 py-3">Projects</th>
-                    {!isDesigner && <th className="px-4 py-3 text-right">Portfolio Value</th>}
-                    <th className="px-5 py-3 text-right">Actions</th>
+                    {!isDesigner && <th className="px-4 py-3 text-right">Portfolio</th>}
+                    <th className="px-5 py-3 text-right"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#EDEFF7] font-medium">
+                <tbody className="divide-y divide-slate-100 font-medium">
                   {filteredAndSortedClients.map((client) => {
                     const bConfig = BUCKET_CONFIG[client.bucket];
                     const stageIndex = getClientStageIndex(client);
                     return (
-                      <tr key={client.clientKey} className="hover:bg-[#EDE8F5]/40 transition-colors group">
+                      <tr key={client.clientKey} className="hover:bg-slate-50 transition-colors group">
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-lg bg-[#EDE8F5] text-[#2A3A73] flex items-center justify-center font-semibold text-xs shrink-0 border border-[#ADBBDA]/60">
+                            <div className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] flex items-center justify-center font-bold text-xs shrink-0">
                               {getInitials(client.clientName)}
                             </div>
                             <div>
-                              <p className="font-semibold text-[#12182F] leading-tight">{client.clientName}</p>
-                              <p className="text-[11px] text-[#8E96B8] mt-0.5">{client.clientEmail || client.clientPhone || 'No contact info'}</p>
+                              <p className="text-sm font-semibold text-slate-800 leading-tight">{client.clientName}</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">{client.clientEmail || client.clientPhone || 'No contact'}</p>
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
-                            client.isDummy
-                              ? "bg-amber-50 text-amber-800 border-amber-200"
-                              : "bg-[#EDE8F5] text-[#334486] border-[#ADBBDA]"
-                          }`}>
-                            <Pin className="w-2.5 h-2.5" />
-                            {client.isDummy ? "Dummy" : "Actual"}
-                          </span>
+                          <Chip tone={client.isDummy ? 'warn' : 'slate'}>{client.isDummy ? 'Dummy' : 'Actual'}</Chip>
                         </td>
                         <td className="px-4 py-3.5">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium text-[10px] border ${bConfig.bg} ${bConfig.color} ${bConfig.border}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${bConfig.dot}`}></span>
-                            {bConfig.label}
-                          </span>
+                          <Chip tone={bConfig.tone}>{bConfig.label}</Chip>
                         </td>
-                        <td className="px-4 py-3.5 text-[#5A628A]">{client.clientLocation || "—"}</td>
+                        <td className="px-4 py-3.5 text-slate-500">{client.clientLocation || "—"}</td>
                         <td className="px-4 py-3.5">
-                          <span className="text-xs text-[#334486] font-medium">{LIFECYCLE_STAGES[stageIndex - 1]?.label || 'Brief'}</span>
+                          <span className="text-xs text-slate-700">{LIFECYCLE_STAGES[stageIndex - 1]?.label || 'Consult'}</span>
                         </td>
-                        <td className="px-4 py-3.5 text-[#5A628A]">{client.projects.length}</td>
+                        <td className="px-4 py-3.5 text-slate-500">{client.projects.length}</td>
                         {!isDesigner && (
-                          <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#12182F]">
+                          <td className="px-4 py-3.5 text-right tabular-nums text-sm font-black text-slate-800">
                             {formatINR(client.totalValue)}
                           </td>
                         )}
@@ -1678,7 +1543,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                                   type="button"
                                   onClick={(e) => handleCopyPortalUrl(client.projects[0].id, e)}
                                   title="Copy client portal link"
-                                  className="p-1.5 rounded-lg text-[#5A628A] hover:text-[#334486] hover:bg-[#EDE8F5] border border-[#E2E5F0]/70 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-[#3D52A0] hover:bg-[#3D52A0]/10 transition-colors cursor-pointer"
                                 >
                                   {copiedId === "portal-" + client.projects[0].id ? (
                                     <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -1686,12 +1551,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                                     <Globe className="w-3.5 h-3.5" />
                                   )}
                                 </button>
-                                <button
-                                  onClick={() => onOpenProject(client.projects[0])}
-                                  className="px-2.5 py-1 text-xs font-semibold text-[#334486] bg-[#EDE8F5] hover:bg-[#E2E5F0] rounded-lg border border-[#ADBBDA] transition-colors cursor-pointer"
-                                >
-                                  Open
-                                </button>
+                                <Button size="sm" onClick={() => onOpenProject(client.projects[0])}>Open</Button>
                               </>
                             )}
                           </div>
@@ -1723,24 +1583,24 @@ Temporary password: ${issuedLogin.tempPassword}`
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 280 }}
-              className="relative w-full max-w-md bg-white h-full shadow-2xl z-10 flex flex-col justify-between border-l border-[#E2E5F0]"
+              className="relative w-full max-w-md bg-white h-full shadow-2xl z-10 flex flex-col justify-between border-l border-slate-200"
             >
               {/* Drawer Header */}
-              <div className="p-6 border-b border-[#EDEFF7] flex items-start justify-between bg-[#F6F7FB]/60">
+              <div className="p-6 border-b border-slate-100 flex items-start justify-between bg-slate-50/60">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-[#EDE8F5] text-[#334486] border border-[#ADBBDA] flex items-center justify-center font-bold text-sm">
+                  <div className="w-12 h-12 rounded-2xl bg-[#3D52A0]/10 text-[#3D52A0] border border-[#3D52A0]/20 flex items-center justify-center font-bold text-sm">
                     {getInitials(dossierClient.clientName)}
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-[#12182F]">{dossierClient.clientName}</h3>
-                    <p className="text-xs text-[#5A628A] mt-0.5">
+                    <h3 className="text-base font-bold text-slate-800">{dossierClient.clientName}</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
                       {dossierClient.clientLocation || "No location specified"}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setDossierClient(null)}
-                  className="p-1.5 rounded-lg text-[#8E96B8] hover:text-[#3A416B] hover:bg-[#EDEFF7] transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1751,31 +1611,31 @@ Temporary password: ${issuedLogin.tempPassword}`
                 
                 {/* Vitals Summary */}
                 <div className="grid grid-cols-2 gap-2.5">
-                  <div className="p-3 bg-[#F6F7FB] border border-[#E2E5F0]/80 rounded-xl">
-                    <span className="text-[10px] uppercase font-semibold text-[#8E96B8] block">Total Portfolio</span>
-                    <span className="text-sm font-bold text-[#12182F] tabular-nums mt-0.5 block">
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
+                    <span className="text-[10px] uppercase font-semibold text-slate-500 block">Total portfolio</span>
+                    <span className="text-sm font-bold text-slate-800 tabular-nums mt-0.5 block">
                       {formatINR(dossierClient.totalValue)}
                     </span>
                   </div>
-                  <div className="p-3 bg-[#F6F7FB] border border-[#E2E5F0]/80 rounded-xl">
-                    <span className="text-[10px] uppercase font-semibold text-[#8E96B8] block">Linked Sites</span>
-                    <span className="text-sm font-bold text-[#12182F] mt-0.5 block">
-                      {dossierClient.projects.length} Project{dossierClient.projects.length > 1 ? 's' : ''}
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
+                    <span className="text-[10px] uppercase font-semibold text-slate-500 block">Projects</span>
+                    <span className="text-sm font-bold text-slate-800 mt-0.5 block">
+                      {dossierClient.projects.length} project{dossierClient.projects.length > 1 ? 's' : ''}
                     </span>
                   </div>
                 </div>
 
                 {/* Contact Records */}
                 <div className="space-y-2">
-                  <span className="text-xs font-bold text-[#12182F] block uppercase tracking-wider">Contact Records</span>
-                  <div className="bg-[#F6F7FB] border border-[#E2E5F0]/70 rounded-xl p-3.5 space-y-2.5 text-xs text-[#3A416B]">
+                  <span className="text-xs font-bold text-slate-800 block uppercase tracking-wider">Contact</span>
+                  <div className="bg-slate-50 border border-slate-200/70 rounded-xl p-3.5 space-y-2.5 text-xs text-slate-700">
                     <div className="flex items-center justify-between">
-                      <span className="text-[#8E96B8] flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Email</span>
-                      <span className="font-medium text-[#12182F] select-all">{dossierClient.clientEmail || '—'}</span>
+                      <span className="text-slate-500 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Email</span>
+                      <span className="font-medium text-slate-800 select-all">{dossierClient.clientEmail || '—'}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[#8E96B8] flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Phone</span>
-                      <span className="font-medium text-[#12182F] select-all">{dossierClient.clientPhone || '—'}</span>
+                      <span className="text-slate-500 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Phone</span>
+                      <span className="font-medium text-slate-800 select-all">{dossierClient.clientPhone || '—'}</span>
                     </div>
                   </div>
                 </div>
@@ -1783,8 +1643,8 @@ Temporary password: ${issuedLogin.tempPassword}`
                 {/* Studio Internal Notes */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#12182F] uppercase tracking-wider">Internal Studio Notes</span>
-                    <span className="text-[10px] text-[#8E96B8]">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Studio notes</span>
+                    <span className="text-[10px] text-slate-500">
                       {(clientNotes[dossierClient.clientKey] || []).length} recorded
                     </span>
                   </div>
@@ -1793,18 +1653,18 @@ Temporary password: ${issuedLogin.tempPassword}`
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="Add an internal studio note or preference..."
+                      placeholder="Add a note only the studio sees"
                       value={newNoteText}
                       onChange={(e) => setNewNoteText(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') handleAddNote(dossierClient.clientKey);
                       }}
-                      className="flex-1 px-3 py-2 bg-[#F6F7FB] border border-[#E2E5F0] rounded-xl text-xs outline-none focus:bg-white focus:border-[#3D52A0]"
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:bg-white focus:border-[#3D52A0]"
                     />
                     <button
                       onClick={() => handleAddNote(dossierClient.clientKey)}
                       disabled={!newNoteText.trim()}
-                      className="px-3.5 py-2 bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-40 text-white font-semibold text-xs rounded-xl transition-all cursor-pointer"
+                      className="px-3.5 py-2 bg-[#3D52A0] hover:bg-[#334486] disabled:opacity-40 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                     >
                       Save
                     </button>
@@ -1813,19 +1673,19 @@ Temporary password: ${issuedLogin.tempPassword}`
                   {/* Notes Feed */}
                   <div className="space-y-2 pt-1 max-h-56 overflow-y-auto">
                     {(clientNotes[dossierClient.clientKey] || []).length === 0 ? (
-                      <p className="text-xs text-[#8E96B8] italic py-2 text-center">No internal notes for this client yet.</p>
+                      <p className="text-xs text-slate-500 py-2 text-center">No notes for this client yet</p>
                     ) : (
                       (clientNotes[dossierClient.clientKey] || []).map((note) => (
-                        <div key={note.id} className="p-3 bg-[#F6F7FB] border border-[#E2E5F0]/60 rounded-xl flex items-start justify-between gap-2 text-xs">
+                        <div key={note.id} className="p-3 bg-slate-50 border border-slate-200/60 rounded-xl flex items-start justify-between gap-2 text-xs">
                           <div>
-                            <p className="text-[#252C4E] leading-relaxed">{note.text}</p>
-                            <p className="text-[10px] text-[#8E96B8] mt-1">
-                              By <span className="font-medium text-[#5A628A]">{note.author}</span> • {timeAgo(note.createdAt)}
+                            <p className="text-slate-800 leading-relaxed">{note.text}</p>
+                            <p className="text-[10px] text-slate-500 mt-1">
+                              By <span className="font-medium text-slate-500">{note.author}</span> • {timeAgo(note.createdAt)}
                             </p>
                           </div>
                           <button
                             onClick={() => handleDeleteNote(dossierClient.clientKey, note.id)}
-                            className="text-[#ADBBDA] hover:text-rose-500 p-1 transition-colors cursor-pointer"
+                            className="text-slate-400 hover:text-rose-500 p-1 transition-colors cursor-pointer"
                             title="Delete note"
                           >
                             <X className="w-3.5 h-3.5" />
@@ -1838,8 +1698,8 @@ Temporary password: ${issuedLogin.tempPassword}`
               </div>
 
               {/* Drawer Footer */}
-              <div className="p-4 border-t border-[#EDEFF7] bg-[#F6F7FB]/80 flex items-center justify-between gap-2">
-                <span className="text-[11px] text-[#8E96B8]">
+              <div className="p-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-slate-500">
                   Last active {timeAgo(dossierClient.lastActivity)}
                 </span>
                 <div className="flex items-center gap-2">
@@ -1848,7 +1708,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                       <button
                         type="button"
                         onClick={(e) => handleCopyPortalUrl(dossierClient.projects[0].id, e, false)}
-                        className="px-3 py-2 bg-white hover:bg-[#F6F7FB] border border-[#E2E5F0] text-[#3A416B] font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                        className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
                         title="Copy active portal link"
                       >
                         {copiedId === "portal-" + dossierClient.projects[0].id ? (
@@ -1859,7 +1719,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                         ) : (
                           <>
                             <Globe className="w-3.5 h-3.5 text-[#3D52A0]" />
-                            <span>Copy Link</span>
+                            <span>Copy link</span>
                           </>
                         )}
                       </button>
@@ -1873,23 +1733,23 @@ Temporary password: ${issuedLogin.tempPassword}`
                           setConfirmReissueFor(null);
                           handleCopyPortalUrl(id, e, true);
                         }}
-                        className="px-3 py-2 bg-white hover:bg-[#F6F7FB] border border-[#E2E5F0] text-[#3A416B] font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                        className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
                         title="Replace the client's link with a new one. Send them the new link: the old one no longer shows your studio on the sign-in page."
                       >
                         {confirmReissueFor === dossierClient.projects[0].id ? (
                           <>
-                            <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
+                            <RefreshCw className="w-3.5 h-3.5 text-[#3D52A0]" />
                             <span>Confirm reissue</span>
                           </>
                         ) : copiedId === "newportal-" + dossierClient.projects[0].id ? (
                           <>
                             <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>New Link Copied</span>
+                            <span>New link copied</span>
                           </>
                         ) : (
                           <>
-                            <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Reissue Link</span>
+                            <RefreshCw className="w-3.5 h-3.5 text-[#3D52A0]" />
+                            <span>Reissue link</span>
                           </>
                         )}
                       </button>
@@ -1903,7 +1763,7 @@ Temporary password: ${issuedLogin.tempPassword}`
                       }}
                       className="btn-primary px-4 py-2 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
                     >
-                      <span>Open Active Project</span>
+                      <span>Open project</span>
                     </button>
                   )}
                 </div>
