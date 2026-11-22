@@ -1641,15 +1641,24 @@ describe('one edit, every option (Edit: All options)', () => {
     { id: 'c', name: 'Comfort Upgrade', timestamp: 2, ...PG, boq: [{ ...placedWardrobe, id: 'c1' }] },
     { id: 'p', name: 'Complete Harmony', timestamp: 3, ...PG, boq: [{ ...placedWardrobe, id: 'p1', baseRate: 1350, marginOverride: 25 }], ...extra },
   ];
-  const allOn = () => fireEvent.click(screen.getByRole('radio', { name: 'All 3' }));
+  const toggle = () => screen.getByRole('switch', { name: 'Edit all 3 options at once' });
+  const allOn = () => fireEvent.click(toggle());
   const byId = (tiers: any[], id: string) => tiers.find(t => t.id === id).boq;
 
   it('an item added reaches every option, each at its own grade; Undo takes it out of all three', () => {
     let latest: any[] = [];
     render(<Harness tiersIn={three()} activeIn="c" probe={t => { latest = t; }} />);
-    expect(screen.getByRole('radio', { name: 'This option' }).getAttribute('aria-checked')).toBe('true');
-    allOn();
-    expect(screen.getByRole('status').textContent).toMatch(/Edits now reach Essential Elegance and Complete Harmony too/);
+    // Off at first, with a one-time tip under it.
+    expect(toggle().getAttribute('aria-checked')).toBe('false');
+    const tip = screen.getByRole('dialog', { name: 'New: edit all options at once' });
+    expect(within(tip).getByText(/goes into Essential Elegance and Complete Harmony too/)).toBeTruthy();
+    fireEvent.click(within(tip).getByRole('button', { name: 'Turn it on' }));
+    expect(screen.queryByRole('dialog', { name: 'New: edit all options at once' })).toBeNull();
+    expect(toggle().getAttribute('aria-checked')).toBe('true');
+    expect(toggle().textContent).toContain('Editing all 3');
+    expect(document.querySelector('[data-option-stack="fanned"]')).toBeTruthy();
+    expect(document.querySelector('[data-editing-all]')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toMatch(/Editing all 3 options: what you add, delete, move or resize goes into Essential Elegance and Complete Harmony too/);
     fireEvent.click(screen.getByRole('button', { name: 'Add Queen bed to Bedroom' }));
     const bed = (id: string) => byId(latest, id).find((l: any) => l.bankId === 'bed');
     // Queen bed is Furniture: not a graded trade, so its rate stays; the margin follows each option (20% × 0.85, × 1, × 1.25).
@@ -1684,14 +1693,25 @@ describe('one edit, every option (Edit: All options)', () => {
     expect([byId(latest, 'e').length, byId(latest, 'c').length, byId(latest, 'p').length]).toEqual([0, 0, 1]);
     expect(screen.getByRole('status').textContent).toMatch(/Also in Essential Elegance\. Complete Harmony \(sent to the client\) is left as it is\./);
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'This option' }));
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute('aria-checked')).toBe('false');
+    expect(document.querySelector('[data-editing-all]')).toBeNull();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Pick Sliding wardrobe' }));
     fireEvent.click(screen.getByRole('button', { name: /^Delete/ }));
     expect([byId(latest, 'e').length, byId(latest, 'c').length]).toEqual([1, 0]);
   });
 
+  it('the tip shows once: Got it, and it does not come back', () => {
+    const { unmount } = render(<Harness tiersIn={three()} activeIn="c" />);
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'New: edit all options at once' })).getByRole('button', { name: 'Got it' }));
+    expect(toggle().getAttribute('aria-checked')).toBe('false');
+    unmount();
+    render(<Harness tiersIn={three()} activeIn="c" />);
+    expect(screen.queryByRole('dialog', { name: 'New: edit all options at once' })).toBeNull();
+  });
+
   it('there is no switch with one option', () => {
     render(<Harness tier={PG} />);
-    expect(screen.queryByRole('radio', { name: /^All \d$/ })).toBeNull();
+    expect(screen.queryByRole('switch', { name: /Edit all \d options/ })).toBeNull();
   });
 });

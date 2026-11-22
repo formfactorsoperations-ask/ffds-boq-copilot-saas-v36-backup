@@ -134,11 +134,15 @@ linkage, notes, change orders on a frozen BOQ). Do not add a mode or a switch ba
 - **The bar** (white, `rounded-2xl border-slate-200 shadow-sm`): the BOQ Playground mark (a brand
   tile with a white pen), the version chip and its menu, the lens switch, the library toggle, search,
   Undo, Save and the Export menu.
-- **Edit: This option | All N** (`Segmented`, `label="Edit"`), beside the lenses while the project has
-  more than one option. All: what is added, deleted, moved or resized goes into every option, each at
-  its own grade (lib/playground/allOptions); finish, rate and margin stay in the option edited; a sent
-  or signed option is left as it is. While it shows, the bar's longer labels (Add items, Save changes,
-  Import Excel) wait for 1800px.
+- **Edit all N** (`AllOptionsParts.tsx`, a `role="switch"`), right after the option's name while the
+  project has more than one option: a brand-outlined button with the options drawn as a stack of cards
+  and a small switch. On, it fills brand and reads "Editing all N", the cards fan out, and the whole bar
+  takes a brand border and ring for as long as it stays on. What is added, deleted, moved or resized
+  goes into every option, each at its own grade (lib/playground/allOptions); finish, rate and margin stay
+  in the option edited; a sent or signed option is left as it is. The first time, a white tip under it
+  (`phd-pop`, an arrow to the button) says what it does, with Turn it on and Got it; it does not come
+  back. While the button shows, the bar's longer labels (Add items, Save changes, Import Excel) wait for
+  1800px, so the bar stays on one row at 1600px.
 - **Five lenses** in one `Segmented` (`label="Lens"`): **Plan**, **Rooms**, **Sheet**, **Tune**, **Deal**.
   A lens change swaps the work area with `key={lens}` and `hud-swap`. A Classic BOQ opens on the Sheet.
 - **The library** floats over the stage's left edge (232px): Pieces, Kits and By client tabs, each a
@@ -215,10 +219,14 @@ deploy build keeps it), with the mockup's timings. On top of the app's classes (
   for a move or a turn, and nothing for a kit.
 - **`pg-print`** (1.4 s): a new line prints into the Live BOQ, the Sheet and the Rooms: it drops 8px
   into place on a brand tint that fades.
+- **`pg-ripple`** (700 ms): "Edit all N" turned on sends one brand ring out from the button, as its
+  cards fan out (a 420 ms spring on each card) and its switch slides across.
+- **`pg-beckon`** (1.6 s, three times): while the first-time tip shows, the button gives three soft
+  brand rings, then stops.
 - What an edit shows is worked out from the BOQ before and after it (`lib/playground/motion.ts`).
   Undo shows nothing.
-- Under `prefers-reduced-motion` all five stop; the glow is not shown, and the price tag stands still
-  above the piece until it goes.
+- Under `prefers-reduced-motion` all seven stop and the cards do not fan; the glow is not shown, and
+  the price tag stands still above the piece until it goes.
 
 ## Copy
 

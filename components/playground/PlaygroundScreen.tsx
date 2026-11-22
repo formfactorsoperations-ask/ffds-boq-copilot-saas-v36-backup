@@ -58,6 +58,7 @@ import type { Grade } from '../../lib/materialSpecs';
 import { lineAmount } from '../../lib/playground/pricing';
 import { KitModal, KIT_DRAG } from './KitParts';
 import { ChangesPanel } from './ChangesParts';
+import { AllOptionsToggle } from './AllOptionsParts';
 import { RevisionIssueModal } from './RevisionParts';
 import { needingReason } from '../../lib/playground/revision';
 import type { ScopeRevisionRecord, RevisionResult } from '../../lib/scopeRevision';
@@ -104,6 +105,8 @@ const LENSES: [Lens, string, React.ElementType, string][] = [
   ['deal', 'Deal', Target, 'Offers, design fee, GST and what the client pays'],
 ];
 const HINT_KEY = 'ffds.playground.hintDone';
+/** The "Edit all 3" tip has been seen (once per browser). */
+const ALL_TIP_KEY = 'ffds.playground.allOptionsTip';
 
 /** A signed version, revised on the plan (PR R2): read-only, with its revision if one is open. */
 export interface SignedPlayground {
@@ -376,6 +379,8 @@ export default function PlaygroundScreen(props: Props) {
     An option sent to the client or signed is left as it is.
   */
   const [editAll, setEditAll] = useState(false);
+  const [allTip, setAllTip] = useState(() => { try { return !localStorage.getItem(ALL_TIP_KEY); } catch { return false; } });
+  const doneAllTip = () => { setAllTip(false); try { localStorage.setItem(ALL_TIP_KEY, '1'); } catch { /* private window */ } };
   const optionSetup = useMemo(() => optionSetupOf(templates as any), [templates]);
   const otherOptions = useMemo(() => {
     const mine = chainOf(chains, tier.id);
@@ -886,7 +891,7 @@ export default function PlaygroundScreen(props: Props) {
       )}
 
       {/* The bar */}
-      <div className="rounded-2xl bg-white border border-slate-200/90 p-2 flex items-center gap-2 flex-wrap shadow-sm">
+      <div className={`rounded-2xl bg-white border p-2 flex items-center gap-2 flex-wrap shadow-sm transition-[border-color,box-shadow] duration-300 ${fanOn ? 'border-[#3D52A0]/50 ring-2 ring-[#3D52A0]/15' : 'border-slate-200/90'}`} data-editing-all={fanOn || undefined}>
         <div className="flex items-center gap-2 pl-0.5">
           <span className="w-8 h-8 rounded-xl bg-[#3D52A0] text-white grid place-items-center shrink-0" title="BOQ Playground"><PenTool className="w-4 h-4" aria-hidden /></span>
           <div className="leading-tight hidden 2xl:block">
@@ -965,6 +970,19 @@ export default function PlaygroundScreen(props: Props) {
           )}
         </div>
 
+        {editSwitch && (
+          <AllOptionsToggle count={otherOptions.length + 1} on={editAll} coach={allTip && !editAll}
+            names={namesOf(otherOptions.map(o => o.t.name || 'Option'))} onCoachDone={doneAllTip}
+            onChange={on => {
+              setEditAll(on);
+              if (on) doneAllTip();
+              const held = otherOptions.filter(o => o.held);
+              setNote(!on ? `Edits stay in ${tier.name || 'this option'} again.` : reachable.length
+                ? `Editing all ${otherOptions.length + 1} options: what you add, delete, move or resize goes into ${namesOf(reachable.map(o => o.t.name || 'Option'))} too. Finish, rate and margin stay in each option.${held.length ? ` ${namesOf(held.map(o => `${o.t.name || 'Option'} (${o.held})`))} ${held.length === 1 ? 'is' : 'are'} left as ${held.length === 1 ? 'it is' : 'they are'}.` : ''}`
+                : 'The other options are sent or signed, so edits stay in this one.');
+            }} />
+        )}
+
         {signed && !revRec && !signed.elsewhere && !superseded && (
           <Button size="sm" variant="primary" icon={PenLine} onClick={signed.onStart}>Start revision {signed.nextNumber}</Button>
         )}
@@ -973,20 +991,6 @@ export default function PlaygroundScreen(props: Props) {
         <Segmented<Lens> size="sm" label="Lens" value={lens}
           onChange={l => { setLens(l); if (l === 'plan') setFitSignal(s => s + 1); }}
           options={LENSES.map(([id, n, I, tt]) => ({ id, label: <span title={tt} className="inline-flex items-center gap-1.5"><I className="w-3.5 h-3.5" aria-hidden />{n}</span> }))} />
-
-        {editSwitch && (
-          <span className="inline-flex items-center gap-1.5" title="All options: what you add, delete, move or resize goes into every option, each at its own grade. Finish, rate and margin stay in the option you edit.">
-            <span className={`${LABEL} hidden min-[1800px]:inline`}>Edit</span>
-            <Segmented<'one' | 'all'> size="sm" label="Edit" value={editAll ? 'all' : 'one'}
-              onChange={v => {
-                setEditAll(v === 'all');
-                if (v === 'all') setNote(reachable.length
-                  ? `Edits now reach ${namesOf(reachable.map(o => o.t.name || 'Option'))} too: what you add, delete, move or resize. Finish, rate and margin stay in each option.${otherOptions.some(o => o.held) ? ` ${namesOf(otherOptions.filter(o => o.held).map(o => `${o.t.name || 'Option'} (${o.held})`))} ${otherOptions.filter(o => o.held).length === 1 ? 'is' : 'are'} left as ${otherOptions.filter(o => o.held).length === 1 ? 'it is' : 'they are'}.` : ''}`
-                  : 'The other options are sent or signed, so edits stay in this one.');
-              }}
-              options={[{ id: 'one', label: 'This option' }, { id: 'all', label: `All ${otherOptions.length + 1}` }]} />
-          </span>
-        )}
 
         {lens !== 'tune' && lens !== 'deal' && !readOnly && !classic && (
           <button type="button" onClick={() => setLibOpen(o => !o)} aria-pressed={libOpen}

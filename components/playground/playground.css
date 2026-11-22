@@ -7,6 +7,8 @@
     pg-glow   the room it landed in glows once
     pg-tag    what the change did to the price floats up from the piece
     pg-print  a new line prints into the Live BOQ, the Sheet and the Rooms
+    pg-ripple "Edit all 3" turned on: a ring leaves the button once
+    pg-beckon "Edit all 3" while its first-time tip shows: three soft rings
 */
 @keyframes pg-slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 .pg-slide { animation: pg-slide 320ms cubic-bezier(.16, 1, .3, 1); }
@@ -36,9 +38,23 @@
 }
 .pg-print { animation: pg-print 1400ms cubic-bezier(.16, 1, .3, 1) backwards; }
 
+@keyframes pg-ripple {
+  0% { box-shadow: 0 0 0 0 rgba(61, 82, 160, .55); }
+  100% { box-shadow: 0 0 0 14px rgba(61, 82, 160, 0); }
+}
+.pg-ripple { animation: pg-ripple 700ms cubic-bezier(.16, 1, .3, 1) forwards; }
+
+@keyframes pg-beckon {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(61, 82, 160, .4); }
+  50% { box-shadow: 0 0 0 8px rgba(61, 82, 160, 0); }
+}
+.pg-beckon { animation: pg-beckon 1600ms ease-out 3; }
+
 @media (prefers-reduced-motion: reduce) {
-  .pg-slide, .pg-drop, .pg-glow, .pg-tag, .pg-print { animation: none !important; }
+  .pg-slide, .pg-drop, .pg-glow, .pg-tag, .pg-print, .pg-ripple, .pg-beckon { animation: none !important; }
   .pg-glow { opacity: 0; }
+  /* "Edit all 3": its cards do not fan, they just change colour. */
+  [data-option-stack] rect { transition: none !important; }
   /* The price tag still says what changed; it stands still, above the piece, until it goes. */
   .pg-tag { transform: translate(-50%, -12px); }
 }
