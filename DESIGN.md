@@ -134,6 +134,11 @@ linkage, notes, change orders on a frozen BOQ). Do not add a mode or a switch ba
 - **The bar** (white, `rounded-2xl border-slate-200 shadow-sm`): the BOQ Playground mark (a brand
   tile with a white pen), the version chip and its menu, the lens switch, the library toggle, search,
   Undo, Save and the Export menu.
+- **Edit: This option | All N** (`Segmented`, `label="Edit"`), beside the lenses while the project has
+  more than one option. All: what is added, deleted, moved or resized goes into every option, each at
+  its own grade (lib/playground/allOptions); finish, rate and margin stay in the option edited; a sent
+  or signed option is left as it is. While it shows, the bar's longer labels (Add items, Save changes,
+  Import Excel) wait for 1800px.
 - **Five lenses** in one `Segmented` (`label="Lens"`): **Plan**, **Rooms**, **Sheet**, **Tune**, **Deal**.
   A lens change swaps the work area with `key={lens}` and `hud-swap`. A Classic BOQ opens on the Sheet.
 - **The library** floats over the stage's left edge (232px): Pieces, Kits and By client tabs, each a

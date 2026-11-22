@@ -1634,3 +1634,64 @@ describe('A line added here holds its price', () => {
     expect(latest[0].boq[0]).toMatchObject({ bankId: 'wardrobe', baseRate: 1000, labor: 400, marginOverride: 20 });
   });
 });
+
+describe('one edit, every option (Edit: All options)', () => {
+  const three = (extra: any = {}) => [
+    { id: 'e', name: 'Essential Elegance', timestamp: 1, ...PG, boq: [{ ...placedWardrobe, id: 'e1', baseRate: 880, marginOverride: 17 }] },
+    { id: 'c', name: 'Comfort Upgrade', timestamp: 2, ...PG, boq: [{ ...placedWardrobe, id: 'c1' }] },
+    { id: 'p', name: 'Complete Harmony', timestamp: 3, ...PG, boq: [{ ...placedWardrobe, id: 'p1', baseRate: 1350, marginOverride: 25 }], ...extra },
+  ];
+  const allOn = () => fireEvent.click(screen.getByRole('radio', { name: 'All 3' }));
+  const byId = (tiers: any[], id: string) => tiers.find(t => t.id === id).boq;
+
+  it('an item added reaches every option, each at its own grade; Undo takes it out of all three', () => {
+    let latest: any[] = [];
+    render(<Harness tiersIn={three()} activeIn="c" probe={t => { latest = t; }} />);
+    expect(screen.getByRole('radio', { name: 'This option' }).getAttribute('aria-checked')).toBe('true');
+    allOn();
+    expect(screen.getByRole('status').textContent).toMatch(/Edits now reach Essential Elegance and Complete Harmony too/);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Queen bed to Bedroom' }));
+    const bed = (id: string) => byId(latest, id).find((l: any) => l.bankId === 'bed');
+    // Queen bed is Furniture: not a graded trade, so its rate stays; the margin follows each option (20% × 0.85, × 1, × 1.25).
+    expect([bed('e')?.marginOverride, bed('c')?.marginOverride, bed('p')?.marginOverride]).toEqual([17, 20, 25]);
+    expect(bed('e').place).toEqual(bed('c').place);
+    expect(screen.getByRole('status').textContent).toMatch(/Also in Essential Elegance and Complete Harmony\./);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(['e', 'c', 'p'].map(id => byId(latest, id).some((l: any) => l.bankId === 'bed'))).toEqual([false, false, false]);
+    expect(screen.getByRole('status').textContent).toMatch(/Undone in Comfort Upgrade, Essential Elegance and Complete Harmony/);
+  });
+
+  it('a resize reaches the same piece in every option; rates and margins stay each option’s own', async () => {
+    let latest: any[] = [];
+    render(<Harness tiersIn={three()} activeIn="c" probe={t => { latest = t; }} />);
+    allOn();
+    fireEvent.pointerDown(piece('c1'), { ...at(3.12, 1.12), pointerId: 1 });
+    fireEvent.pointerUp(stage(), { ...at(3.12, 1.12), pointerId: 1 });
+    await drag(screen.getByLabelText('Resize from the right'), [6.12, 1.12], [8.12, 1.12]);
+    for (const [id, line] of [['e', 'e1'], ['c', 'c1'], ['p', 'p1']]) expect(byId(latest, id).find((l: any) => l.id === line)).toMatchObject({ calcLength: 8, qty: 56 });
+    expect(byId(latest, 'e')[0]).toMatchObject({ baseRate: 880, marginOverride: 17 });
+    expect(byId(latest, 'p')[0]).toMatchObject({ baseRate: 1350, marginOverride: 25 });
+  });
+
+  it('an option sent to the client is left as it is, and says so; This option touches only this one', () => {
+    let latest: any[] = [];
+    const ctx0 = { name: 'Test flat', area: 465, rooms, designFeeType: 'percentage', designFee: 10, proposal: { tierId: 'p', issuedAt: Date.now(), validDays: 15 } };
+    render(<Harness tiersIn={three()} activeIn="c" ctx0={ctx0} probe={t => { latest = t; }} />);
+    allOn();
+    lens('Sheet');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Pick Sliding wardrobe' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Delete/ }));
+    expect([byId(latest, 'e').length, byId(latest, 'c').length, byId(latest, 'p').length]).toEqual([0, 0, 1]);
+    expect(screen.getByRole('status').textContent).toMatch(/Also in Essential Elegance\. Complete Harmony \(sent to the client\) is left as it is\./);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'This option' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Pick Sliding wardrobe' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Delete/ }));
+    expect([byId(latest, 'e').length, byId(latest, 'c').length]).toEqual([1, 0]);
+  });
+
+  it('there is no switch with one option', () => {
+    render(<Harness tier={PG} />);
+    expect(screen.queryByRole('radio', { name: /^All \d$/ })).toBeNull();
+  });
+});
