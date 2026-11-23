@@ -118,6 +118,14 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
             finalAmount = Math.max(0, amount - initiationFee);
             isFirstDesign = false;
         }
+        /*
+          A concession on this invoice (a closing discount, a dispute
+          settlement) is money the client was let off, taken off the payable
+          as lib/paymentSchedule does. Without it the reports counted the
+          full invoice as collected when less came in.
+        */
+        const concession = Math.min(Math.max(0, Number(m.discountAmount) || 0), finalAmount);
+        finalAmount = Math.round(finalAmount - concession);
         if (m.id) milestoneAmounts[m.id] = finalAmount;
 
         if (m.status === 'paid') {
