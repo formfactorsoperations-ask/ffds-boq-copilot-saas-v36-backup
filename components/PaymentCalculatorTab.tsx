@@ -47,6 +47,7 @@ import { Button } from './ui/kit';
 import { isTerminated } from '../lib/termination';
 import { holdsFinanceRole } from '../lib/roleAccess';
 import TerminationPanel from './termination/TerminationPanel';
+import DisputePanel from './disputes/DisputePanel';
 import type { TerminatePayload } from './termination/TerminateProjectModal';
 import { Wallet, SlidersHorizontal } from '@/lib/lucide-shim';
 
@@ -2385,6 +2386,12 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 )}
             </AnimatePresence>
 
+            {!isReadOnlyMode && (
+                <div className="mb-4 empty:hidden">
+                    <DisputePanel slot="lead" context={projectContext} schedule={schedule} canAct={canTerminate && !terminated} actor={terminationActor}
+                        setProjectContext={setProjectContext as any} />
+                </div>
+            )}
             {terminated && (
                 <div className="mb-4">
                     <TerminationPanel context={projectContext} schedule={schedule} canAct={canTerminate} actor={terminationActor}
@@ -3556,6 +3563,12 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 </div>
             )}
 
+            {!isReadOnlyMode && (
+                <div className="mt-6 empty:hidden">
+                    <DisputePanel slot="foot" context={projectContext} schedule={schedule} canAct={canTerminate && !terminated} actor={terminationActor}
+                        setProjectContext={setProjectContext as any} />
+                </div>
+            )}
             {!terminated && !isReadOnlyMode && (
                 <div className="mt-6">
                     <TerminationPanel context={projectContext} schedule={schedule} canAct={canTerminate} actor={terminationActor}

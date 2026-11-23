@@ -69,7 +69,7 @@ export default function ProjectFolder(p: ProjectFolderProps) {
 
   return (
     <article
-      className={`pf-item${p.stage === 'lost' ? ' is-lost' : ''}${p.active ? ' is-active' : ''}${p.selected ? ' is-selected' : ''}`}
+      className={`pf-item${p.stage === 'lost' || p.stage === 'terminated' ? ' is-lost' : ''}${p.active ? ' is-active' : ''}${p.selected ? ' is-selected' : ''}`}
       style={{ animationDelay: `${Math.min(p.index, 8) * 55}ms`, ['--fc' as any]: stage.color }}
       onMouseEnter={enter}
       onMouseLeave={leave}
@@ -93,7 +93,7 @@ export default function ProjectFolder(p: ProjectFolderProps) {
         }}
       >
         <div
-          className={`pf-pole${p.stage === 'lost' ? ' limp' : ''}`}
+          className={`pf-pole${p.stage === 'lost' || p.stage === 'terminated' ? ' limp' : ''}`}
           style={{ right: Math.round(30 * k), top: Math.round(HEADROOM * k) - 48 }}
           aria-hidden
         >

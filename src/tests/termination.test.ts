@@ -7,7 +7,7 @@ import {
 import { computeSchedule } from '../../lib/paymentSchedule';
 import { projectFact, bookedIn, cashIn, overdueAt, marginOf } from '../../lib/ownerReports';
 import { getSingleProjectValue } from '../../lib/financialsUtils';
-import { folderFiles } from '../../lib/projectFolders';
+import { folderFiles, stageOfProject } from '../../lib/projectFolders';
 
 /* A design fee of 2,00,000 and execution of 10,00,000, both with 18% GST. */
 const inputs: SettlementInputs = {
@@ -192,5 +192,8 @@ describe('a terminated project in the studio figures', () => {
     const { out } = terminate(ctx(), { basis: 'custom', designDonePct: 0, executionDonePct: 0, charges: 0, customAmount: 40000 });
     expect(getSingleProjectValue(project(out))).toBe(40000);
     expect(folderFiles(project(out))[0]).toMatchObject({ name: 'Termination settlement', route: 'payment-calc' });
+    /* Its own group on Projects, apart from leads that never signed. */
+    expect(stageOfProject(project(out))).toBe('terminated');
+    expect(stageOfProject(project(ctx({ status: 'lost' })))).toBe('lost');
   });
 });

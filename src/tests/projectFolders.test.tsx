@@ -38,8 +38,8 @@ describe('stages', () => {
     expect(['execution', 'work_paused'].map(stageOf)).toEqual(['execution', 'execution']);
     expect(['completed', 'archived'].map(stageOf)).toEqual(['completed', 'completed']);
     expect(stageOf('lost')).toBe('lost');
-    expect(FOLDER_STAGES.map((s) => s.label)).toEqual(['New lead', 'Proposal sent', 'Won', 'On site', 'Handed over', 'Lost']);
-    expect(new Set(FOLDER_STAGES.map((s) => s.color)).size).toBe(6);
+    expect(FOLDER_STAGES.map((s) => s.label)).toEqual(['New lead', 'Proposal sent', 'Won', 'On site', 'Handed over', 'Lost', 'Terminated']);
+    expect(new Set(FOLDER_STAGES.map((s) => s.color)).size).toBe(7);
     expect(toneOf('won')).toBe('dark');
   });
 

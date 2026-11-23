@@ -11,15 +11,16 @@ import type { FolderFile } from '../components/ui/glass-folder-cards';
 import type { NextAction } from '../services/nextActionEngine';
 import { classifyProject } from './projectClassification';
 import { isTerminated, settlementLine } from './termination';
+import { openDispute, daysOpen } from './disputes';
 
-export type FolderStage = 'lead' | 'proposal' | 'won' | 'execution' | 'completed' | 'lost';
+export type FolderStage = 'lead' | 'proposal' | 'won' | 'execution' | 'completed' | 'lost' | 'terminated';
 
 export interface StageDef {
   id: FolderStage;
   label: string;
   /** The stage colour: the plain panel behind the folder's glass, the flag, the glow under it, the swatch on its tab. */
   color: string;
-  /** Step on the five-step bar (Lead, Quote, Won, Site, Done); -1 when lost. */
+  /** Step on the five-step bar (Lead, Quote, Won, Site, Done); -1 when lost or terminated. */
   step: number;
 }
 
@@ -30,6 +31,8 @@ export const FOLDER_STAGES: StageDef[] = [
   { id: 'execution', label: 'On site', color: '#c2410c', step: 3 },
   { id: 'completed', label: 'Handed over', color: '#047857', step: 4 },
   { id: 'lost', label: 'Lost', color: '#64748b', step: -1 },
+  /* Signed or paid, then dropped before it finished (lib/termination): its own group, apart from leads that never signed. */
+  { id: 'terminated', label: 'Terminated', color: '#be123c', step: -1 },
 ];
 
 export const STAGE: Record<FolderStage, StageDef> = Object.fromEntries(
@@ -55,6 +58,15 @@ export function stageOf(status?: string | null): FolderStage {
     default:
       return 'lead'; // lead, draft, and anything not yet set
   }
+}
+
+/**
+ * The stage of a project, not just of its status: a terminated project is
+ * stored as `lost` with a termination record, and is shown in its own group.
+ */
+export function stageOfProject(project: any): FolderStage {
+  const c = project?.context || {};
+  return isTerminated(c) ? 'terminated' : stageOf(c.status);
 }
 
 /** Dark glass where the stage art is dark, so the name stays readable. */
@@ -84,7 +96,7 @@ const isPicture = (url?: string) => !!url && /\.(png|jpe?g|webp|avif|gif)(\?|$)/
  */
 export function folderFiles(project: any): RoutedFile[] {
   const c = project?.context || {};
-  const stage = stageOf(c.status);
+  const stage = stageOfProject(project);
   const tiers: any[] = project?.tiers || [];
   const rooms: any[] = c.rooms || [];
   const snags = (c.snagList || []).filter((s: any) => s?.status === 'open' || s?.status === 'in_progress').length;
@@ -95,6 +107,9 @@ export function folderFiles(project: any): RoutedFile[] {
   const push = (f: RoutedFile | null | false) => { if (f) out.push(f); };
 
   const renderFile = render ? { name: render.title || 'Latest render', meta: render.roomName || 'Render', image: render.url, route: 'drawing-tracker' } : null;
+  /* An open payment dispute leads, whatever the stage (lib/disputes). */
+  const dispute = openDispute(c);
+  if (dispute) push({ name: 'Dispute', meta: `Open ${daysOpen(dispute)} day${daysOpen(dispute) === 1 ? '' : 's'}`, route: 'payment-calc' });
   switch (stage) {
     case 'lead':
       push({ name: 'Brief & site', meta: rooms.length ? plural(rooms.length, 'room') : 'Start here', route: 'leadiq' });
@@ -124,12 +139,15 @@ export function folderFiles(project: any): RoutedFile[] {
       push({ name: 'Documents', meta: 'Everything issued', route: 'docs' });
       push(renderFile);
       break;
+    case 'terminated': {
+      /* Dropped part-way (lib/termination): the settlement leads. */
+      const line = settlementLine(c.termination?.settlement);
+      push({ name: 'Termination settlement', meta: line.kind === 'even' || c.termination?.settlement?.status !== 'open' ? 'Settled' : line.kind === 'refund' ? 'Refund due' : 'Balance due', route: 'payment-calc' });
+      push({ name: 'Brief & site', meta: 'As it was', route: 'leadiq' });
+      push(tiers.length > 0 && { name: 'Last proposal', meta: plural(tiers.length, 'option'), route: 'client' });
+      break;
+    }
     case 'lost':
-      /* Terminated part-way (lib/termination): the settlement leads. */
-      if (isTerminated(c)) {
-        const line = settlementLine(c.termination?.settlement);
-        push({ name: 'Termination settlement', meta: line.kind === 'even' || c.termination?.settlement?.status !== 'open' ? 'Settled' : line.kind === 'refund' ? 'Refund due' : 'Balance due', route: 'payment-calc' });
-      }
       push({ name: 'Brief & site', meta: 'As it was', route: 'leadiq' });
       push(tiers.length > 0 && { name: 'Last proposal', meta: plural(tiers.length, 'option'), route: 'client' });
       break;
