@@ -48,6 +48,7 @@ import { isTerminated } from '../lib/termination';
 import { holdsFinanceRole } from '../lib/roleAccess';
 import TerminationPanel from './termination/TerminationPanel';
 import DisputePanel from './disputes/DisputePanel';
+import { heldInDispute } from '../lib/disputes';
 import type { TerminatePayload } from './termination/TerminateProjectModal';
 import { Wallet, SlidersHorizontal } from '@/lib/lucide-shim';
 
@@ -1501,15 +1502,20 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
       invoice. Same arithmetic as totalPaid above, for the invoiced state.
     */
     /* Raised and unsettled, priced the same way the table prices them. */
+    /* Invoices held in a payment dispute stay off the chase ladder: the dispute card is where they are worked. */
+    const heldNames = useMemo(
+        () => new Set(milestones.filter((m) => heldInDispute(projectContext, m)).map((m) => m.name)),
+        [milestones, projectContext],
+    );
     const invoicedOutstanding = useMemo(
-        () => outstandingInvoices(schedule, { paymentMilestones: milestones }),
-        [schedule, milestones],
+        () => outstandingInvoices(schedule, { paymentMilestones: milestones.filter((m) => !heldInDispute(projectContext, m)) }),
+        [schedule, milestones, projectContext],
     );
 
     const escalationCfg = (moneySettings as any)?.paymentMilestones?.escalation || DEFAULT_ESCALATION;
     const chase = useMemo(
-        () => collections(moneyRequests as any, invoicedOutstanding, escalationCfg),
-        [moneyRequests, invoicedOutstanding, escalationCfg],
+        () => collections(((moneyRequests || []) as any[]).filter((r) => !heldNames.has(r?.milestoneLabel)) as any, invoicedOutstanding, escalationCfg),
+        [moneyRequests, invoicedOutstanding, escalationCfg, heldNames],
     );
     const billable = useMemo(
         () => billableNow(milestones, amountOfMilestone),

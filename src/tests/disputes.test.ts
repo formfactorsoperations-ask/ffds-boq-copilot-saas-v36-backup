@@ -142,3 +142,67 @@ describe('a payment dispute', () => {
     expect(outstandingByTrack(c, after)).toEqual({ execution: 150000, design: 0 });
   });
 });
+
+import { heldInDispute, disputeWindows } from '../../lib/disputes';
+import { projectFact, overdueAt, debtorsOf } from '../../lib/ownerReports';
+import { clientMoneyOf } from '../../lib/clientMoney';
+import { paymentWaiting } from '../../lib/opsDesk';
+
+describe('an invoice held in a dispute is out of the overdue chase', () => {
+  /* Design fully paid; execution's last 20% invoiced on 1 Sep and unpaid; a design invoice also unpaid. */
+  const real = (): any => ({
+    name: 'Siesta 2BHK', clientName: 'Client', status: 'completed', gstRate: 18, approvedTierId: 't1', bookedOn: '2026-01-10',
+    financials: { initiationFeePaid: 0, billablePercent: 100, designBillablePercent: 100, executionGstEnabled: true, designGstEnabled: true, discounts: [], approvedDesignValue: 200000, approvedExecutionValue: 1000000 },
+    paymentMilestones: [
+      { id: 'd1', type: 'design', name: 'Design 1', percentage: 50, status: 'paid', invoiceDate: '2026-02-01', paidDate: '2026-02-05' },
+      { id: 'd2', type: 'design', name: 'Design final', percentage: 50, status: 'invoiced', invoiceDate: '2026-09-01' },
+      { id: 'e1', type: 'execution', name: 'Execution 1', percentage: 80, status: 'paid', invoiceDate: '2026-03-01', paidDate: '2026-03-05' },
+      { id: 'e2', type: 'execution', name: 'Completion', percentage: 20, status: 'invoiced', invoiceDate: '2026-09-01', invoiceNumber: 'INV-9' },
+    ],
+  });
+  const tier = { id: 't1', summary: { totalSell: 1000000, designFee: 200000, totalCost: 700000 } };
+  const proj = (c: any) => ({ id: 'p1', context: c, tiers: [tier], activeTierId: 't1' });
+  const at = (iso: string) => Date.parse(`${iso}T12:00:00`);
+  /* Execution only is in dispute: the design invoice is not part of it. */
+  const disputed = () => raiseDispute(real(), { ...draft(), openedOn: '2026-10-01', claimed: { execution: 236000, design: 0 }, issues: [] }, 'Owner');
+
+  it('holds only the heads in dispute, only while it is open, and never a paid invoice', () => {
+    const c = disputed();
+    const by = Object.fromEntries(c.paymentMilestones.map((m: any) => [m.id, m]));
+    expect(disputeWindows(c)).toHaveLength(1);
+    expect(heldInDispute(c, by.e2, at('2026-10-15'))).toBe(true);
+    expect(heldInDispute(c, by.e2, at('2026-09-20'))).toBe(false); // before it was raised
+    expect(heldInDispute(c, by.d2, at('2026-10-15'))).toBe(false); // design is not in dispute
+    expect(heldInDispute(c, by.e1, at('2026-10-15'))).toBe(false); // paid
+    const closed = withdrawDispute(c, openDispute(c)!.id, { on: '2026-11-01', note: '', actor: 'Owner' });
+    expect(heldInDispute(closed, by.e2, at('2026-11-02'))).toBe(false); // chase resumes once it closes
+    expect(heldInDispute(closed, by.e2, at('2026-10-15'))).toBe(true);  // but it was held then
+  });
+
+  it('Reports: not overdue and not a debtor while held, with the held amount said', () => {
+    const now = at('2026-10-20');
+    const plain = projectFact(proj(real()));
+    const held = projectFact(proj(disputed()));
+    const before = overdueAt([plain], now, 7);
+    const after = overdueAt([held], now, 7);
+    expect(before.invoices).toBe(2);
+    expect(before.disputed).toBe(0);
+    expect(after.invoices).toBe(1); // the design invoice is still chased
+    expect(after.disputed).toBe(236000);
+    expect(after.value).toBe(before.value - 236000);
+    expect(after.unpaid).toBe(before.unpaid); // still owed
+    expect(debtorsOf([held], now, 7)[0]).toMatchObject({ invoices: 1, oldestName: 'Design final' });
+    /* Looking back to before the dispute, it was overdue then. */
+    expect(overdueAt([held], at('2026-09-25'), 7).invoices).toBe(2);
+  });
+
+  it('Ops Desk and Home waiting lists leave it out; the client-side money marks it', () => {
+    const now = at('2026-10-20');
+    const money = clientMoneyOf(proj(disputed()))!;
+    expect(money.milestones.find((m) => m.id === 'e2')?.disputed).toBe(true);
+    expect(money.milestones.find((m) => m.id === 'd2')?.disputed).toBeUndefined();
+    const waiting = paymentWaiting({ id: 'p1', name: 'Siesta' }, money, { paymentDueDays: 7 } as any, now);
+    expect(waiting.map((w) => w.label)).toEqual(['Design final']);
+    expect(paymentWaiting({ id: 'p1', name: 'Siesta' }, clientMoneyOf(proj(real())), { paymentDueDays: 7 } as any, now)).toHaveLength(2);
+  });
+});

@@ -304,3 +304,34 @@ export function withdrawDispute(ctx: any, id: string, how: { on: string; note: s
     history: withHistory(ctx, how.actor, 'money', `Dispute closed with nothing conceded: ${d.title}`, String(how.note || '').trim() || null, now),
   };
 }
+
+/* ── Out of the overdue chase ───────────────────────────────────────────── */
+
+const dayStart = (iso: unknown): number | null => {
+  if (!iso) return null;
+  const t = new Date(`${String(iso).slice(0, 10)}T00:00:00`).getTime();
+  return isFinite(t) ? t : null;
+};
+
+/** When each head was held in a dispute: from the day it was raised to the day it closed (null while open). */
+export function disputeWindows(ctx: any): { track: DisputeTrack; from: number; to: number | null }[] {
+  const out: { track: DisputeTrack; from: number; to: number | null }[] = [];
+  for (const d of disputesOf(ctx)) {
+    const from = dayStart(d.openedOn);
+    if (from == null) continue;
+    const to = d.status === 'open' ? null : (dayStart(d.closedOn) ?? from);
+    (['execution', 'design'] as const).forEach((track) => { if (num(d.claimed?.[track]) > 0) out.push({ track, from, to }); });
+  }
+  return out;
+}
+
+/**
+ * Whether an unpaid invoice is held in a dispute at a moment: its head is
+ * part of a dispute that was open then. Such an invoice is owed but is not
+ * late, and nobody should be told to chase it: the dispute is the chase.
+ */
+export function heldInDispute(ctx: any, milestone: any, at: number = Date.now()): boolean {
+  if (!milestone || milestone.status === 'paid') return false;
+  const track = trackOf(milestone);
+  return disputeWindows(ctx).some((w) => w.track === track && at >= w.from && (w.to == null || at < w.to));
+}

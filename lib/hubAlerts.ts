@@ -14,6 +14,7 @@
  * client.
  */
 
+import { heldInDispute, openDispute } from './disputes';
 import { pendingPublish } from './publishStatus';
 import { computeSchedule } from './paymentSchedule';
 
@@ -166,7 +167,18 @@ export function buildHubAlerts(args: { context: any; view: any | null }): HubAle
   });
 
   // ── invoices raised and unpaid ───────────────────────────────────────
-  const invoiced = (ctx.paymentMilestones || []).filter((m: any) => m.status === 'invoiced');
+  const raised = (ctx.paymentMilestones || []).filter((m: any) => m.status === 'invoiced');
+  /* Invoices held in a dispute are not a reminder to collect: the dispute is said once instead. */
+  const invoiced = raised.filter((m: any) => !heldInDispute(ctx, m));
+  if (raised.length > invoiced.length) {
+    out.push({
+      id: 'dispute', kind: 'money', label: 'Money', severity: 1,
+      title: 'Payment dispute open',
+      detail: `${raised.length - invoiced.length} invoice${raised.length - invoiced.length === 1 ? '' : 's'} held back until it is settled`,
+      when: ago(openDispute(ctx)?.openedOn),
+      goTo: 'payment-calc', cta: 'Open the dispute',
+    });
+  }
   if (invoiced.length) {
     out.push({
       id: 'invoiced', kind: 'money', label: 'Money', severity: 2,

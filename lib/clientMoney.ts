@@ -11,6 +11,7 @@
 */
 import { computeSchedule } from "./paymentSchedule";
 import { buildPortalMoney } from "./portalMoney";
+import { heldInDispute } from "./disputes";
 
 /** One payment milestone, as the client is quoted it. */
 export interface ClientMilestone {
@@ -25,6 +26,8 @@ export interface ClientMilestone {
   invoiceDate: string | null;
   /** The planned date, when the studio set one. */
   date: string | null;
+  /** Unpaid and held in an open payment dispute (lib/disputes): owed, but not to be chased. */
+  disputed?: boolean;
 }
 
 /** The client's side of the money: what they were quoted, have paid and still owe. Nothing of the studio's side. */
@@ -68,6 +71,7 @@ export function clientMoneyOf(project: any): ClientMoney | null {
         invoiceNumber: m.invoiceNumber ? String(m.invoiceNumber) : null,
         invoiceDate: m.invoiceDate ? String(m.invoiceDate) : null,
         date: m.date ? String(m.date) : null,
+        ...(heldInDispute(ctx, m) ? { disputed: true } : {}),
       })),
     };
   } catch {

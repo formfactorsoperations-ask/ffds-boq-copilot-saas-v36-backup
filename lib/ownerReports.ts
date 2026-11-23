@@ -21,6 +21,7 @@
   Pure, and shared by the screens and the tests.
 */
 import { isTerminated, settlementRow } from './termination';
+import { disputeWindows } from './disputes';
 import { calculateProjectFinancials } from './financialsUtils';
 import { engagementOf, isFeeOnly, type EngagementType } from './engagement';
 import { LOST_REASONS, LEAD_SOURCES, LEAD_STAGES, BOARD_STAGES, FIRST_CALL_MINUTES, QUIET_DAYS, isOpen, type Lead, type LeadSource, type LeadStage } from './leads';
@@ -168,7 +169,12 @@ export interface MilestoneFact {
   paidAt: number | null;
   /** The date planned for it on the schedule, if any. */
   dueAt: number | null;
+  /** When it was held in a payment dispute (lib/disputes): owed, but not late and not chased. */
+  held?: { from: number; to: number | null }[];
 }
+
+/** Held in a dispute at time `t`. */
+const heldAt = (m: MilestoneFact, t: number) => (m.held || []).some((w) => t >= w.from && (w.to == null || t < w.to));
 
 export interface AdditionFact {
   createdAt: number | null;
@@ -261,6 +267,7 @@ export function projectFact(p: any, src: FactSources = {}): ProjectFact {
   const gates = ctx.lifecycle?.gates || {};
   const pos = (src.posByProject?.[p.id] || []).filter((po: any) => po && ['issued', 'received', 'closed'].includes(po.status));
   const committed = pos.reduce((s: number, po: any) => s + Math.max(Number(po.total) || 0, Number(po.billAmount) || 0), 0);
+  const windows = disputeWindows(ctx);
   const milestones: MilestoneFact[] = ((ctx.paymentMilestones || []) as any[]).map((m) => {
     const st = String(m.status || 'pending').toLowerCase();
     return {
@@ -272,6 +279,7 @@ export function projectFact(p: any, src: FactSources = {}): ProjectFact {
       invoicedAt: dateOf(m.invoiceDate),
       paidAt: dateOf(m.paidDate),
       dueAt: dateOf(m.date),
+      held: windows.filter((w) => w.track === (m.type === 'design' ? 'design' : 'execution')).map((w) => ({ from: w.from, to: w.to })),
     };
   });
   /*
@@ -438,16 +446,18 @@ export function billedIn(facts: ProjectFact[], r: Range) {
  * kinder reading and the only one available.
  */
 export function overdueAt(facts: ProjectFact[], t: number, lateDays: number) {
-  let value = 0, invoices = 0, unpaid = 0;
+  let value = 0, invoices = 0, unpaid = 0, disputed = 0;
   const clients = new Set<string>();
   for (const f of money(facts)) for (const m of f.milestones) {
     if (m.status === 'pending' || m.invoicedAt == null || m.invoicedAt > t) continue;
     const stillOpen = m.status === 'invoiced' || (m.paidAt != null && m.paidAt > t);
     if (!stillOpen) continue;
     unpaid += m.amount;
+    /* Held in a dispute: owed, but the dispute is the chase, so it is not overdue. */
+    if (heldAt(m, t)) { disputed += m.amount; continue; }
     if (t - m.invoicedAt > lateDays * DAY) { value += m.amount; invoices++; clients.add(f.id); }
   }
-  return { value, invoices, clients: clients.size, unpaid };
+  return { value, invoices, clients: clients.size, unpaid, disputed };
 }
 
 export interface MarginRow {
@@ -615,7 +625,7 @@ export function scorecard(i: OwnerReportInput): Kpi[] {
   const od = overdueAt(facts, i.now, i.lateAfterDays), odp = overdueAt(facts, w.cur.start, i.lateAfterDays);
   const overdue: Kpi = {
     key: 'overdue', label: 'Owed and overdue', section: 'money', format: 'inr', value: od.value,
-    line: od.invoices ? `${plural(od.invoices, 'invoice')} past ${plural(i.lateAfterDays, 'day')}, with ${plural(od.clients, 'client')}` : 'Nothing is overdue',
+    line: (od.invoices ? `${plural(od.invoices, 'invoice')} past ${plural(i.lateAfterDays, 'day')}, with ${plural(od.clients, 'client')}` : 'Nothing is overdue') + (od.disputed > 0 ? `. ${inr(od.disputed)} held in a dispute is left out` : ''),
     delta: deltaInr(od.value, odp.value, false),
     state: od.value <= 0 ? 'ok' : od.unpaid > 0 && od.value / od.unpaid >= 0.4 ? 'bad' : 'warn',
     bar: od.unpaid > 0 ? { pct: (od.value / od.unpaid) * 100, text: `${Math.round((od.value / od.unpaid) * 100)}% of everything invoiced and unpaid` } : null,
@@ -857,7 +867,7 @@ export function debtorsOf(facts: ProjectFact[], now: number, lateDays: number): 
   for (const f of money(facts)) {
     let overdue = 0, invoices = 0, oldest = 0, oldestName = '';
     for (const m of f.milestones) {
-      if (m.status !== 'invoiced' || m.invoicedAt == null) continue;
+      if (m.status !== 'invoiced' || m.invoicedAt == null || heldAt(m, now)) continue;
       const age = Math.floor((now - m.invoicedAt) / DAY);
       if (age <= lateDays) continue;
       overdue += m.amount; invoices++;
