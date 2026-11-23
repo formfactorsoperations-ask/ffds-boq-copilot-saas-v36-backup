@@ -4,21 +4,20 @@ import { Panel, Button, Chip } from '../ui/kit';
 import { formatCurrency } from '../../lib/utils';
 import type { ScheduleResult } from '../../lib/paymentSchedule';
 import {
-  daysOpen, disputeFileProblems, disputesOf, editDispute, importDispute, latestOffer, openDispute,
+  daysOpen, disputeFileProblems, disputesOf, editDispute, importDispute, openDispute,
   outstandingByTrack, raiseDispute,
 } from '../../lib/disputes';
 import DisputeModal from './DisputeModal';
 import DisputeDetailModal from './DisputeDetailModal';
 
 /*
-  The dispute card on Money.
+  The dispute card at the foot of Money: the way in, and the disputes already
+  closed, each opening in a window (DisputeDetailModal).
 
-  Money keeps a short card and the dispute itself opens in a window
-  (DisputeDetailModal), so it can be read, worked and closed again without
-  taking over the screen. With a dispute open the card leads Money: what is
-  held back and for how long, and one button. With none it is one quiet row
-  at the foot: the way in, and the disputes already closed. Built from the
-  screen kit (DESIGN.md).
+  An OPEN dispute is not drawn here. It is said on every screen of the
+  project, in the strip under the project header
+  (components/projectAlerts/ProjectAlertBar), and opens from there. Built from
+  the screen kit (DESIGN.md).
 */
 
 const money = (v: number) => formatCurrency(Math.round(v));
@@ -35,9 +34,7 @@ export const DisputePanel: React.FC<{
   canAct: boolean;
   actor: string;
   setProjectContext: (fn: (prev: any) => any) => void;
-  /** 'lead' shows the open dispute (top of Money); 'foot' shows the way in and the past ones. */
-  slot: 'lead' | 'foot';
-}> = ({ context, schedule, canAct, actor, setProjectContext, slot }) => {
+}> = ({ context, schedule, canAct, actor, setProjectContext }) => {
   const open = openDispute(context);
   const all = disputesOf(context);
   const past = all.filter((d) => d.status !== 'open');
@@ -66,12 +63,8 @@ export const DisputePanel: React.FC<{
     }
   };
 
-  /*
-    The windows. A reopened dispute moves from the foot card to the lead card,
-    so whichever card is on screen for it keeps its window: the foot card
-    hands over by closing its own once the dispute is open.
-  */
-  const mine = viewed && (slot === 'lead' ? viewed.status === 'open' : true);
+  /* The windows. A dispute reopened here stays in its window, now open, to be worked. */
+  const mine = !!viewed;
   const windows = (
     <>
       {mine && viewed && !editing && (
@@ -89,9 +82,9 @@ export const DisputePanel: React.FC<{
     </>
   );
 
-  if (slot === 'foot') {
-    /* While a dispute is open the lead card is the way in; the foot card stays for the closed ones and for a window it already has open. */
-    if (!canAct && !past.length) return null;
+  {
+    /* While a dispute is open the strip under the project header is the way in; this card stays for the closed ones and for a window it already has open. */
+    if (!canAct && !past.length && !viewed) return null;
     if (open && !past.length && !viewed) return null;
     return (
       <>
@@ -125,22 +118,7 @@ export const DisputePanel: React.FC<{
     );
   }
 
-  if (!open) return null;
-  const d = open;
-  const offer = latestOffer(d);
-  return (
-    <>
-      <Panel icon={Scale} title={d.title}
-        badge={<><Chip tone="warn">In dispute</Chip>{d.workStopped && <Chip tone="slate">Work stopped by client</Chip>}</>}
-        blurb={<>
-          {money(d.claimed.execution + d.claimed.design)} held back for {daysOpen(d)} day{daysOpen(d) === 1 ? '' : 's'}, since {day(d.openedOn)}.
-          {offer?.amount != null ? ` Last offer ${money(offer.amount)} from the ${offer.by}.` : ''}
-          {' '}Its invoices are out of the overdue chase until it is settled.
-        </>}
-        aside={<Button variant="primary" size="sm" onClick={() => { setEditing(false); setViewId(d.id); }}>Open dispute</Button>} />
-      {windows}
-    </>
-  );
+  return null;
 };
 
 export default DisputePanel;

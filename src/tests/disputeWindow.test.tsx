@@ -7,6 +7,8 @@ import React, { useState } from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import DisputePanel from '../../components/disputes/DisputePanel';
+import ProjectAlertBar from '../../components/projectAlerts/ProjectAlertBar';
+import { applyTermination, computeSettlement, isTerminated } from '../../lib/termination';
 import { importDispute, disputesOf, openDispute } from '../../lib/disputes';
 
 const schedule: any = { byId: { e4: { owed: 375308, invoiceTotal: 375308 }, d4: { owed: 102422, invoiceTotal: 102422 } } };
@@ -26,8 +28,9 @@ const Money: React.FC<{ start: any; canAct?: boolean }> = ({ start, canAct = tru
   latest = ctx;
   return (
     <>
-      <DisputePanel slot="lead" context={ctx} schedule={schedule} canAct={canAct} actor="Owner" setProjectContext={(fn) => setCtx(fn)} />
-      <DisputePanel slot="foot" context={ctx} schedule={schedule} canAct={canAct} actor="Owner" setProjectContext={(fn) => setCtx(fn)} />
+      {/* The strip under the project header, then Money's foot card: as the app lays them out. */}
+      <ProjectAlertBar context={ctx} setProjectContext={(fn) => setCtx(fn)} role={canAct ? 'Owner' : 'Designer'} actor="Owner" />
+      <DisputePanel context={ctx} schedule={schedule} canAct={canAct} actor="Owner" setProjectContext={(fn) => setCtx(fn)} />
     </>
   );
 };
@@ -65,11 +68,13 @@ describe('the dispute window', () => {
     expect(screen.getByRole('dialog', { name: 'Dispute' })).toBeTruthy();
   });
 
-  it('an open dispute is a short card on Money; it is settled in the window, which then closes', () => {
+  it('an open dispute is a strip under the project header; it is settled in the window, which then closes', () => {
     const c = settledProject();
     render(<Money start={{ ...c, disputes: [{ ...c.disputes[0], status: 'open', resolution: null, closedOn: null }] }} />);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByText('Kitchen loft')).toBeNull(); // the detail is not on the screen itself
+    expect(screen.getByText('Payment dispute')).toBeTruthy();
+    expect(screen.getByText(/4,77,730 held back/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Open dispute' }));
     const win = screen.getByRole('dialog', { name: 'Dispute' });
     fireEvent.click(within(win).getByRole('button', { name: 'Settle dispute' }));
@@ -79,7 +84,7 @@ describe('the dispute window', () => {
     fireEvent.click(settle[settle.length - 1]);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(disputesOf(latest)[0].status).toBe('settled');
-    expect(latest.paymentMilestones.find((m: any) => m.id === 'e4').discountAmount).toBe(175308);
+    expect(disputesOf(latest)[0].resolution.concession).toEqual({ execution: 175308, design: 24963 });
     expect(screen.queryByRole('button', { name: 'Open dispute' })).toBeNull();
     expect(screen.getByRole('button', { name: 'View' })).toBeTruthy();
   });
@@ -88,5 +93,44 @@ describe('the dispute window', () => {
     render(<Money start={settledProject()} canAct={false} />);
     fireEvent.click(screen.getByRole('button', { name: 'View' }));
     expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Reopen dispute' })).toBeNull();
+  });
+});
+
+describe('the strip under the project header', () => {
+  const inputs = { designGross: 236000, executionGross: 1180000, designTaxable: 200000, executionTaxable: 1000000, collected: 118000, invoicedUnpaid: 0, suggestedDesignPct: 50, suggestedExecutionPct: 0 };
+  const terminatedProject = () => applyTermination({ name: 'Sea View', status: 'won', lifecycle: { stage: 4 }, paymentMilestones: [] }, {
+    reason: 'agreement_not_signed', note: 'No reply to two reminders', effectiveOn: '2026-11-20', actor: 'Owner',
+    settlement: computeSettlement(inputs, { basis: 'prorata', designDonePct: 25, executionDonePct: 0, charges: 0 }),
+  });
+
+  it('draws nothing on a project that is neither terminated nor in dispute', () => {
+    const { container } = render(<ProjectAlertBar context={{ name: 'Sea View', status: 'won' }} role="Owner" actor="Owner" />);
+    expect(container.textContent).toBe('');
+  });
+
+  it('says a project is terminated, with the refund due, and opens the settlement in a window', () => {
+    render(<Money start={terminatedProject()} />);
+    expect(screen.getByText('Project terminated')).toBeTruthy();
+    expect(screen.getByText(/Refund due to the client: ₹\s?59,000/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'View settlement' }));
+    const win = screen.getByRole('dialog', { name: 'Termination settlement' });
+    fireEvent.click(within(win).getByRole('button', { name: 'Record refund paid' }));
+    fireEvent.click(within(win).getByRole('button', { name: 'Save refund paid' }));
+    expect(latest.termination.settlement.status).toBe('settled');
+    expect(screen.getByText(/Refund paid to the client/)).toBeTruthy();
+    /* Reopening asks first, then puts the project back and the strip goes. */
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reopen project' }));
+    expect(isTerminated(latest)).toBe(true);
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reopen project' }));
+    expect(isTerminated(latest)).toBe(false);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByText('Project terminated')).toBeNull();
+  });
+
+  it('someone who does not see the studio\'s money is told, without the amounts or the window', () => {
+    render(<Money start={terminatedProject()} canAct={false} />);
+    expect(screen.getByText('Project terminated')).toBeTruthy();
+    expect(screen.queryByText(/59,000/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'View settlement' })).toBeNull();
   });
 });

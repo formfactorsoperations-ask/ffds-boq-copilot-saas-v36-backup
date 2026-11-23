@@ -2392,25 +2392,13 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 )}
             </AnimatePresence>
 
-            {!isReadOnlyMode && (
-                <div className="mb-4 empty:hidden">
-                    <DisputePanel slot="lead" context={projectContext} schedule={schedule} canAct={canTerminate && !terminated} actor={terminationActor}
-                        setProjectContext={setProjectContext as any} />
-                </div>
-            )}
-            {terminated && (
-                <div className="mb-4">
-                    <TerminationPanel context={projectContext} schedule={schedule} canAct={canTerminate} actor={terminationActor}
-                        setProjectContext={setProjectContext as any} onTerminate={onTerminate} />
-                </div>
-            )}
-
             {activeTier && (
                 <>
                     <MoneyBoard
                         totals={boardTotals}
                         milestoneCount={milestones.length}
-                        status={boardStatus}
+                        status={terminated ? { label: 'Schedule frozen', tone: 'warn' } : boardStatus}
+                        terminated={terminated}
                         tab={moneyTab}
                         onTab={setMoneyTab}
                         historyCount={(financials?.paymentRevisions || []).length + scheduleChangeLog.length}
@@ -3571,14 +3559,13 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
             {!isReadOnlyMode && (
                 <div className="mt-6 empty:hidden">
-                    <DisputePanel slot="foot" context={projectContext} schedule={schedule} canAct={canTerminate && !terminated} actor={terminationActor}
+                    <DisputePanel context={projectContext} schedule={schedule} canAct={canTerminate && !terminated} actor={terminationActor}
                         setProjectContext={setProjectContext as any} />
                 </div>
             )}
             {!terminated && !isReadOnlyMode && (
                 <div className="mt-6">
-                    <TerminationPanel context={projectContext} schedule={schedule} canAct={canTerminate} actor={terminationActor}
-                        setProjectContext={setProjectContext as any} onTerminate={onTerminate} />
+                    <TerminationPanel context={projectContext} schedule={schedule} canAct={canTerminate} onTerminate={onTerminate} />
                 </div>
             )}
 

@@ -3322,6 +3322,7 @@ export default function App() {
                   setActiveTab={setActiveTab}
                   currentRole={currentRole}
                   setProjectContext={setProjectContext}
+                  tierSummary={activeCalculatedTier?.summary}
                   // Must match the condition that actually renders the wizard
                   // below, or the workspace titles the page wrong and shows the
                   // process widget over a wizard that is standing open.

@@ -1,4 +1,5 @@
 import { isTerminated } from '../lib/termination';
+import ProjectAlertBar from './projectAlerts/ProjectAlertBar';
 import React, { useState, useEffect, useMemo } from 'react';
 import { ProjectContextTier } from './ProjectContextTier';
 import { ProjectContext, ProjectStatus, FullProjectData } from '../types';
@@ -113,6 +114,7 @@ export function ProjectWorkspace({
   isWizard = false,
   onLeaveProject,
   onStatusChange,
+  tierSummary,
 }: {
   projectId: string;
   projectContext: ProjectContext;
@@ -124,6 +126,8 @@ export function ProjectWorkspace({
   isWizard?: boolean;
   onLeaveProject?: (targetTab?: string) => void;
   onStatusChange?: (status: ProjectStatus, note?: string) => Promise<void> | void;
+  /** The billed option's summary, for the termination and dispute windows (components/projectAlerts). */
+  tierSummary?: { totalSell?: number; designFee?: number };
 }) {
   const { orgData, currentUserAuth, currentRoles } = useOrg();
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -318,6 +322,12 @@ export function ProjectWorkspace({
           </div>
         </div>
 
+        {/* Terminated, or a payment dispute open: said on every screen of the project (components/projectAlerts/ProjectAlertBar). */}
+        {!isWizard && (
+          <ProjectAlertBar context={projectContext} setProjectContext={setProjectContext as any} tierSummary={tierSummary}
+            role={currentRoles?.length ? currentRoles : currentRole}
+            actor={String((currentUserAuth as any)?.displayName || (currentUserAuth as any)?.email || currentRole || 'Studio')} />
+        )}
 
       {/*
         The one scroll area and the one gutter for every project screen. App.tsx
