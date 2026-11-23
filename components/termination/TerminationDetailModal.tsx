@@ -6,7 +6,7 @@ import DateField from '../ui/DateField';
 import { formatCurrency } from '../../lib/utils';
 import type { ScheduleResult } from '../../lib/paymentSchedule';
 import {
-  reasonLabel, reinstateProject, reviseSettlement, settleTermination, settlementInputs, settlementLine,
+  reasonLabel, reinstateProject, reviseSettlement, settleTermination, settlementInputs, settlementLine, stageWhenEnded,
   type ProjectTermination,
 } from '../../lib/termination';
 import TerminateProjectModal from './TerminateProjectModal';
@@ -102,7 +102,7 @@ export const TerminationDetailModal: React.FC<{
               <Chip tone={open ? 'warn' : 'slate'}>{open ? 'Settlement open' : 'Settled'}</Chip>
               <Chip tone="slate">{t.initiatedBy === 'client' ? 'By the client' : 'By the studio'}</Chip>
             </h3>
-            <p className="text-xs text-slate-500 mt-1 max-w-3xl">Ended {day(t.effectiveOn)}, recorded by {t.by}.{t.note ? ` ${t.note}` : ''}</p>
+            <p className="text-xs text-slate-500 mt-1 max-w-3xl">Ended {day(t.effectiveOn)}{stageWhenEnded(t) ? `, while ${stageWhenEnded(t)}` : ''}. Recorded by {t.by}.{t.note ? ` ${t.note}` : ''}</p>
           </div>
           <button type="button" aria-label="Close" onClick={onClose} className="w-8 h-8 grid place-items-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"><X className="w-4 h-4" /></button>
         </div>

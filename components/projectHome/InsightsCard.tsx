@@ -252,7 +252,10 @@ function PaymentsPanel({ payments, go }: Props) {
   const next = rungs.find(r => r.state === 'up');
 
   // One sentence on where the money stands.
-  const lede = <>
+  const lede = pm.ended ? <>
+    <b>{inr(pm.collected)}</b> collected before the project was terminated. Nothing more will be billed
+    {pm.laterCount ? <>: {pm.laterCount} payment{pm.laterCount === 1 ? '' : 's'} of {inr(pm.later)} {pm.laterCount === 1 ? 'was' : 'were'} dropped</> : ''}.
+  </> : <>
     <b>{inr(pm.collected)}</b> of {inr(pm.gross)} collected ({pct}%).{' '}
     {pm.due.length
       ? <><b>{inr(pm.dueNow)}</b> is due now across {pm.due.length} payment{pm.due.length === 1 ? '' : 's'}
@@ -263,7 +266,7 @@ function PaymentsPanel({ payments, go }: Props) {
   const STAGES: { s: PaymentRung['state']; label: string; amount: number; n: number; glyph: GlyphName }[] = [
     { s: 'paid', label: 'Collected', amount: pm.collected, n: rungs.filter(r => r.state === 'paid').length, glyph: 'decision' },
     { s: 'due', label: 'Due now', amount: pm.dueNow, n: pm.due.length, glyph: 'invoice' },
-    { s: 'up', label: 'Later', amount: pm.later, n: pm.laterCount, glyph: 'calnext' },
+    { s: 'up', label: pm.ended ? 'Not billed' : 'Later', amount: pm.later, n: pm.laterCount, glyph: 'calnext' },
   ];
 
   // Design and Execution labels over their runs of stations.
@@ -277,7 +280,8 @@ function PaymentsPanel({ payments, go }: Props) {
   const link = (a?: PaymentRung, b?: PaymentRung) => !a || !b ? 'none' : a.state === 'paid' && b.state === 'paid' ? 'paid' : b.state === 'due' || a.state === 'due' ? 'due' : 'up';
   const current = rungs.findIndex(r => r.state === 'due');
   const maxAmt = Math.max(1, ...rungs.map(r => r.amount));
-  const status = (r: PaymentRung) => r.state === 'paid' ? 'Collected' : r.state === 'due' ? (r.invoiced ? 'Invoiced' : 'Not invoiced') : 'Later';
+  /* Terminated: what was collected stays collected; an invoice never paid is cancelled; the rest was never billed. */
+  const status = (r: PaymentRung) => r.state === 'paid' ? 'Collected' : pm.ended ? (r.invoiced ? 'Cancelled' : 'Not billed') : r.state === 'due' ? (r.invoiced ? 'Invoiced' : 'Not invoiced') : 'Later';
 
   return (
     <div className={`ph-panel${armed ? ' ph-go' : ''}`}>

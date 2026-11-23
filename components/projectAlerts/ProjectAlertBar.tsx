@@ -5,7 +5,7 @@ import { formatCurrency } from '../../lib/utils';
 import { computeSchedule, type ScheduleResult } from '../../lib/paymentSchedule';
 import { holdsFinanceRole, seesStudioFinance } from '../../lib/roleAccess';
 import type { RoleSet } from '../../lib/roles';
-import { isTerminated, reasonLabel, settlementLine, type ProjectTermination } from '../../lib/termination';
+import { isTerminated, reasonLabel, settlementLine, stageWhenEnded, type ProjectTermination } from '../../lib/termination';
 import { daysOpen, disputesOf, editDispute, openDispute, outstandingByTrack } from '../../lib/disputes';
 import TerminationDetailModal from '../termination/TerminationDetailModal';
 import DisputeDetailModal from '../disputes/DisputeDetailModal';
@@ -76,7 +76,7 @@ export const ProjectAlertBar: React.FC<{
       {t && (
         <Strip icon={ShieldOff} chip={<Chip tone="bad">Project terminated</Chip>}
           action={seesMoney ? <Button size="sm" variant={settlementOpen ? 'primary' : 'secondary'} onClick={() => setWin('termination')}>View settlement</Button> : undefined}>
-          <b className="text-slate-800">{reasonLabel(t.reason)}.</b> Ended {day(t.effectiveOn)}.
+          <b className="text-slate-800">{reasonLabel(t.reason)}.</b> Ended {day(t.effectiveOn)}{stageWhenEnded(t) ? `, while ${stageWhenEnded(t)}` : ''}.
           {seesMoney && <> {line!.kind === 'even' ? 'Nothing to refund and nothing owed.' : `${line!.text}: ${money(line!.amount)}.`}</>}
           {' '}Client portal closed, payment schedule frozen.
         </Strip>

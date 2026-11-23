@@ -21,7 +21,7 @@
  * that lean toward the cursor; and a Record card for site visits, meetings
  * and decisions (keys S, M, D).
  */
-import { isTerminated, reasonLabel, settlementLine } from '../../lib/termination';
+import { isTerminated, reasonLabel, settlementLine, stageWhenEnded } from '../../lib/termination';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db as fsDb } from '../../services/firebaseClient';
@@ -177,10 +177,10 @@ function Home(p: ProjectHomeProps) {
   */
   const terminated = isTerminated(ctx);
   const payments = useMemo(() => {
-    const model = paymentModel(payResult, ctx.paymentMilestones || [], journey.phaseProgress);
+    const model = paymentModel(payResult, ctx.paymentMilestones || [], journey.phaseProgress, terminated);
     if (!terminated) return model;
     const kept = Number((ctx as any).termination?.settlement?.entitled) || 0;
-    return { ...model, gross: Math.max(kept, model.collected), dueNow: 0, later: 0, due: [], laterCount: 0 };
+    return { ...model, gross: Math.max(kept, model.collected) };
   }, [payResult, ctx.paymentMilestones, journey.phaseProgress, terminated, ctx]);
 
   const programme = useMemo(() => {
@@ -333,7 +333,7 @@ function Home(p: ProjectHomeProps) {
     : paused ? <>This project is paused.</>
     : top ? <><span className="dim">Next:</span> {asSentence(top.title)}.</>
     : <>Nothing is waiting on you.</>;
-  const sub = ended ? `${reasonLabel(ended.reason)}. Nothing more is due on it${canSeeMoney && endedLine && endedLine.kind !== 'even' ? `; ${endedLine.text.toLowerCase()}: ${inr(endedLine.amount)}` : ''}.`
+  const sub = ended ? `${reasonLabel(ended.reason)}${stageWhenEnded(ended) ? `, while ${stageWhenEnded(ended)}` : ''}. Nothing more is due on it${canSeeMoney && endedLine && endedLine.kind !== 'even' ? `; ${endedLine.text.toLowerCase()}: ${inr(endedLine.amount)}` : ''}.`
     : paused ? 'Resume it to bring back the next steps and alerts.'
     : top ? top.why
     : strip[activeIdx] ? `${strip[activeIdx].name} is in progress — ${strip[activeIdx].done} of ${strip[activeIdx].total} steps done.` : '';
@@ -530,13 +530,16 @@ function Home(p: ProjectHomeProps) {
             <div className="ph-kv"><span className="k">Area</span><span className="v">{ctx.area ? `${ctx.area} sqft` : '—'}{ctx.location ? ` · ${ctx.location}` : ''}</span></div>
             <div className="ph-kv"><span className="k">Scope</span><span className="v">{(ctx.rooms || []).length} rooms · {p.fullBoq.length} lines</span></div>
             {tierName && <div className="ph-kv"><span className="k">Tier</span><span className="v" title={tierName}>{tierName}</span></div>}
-            <div className="ph-kv"><span className="k">Status</span><span className="v"><span className="ph-bdg ok">{String(ctx.status || 'lead').replace(/_/g, ' ')}</span></span></div>
+            <div className="ph-kv"><span className="k">Status</span><span className="v">{ended
+              ? <><span className="ph-bdg">Terminated</span>{stageWhenEnded(ended) ? <small style={{ display: 'block', marginTop: 4 }}>while {stageWhenEnded(ended)}</small> : null}</>
+              : <span className="ph-bdg ok">{String(ctx.status || 'lead').replace(/_/g, ' ')}</span>}</span></div>
             <div className="pad-b" />
           </section>
 
           <WaitingCard decisions={ctx.projectDecisions || []} go={go} />
 
-          <ComingUp journey={journey} activeIdx={activeIdx} stage={p.stage} payments={payments} />
+          {/* Nothing is coming up on a terminated project. */}
+          {!ended && <ComingUp journey={journey} activeIdx={activeIdx} stage={p.stage} payments={payments} />}
         </aside>
       </div>
     </div>

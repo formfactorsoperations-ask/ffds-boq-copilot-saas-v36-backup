@@ -212,6 +212,8 @@ export interface PaymentModel {
   rungs: PaymentRung[];
   due: PaymentRung[];
   laterCount: number;
+  /** The project was terminated (lib/termination): what is paid stays paid, and nothing else is due or to come. */
+  ended?: boolean;
 }
 
 /**
@@ -228,6 +230,7 @@ export function paymentModel(
   result: PaymentResult | null,
   milestones: PaymentMilestone[],
   phaseProgress: { done: number; total: number; pct: number }[],
+  ended = false,
 ): PaymentModel {
   const empty = { gross: 0, collected: 0, dueNow: 0, later: 0, rungs: [], due: [], laterCount: 0 };
   if (!result || !result.amounts?.length) return empty;
@@ -242,6 +245,7 @@ export function paymentModel(
     const invoiced = a.status === 'invoiced' || (!!m.invoiceDate && !paid);
     let state: PaymentRung['state'] = 'up';
     if (paid) state = 'paid';
+    else if (ended) state = 'up'; // terminated: never due, whatever was raised or reached
     else if (invoiced) state = 'due';
     else if (a.type === 'design' && designStarted) state = 'due';
     else if (a.type === 'execution' && contractingStarted && !firstExecSeen) state = 'due';
@@ -267,6 +271,7 @@ export function paymentModel(
     rungs,
     due,
     laterCount: rungs.filter(r => r.state === 'up').length,
+    ended,
   };
 }
 

@@ -39,6 +39,14 @@ export const TERMINATION_REASONS: { id: TerminationReason; label: string; by: 'c
   { id: 'other', label: 'Another reason', by: 'studio', blurb: 'Say what happened in the note.' },
 ];
 
+const STAGE_WORDS: Record<string, string> = {
+  lead: 'a new lead', draft: 'being drafted', proposal_sent: 'at proposal', negotiation: 'in negotiation',
+  won: 'won, before site work', execution: 'on site', work_paused: 'on hold', completed: 'handed over',
+};
+/** Where the project stood when it was terminated, in words: "on site". Kept so the record says how far it got. */
+export const stageWhenEnded = (t: { prevStatus?: string } | null | undefined): string | null =>
+  (t?.prevStatus && STAGE_WORDS[t.prevStatus]) || null;
+
 export const reasonLabel = (r: unknown): string =>
   TERMINATION_REASONS.find((x) => x.id === r)?.label || 'Terminated';
 
