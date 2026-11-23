@@ -197,3 +197,22 @@ describe('a terminated project in the studio figures', () => {
     expect(stageOfProject(project(ctx({ status: 'lost' })))).toBe('lost');
   });
 });
+
+import { cardStates } from '../../lib/moneyBoard';
+
+describe('milestone statuses on a terminated project', () => {
+  const milestones: any[] = [
+    { id: 'd1', type: 'design', status: 'paid' },
+    { id: 'd2', type: 'design', status: 'invoiced' },
+    { id: 'd3', type: 'design' },
+    { id: 'e1', type: 'execution', status: 'pending' },
+  ];
+
+  it('a live project has an up-next and a later on each track', () => {
+    expect(cardStates(milestones, new Set())).toEqual({ d1: 'paid', d2: 'invoiced', d3: 'next', e1: 'next' });
+  });
+
+  it('terminated: paid stays paid, an unpaid invoice is cancelled, the rest is not billed, even if it was earned', () => {
+    expect(cardStates(milestones, new Set(['d3']), true)).toEqual({ d1: 'paid', d2: 'void', d3: 'dropped', e1: 'dropped' });
+  });
+});

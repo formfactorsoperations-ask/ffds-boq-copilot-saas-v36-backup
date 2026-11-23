@@ -109,7 +109,7 @@ export const MoneyBoard: React.FC<{
     ['Collected', t.collected, 'bg-[#3D52A0]'],
     ['With client', t.withClient, 'bg-amber-500'],
     ['Earned, to invoice', t.earned, 'bg-[#3D52A0]/40'],
-    ['Not earned yet', t.notEarned, 'bg-slate-200'],
+    [p.terminated ? 'Not billed' : 'Not earned yet', t.notEarned, 'bg-slate-200'],
   ];
   return (
     <div className="space-y-4">
@@ -125,7 +125,7 @@ export const MoneyBoard: React.FC<{
                   ? <Chip tone="slate">Project terminated</Chip>
                   : <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 pp-live" />Live</span>}
               </h2>
-              <p className="text-xs text-slate-600 mt-1 tabular-nums"><Fig v={t.collected} /> collected of <b className="text-slate-800"><Fig v={t.contract} /></b> · {p.milestoneCount} {p.milestoneCount === 1 ? 'milestone' : 'milestones'}</p>
+              <p className="text-xs text-slate-600 mt-1 tabular-nums"><Fig v={t.collected} /> collected of <b className="text-slate-800"><Fig v={t.contract} /></b> · {p.milestoneCount} {p.milestoneCount === 1 ? 'milestone' : 'milestones'}{p.terminated ? ' · nothing more will be billed' : ''}</p>
               <div className="flex flex-wrap gap-2 mt-2.5">
                 {([['Taxable', t.taxable, Landmark], ['GST', t.gst, Percent], ['Cash', t.cash, Banknote]] as [string, number, React.ComponentType<any>][]).map(([l, v, I]) => (
                   <span key={l} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">

@@ -10,7 +10,12 @@ import type { PaymentMilestone } from '../types';
   decides what the board says about it.
 */
 
-export type CardState = 'paid' | 'invoiced' | 'earned' | 'next' | 'later';
+/*
+  `void` and `dropped` are for a terminated project (lib/termination): an
+  invoice raised and never paid is cancelled, replaced by the settlement, and
+  a milestone never billed will not be.
+*/
+export type CardState = 'paid' | 'invoiced' | 'earned' | 'next' | 'later' | 'void' | 'dropped';
 export type Track = 'design' | 'execution';
 
 /**
@@ -18,11 +23,13 @@ export type Track = 'design' | 'execution';
  * sub-step ticked, or its date has passed); the first milestone still to come
  * on a track is "up next", the rest "later".
  */
-export function cardStates(milestones: PaymentMilestone[], earnedIds: Set<string>): Record<string, CardState> {
+export function cardStates(milestones: PaymentMilestone[], earnedIds: Set<string>, terminated = false): Record<string, CardState> {
   const out: Record<string, CardState> = {};
   const seenNext: Record<string, boolean> = {};
   for (const m of milestones || []) {
     if (m.status === 'paid') { out[m.id] = 'paid'; continue; }
+    /* Terminated: nothing is up next. What was billed and not paid is cancelled; the rest is never billed. */
+    if (terminated) { out[m.id] = m.status === 'invoiced' ? 'void' : 'dropped'; continue; }
     if (m.status === 'invoiced') { out[m.id] = 'invoiced'; continue; }
     if (earnedIds.has(m.id)) { out[m.id] = 'earned'; continue; }
     const t = m.type || 'design';

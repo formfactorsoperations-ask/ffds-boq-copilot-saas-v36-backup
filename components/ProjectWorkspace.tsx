@@ -271,7 +271,8 @@ export function ProjectWorkspace({
         status={{ label: workspaceStatus.label, disabled: isLimited, onClick: () => { if (!isLimited) setIsStatusModalOpen(true); } }}
         progress={{
           pct: Math.round(projectContext.journeySummary?.pct ?? journey.overall.pct ?? 0),
-          next: isLimited ? undefined : (journey.nextStep?.title || 'Up next'),
+          /* A terminated project has no next step. */
+          next: isLimited ? undefined : isTerminated(projectContext) ? 'Project terminated' : (journey.nextStep?.title || 'Up next'),
           onClick: isLimited ? undefined : () => setActiveTab('project-journey'),
         }}
         projectTools={<><ProjectContextTier projectContext={projectContext} /><ProjectTeamButton project={{ id: projectId, context: projectContext }} size="sm" align="left" /></>}

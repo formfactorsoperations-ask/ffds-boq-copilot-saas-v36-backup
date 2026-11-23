@@ -187,17 +187,23 @@ export const MilestoneCard: React.FC<{
   const fixed = m.isFixedAmount && m.fixedAmount !== undefined;
   const showCash = m.type === 'execution' || A.cash > 0;
   const whole = Math.max(1, A.billable + A.gst + A.cash);
-  const tone = state === 'paid' ? 'ok' : state === 'invoiced' ? 'warn' : state === 'later' ? 'slate' : 'brand';
+  const tone = state === 'paid' ? 'ok' : state === 'invoiced' ? 'warn' : state === 'later' || state === 'void' || state === 'dropped' ? 'slate' : 'brand';
   const chip = {
     paid: <Chip tone="good"><span className="w-1.5 h-1.5 rounded-full bg-current" />Paid</Chip>,
     invoiced: <Chip tone="warn"><span className="w-1.5 h-1.5 rounded-full bg-current" />With client</Chip>,
     earned: <Chip tone="brand"><span className="w-1.5 h-1.5 rounded-full bg-current" />Earned</Chip>,
     next: <Chip tone="slate"><span className="w-1.5 h-1.5 rounded-full bg-current" />Up next</Chip>,
     later: <Chip tone="slate"><span className="w-1.5 h-1.5 rounded-full bg-current" />Later</Chip>,
+    void: <Chip tone="slate"><span className="w-1.5 h-1.5 rounded-full bg-current" />Cancelled</Chip>,
+    dropped: <Chip tone="slate"><span className="w-1.5 h-1.5 rounded-full bg-current" />Not billed</Chip>,
   }[state];
   const steps = m.subSteps || [];
   const done = steps.filter(s => s.isDone).length;
-  const hint = state === 'paid'
+  const hint = state === 'void'
+    ? `${m.invoiceNumber || 'This invoice'} was raised and not paid. The project was terminated, so the settlement replaces it: cancel it in your accounts.`
+    : state === 'dropped'
+      ? 'Not billed. The project was terminated before this was reached.'
+      : state === 'paid'
     ? `Paid${m.paidDate ? ` on ${new Date(m.paidDate + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}.`
     : state === 'invoiced'
       ? `${m.invoiceNumber || 'Invoice'} is with the client${m.invoiceDate ? ` since ${new Date(m.invoiceDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}.`

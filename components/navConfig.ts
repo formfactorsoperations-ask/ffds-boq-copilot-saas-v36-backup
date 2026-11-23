@@ -1,3 +1,4 @@
+import { isTerminated, settlementLine } from '../lib/termination';
 import { Compass, FolderOpen, MessageSquare, Wallet, Scale, Clock, Calendar, MonitorSmartphone, BarChart3, FileCheck } from '@/lib/lucide-shim';
 import { ProjectContext } from '../types';
 import { STAGE_LABELS } from '../constants/journeyConstants';
@@ -274,12 +275,15 @@ export const ALWAYS_ON_BAND: NavItem[] = [
     money: true,
     icon: Wallet,
     statusBadge: (ctx) => {
+      /* Terminated (lib/termination): no milestone is open; what counts is whether the settlement is. */
+      if (isTerminated(ctx)) return settlementLine((ctx as any).termination?.settlement).kind !== 'even' && (ctx as any).termination?.settlement?.status === 'open' ? 'Settle' : 'Closed';
       const milestones = ctx?.paymentMilestones;
       if (!milestones || milestones.length === 0) return null;
       const open = milestones.filter(m => m.status !== 'paid').length;
       return open > 0 ? `${open} open` : "✓";
     },
     badgeTone: (ctx) => {
+      if (isTerminated(ctx)) return 'neutral';
       const milestones = ctx?.paymentMilestones;
       if (!milestones || milestones.length === 0) return 'neutral';
       const open = milestones.filter(m => m.status !== 'paid').length;
