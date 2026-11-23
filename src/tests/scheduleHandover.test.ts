@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildScheduleFromProject } from '../../lib/scheduleBuilder';
 import {
   computeSchedule, reorderTaskInLane, gateHeldChain, releaseBeforeGate, planStartAt, toDayNum, toISO,
-  openStagesOfPastProgramme, closeOutAsPlanned,
+  openStagesOfPastProgramme, closeOutAsPlanned, stepsToRecordAsCompleted,
   type ScheduleResult,
 } from '../../lib/schedule';
 import { ProjectSchedule } from '../../types';
@@ -328,5 +328,33 @@ describe('A project finished before it was entered', () => {
       ? { ...t, status: 'completed' as const, actualStartISO: '2026-08-03', actualEndISO: '2026-08-20' } : t) };
     const closed = closeOutAsPlanned(s2, LATER);
     expect(closed.tasks.find(t => t.id === 'design-1')).toEqual(s2.tasks.find(t => t.id === 'design-1'));
+  });
+});
+
+describe('Design steps of a project finished before it was entered', () => {
+  const NOW = '2026-11-23';
+  const step = (n: number, endDate: string, status?: string) =>
+    ({ stepNumber: n, title: `Step ${n}`, endDate: `${endDate}T23:59:59.000Z`, stepProgress: status ? { status } : undefined });
+
+  it('closes every open step on its planned end when all of them are past', () => {
+    const got = stepsToRecordAsCompleted(
+      [step(1, '2026-02-20', 'completed'), step(2, '2026-03-10', 'in_progress'), step(3, '2026-05-11')],
+      { todayISO: NOW },
+    );
+    expect(got).toEqual([
+      { stepNumber: 2, title: 'Step 2', completedOn: '2026-03-10', missing: false },
+      { stepNumber: 3, title: 'Step 3', completedOn: '2026-05-11', missing: true },
+    ]);
+  });
+
+  it('offers nothing on a live project with a step still ahead', () => {
+    const phases = [step(1, '2026-03-10', 'in_progress'), step(2, '2026-12-20', 'not_started')];
+    expect(stepsToRecordAsCompleted(phases, { todayISO: NOW })).toEqual([]);
+  });
+
+  it('closes them all on a project marked completed, never dated after today', () => {
+    const phases = [step(1, '2026-03-10', 'in_progress'), step(2, '2026-12-20', 'not_started')];
+    expect(stepsToRecordAsCompleted(phases, { todayISO: NOW, projectCompleted: true }).map(e => e.completedOn))
+      .toEqual(['2026-03-10', NOW]);
   });
 });

@@ -69,7 +69,7 @@ import { projectRoomNames } from "../lib/roomSchedule";
 import { engagementDef, engagementOf } from "../lib/engagement";
 import { buildMarkers } from "../lib/scheduleMarkers";
 import { db } from "../services/dbService";
-import { computeSchedule, DEFAULT_CALENDAR, toDayNum, workSpanEnd, toISO, isWorkingDay, workingDaysBetween, shiftByWorkingDays } from "../lib/schedule";
+import { computeSchedule, DEFAULT_CALENDAR, toDayNum, workSpanEnd, toISO, isWorkingDay, workingDaysBetween, shiftByWorkingDays, stepsToRecordAsCompleted } from "../lib/schedule";
 
 interface TimelineTabProps {
   projectId: string | null;
@@ -90,7 +90,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   setPhases: setOldPhases,
   bank,
 }) => {
-  const { orgData, currentRole } = useOrg();
+  const { orgData, currentRole, currentUserAuth } = useOrg();
   const studioId = orgData.tenantId || "demo-tenant-01";
   const safeProjectId = projectId || "";
   /* Designers, Client Relations and Site Supervisors read the programme; they do not set it, and payment requests are not theirs. */
@@ -109,7 +109,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   
   const { settings } = useStudioSettings(studioId);
   const { activeRequest } = usePaymentRequests(limited ? "" : safeProjectId, studioId);
-  const { updateDeliverable, updateClientSignoff, markStepComplete } =
+  const { updateDeliverable, updateClientSignoff, markStepComplete, recordStepsCompleted, setStepCompletedOn, reopenStep } =
     useStepProgress(safeProjectId, studioId);
 
   // Interaction States
@@ -407,6 +407,20 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
       }
     }
   };
+
+  /*
+    A completed project has nothing left to catch up on.
+
+    The late band, the catch-up planner and the AI predictor all answer "how do
+    we still make the handover", which is not a question once the studio has
+    marked the project completed. Design steps nobody closed are offered to the
+    "Record as completed" band on the chart instead.
+  */
+  const projectCompleted = projectContext?.status === 'completed';
+  const stepsToRecord = React.useMemo(
+    () => (limited ? [] : stepsToRecordAsCompleted(phases, { projectCompleted })),
+    [phases, projectCompleted, limited],
+  );
 
   const handleResetSchedule = () => {
     setShowScheduleResetModal(true);
@@ -859,12 +873,12 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
           >
             <ChevronsRight className="w-3.5 h-3.5" />Shift
           </button>
-          <button
+          {!projectCompleted && <button
             onClick={handlePredictHandoverRisks}
             className="text-[10px] uppercase tracking-wider font-bold text-[#B5945B] bg-white border border-[#ebdcb9] hover:bg-amber-50/40 px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
           >
             <Brain className="w-3.5 h-3.5" />AI predictor
-          </button>
+          </button>}
 
           <span className="w-px h-5 bg-slate-200 mx-1" aria-hidden="true" />
 
@@ -927,9 +941,9 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
         </div>
       )}
 
-      {(delayedCount > 0 || compression || activeRequest) && (
+      {((!projectCompleted && (delayedCount > 0 || compression)) || activeRequest) && (
         <div className="flex flex-col gap-3 mb-6">
-          {(delayedCount > 0 || compression) && (
+          {!projectCompleted && (delayedCount > 0 || compression) && (
             <div className={`rounded-2xl border overflow-hidden ${
               delayedCount > 0 ? 'border-red-100 bg-red-50/70' : 'border-amber-100 bg-amber-50/70'
             }`}>
@@ -1027,7 +1041,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
       )}
 
       {/* AI Delay Recovery Advisor Modal / Drawer */}
-      {delayedCount > 0 && showDelayPlanner && (
+      {!projectCompleted && delayedCount > 0 && showDelayPlanner && (
         <div className="mb-6 border border-red-200 rounded-2xl bg-white shadow-xs overflow-hidden">
           <div className="bg-red-50/50 p-4 border-b border-red-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1093,6 +1107,11 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
           onUpdateDeliverable={updateDeliverable}
           onUpdateSignoff={updateClientSignoff}
           onCompleteStep={markStepComplete}
+          closed={projectCompleted}
+          openSteps={stepsToRecord.length}
+          onRecordStepsCompleted={() => recordStepsCompleted(stepsToRecord, currentUserAuth?.email || undefined)}
+          onSetStepCompletedOn={setStepCompletedOn}
+          onReopenStep={reopenStep}
         />
       </div>
 

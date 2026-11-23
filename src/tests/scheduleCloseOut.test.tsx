@@ -7,6 +7,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ScheduleGantt from '../../components/ScheduleGantt';
 import { buildScheduleFromProject } from '../../lib/scheduleBuilder';
+import { closeOutAsPlanned } from '../../lib/schedule';
 import { ProjectSchedule } from '../../types';
 
 const programme = (startISO: string): ProjectSchedule => ({
@@ -34,5 +35,20 @@ describe('Record a finished programme as completed', () => {
     const d = new Date(); d.setDate(d.getDate() + 30);
     render(<ScheduleGantt schedule={programme(d.toISOString().slice(0, 10))} onChange={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Record as completed' })).toBeNull();
+  });
+
+  it('closes open design steps too, when every stage is already done', () => {
+    const onChange = vi.fn();
+    const onSteps = vi.fn();
+    const s = closeOutAsPlanned(programme('2020-01-06'));
+    render(<ScheduleGantt schedule={s} onChange={onChange} openSteps={5} onRecordStepsCompleted={onSteps} closed />);
+
+    expect(screen.getByText(/This project is completed, with 5 design steps still open/)).toBeTruthy();
+    expect(screen.getByText('Finished')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Record as completed' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark 5 done' }));
+
+    expect(onSteps).toHaveBeenCalledTimes(1);
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

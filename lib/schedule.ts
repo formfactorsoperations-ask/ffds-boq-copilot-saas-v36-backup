@@ -1272,6 +1272,47 @@ export function closeOutAsPlanned(schedule: ProjectSchedule, todayISO?: string):
   };
 }
 
+/** A design step as the Timeline holds it: its dates, and whether it is closed. */
+export interface StepRecordPhase {
+  stepNumber: number;
+  title: string;
+  endDate?: string;
+  stepProgress?: { status?: string } | null;
+}
+
+/** One design step to record as completed, and the day to record it on. */
+export interface StepRecordEntry {
+  stepNumber: number;
+  title: string;
+  /** The step's planned end, YYYY-MM-DD. */
+  completedOn: string;
+  /** The step has no progress record yet, so one is written whole. */
+  missing: boolean;
+}
+
+/**
+ * The design steps to close when a finished programme is recorded.
+ *
+ * The same rule as `openStagesOfPastProgramme`: every step still open ended
+ * before today. On a project the studio has marked completed the rule is not
+ * needed -- the project is over, whatever the dates say -- so every open step
+ * is returned, dated on its planned end or on today if that is later.
+ */
+export function stepsToRecordAsCompleted(
+  phases: StepRecordPhase[], opts: { todayISO?: string; projectCompleted?: boolean } = {},
+): StepRecordEntry[] {
+  const today = opts.todayISO || toISO(Math.floor(Date.now() / MS_DAY));
+  const open = phases.filter(p => p.stepProgress?.status !== 'completed' && p.endDate);
+  const day = (p: StepRecordPhase) => p.endDate!.slice(0, 10);
+  if (!open.length || (!opts.projectCompleted && !open.every(p => day(p) < today))) return [];
+  return open.map(p => ({
+    stepNumber: p.stepNumber,
+    title: p.title,
+    completedOn: day(p) < today ? day(p) : today,
+    missing: !p.stepProgress,
+  }));
+}
+
 /** Tasks a hold would move, so the UI can preview before committing. */
 export function holdImpact(schedule: ProjectSchedule, hold: ScheduleHold): {
   moved: string[]; pinnedBlocked: string[];
