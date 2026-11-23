@@ -1272,6 +1272,39 @@ export function closeOutAsPlanned(schedule: ProjectSchedule, todayISO?: string):
   };
 }
 
+/**
+ * Set the day a finished project was actually handed over.
+ *
+ * The handover (or, on a programme without one, whatever stage ended last) is
+ * moved to that day. A finished stage recorded as ending after it is pulled
+ * back to end on it, since nothing can have ended after the handover; stages
+ * that ended earlier are left alone. Does nothing while any stage is open.
+ */
+export function setActualFinish(schedule: ProjectSchedule, finishISO: string, todayISO?: string): ProjectSchedule {
+  const result = computeSchedule(schedule, todayISO);
+  if (!finishISO || !result.tasks.length
+    || result.tasks.some(t => t.status !== 'completed' && !t.actualEndISO)) return schedule;
+  const byId = new Map(result.tasks.map(t => [t.id, t]));
+  const handover = result.tasks.filter(isHandoverTask).map(t => t.id);
+  const lastDay = Math.max(...result.tasks.map(t => t.endDay));
+  const moved = new Set(handover.length ? handover : result.tasks.filter(t => t.endDay === lastDay).map(t => t.id));
+  return {
+    ...schedule,
+    tasks: schedule.tasks.map(t => {
+      const r = byId.get(t.id);
+      if (!r) return t;
+      const endISO = t.actualEndISO || r.endISO;
+      const startISO = t.actualStartISO || r.startISO;
+      if (moved.has(t.id)) {
+        const start = r.kind === 'milestone' || startISO > finishISO ? finishISO : startISO;
+        return { ...t, status: 'completed' as const, actualStartISO: start, actualEndISO: finishISO };
+      }
+      if (endISO <= finishISO) return t;
+      return { ...t, actualStartISO: startISO > finishISO ? finishISO : startISO, actualEndISO: finishISO };
+    }),
+  };
+}
+
 /** A design step as the Timeline holds it: its dates, and whether it is closed. */
 export interface StepRecordPhase {
   stepNumber: number;

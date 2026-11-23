@@ -11,7 +11,7 @@ import {
   computeSchedule, programmeSpanDays, varianceReport, daysLostByReason, ineffectiveHolds, holdImpact,
   freezeBaseline, setTaskProgress, reorderTaskInLane, toDayNum, toISO, isWorkingDay, weekdayOf, GATE_LABEL,
   workingDaysBetween, DEFAULT_CALENDAR, isHandoverTask, isDesignGateTask, gateHeldChain, releaseBeforeGate,
-  planStartAt, nextWorkingDay, openStagesOfPastProgramme, closeOutAsPlanned, type StartPlan,
+  planStartAt, nextWorkingDay, openStagesOfPastProgramme, closeOutAsPlanned, setActualFinish, type StartPlan,
   type ResolvedTask,
 } from '../lib/schedule';
 import { markersByDay, MARKER_LABEL } from '../lib/scheduleMarkers';
@@ -365,6 +365,10 @@ export default function ScheduleGantt({
     stepsToClose ? `${stepsToClose} design step${stepsToClose === 1 ? '' : 's'}` : '',
   ].filter(Boolean).join(' and ');
   const [confirmCloseOut, setConfirmCloseOut] = useState(false);
+  /* On a completed project with every stage done, the Finished card sets the actual handover day. */
+  const [editingFinish, setEditingFinish] = useState(false);
+  const canEditFinish = closed && !readOnly && !!onChange
+    && result.tasks.every(t => t.status === 'completed' || !!t.actualEndISO);
 
   /*
     How long the programme runs, start to handover.
@@ -566,12 +570,41 @@ export default function ScheduleGantt({
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">{closed ? 'Finished' : 'Projected Finish'}</p>
-            <p className="text-lg font-bold mt-1" style={{
-              color: closed ? '#0f172a' : (result.overrunWorkDays ?? 0) > 0 ? '#e11d48' : '#059669',
-            }}>
-              {result.finishISO ? new Date(result.finishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
-            </p>
-            <p className="text-xs text-slate-400 mt-0.5">{closed ? 'Last stage ended' : 'Estimated end date'}</p>
+            {canEditFinish && editingFinish ? (
+              <input
+                type="date"
+                autoFocus
+                aria-label="Actual handover date"
+                defaultValue={result.finishISO || ''}
+                onBlur={e => {
+                  setEditingFinish(false);
+                  if (e.target.value && e.target.value !== result.finishISO) onChange!(setActualFinish(schedule, e.target.value));
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                  if (e.key === 'Escape') setEditingFinish(false);
+                }}
+                className="mt-1 w-full border border-[#ADBBDA] rounded-lg px-2 py-1 text-base font-bold text-slate-900 outline-none bg-white"
+              />
+            ) : (
+              <button
+                type="button"
+                disabled={!canEditFinish}
+                onClick={() => setEditingFinish(true)}
+                className="group/edit text-left w-full disabled:cursor-default cursor-pointer"
+                title={canEditFinish ? 'Change the actual handover date' : undefined}
+              >
+                <p className="text-lg font-bold mt-1 inline-flex items-center gap-1.5" style={{
+                  color: closed ? '#0f172a' : (result.overrunWorkDays ?? 0) > 0 ? '#e11d48' : '#059669',
+                }}>
+                  {result.finishISO ? new Date(result.finishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                  {canEditFinish && (
+                    <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover/edit:opacity-100 transition-opacity" />
+                  )}
+                </p>
+              </button>
+            )}
+            <p className="text-xs text-slate-400 mt-0.5">{closed ? (canEditFinish ? 'Actual handover' : 'Last stage ended') : 'Estimated end date'}</p>
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Total Duration</p>

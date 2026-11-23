@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildScheduleFromProject } from '../../lib/scheduleBuilder';
 import {
   computeSchedule, reorderTaskInLane, gateHeldChain, releaseBeforeGate, planStartAt, toDayNum, toISO,
-  openStagesOfPastProgramme, closeOutAsPlanned, stepsToRecordAsCompleted,
+  openStagesOfPastProgramme, closeOutAsPlanned, stepsToRecordAsCompleted, setActualFinish,
   type ScheduleResult,
 } from '../../lib/schedule';
 import { ProjectSchedule } from '../../types';
@@ -356,5 +356,39 @@ describe('Design steps of a project finished before it was entered', () => {
     const phases = [step(1, '2026-03-10', 'in_progress'), step(2, '2026-12-20', 'not_started')];
     expect(stepsToRecordAsCompleted(phases, { todayISO: NOW, projectCompleted: true }).map(e => e.completedOn))
       .toEqual(['2026-03-10', NOW]);
+  });
+});
+
+describe('The actual handover day of a finished project', () => {
+  const LATER = '2028-01-10';
+  const closed = () => closeOutAsPlanned(programme(), LATER);
+
+  it('moves the handover earlier and pulls back anything recorded after it', () => {
+    const before = computeSchedule(closed(), LATER);
+    const target = toISO(toDayNum(before.finishISO!) - 2);
+    const after = computeSchedule(setActualFinish(closed(), target, LATER), LATER);
+
+    expect(after.finishISO).toBe(target);
+    expect(task(after, 'ms-handover').actualEndISO).toBe(target);
+    after.tasks.forEach(t => {
+      expect(t.actualEndISO! <= target).toBe(true);
+      expect(t.actualStartISO! <= t.actualEndISO!).toBe(true);
+    });
+    // A stage that ended well before is untouched.
+    expect(task(after, 'design-1').actualEndISO).toBe(task(before, 'design-1').actualEndISO);
+  });
+
+  it('moves the handover later without touching the other stages', () => {
+    const before = computeSchedule(closed(), LATER);
+    const target = toISO(toDayNum(before.finishISO!) + 5);
+    const next = setActualFinish(closed(), target, LATER);
+    const after = computeSchedule(next, LATER);
+
+    expect(after.finishISO).toBe(target);
+    expect(next.tasks.filter(t => t.id !== 'ms-handover')).toEqual(closed().tasks.filter(t => t.id !== 'ms-handover'));
+  });
+
+  it('does nothing while a stage is still open', () => {
+    expect(setActualFinish(programme(), '2026-09-01', TODAY)).toEqual(programme());
   });
 });
