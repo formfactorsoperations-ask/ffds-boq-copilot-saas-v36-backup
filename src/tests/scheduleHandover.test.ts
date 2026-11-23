@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildScheduleFromProject } from '../../lib/scheduleBuilder';
 import {
   computeSchedule, reorderTaskInLane, gateHeldChain, releaseBeforeGate, planStartAt, toDayNum, toISO,
+  openStagesOfPastProgramme, closeOutAsPlanned, stepsToRecordAsCompleted, setActualFinish,
   type ScheduleResult,
 } from '../../lib/schedule';
 import { ProjectSchedule } from '../../types';
@@ -287,5 +288,107 @@ describe('Running stages in parallel', () => {
     const plan = planStartAt(s, 'exec-paint-final', later, TODAY);
     expect(plan.schedule.tasks.find(t => t.id === 'exec-paint-final')!.notBeforeISO).toBe(toISO(plan.startDay));
     expect(plan.savedWorkDays).toBeLessThan(0);
+  });
+});
+
+describe('A project finished before it was entered', () => {
+  const LATER = '2028-01-10';
+
+  it('offers nothing while open work still has planned days ahead', () => {
+    expect(openStagesOfPastProgramme(computeSchedule(programme(), TODAY), TODAY)).toEqual([]);
+    expect(closeOutAsPlanned(programme(), TODAY)).toEqual(programme());
+  });
+
+  it('records every open stage as done on its planned dates', () => {
+    const s = programme();
+    const before = computeSchedule(s, LATER);
+    expect(openStagesOfPastProgramme(before, LATER)).toHaveLength(s.tasks.length);
+    // Open work is forecast from today, so the finish reads as today.
+    expect(before.finishISO! >= LATER).toBe(true);
+
+    const closed = closeOutAsPlanned(s, LATER);
+    const after = computeSchedule(closed, LATER);
+
+    after.tasks.forEach(t => {
+      const was = task(before, t.id);
+      expect(t.status).toBe('completed');
+      expect(t.actualStartISO).toBe(was.plannedStartISO);
+      expect(t.actualEndISO).toBe(was.plannedEndISO);
+      expect(t.plannedStartDay).toBe(was.plannedStartDay);
+      expect(t.endDay).toBe(was.plannedEndDay);
+      expect(t.driftDays).toBe(0);
+    });
+    expect(after.finishISO! < LATER).toBe(true);
+    expect(openStagesOfPastProgramme(after, LATER)).toEqual([]);
+  });
+
+  it('keeps a start and a completion already recorded', () => {
+    const s = programme();
+    const s2 = { ...s, tasks: s.tasks.map(t => t.id === 'design-1'
+      ? { ...t, status: 'completed' as const, actualStartISO: '2026-08-03', actualEndISO: '2026-08-20' } : t) };
+    const closed = closeOutAsPlanned(s2, LATER);
+    expect(closed.tasks.find(t => t.id === 'design-1')).toEqual(s2.tasks.find(t => t.id === 'design-1'));
+  });
+});
+
+describe('Design steps of a project finished before it was entered', () => {
+  const NOW = '2026-11-23';
+  const step = (n: number, endDate: string, status?: string) =>
+    ({ stepNumber: n, title: `Step ${n}`, endDate: `${endDate}T23:59:59.000Z`, stepProgress: status ? { status } : undefined });
+
+  it('closes every open step on its planned end when all of them are past', () => {
+    const got = stepsToRecordAsCompleted(
+      [step(1, '2026-02-20', 'completed'), step(2, '2026-03-10', 'in_progress'), step(3, '2026-05-11')],
+      { todayISO: NOW },
+    );
+    expect(got).toEqual([
+      { stepNumber: 2, title: 'Step 2', completedOn: '2026-03-10', missing: false },
+      { stepNumber: 3, title: 'Step 3', completedOn: '2026-05-11', missing: true },
+    ]);
+  });
+
+  it('offers nothing on a live project with a step still ahead', () => {
+    const phases = [step(1, '2026-03-10', 'in_progress'), step(2, '2026-12-20', 'not_started')];
+    expect(stepsToRecordAsCompleted(phases, { todayISO: NOW })).toEqual([]);
+  });
+
+  it('closes them all on a project marked completed, never dated after today', () => {
+    const phases = [step(1, '2026-03-10', 'in_progress'), step(2, '2026-12-20', 'not_started')];
+    expect(stepsToRecordAsCompleted(phases, { todayISO: NOW, projectCompleted: true }).map(e => e.completedOn))
+      .toEqual(['2026-03-10', NOW]);
+  });
+});
+
+describe('The actual handover day of a finished project', () => {
+  const LATER = '2028-01-10';
+  const closed = () => closeOutAsPlanned(programme(), LATER);
+
+  it('moves the handover earlier and pulls back anything recorded after it', () => {
+    const before = computeSchedule(closed(), LATER);
+    const target = toISO(toDayNum(before.finishISO!) - 2);
+    const after = computeSchedule(setActualFinish(closed(), target, LATER), LATER);
+
+    expect(after.finishISO).toBe(target);
+    expect(task(after, 'ms-handover').actualEndISO).toBe(target);
+    after.tasks.forEach(t => {
+      expect(t.actualEndISO! <= target).toBe(true);
+      expect(t.actualStartISO! <= t.actualEndISO!).toBe(true);
+    });
+    // A stage that ended well before is untouched.
+    expect(task(after, 'design-1').actualEndISO).toBe(task(before, 'design-1').actualEndISO);
+  });
+
+  it('moves the handover later without touching the other stages', () => {
+    const before = computeSchedule(closed(), LATER);
+    const target = toISO(toDayNum(before.finishISO!) + 5);
+    const next = setActualFinish(closed(), target, LATER);
+    const after = computeSchedule(next, LATER);
+
+    expect(after.finishISO).toBe(target);
+    expect(next.tasks.filter(t => t.id !== 'ms-handover')).toEqual(closed().tasks.filter(t => t.id !== 'ms-handover'));
+  });
+
+  it('does nothing while a stage is still open', () => {
+    expect(setActualFinish(programme(), '2026-09-01', TODAY)).toEqual(programme());
   });
 });

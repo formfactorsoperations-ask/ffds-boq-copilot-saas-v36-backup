@@ -1229,6 +1229,123 @@ export function setTaskProgress(
   };
 }
 
+/**
+ * Stages still open on a programme whose plan has wholly passed.
+ *
+ * A project that was finished before it was entered here is back-dated, and
+ * every stage on it is then "late": the forecast pulls open work to today, and
+ * marking a stage done stamps today too. This names the case -- every stage
+ * that is not finished was planned to end before today -- so the studio can
+ * record the lot as done on the planned dates (`closeOutAsPlanned`).
+ *
+ * Empty while any open stage still has planned days ahead of it: that is a
+ * live project running late, and its stages are closed one at a time.
+ */
+export function openStagesOfPastProgramme(result: ScheduleResult, todayISO?: string): ResolvedTask[] {
+  const today = toDayNum(todayISO || toISO(Math.floor(Date.now() / MS_DAY)));
+  const open = result.tasks.filter(t => t.status !== 'completed' && !t.actualEndISO);
+  return open.length && open.every(t => t.plannedEndDay < today) ? open : [];
+}
+
+/**
+ * Record a finished programme as done on the dates it was planned for.
+ *
+ * Each open stage is marked completed with its planned start and end as the
+ * actual ones, so it stays where the chart draws it instead of moving to
+ * today. A start already recorded is kept. Does nothing unless the whole plan
+ * is in the past (`openStagesOfPastProgramme`).
+ */
+export function closeOutAsPlanned(schedule: ProjectSchedule, todayISO?: string): ProjectSchedule {
+  const open = new Map(
+    openStagesOfPastProgramme(computeSchedule(schedule, todayISO), todayISO).map(t => [t.id, t]),
+  );
+  if (!open.size) return schedule;
+  return {
+    ...schedule,
+    tasks: schedule.tasks.map(t => {
+      const r = open.get(t.id);
+      if (!r) return t;
+      const endISO = r.plannedEndISO;
+      const startISO = t.actualStartISO && t.actualStartISO <= endISO ? t.actualStartISO : r.plannedStartISO;
+      return { ...t, status: 'completed' as const, actualStartISO: startISO <= endISO ? startISO : endISO, actualEndISO: endISO };
+    }),
+  };
+}
+
+/**
+ * Set the day a finished project was actually handed over.
+ *
+ * The handover (or, on a programme without one, whatever stage ended last) is
+ * moved to that day. A finished stage recorded as ending after it is pulled
+ * back to end on it, since nothing can have ended after the handover; stages
+ * that ended earlier are left alone. Does nothing while any stage is open.
+ */
+export function setActualFinish(schedule: ProjectSchedule, finishISO: string, todayISO?: string): ProjectSchedule {
+  const result = computeSchedule(schedule, todayISO);
+  if (!finishISO || !result.tasks.length
+    || result.tasks.some(t => t.status !== 'completed' && !t.actualEndISO)) return schedule;
+  const byId = new Map(result.tasks.map(t => [t.id, t]));
+  const handover = result.tasks.filter(isHandoverTask).map(t => t.id);
+  const lastDay = Math.max(...result.tasks.map(t => t.endDay));
+  const moved = new Set(handover.length ? handover : result.tasks.filter(t => t.endDay === lastDay).map(t => t.id));
+  return {
+    ...schedule,
+    tasks: schedule.tasks.map(t => {
+      const r = byId.get(t.id);
+      if (!r) return t;
+      const endISO = t.actualEndISO || r.endISO;
+      const startISO = t.actualStartISO || r.startISO;
+      if (moved.has(t.id)) {
+        const start = r.kind === 'milestone' || startISO > finishISO ? finishISO : startISO;
+        return { ...t, status: 'completed' as const, actualStartISO: start, actualEndISO: finishISO };
+      }
+      if (endISO <= finishISO) return t;
+      return { ...t, actualStartISO: startISO > finishISO ? finishISO : startISO, actualEndISO: finishISO };
+    }),
+  };
+}
+
+/** A design step as the Timeline holds it: its dates, and whether it is closed. */
+export interface StepRecordPhase {
+  stepNumber: number;
+  title: string;
+  endDate?: string;
+  stepProgress?: { status?: string } | null;
+}
+
+/** One design step to record as completed, and the day to record it on. */
+export interface StepRecordEntry {
+  stepNumber: number;
+  title: string;
+  /** The step's planned end, YYYY-MM-DD. */
+  completedOn: string;
+  /** The step has no progress record yet, so one is written whole. */
+  missing: boolean;
+}
+
+/**
+ * The design steps to close when a finished programme is recorded.
+ *
+ * The same rule as `openStagesOfPastProgramme`: every step still open ended
+ * before today. On a project the studio has marked completed the rule is not
+ * needed -- the project is over, whatever the dates say -- so every open step
+ * is returned, dated on its planned end or on today if that is later.
+ */
+export function stepsToRecordAsCompleted(
+  phases: StepRecordPhase[], opts: { todayISO?: string; projectCompleted?: boolean } = {},
+): StepRecordEntry[] {
+  const today = opts.todayISO || toISO(Math.floor(Date.now() / MS_DAY));
+  const open = phases.filter(p => p.stepProgress?.status !== 'completed' && p.endDate);
+  const day = (p: StepRecordPhase) => p.endDate!.slice(0, 10);
+  if (!open.length || (!opts.projectCompleted && !open.every(p => day(p) < today))) return [];
+  return open.map(p => ({
+    stepNumber: p.stepNumber,
+    title: p.title,
+    completedOn: day(p) < today ? day(p) : today,
+    missing: !p.stepProgress,
+  }));
+}
+
 /** Tasks a hold would move, so the UI can preview before committing. */
 export function holdImpact(schedule: ProjectSchedule, hold: ScheduleHold): {
   moved: string[]; pinnedBlocked: string[];

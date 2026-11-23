@@ -24,6 +24,8 @@ export interface StepProgress {
   deliverables: DeliverableProgress[];
   completedAt?: string | null;
   completedBy?: string | null;
+  /** Closed in bulk when a finished project was recorded: no checklist, no payment request. */
+  recordedAsCompleted?: boolean;
 }
 
 export async function initProjectStepProgress(projectId: string, studioId: string, studioSettings: StudioSettings) {
@@ -221,5 +223,62 @@ export function useStepProgress(projectId: string, studioId: string) {
         }
     };
 
-    return { steps, updateDeliverable, updateClientSignoff, markStepComplete, loading };
+    /*
+      Recording a project that was finished before it was entered.
+
+      `markStepComplete` is for live work: it wants every deliverable ticked and
+      the client's sign-off, and raises the payment request the step triggers.
+      None of that belongs on a project that is already over and paid, so this
+      writes the status and the day only -- no checklist, no payment request,
+      and the project's own status is left alone.
+    */
+    const recordStepsCompleted = async (
+        entries: { stepNumber: number; title: string; completedOn: string; missing?: boolean }[],
+        userEmail?: string,
+    ) => {
+        if (!firestoreDb || !entries.length) return;
+        try {
+            const batch = writeBatch(firestoreDb);
+            entries.forEach((e) => {
+                const ref = doc(firestoreDb!, `studios/${studioId}/projects/${projectId}/stepProgress`, String(e.stepNumber));
+                batch.set(ref, {
+                    ...(e.missing ? {
+                        stepNumber: e.stepNumber, title: e.title, deliverables: [],
+                        clientSignoffRequired: false, clientSignoffReceived: false, clientSignoffAt: null,
+                    } : {}),
+                    status: 'completed',
+                    completedAt: `${e.completedOn}T12:00:00.000Z`,
+                    completedBy: userEmail || 'Unknown',
+                    recordedAsCompleted: true,
+                }, { merge: true });
+            });
+            await batch.commit();
+        } catch (err) {
+            console.error("Error recording steps as completed:", err);
+        }
+    };
+
+    /** Correct the day a completed step is recorded on (YYYY-MM-DD). */
+    const setStepCompletedOn = async (stepNumber: number, dayISO: string) => {
+        if (!firestoreDb || !dayISO) return;
+        try {
+            const ref = doc(firestoreDb, `studios/${studioId}/projects/${projectId}/stepProgress`, String(stepNumber));
+            await setDoc(ref, { completedAt: `${dayISO}T12:00:00.000Z` }, { merge: true });
+        } catch (err) {
+            console.error("Error updating the completion date:", err);
+        }
+    };
+
+    /** Open a completed step again. Its checklist and sign-off are kept as they were. */
+    const reopenStep = async (stepNumber: number) => {
+        if (!firestoreDb) return;
+        try {
+            const ref = doc(firestoreDb, `studios/${studioId}/projects/${projectId}/stepProgress`, String(stepNumber));
+            await setDoc(ref, { status: 'in_progress', completedAt: null, completedBy: null, recordedAsCompleted: false }, { merge: true });
+        } catch (err) {
+            console.error("Error reopening the step:", err);
+        }
+    };
+
+    return { steps, updateDeliverable, updateClientSignoff, markStepComplete, recordStepsCompleted, setStepCompletedOn, reopenStep, loading };
 }

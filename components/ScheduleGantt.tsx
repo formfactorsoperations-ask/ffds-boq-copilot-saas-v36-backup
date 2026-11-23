@@ -11,10 +11,11 @@ import {
   computeSchedule, programmeSpanDays, varianceReport, daysLostByReason, ineffectiveHolds, holdImpact,
   freezeBaseline, setTaskProgress, reorderTaskInLane, toDayNum, toISO, isWorkingDay, weekdayOf, GATE_LABEL,
   workingDaysBetween, DEFAULT_CALENDAR, isHandoverTask, isDesignGateTask, gateHeldChain, releaseBeforeGate,
-  planStartAt, nextWorkingDay, type StartPlan,
+  planStartAt, nextWorkingDay, openStagesOfPastProgramme, closeOutAsPlanned, setActualFinish, type StartPlan,
   type ResolvedTask,
 } from '../lib/schedule';
 import { markersByDay, MARKER_LABEL } from '../lib/scheduleMarkers';
+import { Button } from './ui/kit';
 import './projectHeader/projectHeader.css';
 import {
   Calendar, Pin, PauseCircle, AlertTriangle, Zap, Lock, Check, Circle, Play, Users, FileText, Printer, X, RefreshCw,
@@ -140,6 +141,14 @@ interface Props {
   onUpdateDeliverable?: (stepNumber: number, deliverableId: string, updates: any) => void;
   onUpdateSignoff?: (stepNumber: number, clientSignoffReceived: boolean) => void;
   onCompleteStep?: (stepNumber: number) => void;
+  /** Design steps the "Record as completed" band would also close (lib/schedule `stepsToRecordAsCompleted`). */
+  openSteps?: number;
+  onRecordStepsCompleted?: () => void;
+  /** Correct the day a completed design step is recorded on, or open it again. */
+  onSetStepCompletedOn?: (stepNumber: number, dayISO: string) => void;
+  onReopenStep?: (stepNumber: number) => void;
+  /** The project is completed: the cards say what happened, not what is forecast. */
+  closed?: boolean;
 }
 
 export default function ScheduleGantt({
@@ -155,6 +164,11 @@ export default function ScheduleGantt({
   onUpdateDeliverable,
   onUpdateSignoff,
   onCompleteStep,
+  openSteps = 0,
+  onRecordStepsCompleted,
+  onSetStepCompletedOn,
+  onReopenStep,
+  closed = false,
 }: Props) {
   const [zoom, setZoom] = useState<Zoom>('week');
   const [showBaseline, setShowBaseline] = useState(true);
@@ -332,6 +346,29 @@ export default function ScheduleGantt({
     the gap between the plan on the chart and what can still actually happen.
   */
   const overdueCount = result.tasks.filter(t => t.overdueToStart).length;
+
+  /*
+    A project that was finished before it was entered here.
+
+    Its start is back-dated, so every stage reads as late and the finish reads
+    as today; marking a stage Done stamps today as well. When the whole plan is
+    behind today, one action records the open stages as done on their planned
+    dates (lib/schedule `closeOutAsPlanned`). Asked twice, because it writes
+    actual dates onto every stage.
+  */
+  const pastOpen = useMemo(() => openStagesOfPastProgramme(result), [result]);
+  /* Stages with planned days still ahead: live work, which the band never closes. */
+  const liveOpen = result.tasks.some(t => t.status !== 'completed' && !t.actualEndISO) && !pastOpen.length;
+  const stepsToClose = onRecordStepsCompleted ? openSteps : 0;
+  const closeParts = [
+    pastOpen.length ? `${pastOpen.length} stage${pastOpen.length === 1 ? '' : 's'}` : '',
+    stepsToClose ? `${stepsToClose} design step${stepsToClose === 1 ? '' : 's'}` : '',
+  ].filter(Boolean).join(' and ');
+  const [confirmCloseOut, setConfirmCloseOut] = useState(false);
+  /* On a completed project with every stage done, the Finished card sets the actual handover day. */
+  const [editingFinish, setEditingFinish] = useState(false);
+  const canEditFinish = closed && !readOnly && !!onChange
+    && result.tasks.every(t => t.status === 'completed' || !!t.actualEndISO);
 
   /*
     How long the programme runs, start to handover.
@@ -532,13 +569,42 @@ export default function ScheduleGantt({
             </p>
           </div>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Projected Finish</p>
-            <p className="text-lg font-bold mt-1" style={{
-              color: (result.overrunWorkDays ?? 0) > 0 ? '#e11d48' : '#059669',
-            }}>
-              {result.finishISO ? new Date(result.finishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
-            </p>
-            <p className="text-xs text-slate-400 mt-0.5">Estimated end date</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">{closed ? 'Finished' : 'Projected Finish'}</p>
+            {canEditFinish && editingFinish ? (
+              <input
+                type="date"
+                autoFocus
+                aria-label="Actual handover date"
+                defaultValue={result.finishISO || ''}
+                onBlur={e => {
+                  setEditingFinish(false);
+                  if (e.target.value && e.target.value !== result.finishISO) onChange!(setActualFinish(schedule, e.target.value));
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                  if (e.key === 'Escape') setEditingFinish(false);
+                }}
+                className="mt-1 w-full border border-[#ADBBDA] rounded-lg px-2 py-1 text-base font-bold text-slate-900 outline-none bg-white"
+              />
+            ) : (
+              <button
+                type="button"
+                disabled={!canEditFinish}
+                onClick={() => setEditingFinish(true)}
+                className="group/edit text-left w-full disabled:cursor-default cursor-pointer"
+                title={canEditFinish ? 'Change the actual handover date' : undefined}
+              >
+                <p className="text-lg font-bold mt-1 inline-flex items-center gap-1.5" style={{
+                  color: closed ? '#0f172a' : (result.overrunWorkDays ?? 0) > 0 ? '#e11d48' : '#059669',
+                }}>
+                  {result.finishISO ? new Date(result.finishISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                  {canEditFinish && (
+                    <Pencil className="w-3 h-3 text-slate-300 opacity-0 group-hover/edit:opacity-100 transition-opacity" />
+                  )}
+                </p>
+              </button>
+            )}
+            <p className="text-xs text-slate-400 mt-0.5">{closed ? (canEditFinish ? 'Actual handover' : 'Last stage ended') : 'Estimated end date'}</p>
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Total Duration</p>
@@ -587,7 +653,16 @@ export default function ScheduleGantt({
           </div>
           <div className="col-span-2 lg:col-span-1">
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Status Variance</p>
-            {result.overrunWorkDays != null ? (
+            {closed && result.overrunWorkDays != null ? (
+              <>
+                {/* A finished project has nothing left to forecast: say how it ended against the target. */}
+                <p className="text-lg font-bold text-slate-900 mt-1">
+                  {result.overrunWorkDays > 0 ? `${result.overrunWorkDays}d after target`
+                    : result.overrunWorkDays < 0 ? `${Math.abs(result.overrunWorkDays)}d before target` : 'On target'}
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5 font-medium">Working days, against the target handover</p>
+              </>
+            ) : result.overrunWorkDays != null ? (
               <>
                 <p className="text-lg font-bold mt-1" style={{
                   color: result.overrunWorkDays > 0 ? '#e11d48' : '#059669',
@@ -620,6 +695,39 @@ export default function ScheduleGantt({
           disclosure -- see the note there.
         */}
       </div>
+
+      {!readOnly && onChange && (!liveOpen || closed) && (pastOpen.length > 0 || stepsToClose > 0) && (
+        <div className="hud-panel-in rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 flex items-start gap-3 flex-wrap">
+          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1 basis-64">
+            <p className="text-xs font-bold text-amber-900">
+              {closed ? 'This project is completed' : 'This programme ended before today'}, with {closeParts} still open.
+            </p>
+            <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+              {confirmCloseOut
+                ? 'Each one will be marked done on its planned dates. Design steps close without their checklist and without raising a payment request. You can correct any of them afterwards.'
+                : 'If the project is already finished, record it as done on these dates. Otherwise the finish keeps moving to today.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {confirmCloseOut ? (
+              <>
+                <Button size="sm" variant="quiet" onClick={() => setConfirmCloseOut(false)}>Cancel</Button>
+                <Button size="sm" variant="primary" icon={Check}
+                  onClick={() => {
+                    setConfirmCloseOut(false);
+                    if (pastOpen.length) onChange(closeOutAsPlanned(schedule));
+                    if (stepsToClose) onRecordStepsCompleted?.();
+                  }}>
+                  Mark {pastOpen.length + stepsToClose} done
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" icon={Check} onClick={() => setConfirmCloseOut(true)}>Record as completed</Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/*
         The CONFIGURE row is gone.
@@ -1798,6 +1906,25 @@ export default function ScheduleGantt({
                       Design Stage Deliverables &amp; Sign-off
                     </span>
                   </div>
+                  {selectedPhase.stepProgress.status === 'completed' && !readOnly && (onSetStepCompletedOn || onReopenStep) && (
+                    <div className="flex items-end gap-2 flex-wrap">
+                      {onSetStepCompletedOn && (
+                        <label className="flex-1 min-w-[9rem]">
+                          <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Completed on</span>
+                          <input
+                            type="date"
+                            aria-label="Completed on"
+                            value={(selectedPhase.stepProgress.completedAt || '').slice(0, 10)}
+                            onChange={e => { if (e.target.value) onSetStepCompletedOn(selectedPhase.stepNumber, e.target.value); }}
+                            className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none bg-slate-50 focus:bg-white focus:border-[#ADBBDA] font-medium"
+                          />
+                        </label>
+                      )}
+                      {onReopenStep && (
+                        <Button size="sm" onClick={() => onReopenStep(selectedPhase.stepNumber)}>Reopen step</Button>
+                      )}
+                    </div>
+                  )}
                   <div className="border border-slate-100 rounded-xl bg-slate-50/50 p-3">
                     <StepDeliverableChecklist
                       step={selectedPhase.stepProgress}
