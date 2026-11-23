@@ -197,3 +197,66 @@ describe('a terminated project in the studio figures', () => {
     expect(stageOfProject(project(ctx({ status: 'lost' })))).toBe('lost');
   });
 });
+
+import { cardStates } from '../../lib/moneyBoard';
+
+describe('milestone statuses on a terminated project', () => {
+  const milestones: any[] = [
+    { id: 'd1', type: 'design', status: 'paid' },
+    { id: 'd2', type: 'design', status: 'invoiced' },
+    { id: 'd3', type: 'design' },
+    { id: 'e1', type: 'execution', status: 'pending' },
+  ];
+
+  it('a live project has an up-next and a later on each track', () => {
+    expect(cardStates(milestones, new Set())).toEqual({ d1: 'paid', d2: 'invoiced', d3: 'next', e1: 'next' });
+  });
+
+  it('terminated: paid stays paid, an unpaid invoice is cancelled, the rest is not billed, even if it was earned', () => {
+    expect(cardStates(milestones, new Set(['d3']), true)).toEqual({ d1: 'paid', d2: 'void', d3: 'dropped', e1: 'dropped' });
+  });
+});
+
+import { paymentModel } from '../../lib/projectHome';
+import { stageWhenEnded } from '../../lib/termination';
+
+describe('terminated mid-execution: what was done stays as it was', () => {
+  /* On site: design fully paid, first execution stage paid, the second invoiced and unpaid, the rest not reached. */
+  const onSite: any = ctx({
+    status: 'execution', lifecycle: { stage: 5, gates: {} },
+    paymentMilestones: [
+      { id: 'd1', type: 'design', name: 'Design', percentage: 100, status: 'paid', invoiceDate: '2026-09-05', paidDate: '2026-09-10' },
+      { id: 'e1', type: 'execution', name: 'Advance', percentage: 40, status: 'paid', invoiceDate: '2026-10-01', paidDate: '2026-10-03' },
+      { id: 'e2', type: 'execution', name: 'Structure', percentage: 30, status: 'invoiced', invoiceDate: '2026-11-01' },
+      { id: 'e3', type: 'execution', name: 'Finishing', percentage: 30 },
+    ],
+  });
+  const { out } = terminate(onSite, { basis: 'keep_paid', designDonePct: 0, executionDonePct: 0, charges: 0 });
+
+  it('keeps the stage it had reached, and says so', () => {
+    expect(out.termination.prevStatus).toBe('execution');
+    expect(out.lifecycle.stage).toBe(5);
+    expect(stageWhenEnded(out.termination)).toBe('on site');
+    expect(stageWhenEnded({ prevStatus: 'won' })).toBe('won, before site work');
+    expect(stageWhenEnded(null)).toBeNull();
+  });
+
+  it('keeps every payment already made as Paid, with its dates; only what was not paid changes', () => {
+    expect(out.paymentMilestones).toEqual(onSite.paymentMilestones); // the rows themselves are untouched
+    expect(cardStates(out.paymentMilestones, new Set(), true)).toEqual({ d1: 'paid', e1: 'paid', e2: 'void', e3: 'dropped' });
+  });
+
+  it('Project Hub: collected stays collected, nothing is due, the rest is not billed', () => {
+    const schedule = computeSchedule({ context: out, tierSummary: tier.summary });
+    const live = paymentModel(schedule as any, onSite.paymentMilestones, []);
+    const ended = paymentModel(schedule as any, out.paymentMilestones, [], true);
+    expect(live.due.map((r) => r.id)).toEqual(['e2']);
+    expect(ended.ended).toBe(true);
+    expect(ended.due).toEqual([]);
+    expect(ended.dueNow).toBe(0);
+    expect(ended.collected).toBe(live.collected);
+    expect(ended.rungs.map((r) => r.state)).toEqual(['paid', 'paid', 'up', 'up']);
+    expect(ended.rungs.find((r) => r.id === 'e2')?.invoiced).toBe(true); // reads Cancelled
+    expect(ended.laterCount).toBe(2);
+  });
+});

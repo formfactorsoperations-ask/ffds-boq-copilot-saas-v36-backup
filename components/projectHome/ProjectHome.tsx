@@ -21,6 +21,7 @@
  * that lean toward the cursor; and a Record card for site visits, meetings
  * and decisions (keys S, M, D).
  */
+import { isTerminated, reasonLabel, settlementLine, stageWhenEnded } from '../../lib/termination';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db as fsDb } from '../../services/firebaseClient';
@@ -170,7 +171,17 @@ function Home(p: ProjectHomeProps) {
   const payResult = useMemo(() => {
     try { return computePayments({ context: ctx, tierSummary: p.activeTier?.summary }); } catch { return null; }
   }, [ctx, p.activeTier]);
-  const payments = useMemo(() => paymentModel(payResult, ctx.paymentMilestones || [], journey.phaseProgress), [payResult, ctx.paymentMilestones, journey.phaseProgress]);
+  /*
+    Terminated (lib/termination): nothing is due and nothing is to come. What
+    was collected is measured against what the studio keeps, not the contract.
+  */
+  const terminated = isTerminated(ctx);
+  const payments = useMemo(() => {
+    const model = paymentModel(payResult, ctx.paymentMilestones || [], journey.phaseProgress, terminated);
+    if (!terminated) return model;
+    const kept = Number((ctx as any).termination?.settlement?.entitled) || 0;
+    return { ...model, gross: Math.max(kept, model.collected) };
+  }, [payResult, ctx.paymentMilestones, journey.phaseProgress, terminated, ctx]);
 
   const programme = useMemo(() => {
     if (savedSchedule === undefined) return { rows: [] as GanttRow[], finishISO: null as string | null, targetISO: null as string | null };
@@ -316,10 +327,14 @@ function Home(p: ProjectHomeProps) {
   /* ───────────── header ───────────── */
   const paused = ctx.status === 'work_paused';
   const top = p.nextActions[0] || null;
-  const headline = paused ? <>This project is paused.</>
+  const ended: any = terminated ? (ctx as any).termination : null;
+  const endedLine = ended ? settlementLine(ended.settlement) : null;
+  const headline = ended ? <>This project was terminated.</>
+    : paused ? <>This project is paused.</>
     : top ? <><span className="dim">Next:</span> {asSentence(top.title)}.</>
     : <>Nothing is waiting on you.</>;
-  const sub = paused ? 'Resume it to bring back the next steps and alerts.'
+  const sub = ended ? `${reasonLabel(ended.reason)}${stageWhenEnded(ended) ? `, while ${stageWhenEnded(ended)}` : ''}. Nothing more is due on it${canSeeMoney && endedLine && endedLine.kind !== 'even' ? `; ${endedLine.text.toLowerCase()}: ${inr(endedLine.amount)}` : ''}.`
+    : paused ? 'Resume it to bring back the next steps and alerts.'
     : top ? top.why
     : strip[activeIdx] ? `${strip[activeIdx].name} is in progress — ${strip[activeIdx].done} of ${strip[activeIdx].total} steps done.` : '';
 
@@ -327,9 +342,19 @@ function Home(p: ProjectHomeProps) {
   const canModifyBrief = !ctx.approvedTierId && !ctx.lifecycle?.gates?.proposalAccepted?.done && p.stage < 3 && !!p.onModifyBrief;
 
   /* ───────────── up next ───────────── */
-  const rows = buildRows({
-    p, ctx, go, openInsight, drawings, payments, programmeRows: programme.rows, followUps, activeIdx, strip,
-  });
+  /* Terminated: the project's own next steps no longer apply. The one thing left is a settlement still open. */
+  const rows: Row[] = ended
+    ? (canSeeMoney && ended.settlement?.status === 'open' && endedLine && endedLine.kind !== 'even'
+      ? [{
+        key: 'termination-settlement', tone: 'gold', icon: <Glyph name="invoice" />,
+        title: <>{endedLine.kind === 'refund' ? 'Pay the refund' : 'Collect the balance'} · {inr(endedLine.amount)}</>,
+        desc: <>The project was terminated and its settlement is still open. Record it from the strip under the project header once the money has moved.</>,
+        actions: [{ label: 'Open Money', onClick: () => go('payment-calc') }],
+      }]
+      : [])
+    : buildRows({
+      p, ctx, go, openInsight, drawings, payments, programmeRows: programme.rows, followUps, activeIdx, strip,
+    });
   const visibleRows = rows.slice(0, 3);
   const moreRows = rows.slice(3);
 
@@ -439,7 +464,9 @@ function Home(p: ProjectHomeProps) {
           {/* ═══ up next ═══ */}
           <section className="ph-card ph-rise" style={{ animationDelay: '.1s' }}>
             <div className="ph-sec-h"><h2>Up next</h2><span className="ph-count">{rows.length}</span><span className="sp" /><span className="hint">Most important first</span></div>
-            {rows.length === 0 && <div className="ph-empty"><b>You&rsquo;re clear</b>Nothing needs you on this project right now.</div>}
+            {rows.length === 0 && (ended
+              ? <div className="ph-empty"><b>Project terminated</b>Nothing more is due on this project. Its screens are kept as a record.</div>
+              : <div className="ph-empty"><b>You&rsquo;re clear</b>Nothing needs you on this project right now.</div>)}
             {visibleRows.map(r => <UpNextRow key={r.key} r={r} />)}
             {moreRows.length > 0 && (
               <>
@@ -503,13 +530,16 @@ function Home(p: ProjectHomeProps) {
             <div className="ph-kv"><span className="k">Area</span><span className="v">{ctx.area ? `${ctx.area} sqft` : '—'}{ctx.location ? ` · ${ctx.location}` : ''}</span></div>
             <div className="ph-kv"><span className="k">Scope</span><span className="v">{(ctx.rooms || []).length} rooms · {p.fullBoq.length} lines</span></div>
             {tierName && <div className="ph-kv"><span className="k">Tier</span><span className="v" title={tierName}>{tierName}</span></div>}
-            <div className="ph-kv"><span className="k">Status</span><span className="v"><span className="ph-bdg ok">{String(ctx.status || 'lead').replace(/_/g, ' ')}</span></span></div>
+            <div className="ph-kv"><span className="k">Status</span><span className="v">{ended
+              ? <><span className="ph-bdg">Terminated</span>{stageWhenEnded(ended) ? <small style={{ display: 'block', marginTop: 4 }}>while {stageWhenEnded(ended)}</small> : null}</>
+              : <span className="ph-bdg ok">{String(ctx.status || 'lead').replace(/_/g, ' ')}</span>}</span></div>
             <div className="pad-b" />
           </section>
 
           <WaitingCard decisions={ctx.projectDecisions || []} go={go} />
 
-          <ComingUp journey={journey} activeIdx={activeIdx} stage={p.stage} payments={payments} />
+          {/* Nothing is coming up on a terminated project. */}
+          {!ended && <ComingUp journey={journey} activeIdx={activeIdx} stage={p.stage} payments={payments} />}
         </aside>
       </div>
     </div>

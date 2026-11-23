@@ -25,6 +25,8 @@ const STATUS: Record<CardState, { label: string; tone: 'good' | 'warn' | 'brand'
   earned: { label: 'Earned', tone: 'brand' },
   next: { label: 'Up next', tone: 'slate' },
   later: { label: 'Later', tone: 'slate' },
+  void: { label: 'Cancelled', tone: 'slate' },
+  dropped: { label: 'Not billed', tone: 'slate' },
 };
 
 export interface SummaryTrack {
@@ -109,7 +111,7 @@ const TrackTable: React.FC<{ t: SummaryTrack; index: number; onOpen: (id: string
                   <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
                     {dateOf(m.date)
                       || (m.status === 'paid' && dateOf(m.paidDate) ? `Paid ${dateOf(m.paidDate)}` : null)
-                      || (m.status === 'paid' || m.status === 'invoiced' ? '—' : <span className="text-amber-700">No date</span>)}
+                      || (m.status === 'paid' || m.status === 'invoiced' || t.states[m.id] === 'void' || t.states[m.id] === 'dropped' ? '—' : <span className="text-amber-700">No date</span>)}
                   </td>
                 </motion.tr>
               );

@@ -92,6 +92,8 @@ export const MoneyBoard: React.FC<{
   scheduleLabel: string;
   onEdit: () => void;
   readOnly?: boolean;
+  /** The project was terminated (lib/termination): nothing here is live, and no schedule is to be sent. */
+  terminated?: boolean;
   tiles: BoardTile[];
   preview: BoardPreview | null;
   versionPill?: React.ReactNode;
@@ -107,7 +109,7 @@ export const MoneyBoard: React.FC<{
     ['Collected', t.collected, 'bg-[#3D52A0]'],
     ['With client', t.withClient, 'bg-amber-500'],
     ['Earned, to invoice', t.earned, 'bg-[#3D52A0]/40'],
-    ['Not earned yet', t.notEarned, 'bg-slate-200'],
+    [p.terminated ? 'Not billed' : 'Not earned yet', t.notEarned, 'bg-slate-200'],
   ];
   return (
     <div className="space-y-4">
@@ -119,9 +121,11 @@ export const MoneyBoard: React.FC<{
               <h2 className="flex flex-wrap items-center gap-2.5 text-xl font-bold text-slate-800 tracking-tight">
                 Money
                 <Chip tone={p.status.tone}><span className="w-1.5 h-1.5 rounded-full bg-current" />{p.status.label}</Chip>
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 pp-live" />Live</span>
+                {p.terminated
+                  ? <Chip tone="slate">Project terminated</Chip>
+                  : <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 pp-live" />Live</span>}
               </h2>
-              <p className="text-xs text-slate-600 mt-1 tabular-nums"><Fig v={t.collected} /> collected of <b className="text-slate-800"><Fig v={t.contract} /></b> · {p.milestoneCount} {p.milestoneCount === 1 ? 'milestone' : 'milestones'}</p>
+              <p className="text-xs text-slate-600 mt-1 tabular-nums"><Fig v={t.collected} /> collected of <b className="text-slate-800"><Fig v={t.contract} /></b> · {p.milestoneCount} {p.milestoneCount === 1 ? 'milestone' : 'milestones'}{p.terminated ? ' · nothing more will be billed' : ''}</p>
               <div className="flex flex-wrap gap-2 mt-2.5">
                 {([['Taxable', t.taxable, Landmark], ['GST', t.gst, Percent], ['Cash', t.cash, Banknote]] as [string, number, React.ComponentType<any>][]).map(([l, v, I]) => (
                   <span key={l} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
@@ -149,7 +153,7 @@ export const MoneyBoard: React.FC<{
           <Glide id="money-tab" label="Money view" value={p.tab} onChange={p.onTab}
             options={[{ id: 'board', label: `Milestones · ${p.milestoneCount}` }, { id: 'history', label: p.historyCount ? `History · ${p.historyCount}` : 'History', icon: History }]} />
           <span className="ml-auto flex flex-wrap gap-2">
-            <Button size="sm" variant="secondary" icon={FileSignature} onClick={p.onSchedule}>{p.scheduleLabel}</Button>
+            {!p.terminated && <Button size="sm" variant="secondary" icon={FileSignature} onClick={p.onSchedule}>{p.scheduleLabel}</Button>}
             {!p.readOnly && <Button size="sm" variant="primary" icon={Pencil} className="pp-press" onClick={p.onEdit}>Edit milestones</Button>}
           </span>
         </div>

@@ -1918,7 +1918,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         return { gross, discount: Math.max(0, gross - taxable), taxable, billable: sum('billable'), gst: sum('gst'), cash: sum('cash'), total: sum('base') + sum('gst') };
     };
     const earnedIds = useMemo(() => new Set((billable.items || []).filter(i => i.earned).map(i => i.id)), [billable]);
-    const states = useMemo(() => cardStates(milestones, earnedIds), [milestones, earnedIds]);
+    const states = useMemo(() => cardStates(milestones, earnedIds, terminated), [milestones, earnedIds, terminated]);
     const owedWhere = (s: typeof schedule, pick: (m: PaymentMilestone) => boolean) =>
         milestones.filter(pick).reduce((x, m) => x + (s.byId[m.id]?.owed || 0), 0);
     const sumOf = (s: typeof schedule, k: 'gst' | 'cash' | 'base') => s.amounts.reduce((x, a) => x + (a[k] || 0), 0);
@@ -2392,25 +2392,13 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 )}
             </AnimatePresence>
 
-            {!isReadOnlyMode && (
-                <div className="mb-4 empty:hidden">
-                    <DisputePanel slot="lead" context={projectContext} schedule={schedule} canAct={canTerminate && !terminated} actor={terminationActor}
-                        setProjectContext={setProjectContext as any} />
-                </div>
-            )}
-            {terminated && (
-                <div className="mb-4">
-                    <TerminationPanel context={projectContext} schedule={schedule} canAct={canTerminate} actor={terminationActor}
-                        setProjectContext={setProjectContext as any} onTerminate={onTerminate} />
-                </div>
-            )}
-
             {activeTier && (
                 <>
                     <MoneyBoard
                         totals={boardTotals}
                         milestoneCount={milestones.length}
-                        status={boardStatus}
+                        status={terminated ? { label: 'Schedule frozen', tone: 'warn' } : boardStatus}
+                        terminated={terminated}
                         tab={moneyTab}
                         onTab={setMoneyTab}
                         historyCount={(financials?.paymentRevisions || []).length + scheduleChangeLog.length}
@@ -3571,14 +3559,13 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
             {!isReadOnlyMode && (
                 <div className="mt-6 empty:hidden">
-                    <DisputePanel slot="foot" context={projectContext} schedule={schedule} canAct={canTerminate && !terminated} actor={terminationActor}
+                    <DisputePanel context={projectContext} schedule={schedule} canAct={canTerminate && !terminated} actor={terminationActor}
                         setProjectContext={setProjectContext as any} />
                 </div>
             )}
             {!terminated && !isReadOnlyMode && (
                 <div className="mt-6">
-                    <TerminationPanel context={projectContext} schedule={schedule} canAct={canTerminate} actor={terminationActor}
-                        setProjectContext={setProjectContext as any} onTerminate={onTerminate} />
+                    <TerminationPanel context={projectContext} schedule={schedule} canAct={canTerminate} onTerminate={onTerminate} />
                 </div>
             )}
 
