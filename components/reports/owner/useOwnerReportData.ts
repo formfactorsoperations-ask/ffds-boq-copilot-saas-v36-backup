@@ -1,3 +1,4 @@
+import { isTerminated } from '../../../lib/termination';
 import { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import type { FullProjectData } from '../../../types';
@@ -47,7 +48,7 @@ export function useOwnerReportData(projects: FullProjectData[]) {
   const { map: teamMap } = useProjectTeam();
   const people = usePeople(true);
 
-  const moneyIds = useMemo(() => projects.filter((p) => MONEY_STATUSES.includes(p.context?.status || '')).map((p) => p.id), [projects]);
+  const moneyIds = useMemo(() => projects.filter((p) => MONEY_STATUSES.includes(p.context?.status || '') || isTerminated(p.context)).map((p) => p.id), [projects]);
   const activeIds = useMemo(() => projects.filter((p) => ['won', ...LIVE_STATUSES].includes(p.context?.status || '')).map((p) => p.id), [projects]);
   const moneyKey = moneyIds.join('|');
   const activeKey = activeIds.join('|');

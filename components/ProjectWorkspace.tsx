@@ -1,3 +1,4 @@
+import { isTerminated } from '../lib/termination';
 import React, { useState, useEffect, useMemo } from 'react';
 import { ProjectContextTier } from './ProjectContextTier';
 import { ProjectContext, ProjectStatus, FullProjectData } from '../types';
@@ -207,7 +208,9 @@ export function ProjectWorkspace({
   /* What the project sidebar shows (components/projectNav/ProjectSidebar). */
   const [mobileNav, setMobileNav] = useState(false);
   useEffect(() => { setMobileNav(false); }, [activeTab]);
-  const workspaceStatus = WORKSPACE_STATUS_MAP[(projectContext.status && WORKSPACE_STATUS_MAP[projectContext.status]) ? projectContext.status : 'draft'];
+  const workspaceStatusBase = WORKSPACE_STATUS_MAP[(projectContext.status && WORKSPACE_STATUS_MAP[projectContext.status]) ? projectContext.status : 'draft'];
+  /* A project dropped part-way reads Terminated, not Lost (lib/termination). */
+  const workspaceStatus = isTerminated(projectContext) ? { ...workspaceStatusBase, label: 'Terminated' } : workspaceStatusBase;
   const sidebarStages: SidebarStage[] = NAV.map(s => {
     const screens = s.items.filter(i => !hiddenForRole(i)).map(i => ({ route: i.route, label: i.label, readOnly: !!accessBadge(i.route) }));
     const locked = isStageLocked(s.stage);

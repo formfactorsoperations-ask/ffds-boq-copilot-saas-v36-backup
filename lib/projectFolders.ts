@@ -10,6 +10,7 @@
 import type { FolderFile } from '../components/ui/glass-folder-cards';
 import type { NextAction } from '../services/nextActionEngine';
 import { classifyProject } from './projectClassification';
+import { isTerminated, settlementLine } from './termination';
 
 export type FolderStage = 'lead' | 'proposal' | 'won' | 'execution' | 'completed' | 'lost';
 
@@ -124,6 +125,11 @@ export function folderFiles(project: any): RoutedFile[] {
       push(renderFile);
       break;
     case 'lost':
+      /* Terminated part-way (lib/termination): the settlement leads. */
+      if (isTerminated(c)) {
+        const line = settlementLine(c.termination?.settlement);
+        push({ name: 'Termination settlement', meta: line.kind === 'even' || c.termination?.settlement?.status !== 'open' ? 'Settled' : line.kind === 'refund' ? 'Refund due' : 'Balance due', route: 'payment-calc' });
+      }
       push({ name: 'Brief & site', meta: 'As it was', route: 'leadiq' });
       push(tiers.length > 0 && { name: 'Last proposal', meta: plural(tiers.length, 'option'), route: 'client' });
       break;

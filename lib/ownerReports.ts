@@ -20,6 +20,7 @@
 
   Pure, and shared by the screens and the tests.
 */
+import { isTerminated, settlementRow } from './termination';
 import { calculateProjectFinancials } from './financialsUtils';
 import { engagementOf, isFeeOnly, type EngagementType } from './engagement';
 import { LOST_REASONS, LEAD_SOURCES, LEAD_STAGES, BOARD_STAGES, FIRST_CALL_MINUTES, QUIET_DAYS, isOpen, type Lead, type LeadSource, type LeadStage } from './leads';
@@ -191,6 +192,8 @@ export interface ProjectFact {
   name: string;
   client: string;
   status: string;
+  /** Dropped before it finished (lib/termination): counted for the money it kept. */
+  terminated?: boolean;
   area: number;
   bookedAt: number | null;
   /**
@@ -271,8 +274,24 @@ export function projectFact(p: any, src: FactSources = {}): ProjectFact {
       dueAt: dateOf(m.date),
     };
   });
+  /*
+    A terminated project (lib/termination) is still money: what was collected
+    stays collected. Its contract shrinks to what the studio keeps, the
+    invoices never paid fall away, and the settlement is one more payment row:
+    a refund is cash out on the day it is paid, a balance due is owed until it
+    comes in.
+  */
+  const terminated = isTerminated(ctx);
+  if (terminated) {
+    const row = settlementRow(ctx);
+    const paidOnly = milestones.filter((m) => m.status === 'paid');
+    milestones.length = 0;
+    milestones.push(...paidOnly);
+    if (row) milestones.push({ id: 'termination-settlement', name: row.amount < 0 ? 'Termination refund' : 'Termination balance', type: 'design', status: row.status, amount: row.amount, invoicedAt: row.invoicedAt, paidAt: row.paidAt, dueAt: null });
+  }
+  const kept = terminated ? ctx.termination?.settlement?.keptExGst : null;
   /* When it was booked: the studio's own date first, then the accepted proposal, then the signed contract. */
-  const signed = MONEY_STATUSES.includes(status);
+  const signed = MONEY_STATUSES.includes(status) || terminated;
   const booked = ((): { at: number | null; source: BookedSource } => {
     const set = dateOf(ctx.bookedOn);
     if (set != null) return { at: set, source: 'set' };
@@ -300,13 +319,14 @@ export function projectFact(p: any, src: FactSources = {}): ProjectFact {
     name: ctx.name || ctx.clientName || 'Untitled',
     client: ctx.clientName || ctx.name || '',
     status,
+    terminated,
     area: Number(ctx.area) || 0,
     bookedAt: signed ? booked.at : null,
     bookedSource: signed ? booked.source : 'none',
     firstMoneyAt: milestones.reduce<number | null>((m, x) => { const t = x.invoicedAt ?? x.paidAt; return t != null && (m == null || t < m) ? t : m; }, null),
     engagement: engagementOf(ctx),
-    execution: Number(fin?.taxableExecution) || 0,
-    design: Number(fin?.taxableDesign) || 0,
+    execution: kept ? Number(kept.execution) || 0 : Number(fin?.taxableExecution) || 0,
+    design: kept ? Number(kept.design) || 0 : Number(fin?.taxableDesign) || 0,
     // A fee-only project buys nothing, whatever cost an old BOQ left on its option.
     plannedCost: isFeeOnly(engagementOf(ctx)) ? 0 : Number(tierOf(p)?.summary?.totalCost) || 0,
     committed,
@@ -369,7 +389,7 @@ export interface Kpi {
 
 /* ── Money in a range ───────────────────────────────────────────────────── */
 
-const money = (facts: ProjectFact[]) => facts.filter((f) => MONEY_STATUSES.includes(f.status));
+const money = (facts: ProjectFact[]) => facts.filter((f) => MONEY_STATUSES.includes(f.status) || f.terminated);
 
 export function bookedIn(facts: ProjectFact[], r: Range) {
   let value = 0, execution = 0, design = 0, additions = 0, count = 0, area = 0, areaValue = 0;
@@ -439,7 +459,8 @@ export function marginOf(facts: ProjectFact[]) {
     design-only fee has no bought cost, so counting it would read as a 100%
     margin and lift the studio's figure; it is left out.
   */
-  const rows = money(facts).filter((f) => contract(f) > 0 && !(f.engagement && isFeeOnly(f.engagement)));
+  /* A terminated project keeps part of a fee against costs it never ran up: not a margin. */
+  const rows = money(facts).filter((f) => !f.terminated && contract(f) > 0 && !(f.engagement && isFeeOnly(f.engagement)));
   const total = rows.reduce((s, f) => s + contract(f), 0);
   const planned = rows.reduce((s, f) => s + f.plannedCost, 0);
   const measured = rows.filter((f) => f.committed > 0);

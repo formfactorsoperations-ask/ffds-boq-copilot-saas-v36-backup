@@ -293,6 +293,11 @@ export const ALL_PROJECT_STATUSES: StatusDetail[] = [
         title: 'Studio Intelligence Retention',
         description: 'Preserved in database for historic analytics, loss reason audits, and conversion rates.',
         type: 'info'
+      },
+      {
+        title: 'Signed or paid projects are terminated',
+        description: 'If the project has a contract or payments on it, the next step settles the money (what the studio keeps, any refund or balance) and closes the client portal.',
+        type: 'financial'
       }
     ]
   }

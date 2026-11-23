@@ -1083,6 +1083,8 @@ export interface ProjectContext {
      * recorded by the journey engine the first time it sees the pin).
      */
     statusPin?: { status: ProjectStatus; stage: number; at: number; journeyStage: number | null } | null;
+    /** Set when the project was dropped before it finished: the reason and the money settlement (lib/termination). Status is `lost` while it stands. */
+    termination?: import('./lib/termination').ProjectTermination | null;
     /** Design → Execution handoff checkpoint (soft gate). Single source of truth. */
     designGate?: DesignGateState;
     /** Human-readable audit trail of meaningful project changes (capped ring buffer). */

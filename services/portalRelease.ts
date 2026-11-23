@@ -1,3 +1,4 @@
+import { isTerminated } from '../lib/termination';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db as fsDb } from './firebaseClient';
 import { db as storageDb } from './dbService';
@@ -180,6 +181,8 @@ export function buildReleaseView(ctx: ProjectContext, inputs: PortalReleaseInput
 
 /** Rewrites the client's portal copy from `ctx`. Throws if the write is refused. */
 export async function releasePortal(ctx: ProjectContext, inputs: PortalReleaseInputs): Promise<PortalView | null> {
+  /* A terminated project's portal is closed (services/terminationService); sending it would open it again. */
+  if (isTerminated(ctx)) throw new Error('This project is terminated, so its client portal is closed. Reopen the project in Money before sending the portal.');
   const gathered = await gatherPortalRelease(inputs);
   return writePortalView(
     inputs.projectId,
