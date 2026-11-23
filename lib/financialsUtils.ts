@@ -1,3 +1,4 @@
+import { terminatedValue } from './termination';
 import { billingBase, billingSummary } from './paymentSchedule';
 import { designFeeFor } from './boqPricing';
 import { engagementOf, isFeeOnly } from './engagement';
@@ -162,6 +163,9 @@ export function calculateProjectFinancials(context: any, activeTier?: any) {
 
 export function getSingleProjectValue(p: any): number {
     if (!p) return 0;
+    /* A terminated project is worth what the studio keeps of it (lib/termination). */
+    const keptOnTermination = terminatedValue(p.context);
+    if (keptOnTermination != null) return keptOnTermination;
     const status = p.context?.status || "draft";
     const isWonOrDelivered = ["won", "execution", "work_paused", "completed"].includes(status);
 

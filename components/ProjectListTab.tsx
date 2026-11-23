@@ -37,7 +37,7 @@ import LiquidGlassFlipCard from "./ui/LiquidGlassFlipCard";
 import MarginReveal from "./projects/MarginReveal";
 import { Dot } from "./ui/HudBits";
 import ProjectFolder from "./projects/ProjectFolder";
-import { FOLDER_STAGES, STAGE, stageOf, kindOf, folderFiles, folderNext, type FolderStage } from "../lib/projectFolders";
+import { FOLDER_STAGES, STAGE, stageOf, stageOfProject, kindOf, folderFiles, folderNext, type FolderStage } from "../lib/projectFolders";
 import { boqTagOf, type BoqTag } from "../lib/playground/versions";
 import { usePageHeader } from "../contexts/PageHeaderContext";
 import { LayoutGrid, Rows3, Search as SearchIcon, X as XIcon, Check as CheckIcon } from "lucide-react";
@@ -402,7 +402,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
 
   /* The phase tabs are the folder stages (lib/projectFolders stageOf), so a tab and its folders always agree. */
   const matchesPhase = (proj: FullProjectData, phase: string) =>
-    phase === 'all' || stageOf(proj.context?.status) === phase;
+    phase === 'all' || stageOfProject(proj) === phase;
 
   const matchesSearch = (proj: FullProjectData) => {
     if (!searchQuery) return true;
@@ -411,7 +411,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
        and searching for one used to return nothing at all. */
     /* The pill's own word too, not just the raw status: the Execution pill
        counts seven, so typing "execution" had better not return four. */
-    const bucket = STAGE[stageOf(st)];
+    const bucket = STAGE[stageOfProject(proj)];
     return [
       /* The label on the card, not just the stored name -- otherwise typing
          the very detail the row shows you returns nothing. */
@@ -1107,7 +1107,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                         name={displayName(project)}
                         meta={meta || 'Scope to set'}
                         client={c.clientName || 'No client yet'}
-                        stage={stageOf(c.status)}
+                        stage={stageOfProject(project)}
                         kind={kindOf(project)}
                         boq={boqTagOf(project.tiers)}
                         files={folderFiles(project)}
@@ -1128,7 +1128,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                     return (
                       <div className="pf-shelves">
                         {FOLDER_STAGES.map((st) => {
-                          const row = shownProjects.filter((proj) => stageOf(proj.context?.status) === st.id);
+                          const row = shownProjects.filter((proj) => stageOfProject(proj) === st.id);
                           if (!row.length) return null;
                           return (
                             <div key={st.id} className="pf-shelf" style={{ ['--fc' as any]: st.color }}>

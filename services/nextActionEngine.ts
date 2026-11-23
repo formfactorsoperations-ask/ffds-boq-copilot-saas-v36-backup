@@ -1,3 +1,4 @@
+import { heldInDispute } from '../lib/disputes';
 export interface NextAction {
     id: string;
     title: string;
@@ -41,7 +42,9 @@ export function getNextActions(context: {
     };
 
     // Use designPaymentStages or fallback to project.paymentMilestones
-    const milestones = designPaymentStages || project.paymentMilestones || [];
+    /* An invoice held in a payment dispute is not a prompt to collect (lib/disputes). */
+    const milestones = (designPaymentStages || project.paymentMilestones || []).map((m: any) =>
+        ((m?.status === 'invoiced' || m?.status === 'advance_requested') && heldInDispute(project, m) ? { ...m, status: 'disputed' } : m));
 
     // STAGE 1: Pre-Sales
     if (stage === 1) {

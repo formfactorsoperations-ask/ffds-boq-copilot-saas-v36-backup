@@ -168,6 +168,10 @@ import { SaveIcon, UploadIcon, NewFileIcon } from "./components/Icons";
 import Card from "./components/shared/Card";
 import { publicAppOrigin } from "./lib/publicUrl";
 import { releasePortal } from "./services/portalRelease";
+import { applyTermination, isTerminated, needsSettlement, settlementInputs } from "./lib/termination";
+import { closeClientPortal } from "./services/terminationService";
+import { clientPeople } from "./lib/clientContacts";
+import TerminateProjectModal, { type TerminatePayload } from "./components/termination/TerminateProjectModal";
 import { NotifyProvider } from "./components/notify/NotifyContext";
 import NotifyBell from "./components/notify/NotifyBell";
 import NeedsYouBar from "./components/notify/NeedsYouBar";
@@ -221,6 +225,8 @@ export default function App() {
   const [showWizardOverride, setShowWizardOverride] = useState(false);
   /* The New Project window (components/projects/StartProjectModal). */
   const [startingProject, setStartingProject] = useState(false);
+  /* The project being terminated from the status window (lib/termination). */
+  const [terminateTarget, setTerminateTarget] = useState<string | null>(null);
   /* Pricing & Tiers' "Edit BOQ": the option's BOQ over the comparison (components/pricing/BoqSlideOver). */
   const [boqDrawerOpen, setBoqDrawerOpen] = useState(false);
   /* The lines to show when the slide-over opens from "Where the money goes"; `at` re-focuses the same line. */
@@ -2213,6 +2219,21 @@ export default function App() {
       ? prevContext.status
       : 'draft';
 
+    /*
+      Closing a project that has a contract or money in it is a termination,
+      not a lost lead: the money has to be settled and the client's portal
+      closed. The status window hands over to the terminate window, which
+      does all three together (terminateProject below).
+    */
+    if (sanitizedStatus === 'lost' && prevContext && !isTerminated(prevContext) && needsSettlement(prevContext, null)) {
+      if (!holdsFinanceRole(currentRoles?.length ? currentRoles : currentRole)) {
+        showSuccessWithNext('This project has a contract or payments on it. Ask the studio owner or Ops Director to terminate it from Money.');
+        return;
+      }
+      setTerminateTarget(projectId);
+      return;
+    }
+
     const historyEntry: HistoryEvent = {
       id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       at: Date.now(),
@@ -2248,6 +2269,8 @@ export default function App() {
       ...(sanitizedStatus === 'proposal_sent' && !prevContext?.proposalSentAt ? { proposalSentAt: new Date().toISOString() } : {}),
       ...(sanitizedStatus === 'completed' ? { handoverDate: Date.now(), journeySummary: { ...(prevContext?.journeySummary || { done: 10, total: 10, pct: 100, active: 0, phaseProgress: [] }), pct: 100 } } : {}),
       ...(sanitizedStatus === 'execution' ? { executionApprovedByFFDS: true } : {}),
+      /* Moved off closed by hand: the termination no longer stands. */
+      ...(sanitizedStatus !== 'lost' && prevContext?.termination ? { termination: null } : {}),
     };
 
     let updatedActiveProject = existingProject?.activeProject || (activeInternalId === projectId ? activeProject : null);
@@ -2336,6 +2359,36 @@ export default function App() {
 
     // 4. Persist project changes to database
     await db.saveProject(projectToPersist);
+  };
+
+  /**
+   * Terminates a project: records why and the money settlement, files it
+   * with closed projects, and closes the client's portal. From Money on the
+   * open project, or from the status window on any project.
+   */
+  const terminateProject = async (projectId: string, payload: TerminatePayload) => {
+    const existingProject = projectLibrary.find((p) => p.id === projectId);
+    const isOpen = activeInternalId === projectId;
+    const prevContext = isOpen ? projectContext : existingProject?.context;
+    if (!prevContext) throw new Error('That project could not be found.');
+    const emails = clientPeople(prevContext).filter((p) => p.portal === 'on' && p.email).map((p) => String(p.email));
+    const actor = String(currentUserAuth?.displayName || currentUserAuth?.email || orgData?.role || 'Studio');
+    const updatedContext = applyTermination(prevContext, { ...payload, actor, portalEmails: emails }) as ProjectContext;
+
+    if (isOpen) setProjectContext(updatedContext);
+    if (existingProject) {
+      const projectToPersist: FullProjectData = { ...existingProject, context: updatedContext, lastModified: Date.now() };
+      setProjectLibrary((prev) => prev.map((p) => (p.id === projectId ? projectToPersist : p)));
+      await db.saveProject(projectToPersist);
+    }
+    const closed = await closeClientPortal(projectId, orgData?.tenantId || 'demo-tenant-01', emails);
+    showSuccessWithNext(
+      !closed.tombstoned
+        ? 'Project terminated, but the client portal could not be closed. Check your connection and remove access under Client contacts.'
+        : closed.failed.length
+          ? `Project terminated and the portal closed. Could not take it off ${closed.failed.join(', ')}: remove access under Client contacts.`
+          : 'Project terminated. The client portal is closed and the settlement is on Money.',
+    );
   };
 
   const handleQuickProjectUpdate = async (
@@ -3645,6 +3698,7 @@ export default function App() {
                           fullBoq={activeProject ? executionBoq : fullBoqForActiveTier}
                           setBoq={setBoqForActiveTier}
                           aiStrategy={aiStrategy}
+                          onTerminate={(payload) => terminateProject(activeInternalId!, payload)}
                         />
                       )}
                       {activeTab === "materials" && (
@@ -4627,6 +4681,26 @@ export default function App() {
         />
         </Suspense>
       )}
+      {terminateTarget && (() => {
+        const target = projectLibrary.find((p) => p.id === terminateTarget);
+        const isOpen = activeInternalId === terminateTarget;
+        const ctx = isOpen ? projectContext : target?.context;
+        if (!ctx) return null;
+        const tierSummary = isOpen
+          ? activeCalculatedTier?.summary
+          : ((target?.tiers || []).find((t: any) => t?.id === (target?.activeTierId || ctx.approvedTierId)) || target?.tiers?.[0])?.summary;
+        let schedule = null;
+        try { schedule = computeSchedule({ context: ctx, tierSummary }); } catch { schedule = null; }
+        return (
+          <TerminateProjectModal
+            projectName={ctx.name || ctx.clientName || 'Project'}
+            inputs={settlementInputs(ctx, schedule)}
+            portalLogins={clientPeople(ctx).filter((p) => p.portal === 'on').length}
+            onClose={() => setTerminateTarget(null)}
+            onConfirm={async (payload) => { await terminateProject(terminateTarget, payload); setTerminateTarget(null); }}
+          />
+        );
+      })()}
       <OfflineIndicator />
         </div>
     </div>

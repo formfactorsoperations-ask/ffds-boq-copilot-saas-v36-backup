@@ -44,6 +44,12 @@ import { EditMilestonesModal, type StudioStages } from './money/board/EditMilest
 import { MilestoneSummary } from './money/board/MilestoneSummary';
 import { cardStates, trackTotal, shareOf, sameTerms, termsChanges, studioCashPct, type TaxTerms, type ScheduleChange, type Track as BoardTrack } from '../lib/moneyBoard';
 import { Button } from './ui/kit';
+import { isTerminated } from '../lib/termination';
+import { holdsFinanceRole } from '../lib/roleAccess';
+import TerminationPanel from './termination/TerminationPanel';
+import DisputePanel from './disputes/DisputePanel';
+import { heldInDispute } from '../lib/disputes';
+import type { TerminatePayload } from './termination/TerminateProjectModal';
 import { Wallet, SlidersHorizontal } from '@/lib/lucide-shim';
 
 interface PaymentCalculatorTabProps {
@@ -58,6 +64,8 @@ interface PaymentCalculatorTabProps {
     fullBoq?: FullBoqItem[];
     setBoq?: React.Dispatch<React.SetStateAction<BoqItem[]>>;
     aiStrategy?: AIStrategy;
+    /** Terminates this project: saves it and closes the client portal (App). */
+    onTerminate?: (p: TerminatePayload) => Promise<void> | void;
 }
 
 const DEFAULT_MILESTONES: PaymentMilestone[] = [
@@ -250,9 +258,9 @@ const PanelMetric: React.FC<{ value: string; caption: string; muted?: boolean }>
     </div>
 );
 
-const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectContext, setProjectContext, activeTier, tiers = [], allProjects = [], bank = [], fullBoq = [], setBoq, aiStrategy = 'balanced', projectId }) => {
+const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectContext, setProjectContext, activeTier, tiers = [], allProjects = [], bank = [], fullBoq = [], setBoq, aiStrategy = 'balanced', projectId, onTerminate }) => {
     // --- STATE ---
-    const { orgData, currentUserAuth } = useOrg() as any;
+    const { orgData, currentUserAuth, currentRole, currentRoles } = useOrg() as any;
     /*
       Field by field, not all-or-nothing.
 
@@ -379,6 +387,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const selectedHistoricalEntry = selectedSnapshotId ? availableVersions.find(v => v.id === selectedSnapshotId) : null;
     const activeSnapshot = selectedHistoricalEntry;
     const isReadOnlyMode = !!selectedHistoricalEntry && !selectedHistoricalEntry.isCurrentActive;
+    /* A terminated project's schedule is frozen: the settlement (lib/termination) is the truth from there. */
+    const terminated = isTerminated(projectContext);
+    const lockedMode = isReadOnlyMode || terminated;
 
     // Derived active values
     /*
@@ -951,6 +962,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     };
 
     const executeInvoiceAction = (index: number, action: InvoiceAction, lockedTaxableBase?: number) => {
+        if (terminated) return;
         const projectCode = (projectContext?.name || 'PRJ').substring(0, 3).toUpperCase();
         const seq = String(index + 1).padStart(2, '0');
         
@@ -1195,6 +1207,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
          billablePercent, designBillablePercent, executionGstEnabled, designGstEnabled, initiationFee, discounts,
          rawExecutionTotal, rawDesignFee]);
     const schedule = useMemo(() => computeSchedule(scheduleArgs), [scheduleArgs]);
+    const canTerminate = holdsFinanceRole(currentRoles?.length ? currentRoles : currentRole);
+    const terminationActor = String(currentUserAuth?.displayName || currentUserAuth?.email || orgData?.role || 'Studio');
 
     /*
       An open Scope Revision, previewed on these same figures.
@@ -1488,15 +1502,20 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
       invoice. Same arithmetic as totalPaid above, for the invoiced state.
     */
     /* Raised and unsettled, priced the same way the table prices them. */
+    /* Invoices held in a payment dispute stay off the chase ladder: the dispute card is where they are worked. */
+    const heldNames = useMemo(
+        () => new Set(milestones.filter((m) => heldInDispute(projectContext, m)).map((m) => m.name)),
+        [milestones, projectContext],
+    );
     const invoicedOutstanding = useMemo(
-        () => outstandingInvoices(schedule, { paymentMilestones: milestones }),
-        [schedule, milestones],
+        () => outstandingInvoices(schedule, { paymentMilestones: milestones.filter((m) => !heldInDispute(projectContext, m)) }),
+        [schedule, milestones, projectContext],
     );
 
     const escalationCfg = (moneySettings as any)?.paymentMilestones?.escalation || DEFAULT_ESCALATION;
     const chase = useMemo(
-        () => collections(moneyRequests as any, invoicedOutstanding, escalationCfg),
-        [moneyRequests, invoicedOutstanding, escalationCfg],
+        () => collections(((moneyRequests || []) as any[]).filter((r) => !heldNames.has(r?.milestoneLabel)) as any, invoicedOutstanding, escalationCfg),
+        [moneyRequests, invoicedOutstanding, escalationCfg, heldNames],
     );
     const billable = useMemo(
         () => billableNow(milestones, amountOfMilestone),
@@ -1950,14 +1969,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             key: 'next30', label: 'Next 30 days', icon: BOARD_ICONS.CalendarClock, tone: 'brand',
             value: formatCurrency(in30.reduce((x, m) => x + (schedule.byId[m.id]?.owed || 0), 0)),
             sub: undated.length ? `Expected in · ${undated.length} undated, tap to date them from the timeline` : `Expected in · ${formatCurrency(gap.outflowTotal + gap.undatedOutflow)} owed to vendors`,
-            onClick: undated.length && !isReadOnlyMode ? runDateDerivation : undefined,
+            onClick: undated.length && !lockedMode ? runDateDerivation : undefined,
         },
         {
             key: 'schedule', label: 'Payment schedule', icon: BOARD_ICONS.FileSignature,
             tone: !latestSchedule || hasUnsavedScheduleChanges ? 'warn' : scheduleAccepted ? 'ok' : 'slate',
             value: !latestSchedule ? 'Not generated' : hasUnsavedScheduleChanges ? 'Out of date' : scheduleAccepted ? 'Accepted' : `v${latestSchedule.version} issued`,
             sub: !latestSchedule ? 'Tap to generate it from these milestones' : hasUnsavedScheduleChanges ? 'Milestones changed since it was issued' : scheduleAccepted ? 'The client accepted the schedule and terms' : 'Waiting for the client to accept it',
-            onClick: (!latestSchedule || hasUnsavedScheduleChanges) && !isReadOnlyMode ? handleGenerateSchedule : undefined,
+            onClick: (!latestSchedule || hasUnsavedScheduleChanges) && !lockedMode ? handleGenerateSchedule : undefined,
         },
         {
             key: 'studio', label: 'Studio cash this FY', icon: BOARD_ICONS.Gauge,
@@ -2024,8 +2043,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             <Wallet className="w-3.5 h-3.5 text-[#3D52A0]" />
             Initiation retainer: {initiationFee > 0 ? <b className="text-slate-800 tabular-nums">{formatCurrency(initiationFee)}</b> : 'none taken'}
             {initiationFee > 0 && <span className="text-slate-500">· comes off the first design invoice</span>}
-            {!isReadOnlyMode && !retainerOpen && <Button size="sm" variant="quiet" onClick={() => setRetainerOpen(true)}>{initiationFee > 0 ? 'Change' : 'Add retainer'}</Button>}
-            {!isReadOnlyMode && retainerOpen && (
+            {!lockedMode && !retainerOpen && <Button size="sm" variant="quiet" onClick={() => setRetainerOpen(true)}>{initiationFee > 0 ? 'Change' : 'Add retainer'}</Button>}
+            {!lockedMode && retainerOpen && (
                 <span className="inline-flex flex-wrap items-center gap-1.5">
                     {[4999, 10000, 25000].map(v => <Button key={v} size="sm" variant={initiationFee === v ? 'primary' : 'secondary'} onClick={() => setInitiationFee(v)}>{formatCurrency(v)}</Button>)}
                     <input className="w-24 px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs tabular-nums" inputMode="numeric" aria-label="Retainer amount"
@@ -2052,7 +2071,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 plate={(
                     <TaxPlate track={t} share={share} gstOn={gstOnT} gstRate={shownTerms.gstRate}
                         figures={figuresOf(shown, t)} saved={previewSchedule ? figuresOf(schedule, t) : undefined}
-                        readOnly={isReadOnlyMode}
+                        readOnly={lockedMode}
                         onShare={v => setTerm(t === 'design' ? { designBillablePercent: v } : { billablePercent: v })}
                         onGst={on => setTerm(t === 'design' ? { designGstEnabled: on } : { executionGstEnabled: on })}
                         footer={t === 'design' ? retainerLine : undefined} />
@@ -2061,9 +2080,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 shares={Object.fromEntries(rows.map(m => [m.id, shareOf(m, taxableT)]))}
                 totalPct={tot.pct} whole={tot.whole || rows.length === 0}
                 collected={collectedT} withClient={withClientT} clientPays={figuresOf(schedule, t).total}
-                waitingOnClient={!scheduleAccepted} readOnly={isReadOnlyMode} wasLocal={wasLocal}
+                waitingOnClient={!scheduleAccepted} readOnly={lockedMode} wasLocal={wasLocal}
                 actions={cardActions} highlightId={highlightMilestoneId}
-                onSetDates={isReadOnlyMode ? undefined : () => setDatingTrack(t)} />
+                onSetDates={lockedMode ? undefined : () => setDatingTrack(t)} />
         );
     });
 
@@ -2373,6 +2392,19 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 )}
             </AnimatePresence>
 
+            {!isReadOnlyMode && (
+                <div className="mb-4 empty:hidden">
+                    <DisputePanel slot="lead" context={projectContext} schedule={schedule} canAct={canTerminate && !terminated} actor={terminationActor}
+                        setProjectContext={setProjectContext as any} />
+                </div>
+            )}
+            {terminated && (
+                <div className="mb-4">
+                    <TerminationPanel context={projectContext} schedule={schedule} canAct={canTerminate} actor={terminationActor}
+                        setProjectContext={setProjectContext as any} onTerminate={onTerminate} />
+                </div>
+            )}
+
             {activeTier && (
                 <>
                     <MoneyBoard
@@ -2385,7 +2417,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         onSchedule={scheduleAction.onClick}
                         scheduleLabel={scheduleAction.label}
                         onEdit={() => openEditor('both')}
-                        readOnly={isReadOnlyMode}
+                        readOnly={lockedMode}
                         tiles={boardTiles}
                         preview={boardPreview}
                         versionPill={versionPill}
@@ -2395,7 +2427,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         breakdown={breakdownToggle}
                     />
 
-            {moneyTab === 'board' && taxToolsOpen && !isReadOnlyMode && (<>
+            {moneyTab === 'board' && taxToolsOpen && !lockedMode && (<>
 
             {/* COLLAPSIBLE FINANCIAL CONTROLS & RATIOS */}
             <div className="bg-white rounded-3xl border border-[#E2E5F0] shadow-sm overflow-hidden">
@@ -3189,7 +3221,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             */}
             </>)}
 
-            {editFocus && !isReadOnlyMode && (
+            {editFocus && !lockedMode && (
                 <EditMilestonesModal
                     milestones={milestones}
                     focus={editFocus}
@@ -3534,6 +3566,19 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {!isReadOnlyMode && (
+                <div className="mt-6 empty:hidden">
+                    <DisputePanel slot="foot" context={projectContext} schedule={schedule} canAct={canTerminate && !terminated} actor={terminationActor}
+                        setProjectContext={setProjectContext as any} />
+                </div>
+            )}
+            {!terminated && !isReadOnlyMode && (
+                <div className="mt-6">
+                    <TerminationPanel context={projectContext} schedule={schedule} canAct={canTerminate} actor={terminationActor}
+                        setProjectContext={setProjectContext as any} onTerminate={onTerminate} />
                 </div>
             )}
 

@@ -216,7 +216,8 @@ export function paymentWaiting(project: { id: string; name: string }, money: Cli
   if (!money) return [];
   const out: WaitingItem[] = [];
   for (const m of money.milestones) {
-    if (m.status !== 'invoiced') continue;
+    /* Held in a dispute: the dispute is the chase, so it is not on the waiting list. */
+    if (m.status !== 'invoiced' || m.disputed) continue;
     const since = toMs(m.invoiceDate) ?? toMs(m.date);
     if (since == null) continue;
     const dueKey = addDays(dayKey(since), settings.paymentDueDays);
