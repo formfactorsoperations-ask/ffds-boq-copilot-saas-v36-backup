@@ -248,3 +248,29 @@ describe('a dispute added from a file', () => {
     expect(disputesOf(importDispute(open, file(), 'Owner'))).toHaveLength(2); // a past one may sit beside an open one
   });
 });
+
+import { calculateProjectFinancials } from '../../lib/financialsUtils';
+import { cashIn } from '../../lib/ownerReports';
+
+describe('a concession reaches the reports', () => {
+  it('counts what came in, not the full invoice, once a settled invoice is paid', () => {
+    const base: any = {
+      status: 'completed', gstRate: 18, approvedTierId: 't1', bookedOn: '2026-01-10',
+      financials: { initiationFeePaid: 0, billablePercent: 100, designBillablePercent: 100, executionGstEnabled: false, designGstEnabled: true, discounts: [], approvedDesignValue: 100000, approvedExecutionValue: 1000000 },
+      paymentMilestones: [
+        { id: 'e4', type: 'execution', name: 'Completion', percentage: 10, isFixedAmount: true, fixedAmount: 375308, status: 'paid', invoiceDate: '2026-05-08', paidDate: '2026-06-22', discountAmount: 175308, discountReason: 'Dispute settlement' },
+        { id: 'd3', type: 'design', name: 'Final', percentage: 100, isFixedAmount: true, fixedAmount: 86798, status: 'paid', invoiceDate: '2026-05-08', paidDate: '2026-06-22', discountAmount: 24963 },
+      ],
+    };
+    const tier = { id: 't1', summary: { totalSell: 1000000, designFee: 100000 } };
+    const fin = calculateProjectFinancials(base, tier);
+    expect(fin.milestoneAmounts.e4).toBe(200000);
+    expect(fin.milestoneAmounts.d3).toBe(77459);
+    expect(fin.totalPaid).toBe(277459);
+    const schedule = computeSchedule({ context: base, tierSummary: tier.summary });
+    expect(schedule.byId.e4.owed).toBe(200000);
+    expect(schedule.byId.d3.owed).toBe(77459);
+    const fact = projectFact({ id: 'p', context: base, tiers: [tier], activeTierId: 't1' });
+    expect(cashIn([fact], { start: Date.parse('2026-06-01'), end: Date.parse('2026-07-01') }).value).toBe(277459);
+  });
+});
