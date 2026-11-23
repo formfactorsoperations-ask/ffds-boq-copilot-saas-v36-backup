@@ -335,3 +335,76 @@ export function heldInDispute(ctx: any, milestone: any, at: number = Date.now())
   const track = trackOf(milestone);
   return disputeWindows(ctx).some((w) => w.track === track && at >= w.from && (w.to == null || at < w.to));
 }
+
+/* ── A dispute recorded after the fact ──────────────────────────────────── */
+
+const isDay = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && dayStart(v) != null;
+const side = (v: unknown): 'client' | 'studio' => (v === 'studio' ? 'studio' : 'client');
+
+/** What is wrong with a dispute file, in words; empty when it can be read. */
+export function disputeFileProblems(raw: any): string[] {
+  const out: string[] = [];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return ['This is not a dispute file.'];
+  if (!String(raw.title || '').trim()) out.push('It has no title.');
+  if (!isDay(raw.openedOn)) out.push('The date it was raised is missing (openedOn, as yyyy-mm-dd).');
+  if (raw.status === 'settled') {
+    if (!isDay(raw.resolution?.on)) out.push('It is marked settled but has no settlement date (resolution.on).');
+    if (raw.resolution?.settled == null) out.push('It is marked settled but has no settled amounts (resolution.settled).');
+  }
+  if ((raw.positions || []).some((p: any) => !isDay(p?.on))) out.push('A position has no date (on, as yyyy-mm-dd).');
+  return out;
+}
+
+/**
+ * Adds a dispute from a file: one that happened before the studio kept them
+ * here, or one prepared elsewhere. A settled one is history only. Its
+ * concession is recorded on the dispute and NOT written onto any invoice,
+ * because the invoices were dealt with at the time; nothing in Money moves.
+ * An open one is raised as usual, and is refused while another is open.
+ */
+export function importDispute(ctx: any, raw: any, actor: string, now: number = Date.now()): any {
+  if (disputeFileProblems(raw).length) return ctx;
+  const status: DisputeStatus = raw.status === 'settled' ? 'settled' : raw.status === 'withdrawn' ? 'withdrawn' : 'open';
+  if (status === 'open' && openDispute(ctx)) return ctx;
+  const claimed = { execution: pos(raw.claimed?.execution), design: pos(raw.claimed?.design) };
+  const positions: DisputePosition[] = ((raw.positions || []) as any[])
+    .filter((p) => String(p?.note || '').trim() || p?.amount != null)
+    .map((p) => ({ id: uid('pos'), on: String(p.on), by: side(p.by), note: String(p.note || '').trim(), amount: p.amount == null ? null : pos(p.amount) }))
+    .sort((a, b) => a.on.localeCompare(b.on));
+  let resolution: DisputeResolution | null = null;
+  if (status === 'settled') {
+    const settled = { execution: pos(raw.resolution.settled?.execution), design: pos(raw.resolution.settled?.design) };
+    const concession = concessionFor(claimed, settled);
+    resolution = {
+      on: String(raw.resolution.on), by: actor, settled, concession,
+      reason: String(raw.resolution.reason || '').trim() || `Dispute settlement: ${String(raw.title).trim()}`,
+      withoutAdmission: raw.resolution.withoutAdmission !== false,
+      appliedTo: [], unallocated: total(concession),
+    };
+  }
+  const closedOn = status === 'open' ? null : String(resolution?.on || (isDay(raw.closedOn) ? raw.closedOn : raw.openedOn));
+  const dispute: ProjectDispute = {
+    id: uid('dsp'),
+    title: String(raw.title).trim(),
+    summary: String(raw.summary || '').trim(),
+    raisedBy: side(raw.raisedBy),
+    openedOn: String(raw.openedOn),
+    openedBy: actor,
+    stage: String(raw.stage || ctx?.status || 'draft'),
+    claimed,
+    workStopped: !!raw.workStopped,
+    issues: cleanIssues((raw.issues || []).map((i: any) => ({ ...i, id: '' }))),
+    positions,
+    status,
+    resolution,
+    closedOn,
+    closedNote: status === 'open' ? null : (String(raw.closedNote || resolution?.reason || '').trim() || null),
+  };
+  const disputes = [...disputesOf(ctx), dispute].sort((a, b) => a.openedOn.localeCompare(b.openedOn));
+  return {
+    ...ctx,
+    disputes,
+    history: withHistory(ctx, actor, 'money', `Dispute added from a file: ${dispute.title}`,
+      resolution ? `Settled at ${inr(total(resolution.settled))} of ${inr(total(claimed))} claimed on ${resolution.on}. Recorded as history; no invoice was changed.` : `${inr(total(claimed))} unpaid is in dispute.`, now),
+  };
+}

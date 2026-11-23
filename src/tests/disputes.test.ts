@@ -206,3 +206,45 @@ describe('an invoice held in a dispute is out of the overdue chase', () => {
     expect(paymentWaiting({ id: 'p1', name: 'Siesta' }, clientMoneyOf(proj(real())), { paymentDueDays: 7 } as any, now)).toHaveLength(2);
   });
 });
+
+import { importDispute, disputeFileProblems } from '../../lib/disputes';
+
+describe('a dispute added from a file', () => {
+  const file = () => ({
+    title: 'Units not built to the drawings', raisedBy: 'client', openedOn: '2026-05-15', workStopped: true,
+    claimed: { execution: 375308, design: 102422 },
+    issues: [{ title: 'Kitchen loft', ref: 'BOQ 12', billed: 89100, claimed: 64100 }, { title: '', billed: 1, claimed: 1 }],
+    positions: [
+      { on: '2026-06-14', by: 'studio', note: 'Full and final offer', amount: 276407 },
+      { on: '2026-06-03', by: 'client', note: 'Deductions on five lines', amount: 276407 },
+    ],
+    status: 'settled',
+    resolution: { on: '2026-06-22', settled: { execution: 200000, design: 77459 }, reason: 'Closure', withoutAdmission: true },
+  });
+
+  it('records a settled dispute as history and changes no invoice', () => {
+    const before = ctx();
+    const c = importDispute(before, file(), 'Owner');
+    const d = disputesOf(c)[0];
+    expect(d).toMatchObject({ status: 'settled', closedOn: '2026-06-22', openedOn: '2026-05-15', workStopped: true });
+    expect(d.resolution).toMatchObject({ concession: { execution: 175308, design: 24963 }, appliedTo: [], unallocated: 200271, withoutAdmission: true });
+    expect(d.issues).toHaveLength(1);
+    expect(d.positions.map((p) => p.on)).toEqual(['2026-06-03', '2026-06-14']);
+    expect(daysOpen(d)).toBe(38);
+    expect(c.paymentMilestones).toEqual(before.paymentMilestones);
+    expect(inDispute(c)).toBe(false);
+    expect(c.history[0].summary).toMatch(/Dispute added from a file/);
+    /* Reopening it later has no concession to take back. */
+    expect(reopenDispute(c, d.id, 'Owner').paymentMilestones).toEqual(before.paymentMilestones);
+  });
+
+  it('refuses a file it cannot read, and a second open dispute', () => {
+    expect(disputeFileProblems([])).toHaveLength(1);
+    expect(disputeFileProblems({ title: 'x' }).join(' ')).toMatch(/openedOn/);
+    expect(disputeFileProblems({ ...file(), resolution: {} }).length).toBe(2);
+    expect(importDispute(ctx(), { title: 'x' }, 'Owner')).toEqual(ctx());
+    const open = raiseDispute(ctx(), draft(), 'Owner');
+    expect(disputesOf(importDispute(open, { ...file(), status: 'open' }, 'Owner'))).toHaveLength(1);
+    expect(disputesOf(importDispute(open, file(), 'Owner'))).toHaveLength(2); // a past one may sit beside an open one
+  });
+});

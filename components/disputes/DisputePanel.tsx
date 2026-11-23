@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from 'react';
-import { Check, Plus, Scale, Pencil, RotateCcw, Trash2 } from '@/lib/lucide-shim';
+import React, { useMemo, useRef, useState } from 'react';
+import { Check, Plus, Scale, Pencil, RotateCcw, Trash2, Upload } from '@/lib/lucide-shim';
 import { Panel, Button, Chip, Segmented, SummaryStrip, LABEL, INPUT, type Stat } from '../ui/kit';
 import DateField from '../ui/DateField';
 import { formatCurrency } from '../../lib/utils';
 import type { ScheduleResult } from '../../lib/paymentSchedule';
 import {
-  addPosition, allocateConcession, concessionFor, daysOpen, disputesOf, editDispute, issuesTotal, latestOffer, openDispute,
+  addPosition, allocateConcession, disputeFileProblems, importDispute, concessionFor, daysOpen, disputesOf, editDispute, issuesTotal, latestOffer, openDispute,
   outstandingByTrack, raiseDispute, removePosition, reopenDispute, settleDispute, withdrawDispute, type ProjectDispute,
 } from '../../lib/disputes';
 import DisputeModal from './DisputeModal';
@@ -53,6 +53,23 @@ export const DisputePanel: React.FC<{
   const [amount, setAmount] = useState('');
   const [settled, setSettled] = useState({ execution: '', design: '' });
   const [noAdmission, setNoAdmission] = useState(true);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+
+  /* A dispute kept elsewhere, or one from before disputes were kept here, comes in as a file (lib/disputes importDispute). */
+  const readFile = async (file: File | undefined) => {
+    setFileError(null);
+    if (!file) return;
+    try {
+      const raw = JSON.parse(await file.text());
+      const problems = disputeFileProblems(raw);
+      if (problems.length) { setFileError(problems.join(' ')); return; }
+      if (raw.status !== 'settled' && raw.status !== 'withdrawn' && openDispute(context)) { setFileError('A dispute is already open on this project.'); return; }
+      setProjectContext((prev: any) => importDispute(prev, raw, actor));
+    } catch {
+      setFileError('That file could not be read as a dispute file.');
+    }
+  };
 
   const start = (f: 'position' | 'settle' | 'withdraw', d: ProjectDispute) => {
     setOn(todayIso()); setNote(''); setAmount('');
@@ -66,14 +83,22 @@ export const DisputePanel: React.FC<{
       <>
         <Panel as="h3" icon={Scale} title="Payment dispute"
           blurb="For a client holding back payment over the work or the bill. Track what is contested and each side's position, then settle it: the concession goes onto the unpaid invoices."
-          aside={canAct ? <Button variant="secondary" size="sm" onClick={() => setModal('raise')}>Raise a dispute</Button> : undefined}>
+          aside={canAct ? (
+            <>
+              <input ref={fileInput} type="file" accept="application/json,.json" className="hidden" aria-label="Dispute file"
+                onChange={(e) => { readFile(e.target.files?.[0]); e.target.value = ''; }} />
+              <Button variant="quiet" size="sm" icon={Upload} onClick={() => fileInput.current?.click()} title="Add a dispute from a file, for example one settled before disputes were kept here. A settled one is history only: no invoice is changed.">Add from a file</Button>
+              <Button variant="secondary" size="sm" onClick={() => setModal('raise')}>Raise a dispute</Button>
+            </>
+          ) : undefined}>
+          {fileError && <p className="mb-3 text-xs font-semibold text-rose-700">{fileError}</p>}
           {past.length > 0 && (
             <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
               {past.map((d) => (
                 <div key={d.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
                   <div className="min-w-[200px] flex-1">
                     <p className="text-sm font-semibold text-slate-800 flex flex-wrap items-center gap-2">{d.title}<Chip tone={d.status === 'settled' ? 'good' : 'slate'}>{d.status === 'settled' ? 'Settled' : 'Nothing conceded'}</Chip></p>
-                    <p className="text-[11px] text-slate-500 tabular-nums">{day(d.openedOn)} to {day(d.closedOn)}, {daysOpen(d)} days.{d.resolution ? ` ${money(d.claimed.execution + d.claimed.design)} claimed, settled at ${money(d.resolution.settled.execution + d.resolution.settled.design)}; ${money(d.resolution.concession.execution + d.resolution.concession.design)} conceded.` : d.closedNote ? ` ${d.closedNote}` : ''}</p>
+                    <p className="text-[11px] text-slate-500 tabular-nums">{day(d.openedOn)} to {day(d.closedOn)}, {daysOpen(d)} days.{d.resolution ? ` ${money(d.claimed.execution + d.claimed.design)} claimed, settled at ${money(d.resolution.settled.execution + d.resolution.settled.design)}; ${money(d.resolution.concession.execution + d.resolution.concession.design)} conceded${d.issues.length ? ` over ${d.issues.length} item${d.issues.length === 1 ? '' : 's'}` : ''}${d.positions.length ? `, ${d.positions.length} positions logged` : ''}.` : d.closedNote ? ` ${d.closedNote}` : ''}</p>
                   </div>
                   {canAct && <Button variant="quiet" size="sm" icon={RotateCcw} onClick={() => setProjectContext((prev: any) => reopenDispute(prev, d.id, actor))} title={d.resolution ? 'Takes the concession back off the invoices' : undefined}>Reopen</Button>}
                 </div>
