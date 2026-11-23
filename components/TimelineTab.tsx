@@ -1314,8 +1314,8 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
                         </p>
                         <p className="text-xs text-amber-800/80 mt-1.5 leading-relaxed">
                           A date in the past reads as work already done, and the client&rsquo;s
-                          programme reads these dates. Close them off after the move so the
-                          calendar and the record say the same thing.
+                          programme reads these dates. If the project is already finished,
+                          use &ldquo;Record as completed&rdquo; above the chart after the move.
                         </p>
                       </div>
                     </div>

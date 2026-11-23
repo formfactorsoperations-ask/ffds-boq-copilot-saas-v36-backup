@@ -11,10 +11,11 @@ import {
   computeSchedule, programmeSpanDays, varianceReport, daysLostByReason, ineffectiveHolds, holdImpact,
   freezeBaseline, setTaskProgress, reorderTaskInLane, toDayNum, toISO, isWorkingDay, weekdayOf, GATE_LABEL,
   workingDaysBetween, DEFAULT_CALENDAR, isHandoverTask, isDesignGateTask, gateHeldChain, releaseBeforeGate,
-  planStartAt, nextWorkingDay, type StartPlan,
+  planStartAt, nextWorkingDay, openStagesOfPastProgramme, closeOutAsPlanned, type StartPlan,
   type ResolvedTask,
 } from '../lib/schedule';
 import { markersByDay, MARKER_LABEL } from '../lib/scheduleMarkers';
+import { Button } from './ui/kit';
 import './projectHeader/projectHeader.css';
 import {
   Calendar, Pin, PauseCircle, AlertTriangle, Zap, Lock, Check, Circle, Play, Users, FileText, Printer, X, RefreshCw,
@@ -334,6 +335,18 @@ export default function ScheduleGantt({
   const overdueCount = result.tasks.filter(t => t.overdueToStart).length;
 
   /*
+    A project that was finished before it was entered here.
+
+    Its start is back-dated, so every stage reads as late and the finish reads
+    as today; marking a stage Done stamps today as well. When the whole plan is
+    behind today, one action records the open stages as done on their planned
+    dates (lib/schedule `closeOutAsPlanned`). Asked twice, because it writes
+    actual dates onto every stage.
+  */
+  const pastOpen = useMemo(() => openStagesOfPastProgramme(result), [result]);
+  const [confirmCloseOut, setConfirmCloseOut] = useState(false);
+
+  /*
     How long the programme runs, start to handover.
 
     This measured the planned start against the FORECAST finish, which is a real
@@ -620,6 +633,35 @@ export default function ScheduleGantt({
           disclosure -- see the note there.
         */}
       </div>
+
+      {!readOnly && onChange && pastOpen.length > 0 && (
+        <div className="hud-panel-in rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 flex items-start gap-3 flex-wrap">
+          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1 basis-64">
+            <p className="text-xs font-bold text-amber-900">
+              This programme ended before today, with {pastOpen.length} stage{pastOpen.length === 1 ? '' : 's'} still open.
+            </p>
+            <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+              {confirmCloseOut
+                ? 'Every open stage will be marked done, with its planned start and end as the actual dates. You can still correct a stage afterwards.'
+                : 'If the project is already finished, record it as done on these dates. Otherwise the finish keeps moving to today.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {confirmCloseOut ? (
+              <>
+                <Button size="sm" variant="quiet" onClick={() => setConfirmCloseOut(false)}>Cancel</Button>
+                <Button size="sm" variant="primary" icon={Check}
+                  onClick={() => { setConfirmCloseOut(false); onChange(closeOutAsPlanned(schedule)); }}>
+                  Mark {pastOpen.length} done
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" icon={Check} onClick={() => setConfirmCloseOut(true)}>Record as completed</Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/*
         The CONFIGURE row is gone.

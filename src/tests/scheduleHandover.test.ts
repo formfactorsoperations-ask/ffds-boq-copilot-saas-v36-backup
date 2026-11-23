@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildScheduleFromProject } from '../../lib/scheduleBuilder';
 import {
   computeSchedule, reorderTaskInLane, gateHeldChain, releaseBeforeGate, planStartAt, toDayNum, toISO,
+  openStagesOfPastProgramme, closeOutAsPlanned,
   type ScheduleResult,
 } from '../../lib/schedule';
 import { ProjectSchedule } from '../../types';
@@ -287,5 +288,45 @@ describe('Running stages in parallel', () => {
     const plan = planStartAt(s, 'exec-paint-final', later, TODAY);
     expect(plan.schedule.tasks.find(t => t.id === 'exec-paint-final')!.notBeforeISO).toBe(toISO(plan.startDay));
     expect(plan.savedWorkDays).toBeLessThan(0);
+  });
+});
+
+describe('A project finished before it was entered', () => {
+  const LATER = '2028-01-10';
+
+  it('offers nothing while open work still has planned days ahead', () => {
+    expect(openStagesOfPastProgramme(computeSchedule(programme(), TODAY), TODAY)).toEqual([]);
+    expect(closeOutAsPlanned(programme(), TODAY)).toEqual(programme());
+  });
+
+  it('records every open stage as done on its planned dates', () => {
+    const s = programme();
+    const before = computeSchedule(s, LATER);
+    expect(openStagesOfPastProgramme(before, LATER)).toHaveLength(s.tasks.length);
+    // Open work is forecast from today, so the finish reads as today.
+    expect(before.finishISO! >= LATER).toBe(true);
+
+    const closed = closeOutAsPlanned(s, LATER);
+    const after = computeSchedule(closed, LATER);
+
+    after.tasks.forEach(t => {
+      const was = task(before, t.id);
+      expect(t.status).toBe('completed');
+      expect(t.actualStartISO).toBe(was.plannedStartISO);
+      expect(t.actualEndISO).toBe(was.plannedEndISO);
+      expect(t.plannedStartDay).toBe(was.plannedStartDay);
+      expect(t.endDay).toBe(was.plannedEndDay);
+      expect(t.driftDays).toBe(0);
+    });
+    expect(after.finishISO! < LATER).toBe(true);
+    expect(openStagesOfPastProgramme(after, LATER)).toEqual([]);
+  });
+
+  it('keeps a start and a completion already recorded', () => {
+    const s = programme();
+    const s2 = { ...s, tasks: s.tasks.map(t => t.id === 'design-1'
+      ? { ...t, status: 'completed' as const, actualStartISO: '2026-08-03', actualEndISO: '2026-08-20' } : t) };
+    const closed = closeOutAsPlanned(s2, LATER);
+    expect(closed.tasks.find(t => t.id === 'design-1')).toEqual(s2.tasks.find(t => t.id === 'design-1'));
   });
 });

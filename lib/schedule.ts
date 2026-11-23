@@ -1229,6 +1229,49 @@ export function setTaskProgress(
   };
 }
 
+/**
+ * Stages still open on a programme whose plan has wholly passed.
+ *
+ * A project that was finished before it was entered here is back-dated, and
+ * every stage on it is then "late": the forecast pulls open work to today, and
+ * marking a stage done stamps today too. This names the case -- every stage
+ * that is not finished was planned to end before today -- so the studio can
+ * record the lot as done on the planned dates (`closeOutAsPlanned`).
+ *
+ * Empty while any open stage still has planned days ahead of it: that is a
+ * live project running late, and its stages are closed one at a time.
+ */
+export function openStagesOfPastProgramme(result: ScheduleResult, todayISO?: string): ResolvedTask[] {
+  const today = toDayNum(todayISO || toISO(Math.floor(Date.now() / MS_DAY)));
+  const open = result.tasks.filter(t => t.status !== 'completed' && !t.actualEndISO);
+  return open.length && open.every(t => t.plannedEndDay < today) ? open : [];
+}
+
+/**
+ * Record a finished programme as done on the dates it was planned for.
+ *
+ * Each open stage is marked completed with its planned start and end as the
+ * actual ones, so it stays where the chart draws it instead of moving to
+ * today. A start already recorded is kept. Does nothing unless the whole plan
+ * is in the past (`openStagesOfPastProgramme`).
+ */
+export function closeOutAsPlanned(schedule: ProjectSchedule, todayISO?: string): ProjectSchedule {
+  const open = new Map(
+    openStagesOfPastProgramme(computeSchedule(schedule, todayISO), todayISO).map(t => [t.id, t]),
+  );
+  if (!open.size) return schedule;
+  return {
+    ...schedule,
+    tasks: schedule.tasks.map(t => {
+      const r = open.get(t.id);
+      if (!r) return t;
+      const endISO = r.plannedEndISO;
+      const startISO = t.actualStartISO && t.actualStartISO <= endISO ? t.actualStartISO : r.plannedStartISO;
+      return { ...t, status: 'completed' as const, actualStartISO: startISO <= endISO ? startISO : endISO, actualEndISO: endISO };
+    }),
+  };
+}
+
 /** Tasks a hold would move, so the UI can preview before committing. */
 export function holdImpact(schedule: ProjectSchedule, hold: ScheduleHold): {
   moved: string[]; pinnedBlocked: string[];
