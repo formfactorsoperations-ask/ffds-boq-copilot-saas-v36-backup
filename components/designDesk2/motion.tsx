@@ -25,10 +25,10 @@ import React, { useRef } from 'react';
   prefers-reduced-motion, and nothing tilts on touch.
 */
 
-export type LiveTool = 'select' | 'pin' | 'rect' | 'arrow' | 'pen' | 'compare' | 'changes';
+export type LiveTool = 'select' | 'pin' | 'rect' | 'arrow' | 'pen' | 'compare' | 'changes' | 'measure';
 
 /** The colour of each tool's tile. */
-export const TOOL_COLOR: Record<LiveTool, string> = { select: '#334155', pin: '#E11D48', rect: '#D97706', arrow: '#059669', pen: '#3D52A0', compare: '#475569', changes: '#D97706' };
+export const TOOL_COLOR: Record<LiveTool, string> = { select: '#334155', pin: '#E11D48', rect: '#D97706', arrow: '#059669', pen: '#3D52A0', compare: '#475569', changes: '#D97706', measure: '#3D52A0' };
 
 const PARTS: Record<LiveTool, React.ReactNode> = {
   select: <path className="f" d="M5 3l14 7-6 2-2 6z" />,
@@ -38,6 +38,7 @@ const PARTS: Record<LiveTool, React.ReactNode> = {
   pen: <><path className="f" d="M5 16L16 5l3 3L8 19l-4 1z" /><path className="sq" d="M13 21c2-1.6 3.4 1.2 6 0" /></>,
   compare: <><rect className="f" x="3" y="5" width="18" height="14" rx="2" /><path className="sl" d="M12 3v18" /></>,
   changes: <><path className="f" d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9z" /><path d="M19 15v5M16.5 17.5h5" /></>,
+  measure: <><rect className="f sl" x="3" y="8" width="18" height="8" rx="1.5" /><path d="M7 8v3M11 8v4M15 8v3M19 8v4" /></>,
 };
 
 /** A tool's icon in its round tile. It moves when its key (`dd2-key`) is hovered, has just been picked, or is being shown off. */
@@ -84,6 +85,8 @@ export const DeskMotionStyles = () => (
     .dd2-key:hover[data-tool="pen"] .dd2-ico .sq { stroke-dasharray: 14; animation: dd2Write .7s linear infinite }
     .dd2-key:hover[data-tool="compare"] .dd2-ico .sl { animation: dd2Slide 1s ease-in-out infinite }
     .dd2-key:hover[data-tool="changes"] .dd2-ico svg { animation: dd2Twinkle .9s ease-in-out infinite }
+    .dd2-key:hover[data-tool="measure"] .dd2-ico svg { animation: dd2Slide 1s ease-in-out infinite }
+    .dd2-key[data-tool="measure"][aria-pressed="true"] { background: color-mix(in srgb, var(--c) 13%, #fff); color: var(--c) }
     :is(.dd2-key.is-demo, .dd2-key.is-tool[aria-pressed="true"]):not(:hover)[data-tool="select"] .dd2-ico svg { animation: dd2Click .9s ease-in-out 1 }
     :is(.dd2-key.is-demo, .dd2-key.is-tool[aria-pressed="true"]):not(:hover)[data-tool="pin"] .dd2-ico svg { animation: dd2Drop .9s cubic-bezier(.3,1.6,.5,1) 1 }
     :is(.dd2-key.is-demo, .dd2-key.is-tool[aria-pressed="true"]):not(:hover)[data-tool="rect"] .dd2-ico .dr { stroke-dasharray: 64; animation: dd2Draw 1.2s ease-in-out 1 }

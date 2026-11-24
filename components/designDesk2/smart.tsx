@@ -60,7 +60,7 @@ export const SiteLine: React.FC<{ d: ReviewDrawing; canSet: boolean }> = ({ d, c
         </label>
       ) : (
         <>
-          <span className="min-w-0 flex-1">{r ? r.line : 'No site date yet. Set one and the desk warns before it is missed.'}</span>
+          <span className="min-w-0 flex-1">{r ? r.line : 'No site date yet.'}</span>
           {canSet && <button type="button" onClick={() => setEditing(true)} className="min-h-[36px] shrink-0 rounded-lg px-2 text-xs font-bold underline">{d.siteDate ? 'Change' : 'Set the site date'}</button>}
         </>
       )}

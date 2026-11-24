@@ -28,6 +28,8 @@ export interface ReviewDrawing {
   siteDate?: string | null;
   /** The Drawings tab's gap flag: its companion drawing is ahead of it, or missing. */
   isGapFlagged?: boolean;
+  /** The drawing's scale, the n of 1 : n, set once by hand for Measure (lib/measure.ts). */
+  scale?: number | null;
   review?: ReviewSummary;
 }
 
@@ -46,6 +48,7 @@ const toDrawing = (orgId: string, projectId: string, id: string, data: any): Rev
   gfcStatus: data?.gfc?.status || null,
   siteDate: data?.siteDate || null,
   isGapFlagged: !!data?.isGapFlagged,
+  scale: typeof data?.measureScale === 'number' && data.measureScale > 0 ? data.measureScale : null,
   review: data?.review,
 });
 
@@ -123,6 +126,12 @@ export const setAudience = (t: Target, audience: 'client' | 'studio') => call({ 
 export async function setSiteDate(t: Target, date: string | null): Promise<void> {
   if (!db) return;
   await updateDoc(doc(db, drawingPath(t.orgId, t.projectId, t.drawingId)), { siteDate: date || deleteField() });
+}
+
+/** The drawing's scale for Measure (the n of 1 : n), or null to clear it. A plain field on the tracker row, like the site date. */
+export async function setMeasureScale(t: Target, scale: number | null): Promise<void> {
+  if (!db) return;
+  await updateDoc(doc(db, drawingPath(t.orgId, t.projectId, t.drawingId)), { measureScale: scale || deleteField() });
 }
 
 /** Reminds whoever is holding the drawing (the bell and their phone), and notes it in the drawing's history. */

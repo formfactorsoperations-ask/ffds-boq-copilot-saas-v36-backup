@@ -78,7 +78,7 @@ describe('the site date on a drawing', () => {
   it('lets a lead set it, and only shows it to everyone else', async () => {
     const d = row('a', 'A', 'IN_REVIEW');
     const { unmount } = render(<SiteLine d={d} canSet />);
-    expect(screen.getByText('No site date yet. Set one and the desk warns before it is missed.')).toBeTruthy();
+    expect(screen.getByText('No site date yet.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Set the site date' }));
     await act(async () => { fireEvent.change(screen.getByLabelText(/Site needs it on/), { target: { value: '2026-12-01' } }); });
     expect(h.site).toHaveBeenCalledWith({ orgId: 's', projectId: 'p1', drawingId: 'a' }, '2026-12-01');

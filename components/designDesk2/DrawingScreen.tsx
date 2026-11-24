@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import {
   watchDrawing, watchVersions, watchMarks, watchRounds, watchEvents, submitSheet, withdrawSheet, approveSheet, returnSheet, clientReturn, clientKeep,
-  createMark, deleteMark, updateMark, fixMark, setAudience, removeVersion, fileBlob, type ReviewDrawing, type ReviewError,
+  createMark, deleteMark, updateMark, fixMark, setAudience, setMeasureScale, removeVersion, fileBlob, type ReviewDrawing, type ReviewError,
 } from '../../services/drawingReviewService';
 import { loadPdf } from '../../lib/pdfRender';
 import { canReview, canUpload, canSetAudience, allowed, clientPending, stateOf, guessAudience, turnShape, type Turn, type MarkShape, type ReviewMark, type ReviewVersion, type ReviewRound, type ReviewEvent } from '../../lib/drawingReview';
@@ -18,6 +18,8 @@ import { useSheetChanges } from '../drawingReview/useSheetChanges';
 import { MARK, FIXED, CLIENT, roomLabel, ago, shortDate, firstName, useToast, Initials } from '../drawingReview/ui';
 import type { Me } from '../drawingReview/SheetStudio';
 import { NudgeButton, SiteLine } from './smart';
+import { MeasureBar, MeasureLayer, type Measure } from './measure';
+import { paperMm } from '../../lib/measure';
 import { Btn, Tag, cx } from './parts';
 import { DeskMotionStyles, LiveIcon, Tilt, TOOL_COLOR, type LiveTool } from './motion';
 
@@ -198,6 +200,12 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   const [spot, setSpotRaw] = useState<boolean>(() => read(spotKey, true));
   const setSpot = (v: boolean) => { setSpotRaw(v); write(spotKey, v); };
   const [tool, setTool] = useState<Tool>('select');
+  /* Measure: a drag between two points reads a length from the drawing's scale (lib/measure.ts). Not a note, and not saved. */
+  const [measuring, setMeasuring] = useState(false);
+  const [measures, setMeasures] = useState<Measure[]>([]);
+  const [scaleNow, setScaleNow] = useState<number | null | undefined>(undefined);
+  const measureSeq = useRef(0);
+  useEffect(() => { if (tool !== 'select') setMeasuring(false); }, [tool]);
   const [selected, setSelected] = useState<string | null>(null);
   /* The note under the pointer, on the drawing or in the list: its pin and its card light up together. */
   const [hover, setHover] = useState<string | null>(null);
@@ -248,6 +256,27 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   const current = versions.find((v) => v.id === r?.versionId) || versions[versions.length - 1] || null;
   const viewing = versions.find((v) => v.id === viewId) || current;
   const isCurrent = !!viewing && viewing.id === current?.id;
+
+  /* ---- Measure: the scale (saved on the drawing) and the lines drawn this visit */
+  const scale = scaleNow !== undefined ? scaleNow : d?.scale ?? null;
+  useEffect(() => { setMeasures([]); }, [viewing?.id]);
+  const saveScale = (n: number | null) => {
+    setScaleNow(n);
+    setMeasureScale(target, n).catch((e: any) => toast({ title: 'The scale was not saved', sub: e?.message || 'It is used on this screen until you leave it.' }));
+  };
+  const toggleMeasure = () => { setMeasuring((on) => !on); setTool('select'); setDraft(null); };
+  const addMeasure = (page: number, shape: MarkShape) => {
+    const path = viewing?.pdfPath;
+    if (shape.t !== 'arrow' || !path) return;
+    const span = { x: shape.x, y: shape.y, x2: shape.x2, y2: shape.y2 };
+    /* The page's size on paper turns the line into millimetres. */
+    loadPdf(path, async () => (await fileBlob(path)).arrayBuffer()).then((doc) => doc.getPage(page + 1)).then((pg) => {
+      const v = pg.getViewport({ scale: 1 });
+      const paper = paperMm(span, v.width, v.height);
+      if (paper < 0.5) return;
+      setMeasures((m) => [...m.slice(-19), { id: ++measureSeq.current, page, ...span, paper }]);
+    }).catch(() => toast({ title: 'That could not be measured', sub: 'The drawing did not open. Try again.' }));
+  };
   const prev = viewing ? versions.find((v) => v.n === viewing.n - 1) || null : null;
   const onSheet = marks.filter((m) => m.versionId === viewing?.id);
   const fixedFromPrev = isCurrent && prev ? marks.filter((m) => m.versionId === prev.id && m.status === 'FIXED') : [];
@@ -436,11 +465,12 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
     const key = (e: KeyboardEvent) => {
       const el = document.activeElement as HTMLElement | null;
       if (el && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) return;
-      if (e.key === 'Escape') { if (draft) setDraft(null); else if (tool !== 'select') setTool('select'); else if (full) exitFull(); return; }
+      if (e.key === 'Escape') { if (draft) setDraft(null); else if (measuring) setMeasuring(false); else if (tool !== 'select') setTool('select'); else if (full) exitFull(); return; }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
       const t = ({ v: 'select', p: 'pin', b: 'rect', a: 'arrow', d: 'pen' } as Record<string, Tool>)[k];
       if (t && canMark) setTool(t);
+      if (k === 'm' && !compare) toggleMeasure();
       if (k === 'c' && prev) setCompare((c) => !c);
       if (k === 'r') rotate();
       if (k === 'f') { if (full) exitFull(); else enterFull(); }
@@ -451,9 +481,9 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [canMark, prev?.id, !!draft, tool, full, panel]);
+  }, [canMark, prev?.id, !!draft, tool, full, panel, measuring, compare]);
 
-  const moving = space || tool === 'select' || !canMark;
+  const moving = space || (!measuring && (tool === 'select' || !canMark));
   const dist = () => { const [a, b] = [...touches.current.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
   const panStart = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = scroller.current;
@@ -630,10 +660,10 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
             <PageBlock key={`${viewing.id}:${i}:${attempt}`} index={i} pages={pages} pdfPath={viewing.pdfPath} prevPath={prev?.pdfPath || null} compare={compare && !!prev}
               compareLabel={prev ? [`v${prev.n}`, `v${viewing.n}`] : undefined} spotting={spotting} zoom={zoom} turn={turn}
               marks={onSheet.filter((m) => m.page === i)} draft={draft?.page === i ? draft.shape : null} selected={selected}
-              tool={space ? 'select' : tool} canMark={canMark && !draft} onPageCount={setPages}
+              tool={space ? 'select' : measuring ? 'arrow' : tool} canMark={measuring ? !compare : canMark && !draft} onPageCount={setPages}
               onSelect={(id) => { setSelected(id); setTab('notes'); }}
-              onShape={(page, shape, anchor) => { setDraft({ page, shape, anchor, text: '', blocking: false }); setTab('notes'); setSelected(null); }}
-              onDiff={onDiff} overlay={composer(i)} hover={hover} onHover={setHover} who={whoWrote} onPageState={onPageState} />
+              onShape={(page, shape, anchor) => { if (measuring) { addMeasure(page, shape); return; } setDraft({ page, shape, anchor, text: '', blocking: false }); setTab('notes'); setSelected(null); }}
+              onDiff={onDiff} overlay={<>{composer(i)}<MeasureLayer list={measures.filter((x) => x.page === i)} turn={turn} scale={scale} /></>} hover={hover} onHover={setHover} who={whoWrote} onPageState={onPageState} />
           ))}</div> : (
             <div className="mx-auto mt-12 max-w-md rounded-2xl border-2 border-dashed border-slate-300 bg-white px-6 py-10 text-center">
               <p className="text-lg font-bold text-slate-800">No PDF yet</p>
@@ -646,31 +676,38 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
         {ticked && <div className="dd2-tick" role="status" aria-label="Approved"><svg viewBox="0 0 24 24" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></div>}
         {viewing && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex flex-col items-center gap-2 px-3">
-            {canMark && !draft && tool !== 'select' ? <div className="rounded-full bg-slate-800/90 px-3.5 py-1.5 text-center text-sm font-semibold text-white">{toolNow[2]}: {toolNow[3]}</div>
+            {measuring ? <MeasureBar scale={scale} last={measures[measures.length - 1] || null} count={measures.length} onScale={saveScale} onClear={() => setMeasures([])} />
+              : canMark && !draft && tool !== 'select' ? <div className="rounded-full bg-slate-800/90 px-3.5 py-1.5 text-center text-sm font-semibold text-white">{toolNow[2]}: {toolNow[3]}</div>
               : tip && !draft && <div className="rounded-full bg-slate-800/90 px-3.5 py-1.5 text-center text-sm font-semibold text-white">Drag to move around. Ctrl + scroll to zoom.</div>}
             <div className="dd2-dock pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-0.5 rounded-[28px] border border-slate-200 px-2 py-1" role="toolbar" aria-label="Drawing tools">
               {canMark && <>
                 {TOOLS.map(([t, key, name, hint]) => (
-                  <button key={t} type="button" data-tool={t} onClick={() => { setTool(t); setDraft(null); }} aria-pressed={tool === t} aria-label={name} title={`${name} (${key}). ${hint}`}
-                    className={cx('dd2-key is-tool inline-flex min-h-[44px] min-w-[40px] items-center justify-center gap-1.5 rounded-full px-1 text-sm font-bold text-slate-600', tool === t && 'pr-3', demo === t && 'is-demo')} style={{ ['--c' as any]: TOOL_COLOR[t] }}>
-                    <LiveIcon tool={t} /><span className={tool === t ? '' : 'hidden 2xl:inline'}>{name}</span>
+                  <button key={t} type="button" data-tool={t} onClick={() => { setMeasuring(false); setTool(t); setDraft(null); }} aria-pressed={tool === t && !measuring} aria-label={name} title={`${name} (${key}). ${hint}`}
+                    className={cx('dd2-key is-tool inline-flex min-h-[44px] min-w-[40px] items-center justify-center gap-1.5 rounded-full px-1 text-sm font-bold text-slate-600', tool === t && !measuring && 'pr-3', demo === t && 'is-demo')} style={{ ['--c' as any]: TOOL_COLOR[t] }}>
+                    <LiveIcon tool={t} /><span className={tool === t && !measuring ? '' : 'hidden min-[1800px]:inline'}>{name}</span>
                   </button>
                 ))}
                 {sep}
               </>}
               {prev && isCurrent && (
                 <button type="button" data-tool="compare" onClick={() => { setCompare((c) => !c); setDraft(null); }} aria-pressed={compare} title={`Slide between this version and v${prev.n} (C)`}
-                  className={cx('dd2-key inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-1 pr-2.5 text-sm font-bold', compare ? 'bg-slate-200 text-slate-900' : 'text-slate-600', demo === 'compare' && 'is-demo')} style={{ ['--c' as any]: TOOL_COLOR.compare }}>
-                  <LiveIcon tool="compare" />{compare ? 'Comparing' : 'Compare'}
+                  aria-label="Compare" className={cx('dd2-key inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-1 text-sm font-bold', compare ? 'bg-slate-200 pr-2.5 text-slate-900' : 'text-slate-600 2xl:pr-2.5', demo === 'compare' && 'is-demo')} style={{ ['--c' as any]: TOOL_COLOR.compare }}>
+                  <LiveIcon tool="compare" /><span className={compare ? '' : 'hidden 2xl:inline'}>{compare ? 'Comparing' : 'Compare'}</span>
                 </button>
               )}
               {prev && isCurrent && !compare && (
                 <button type="button" data-tool="changes" onClick={() => setSpot(!spot)} aria-pressed={spot} title={`Outline what changed since v${prev.n}`}
-                  className={cx('dd2-key inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-1 pr-2.5 text-sm font-bold', spot ? 'bg-amber-100 text-amber-900' : 'text-slate-600', demo === 'changes' && 'is-demo')} style={{ ['--c' as any]: TOOL_COLOR.changes }}>
-                  <LiveIcon tool="changes" />{spot && changeCount ? `Changes · ${changeCount}` : 'Changes'}
+                  aria-label="Changes" className={cx('dd2-key inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-1 text-sm font-bold', spot ? 'bg-amber-100 text-amber-900 2xl:pr-2.5' : 'text-slate-600 2xl:pr-2.5', demo === 'changes' && 'is-demo')} style={{ ['--c' as any]: TOOL_COLOR.changes }}>
+                  <LiveIcon tool="changes" /><span className="hidden 2xl:inline">{spot && changeCount ? `Changes · ${changeCount}` : 'Changes'}</span>{spot && changeCount > 0 && <span className="2xl:hidden">{changeCount}</span>}
                 </button>
               )}
               {prev && isCurrent && sep}
+              {!compare && (
+                <button type="button" data-tool="measure" onClick={toggleMeasure} aria-pressed={measuring} aria-label="Measure" title="Measure (M). Drag between two points to read a length from the drawing's scale."
+                  className={cx('dd2-key inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-1 text-sm font-bold text-slate-600', measuring && 'pr-3')} style={{ ['--c' as any]: TOOL_COLOR.measure }}>
+                  <LiveIcon tool="measure" />{measuring && <span>Measure</span>}
+                </button>
+              )}
               <button type="button" onClick={() => { rotate(); setDraft(null); }} aria-label="Rotate the drawing" title="Rotate (R). Notes stay where they belong." className={barBtn()}><RotateCw size={18} className="dd2-plain turn" aria-hidden />{turn ? `${turn}°` : ''}</button>
               <button type="button" onClick={() => zoomTo((z) => z - 0.2)} aria-label="Zoom out" title="Zoom out (-, or Ctrl + scroll)" className={barBtn()}><Minus size={18} className="dd2-plain pulse" aria-hidden /></button>
               <button type="button" onClick={() => zoomTo(1)} title="Fit the width (0)" aria-label={`Zoom ${Math.round(zoom * 100)} percent. Press to fit the width.`} className={cx(barBtn(), 'min-w-[50px] tabular-nums')}>{Math.round(zoom * 100)}%</button>
