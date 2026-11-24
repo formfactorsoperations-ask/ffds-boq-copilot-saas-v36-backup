@@ -537,6 +537,23 @@ the orbit dial.
   of the card in front is lit. Fan with arrows, a swipe, the arrow keys or a
   tap on a side card. Motion stops under `prefers-reduced-motion`.
 
+### The film behind the greeting (asked for 24 Nov 2026)
+
+The owner asked for a background in motion on Home that costs nothing, and chose a
+finished room from five free clips (a plant-shadowed wall, drafting, the finished
+room, material samples, a walkthrough). A short, silent film of it loops behind the
+greeting, inside the hero card only (`components/home/HomeHeroVideo.tsx`):
+
+- The clip is "A Modern Living Room" from Pexels (video 7533207), free to use under the
+  Pexels licence, cut to a 7-second seamless loop. It is served from
+  `public/home/hero-room.webm` and `.mp4`, with `hero-room.jpg` (its first frame) as the
+  poster. Keep each file small (a couple of MB).
+- Muted, looped and inline. It never plays under `prefers-reduced-motion` (the poster
+  stands still), pauses when Home is scrolled past it or the tab is hidden, and takes
+  itself away if it cannot load, leaving the hero as it was.
+- A white wash sits over it: lighter behind the greeting so the words read, and white
+  at the foot where the story cards sit. The rest of Home stays solid white.
+
 ### Home widgets (approved 12 Oct 2026)
 
 The Home widgets (`components/home/HomeWidgets.tsx`, rules in

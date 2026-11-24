@@ -16,6 +16,7 @@ import { greetingWord } from './useStudioHomeData';
 import { EDGE } from './homeStyles';
 import '../people/peopleStyles';
 import { Tilt } from '../people/PeopleBits';
+import HomeHeroVideo from './HomeHeroVideo';
 
 /*
   THE TOP OF HOME (lib/homeStories.ts): a greeting, the projects you were last
@@ -87,6 +88,8 @@ export default function StoryDeck({ feeds, counts, projects, role, roles, userNa
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-b from-[#F4F6FC] via-white to-[#FAF7F1]" />
         <div className="aurora-a absolute -top-48 right-[-6rem] w-[38rem] h-[38rem] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(61, 82, 160,.12), transparent 70%)' }} />
+        {/* Towers in the clouds: a silent film behind the greeting (DESIGN.md → "The film behind the greeting"). */}
+        <HomeHeroVideo />
       </div>
       <div className="relative px-5 md:px-12 pt-9 pb-8 flex flex-col items-center text-center">
         <DateClock />
