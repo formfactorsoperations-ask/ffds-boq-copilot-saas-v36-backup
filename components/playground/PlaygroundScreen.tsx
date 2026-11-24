@@ -18,6 +18,8 @@ import { inferBasis } from '../../lib/takeoff';
 import { lockedTierId } from '../../lib/scopeFlow';
 import { ftin } from '../../lib/playground/geometry';
 import SketchModal from './SketchModal';
+import CustomItemModal from './CustomItemModal';
+import { SCOPE_BUCKETS } from '../../lib/scopeBuckets';
 import { CivilPanel } from './CivilParts';
 import {
   civilItems, toggleRoomCivil, addWallCivil, fromBrief, missingStandardItems, briefCivilAsk, toolOf, syncedCivil, SITE_LABEL,
@@ -52,6 +54,7 @@ import { kitsOf, kitStartRooms, kitApply, kitAddsDebris, kitEstimate, kitFits, r
 import { ADDON_BUNDLES, priceForOption, type TemplateData } from '../../lib/standardPackages';
 import { optionSetupOf } from '../../lib/optionSetup';
 import { scopeEdit, isEmptyEdit, applyScopeEdit, namesOf } from '../../lib/playground/allOptions';
+import { moveRoomLines } from '../../lib/playground/roomRename';
 import { templateLines } from '../../lib/playground/templateBuild';
 import { workLine, measureWork } from '../../lib/playground/works';
 import type { Grade } from '../../lib/materialSpecs';
@@ -456,6 +459,11 @@ export default function PlaygroundScreen(props: Props) {
     return () => clearTimeout(t);
   }, [fresh]);
   const replace = (line: BoqItem, msg?: string) => commit(boq.map(l => (l.id === line.id ? line : l)), msg);
+  /* Lines left under a room name the Brief no longer has, moved into one of its rooms (lib/playground/roomRename). */
+  const moveRoom = (from: string, to: string) => {
+    const n = boq.filter(l => l.roomId === from).length;
+    commit(moveRoomLines(boq, from, to), `${n === 1 ? 'The line' : `${n} lines`} in ${from} moved to ${to}. Undo puts ${n === 1 ? 'it' : 'them'} back.`);
+  };
   const replaceMany = (lines: BoqItem[]) => { const m = new Map(lines.map(l => [l.id, l])); commit(boq.map(l => m.get(l.id) || l)); };
   const remove = (ids: string[]) => { const s = new Set(ids); commit(boq.filter(l => !s.has(l.id)), `${ids.length === 1 ? 'Line' : `${ids.length} lines`} deleted. Undo puts ${ids.length === 1 ? 'it' : 'them'} back.`); if (sel && s.has(sel)) setSel(null); };
   const undo = () => {
@@ -490,6 +498,15 @@ export default function PlaygroundScreen(props: Props) {
   };
   /* A work from the library (civil, plumbing, electrical…): not drawn, so it joins the room it is dropped on, its
      quantity measured from that room and the sum said (lib/playground/works). */
+  /* A custom item: something the Item Bank does not have, kept with the project (lib/playground/custom). */
+  const [custom, setCustom] = useState<{ name: string; cat?: string; work?: boolean } | null>(null);
+  const customRooms = useMemo(() => [...realRooms(rooms).map(r => r.name), ...SCOPE_BUCKETS].filter((n, i, a) => a.indexOf(n) === i), [rooms]);
+  const addCustom = (item: Item, qty: number, roomName: string, how?: string) => {
+    setProjectContext(p => ({ ...p, adHocItems: [...(p.adHocItems || []), item] }));
+    const line = prepareNew({ id: newId(), bankId: item.id, qty, roomId: roomName, baseRate: item.materials, labor: item.labor, marginOverride: item.margin });
+    commit([...boq, line], `${item.name} added to ${roomName} as a custom item${how ? `: ${qty} ${item.unit}, ${how}` : ''}. It is kept with this project, and the Item Bank keeps a copy to pick again.`);
+    setSel(line.id); setSelRoom(null); setCustom(null);
+  };
   const addWork = (item: Item, roomName: string | null) => {
     if (readOnly) { setNote('This option is locked: nothing can be added.'); return; }
     if (!roomName) { setNote('Click a room on the plan first, or drag the work onto a room.'); return; }
@@ -1120,7 +1137,7 @@ export default function PlaygroundScreen(props: Props) {
                     onShowOnPlan={name => { setLens('plan'); pickRoom(name); setFitSignal(s => s + 1); }}
                     changes={changes} baseName={prevName}
                     onDropItem={(id, room) => { if (id.startsWith(KIT_DRAG)) { openKit(id.slice(KIT_DRAG.length), room); return; } const it = bank.find(i => i.id === id); if (it) { if (drawOf(it)) addToRoom(it, room); else addWork(it, room); } }}
-                    onReplaceMany={replaceMany} />
+                    onReplaceMany={replaceMany} onMoveRoom={moveRoom} />
                 )}
                 {lens === 'sheet' && fullGrid && renderFullGrid && (
                   <div className="p-3">
@@ -1133,6 +1150,7 @@ export default function PlaygroundScreen(props: Props) {
                     seesMargins={seesMargins} hideFigures={hideFigures} floor={floor} query={query}
                     onSel={pickLine} onReplace={l => replace(l)} onReplaceMany={replaceMany} onDelete={remove}
                     onFullGrid={renderFullGrid ? () => setFullGrid(true) : undefined}
+                    onCustom={() => setCustom({ name: '' })}
                     specBank={specBank} onUpdateLines={offer ? updateLines : undefined}
                     changes={changes} removedName={l => bankMap.get(l.bankId)?.name || (l as { name?: string }).name || 'Line'} />
                 )}
@@ -1169,6 +1187,7 @@ export default function PlaygroundScreen(props: Props) {
                   kits={kits} bankMap={bankMap} hideFigures={hideFigures} kitEstimate={kitCardEstimate} onKit={id => openKit(id)}
                   places={supplyPlaces} onAddSupplied={addSupplied} onAddWork={it => addWork(it, workRoomReal)} workRoom={workRoomReal}
                   measureWork={it => (workRoomReal ? measureWork(it, rooms.find(x => x.name === workRoomReal)) : null)}
+                  onCustom={(name, cat, work) => setCustom({ name, cat, work })}
                   artOf={specBank ? (it => { const r = recipeOf(it, specBank); return r ? artOfSpecs(specsFromRecipe(specBank, r, grade), specBank.materials) : {}; }) : undefined} />
               </div>
             )}
@@ -1341,6 +1360,12 @@ export default function PlaygroundScreen(props: Props) {
           onRoom={name => setKitUi(k => k && ({ ...k, rooms: k.rooms.includes(name) ? k.rooms.filter(r => r !== name) : [...k.rooms, name] }))}
           onTick={(key, on) => setKitUi(k => k && ({ ...k, off: { ...k.off, [key]: !on } }))}
           onClose={() => setKitUi(null)} onApply={applyKit} />
+      )}
+      {custom && (
+        <CustomItemModal bank={bank} rooms={customRooms} room={(custom.work && workRoomReal) || libTarget} name={custom.name} cat={custom.cat}
+          work={!!custom.work} roomOf={name => rooms.find(r => r.name === name)}
+          seesMargins={seesMargins && !hideFigures} rounded={!!rules} newId={newId}
+          onAdd={addCustom} onClose={() => setCustom(null)} />
       )}
       {planModal && (
         <div className="fixed inset-0 z-[300] grid place-items-center p-4 phd-scrim" style={{ background: 'rgba(15,23,42,.45)' }} role="dialog" aria-modal="true" aria-label="The plan under this BOQ">

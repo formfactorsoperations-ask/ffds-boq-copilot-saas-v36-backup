@@ -5,6 +5,7 @@ import { CIVIL_SCOPE_FIELDS, DEFAULT_CIVIL_SCOPE, resolveCivilScope, isScopeCust
 import { ROOM_DISTRIBUTIONS, resolveActiveTemplate, ensureRoomsExistForTemplate, roomFamily } from '../lib/standardPackages';
 import { isScopeBucket, realRooms, ensureScopeRooms, polishRoomNames, SCOPE_BUCKETS, SCOPE_BUCKET_META } from '../lib/scopeBuckets';
 import { estimateRoomSizes, isAiAvailable } from '../services/geminiService';
+import { renameProblem } from '../lib/playground/roomRename';
 import { useOrg } from '../contexts/OrgContext';
 import TakeoffPanel from './TakeoffPanel';
 import EngagementPicker from './projects/EngagementPicker';
@@ -45,6 +46,12 @@ interface ProjectContextCardProps {
   hideExecutionControls?: boolean;
   /** One part of the brief on its own, for Brief & Site's read view to edit in place. */
   only?: BriefPart;
+  /**
+   * A room renamed, once its new name is done: App carries it into the BOQ's
+   * lines and room offers (lib/playground/roomRename). Without it the BOQ kept
+   * the old name as a room of its own.
+   */
+  onRenameRoom?: (from: string, to: string) => void;
 }
 
 /** The parts of the brief Brief & Site can open one at a time. */
@@ -115,12 +122,50 @@ export function useAutoMapRooms(
   }, [enabled, projectContext.name, projectContext.config, projectContext.area, projectContext.rooms]);
 }
 
+/*
+  A room's name, renamed once it is done (on leaving the field, or Enter) rather
+  than letter by letter: the BOQ follows the rename, and a half-typed name could
+  land on another room's. A name that is empty, a scope's or another room's is
+  not taken; the field goes back and says why. Escape goes back too.
+*/
+function RoomNameInput({ value, names, onCommit }: { value: string; names: string[]; onCommit: (name: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => { setDraft(value); }, [value]);
+  const done = () => {
+    if (draft === value) return;
+    const p = renameProblem(names, value, draft);
+    if (p) { setProblem(p); setDraft(value); return; }
+    setProblem(null);
+    onCommit(draft.trim());
+  };
+  return (
+    <>
+      <input
+        type="text"
+        value={draft}
+        aria-label="Room name"
+        onChange={e => { setDraft(e.target.value); if (problem) setProblem(null); }}
+        onBlur={done}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+          if (e.key === 'Escape') { setDraft(value); setProblem(null); }
+        }}
+        className="w-full px-3 py-2 bg-slate-50/80 border border-slate-200 rounded-lg focus:bg-white focus:border-[#3D52A0] font-bold text-slate-800 text-xs outline-none transition-all"
+        placeholder="e.g. Master Bedroom"
+      />
+      {problem && <p role="alert" className="text-[11px] font-semibold text-rose-600">{problem}</p>}
+    </>
+  );
+}
+
 const ProjectContextCard: React.FC<ProjectContextCardProps> = ({ 
   projectContext, 
   setProjectContext,
   hideExecutionControls = false,
   projectId,
   only,
+  onRenameRoom,
 }) => {
   const { teamMembers } = useOrg();
   const siteSupervisors = teamMembers.filter(m => m.role === 'Site Supervisor');
@@ -174,6 +219,15 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
     
     newRooms[index] = roomToUpdate;
     setProjectContext(prev => ({ ...prev, rooms: newRooms }));
+  };
+
+  /* A room's new name, once it is done: the room renamed, and the BOQ told so it follows. */
+  const renameRoom = (index: number, to: string) => {
+    const from = projectContext.rooms?.[index]?.name || '';
+    const name = to.trim();
+    if (!name || name === from) return;
+    handleRoomChange(index, 'name', name);
+    onRenameRoom?.(from, name);
   };
 
   const handleAddRoom = () => {
@@ -988,13 +1042,9 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                         {/* Room Name */}
                         <div className="xl:col-span-4 space-y-1">
                           <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Room Designation</label>
-                          <input 
-                            type="text" 
-                            value={room.name || ''} 
-                            onChange={e => handleRoomChange(index, 'name', e.target.value)} 
-                            className="w-full px-3 py-2 bg-slate-50/80 border border-slate-200 rounded-lg focus:bg-white focus:border-[#3D52A0] font-bold text-slate-800 text-xs outline-none transition-all" 
-                            placeholder="e.g. Master Bedroom" 
-                          />
+                          <RoomNameInput value={room.name || ''}
+                            names={(projectContext.rooms || []).map(r => r?.name || '')}
+                            onCommit={name => renameRoom(index, name)} />
                         </div>
 
                         {/* Dimensions: Length x Width */}

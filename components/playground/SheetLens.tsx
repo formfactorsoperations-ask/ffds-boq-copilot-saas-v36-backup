@@ -26,7 +26,7 @@ const STATUS_CHIP: Record<string, [string, 'warn' | 'slate' | 'good']> = {
   pending_finalisation: ['To confirm', 'warn'],
 };
 
-export default function SheetLens({ rooms, models, shares, roomTotals, sel, readOnly, seesMargins, hideFigures, floor, query, onSel, onReplace, onReplaceMany, onDelete, onFullGrid, specBank, onUpdateLines, changes, removedName }: {
+export default function SheetLens({ rooms, models, shares, roomTotals, sel, readOnly, seesMargins, hideFigures, floor, query, onSel, onReplace, onReplaceMany, onDelete, onFullGrid, specBank, onUpdateLines, changes, removedName, onCustom }: {
   rooms: Room[];
   models: LineModel[];
   shares: Map<string, ShareRow[]>;
@@ -43,6 +43,8 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
   onDelete: (ids: string[]) => void;
   /** Opens the full grid (statuses, linkage, notes, labour), as the Excel view had it. */
   onFullGrid?: () => void;
+  /** Opens the custom item form: something the Item Bank does not have. */
+  onCustom?: () => void;
   /** The Material specs bank (S2): each line's parts as chips. */
   specBank?: MaterialSpecsBank | null;
   /** Takes these lines to the current versions of their materials. */
@@ -212,6 +214,7 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
               <td colSpan={N - 2} className="px-2 py-2 text-xs text-slate-500">
                 Drag a number sideways to change it · Shift for fine steps · click it to type
                 {onFullGrid && <> · <button type="button" onClick={onFullGrid} className="font-bold text-[#3D52A0] hover:underline">Open the full grid</button> for status, linkage and notes</>}
+                {onCustom && !readOnly && <> · <button type="button" onClick={onCustom} className="font-bold text-[#3D52A0] hover:underline">Add a custom item</button>, not in the Item Bank</>}
               </td>
               <td className="px-2 py-2 text-right text-sm font-black tabular-nums">{showAmount ? inr(total) : ''}</td>
             </tr>

@@ -1715,3 +1715,106 @@ describe('one edit, every option (Edit: All options)', () => {
     expect(screen.queryByRole('switch', { name: /Edit all \d options/ })).toBeNull();
   });
 });
+
+describe('a custom item, not in the Item Bank', () => {
+  const form = () => screen.getByRole('dialog', { name: 'Add a custom item' });
+  const field = (name: RegExp) => within(form()).getByLabelText(name) as HTMLInputElement;
+
+  it('from the library: typed in the filter, added to the room, kept with the project and priced', () => {
+    let latest: any[] = [];
+    let ctx: any = null;
+    render(<Harness tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} probeCtx={c => { ctx = c; }} />);
+    const lib = screen.getByRole('complementary', { name: 'Studio design library' });
+    fireEvent.change(within(lib).getByLabelText('Filter the catalogue'), { target: { value: 'Fluted feature wall' } });
+    fireEvent.click(within(lib).getByRole('button', { name: 'Add “Fluted feature wall” as a custom item' }));
+    expect(field(/Item name/).value).toBe('Fluted feature wall');
+    expect((within(form()).getByLabelText(/Trade/) as HTMLSelectElement).value).toBe('Carpentry');
+    fireEvent.change(field(/Quantity/), { target: { value: '40' } });
+    fireEvent.change(within(form()).getByLabelText(/Unit/), { target: { value: 'sq ft' } });
+    // The Owner sees cost and margin.
+    fireEvent.change(field(/Material cost/), { target: { value: '1500' } });
+    fireEvent.change(field(/Labour/), { target: { value: '500' } });
+    fireEvent.change(field(/Margin/), { target: { value: '20' } });
+    expect(within(form()).getByRole('status').textContent).toBe('Comes to ₹96,000 for 40 sq ft.');
+    fireEvent.change(within(form()).getByLabelText(/What the client reads/), { target: { value: 'Walnut veneer, brass inlay' } });
+    fireEvent.click(within(form()).getByRole('button', { name: 'Add to Bedroom' }));
+    expect(screen.queryByRole('dialog', { name: 'Add a custom item' })).toBeNull();
+    const item = ctx.adHocItems.find((i: any) => i.name === 'Fluted feature wall');
+    expect(item).toMatchObject({ cat: 'Carpentry', unit: 'sq ft', materials: 1500, labor: 500, margin: 20, specs: 'Walnut veneer, brass inlay' });
+    expect(latest[0].boq[0]).toMatchObject({ bankId: item.id, qty: 40, roomId: 'Bedroom', baseRate: 1500, labor: 500, marginOverride: 20 });
+    expect(screen.getByRole('status').textContent).toMatch(/added to Bedroom as a custom item/);
+    expect(within(inspector()).getByText('Fluted feature wall')).toBeTruthy();
+  });
+
+  it('a custom work from Works: wooden flooring replacement, measured from the room’s floor, or typed', () => {
+    let latest: any[] = [];
+    let ctx: any = null;
+    render(<Harness tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} probeCtx={c => { ctx = c; }} />);
+    const lib = screen.getByRole('complementary', { name: 'Studio design library' });
+    fireEvent.click(within(lib).getByRole('radio', { name: 'Works' }));
+    fireEvent.click(within(lib).getByRole('button', { name: /Add a custom work/ }));
+    fireEvent.change(field(/Item name/), { target: { value: 'Wooden flooring replacement' } });
+    expect((within(form()).getByLabelText(/^Unit/) as HTMLSelectElement).value).toBe('sq ft');
+    expect((within(form()).getByLabelText(/^Measure/) as HTMLSelectElement).value).toBe('floor');
+    // The Bedroom is 12′ × 10′ on the plan.
+    expect(form().querySelector('[data-measured]')!.textContent).toMatch(/120 sq ft: the floor, 12′ × 10′, in Bedroom/);
+    fireEvent.change(field(/Material cost/), { target: { value: '300' } });
+    fireEvent.change(field(/Labour/), { target: { value: '60' } });
+    fireEvent.change(field(/Margin/), { target: { value: '25' } });
+    expect(within(form()).getByRole('status').textContent).toBe('Comes to ₹54,000 for 120 sq ft.');
+    // Measured by the walls instead, then typed.
+    fireEvent.change(within(form()).getByLabelText(/^Measure/), { target: { value: 'perimeter' } });
+    expect(within(form()).getByLabelText(/^Measure/)).toBeTruthy();
+    fireEvent.change(within(form()).getByLabelText(/^Measure/), { target: { value: 'floor' } });
+    fireEvent.click(within(form()).getByRole('radio', { name: 'Type it' }));
+    fireEvent.change(field(/Quantity, typed/), { target: { value: '100' } });
+    expect(within(form()).getByRole('status').textContent).toBe('Comes to ₹45,000 for 100 sq ft.');
+    fireEvent.click(within(form()).getByRole('radio', { name: 'Measure from the room' }));
+    fireEvent.click(within(form()).getByRole('button', { name: 'Add to Bedroom' }));
+    const item = ctx.adHocItems.find((i: any) => i.name === 'Wooden flooring replacement');
+    expect(latest[0].boq[0]).toMatchObject({ bankId: item.id, qty: 120, roomId: 'Bedroom' });
+    expect(screen.getAllByRole('status').some(e => /as a custom item: 120 sq ft, the floor, 12′ × 10′\./.test(e.textContent || ''))).toBe(true);
+  });
+
+  it('from the Sheet; a Designer gives the rate the client pays and never sees cost or margin', () => {
+    org.role = 'Designer';
+    let ctx: any = null;
+    render(<Harness tier={PG} probeCtx={c => { ctx = c; }} />);
+    lens('Sheet');
+    fireEvent.click(screen.getByRole('button', { name: 'Add a custom item' }));
+    expect(within(form()).queryByLabelText(/Material cost/)).toBeNull();
+    expect(within(form()).queryByLabelText(/Margin/)).toBeNull();
+    expect((within(form()).getByRole('button', { name: /^Add to / }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(form()).getByRole('status').textContent).toBe('Give it a name.');
+    fireEvent.change(field(/Item name/), { target: { value: 'Brass handles, set of 12' } });
+    fireEvent.change(within(form()).getByLabelText(/^Room/), { target: { value: 'Kitchen' } });
+    fireEvent.change(within(form()).getByLabelText(/Unit/), { target: { value: 'set' } });
+    fireEvent.change(field(/Rate to the client/), { target: { value: '6,000' } });
+    fireEvent.click(within(form()).getByRole('button', { name: 'Add to Kitchen' }));
+    const item = ctx.adHocItems.find((i: any) => i.name === 'Brass handles, set of 12');
+    expect(item.unit).toBe('set');
+    expect(Math.round((item.materials + item.labor) * (1 + item.margin / 100))).toBe(6000);
+  });
+});
+
+describe('a room renamed in the Brief: lines left under the old name', () => {
+  beforeEach(() => { org.role = 'Super Admin'; });
+
+  it('show as not a room in the Brief now, and move into a room from their card in Rooms', () => {
+    let latest: any[] = [];
+    // The Bedroom was "M. Bedroom" when these two lines were added.
+    const boq = [...baseBoq(), { id: 'l4', bankId: 'bed', qty: 1, roomId: 'M. Bedroom' }, { id: 'l5', bankId: 'paint', qty: 200, roomId: 'M. Bedroom' }];
+    render(<Harness tier={{ ...PG, boq }} probe={t => { latest = t; }} />);
+    lens('Rooms');
+    const card = document.querySelector('[data-roomcard="M. Bedroom"]') as HTMLElement;
+    expect(card.textContent).toMatch(/Not a room in the Brief now/);
+    const move = within(card).getByLabelText(/Move the lines in M\. Bedroom to/) as HTMLSelectElement;
+    expect([...move.options].map(o => o.value)).toEqual(['', 'Bedroom', 'Kitchen']);
+    fireEvent.change(move, { target: { value: 'Bedroom' } });
+    expect(latest[0].boq.filter((l: any) => l.roomId === 'Bedroom').map((l: any) => l.id)).toEqual(['l1', 'l2', 'l4', 'l5']);
+    expect(document.querySelector('[data-roomcard="M. Bedroom"]')).toBeNull();
+    expect(screen.getAllByRole('status').some(e => /2 lines in M\. Bedroom moved to Bedroom\. Undo puts them back\./.test(e.textContent || ''))).toBe(true);
+    // The scopes are not offered the move: they are not rooms gone astray.
+    expect(document.querySelector('[data-move-room]')).toBeNull();
+  });
+});

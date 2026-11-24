@@ -36,6 +36,8 @@ interface Props {
   projectContext: ProjectContext;
   setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
   projectId?: string;
+  /** A room renamed: App carries the name into the BOQ (lib/playground/roomRename). */
+  onRenameRoom?: (from: string, to: string) => void;
 }
 
 const SITE_STATE: Record<string, string> = { raw_shell: 'Raw shell', semi_finished: 'Semi-finished', finished: 'Finished (refit only)' };
@@ -75,7 +77,7 @@ const why = (row: ScopeReading): string => row.why.kind === 'site' ? 'from the s
   : row.why.kind === 'hand' ? 'set by hand'
   : row.on ? 'on by default; the brief does not say' : 'not in the brief';
 
-export default function BriefReadView({ projectContext: ctx, setProjectContext, projectId }: Props) {
+export default function BriefReadView({ projectContext: ctx, setProjectContext, projectId, onRenameRoom }: Props) {
   const { orgData } = useOrg();
   const [editing, setEditing] = useState<BriefPart | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
@@ -123,7 +125,7 @@ export default function BriefReadView({ projectContext: ctx, setProjectContext, 
     <div className="space-y-6">
       {parts.map(part => (
         <ProjectContextCard key={part} only={part} projectContext={ctx} setProjectContext={setProjectContext}
-          aiStrategy="balanced" hideExecutionControls projectId={projectId} />
+          aiStrategy="balanced" hideExecutionControls projectId={projectId} onRenameRoom={onRenameRoom} />
       ))}
     </div>
   );
