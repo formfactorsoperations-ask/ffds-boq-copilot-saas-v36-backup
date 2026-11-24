@@ -146,10 +146,13 @@ describe('a design meeting', { timeout: 60000 }, () => {
   it('records changes pinned on the room\'s sheets, and refuses changes with nothing pinned', async () => {
     expect(await code(users.head.meet({ action: 'room', meetingId, room: 'Kitchen', outcome: 'changes', changes: [] }))).toBe('functions/invalid-argument');
     const res = await users.head.meet({ action: 'room', meetingId, room: 'Kitchen', outcome: 'changes', changes: [
-      { drawingId: 'k1', page: 0, shape: { t: 'pin', x: 0.3, y: 0.4 }, text: 'Lighter shade on the upper shutters' },
+      { drawingId: 'k1', page: 0, shape: { t: 'pin', x: 0.3, y: 0.4 }, text: 'Lighter shade on the upper shutters', cost: { kind: 'more', amount: '6500', note: 'laminate upgrade', junk: true } },
       { drawingId: 'k1', page: 0, shape: { t: 'rect', x: 0.5, y: 0.5, w: 0.2, h: 0.1 }, text: 'Open shelf here instead' },
     ] });
     expect(res.meeting.rooms[0].changes).toHaveLength(2);
+    /* A lead's cost estimate is kept with its change, cleaned; a change without one has none. */
+    expect(res.meeting.rooms[0].changes[0].cost).toEqual({ kind: 'more', amount: 6500, note: 'laminate upgrade' });
+    expect(res.meeting.rooms[0].changes[1].cost).toBeUndefined();
   });
 
   it('a round past the included ones must be billed or waived before the meeting closes', async () => {
@@ -216,6 +219,12 @@ describe('a design meeting', { timeout: 60000 }, () => {
     const m = await users.head.meet({ action: 'start', rooms: ['Living Room'] });
     await users.head.meet({ action: 'cancel', meetingId: m.meeting.id });
     expect((await read(`${P}/designMeetings/${m.meeting.id}`)).state).toBe('CANCELLED');
+    /* A meeting can also be finished with no room decided: it is kept as held, nothing is recorded, and the room can be shown again. */
+    const quiet = await users.head.meet({ action: 'start', rooms: ['Living Room'] });
+    const held = await users.head.meet({ action: 'close', meetingId: quiet.meeting.id, charges: {} });
+    expect(held.meeting.state).toBe('CLOSED');
+    expect(held.meeting.rooms[0].outcome).toBeNull();
+    expect(held.meeting.approval).toBeNull();
     const again = await users.head.meet({ action: 'start', rooms: ['Living Room'] });
     expect(again.meeting.state).toBe('OPEN');
   });

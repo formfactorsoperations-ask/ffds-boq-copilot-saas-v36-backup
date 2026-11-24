@@ -763,6 +763,52 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      /*
+        ROOM MESSAGES (Design Desk 2.0, lib/roomMessages.ts): a short thread
+        per room, for the people who work on the project's drawings. Read and
+        written by the studio's Design Head, Owner, Admin and Ops Director,
+        and by the Designers, Client Relations and Site Supervisors assigned
+        to THIS project, by the server's copies. Nobody else: not the studio's
+        other roles, and never a client. Kept here, beside those copies,
+        because the catch-all under organizations/{orgId} opens whatever sits
+        beneath it to every member of the studio, and rules only ever widen.
+
+        A message names its studio and its writer and is checked against both;
+        the project must be that studio's (its designView says so). It is
+        written once: no edit, no delete. A list must ask for one studio's
+        messages by name, as a rule cannot filter a query.
+      */
+      match /roomMessages/{messageId} {
+        function seesRoomMessages(tenantId) {
+          return isAuthenticated() && tenantId is string && (
+            isSuperAdmin()
+            || (isSameTenant(tenantId) && getUserData().get('role', '') in ['Design Head', 'Owner', 'Admin', 'Ops Director'])
+            || isAssignedDesigner(tenantId, projectId)
+            || isAssignedTeam(tenantId, projectId, 'ops')
+            || isAssignedTeam(tenantId, projectId, 'site')
+          );
+        }
+        allow read: if seesRoomMessages(resource.data.tenantId);
+        allow create: if seesRoomMessages(request.resource.data.tenantId)
+          && exists(designViewPath(projectId))
+          && get(designViewPath(projectId)).data.tenantId == request.resource.data.tenantId
+          && request.resource.data.keys().hasOnly(['tenantId', 'projectId', 'room', 'text', 'by', 'at'])
+          && request.resource.data.keys().hasAll(['tenantId', 'projectId', 'room', 'text', 'by', 'at'])
+          && request.resource.data.projectId == projectId
+          && request.resource.data.room is string && request.resource.data.room.size() > 0 && request.resource.data.room.size() <= 120
+          && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+          && request.resource.data.by is map
+          && request.resource.data.by.keys().hasOnly(['uid', 'email', 'name'])
+          && request.resource.data.by.uid == request.auth.uid
+          && request.resource.data.by.email == myEmail()
+          && request.resource.data.by.name is string && request.resource.data.by.name.size() <= 120
+          /* The time a browser sent, within ten minutes of the server's. */
+          && request.resource.data.at is number
+          && request.resource.data.at > request.time.toMillis() - 600000
+          && request.resource.data.at < request.time.toMillis() + 600000;
+        allow update, delete: if false;
+      }
+
       /* Client Relations and Site Supervisors: the records teamMayRead names, on an assigned project. */
       match /{teamSub}/{teamDoc=**} {
         allow read: if teamMayRead(myTeamKind(), teamSub)

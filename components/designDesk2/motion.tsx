@@ -1,0 +1,356 @@
+import React, { useEffect, useRef, useState } from 'react';
+
+/*
+  DESIGN DESK 2.0 MOTION: "Living icons" (DESIGN.md, "Design Desk 2.0
+  motion"). The owner chose it on 24 Nov 2026 from four live options, for the
+  drawing screen's tools, note pins and review panel.
+
+  Every tool's icon acts out what the tool does, so the tool bar teaches
+  itself: the pin drops, the box draws its outline, the arrow shoots, the pen
+  writes, Compare slides and Changes twinkles. The icons are drawn here
+  (LiveIcon) because their parts move on their own, which a stock icon's
+  cannot.
+
+  - dd2-dock / dd2-key / dd2-ico: the tool bar, each tool in a soft round tile
+    of its own colour that fills when it is under the pointer or in hand;
+  - dd2-pin: a note's pin on the drawing; an open note sends out ripples;
+  - dd2-bubble / dd2-lead: the note that springs out of a pin on a dotted line;
+  - Tilt (dd2-tilt) and dd2-note: a note's card, which leans a little, grows a
+    coloured edge and bounces its number when it or its pin is looked at;
+  - dd2-go and dd2-tick: Approve, and the big tick it draws over the drawing;
+  - dd2-dot: the breathing dot beside "Your turn".
+
+  Colours are the desk's own (rose notes, emerald done, amber client and
+  changes, slate, the brand blue). Everything stops under
+  prefers-reduced-motion, and nothing tilts on touch.
+*/
+
+export type LiveTool = 'select' | 'pin' | 'rect' | 'arrow' | 'pen' | 'compare' | 'changes' | 'measure';
+
+/** The colour of each tool's tile. */
+export const TOOL_COLOR: Record<LiveTool, string> = { select: '#334155', pin: '#E11D48', rect: '#D97706', arrow: '#059669', pen: '#3D52A0', compare: '#475569', changes: '#D97706', measure: '#3D52A0' };
+
+const PARTS: Record<LiveTool, React.ReactNode> = {
+  select: <path className="f" d="M5 3l14 7-6 2-2 6z" />,
+  pin: <><path className="f" d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10z" /><circle cx="12" cy="11" r="2" /></>,
+  rect: <rect className="f dr" x="4" y="5" width="16" height="14" rx="2" />,
+  arrow: <><path d="M5 19L19 5" /><path d="M10 5h9v9" /></>,
+  pen: <><path className="f" d="M5 16L16 5l3 3L8 19l-4 1z" /><path className="sq" d="M13 21c2-1.6 3.4 1.2 6 0" /></>,
+  compare: <><rect className="f" x="3" y="5" width="18" height="14" rx="2" /><path className="sl" d="M12 3v18" /></>,
+  changes: <><path className="f" d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9z" /><path d="M19 15v5M16.5 17.5h5" /></>,
+  measure: <><rect className="f sl" x="3" y="8" width="18" height="8" rx="1.5" /><path d="M7 8v3M11 8v4M15 8v3M19 8v4" /></>,
+};
+
+/** A tool's icon in its round tile. It moves when its key (`dd2-key`) is hovered, has just been picked, or is being shown off. */
+export const LiveIcon: React.FC<{ tool: LiveTool }> = ({ tool }) => (
+  <span className="dd2-ico" aria-hidden><svg viewBox="0 0 24 24">{PARTS[tool]}</svg></span>
+);
+
+export const DeskMotionStyles = () => (
+  <style>{`
+    @keyframes dd2PinIn { from { transform: translate(-50%, -50%) scale(0) } to { transform: translate(-50%, -50%) scale(1) } }
+    @keyframes dd2Ripple { from { transform: scale(.9); opacity: .8 } to { transform: scale(2.3); opacity: 0 } }
+    @keyframes dd2Bubble { from { opacity: 0; transform: scale(.78) } to { opacity: 1; transform: none } }
+    @keyframes dd2Dash { to { background-position: 0 7px } }
+    @keyframes dd2Dot { 50% { transform: scale(1.6); opacity: .45 } }
+    @keyframes dd2Click { 0%, 100% { transform: none } 40% { transform: translate(2px, 2px) scale(.82) } }
+    @keyframes dd2Drop { 0% { transform: translateY(-9px) } 55% { transform: translateY(1px) scale(1.08, .9) } 100% { transform: none } }
+    @keyframes dd2Draw { 0% { stroke-dashoffset: 64 } 60%, 100% { stroke-dashoffset: 0 } }
+    @keyframes dd2Write { from { stroke-dashoffset: 14 } to { stroke-dashoffset: 0 } }
+    @keyframes dd2Shoot { 0% { transform: translate(-4px, 4px); opacity: .3 } 60% { transform: translate(3px, -3px); opacity: 1 } 100% { transform: none } }
+    @keyframes dd2Wag { 0%, 100% { transform: rotate(0) } 30% { transform: rotate(-12deg) translate(-1px, 1px) } 70% { transform: rotate(8deg) translate(2px, 0) } }
+    @keyframes dd2Slide { 0%, 100% { transform: translateX(-5px) } 50% { transform: translateX(5px) } }
+    @keyframes dd2Twinkle { 0%, 100% { transform: scale(1) rotate(0) } 50% { transform: scale(1.28) rotate(22deg) } }
+    @keyframes dd2Turn { to { transform: rotate(90deg) } }
+    @keyframes dd2Pulse { 50% { transform: scale(1.3) } }
+    @keyframes dd2TickIn { 0% { transform: scale(0); opacity: 0 } 25% { transform: scale(1); opacity: 1 } 80% { transform: scale(1); opacity: 1 } 100% { transform: scale(1.5); opacity: 0 } }
+    @keyframes dd2TickDraw { to { stroke-dashoffset: 0 } }
+
+    /* ---- the tool bar */
+    .dd2-dock { background: #fff; box-shadow: 0 18px 34px -18px rgba(15,23,42,.5) }
+    .dd2-key { --c: #334155; transition: background-color .2s, color .2s }
+    .dd2-ico { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 9999px; background: #F1F5F9; background: color-mix(in srgb, var(--c) 14%, #fff); color: var(--c); transition: background-color .2s, color .2s, transform .2s cubic-bezier(.3,1.5,.5,1) }
+    .dd2-ico svg { width: 20px; height: 20px; overflow: visible; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round }
+    .dd2-ico .f { fill: color-mix(in srgb, var(--c) 26%, transparent) }
+    .dd2-key:hover:not(:disabled) .dd2-ico, .dd2-key[aria-pressed="true"] .dd2-ico, .dd2-key.is-demo .dd2-ico { background: var(--c); color: #fff; transform: scale(1.1) }
+    .dd2-key:hover:not(:disabled) .dd2-ico .f, .dd2-key[aria-pressed="true"] .dd2-ico .f, .dd2-key.is-demo .dd2-ico .f { fill: rgba(255,255,255,.3) }
+    .dd2-key.is-tool[aria-pressed="true"] { background: #F1F5F9; background: color-mix(in srgb, var(--c) 13%, #fff); color: var(--c) }
+
+    /* each icon acts out its tool: again and again under the pointer, once when it is picked or shown off */
+    .dd2-key:hover[data-tool="select"] .dd2-ico svg { animation: dd2Click .9s ease-in-out infinite }
+    .dd2-key:hover[data-tool="pin"] .dd2-ico svg { animation: dd2Drop .9s cubic-bezier(.3,1.6,.5,1) infinite }
+    .dd2-key:hover[data-tool="rect"] .dd2-ico .dr { stroke-dasharray: 64; animation: dd2Draw 1.2s ease-in-out infinite }
+    .dd2-key:hover[data-tool="arrow"] .dd2-ico svg { animation: dd2Shoot .8s ease-in-out infinite }
+    .dd2-key:hover[data-tool="pen"] .dd2-ico svg { animation: dd2Wag .7s ease-in-out infinite }
+    .dd2-key:hover[data-tool="pen"] .dd2-ico .sq { stroke-dasharray: 14; animation: dd2Write .7s linear infinite }
+    .dd2-key:hover[data-tool="compare"] .dd2-ico .sl { animation: dd2Slide 1s ease-in-out infinite }
+    .dd2-key:hover[data-tool="changes"] .dd2-ico svg { animation: dd2Twinkle .9s ease-in-out infinite }
+    .dd2-key:hover[data-tool="measure"] .dd2-ico svg { animation: dd2Slide 1s ease-in-out infinite }
+    .dd2-key[data-tool="measure"][aria-pressed="true"] { background: color-mix(in srgb, var(--c) 13%, #fff); color: var(--c) }
+    :is(.dd2-key.is-demo, .dd2-key.is-tool[aria-pressed="true"]):not(:hover)[data-tool="select"] .dd2-ico svg { animation: dd2Click .9s ease-in-out 1 }
+    :is(.dd2-key.is-demo, .dd2-key.is-tool[aria-pressed="true"]):not(:hover)[data-tool="pin"] .dd2-ico svg { animation: dd2Drop .9s cubic-bezier(.3,1.6,.5,1) 1 }
+    :is(.dd2-key.is-demo, .dd2-key.is-tool[aria-pressed="true"]):not(:hover)[data-tool="rect"] .dd2-ico .dr { stroke-dasharray: 64; animation: dd2Draw 1.2s ease-in-out 1 }
+    :is(.dd2-key.is-demo, .dd2-key.is-tool[aria-pressed="true"]):not(:hover)[data-tool="arrow"] .dd2-ico svg { animation: dd2Shoot .8s ease-in-out 1 }
+    :is(.dd2-key.is-demo, .dd2-key.is-tool[aria-pressed="true"]):not(:hover)[data-tool="pen"] .dd2-ico svg { animation: dd2Wag .7s ease-in-out 2 }
+    :is(.dd2-key.is-demo, .dd2-key.is-tool[aria-pressed="true"]):not(:hover)[data-tool="pen"] .dd2-ico .sq { stroke-dasharray: 14; animation: dd2Write .7s linear 2 }
+    .dd2-key.is-demo:not(:hover)[data-tool="compare"] .dd2-ico .sl { animation: dd2Slide 1s ease-in-out 1 }
+    .dd2-key.is-demo:not(:hover)[data-tool="changes"] .dd2-ico svg { animation: dd2Twinkle .9s ease-in-out 1 }
+    /* the plain keys move a little too */
+    .dd2-key .dd2-plain { transition: transform .2s cubic-bezier(.3,1.5,.5,1) }
+    .dd2-key:hover:not(:disabled) .dd2-plain.turn { animation: dd2Turn .5s cubic-bezier(.3,1.5,.5,1) }
+    .dd2-key:hover:not(:disabled) .dd2-plain.pulse { animation: dd2Pulse .5s ease-in-out }
+    .dd2-key:hover:not(:disabled) .dd2-plain.grow { transform: scale(1.22) }
+    .dd2-key:hover:not(:disabled) .dd2-plain.shift { transform: translateX(3px) }
+
+    /* ---- pins on the drawing */
+    .dd2-pin {
+      position: absolute; transform: translate(-50%, -50%); z-index: 2;
+      width: max(28px, 3.3%); aspect-ratio: 1; container-type: inline-size;
+      display: grid; place-items: center; border-radius: 9999px; border: 2px solid #fff; color: #fff; font-weight: 800; cursor: pointer;
+      background: var(--pin); box-shadow: 0 5px 12px -4px rgba(15,23,42,.55);
+      animation: dd2PinIn .5s cubic-bezier(.3,1.6,.5,1) both; transition: transform .2s cubic-bezier(.3,1.6,.5,1);
+    }
+    .dd2-pin > b { font-size: 46cqw; line-height: 1 }
+    .dd2-pin.is-open::before, .dd2-pin.is-open::after { content: ''; position: absolute; inset: -3px; border-radius: 9999px; border: 2px solid var(--pin); animation: dd2Ripple 2.2s ease-out infinite; pointer-events: none }
+    .dd2-pin.is-open::after { animation-delay: 1.1s }
+    .dd2-pin:hover, .dd2-pin.is-hot, .dd2-pin.is-picked { transform: translate(-50%, -50%) scale(1.25); z-index: 6 }
+    .dd2-pin.is-off { pointer-events: none }
+    .dd2-pin.is-off::before, .dd2-pin.is-off::after { animation: none; opacity: 0 }
+
+    .dd2-bubble { animation: dd2Bubble .3s cubic-bezier(.3,1.5,.5,1) both; pointer-events: none }
+    .dd2-lead { position: absolute; width: 2px; height: 26px; margin-left: -1px; background: repeating-linear-gradient(var(--pin) 0 4px, transparent 4px 7px); animation: dd2Dash .4s linear infinite; pointer-events: none }
+
+    /* ---- note cards */
+    .dd2-tilt { position: relative; transform: perspective(700px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform .22s cubic-bezier(.22,1,.36,1), box-shadow .22s, border-color .2s }
+    .dd2-tilt > .dd2-light { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .2s; background: radial-gradient(circle at var(--mx, 50%) var(--my, 0%), rgba(255,255,255,.7), rgba(255,255,255,0) 58%) }
+    .dd2-tilt:hover > .dd2-light { opacity: 1 }
+    .dd2-note { overflow: hidden }
+    .dd2-note::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--pin); transform: scaleY(0); transform-origin: top; transition: transform .3s cubic-bezier(.3,1.4,.5,1) }
+    .dd2-note:hover::before, .dd2-note.is-hot::before { transform: scaleY(1) }
+    .dd2-note:hover, .dd2-note.is-hot { box-shadow: 0 14px 22px -14px var(--pin) }
+    .dd2-note:hover .dd2-badge, .dd2-note.is-hot .dd2-badge { animation: dd2Drop .6s cubic-bezier(.3,1.6,.5,1) }
+    .dd2-badge { background: var(--pin) }
+
+    /* ---- the decision */
+    .dd2-go { transition: transform .2s cubic-bezier(.3,1.5,.5,1), background-color .15s }
+    .dd2-go:hover:not(:disabled) { transform: scale(1.03) }
+    .dd2-go:hover:not(:disabled) svg { animation: dd2Drop .6s cubic-bezier(.3,1.6,.5,1) }
+    .dd2-go:active:not(:disabled) { transform: scale(.97) }
+    .dd2-tick { position: absolute; left: 50%; top: 42%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 9999px; background: #059669; display: grid; place-items: center; z-index: 20; pointer-events: none; box-shadow: 0 20px 40px -12px rgba(5,150,105,.7); animation: dd2TickIn 1.1s cubic-bezier(.3,1.5,.5,1) forwards }
+    .dd2-tick svg { width: 64px; height: 64px; fill: none; stroke: #fff; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 30; stroke-dashoffset: 30; animation: dd2TickDraw .4s .2s forwards }
+    .dd2-dot { animation: dd2Dot 1.6s ease-in-out infinite }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dd2-pin, .dd2-pin::before, .dd2-pin::after, .dd2-bubble, .dd2-lead, .dd2-dot, .dd2-tick, .dd2-tick svg, .dd2-ico svg, .dd2-ico svg *, .dd2-plain, .dd2-badge, .dd2-go svg { animation: none !important }
+      .dd2-pin, .dd2-tilt, .dd2-ico, .dd2-plain, .dd2-go, .dd2-note::before { transition: none !important }
+      .dd2-tilt { transform: none !important }
+      .dd2-pin.is-open::before, .dd2-pin.is-open::after { display: none }
+      .dd2-tick svg { stroke-dashoffset: 0 }
+      .dd2-key:hover:not(:disabled) .dd2-ico, .dd2-key:hover:not(:disabled) .dd2-plain, .dd2-go:hover:not(:disabled) { transform: none }
+    }
+  `}</style>
+);
+
+/*
+  THE MEETING SCREEN'S MOTION AND DEPTH (owner, 24 Nov 2026: "no animations
+  on the page, it is too flat"). The same language as the drawing screen's
+  Living icons, on the dark screen: the three buttons a room ends with are
+  raised keys whose icons act (the pin drops, the tick draws itself, the
+  receiver rocks); panels have a lit top edge and a shadow; the page of the
+  drawing floats; a room's disc pops when it is decided; a new minute lands
+  with a flash; the round chip glows once its rounds are used. Colours are
+  the desk's: slate, emerald, amber, rose. Everything stops under reduced
+  motion. Needs DeskMotionStyles beside it for the shared keyframes.
+*/
+export const MeetMotionStyles = () => (
+  <style>{`
+    @keyframes dd2mIn { from { opacity: 0; transform: translateY(10px) scale(.985) } to { opacity: 1; transform: none } }
+    @keyframes dd2mGlow { 0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0) } 50% { box-shadow: 0 0 0 5px rgba(245,158,11,.22) } }
+    @keyframes dd2mFlash { 0% { background-color: rgba(16,185,129,.45) } 100% { background-color: rgba(30,41,59,.7) } }
+    @keyframes dd2mPop { 0% { transform: scale(.4) } 60% { transform: scale(1.18) } 100% { transform: none } }
+    @keyframes dd2mDrift { 0%, 100% { transform: translate3d(0,0,0) } 50% { transform: translate3d(3%, 4%, 0) } }
+    @keyframes dd2mRock { 0%, 100% { transform: rotate(0) } 25% { transform: rotate(-14deg) } 75% { transform: rotate(10deg) } }
+    @keyframes dd2mCall { 0%, 100% { box-shadow: inset 0 0 0 1px rgba(245,158,11,.25) } 50% { box-shadow: inset 0 0 0 2px rgba(245,158,11,.7) } }
+    @keyframes dd2mBar { from { transform: scaleY(0) } to { transform: scaleY(1) } }
+
+    .dd2m-bg { background: #020617; isolation: isolate }
+    .dd2m-bg::before, .dd2m-bg::after { content: ''; position: absolute; z-index: -1; border-radius: 9999px; filter: blur(70px); pointer-events: none; animation: dd2mDrift 18s ease-in-out infinite }
+    .dd2m-bg::before { left: -12%; top: -28%; width: 55%; height: 70%; background: rgba(16,185,129,.20) }
+    .dd2m-bg::after { right: -14%; bottom: -34%; width: 50%; height: 70%; background: rgba(245,158,11,.11); animation-delay: -9s }
+
+    .dd2m-panel { background: linear-gradient(180deg, rgba(30,41,59,.92), rgba(15,23,42,.94)); border: 1px solid rgba(148,163,184,.14); box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 24px 44px -28px rgba(0,0,0,.95) }
+    .dd2m-rise { animation: dd2mIn .45s cubic-bezier(.22,1,.36,1) both }
+    .dd2m-lift { transition: transform .2s cubic-bezier(.3,1.5,.5,1), box-shadow .2s, border-color .2s }
+    .dd2m-lift:hover { transform: translateY(-3px); border-color: rgba(52,211,153,.45); box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 26px 40px -24px rgba(16,185,129,.55) }
+
+    /* ---- the keys a room ends with */
+    .dd2m-key { position: relative; color: #fff; background: linear-gradient(180deg, var(--k1), var(--k)); box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 5px 0 var(--kd), 0 18px 26px -14px var(--k); transform: translateY(-2px); transition: transform .14s cubic-bezier(.3,1.5,.5,1), box-shadow .14s, filter .14s }
+    .dd2m-key:hover:not(:disabled) { transform: translateY(-4px); box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 7px 0 var(--kd), 0 24px 30px -14px var(--k); filter: brightness(1.06) }
+    .dd2m-key:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 0 var(--kd), 0 8px 14px -10px var(--k) }
+    .dd2m-key:disabled { filter: saturate(.5) }
+    .dd2m-key.amber { --k: #D97706; --k1: #F59E0B; --kd: #92400E }
+    .dd2m-key.emerald { --k: #059669; --k1: #10B981; --kd: #065F46 }
+    .dd2m-key.rose { --k: #E11D48; --k1: #F43F5E; --kd: #9F1239 }
+    .dd2m-key.slate { --k: #334155; --k1: #475569; --kd: #0F172A }
+    .dd2m-key .ico { display: inline-grid; transform-origin: 50% 100% }
+    .dd2m-key.amber:hover:not(:disabled) .ico, .dd2m-key.amber.is-on .ico { animation: dd2Drop .7s cubic-bezier(.3,1.6,.5,1) infinite }
+    .dd2m-key.rose:hover:not(:disabled) .ico { animation: dd2mRock .6s ease-in-out infinite }
+    .dd2m-key.slate:hover:not(:disabled) .ico { animation: dd2Wag .6s ease-in-out }
+    .dd2m-key.emerald .ico path, .dd2m-key.emerald .ico polyline { stroke-dasharray: 64; stroke-dashoffset: 0 }
+    .dd2m-key.emerald:hover:not(:disabled) .ico path, .dd2m-key.emerald:hover:not(:disabled) .ico polyline { animation: dd2Draw 1.1s ease-out infinite }
+
+    /* ---- the top bar's quiet keys */
+    .dd2m-soft { background: linear-gradient(180deg, #334155, #1E293B); box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 3px 0 #0B1220; transform: translateY(-1px); transition: transform .14s cubic-bezier(.3,1.5,.5,1), box-shadow .14s, filter .14s }
+    .dd2m-soft:hover:not(:disabled) { transform: translateY(-3px); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 5px 0 #0B1220; filter: brightness(1.12) }
+    .dd2m-soft:active:not(:disabled) { transform: translateY(1px); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 1px 0 #0B1220 }
+    .dd2m-soft:hover:not(:disabled) svg { animation: dd2Pulse .5s ease-in-out }
+    .dd2m-soft.go { background: linear-gradient(180deg, #10B981, #059669); box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 3px 0 #065F46, 0 14px 22px -12px #059669 }
+
+    /* ---- rooms, tabs, the page */
+    .dd2m-room { position: relative; transition: transform .2s cubic-bezier(.3,1.5,.5,1), background-color .2s }
+    .dd2m-room:hover { transform: translateX(4px) }
+    .dd2m-room.is-on { background: linear-gradient(90deg, rgba(16,185,129,.22), rgba(30,41,59,.9) 60%); box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 16px 26px -20px rgba(16,185,129,.8) }
+    .dd2m-room.is-on::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 4px; background: #34D399; transform-origin: 50% 50%; animation: dd2mBar .35s cubic-bezier(.3,1.5,.5,1) both }
+    .dd2m-disc { transition: background-color .2s }
+    .dd2m-disc.is-done { animation: dd2mPop .5s cubic-bezier(.3,1.6,.5,1) both; box-shadow: 0 6px 14px -4px currentColor }
+    .dd2m-tab { transition: transform .18s cubic-bezier(.3,1.5,.5,1), box-shadow .18s, background-color .15s }
+    .dd2m-tab:hover { transform: translateY(-2px) }
+    .dd2m-tab.is-on { transform: translateY(-2px); box-shadow: 0 10px 18px -10px rgba(255,255,255,.55) }
+    .dd2m-page { filter: drop-shadow(0 26px 30px rgba(0,0,0,.6)); animation: dd2mIn .5s cubic-bezier(.22,1,.36,1) both }
+    .dd2m-chip.is-over { animation: dd2mGlow 2.2s ease-in-out infinite }
+    .dd2m-min { animation: dd2mFlash 1.4s ease-out both, dd2mIn .4s cubic-bezier(.22,1,.36,1) both }
+    .dd2m-call { animation: dd2mCall 1.8s ease-in-out infinite }
+    .dd2m-stamp { position: absolute; left: 50%; top: 42%; min-width: 120px; height: 120px; margin: -60px 0 0 -60px; padding: 0 18px; border-radius: 9999px; background: #D97706; color: #fff; display: grid; place-items: center; z-index: 20; pointer-events: none; font-size: 54px; font-weight: 800; box-shadow: 0 20px 40px -12px rgba(217,119,6,.75); animation: dd2TickIn 1.1s cubic-bezier(.3,1.5,.5,1) forwards }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dd2m-bg::before, .dd2m-bg::after, .dd2m-rise, .dd2m-key .ico, .dd2m-key .ico *, .dd2m-soft svg, .dd2m-room.is-on::before, .dd2m-disc.is-done, .dd2m-page, .dd2m-chip.is-over, .dd2m-min, .dd2m-call, .dd2m-stamp { animation: none !important }
+      .dd2m-key, .dd2m-soft, .dd2m-room, .dd2m-tab, .dd2m-lift { transition: none !important }
+      .dd2m-key:hover:not(:disabled), .dd2m-soft:hover:not(:disabled), .dd2m-room:hover, .dd2m-tab:hover, .dd2m-lift:hover { transform: none }
+      .dd2m-stamp { display: none }
+    }
+  `}</style>
+);
+
+/** A card that leans a few degrees towards the mouse, with a soft light where the pointer is. Still on touch. */
+export const Tilt: React.FC<{ children: React.ReactNode; className?: string; style?: React.CSSProperties; max?: number; [attr: string]: unknown }> = ({ children, className = '', style, max = 3, ...rest }) => {
+  const el = useRef<HTMLDivElement>(null);
+  const move = (e: React.PointerEvent<HTMLDivElement>) => {
+    const node = el.current;
+    if (!node || e.pointerType !== 'mouse') return;
+    const r = node.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    node.style.setProperty('--ry', `${((x - 0.5) * 2 * max).toFixed(2)}deg`);
+    node.style.setProperty('--rx', `${((0.5 - y) * 2 * max).toFixed(2)}deg`);
+    node.style.setProperty('--mx', `${Math.round(x * 100)}%`);
+    node.style.setProperty('--my', `${Math.round(y * 100)}%`);
+  };
+  const leave = () => { el.current?.style.setProperty('--rx', '0deg'); el.current?.style.setProperty('--ry', '0deg'); };
+  return (
+    <div ref={el} className={`dd2-tilt ${className}`} style={style} onPointerMove={move} onPointerLeave={leave} {...rest}>
+      {children}
+      <span className="dd2-light" aria-hidden />
+    </div>
+  );
+};
+
+/*
+  THE DESK'S PAGES IN MOTION (owner, 25 Nov 2026: "can we add some
+  animations"; DESIGN.md, "Design Desk 2.0 pages in motion"). Home, the rail
+  and the project list, in the same language as the drawing screen and the
+  meeting: the welcome band has two slow lights behind it, the drawing in
+  "Start here" floats and its button's arrow leans forward, the steps draw
+  themselves and "your turn" beats, a row's drawing lifts under the pointer,
+  the rail's ring and the projects' bars fill, and a section rises as it is
+  scrolled to (Reveal). Colours are the desk's: emerald, amber, slate.
+  Everything stops under reduced motion.
+*/
+export const HomeMotionStyles = () => (
+  <style>{`
+    @keyframes dd2hDrift { 0%, 100% { transform: translate3d(0,0,0) scale(1) } 50% { transform: translate3d(7%, 9%, 0) scale(1.1) } }
+    @keyframes dd2hRise { from { opacity: 0; transform: translateY(18px) } to { opacity: 1; transform: none } }
+    @keyframes dd2hGrow { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+    @keyframes dd2hRing { from { stroke-dashoffset: var(--len) } to { stroke-dashoffset: var(--off) } }
+    @keyframes dd2hBeat { 0% { box-shadow: 0 0 0 0 rgba(245,158,11,.55) } 70%, 100% { box-shadow: 0 0 0 10px rgba(245,158,11,0) } }
+    @keyframes dd2hLean { 0%, 100% { transform: translateX(0) } 50% { transform: translateX(4px) } }
+    @keyframes dd2hSheen { 0% { transform: translateX(-140%) skewX(-20deg) } 55%, 100% { transform: translateX(320%) skewX(-20deg) } }
+    @keyframes dd2hFloat { 0%, 100% { transform: translateY(0) rotate(-1deg) } 50% { transform: translateY(-5px) rotate(.6deg) } }
+    @keyframes dd2hInk { to { stroke-dashoffset: 0 } }
+    @keyframes dd2hPop { 0% { transform: scale(.5) } 60% { transform: scale(1.12) } 100% { transform: none } }
+
+    /* ---- the welcome band */
+    .dd2h-band { position: relative; isolation: isolate }
+    .dd2h-band::before, .dd2h-band::after { content: ''; position: absolute; z-index: -1; border-radius: 9999px; filter: blur(64px); pointer-events: none; animation: dd2hDrift 16s ease-in-out infinite }
+    .dd2h-band::before { right: -8%; top: -55%; width: 46%; height: 130%; background: rgba(16,185,129,.38) }
+    .dd2h-band::after { left: 18%; bottom: -70%; width: 40%; height: 110%; background: rgba(245,158,11,.16); animation-delay: -8s }
+    .dd2h-start { box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 26px 40px -30px rgba(0,0,0,.9); animation: dd2hRise .55s cubic-bezier(.22,1,.36,1) .08s both }
+    .dd2h-thumb { display: block; animation: dd2hFloat 6s ease-in-out infinite; filter: drop-shadow(0 14px 16px rgba(0,0,0,.45)); transition: scale .25s cubic-bezier(.3,1.5,.5,1) }
+    button:hover > .dd2h-thumb { scale: 1.05 }
+    .dd2h-go { position: relative; overflow: hidden; transition: scale .2s cubic-bezier(.3,1.5,.5,1), background-color .15s, box-shadow .2s; box-shadow: 0 14px 24px -14px rgba(0,0,0,.7) }
+    .dd2h-go:hover:not(:disabled) { scale: 1.04 }
+    .dd2h-go svg { animation: dd2hLean 1.5s ease-in-out infinite }
+    .dd2h-go::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 34%; background: linear-gradient(90deg, rgba(16,185,129,0), rgba(16,185,129,.22), rgba(16,185,129,0)); animation: dd2hSheen 3.6s ease-in-out infinite; pointer-events: none }
+
+    /* ---- the numbered steps */
+    .dd2h-line { transform-origin: 0 50%; animation: dd2hGrow .6s cubic-bezier(.22,1,.36,1) both; animation-delay: calc(var(--i, 0) * 150ms) }
+    .dd2h-step { animation: dd2hPop .45s cubic-bezier(.3,1.6,.5,1) both; animation-delay: calc(var(--i, 0) * 150ms + 80ms) }
+    .dd2h-now { animation: dd2hPop .45s cubic-bezier(.3,1.6,.5,1) both, dd2hBeat 1.9s ease-out 1s infinite; animation-delay: calc(var(--i, 0) * 150ms + 80ms), 1s }
+
+    /* ---- a drawing's row, a project's row */
+    .dd2h-row .dd2h-sheet, .dd2h-row .dd2h-mark { transition: transform .25s cubic-bezier(.3,1.5,.5,1) }
+    .dd2h-row:hover .dd2h-sheet { transform: translateY(-3px) rotate(-1.5deg) scale(1.05) }
+    .dd2h-row:hover .dd2h-mark { transform: rotate(-6deg) scale(1.08) }
+    .dd2h-row .dd2h-chev { transition: transform .2s cubic-bezier(.3,1.5,.5,1), color .15s }
+    .dd2h-row:hover .dd2h-chev { transform: translateX(4px); color: #059669 }
+    .dd2h-row button svg { transition: transform .2s cubic-bezier(.3,1.5,.5,1) }
+    .dd2h-row:hover button:not(:disabled) > svg:first-child { transform: translateX(3px) }
+    .dd2h-bar { overflow: hidden }
+    .dd2h-bar > i { display: block; height: 100%; border-radius: inherit; transform-origin: 0 50%; animation: dd2hGrow .9s cubic-bezier(.22,1,.36,1) .15s both }
+    .dd2h-pop { animation: dd2hPop .45s cubic-bezier(.3,1.6,.5,1) both }
+    .dd2h-chip { transition: transform .18s cubic-bezier(.3,1.5,.5,1), border-color .15s, box-shadow .2s }
+    .dd2h-chip:hover { transform: translateY(-2px); border-color: #10B981; box-shadow: 0 12px 18px -14px rgba(5,150,105,.7) }
+
+    /* ---- the rail */
+    .dd2h-rail { background: linear-gradient(180deg, #0C1F1A, #0A1915); box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 24px 40px -30px rgba(12,31,26,.9) }
+    .dd2h-tile { background: linear-gradient(180deg, rgba(255,255,255,.1), rgba(255,255,255,.04)); box-shadow: inset 0 1px 0 rgba(255,255,255,.09) }
+    .dd2h-ring .val { stroke-dasharray: var(--len); stroke-dashoffset: var(--off); animation: dd2hRing 1.2s cubic-bezier(.22,1,.36,1) .2s both }
+    .dd2h-proj { transition: transform .18s cubic-bezier(.3,1.5,.5,1), background-color .15s }
+    .dd2h-proj:hover { transform: translateX(3px) }
+    .dd2h-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.22) transparent }
+    .dd2h-fill { container-type: size }
+    .dd2h-plan { display: none; margin: 12px 0 4px }
+    .dd2h-plan path { fill: none; stroke: rgba(110,231,183,.42); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: dd2hInk 1.6s cubic-bezier(.4,0,.2,1) forwards; animation-delay: calc(var(--i, 0) * 320ms + 600ms) }
+    @container (min-height: 190px) { .dd2h-plan { display: block } }
+
+    /* ---- a section that rises as it is scrolled to */
+    .dd2h-wait { opacity: 0; transform: translateY(18px) }
+    .dd2h-show { animation: dd2hRise .55s cubic-bezier(.22,1,.36,1) both }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dd2h-band::before, .dd2h-band::after, .dd2h-start, .dd2h-thumb, .dd2h-go svg, .dd2h-go::after, .dd2h-line, .dd2h-step, .dd2h-now, .dd2h-bar > i, .dd2h-pop, .dd2h-ring .val, .dd2h-show { animation: none !important }
+      .dd2h-go, .dd2h-thumb, .dd2h-row .dd2h-sheet, .dd2h-row .dd2h-mark, .dd2h-row .dd2h-chev, .dd2h-row button svg, .dd2h-chip, .dd2h-proj { transition: none !important }
+      .dd2h-row:hover .dd2h-sheet, .dd2h-row:hover .dd2h-mark, .dd2h-row:hover .dd2h-chev, .dd2h-row:hover button > svg, .dd2h-chip:hover, .dd2h-proj:hover { transform: none !important }
+      .dd2h-go:hover:not(:disabled), button:hover > .dd2h-thumb { scale: 1 }
+      .dd2h-wait { opacity: 1; transform: none }
+      .dd2h-plan path { animation: none !important; stroke-dashoffset: 0 }
+    }
+  `}</style>
+);
+
+/** A section that rises into place the first time it is scrolled to. Already on screen, or with no way to tell, it just shows. */
+export const Reveal: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => {
+  const el = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<'plain' | 'wait' | 'show'>('plain');
+  useEffect(() => {
+    const node = el.current;
+    if (!node || typeof IntersectionObserver !== 'function' || typeof window.matchMedia !== 'function') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (node.getBoundingClientRect().top < window.innerHeight) return;
+    setState('wait');
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) { setState('show'); io.disconnect(); }
+    }, { rootMargin: '0px 0px -6% 0px' });
+    io.observe(node);
+    return () => io.disconnect();
+  }, []);
+  return <div ref={el} className={`${className} ${state === 'wait' ? 'dd2h-wait' : state === 'show' ? 'dd2h-show' : ''}`}>{children}</div>;
+};

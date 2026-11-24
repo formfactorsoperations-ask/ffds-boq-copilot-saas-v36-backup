@@ -408,6 +408,55 @@ export function reviewDraft(
   return { ...base, kind: 'design.returned', level: 'needs', title: `${sheet} came back with changes`, line: p.reason ? quote(p.reason) : kind === 'clientReturn' ? 'Changes the client asked for' : `Returned by ${p.actor}`, action: 'See the marks', to };
 }
 
+/* ── Design Desk reminders ───────────────────────────────────────────────── */
+
+/**
+ * A reminder to whoever is holding a drawing (lib/deskSmart.ts: heldBy): the
+ * Design Head when it is waiting for a check, its designer when it is waiting
+ * for changes or to be sent. `by` is the person who pressed Nudge.
+ */
+export function nudgeDraft(p: { projectId: string; projectName: string | null; sheet: string; who: 'head' | 'designer'; days: number; ask: string; designerEmail?: string | null; by?: string | null; sheetId?: string }): Draft | null {
+  if (p.who === 'designer' && !p.designerEmail) return null;
+  const sheet = clip(p.sheet || 'A drawing', 60);
+  const waited = p.days >= 1 ? `${p.days} day${p.days === 1 ? '' : 's'}` : 'since today';
+  return {
+    kind: 'design.nudge', area: 'design', level: 'needs', projectId: p.projectId, projectName: p.projectName, route: 'design-review', group: null,
+    /* The sheet's own ref, so the reminder is settled with the sheet's other notes when it moves on. */
+    ref: p.sheetId ? refs.sheet(p.projectId, p.sheetId) : null,
+    actor: p.by || null,
+    title: `${sheet} has waited ${waited} for you`,
+    line: p.by ? `${p.by} sent a reminder: please ${p.ask}` : `A reminder from the desk: please ${p.ask}`,
+    action: 'Open it',
+    to: p.who === 'head' ? { roles: ['Design Head'] } : { emails: [inboxKey(p.designerEmail as string)] },
+  };
+}
+
+/* ── Design Desk room messages ───────────────────────────────────────────── */
+
+/**
+ * A message written in a room of a project (lib/roomMessages.ts). It goes to
+ * the Design Head and the Ops Director, and to `people`: the Designers, Client
+ * Relations and Site Supervisors the server's copies list for this project,
+ * who are the same people the security rules let read it. It opens the
+ * project's Drawings, where every one of them can reach the thread.
+ */
+export function roomMessageDraft(
+  m: { projectId: string; projectName: string | null; room: string; text: string; actor: string },
+  people: string[],
+): Draft | null {
+  const text = String(m.text ?? '').trim();
+  if (!text || !m.projectId) return null;
+  const room = !m.room || m.room === 'General / Project-Wide' ? 'Whole home' : clip(m.room, 40);
+  const actor = clip(m.actor || 'Someone', 40);
+  return {
+    kind: 'design.roomMessage', area: 'design', level: 'update',
+    title: `${actor} wrote in ${room}`, line: quote(text),
+    projectId: m.projectId, projectName: m.projectName, route: 'drawing-tracker', action: null, actor,
+    group: `room:${m.projectId}:${m.room || ''}`,
+    to: { roles: ['Design Head', 'Ops Director'], emails: people.map(inboxKey).filter(Boolean) },
+  };
+}
+
 /* ── Site ────────────────────────────────────────────────────────────────── */
 
 export function siteDraft(action: any, p: { projectId: string; projectName: string | null; actor: string; blockerId?: string | null }): Draft | null {

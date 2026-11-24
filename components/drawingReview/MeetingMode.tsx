@@ -47,7 +47,7 @@ interface Props {
   onExit: (to?: 'foryou') => void;
 }
 
-type Draft = { shape: MarkShape; page: number; text: string };
+export type Draft = { shape: MarkShape; page: number; text: string };
 
 /* The same per-drawing rotation the review screen remembers, so a sheet turned there is turned here too. */
 const turnKey = (projectId: string, drawingId: string) => `ffds_dr_turn_${projectId}_${drawingId}`;
@@ -657,9 +657,11 @@ interface ViewProps {
   planMode: PlanMode;
   size: { w: number; h: number };
   scroll: { x: number; y: number };
+  /** The layout plan turned for reading, when the presenter's screen shows it turned (the new meeting screen). */
+  planTurn?: Turn;
 }
 
-const ClientView: React.FC<ViewProps> = ({ projectName, look, meeting: m, step, at, room, sh, sheetIndex, page, pages, zoom, turn, marks, draft, changes, planMode, size, scroll }) => {
+export const ClientView: React.FC<ViewProps> = ({ projectName, look, meeting: m, step, at, room, sh, sheetIndex, page, pages, zoom, turn, marks, draft, changes, planMode, size, scroll, planTurn }) => {
   const head = (
     <div className="flex h-[68px] shrink-0 items-center gap-3 border-b border-[#E4E4DE] bg-white px-6">
       <ProjectMark code={look.code} color={look.color} size={38} />
@@ -714,7 +716,7 @@ const ClientView: React.FC<ViewProps> = ({ projectName, look, meeting: m, step, 
           <aside className="flex shrink-0 flex-col gap-3 overflow-auto" style={{ width: colW }}>
             {plan && m.layout && (
               <div className="rounded-[16px] border border-[#E4E4DE] bg-white p-3">
-                <LayoutPanel sheet={m.layout} room={room.room} box={box} maxWidth={colW - 26} compact={!side} />
+                <LayoutPanel sheet={m.layout} room={room.room} box={box} maxWidth={colW - 26} compact={!side} turn={planTurn} />
               </div>
             )}
             {list && (

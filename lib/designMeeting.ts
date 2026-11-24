@@ -44,6 +44,22 @@ export interface MeetingChange {
   page: number;
   shape: MarkShape;
   text: string;
+  /** What the change would do to the BOQ, as the studio estimated it in the meeting (leads only). Never shown to the client. */
+  cost?: ChangeCost | null;
+}
+
+/**
+ * The studio's estimate of what a client's change does to the BOQ: nothing,
+ * more or less, with a rounded figure when one is known. It is an estimate a
+ * person typed in the meeting and confirms before anything reaches the
+ * client's bill; nothing is priced from it by itself.
+ */
+export interface ChangeCost {
+  kind: 'none' | 'more' | 'less';
+  /** Rupees, before GST, always positive; null when only the direction is known. */
+  amount: number | null;
+  /** What on the BOQ it touches, in a few words. */
+  note: string | null;
 }
 
 export type ChargeStatus = 'to_bill' | 'billed' | 'waived';
@@ -627,9 +643,43 @@ export function cleanChanges(raw: unknown, sheets: Pick<MeetingSheet, 'drawingId
     const text = cleanText((c as any).text, 500);
     /* Pins, boxes and arrows: what a meeting records. A sketch's points cannot be stored inside a meeting. */
     if (!shape || shape.t === 'pen' || !text) continue;
-    out.push({ n: out.length + 1, drawingId: String((c as any).drawingId), page: Math.max(0, Math.min(500, Math.floor(Number((c as any).page) || 0))), shape, text });
+    const cost = cleanCost((c as any).cost);
+    out.push({ n: out.length + 1, drawingId: String((c as any).drawingId), page: Math.max(0, Math.min(500, Math.floor(Number((c as any).page) || 0))), shape, text, ...(cost ? { cost } : {}) });
   }
   return out;
+}
+
+/** A change's cost estimate, checked: a direction, a rounded figure up to one crore, and a short note. */
+export function cleanCost(raw: unknown): ChangeCost | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const kind = (raw as any).kind;
+  if (kind !== 'none' && kind !== 'more' && kind !== 'less') return null;
+  const n = Number((raw as any).amount);
+  const amount = kind === 'none' || (raw as any).amount === null || (raw as any).amount === undefined || (raw as any).amount === '' || !Number.isFinite(n) || n <= 0 || n > 10_000_000 ? null : Math.round(n);
+  const note = cleanText((raw as any).note, 120) || null;
+  return { kind, amount, note };
+}
+
+/** A cost estimate in a line: "About +₹6,500 on the BOQ (dimmer driver and switch)". */
+export function costLine(c: ChangeCost | null | undefined): string {
+  if (!c) return '';
+  const what = c.note ? ` (${c.note})` : '';
+  if (c.kind === 'none') return `No cost change on the BOQ${what}`;
+  const sign = c.kind === 'more' ? '+' : '−';
+  return c.amount ? `About ${sign}₹${c.amount.toLocaleString('en-IN')} on the BOQ${what}` : `${c.kind === 'more' ? 'Costs more' : 'Costs less'} on the BOQ, figure to follow${what}`;
+}
+
+/** The estimates of several changes added up: more minus less, and how many have no figure yet. */
+export function costTotal(changes: Pick<MeetingChange, 'cost'>[]): { net: number; open: number; any: boolean } {
+  let net = 0, open = 0, any = false;
+  changes.forEach((c) => {
+    if (!c.cost) return;
+    any = true;
+    if (c.cost.kind === 'none') return;
+    if (!c.cost.amount) { open++; return; }
+    net += c.cost.kind === 'more' ? c.cost.amount : -c.cost.amount;
+  });
+  return { net, open, any };
 }
 
 export const cleanFee = (v: unknown): number | null => {
@@ -702,10 +752,14 @@ export interface PortalDesignMeeting {
 
 export const MAX_PORTAL_MEETINGS = 40;
 
-/** Closed meetings, newest first, reduced to what the client may see. */
+/**
+ * Closed meetings, newest first, reduced to what the client may see. A meeting
+ * that ended with no room decided recorded nothing for the client, so it is
+ * not in their record.
+ */
 export function portalDesignRecord(meetings: DesignMeeting[]): PortalDesignMeeting[] {
   return meetings
-    .filter((m) => m.state === 'CLOSED')
+    .filter((m) => m.state === 'CLOSED' && m.rooms.some((r) => r.outcome))
     .sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0))
     .slice(0, MAX_PORTAL_MEETINGS)
     .map((m) => ({

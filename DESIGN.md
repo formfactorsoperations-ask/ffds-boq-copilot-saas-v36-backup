@@ -87,7 +87,8 @@ People, the Ops Desk and Pricing keep their approved motion by passing their own
 and fonts of their own in every app file. A file may only go down from the counts recorded on
 16 Nov 2026 (`designGuard.baseline.json`), and a new file starts at zero. After cleaning a file up,
 run `UPDATE_DESIGN_BASELINE=1 npx vitest run src/tests/designGuard.test.ts`. Design Desk
-(`components/drawingReview`) keeps its own colours.
+(`components/drawingReview`) keeps its own colours. Design Desk 2.0 (`components/designDesk2`) has
+its own section below.
 
 ## Modals
 
@@ -108,6 +109,160 @@ Use only the motion classes that already exist; do not write new keyframes.
 - Figures count up with `CountUp`. Loading states use `Dot live` or `hud-scanning`.
 - Modals use `phd-scrim` and `phd-pop`. Small hover lifts use `phd-lift`.
 - Reduced motion is already handled in the CSS; do not add motion that bypasses it.
+
+## Design Desk 2.0 (mockup approved 24 Nov 2026)
+
+The owner approved a new look for the Design Desk (`components/designDesk2`), from the mockup
+"Design Desk, the easy flow". Designers are its main users, so it is plainer and larger than the
+console screens. It is built in phases behind a studio switch (the studio's `designDesk` field,
+read by `DesignDeskSwitch`); today's desk (`components/drawingReview`) stays until each phase is
+accepted. The switch is one row in Studio settings > Data & integrations
+(`components/studio/DesignDeskSetting.tsx`, the kit's `Segmented`), saved with the rest of the
+settings draft. Neither desk draws a switch or a way back: people at work see one desk.
+
+What the new desk may do that a console screen may not:
+- **A dark green rail** (`components/designDesk2/rail.tsx`, `#0C1F1A`) with Home, All drawings and
+  Meetings. The active item is `bg-emerald-600 text-white hud-rail-active`; the others are
+  `text-emerald-100`. On a wide screen it is a full-height side panel that stays in view while the
+  page scrolls, and under the three pages it carries, in this order: a ring with how many of the
+  drawings are approved, three small counts (Need you, Being checked, Being changed), "Projects with
+  drawings" (one click opens a project; the open one is `bg-white/15`), a line-drawn plan in what
+  room is left, and Upload drawings for someone who uploads. On a phone it is a row of tabs above the
+  page and the rest is left out. **Do not use CSS `sticky` for it:** the app's root has
+  `overflow-x: hidden`, so nothing sticks to the window; `useRailFollow` pins it instead.
+- **Home's project list** (`ProjectList.tsx`) is one list, a line per project that has drawings, in
+  fixed columns: mark, name and client, "n of m approved" with a bar, one tag (amber "n need you",
+  emerald "All approved" or slate "Nothing for you"), an arrow. Projects with no drawing are folded
+  under one line ("14 projects with no drawings yet") and open as small tiles. From nine projects up
+  there is a "Find a project" box. Do not go back to a grid of equal cards.
+- **Emerald for the main action** (`bg-emerald-600`, hover `emerald-700`) and for done steps, in
+  place of the brand blue. **Amber for "your turn" and the client.** Rose for late. Slate for the
+  rest. No other colours.
+- **Larger controls and type:** buttons are 44px tall (48px for the one in "Start here"), names are
+  `text-base font-bold`, the sentence under a name is `text-sm text-slate-700`.
+- **The welcome band** on Home: a `from-[#0C1F1A] to-emerald-900` gradient with "Start here" inside.
+- **Its own parts** (`components/designDesk2/parts.tsx`: `Btn`, `Card`, `Tag`, `StepTrack`,
+  `Empty`) instead of the screen kit, because of the size and the colour.
+
+Room messages (`components/roomMessages`) are one thread in two looks. Beside a room's drawings on
+the new desk, `RoomThread` takes the desk's emerald (`tone="desk"`). In a project's Drawings tab the
+"Room messages" button is the kit's `Button`, and its panel follows the modal rules above with the
+brand blue (`tone="console"`), because that screen is a console screen.
+
+What stays as everywhere else:
+- The fonts. The mockup's fonts were not adopted (owner, 24 Nov 2026): the desk uses the app's own.
+- The motion classes on its pages: `hud-panel-in`, `hud-row-in`, `hud-swap`, `hud-rail-active`,
+  `phd-lift`, plus the desk's own `dd2h-*` set (see "Design Desk 2.0 pages in motion" below). The
+  drawing screen has more: see "Design Desk 2.0 motion" below.
+- The guard: `designGuard.test.ts` counts the new folder like any other, and it is at zero.
+- The words: a drawing's place is one plain sentence (`lib/designDesk2.ts`, `whereLine`), its steps
+  are numbered (`stepsOf`), and it shows one main button (`mainAction`).
+
+### Design Desk 2.0 pages in motion (owner, 25 Nov 2026)
+
+The owner asked for animation on the desk's pages. It lives in `HomeMotionStyles`
+(`components/designDesk2/motion.tsx`, classes `dd2h-*`), mounted once by the desk, and is for the
+desk only. Same fonts; emerald, amber and slate.
+
+- **The welcome band** (`dd2h-band`): two slow lights drift behind it. The drawing in "Start here"
+  floats (`dd2h-thumb`); its button's arrow leans forward and a light passes over it (`dd2h-go`).
+- **The numbered steps**: the done line draws itself (`dd2h-line`), each done step pops in
+  (`dd2h-step`), and the current step beats amber when it is the person's turn (`dd2h-now`).
+- **A row** (`dd2h-row`): under the pointer the drawing lifts and tips, the project's mark tips, and
+  the arrow slides. A project's approved bar fills from empty (`dd2h-bar`).
+- **The rail**: the ring draws to its value, the counts use `CountUp`, the Home count pops
+  (`dd2h-pop`), a project slides under the pointer (`dd2h-proj`), and the plan at the bottom draws
+  itself wall by wall once (`dd2h-plan`), only when there is room for it.
+- **Sections below the fold** rise the first time they are scrolled to (`Reveal`); a section already
+  on screen, or a browser that cannot tell, just shows it.
+- Everything stops under `prefers-reduced-motion`, and nothing is hidden waiting for an animation.
+
+### Design Desk 2.0 meetings (Phase 2, from the same approved mockup)
+
+The Meetings page (`MeetingsPage.tsx`) is a desk page like Home: `Card`, `SectionTitle`, `Btn`,
+`Tag`, three numbered steps in emerald discs, and the resume band in the welcome band's gradient.
+
+The meeting screen (`MeetingScreen.tsx`) is the one **dark** screen of the desk, as in the mockup:
+it covers the app (`fixed inset-0 z-[110]`, under the dialogs and toasts at 120) so the drawing is
+the brightest thing in the room or on a shared screen.
+- Background `bg-slate-950`, panels `bg-slate-900`, rows and quiet buttons `bg-slate-800`, text
+  `slate-100` to `slate-400`. Only slate, with the desk's three meanings on top: **emerald** the
+  client is happy, **amber** a change the client asked for, **rose** the clock and Finish.
+- The bar at the bottom holds the three things a room ends with, 48px tall: Add a change (amber),
+  Client is happy with this room (emerald), Finish the meeting (rose).
+- The change box, the finishing page and "Meeting saved" are light, in the desk's own parts.
+- **Motion and depth** (owner, 24 Nov 2026, after trying it: "no animations on the page, it is too
+  flat"). The drawing screen's Living icons language, on the dark screen
+  (`MeetMotionStyles` in `components/designDesk2/motion.tsx`, classes `dd2m-*`):
+  - the three buttons a room ends with are **raised keys** (`dd2m-key amber|emerald|rose`): a lit
+    top edge, a darker base under them, they lift under the pointer and press down on a click, and
+    their icons act (the pin drops, the tick draws itself, the receiver rocks). The pin keeps
+    dropping while a change is being placed;
+  - panels (`dd2m-panel`) have a lit top edge and a shadow, and rise in one after another; the
+    background has two slow glows, emerald and amber (`dd2m-bg`);
+  - the room being shown has a green bar and glow, a room's disc pops when it is decided, the open
+    tab is raised, the page of the drawing rises in when it changes;
+  - **the client's changes are living pins** on the drawing (the drawing screen's `dd2-pin`, in
+    amber): they pop in and ripple, and hovering one springs the client's words out beside it and
+    lights its card in the list;
+  - deciding a room shows the drawing screen's big tick (the client is happy) or the number of
+    changes in an amber disc (`dd2m-stamp`) before the next room opens;
+  - a new minute lands with a green flash; the round chip glows once a room's rounds are used; the
+    client window card pulses amber until the window is open.
+  Same fonts, same four colours. Everything stops under reduced motion.
+
+What the client is shown has not changed: the client's window is today's `ClientView`
+(`components/drawingReview/MeetingMode.tsx`), reused as it is. The dialogs the meeting shares with
+today's desk (sign, who presents, room marks, the approval email) keep their layout and take the
+desk's emerald through `--dd-accent` (`DESK_ACCENT` in `meetingBits.tsx`); on today's desk they are
+indigo as before.
+
+### Design Desk 2.0 smart features (Phase 3A)
+
+The smart features that need no AI are desk parts like the rest (`components/designDesk2/smart.tsx`,
+`measure.tsx`), in the desk's colours:
+- **Worth knowing** on Home: `Card` rows with a 44px tinted tile, a bold line and one sentence,
+  and at most one `Btn`. Rose for a site date at risk, amber for money and for a missing drawing.
+  `phd-lift` on hover, `hud-panel-in` one after another.
+- **Site date**: a rose `Tag` with the hard-hat icon on a drawing's row only when the date is at
+  risk (amber when the drawing is approved and only needs sending); on the drawing screen one line
+  under "Where it is now", rose, amber or slate.
+- **Nudge**: a quiet `Btn` with the bell on a row, a plain one on the drawing screen. After it is
+  pressed it reads "Reminded" with a tick. Nothing is reminded by itself and nothing goes to
+  WhatsApp (owner, 24 Nov 2026: held back for now).
+- **Measure**: its key joins the drawing screen's tool bar with a ruler that slides under the
+  pointer (`LiveIcon tool="measure"`). Lines and their labels on the drawing are the brand blue
+  `#3D52A0`, so they cannot be taken for notes (rose) or the client's changes (amber). The strip
+  above the tool bar is white with `hud-panel-in`.
+- **What the AI says is always marked as the AI's** (`components/designDesk2/ai.tsx`). The named
+  changes are an amber card under "Where it is now" with a sparkle icon and "Named by AI"; a hint
+  beside a note is a small chip that starts "AI:" (emerald for looks fixed, rose for looks the
+  same, nothing when it cannot tell); a repeat mistake is a rose card with "Found by AI". They sit
+  beside the Design Head's own buttons and never replace one.
+- The tool bar stays one row from 1280px: tool names show only on the tool in hand below 1800px,
+  and Compare, Changes and Measure are icons until they are in use.
+
+### Design Desk 2.0 motion: Living icons (chosen 24 Nov 2026)
+
+The owner asked for animation on the drawing screen's tools, notes and review panel, was shown four
+live options (Clay, Keycaps, Living icons, Glow dock) and chose **Living icons**. It lives in
+`components/designDesk2/motion.tsx` and is for the drawing screen only. Same fonts; the colours are
+the desk's own (rose notes, emerald done, amber client and changes, slate, the brand blue).
+
+- **Every tool's icon acts out what the tool does** (`LiveIcon`, `dd2-key`, `dd2-ico`): Select
+  clicks, the pin drops, the box draws its outline, the arrow shoots, the pen writes, Compare slides,
+  Changes twinkles. An icon sits in a soft round tile of its own colour, which fills when it is
+  under the pointer or in hand. It moves again and again under the pointer, and once when it is
+  picked. The first time a drawing is opened in a visit, each icon acts once in turn. The icons are
+  drawn in `motion.tsx`, because a stock icon's parts cannot move on their own.
+- **Pins** (`dd2-pin`): a note's number pops in. An open note sends out ripples; a fixed one is still.
+  It grows under the pointer.
+- **The note on hover** (`dd2-bubble`, `dd2-lead`): springs out of its pin on a moving dotted line.
+- **Pin and card together:** hovering a pin lights its card in the list; hovering a card grows its pin.
+- **Note cards** (`Tilt`, `dd2-note`): lean a little, grow a coloured edge and bounce their number.
+- **Approve** (`dd2-go`, `dd2-tick`): a big tick draws itself over the drawing before the next one
+  opens. "Your turn" has a breathing dot (`dd2-dot`).
+- Everything stops under `prefers-reduced-motion`, and nothing tilts on touch.
 
 ### Playground library motion (approved 20 Nov 2026)
 

@@ -80,6 +80,8 @@ export interface ReviewSummary {
    * that the Design Head never marked so, is the client's.
    */
   audienceChecked?: boolean;
+  /** When the holder was last reminded (the daily reminder or the Nudge button). Written by the drawingReview function only. */
+  nudgedAt?: number | null;
   updatedAt: number;
 }
 
@@ -156,7 +158,7 @@ export interface ReviewMark {
 }
 
 export interface ReviewEvent {
-  type: 'uploaded' | 'submitted' | 'withdrawn' | 'returned' | 'approved' | 'audience' | 'removed' | 'client' | 'clientKept';
+  type: 'uploaded' | 'submitted' | 'withdrawn' | 'returned' | 'approved' | 'audience' | 'removed' | 'client' | 'clientKept' | 'nudge';
   at: number;
   by: ReviewPerson;
   versionNo?: number;

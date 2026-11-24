@@ -130,7 +130,7 @@ export default function ClientSign({ orgId, projectId, meeting, onClose, onSigne
           <label className="flex flex-col gap-1 text-[13px] font-bold">
             Your name
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="name" placeholder="As you would sign it"
-              className="min-h-[44px] rounded-[10px] border border-[#DCDCD5] px-3 text-[15px] font-medium outline-none focus:border-[#4146C8] focus:shadow-[0_0_0_3px_rgba(65,70,200,0.15)]" />
+              className="min-h-[44px] rounded-[10px] border border-[#DCDCD5] px-3 text-[15px] font-medium outline-none focus:border-[color:var(--dd-accent,#4146C8)] focus:shadow-[0_0_0_3px_var(--dd-accent-ring,rgba(65,70,200,0.15))]" />
           </label>
           <div>
             <div className="mb-1 flex items-center justify-between text-[13px] font-bold">

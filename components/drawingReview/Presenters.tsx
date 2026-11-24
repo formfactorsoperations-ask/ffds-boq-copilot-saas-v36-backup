@@ -81,7 +81,7 @@ export default function Presenters({ orgId, projectId, projectName, drawings, de
   const box = (on: boolean, disabled: boolean, label: string, onClick: () => void) => (
     <button type="button" role="checkbox" aria-checked={on} aria-label={label} disabled={disabled} onClick={onClick}
       className="mx-auto grid h-9 w-9 place-items-center rounded-[10px] border transition disabled:opacity-35"
-      style={on ? { background: '#4146C8', borderColor: '#4146C8', color: '#fff' } : { background: '#fff', borderColor: '#DCDCD5' }}>
+      style={on ? { background: 'var(--dd-accent,#4146C8)', borderColor: 'var(--dd-accent,#4146C8)', color: '#fff' } : { background: '#fff', borderColor: '#DCDCD5' }}>
       {on && <Check size={16} strokeWidth={3} />}
     </button>
   );
@@ -142,7 +142,7 @@ export default function Presenters({ orgId, projectId, projectName, drawings, de
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[#EEEEEA] bg-[#FBFBF8] px-6 py-3">
           <span className="mr-auto text-[12px] text-[#5F636D]">{changed.length ? `${changed.length} drawing${changed.length === 1 ? '' : 's'} changed` : 'No changes yet'}</span>
           <button type="button" onClick={onClose} disabled={busy} className="min-h-[44px] rounded-xl px-4 text-[14px] font-bold text-[#4F535C] hover:bg-[#EBEBE5]">Cancel</button>
-          <button type="button" onClick={save} disabled={busy || !changed.length} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#4146C8] px-[18px] text-[14px] font-bold text-white hover:bg-[#3439AD] disabled:opacity-45">
+          <button type="button" onClick={save} disabled={busy || !changed.length} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[color:var(--dd-accent,#4146C8)] px-[18px] text-[14px] font-bold text-white hover:bg-[color:var(--dd-accent-deep,#3439AD)] disabled:opacity-45">
             {busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={2.6} />}Save
           </button>
         </div>

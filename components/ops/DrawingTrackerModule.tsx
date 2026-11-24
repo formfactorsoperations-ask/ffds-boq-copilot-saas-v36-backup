@@ -26,6 +26,7 @@ import { FileCheck2 } from 'lucide-react';
 import { classifyRevisionCause, RevisionClassification } from '../../services/geminiService';
 import { useOrg } from '../../contexts/OrgContext';
 import { isDesignerRole } from '../../lib/roleAccess';
+import RoomMessagesPanel from '../roomMessages/RoomMessagesPanel';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface DrawingTrackerModuleProps {
@@ -2388,6 +2389,9 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                             <List className="w-3.5 h-3.5" />
                         </button>
                     </div>
+
+                    {/* The project's room threads (lib/roomMessages.ts); shown only to the roles that may read them. */}
+                    <RoomMessagesPanel projectId={projectId} rooms={drawings.map((d) => d.roomName)} />
 
                     {isOwner && (
                         <div className="flex items-center gap-2 relative">

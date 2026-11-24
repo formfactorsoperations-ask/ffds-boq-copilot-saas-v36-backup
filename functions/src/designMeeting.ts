@@ -131,6 +131,8 @@ async function decide(actor: Actor, orgId: string, projectId: string, input: Inp
     if (i < 0) throw new HttpsError("invalid-argument", "That room is not in this meeting.");
     const outcome = input.outcome === "agreed" || input.outcome === "changes" ? input.outcome : null;
     const changes = outcome === "changes" ? cleanChanges(input.changes, m.rooms[i].sheets) : [];
+    /* What a change costs on the BOQ is the leads' to estimate: a Designer's meeting records none. */
+    if (!isLead(actor)) changes.forEach((c) => { delete c.cost; });
     if (outcome === "changes" && !changes.length) throw new HttpsError("invalid-argument", "Pin at least one change on the drawing, or mark the room agreed.");
     const rooms = m.rooms.map((r, k) => (k === i ? { ...r, outcome, changes } : r));
     const next = { ...m, rooms, rev: m.rev + 1 };
@@ -151,8 +153,12 @@ async function close(actor: Actor, orgId: string, projectId: string, input: Inpu
     mustRunThis(actor, m);
     if (m.state !== "OPEN") throw new HttpsError("failed-precondition", "This meeting is already closed.");
     if (input.expectedRev !== undefined && Number(input.expectedRev) !== m.rev) throw new HttpsError("aborted", "The meeting changed a moment ago. Refresh and try again.");
+    /*
+      A meeting can end with no room decided: the client saw the drawings and
+      wants to think. It is saved as held, nothing is recorded on any drawing
+      or for the client, and every room can be shown again.
+    */
     const decided = m.rooms.filter((r) => r.outcome);
-    if (!decided.length) throw new HttpsError("failed-precondition", "Mark at least one room agreed or with changes, or cancel the meeting.");
 
     /* Every read before any write. */
     const ids = [...new Set(decided.flatMap((r) => r.sheets.map((s) => s.drawingId)))];

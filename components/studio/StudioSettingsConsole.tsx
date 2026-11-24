@@ -31,6 +31,7 @@ import OpsDeskSettings from './OpsDeskSettings';
 import MinutesMigration from './MinutesMigration';
 import PeopleSettings from './PeopleSettings';
 import EngagementSettings from './EngagementSettings';
+import DesignDeskSetting, { deskChoiceOf } from './DesignDeskSetting';
 import ConsoleHeader from '../ui/ConsoleHeader';
 import {
   SETTINGS_SECTIONS, SETTINGS_FIELDS, SectionId, SettingsField,
@@ -608,6 +609,19 @@ export default function StudioSettingsConsole(props: {
                   <p className="text-xs text-slate-500 mt-0.5">Import projects from a JSON file.</p>
                   <input type="file" accept="application/json" className="hidden" onChange={props.onImportProject} />
                 </label>
+              </div>
+
+              {/* Which Design Desk the studio works on (Design Desk 2.0 rollout). Saved with the rest of the draft. */}
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">
+                  Design Desk
+                </h3>
+                <DesignDeskSetting
+                  value={deskChoiceOf(draft)}
+                  saved={deskChoiceOf(orgData)}
+                  onChange={(v) => setField('designDesk', v)}
+                  highlight={jumpKey === 'designDesk'}
+                />
               </div>
 
               <div className="mt-6 pt-6 border-t border-slate-100">
