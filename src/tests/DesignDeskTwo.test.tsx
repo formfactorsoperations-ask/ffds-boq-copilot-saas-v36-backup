@@ -207,6 +207,32 @@ describe('Design Desk 2.0', () => {
     expect(h.approve).toHaveBeenCalledWith({ orgId: 's', projectId: 'p1', drawingId: 'b' }, 7);
   });
 
+  it("shows a note beside its pin on hover, and lights the pin from the list", async () => {
+    org('Design Head', 'Head');
+    h.versions = [v1];
+    h.marks = [{ id: 'm1', versionId: 'v1', n: 1, page: 0, shape: { t: 'pin', x: 0.2, y: 0.6 }, text: 'Oven will not fit', blocking: true, status: 'OPEN', by: person('Head'), at: NOW, updatedAt: NOW }];
+    render(<DeskTwo projects={projects} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Check this drawing' })[0]);
+    const pin = await screen.findByRole('button', { name: 'Note 1: Oven will not fit' }, { timeout: 4000 });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.mouseEnter(pin);
+    const tip = screen.getByRole('tooltip');
+    expect(within(tip).getByText('Oven will not fit')).toBeTruthy();
+    expect(within(tip).getByText('Must fix')).toBeTruthy();
+    /* The note's card in the list lights up with it. */
+    const card = screen.getByRole('button', { name: 'Show note 1 on the drawing' }).closest('[data-note]')!;
+    expect(card.className).toContain('is-hot');
+    fireEvent.mouseLeave(pin);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    /* And the other way round: the card rings its pin. */
+    fireEvent.mouseEnter(card);
+    expect(pin.className).toContain('is-hot');
+    /* With a marking tool in hand the pins let the pointer through. */
+    fireEvent.mouseLeave(card);
+    fireEvent.keyDown(window, { key: 'b' });
+    expect(pin.className).toContain('is-off');
+  });
+
   it('blocks approval while a must-fix note is open', () => {
     org('Design Head', 'Head');
     h.versions = [v1];

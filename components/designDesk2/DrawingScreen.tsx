@@ -18,6 +18,7 @@ import { useSheetChanges } from '../drawingReview/useSheetChanges';
 import { MARK, FIXED, CLIENT, roomLabel, ago, shortDate, firstName, useToast, Initials } from '../drawingReview/ui';
 import type { Me } from '../drawingReview/SheetStudio';
 import { Btn, Tag, cx } from './parts';
+import { DeskMotionStyles, Tilt } from './motion';
 
 /*
   ONE DRAWING, on the new desk (Design Desk 2.0, Phase 1).
@@ -59,6 +60,8 @@ const TOOLS: [Tool, string, string, string, React.ComponentType<any>][] = [
   ['arrow', 'A', 'Arrow', 'Drag from the note to what it points at.', MoveUpRight],
   ['pen', 'D', 'Draw', 'Sketch freehand on the drawing.', PenLine],
 ];
+/* Each tool's icon sits in a filled tile: slate to select, the note colour to mark, amber and emerald for the two shapes that point, the brand blue to draw. */
+const TOOL_TILE: Record<Tool, string> = { select: '#334155', pin: '#E11D48', rect: '#D97706', arrow: '#059669', pen: '#3D52A0' };
 const SHAPE_WORD: Record<string, string> = { pin: 'Pin', rect: 'Box', arrow: 'Arrow', pen: 'Sketch' };
 const EVENT_WORD: Record<string, string> = { uploaded: 'uploaded', submitted: 'sent it to the Design Head', withdrawn: 'pulled it back', returned: 'asked for changes', approved: 'approved', audience: 'changed who it is for', removed: 'removed the PDF', client: 'showed it to the client', clientKept: 'kept it approved after the meeting' };
 const QUICK = ['Check this dimension', 'Line this up with the ceiling plan', 'Match the material schedule', 'Show the hinge side', 'Add a section through here'];
@@ -72,6 +75,53 @@ const LANDSCAPE_TURN: Turn = 270;
 type Draft = { page: number; shape: MarkShape; anchor: { x: number; y: number }; text: string; blocking: boolean };
 type Diff = { busy: boolean; kind?: string; count: number };
 
+const markColor = (m: ReviewMark) => (m.status === 'FIXED' ? FIXED : m.source === 'client' ? CLIENT : MARK);
+/** Where a note's numbered tag sits on the page as it is shown (the same spot PdfStage draws it). */
+function tagSpot(shape: MarkShape, turn: Turn): [number, number] {
+  const s = turnShape(shape, turn, 'view');
+  if (s.t === 'pin') return [s.x, s.y];
+  if (s.t === 'rect') return [s.x + s.w, s.y];
+  if (s.t === 'arrow') return [s.x, s.y];
+  return [s.pts[0]?.[0] ?? 0.5, s.pts[0]?.[1] ?? 0.5];
+}
+
+/*
+  The pins of one page, over the drawing: each note's number as a raised badge
+  that lifts under the pointer and opens the note beside it, so a note can be
+  read without looking away from the drawing. Hovering a note in the list
+  rings its pin here. While a marking tool is in hand the pins let the pointer
+  through, so a new mark can be drawn over them.
+*/
+const Pins: React.FC<{ marks: ReviewMark[]; turn: Turn; hover: string | null; selected: string | null; passive: boolean; who: (m: ReviewMark) => string; onHover: (id: string | null) => void; onSelect: (id: string) => void }> = ({ marks, turn, hover, selected, passive, who, onHover, onSelect }) => (
+  <>
+    {marks.map((m) => {
+      const [x, y] = tagSpot(m.shape, turn);
+      const hot = hover === m.id;
+      return (
+        <React.Fragment key={m.id}>
+          <button type="button" aria-label={`Note ${m.n}: ${m.text}`} onClick={() => onSelect(m.id)}
+            onMouseEnter={() => onHover(m.id)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(m.id)} onBlur={() => onHover(null)}
+            className={cx('dd2-pin', hot && 'is-hot', !hot && selected === m.id && 'is-picked', passive && 'is-off')}
+            style={{ left: `${x * 100}%`, top: `${y * 100}%`, ['--pin' as any]: markColor(m) }}><b>{m.n}</b></button>
+          {hot && (
+            <div className="absolute z-[5] w-[260px] max-w-[70vw]" role="tooltip"
+              style={{ left: `${x * 100}%`, top: `${y * 100}%`, transform: `translate(${x > 0.72 ? 'calc(-100% + 18px)' : x < 0.28 ? '-18px' : '-50%'}, ${y < 0.28 ? '26px' : 'calc(-100% - 26px)'})` }}>
+              <div className="dd2-bubble rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-2xl">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                  <span className="dd2-badge grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ ['--pin' as any]: markColor(m) }}>{m.n}</span>
+                  <span className="min-w-0 flex-1 truncate">{who(m)}</span>
+                  {m.status === 'FIXED' ? <Tag tone="good">Fixed</Tag> : m.blocking ? <Tag tone="bad">Must fix</Tag> : null}
+                </div>
+                <p className={cx('mt-1.5 text-sm', m.status === 'FIXED' ? 'text-slate-500 line-through decoration-emerald-500' : 'text-slate-800')}>{m.text}</p>
+              </div>
+            </div>
+          )}
+        </React.Fragment>
+      );
+    })}
+  </>
+);
+
 /* ------------------------------------------------------------ one page of the PDF */
 
 interface PageProps {
@@ -79,10 +129,11 @@ interface PageProps {
   zoom: number; turn: Turn; marks: ReviewMark[]; draft: MarkShape | null; selected: string | null; tool: Tool; canMark: boolean;
   onPageCount: (n: number) => void; onSelect: (id: string) => void; onShape: (page: number, shape: MarkShape, anchor: { x: number; y: number }) => void;
   onDiff: (page: number, d: Diff | null) => void; overlay: React.ReactNode;
+  hover: string | null; onHover: (id: string | null) => void; who: (m: ReviewMark) => string;
 }
 
 /** A page is drawn when it comes near the screen, so a long set opens as fast as a single sheet. */
-const PageBlock: React.FC<PageProps> = ({ index, pages, pdfPath, prevPath, compare, compareLabel, spotting, zoom, turn, marks, draft, selected, tool, canMark, onPageCount, onSelect, onShape, onDiff, overlay }) => {
+const PageBlock: React.FC<PageProps> = ({ index, pages, pdfPath, prevPath, compare, compareLabel, spotting, zoom, turn, marks, draft, selected, tool, canMark, onPageCount, onSelect, onShape, onDiff, overlay, hover, onHover, who }) => {
   const box = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(index === 0 || typeof IntersectionObserver === 'undefined');
   useEffect(() => {
@@ -102,7 +153,8 @@ const PageBlock: React.FC<PageProps> = ({ index, pages, pdfPath, prevPath, compa
       {near ? (
         <PdfStage pdfPath={pdfPath} comparePath={compare ? prevPath : null} compareLabel={compareLabel} page={index} zoom={zoom} turn={turn}
           marks={marks} draft={draft} selectedId={selected} tool={tool} canMark={canMark} onPageCount={index === 0 ? onPageCount : undefined}
-          changes={boxes} maxWidth={5000} onSelect={onSelect} onShape={(shape, anchor) => onShape(index, shape, anchor)} overlay={overlay} />
+          changes={boxes} maxWidth={5000} onSelect={onSelect} onShape={(shape, anchor) => onShape(index, shape, anchor)}
+          overlay={<>{!compare && <Pins marks={marks} turn={turn} hover={hover} selected={selected} passive={canMark && tool !== 'select'} who={who} onHover={onHover} onSelect={onSelect} />}{overlay}</>} />
       ) : <div className="mx-auto aspect-[1.414/1] w-full max-w-full rounded bg-white/70" aria-hidden />}
     </div>
   );
@@ -134,6 +186,8 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   const setSpot = (v: boolean) => { setSpotRaw(v); write(spotKey, v); };
   const [tool, setTool] = useState<Tool>('select');
   const [selected, setSelected] = useState<string | null>(null);
+  /* The note under the pointer, on the drawing or in the list: its pin and its card light up together. */
+  const [hover, setHover] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
   const [retMsg, setRetMsg] = useState('');
@@ -427,6 +481,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   };
 
   const snippets = useMemo(() => QUICK.slice(0, 4), []);
+  const whoWrote = (m: ReviewMark) => `${m.source === 'client' ? 'Client' : m.by?.email === me.email ? 'You' : firstName(m.by?.name)} · ${SHAPE_WORD[m.shape.t]}`;
 
   if (d === undefined) return <div className="grid min-h-[60vh] place-items-center text-slate-400"><Loader2 className="animate-spin" aria-label="Loading" /></div>;
   if (d === null) return (
@@ -440,8 +495,8 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   const steps = stepsOf(d);
   const toolNow = TOOLS.find((t) => t[0] === tool) || TOOLS[0];
   const draftNo = (r?.marksSeq || 0) + 1;
-  const barBtn = (on = false) => cx('inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-xl px-2.5 text-sm font-bold transition-colors disabled:opacity-40', on ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800');
-  const sep = <span className="mx-0.5 h-7 w-px shrink-0 bg-slate-200" aria-hidden />;
+  const barBtn = (on = false) => cx('dd2-key inline-flex min-h-[44px] min-w-[38px] items-center justify-center gap-1.5 rounded-xl px-1.5 text-sm font-bold disabled:opacity-40', on ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-white hover:text-slate-800');
+  const sep = <span className="h-7 w-px shrink-0 bg-slate-200" aria-hidden />;
   const field = 'w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20';
 
   const composer = (page: number) => draft && draft.page === page && (
@@ -504,7 +559,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
               tool={space ? 'select' : tool} canMark={canMark && !draft} onPageCount={setPages}
               onSelect={(id) => { setSelected(id); setTab('notes'); }}
               onShape={(page, shape, anchor) => { setDraft({ page, shape, anchor, text: '', blocking: false }); setTab('notes'); setSelected(null); }}
-              onDiff={onDiff} overlay={composer(i)} />
+              onDiff={onDiff} overlay={composer(i)} hover={hover} onHover={setHover} who={whoWrote} />
           ))}</div> : (
             <div className="mx-auto mt-12 max-w-md rounded-2xl border-2 border-dashed border-slate-300 bg-white px-6 py-10 text-center">
               <p className="text-lg font-bold text-slate-800">No PDF yet</p>
@@ -518,31 +573,31 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
           <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex flex-col items-center gap-2 px-3">
             {canMark && !draft && tool !== 'select' ? <div className="rounded-full bg-slate-800/90 px-3.5 py-1.5 text-center text-sm font-semibold text-white">{toolNow[2]}: {toolNow[3]}</div>
               : tip && !draft && <div className="rounded-full bg-slate-800/90 px-3.5 py-1.5 text-center text-sm font-semibold text-white">Drag to move around. Ctrl + scroll to zoom.</div>}
-            <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-0.5 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl" role="toolbar" aria-label="Drawing tools">
+            <div className="dd2-dock pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-0.5 rounded-2xl border border-slate-200 p-1.5" role="toolbar" aria-label="Drawing tools">
               {canMark && <>
                 {TOOLS.map(([t, key, name, hint, Icon]) => (
                   <button key={t} type="button" onClick={() => { setTool(t); setDraft(null); }} aria-pressed={tool === t} aria-label={name} title={`${name} (${key}). ${hint}`}
-                    className={cx('inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-xl px-2.5 text-sm font-bold transition-colors', tool === t ? (t === 'select' ? 'bg-slate-800 text-white' : 'bg-rose-600 text-white') : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800')}>
-                    <Icon size={18} aria-hidden /><span className={tool === t ? '' : 'hidden 2xl:inline'}>{name}</span>
+                    className={cx('dd2-key inline-flex min-h-[44px] min-w-[40px] items-center justify-center gap-1.5 rounded-xl px-1 text-sm font-bold', tool === t ? 'bg-slate-200 pr-2.5 text-slate-900' : 'text-slate-600 hover:bg-white hover:text-slate-800')}>
+                    <span className="dd2-ico" style={{ background: TOOL_TILE[t] }}><Icon size={17} strokeWidth={2.4} fill="currentColor" fillOpacity={0.28} aria-hidden /></span><span className={tool === t ? '' : 'hidden 2xl:inline'}>{name}</span>
                   </button>
                 ))}
                 {sep}
               </>}
               {prev && isCurrent && (
                 <button type="button" onClick={() => { setCompare((c) => !c); setDraft(null); }} aria-pressed={compare} className={barBtn(compare)} title={`Slide between this version and v${prev.n} (C)`}>
-                  <Columns2 size={18} aria-hidden />{compare ? 'Comparing' : 'Compare'}
+                  <span className="dd2-ico" style={{ background: '#475569' }}><Columns2 size={17} strokeWidth={2.4} fill="currentColor" fillOpacity={0.28} aria-hidden /></span>{compare ? 'Comparing' : 'Compare'}
                 </button>
               )}
               {prev && isCurrent && !compare && (
                 <button type="button" onClick={() => setSpot(!spot)} aria-pressed={spot} title={`Outline what changed since v${prev.n}`}
-                  className={cx('inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-2.5 text-sm font-bold transition-colors', spot ? 'bg-amber-100 text-amber-800' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800')}>
-                  <Sparkles size={18} aria-hidden />{spot && changeCount ? `Changes · ${changeCount}` : 'Changes'}
+                  className={cx('dd2-key inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-1 pr-2 text-sm font-bold', spot ? 'bg-amber-100 text-amber-900' : 'text-slate-600 hover:bg-white hover:text-slate-800')}>
+                  <span className="dd2-ico" style={{ background: '#D97706' }}><Sparkles size={17} strokeWidth={2.4} fill="currentColor" fillOpacity={0.28} aria-hidden /></span>{spot && changeCount ? `Changes · ${changeCount}` : 'Changes'}
                 </button>
               )}
               {prev && isCurrent && sep}
               <button type="button" onClick={() => { rotate(); setDraft(null); }} aria-label="Rotate the drawing" title="Rotate (R). Notes stay where they belong." className={barBtn()}><RotateCw size={18} aria-hidden />{turn ? `${turn}°` : ''}</button>
               <button type="button" onClick={() => zoomTo((z) => z - 0.2)} aria-label="Zoom out" title="Zoom out (-, or Ctrl + scroll)" className={barBtn()}><Minus size={18} aria-hidden /></button>
-              <button type="button" onClick={() => zoomTo(1)} title="Fit the width (0)" aria-label={`Zoom ${Math.round(zoom * 100)} percent. Press to fit the width.`} className={cx(barBtn(), 'min-w-[56px] tabular-nums')}>{Math.round(zoom * 100)}%</button>
+              <button type="button" onClick={() => zoomTo(1)} title="Fit the width (0)" aria-label={`Zoom ${Math.round(zoom * 100)} percent. Press to fit the width.`} className={cx(barBtn(), 'min-w-[50px] tabular-nums')}>{Math.round(zoom * 100)}%</button>
               <button type="button" onClick={() => zoomTo((z) => z + 0.2)} aria-label="Zoom in" title="Zoom in (+, or Ctrl + scroll)" className={barBtn()}><Plus size={18} aria-hidden /></button>
               {sep}
               <button type="button" onClick={() => (full ? exitFull() : enterFull())} aria-pressed={full} aria-label={full ? 'Exit full screen' : 'Full screen'} title={full ? 'Leave full screen (Esc)' : 'Full screen, with the notes beside the drawing (F)'} className={barBtn(full)}>
@@ -570,7 +625,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
           </div>
           <div className={cx('mt-2.5 rounded-xl px-3 py-2 text-sm', yours ? 'bg-amber-50 text-amber-900' : 'bg-slate-50 text-slate-700')}>
             <span className="flex flex-wrap items-baseline gap-x-2">
-              <b>{yours ? 'Your turn' : 'Where it is now'}</b>
+              <b className="inline-flex items-center gap-1.5">{yours && <span className="dd2-dot h-2 w-2 rounded-full bg-amber-500" aria-hidden />}{yours ? 'Your turn' : 'Where it is now'}</b>
               <span className="text-xs opacity-80">{steps.current >= steps.labels.length ? `All ${steps.labels.length} steps done` : `Step ${steps.current + 1} of ${steps.labels.length}: ${steps.labels[steps.current]}`}</span>
             </span>
             <span className="block">{whereLine(d, viewer)}</span>
@@ -617,9 +672,10 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
               const done = m.status === 'FIXED';
               const sel = selected === m.id;
               return (
-                <div key={m.id} data-note={m.id} className={cx('hud-row-in flex shrink-0 gap-2.5 rounded-xl border bg-white p-3', sel ? 'border-rose-400 ring-2 ring-rose-100' : 'border-slate-200')} style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
+                <Tilt key={m.id} data-note={m.id} onMouseEnter={() => setHover(m.id)} onMouseLeave={() => setHover(null)}
+                  className={cx('hud-row-in flex shrink-0 gap-2.5 rounded-xl border bg-white p-3', hover === m.id && 'is-hot', sel ? 'border-rose-400 ring-2 ring-rose-100' : hover === m.id ? 'border-rose-300' : 'border-slate-200')} style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
                   <button type="button" onClick={() => showMark(m)} aria-label={`Show note ${m.n} on the drawing`}
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: done ? FIXED : m.source === 'client' ? CLIENT : MARK }}>{m.n}</button>
+                    className="dd2-badge grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ ['--pin' as any]: markColor(m) }}>{m.n}</button>
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-bold text-slate-500">{m.source === 'client' ? <span className="text-amber-700">Client</span> : m.by?.email === me.email ? 'You' : firstName(m.by?.name)} · {SHAPE_WORD[m.shape.t]}{pages > 1 ? ` · page ${m.page + 1}` : ''}</div>
                     <div className={cx('mt-0.5 text-sm', done ? 'text-slate-500 line-through decoration-emerald-500' : 'text-slate-800')}>{m.text}</div>
@@ -640,7 +696,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
                       {done && !canFix && <Tag tone="good">{m.fixedInVersionNo ? `Fixed in v${m.fixedInVersionNo}` : 'Fixed'}</Tag>}
                     </div>
                   </div>
-                </div>
+                </Tilt>
               );
             })}
 
@@ -694,8 +750,8 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
                   : `Approving signs off v${r?.versionNo} exactly as it is.${self ? ' It is your own drawing, so the history will say self-approved.' : ''}${audience === 'studio' ? ' It stays inside the studio.' : ''}`}
               </p>
               <div className="flex gap-2">
-                <Btn kind="plain" className="flex-1 px-3" disabled={!!busy} onClick={() => { setRequestOpen(true); setDraft(null); }}>Request changes</Btn>
-                <Btn kind="primary" icon={busy === 'approve' ? Loader2 : Check} className="flex-1 px-3" disabled={!!busy || blockingOpen > 0 || !!draft} title={self ? 'Approve your own drawing' : undefined} onClick={() => decide('approve')}>Approve v{r?.versionNo}</Btn>
+                <Btn kind="plain" className="dd2-key flex-1 px-3" disabled={!!busy} onClick={() => { setRequestOpen(true); setDraft(null); }}>Request changes</Btn>
+                <Btn kind="primary" icon={busy === 'approve' ? Loader2 : Check} className="dd2-go flex-1 px-3" disabled={!!busy || blockingOpen > 0 || !!draft} title={self ? 'Approve your own drawing' : undefined} onClick={() => decide('approve')}>Approve v{r?.versionNo}</Btn>
               </div>
             </>
           )}
@@ -772,6 +828,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
 
   return (
     <div className="hud-panel-in">
+      <DeskMotionStyles />
       <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <button type="button" onClick={onClose} className="inline-flex min-h-[40px] items-center gap-1 rounded-xl pl-2 pr-3 text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-800">
           <ChevronLeft size={18} aria-hidden />{backLabel}

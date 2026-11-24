@@ -137,11 +137,31 @@ brand blue (`tone="console"`), because that screen is a console screen.
 
 What stays as everywhere else:
 - The fonts. The mockup's fonts were not adopted (owner, 24 Nov 2026): the desk uses the app's own.
-- The motion classes: `hud-panel-in`, `hud-row-in`, `hud-swap`, `hud-rail-active`, `phd-lift`.
-  No new keyframes.
+- The motion classes on its pages: `hud-panel-in`, `hud-row-in`, `hud-swap`, `hud-rail-active`,
+  `phd-lift`. The drawing screen has more: see "Design Desk 2.0 motion" below.
 - The guard: `designGuard.test.ts` counts the new folder like any other, and it is at zero.
 - The words: a drawing's place is one plain sentence (`lib/designDesk2.ts`, `whereLine`), its steps
   are numbered (`stepsOf`), and it shows one main button (`mainAction`).
+
+### Design Desk 2.0 motion (asked for 24 Nov 2026)
+
+The owner asked for "animation and 3D" on the drawing screen's notes and review panel, with
+colour-filled icons and a note that shows when its pin is hovered. It lives in
+`components/designDesk2/motion.tsx` and is for the drawing screen only. Same fonts; the colours are
+the desk's own (rose notes, emerald done, amber client and changes, slate, the brand blue).
+
+- **Pins** (`dd2-pin`): a note's number is a raised badge over the drawing. It drops in, lifts under
+  the pointer and rings while its note is being looked at. Hovering it opens the note beside it
+  (`dd2-bubble`), so a note is read without looking away from the drawing.
+- **Pin and card together:** hovering a pin lights its card in the list; hovering a card rings its pin.
+- **Note cards** (`Tilt`, `dd2-tilt`): lean a few degrees towards the mouse with a soft light. The
+  number is a small raised badge (`dd2-badge`). Still on touch.
+- **The tool bar** (`dd2-dock`, `dd2-key`, `dd2-ico`): a raised dock. Each tool is a key that lifts on
+  hover and sinks when pressed, with its icon in a filled tile: slate to select, rose for Pin, amber
+  for Box and Changes, emerald for Arrow, the brand blue for Draw.
+- **The decision** (`dd2-go`): Approve has depth and a passing light on hover. "Your turn" has a
+  breathing dot (`dd2-dot`).
+- Everything stops under `prefers-reduced-motion`, and nothing tilts on touch.
 
 ### Playground library motion (approved 20 Nov 2026)
 
