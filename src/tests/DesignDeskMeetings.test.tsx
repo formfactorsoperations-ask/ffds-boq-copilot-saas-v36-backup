@@ -11,7 +11,7 @@ import type { DesignMeeting } from '../../lib/designMeeting';
   calls must be the ones today's meeting makes.
 */
 
-const h = vi.hoisted(() => ({ start: null as any, decide: null as any, close: null as any, cancel: null as any, outside: null as any, approvable: [] as any[], charge: null as any }));
+const h = vi.hoisted(() => ({ start: null as any, decide: null as any, close: null as any, cancel: null as any, outside: null as any, approvable: [] as any[], charge: null as any, upright: false }));
 
 vi.mock('../../services/designMeetingService', () => ({
   startMeeting: (...a: any[]) => h.start(...a),
@@ -25,17 +25,17 @@ vi.mock('../../services/designMeetingService', () => ({
   saveLayoutRooms: vi.fn(), signMeeting: vi.fn(), setPresenters: vi.fn(), sendApproval: vi.fn(), recordApproval: vi.fn(),
 }));
 vi.mock('../../services/drawingReviewService', () => ({ fileUrl: () => Promise.reject(new Error('no files in tests')), fileBlob: () => Promise.reject(new Error('no files in tests')) }));
-vi.mock('../../lib/pdfRender', () => ({ loadPdf: vi.fn(() => Promise.resolve({ numPages: 1, getPage: async () => ({ getViewport: () => ({ width: 1000, height: 700 }) }) })), renderPage: vi.fn(), isCancelled: () => false, thumbnailOf: vi.fn(), pageCountOf: vi.fn() }));
+vi.mock('../../lib/pdfRender', () => ({ loadPdf: vi.fn(() => Promise.resolve({ numPages: 1, getPage: async () => ({ getViewport: () => (h.upright ? { width: 700, height: 1000 } : { width: 1000, height: 700 }) }) })), renderPage: vi.fn(), isCancelled: () => false, thumbnailOf: vi.fn(), pageCountOf: vi.fn() }));
 vi.mock('../../lib/pdfLandscape', () => ({ landscapePdf: vi.fn() }));
 /* The drawing itself: a stand-in that pins a change where it is told to. */
 vi.mock('../../components/drawingReview/PdfStage', () => ({
-  default: (p: any) => <button type="button" data-testid="drawing" data-pins={p.marks.length} disabled={!p.canMark} onClick={() => p.onShape?.({ t: 'pin', x: 0.5, y: 0.4 })}>the drawing</button>,
+  default: (p: any) => <div><button type="button" data-testid="drawing" data-pins={p.marks.length} data-zoom={p.zoom} data-turn={p.turn} disabled={!p.canMark} onClick={() => p.onShape?.({ t: 'pin', x: 0.5, y: 0.4 })}>the drawing</button>{p.overlay}</div>,
 }));
 vi.mock('../../components/drawingReview/ClientApproval', () => ({
   default: (p: any) => <div data-testid="approval" data-open={p.startOpen ? 'yes' : 'no'}>approval for {p.m.id}</div>,
   ApprovalChip: () => null,
 }));
-vi.mock('../../components/drawingReview/LayoutPlan', () => ({ LayoutPanel: () => <div>plan</div>, LayoutRooms: () => null }));
+vi.mock('../../components/drawingReview/LayoutPlan', () => ({ LayoutPanel: (p: any) => <div data-testid={p.compact ? 'plan-small' : 'plan'} data-turn={p.turn} data-zoom={p.zoom}>plan</div>, LayoutRooms: () => null }));
 vi.mock('../../components/drawingReview/DeskParts', () => ({ ProjectMark: () => null, SheetThumb: () => null }));
 
 import MeetingsPage from '../../components/designDesk2/MeetingsPage';
@@ -85,6 +85,7 @@ beforeEach(() => {
   h.outside = vi.fn(async () => ({}));
   h.charge = vi.fn(async () => null);
   h.approvable = [{ drawingId: 'l1', name: 'Living false ceiling', room: 'Living & dining', versionNo: 1 }];
+  h.upright = false;
 });
 
 describe('the Meetings page', () => {
@@ -214,6 +215,64 @@ describe('the meeting screen', () => {
     expect(screen.getByText(/It waits for the Design Head to bill or waive it/)).toBeTruthy();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save the meeting' })); });
     expect(h.close).toHaveBeenCalledWith({ orgId: 's', projectId: 'p1' }, 'm9', 2, {});
+  });
+
+  it('zooms with Ctrl + scroll from anywhere on the viewer, in whichever room is open', async () => {
+    render(screenOf(meeting()));
+    const viewer = (await screen.findByTestId('drawing')).closest('section')!;
+    const zoom = () => screen.getByTitle('Fit the drawing (0)').textContent;
+    expect(zoom()).toBe('100%');
+    /* Plain scrolling moves the page; it does not zoom. */
+    fireEvent.wheel(viewer, { deltaY: -100 });
+    expect(zoom()).toBe('100%');
+    fireEvent.wheel(viewer, { deltaY: -100, ctrlKey: true });
+    expect(zoom()).toBe('115%');
+    /* The second room: the viewer is the same one, so the scroll still zooms. */
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Rooms to show' })).getByRole('button', { name: /Master bedroom/ }));
+    fireEvent.wheel(await screen.findByTestId('drawing'), { deltaY: 100, ctrlKey: true });
+    expect(zoom()).toBe('100%');
+    fireEvent.wheel(screen.getByRole('toolbar', { name: 'Drawing controls' }), { deltaY: -100, ctrlKey: true });
+    expect(zoom()).toBe('115%');
+    expect(screen.getByTestId('drawing').getAttribute('data-zoom')).toBe('1.15');
+  });
+
+  it('shows a layout plan stored upright in landscape, and lets it be turned and zoomed', async () => {
+    h.upright = true;
+    const layout = { drawingId: 'a1', name: 'Layout plan', versionId: 'v1', versionNo: 4, pdfPath: 'plan.pdf', pageCount: 1, rooms: {} };
+    render(screenOf(meeting({ layout })));
+    /* Beside the drawing and on its own tab, the plan is turned to read landscape. */
+    expect((await screen.findByTestId('plan-small')).getAttribute('data-turn')).toBe('270');
+    fireEvent.click(screen.getByRole('button', { name: 'Layout plan' }));
+    const plan = await screen.findByTestId('plan');
+    expect(plan.getAttribute('data-turn')).toBe('270');
+    fireEvent.wheel(plan, { deltaY: -100, ctrlKey: true });
+    expect(screen.getByTestId('plan').getAttribute('data-zoom')).toBe('1.15');
+    /* The rotate button turns the plan, not the drawing, and the choice is remembered. */
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate the layout plan' }));
+    expect(screen.getByTestId('plan').getAttribute('data-turn')).toBe('0');
+    expect(localStorage.getItem('ffds_dr_turn_p1_a1')).toBe('0');
+    expect(localStorage.getItem('ffds_dr_turn_p1_l1')).toBeNull();
+  });
+
+  it('puts a living pin on each change, and marks a decided room with a tick or its count', async () => {
+    const m = meeting();
+    h.decide = answer(m);
+    render(screenOf(m));
+    fireEvent.click(screen.getByRole('button', { name: 'Add a change' }));
+    fireEvent.click(await screen.findByTestId('drawing'));
+    fireEvent.change(screen.getByLabelText('What does the client want changed here?'), { target: { value: 'Warmer cove light' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add the change' }));
+    /* The pin opens the client's words beside it, and lights the change in the list. */
+    const pin = screen.getByRole('button', { name: 'Change 1: Warmer cove light' });
+    expect(pin.className).toContain('is-off');
+    fireEvent.click(screen.getByRole('button', { name: 'Stop adding' }));
+    expect(pin.className).not.toContain('is-off');
+    fireEvent.mouseEnter(pin);
+    expect(within(screen.getByRole('tooltip')).getByText('Warmer cove light')).toBeTruthy();
+    expect(document.querySelector('.dd2-note.is-hot')).toBeTruthy();
+    fireEvent.mouseLeave(pin);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Done: 1 change for this room' })); });
+    expect(screen.getByRole('status', { name: '1 change noted' })).toBeTruthy();
   });
 
   it('lets a decided room be reopened, and leaves the meeting open when left', async () => {

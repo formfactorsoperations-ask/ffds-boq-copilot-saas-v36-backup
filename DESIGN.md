@@ -157,8 +157,25 @@ the brightest thing in the room or on a shared screen.
 - The bar at the bottom holds the three things a room ends with, 48px tall: Add a change (amber),
   Client is happy with this room (emerald), Finish the meeting (rose).
 - The change box, the finishing page and "Meeting saved" are light, in the desk's own parts.
-- Motion: `hud-swap` when the room or drawing changes, `hud-row-in` for a new change or minute,
-  `phd-pop` for the change box, `dd2-dot` on the clock. Nothing new.
+- **Motion and depth** (owner, 24 Nov 2026, after trying it: "no animations on the page, it is too
+  flat"). The drawing screen's Living icons language, on the dark screen
+  (`MeetMotionStyles` in `components/designDesk2/motion.tsx`, classes `dd2m-*`):
+  - the three buttons a room ends with are **raised keys** (`dd2m-key amber|emerald|rose`): a lit
+    top edge, a darker base under them, they lift under the pointer and press down on a click, and
+    their icons act (the pin drops, the tick draws itself, the receiver rocks). The pin keeps
+    dropping while a change is being placed;
+  - panels (`dd2m-panel`) have a lit top edge and a shadow, and rise in one after another; the
+    background has two slow glows, emerald and amber (`dd2m-bg`);
+  - the room being shown has a green bar and glow, a room's disc pops when it is decided, the open
+    tab is raised, the page of the drawing rises in when it changes;
+  - **the client's changes are living pins** on the drawing (the drawing screen's `dd2-pin`, in
+    amber): they pop in and ripple, and hovering one springs the client's words out beside it and
+    lights its card in the list;
+  - deciding a room shows the drawing screen's big tick (the client is happy) or the number of
+    changes in an amber disc (`dd2m-stamp`) before the next room opens;
+  - a new minute lands with a green flash; the round chip glows once a room's rounds are used; the
+    client window card pulses amber until the window is open.
+  Same fonts, same four colours. Everything stops under reduced motion.
 
 What the client is shown has not changed: the client's window is today's `ClientView`
 (`components/drawingReview/MeetingMode.tsx`), reused as it is. The dialogs the meeting shares with

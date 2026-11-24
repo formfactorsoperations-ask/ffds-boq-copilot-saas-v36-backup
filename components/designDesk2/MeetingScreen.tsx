@@ -1,10 +1,9 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, BadgeCheck, Check, ChevronLeft, ChevronRight, Download, Eye, IndianRupee, Loader2, MapPin, MapPinned, Maximize2, Minimize2, Minus, MonitorUp, PenLine, PhoneOff, Plus, ReceiptText, RotateCw, Trash2, Undo2, X } from 'lucide-react';
 import { landscapePdf } from '../../lib/pdfLandscape';
-import { loadPdf } from '../../lib/pdfRender';
 import { clientRoundsByRoom, costLine, costTotal, isOverIncluded, needsApproval, plural, type ChangeCost, type DesignMeeting, type MeetingChange, type RoomOutcome } from '../../lib/designMeeting';
 import { clock, minutesOf, roundsLine } from '../../lib/meetingMinutes';
-import type { MarkShape, ReviewMark, Turn } from '../../lib/drawingReview';
+import { turnShape, type MarkShape, type ReviewMark, type Turn } from '../../lib/drawingReview';
 import { decideRoom, closeMeeting } from '../../services/designMeetingService';
 import { fileBlob } from '../../services/drawingReviewService';
 import PdfStage from '../drawingReview/PdfStage';
@@ -15,7 +14,8 @@ import { LayoutPanel } from '../drawingReview/LayoutPlan';
 import { ClientView } from '../drawingReview/MeetingMode';
 import { useClientWindow, ClientPortal, useScrollMirror } from '../drawingReview/ClientWindow';
 import { Btn, cx } from './parts';
-import { CopyMinutes, DESK_ACCENT, MinutesList, RoomResult, inr, meetingTitle, savedWay } from './meetingBits';
+import { CopyMinutes, DESK_ACCENT, MinutesList, RoomResult, inr, meetingTitle, savedWay, useSheetTurn } from './meetingBits';
+import { DeskMotionStyles, MeetMotionStyles, Tilt } from './motion';
 
 /*
   DESIGN DESK 2.0: the meeting screen (build plan, Phase 2).
@@ -56,20 +56,59 @@ type CostKind = '' | ChangeCost['kind'];
 type Draft = { shape: MarkShape; page: number; text: string; kind: CostKind; amount: string; note: string };
 type Tab = number | 'plan';
 
-/* The same per-drawing rotation the drawing screen remembers, so a sheet turned there is turned here too. */
-const turnKey = (projectId: string, drawingId: string) => `ffds_dr_turn_${projectId}_${drawingId}`;
-const savedTurn = (projectId: string, drawingId: string): Turn | null => {
-  try { const raw = localStorage.getItem(turnKey(projectId, drawingId)); if (raw === null) return null; const v = Number(JSON.parse(raw)); return ([0, 90, 180, 270].includes(v) ? v : 0) as Turn; } catch { return null; }
-};
-
 const Elapsed: React.FC<{ since: number }> = ({ since }) => {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   return <span className="tabular-nums">{clock(now - since)}</span>;
 };
 
-const dark = 'inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-bold transition-colors disabled:opacity-40';
-const ghost = cx(dark, 'bg-slate-800 text-slate-100 hover:bg-slate-700');
+const dark = 'inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-bold disabled:opacity-40';
+const ghost = cx(dark, 'dd2m-soft text-slate-100');
+const calm = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/** Where a change's numbered pin sits on the page as it is shown (the same spot PdfStage draws its flat tag). */
+function pinSpot(shape: MarkShape, turn: Turn): [number, number] {
+  const s = turnShape(shape, turn, 'view');
+  if (s.t === 'pin') return [s.x, s.y];
+  if (s.t === 'rect') return [s.x + s.w, s.y];
+  if (s.t === 'arrow') return [s.x, s.y];
+  return [s.pts[0]?.[0] ?? 0.5, s.pts[0]?.[1] ?? 0.5];
+}
+
+/*
+  The client's changes on the page being shown, as the drawing screen's living
+  pins in the client's amber: each pops in and ripples, grows under the pointer
+  and springs its words out beside it, and lights its card in the list. While a
+  change is being placed they let the tap through.
+*/
+const ChangePins: React.FC<{ changes: MeetingChange[]; turn: Turn; hot: number | null; onHot: (n: number | null) => void; passive: boolean; studio: boolean }> = ({ changes, turn, hot, onHot, passive, studio }) => (
+  <>
+    {changes.map((c) => {
+      const [x, y] = pinSpot(c.shape, turn);
+      const on = hot === c.n;
+      const below = y < 0.3;
+      const at = x > 0.72 ? 'calc(100% - 18px)' : x < 0.28 ? '18px' : '50%';
+      const pin = { left: `${x * 100}%`, top: `${y * 100}%`, ['--pin' as any]: '#D97706' };
+      return (
+        <React.Fragment key={c.n}>
+          <button type="button" aria-label={`Change ${c.n}: ${c.text}`} onMouseEnter={() => onHot(c.n)} onMouseLeave={() => onHot(null)} onFocus={() => onHot(c.n)} onBlur={() => onHot(null)}
+            className={cx('dd2-pin is-open', on && 'is-hot', passive && 'is-off')} style={pin}><b>{c.n}</b></button>
+          {on && (
+            <div className="absolute z-[5] w-[260px] max-w-[70vw]" role="tooltip"
+              style={{ ...pin, transform: `translate(${x > 0.72 ? 'calc(-100% + 18px)' : x < 0.28 ? '-18px' : '-50%'}, ${below ? '34px' : 'calc(-100% - 34px)'})` }}>
+              <span className="dd2-lead" style={{ left: at, [below ? 'bottom' : 'top']: '100%' }} aria-hidden />
+              <div className="dd2-bubble rounded-2xl border border-slate-200 bg-white p-3 text-left text-slate-800 shadow-2xl" style={{ transformOrigin: `${at} ${below ? 'top' : 'bottom'}` }}>
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-500"><span className="dd2-badge grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold text-white">{c.n}</span>The client asked</div>
+                <p className="mt-1.5 text-sm">{c.text}</p>
+                {studio && c.cost && <p className="mt-1 text-xs font-bold text-amber-800">{costLine(c.cost)}</p>}
+              </div>
+            </div>
+          )}
+        </React.Fragment>
+      );
+    })}
+  </>
+);
 const icon = 'grid h-10 w-10 shrink-0 place-items-center rounded-xl text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-30';
 
 export default function MeetingScreen({ orgId, projectId, projectName, look, meeting, meetings, lead, me, onExit }: Props) {
@@ -104,29 +143,17 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
   const done = m.rooms.filter((r) => r.outcome).length;
   const showPlan = tab === 'plan' && !!m.layout;
 
-  /* ------------------------------------------------------------ which way each drawing reads */
-  const [turns, setTurns] = useState<Record<string, Turn>>({});
-  useEffect(() => {
-    const id = sh.drawingId;
-    if (turns[id] !== undefined) return;
-    const saved = savedTurn(projectId, id);
-    if (saved !== null || !sh.pdfPath) { setTurns((t) => ({ ...t, [id]: saved ?? 0 })); return; }
-    /* A drawing stored upright opens turned to landscape, as on the drawing screen. */
-    let live = true;
-    const path = sh.pdfPath;
-    loadPdf(path, async () => (await fileBlob(path)).arrayBuffer()).then((doc) => doc.getPage(1)).then((p) => {
-      if (!live) return;
-      const v = p.getViewport({ scale: 1 });
-      setTurns((t) => (t[id] !== undefined ? t : { ...t, [id]: v.height > v.width * 1.01 ? 270 : 0 }));
-    }).catch(() => { if (live) setTurns((t) => (t[id] !== undefined ? t : { ...t, [id]: 0 })); });
-    return () => { live = false; };
-  }, [sh.drawingId, sh.pdfPath]);
-  const turn: Turn = turns[sh.drawingId] ?? savedTurn(projectId, sh.drawingId) ?? 0;
-  const rotate = () => {
-    const n = ((turn + 90) % 360) as Turn;
-    setTurns((t) => ({ ...t, [sh.drawingId]: n }));
-    try { localStorage.setItem(turnKey(projectId, sh.drawingId), JSON.stringify(n)); } catch { /* storage off */ }
-  };
+  /* ------------------------------------------------------------ which way each drawing, and the plan, reads */
+  const [turnRaw, rotateSheet] = useSheetTurn(projectId, sh.drawingId, sh.pdfPath);
+  const turn: Turn = turnRaw ?? 0;
+  const [planTurnRaw, rotatePlan] = useSheetTurn(projectId, m.layout?.drawingId, m.layout?.pdfPath);
+  const planTurn: Turn = planTurnRaw ?? 0;
+  const rotate = () => (showPlan ? rotatePlan() : rotateSheet());
+  const [hot, setHot] = useState<number | null>(null);
+  /* A room just decided: a tick, or the number of changes, over the drawing before the next room opens. */
+  const [stamp, setStamp] = useState<{ happy: boolean; n: number } | null>(null);
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
 
   /* ------------------------------------------------------------ the three ways to show it */
   const [full, setFull] = useState(false);
@@ -155,15 +182,69 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
     ro.observe(el);
     return () => ro.disconnect();
   }, [step, full, showPlan]);
-  const zoomBy = (d: number) => setZoom((z) => Math.min(4, Math.max(0.5, +(z + d).toFixed(2))));
+  /*
+    Zoom. Ctrl + scroll works anywhere over the viewer (its tabs and controls
+    too), in whichever room or drawing is open, and keeps the spot under the
+    pointer where it is; the client's window follows. The listener sits on
+    the viewer itself, which is never replaced when the room changes.
+  */
+  const viewer = useRef<HTMLElement>(null);
+  const anchor = useRef<{ fx: number; fy: number; px: number; py: number; at: number } | null>(null);
+  const zoomTo = (next: (z: number) => number, at?: { x: number; y: number }) => {
+    const sc = stage.current;
+    const pg = sc?.querySelector('canvas');
+    if (sc && pg && at) {
+      const r = pg.getBoundingClientRect(), s0 = sc.getBoundingClientRect();
+      const px = at.x - s0.left, py = at.y - s0.top;
+      const held = anchor.current;
+      /* More notches of the same scroll, pointer still: keep the spot first measured, since the page is mid-resize now. */
+      if (held && Math.abs(held.px - px) < 4 && Math.abs(held.py - py) < 4) held.at = Date.now();
+      else if (r.width > 0 && r.height > 0) anchor.current = { fx: (at.x - r.left) / r.width, fy: (at.y - r.top) / r.height, px, py, at: Date.now() };
+    }
+    setZoom((z) => Math.min(5, Math.max(0.5, Math.round(next(z) * 100) / 100)));
+  };
+  const zoomBy = (d: number) => zoomTo((z) => z + d);
   useEffect(() => {
-    const el = stage.current;
+    const el = viewer.current;
     if (!el) return;
-    /* Ctrl + scroll zooms the drawing, not the whole app; the client's window follows. */
-    const wheel = (e: WheelEvent) => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); zoomBy(e.deltaY < 0 ? 0.1 : -0.1); };
+    const wheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const step = Math.max(-0.35, Math.min(0.35, -e.deltaY * 0.0014));
+      zoomTo((z) => z * Math.exp(step), { x: e.clientX, y: e.clientY });
+    };
     el.addEventListener('wheel', wheel, { passive: false });
     return () => el.removeEventListener('wheel', wheel);
-  }, [step, showPlan]);
+  }, [step]);
+  /*
+    After a zoom the page takes a moment to settle at its new size (the PDF is
+    drawn again): hold the pointer's spot until the size has stopped changing,
+    and let go at once if the person scrolls or drags themselves.
+  */
+  useEffect(() => {
+    const a = anchor.current;
+    const sc = stage.current;
+    if (!a || !sc) return;
+    let raf = 0, lastW = -1, steady = Date.now();
+    const drop = (e: Event) => { if (e.type === 'wheel' && ((e as WheelEvent).ctrlKey || (e as WheelEvent).metaKey)) return; anchor.current = null; };
+    sc.addEventListener('pointerdown', drop);
+    sc.addEventListener('wheel', drop, { passive: true });
+    const hold = () => {
+      if (anchor.current !== a) return;
+      const pg = sc.querySelector('canvas');
+      if (pg) {
+        const r = pg.getBoundingClientRect(), s0 = sc.getBoundingClientRect();
+        if (Math.abs(r.width - lastW) > 0.5) { lastW = r.width; steady = Date.now(); }
+        sc.scrollLeft += r.left + a.fx * r.width - (s0.left + a.px);
+        sc.scrollTop += r.top + a.fy * r.height - (s0.top + a.py);
+      }
+      const now = Date.now();
+      if (now - a.at > 3000 || (now - a.at > 500 && now - steady > 450)) { anchor.current = null; return; }
+      raf = requestAnimationFrame(hold);
+    };
+    raf = requestAnimationFrame(hold);
+    return () => { cancelAnimationFrame(raf); sc.removeEventListener('pointerdown', drop); sc.removeEventListener('wheel', drop); };
+  }, [zoom]);
 
   /* ------------------------------------------------------------ moving about */
   const go = (i: number) => { setAt(i); setTab(0); setPage(0); setPinning(false); setDraft(null); };
@@ -180,7 +261,7 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
       const k = e.key.toLowerCase();
       if (k === 'c') startPin();
       if (k === 'l' && m.layout) pick(tab === 'plan' ? 0 : 'plan');
-      if (k === 'r' && tab !== 'plan') rotate();
+      if (k === 'r') rotate();
       if (k === 'f') { if (full) exitFull(); else enterFull(); }
       if (k === '+' || k === '=') zoomBy(0.25);
       if (k === '-') zoomBy(-0.25);
@@ -193,7 +274,8 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
     return () => window.removeEventListener('keydown', key);
   });
 
-  const marks = mine.filter((c) => c.drawingId === sh.drawingId && c.page === page)
+  const onPage = mine.filter((c) => c.drawingId === sh.drawingId && c.page === page);
+  const marks = onPage
     .map((c) => ({ id: `c${c.n}`, n: c.n, page: c.page, shape: c.shape, status: 'OPEN', source: 'client' }) as unknown as ReviewMark);
 
   /* ------------------------------------------------------------ what the buttons do */
@@ -210,7 +292,9 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
       if (outcome === 'agreed') setChanges((c) => ({ ...c, [room.room]: [] }));
       setPinning(false);
       const to = next >= 0 ? next : any;
-      if (to >= 0) setTimeout(() => go(to), 300);
+      const still = calm();
+      if (!still) { setStamp({ happy: outcome === 'agreed', n: mine.length }); setTimeout(() => { if (alive.current) setStamp(null); }, 1100); }
+      if (to >= 0) setTimeout(() => { if (alive.current) go(to); }, still ? 300 : 950);
     } catch (e: any) {
       toast({ title: 'Not saved', sub: e?.message });
     } finally { setBusy(false); }
@@ -265,7 +349,7 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
     <ClientPortal client={client}>
       <ClientView projectName={projectName} look={look} meeting={m} step={step} at={at} room={room} sh={sh} sheetIndex={sheet}
         page={page} pages={pages} zoom={zoom} turn={turn} marks={marks} draft={draft ? { shape: draft.shape, page: draft.page, text: draft.text } : null} changes={mine}
-        planMode={!m.layout ? 'off' : showPlan ? 'side' : 'inset'} size={client.size} scroll={mirror.at} />
+        planMode={!m.layout ? 'off' : showPlan ? 'side' : 'inset'} size={client.size} scroll={mirror.at} planTurn={planTurn} />
     </ClientPortal>
   ) : null;
 
@@ -382,7 +466,9 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
   const costKinds: [ChangeCost['kind'], string][] = [['none', 'No cost change'], ['more', 'Costs more'], ['less', 'Costs less']];
 
   return (
-    <div ref={root} className="fixed inset-0 z-[110] flex flex-col bg-slate-950 text-slate-100" style={DESK_ACCENT} role="dialog" aria-label="Client meeting">
+    <div ref={root} className="dd2m-bg fixed inset-0 z-[110] flex flex-col overflow-hidden bg-slate-950 text-slate-100" style={DESK_ACCENT} role="dialog" aria-label="Client meeting">
+      <DeskMotionStyles />
+      <MeetMotionStyles />
       {/* ---------------- the top bar */}
       <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
         <span className="inline-flex h-8 items-center gap-2 rounded-full bg-rose-600 px-3 text-xs font-bold text-white" title="How long the meeting has run"><span className="dd2-dot h-1.5 w-1.5 rounded-full bg-white" /><Elapsed since={m.startedAt} /></span>
@@ -390,7 +476,7 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
           <div className="truncate text-base font-bold">Meeting{m.attendees ? ` with ${m.attendees}` : ` · ${projectName}`}</div>
           <div className="truncate text-xs text-slate-400">Room {at + 1} of {m.rooms.length} · {done} done · {way === 'call' ? (client ? 'share the client window in your call' : 'open the client window for your call') : 'turn the screen to the client, or go full screen'}</div>
         </div>
-        <span className={cx('inline-flex min-h-[32px] items-center rounded-full px-3 text-xs font-bold', over ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-300')}
+        <span className={cx('dd2m-chip inline-flex min-h-[32px] items-center rounded-full px-3 text-xs font-bold', over ? 'is-over bg-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-300')}
           title={over ? 'A change in this room starts a round that can be charged' : 'Revision rounds the client has used in this room'}>
           {roomLabel(room.room)}: {roundsLine(roundsUsed, m.includedRounds)}
         </span>
@@ -401,7 +487,7 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
             <button type="button" onClick={closeClient} aria-label="Close the client's window" className="grid h-10 w-10 place-items-center rounded-xl hover:bg-white/10"><X size={15} /></button>
           </span>
         ) : (
-          <button type="button" onClick={launchClient} className={cx(dark, way === 'call' ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-800 text-slate-100 hover:bg-slate-700')} title="For a call: a clean window with only the drawing, to share in Google Meet or Zoom">
+          <button type="button" onClick={launchClient} className={cx(dark, 'dd2m-soft text-white', way === 'call' && 'go')} title="For a call: a clean window with only the drawing, to share in Google Meet or Zoom">
             <MonitorUp size={16} aria-hidden />Client window
           </button>
         ))}
@@ -420,8 +506,8 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
               const on = i === at; const s = status(r);
               return (
                 <button key={r.room} type="button" onClick={() => go(i)} aria-current={on ? 'true' : undefined}
-                  className={cx('flex min-h-[56px] shrink-0 items-center gap-3 rounded-xl px-3 text-left transition-colors', on ? 'bg-slate-800' : 'hover:bg-slate-900')}>
-                  <span className={cx('grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold', s.tone === 'ok' ? 'bg-emerald-600 text-white' : s.tone === 'ch' ? 'bg-amber-500 text-white' : on ? 'bg-white text-slate-900' : 'bg-slate-800 text-slate-300')}>
+                  className={cx('dd2m-room flex min-h-[56px] shrink-0 items-center gap-3 rounded-xl px-3 text-left', on ? 'is-on' : 'hover:bg-slate-900')}>
+                  <span key={s.tone} className={cx('dd2m-disc grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold', r.outcome && 'is-done', s.tone === 'ok' ? 'bg-emerald-600 text-white' : s.tone === 'ch' ? 'bg-amber-500 text-white' : on ? 'bg-white text-slate-900' : 'bg-slate-800 text-slate-300')}>
                     {s.tone === 'ok' ? <Check size={15} strokeWidth={3} aria-hidden /> : i + 1}
                   </span>
                   <span className="min-w-0">
@@ -435,19 +521,19 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
         )}
 
         {/* ---------------- the drawing */}
-        <section className="relative flex min-h-[420px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-slate-900 lg:min-h-0">
+        <section ref={viewer} className="dd2m-panel relative flex min-h-[420px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl lg:min-h-0">
           <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-slate-800 px-2 py-2">
             <button type="button" onClick={() => step1(-1)} disabled={tabs.length < 2} aria-label="Previous drawing" className={icon}><ChevronLeft size={18} /></button>
             <b key={at} className="hud-swap shrink-0 px-1 text-base">{roomLabel(room.room)}</b>
             {room.sheets.map((s, i) => (
               <button key={s.drawingId} type="button" onClick={() => pick(i)} aria-pressed={tab === i}
-                className={cx('min-h-[40px] shrink-0 whitespace-nowrap rounded-xl px-3 text-sm font-bold transition-colors', tab === i ? 'bg-white text-slate-900' : 'bg-slate-800 text-slate-200 hover:bg-slate-700')}>
+                className={cx('dd2m-tab min-h-[40px] shrink-0 whitespace-nowrap rounded-xl px-3 text-sm font-bold', tab === i ? 'is-on bg-white text-slate-900' : 'bg-slate-800 text-slate-200 hover:bg-slate-700')}>
                 {s.name}<span className={cx('ml-1.5 text-xs font-semibold', tab === i ? 'text-slate-500' : 'text-slate-400')}>v{s.versionNo}</span>
               </button>
             ))}
             {m.layout && (
               <button type="button" onClick={() => pick('plan')} aria-pressed={tab === 'plan'} title="Show the layout plan large (L)"
-                className={cx('inline-flex min-h-[40px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 text-sm font-bold transition-colors', tab === 'plan' ? 'bg-white text-slate-900' : 'bg-slate-800 text-slate-200 hover:bg-slate-700')}>
+                className={cx('dd2m-tab inline-flex min-h-[40px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 text-sm font-bold', tab === 'plan' ? 'is-on bg-white text-slate-900' : 'bg-slate-800 text-slate-200 hover:bg-slate-700')}>
                 <MapPinned size={15} aria-hidden />Layout plan
               </button>
             )}
@@ -455,24 +541,30 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
             <button type="button" onClick={() => step1(1)} disabled={tabs.length < 2} aria-label="Next drawing" className={icon}><ChevronRight size={18} /></button>
           </div>
 
-          <div ref={stage} key={`${at}:${showPlan ? 'plan' : sheet}`} onScroll={mirror.onScroll} className="hud-swap min-h-0 flex-1 overflow-auto p-3 pb-[76px]">
+          <div ref={stage} key={`${at}:${showPlan ? 'plan' : sheet}`} onScroll={mirror.onScroll} className="min-h-0 flex-1 overflow-auto p-3 pb-[76px]">
             {showPlan && m.layout ? (
-              <div className="mx-auto max-w-[1400px] rounded-xl bg-white p-3"><LayoutPanel sheet={m.layout} room={room.room} box={box} fitHeight={stageH > 240 ? stageH - 60 : undefined} maxWidth={1600} /></div>
+              planTurnRaw === undefined ? <div className="grid h-full min-h-[240px] place-items-center text-slate-500"><Loader2 className="animate-spin" aria-label="Opening the layout plan" /></div>
+                : <div className="dd2m-page mx-auto max-w-[1500px] rounded-xl bg-white p-3"><LayoutPanel sheet={m.layout} room={room.room} box={box} turn={planTurn} zoom={zoom} fitHeight={stageH > 240 ? stageH - 60 : undefined} maxWidth={4000} /></div>
             ) : sh.pdfPath ? (
-              turns[sh.drawingId] === undefined ? <div className="grid h-full min-h-[240px] place-items-center text-slate-500"><Loader2 className="animate-spin" aria-label="Opening the drawing" /></div> : (
-                <React.Fragment key={`${sh.drawingId}/${sh.versionId}`}><PdfStage pdfPath={sh.pdfPath} page={page} zoom={zoom} turn={turn} marks={marks} draft={draft?.shape || null}
+              turnRaw === undefined ? <div className="grid h-full min-h-[240px] place-items-center text-slate-500"><Loader2 className="animate-spin" aria-label="Opening the drawing" /></div> : (
+                <div key={`${sh.drawingId}/${sh.versionId}`} className="dd2m-page"><PdfStage pdfPath={sh.pdfPath} page={page} zoom={zoom} turn={turn} marks={marks} draft={draft?.shape || null}
                   tool={pinning ? 'pin' : 'select'} canMark={pinning && !draft && !room.outcome} markColor={CLIENT} onPageCount={setPages}
                   maxWidth={4000} fitHeight={stageH > 240 ? stageH - 4 : undefined}
-                  onShape={(shape) => setDraft({ shape, page, text: '', kind: '', amount: '', note: '' })} /></React.Fragment>
+                  overlay={<ChangePins changes={onPage} turn={turn} hot={hot} onHot={setHot} passive={pinning} studio={lead} />}
+                  onShape={(shape) => setDraft({ shape, page, text: '', kind: '', amount: '', note: '' })} /></div>
               )
             ) : <div className="grid h-60 place-items-center text-slate-400">This drawing has no PDF.</div>}
           </div>
 
           {full && m.layout && !showPlan && (
             <button type="button" onClick={() => pick('plan')} title="Show the layout plan large (L)" className="absolute bottom-[76px] left-3 z-10 w-[240px] rounded-xl bg-white p-2 text-left shadow-2xl">
-              <LayoutPanel sheet={m.layout} room={room.room} box={box} maxWidth={224} compact />
+              <LayoutPanel sheet={m.layout} room={room.room} box={box} maxWidth={224} compact turn={planTurn} />
             </button>
           )}
+
+          {stamp && (stamp.happy
+            ? <div className="dd2-tick" role="status" aria-label="The client is happy"><svg viewBox="0 0 24 24" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></div>
+            : <div className="dd2m-stamp" role="status" aria-label={`${plural(stamp.n, 'change')} noted`}>{stamp.n}</div>)}
 
           {pinning && !draft && <div className="pointer-events-none absolute bottom-[76px] left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-white shadow-lg" role="status">Tap the drawing where the client wants a change</div>}
 
@@ -519,9 +611,9 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
             </div>
           )}
 
-          {!showPlan && (
-            <div className="absolute bottom-3 left-1/2 z-10 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-0.5 overflow-x-auto rounded-2xl bg-slate-800/95 p-1 shadow-xl backdrop-blur" role="toolbar" aria-label="Drawing controls">
-              {pages > 1 && <>
+          {(
+            <div className="absolute bottom-3 left-1/2 z-10 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-0.5 overflow-x-auto rounded-2xl border border-slate-600/40 bg-slate-800/95 p-1 shadow-2xl backdrop-blur" role="toolbar" aria-label="Drawing controls">
+              {!showPlan && pages > 1 && <>
                 <button type="button" onClick={() => { setPage((p) => Math.max(0, p - 1)); setDraft(null); }} disabled={page === 0} aria-label="Previous page" className={icon}><ChevronLeft size={17} /></button>
                 <span className="whitespace-nowrap px-1 text-xs font-bold text-slate-300">Page {page + 1} of {pages}</span>
                 <button type="button" onClick={() => { setPage((p) => Math.min(pages - 1, p + 1)); setDraft(null); }} disabled={page >= pages - 1} aria-label="Next page" className={icon}><ChevronRight size={17} /></button>
@@ -530,8 +622,8 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
               <button type="button" onClick={() => zoomBy(-0.25)} aria-label="Zoom out" className={icon}><Minus size={17} /></button>
               <button type="button" onClick={() => setZoom(1)} title="Fit the drawing (0)" className="min-h-[40px] min-w-[52px] rounded-xl px-1 text-xs font-bold text-slate-200 hover:bg-slate-700">{Math.round(zoom * 100)}%</button>
               <button type="button" onClick={() => zoomBy(0.25)} aria-label="Zoom in" className={icon}><Plus size={17} /></button>
-              <button type="button" onClick={rotate} aria-label="Rotate the drawing" title="Rotate (R). Pins stay where they are on the drawing." className={icon}><RotateCw size={17} /></button>
-              <button type="button" onClick={download} disabled={saving || !sh.pdfPath} aria-label={`Download ${sh.name} v${sh.versionNo}`} title="Download the approved PDF" className={icon}>{saving ? <Loader2 size={17} className="animate-spin" /> : <Download size={17} />}</button>
+              <button type="button" onClick={rotate} aria-label={showPlan ? 'Rotate the layout plan' : 'Rotate the drawing'} title={showPlan ? 'Turn the plan a quarter (R). It is remembered on this device.' : 'Rotate (R). Pins stay where they are on the drawing.'} className={icon}><RotateCw size={17} /></button>
+              {!showPlan && <button type="button" onClick={download} disabled={saving || !sh.pdfPath} aria-label={`Download ${sh.name} v${sh.versionNo}`} title="Download the approved PDF" className={icon}>{saving ? <Loader2 size={17} className="animate-spin" /> : <Download size={17} />}</button>}
             </div>
           )}
         </section>
@@ -540,8 +632,8 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
         {!full && (
           <aside className="flex min-h-0 shrink-0 flex-col gap-3 overflow-y-auto pb-1 lg:w-[292px]" aria-label="Meeting notes">
             {(way === 'call' || client) && (
-              <button type="button" onClick={client ? () => client.win.focus() : launchClient} className="flex shrink-0 items-center gap-3 rounded-2xl bg-slate-900 p-3 text-left hover:bg-slate-800">
-                <span className={cx('grid h-11 w-11 shrink-0 place-items-center rounded-xl', client ? 'bg-emerald-900/60 text-emerald-300' : 'bg-slate-800 text-slate-400')}>{client ? <Eye size={20} aria-hidden /> : <MonitorUp size={20} aria-hidden />}</span>
+              <button type="button" onClick={client ? () => client.win.focus() : launchClient} className={cx('dd2m-panel dd2m-lift dd2m-rise flex shrink-0 items-center gap-3 rounded-2xl p-3 text-left', !client && 'dd2m-call')}>
+                <span className={cx('relative grid h-11 w-11 shrink-0 place-items-center rounded-xl', client ? 'bg-emerald-900/60 text-emerald-300' : 'bg-slate-800 text-slate-400')}>{client ? <Eye size={20} aria-hidden /> : <MonitorUp size={20} aria-hidden />}{client && <span className="dd2-dot absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400" aria-hidden />}</span>
                 <span className="min-w-0">
                   <span className="block text-xs font-bold uppercase tracking-wider text-slate-400">Client window</span>
                   <span className={cx('block text-sm font-bold', client ? 'text-emerald-400' : 'text-amber-300')}>{client ? 'Open. This is what the client sees.' : 'Not open yet. Press to open it.'}</span>
@@ -551,33 +643,34 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
             {client && <p className="shrink-0 px-1 text-xs text-slate-400">In your call, share the window called <b className="text-slate-200">Design meeting · {projectName}</b>. It follows what you show here.</p>}
 
             {m.layout && (
-              <button type="button" onClick={() => pick(tab === 'plan' ? 0 : 'plan')} title="Show the layout plan large (L)" className="shrink-0 rounded-2xl bg-slate-900 p-3 text-left hover:bg-slate-800">
+              <button type="button" onClick={() => pick(tab === 'plan' ? 0 : 'plan')} title="Show the layout plan large (L)" className="dd2m-panel dd2m-lift dd2m-rise shrink-0 rounded-2xl p-3 text-left" style={{ animationDelay: '60ms' }}>
                 <span className="mb-2 flex items-center gap-2"><span className="flex-1 text-xs font-bold uppercase tracking-wider text-slate-400">Layout plan</span><span className="truncate text-xs font-bold text-emerald-400">{box ? roomLabel(room.room) : 'Room not marked'}</span></span>
-                <span className="block overflow-hidden rounded-lg bg-white p-1.5"><LayoutPanel sheet={m.layout} room={room.room} box={box} maxWidth={250} fitHeight={150} compact /></span>
+                <span className="block overflow-hidden rounded-lg bg-white p-1.5"><LayoutPanel sheet={m.layout} room={room.room} box={box} maxWidth={250} compact turn={planTurn} /></span>
               </button>
             )}
 
-            <div className="shrink-0 rounded-2xl bg-slate-900 p-3">
+            <div className="dd2m-panel dd2m-rise shrink-0 rounded-2xl p-3" style={{ animationDelay: '120ms' }}>
               <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">The client's changes · {roomLabel(room.room)}</div>
               {mine.length ? (
                 <ul className="flex flex-col gap-1.5">
                   {mine.map((c) => (
-                    <li key={c.n} className="hud-row-in flex items-start gap-2.5 rounded-xl bg-slate-800 p-2.5">
-                      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-amber-500 text-xs font-bold text-white">{c.n}</span>
+                    <li key={c.n} className="hud-row-in"><Tilt className={cx('dd2-note flex items-start gap-2.5 rounded-xl bg-slate-800 p-2.5', hot === c.n && 'is-hot')} style={{ ['--pin' as any]: '#F59E0B' }}
+                      onMouseEnter={() => setHot(c.n)} onMouseLeave={() => setHot(null)}>
+                      <span className="dd2-badge mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold text-white">{c.n}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm text-slate-100">{c.text}</span>
                         <span className="block truncate text-xs text-slate-400">On {room.sheets.find((s) => s.drawingId === c.drawingId)?.name}{c.page ? `, page ${c.page + 1}` : ''}</span>
                         {lead && c.cost && <span className="block text-xs font-semibold text-amber-300">{costLine(c.cost)}</span>}
                       </span>
                       {!room.outcome && <button type="button" onClick={() => removeChange(c.n)} aria-label={`Remove change ${c.n}`} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white"><Trash2 size={15} /></button>}
-                    </li>
+                    </Tilt></li>
                   ))}
                 </ul>
               ) : <p className="text-sm text-slate-400">{room.outcome === 'agreed' ? 'The client is happy with this room as shown.' : pinning ? 'Tap the drawing to pin the first change.' : 'None yet. If the client asks for something, press Add a change and tap the drawing.'}</p>}
             </div>
 
-            <div className="flex min-h-[160px] flex-1 flex-col rounded-2xl bg-slate-900 p-3">
-              <div className="mb-2 flex items-center gap-2"><span className="flex-1 text-xs font-bold uppercase tracking-wider text-slate-400">Minutes</span><span className="text-xs font-bold text-emerald-400">writing as you go</span></div>
+            <div className="dd2m-panel dd2m-rise flex min-h-[160px] flex-1 flex-col rounded-2xl p-3" style={{ animationDelay: '180ms' }}>
+              <div className="mb-2 flex items-center gap-2"><span className="flex-1 text-xs font-bold uppercase tracking-wider text-slate-400">Minutes</span><span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400"><span className="dd2-dot h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />writing as you go</span></div>
               <MinutesList lines={shownLines} dark className="min-h-0 flex-1" />
             </div>
           </aside>
@@ -585,7 +678,7 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
       </div>
 
       {/* ---------------- what the room ends with */}
-      <footer className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+      <footer className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-4 pb-4 pt-3">
         <div className="min-w-0 flex-[1_1_220px]">
           <div className="truncate text-sm font-bold text-slate-100">
             {room.outcome ? `${roomLabel(room.room)}: ${room.outcome === 'agreed' ? 'the client is happy' : `${plural(room.changes.length, 'change')} recorded`}. You can reopen it until the meeting is saved.` : `${roomLabel(room.room)}: what does the client say?`}
@@ -593,20 +686,20 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
           <div className="truncate text-xs text-slate-400">Keys: C add a change{m.layout ? ' · L layout plan' : ''} · ← → drawings · F full screen · Ctrl + scroll to zoom</div>
         </div>
         {room.outcome ? (
-          <button type="button" disabled={busy} onClick={reopen} className={cx(ghost, 'min-h-[48px] text-base')}><Undo2 size={18} aria-hidden />Reopen this room</button>
+          <button type="button" disabled={busy} onClick={reopen} className={cx(dark, 'dd2m-key slate min-h-[48px] text-base')}><span className="ico"><Undo2 size={18} aria-hidden /></span>Reopen this room</button>
         ) : (<>
           <button type="button" onClick={startPin} aria-pressed={pinning} title="Pin what the client wants changed on the drawing (C)"
-            className={cx(dark, 'min-h-[48px] text-base text-white', pinning ? 'bg-amber-700 hover:bg-amber-700' : 'bg-amber-500 hover:bg-amber-600')}>
-            <MapPin size={18} aria-hidden />{pinning ? 'Stop adding' : 'Add a change'}
+            className={cx(dark, 'dd2m-key amber min-h-[48px] text-base', pinning && 'is-on')}>
+            <span className="ico"><MapPin size={18} aria-hidden /></span>{pinning ? 'Stop adding' : 'Add a change'}
           </button>
-          <button type="button" disabled={busy || !!draft} onClick={() => decide(mine.length ? 'changes' : 'agreed')} className={cx(dark, 'min-h-[48px] bg-emerald-600 text-base text-white hover:bg-emerald-700')}>
-            {busy ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Check size={18} strokeWidth={2.6} aria-hidden />}
+          <button type="button" disabled={busy || !!draft} onClick={() => decide(mine.length ? 'changes' : 'agreed')} className={cx(dark, 'dd2m-key emerald min-h-[48px] text-base')}>
+            {busy ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <span className="ico"><Check size={18} strokeWidth={2.6} aria-hidden /></span>}
             {mine.length ? `Done: ${plural(mine.length, 'change')} for this room` : 'Client is happy with this room'}
           </button>
         </>)}
         <button type="button" onClick={() => { exitFull(); setPinning(false); setDraft(null); setStep('wrap'); }} disabled={!done} title={done ? undefined : 'Decide at least one room first, or leave for now'}
-          className={cx(dark, 'min-h-[48px] bg-rose-600 text-base text-white hover:bg-rose-700')}>
-          <PhoneOff size={18} aria-hidden />Finish the meeting
+          className={cx(dark, 'dd2m-key rose min-h-[48px] text-base')}>
+          <span className="ico"><PhoneOff size={18} aria-hidden /></span>Finish the meeting
         </button>
       </footer>
       {clientView}

@@ -148,6 +148,86 @@ export const DeskMotionStyles = () => (
   `}</style>
 );
 
+/*
+  THE MEETING SCREEN'S MOTION AND DEPTH (owner, 24 Nov 2026: "no animations
+  on the page, it is too flat"). The same language as the drawing screen's
+  Living icons, on the dark screen: the three buttons a room ends with are
+  raised keys whose icons act (the pin drops, the tick draws itself, the
+  receiver rocks); panels have a lit top edge and a shadow; the page of the
+  drawing floats; a room's disc pops when it is decided; a new minute lands
+  with a flash; the round chip glows once its rounds are used. Colours are
+  the desk's: slate, emerald, amber, rose. Everything stops under reduced
+  motion. Needs DeskMotionStyles beside it for the shared keyframes.
+*/
+export const MeetMotionStyles = () => (
+  <style>{`
+    @keyframes dd2mIn { from { opacity: 0; transform: translateY(10px) scale(.985) } to { opacity: 1; transform: none } }
+    @keyframes dd2mGlow { 0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0) } 50% { box-shadow: 0 0 0 5px rgba(245,158,11,.22) } }
+    @keyframes dd2mFlash { 0% { background-color: rgba(16,185,129,.45) } 100% { background-color: rgba(30,41,59,.7) } }
+    @keyframes dd2mPop { 0% { transform: scale(.4) } 60% { transform: scale(1.18) } 100% { transform: none } }
+    @keyframes dd2mDrift { 0%, 100% { transform: translate3d(0,0,0) } 50% { transform: translate3d(3%, 4%, 0) } }
+    @keyframes dd2mRock { 0%, 100% { transform: rotate(0) } 25% { transform: rotate(-14deg) } 75% { transform: rotate(10deg) } }
+    @keyframes dd2mCall { 0%, 100% { box-shadow: inset 0 0 0 1px rgba(245,158,11,.25) } 50% { box-shadow: inset 0 0 0 2px rgba(245,158,11,.7) } }
+    @keyframes dd2mBar { from { transform: scaleY(0) } to { transform: scaleY(1) } }
+
+    .dd2m-bg { background: #020617; isolation: isolate }
+    .dd2m-bg::before, .dd2m-bg::after { content: ''; position: absolute; z-index: -1; border-radius: 9999px; filter: blur(70px); pointer-events: none; animation: dd2mDrift 18s ease-in-out infinite }
+    .dd2m-bg::before { left: -12%; top: -28%; width: 55%; height: 70%; background: rgba(16,185,129,.20) }
+    .dd2m-bg::after { right: -14%; bottom: -34%; width: 50%; height: 70%; background: rgba(245,158,11,.11); animation-delay: -9s }
+
+    .dd2m-panel { background: linear-gradient(180deg, rgba(30,41,59,.92), rgba(15,23,42,.94)); border: 1px solid rgba(148,163,184,.14); box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 24px 44px -28px rgba(0,0,0,.95) }
+    .dd2m-rise { animation: dd2mIn .45s cubic-bezier(.22,1,.36,1) both }
+    .dd2m-lift { transition: transform .2s cubic-bezier(.3,1.5,.5,1), box-shadow .2s, border-color .2s }
+    .dd2m-lift:hover { transform: translateY(-3px); border-color: rgba(52,211,153,.45); box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 26px 40px -24px rgba(16,185,129,.55) }
+
+    /* ---- the keys a room ends with */
+    .dd2m-key { position: relative; color: #fff; background: linear-gradient(180deg, var(--k1), var(--k)); box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 5px 0 var(--kd), 0 18px 26px -14px var(--k); transform: translateY(-2px); transition: transform .14s cubic-bezier(.3,1.5,.5,1), box-shadow .14s, filter .14s }
+    .dd2m-key:hover:not(:disabled) { transform: translateY(-4px); box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 7px 0 var(--kd), 0 24px 30px -14px var(--k); filter: brightness(1.06) }
+    .dd2m-key:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 0 var(--kd), 0 8px 14px -10px var(--k) }
+    .dd2m-key:disabled { filter: saturate(.5) }
+    .dd2m-key.amber { --k: #D97706; --k1: #F59E0B; --kd: #92400E }
+    .dd2m-key.emerald { --k: #059669; --k1: #10B981; --kd: #065F46 }
+    .dd2m-key.rose { --k: #E11D48; --k1: #F43F5E; --kd: #9F1239 }
+    .dd2m-key.slate { --k: #334155; --k1: #475569; --kd: #0F172A }
+    .dd2m-key .ico { display: inline-grid; transform-origin: 50% 100% }
+    .dd2m-key.amber:hover:not(:disabled) .ico, .dd2m-key.amber.is-on .ico { animation: dd2Drop .7s cubic-bezier(.3,1.6,.5,1) infinite }
+    .dd2m-key.rose:hover:not(:disabled) .ico { animation: dd2mRock .6s ease-in-out infinite }
+    .dd2m-key.slate:hover:not(:disabled) .ico { animation: dd2Wag .6s ease-in-out }
+    .dd2m-key.emerald .ico path, .dd2m-key.emerald .ico polyline { stroke-dasharray: 64; stroke-dashoffset: 0 }
+    .dd2m-key.emerald:hover:not(:disabled) .ico path, .dd2m-key.emerald:hover:not(:disabled) .ico polyline { animation: dd2Draw 1.1s ease-out infinite }
+
+    /* ---- the top bar's quiet keys */
+    .dd2m-soft { background: linear-gradient(180deg, #334155, #1E293B); box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 3px 0 #0B1220; transform: translateY(-1px); transition: transform .14s cubic-bezier(.3,1.5,.5,1), box-shadow .14s, filter .14s }
+    .dd2m-soft:hover:not(:disabled) { transform: translateY(-3px); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 5px 0 #0B1220; filter: brightness(1.12) }
+    .dd2m-soft:active:not(:disabled) { transform: translateY(1px); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 1px 0 #0B1220 }
+    .dd2m-soft:hover:not(:disabled) svg { animation: dd2Pulse .5s ease-in-out }
+    .dd2m-soft.go { background: linear-gradient(180deg, #10B981, #059669); box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 3px 0 #065F46, 0 14px 22px -12px #059669 }
+
+    /* ---- rooms, tabs, the page */
+    .dd2m-room { position: relative; transition: transform .2s cubic-bezier(.3,1.5,.5,1), background-color .2s }
+    .dd2m-room:hover { transform: translateX(4px) }
+    .dd2m-room.is-on { background: linear-gradient(90deg, rgba(16,185,129,.22), rgba(30,41,59,.9) 60%); box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 16px 26px -20px rgba(16,185,129,.8) }
+    .dd2m-room.is-on::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 4px; background: #34D399; transform-origin: 50% 50%; animation: dd2mBar .35s cubic-bezier(.3,1.5,.5,1) both }
+    .dd2m-disc { transition: background-color .2s }
+    .dd2m-disc.is-done { animation: dd2mPop .5s cubic-bezier(.3,1.6,.5,1) both; box-shadow: 0 6px 14px -4px currentColor }
+    .dd2m-tab { transition: transform .18s cubic-bezier(.3,1.5,.5,1), box-shadow .18s, background-color .15s }
+    .dd2m-tab:hover { transform: translateY(-2px) }
+    .dd2m-tab.is-on { transform: translateY(-2px); box-shadow: 0 10px 18px -10px rgba(255,255,255,.55) }
+    .dd2m-page { filter: drop-shadow(0 26px 30px rgba(0,0,0,.6)); animation: dd2mIn .5s cubic-bezier(.22,1,.36,1) both }
+    .dd2m-chip.is-over { animation: dd2mGlow 2.2s ease-in-out infinite }
+    .dd2m-min { animation: dd2mFlash 1.4s ease-out both, dd2mIn .4s cubic-bezier(.22,1,.36,1) both }
+    .dd2m-call { animation: dd2mCall 1.8s ease-in-out infinite }
+    .dd2m-stamp { position: absolute; left: 50%; top: 42%; min-width: 120px; height: 120px; margin: -60px 0 0 -60px; padding: 0 18px; border-radius: 9999px; background: #D97706; color: #fff; display: grid; place-items: center; z-index: 20; pointer-events: none; font-size: 54px; font-weight: 800; box-shadow: 0 20px 40px -12px rgba(217,119,6,.75); animation: dd2TickIn 1.1s cubic-bezier(.3,1.5,.5,1) forwards }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dd2m-bg::before, .dd2m-bg::after, .dd2m-rise, .dd2m-key .ico, .dd2m-key .ico *, .dd2m-soft svg, .dd2m-room.is-on::before, .dd2m-disc.is-done, .dd2m-page, .dd2m-chip.is-over, .dd2m-min, .dd2m-call, .dd2m-stamp { animation: none !important }
+      .dd2m-key, .dd2m-soft, .dd2m-room, .dd2m-tab, .dd2m-lift { transition: none !important }
+      .dd2m-key:hover:not(:disabled), .dd2m-soft:hover:not(:disabled), .dd2m-room:hover, .dd2m-tab:hover, .dd2m-lift:hover { transform: none }
+      .dd2m-stamp { display: none }
+    }
+  `}</style>
+);
+
 /** A card that leans a few degrees towards the mouse, with a soft light where the pointer is. Still on touch. */
 export const Tilt: React.FC<{ children: React.ReactNode; className?: string; style?: React.CSSProperties; max?: number; [attr: string]: unknown }> = ({ children, className = '', style, max = 3, ...rest }) => {
   const el = useRef<HTMLDivElement>(null);

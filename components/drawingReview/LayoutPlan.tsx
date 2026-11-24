@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Eraser, Loader2, MapPinned, X } from 'lucide-react';
 import type { PlanBox } from '../../lib/designMeeting';
+import type { Turn } from '../../lib/drawingReview';
 import { saveLayoutRooms } from '../../services/designMeetingService';
 import PdfStage from './PdfStage';
 import { CLIENT, roomLabel, useToast } from './ui';
@@ -21,7 +22,9 @@ export interface PlanSheet { drawingId: string; name: string; versionNo: number;
 export const LayoutPanel: React.FC<{
   sheet: PlanSheet; room: string; box: PlanBox | null;
   loader?: () => Promise<ArrayBuffer>; fitHeight?: number; maxWidth?: number; compact?: boolean;
-}> = ({ sheet, room, box, loader, fitHeight, maxWidth, compact }) => (
+  /** The plan turned for reading (a plan stored upright, shown landscape) and zoomed. The room's outline turns with it. */
+  turn?: Turn; zoom?: number;
+}> = ({ sheet, room, box, loader, fitHeight, maxWidth, compact, turn, zoom }) => (
   <div className="flex min-w-0 flex-col gap-1.5">
     <div className="flex items-center gap-2 text-[11.5px] font-bold text-[#5F636D]">
       <MapPinned size={14} className="shrink-0" style={{ color: CLIENT }} />
@@ -29,7 +32,7 @@ export const LayoutPanel: React.FC<{
       {box ? <span style={{ color: CLIENT }}>{roomLabel(room)} outlined</span> : !compact && <span>Room not marked on the plan</span>}
     </div>
     {sheet.pdfPath ? (
-      <PdfStage pdfPath={sheet.pdfPath} loader={loader} page={box?.page || 0} zoom={1} marks={[]} tool="select" canMark={false}
+      <PdfStage pdfPath={sheet.pdfPath} loader={loader} page={box?.page || 0} zoom={zoom || 1} turn={turn} marks={[]} tool="select" canMark={false}
         fitHeight={fitHeight} maxWidth={maxWidth} areas={box ? [{ ...box, label: roomLabel(room), active: true }] : null} />
     ) : <div className="grid h-32 place-items-center text-[12.5px] text-[#5F636D]">The plan has no PDF.</div>}
   </div>
@@ -39,7 +42,9 @@ export const LayoutPanel: React.FC<{
 export const LayoutRooms: React.FC<{
   orgId: string; projectId: string; sheet: PlanSheet; rooms: string[];
   initial: Record<string, PlanBox>; onClose: () => void;
-}> = ({ orgId, projectId, sheet, rooms, initial, onClose }) => {
+  /** The plan turned for reading while the boxes are drawn; the boxes are saved against the page as it is stored. */
+  turn?: Turn;
+}> = ({ orgId, projectId, sheet, rooms, initial, onClose, turn }) => {
   const toast = useToast();
   const [boxes, setBoxes] = useState<Record<string, PlanBox>>(initial);
   const [current, setCurrent] = useState(() => rooms.find((r) => !initial[r]) || rooms[0] || '');
@@ -98,7 +103,7 @@ export const LayoutRooms: React.FC<{
             </div>
             <div className="rounded-[14px] bg-[#F1F1EC] p-3">
               {sheet.pdfPath && (
-                <PdfStage pdfPath={sheet.pdfPath} page={page} zoom={1} marks={[]} tool="rect" canMark={!!current} onPageCount={setPages} onShape={place}
+                <PdfStage pdfPath={sheet.pdfPath} page={page} zoom={1} turn={turn} marks={[]} tool="rect" canMark={!!current} onPageCount={setPages} onShape={place}
                   fitHeight={typeof window !== 'undefined' ? window.innerHeight - 280 : 600}
                   areas={rooms.filter((r) => boxes[r] && boxes[r].page === page).map((r) => ({ ...boxes[r], label: roomLabel(r), active: r === current }))} />
               )}

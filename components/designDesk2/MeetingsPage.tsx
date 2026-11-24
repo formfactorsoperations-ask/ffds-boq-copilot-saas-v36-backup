@@ -14,7 +14,7 @@ import ClientApproval from '../drawingReview/ClientApproval';
 import { ProjectMark, SheetThumb } from '../drawingReview/DeskParts';
 import { roomLabel, shortDate, firstName, useToast } from '../drawingReview/ui';
 import { Btn, Card, Empty, SectionTitle, Tag, cx } from './parts';
-import { CopyMinutes, DESK_ACCENT, MinutesList, RoomResult, inr, meetingTitle, saveWay, savedWay } from './meetingBits';
+import { CopyMinutes, DESK_ACCENT, MinutesList, RoomResult, inr, meetingTitle, saveWay, savedWay, useSheetTurn } from './meetingBits';
 
 /*
   DESIGN DESK 2.0: the Meetings page (build plan, Phase 2).
@@ -91,6 +91,8 @@ export default function MeetingsPage({ orgId, projectId, projectName, drawings, 
   const allRooms = useMemo(() => [...new Set(drawings.map((d) => d.roomName || GENERAL_ROOM))].filter((r) => r !== GENERAL_ROOM).sort(), [drawings]);
   const marks = setup && plan && setup.drawingId === plan.id ? setup.rooms : {};
   const [marking, setMarking] = useState(false);
+  /* A plan stored upright is marked the way it will be shown: landscape. */
+  const [planTurn] = useSheetTurn(projectId || '', plan?.id, plan?.review?.pdfPath);
 
   /* Revision rounds: what each room has used, and how many the client's terms include (as the last meeting recorded them). */
   const used = useMemo(() => clientRoundsByRoom(meetings || []), [meetings]);
@@ -361,7 +363,7 @@ export default function MeetingsPage({ orgId, projectId, projectName, drawings, 
       {signing && <ClientSign orgId={orgId} projectId={projectId} meeting={signing} onClose={() => setSigning(null)} />}
       {giving && <Presenters orgId={orgId} projectId={projectId} projectName={projectName} drawings={drawings} designers={designers} onClose={() => setGiving(false)} />}
       {marking && plan && (
-        <LayoutRooms orgId={orgId} projectId={projectId} rooms={allRooms} initial={marks} onClose={() => setMarking(false)}
+        <LayoutRooms orgId={orgId} projectId={projectId} rooms={allRooms} initial={marks} onClose={() => setMarking(false)} turn={planTurn}
           sheet={{ drawingId: plan.id, name: plan.name, versionNo: plan.review?.versionNo || 1, pdfPath: plan.review?.pdfPath || null }} />
       )}
       {outside && <RecordOutside orgId={orgId} projectId={projectId} onClose={() => setOutside(false)} />}

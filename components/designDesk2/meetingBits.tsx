@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Check, ClipboardCheck, Copy, IndianRupee, MapPin, MessageSquareText, PencilLine, Undo2 } from 'lucide-react';
 import { costLine, plural, type DesignMeeting, type MeetingRoom } from '../../lib/designMeeting';
 import { minutesText, type MeetingWay, type MinuteLine } from '../../lib/meetingMinutes';
+import { loadPdf } from '../../lib/pdfRender';
+import type { Turn } from '../../lib/drawingReview';
+import { fileBlob } from '../../services/drawingReviewService';
 import { roomLabel, useToast } from '../drawingReview/ui';
 import { Btn, Tag, cx } from './parts';
 
@@ -14,6 +17,47 @@ import { Btn, Tag, cx } from './parts';
 const WAY_KEY = 'ffds_dd2_meet_way';
 export const savedWay = (): MeetingWay => { try { return localStorage.getItem(WAY_KEY) === 'room' ? 'room' : 'call'; } catch { return 'call'; } };
 export const saveWay = (w: MeetingWay) => { try { localStorage.setItem(WAY_KEY, w); } catch { /* storage off */ } };
+
+/* The same per-drawing rotation the drawing screen remembers, so a sheet turned there is turned here too. */
+const turnKey = (projectId: string, drawingId: string) => `ffds_dr_turn_${projectId}_${drawingId}`;
+const savedTurn = (projectId: string, drawingId: string): Turn | null => {
+  try { const raw = localStorage.getItem(turnKey(projectId, drawingId)); if (raw === null) return null; const v = Number(JSON.parse(raw)); return ([0, 90, 180, 270].includes(v) ? v : 0) as Turn; } catch { return null; }
+};
+/* What each file was found to need, so going back to a drawing does not ask the file again. */
+const found = new Map<string, Turn>();
+
+/**
+ * Which way a drawing is shown: the turn the person last chose for it on this
+ * device, else landscape for a file stored upright (as on the drawing screen).
+ * Undefined while the file is being asked. `rotate` turns it a quarter and
+ * remembers that.
+ */
+export function useSheetTurn(projectId: string, drawingId: string | null | undefined, pdfPath: string | null | undefined): [Turn | undefined, () => void] {
+  const key = drawingId ? `${projectId}/${drawingId}/${pdfPath || ''}` : '';
+  const start = (): Turn | undefined => (!drawingId ? 0 : savedTurn(projectId, drawingId) ?? found.get(key) ?? (pdfPath ? undefined : 0));
+  const [state, setState] = useState<{ key: string; turn: Turn | undefined }>(() => ({ key, turn: start() }));
+  const turn = state.key === key ? state.turn : start();
+  useEffect(() => {
+    const first = start();
+    setState({ key, turn: first });
+    if (first !== undefined || !pdfPath) return;
+    let live = true;
+    loadPdf(pdfPath, async () => (await fileBlob(pdfPath)).arrayBuffer()).then((doc) => doc.getPage(1)).then((p) => {
+      const v = p.getViewport({ scale: 1 });
+      const t: Turn = v.height > v.width * 1.01 ? 270 : 0;
+      found.set(key, t);
+      if (live) setState((s) => (s.key === key && s.turn === undefined ? { key, turn: t } : s));
+    }).catch(() => { if (live) setState((s) => (s.key === key && s.turn === undefined ? { key, turn: 0 } : s)); });
+    return () => { live = false; };
+  }, [key]);
+  const rotate = () => {
+    if (!drawingId) return;
+    const n = (((turn ?? 0) + 90) % 360) as Turn;
+    setState({ key, turn: n });
+    try { localStorage.setItem(turnKey(projectId, drawingId), JSON.stringify(n)); } catch { /* storage off */ }
+  };
+  return [turn, rotate];
+}
 
 export const inr = (n: number | null | undefined) => (n === null || n === undefined ? '' : `₹${Math.abs(n).toLocaleString('en-IN')}`);
 
@@ -38,7 +82,7 @@ export const MinutesList: React.FC<{ lines: MinuteLine[]; dark?: boolean; classN
           ? { emerald: 'bg-emerald-500 text-white', amber: 'bg-amber-500 text-white', rose: 'bg-rose-500 text-white', slate: 'bg-slate-700 text-slate-200' }[tone]
           : { emerald: 'bg-emerald-100 text-emerald-700', amber: 'bg-amber-100 text-amber-800', rose: 'bg-rose-100 text-rose-700', slate: 'bg-slate-100 text-slate-600' }[tone];
         return (
-          <li key={`${i}:${l.text}`} className={cx('hud-row-in flex items-start gap-2.5 rounded-xl px-2.5 py-2 text-sm', dark ? 'bg-slate-800/70 text-slate-200' : 'bg-slate-50 text-slate-700')}>
+          <li key={`${i}:${l.text}`} className={cx('flex items-start gap-2.5 rounded-xl px-2.5 py-2 text-sm', dark ? 'dd2m-min bg-slate-800/70 text-slate-200' : 'hud-row-in bg-slate-50 text-slate-700')}>
             <span className={cx('mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full', dot)}><Icon size={11} strokeWidth={2.6} aria-hidden /></span>
             <span className="min-w-0 flex-1">{l.text}{l.studio && <span className={cx('ml-1.5 whitespace-nowrap text-xs font-bold', dark ? 'text-slate-400' : 'text-slate-400')}>Studio only</span>}</span>
           </li>
