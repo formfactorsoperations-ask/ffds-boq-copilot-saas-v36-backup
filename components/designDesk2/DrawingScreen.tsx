@@ -76,6 +76,7 @@ const LANDSCAPE_TURN: Turn = 270;
 
 type Draft = { page: number; shape: MarkShape; anchor: { x: number; y: number }; text: string; blocking: boolean };
 type Diff = { busy: boolean; kind?: string; count: number };
+type PageState = 'loading' | 'drawn' | 'error';
 
 const markColor = (m: ReviewMark) => (m.status === 'FIXED' ? FIXED : m.source === 'client' ? CLIENT : MARK);
 /** Where a note's numbered tag sits on the page as it is shown (the same spot PdfStage draws it). */
@@ -137,10 +138,13 @@ interface PageProps {
   onPageCount: (n: number) => void; onSelect: (id: string) => void; onShape: (page: number, shape: MarkShape, anchor: { x: number; y: number }) => void;
   onDiff: (page: number, d: Diff | null) => void; overlay: React.ReactNode;
   hover: string | null; onHover: (id: string | null) => void; who: (m: ReviewMark) => string;
+  onPageState: (page: number, state: PageState) => void;
 }
 
 /** A page is drawn when it comes near the screen, so a long set opens as fast as a single sheet. */
-const PageBlock: React.FC<PageProps> = ({ index, pages, pdfPath, prevPath, compare, compareLabel, spotting, zoom, turn, marks, draft, selected, tool, canMark, onPageCount, onSelect, onShape, onDiff, overlay, hover, onHover, who }) => {
+const PageBlock: React.FC<PageProps> = ({ index, pages, pdfPath, prevPath, compare, compareLabel, spotting, zoom, turn, marks, draft, selected, tool, canMark, onPageCount, onSelect, onShape, onDiff, overlay, hover, onHover, who, onPageState }) => {
+  /* The pins and the note box sit on the drawing, so they wait until it is on screen. */
+  const [state, setState] = useState<PageState>('loading');
   const box = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(index === 0 || typeof IntersectionObserver === 'undefined');
   useEffect(() => {
@@ -161,7 +165,8 @@ const PageBlock: React.FC<PageProps> = ({ index, pages, pdfPath, prevPath, compa
         <PdfStage pdfPath={pdfPath} comparePath={compare ? prevPath : null} compareLabel={compareLabel} page={index} zoom={zoom} turn={turn}
           marks={marks} draft={draft} selectedId={selected} tool={tool} canMark={canMark} onPageCount={index === 0 ? onPageCount : undefined}
           changes={boxes} maxWidth={5000} onSelect={onSelect} onShape={(shape, anchor) => onShape(index, shape, anchor)}
-          overlay={<>{!compare && <Pins marks={marks} turn={turn} hover={hover} selected={selected} passive={canMark && tool !== 'select'} who={who} onHover={onHover} onSelect={onSelect} />}{overlay}</>} />
+          onState={(st) => { setState(st); onPageState(index, st); }}
+          overlay={state === 'drawn' ? <>{!compare && <Pins marks={marks} turn={turn} hover={hover} selected={selected} passive={canMark && tool !== 'select'} who={who} onHover={onHover} onSelect={onSelect} />}{overlay}</> : (compare ? overlay : null)} />
       ) : <div className="mx-auto aspect-[1.414/1] w-full max-w-full rounded bg-white/70" aria-hidden />}
     </div>
   );
@@ -280,23 +285,57 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
     for this, so the drawing does not appear upright and then jump.
   */
   const viewPath = viewing?.pdfPath || null;
+  /* How the first page is doing, and how many times the file has been asked for. */
+  const [pageOne, setPageOne] = useState<PageState>('loading');
+  const [attempt, setAttempt] = useState(0);
+  const [slow, setSlow] = useState(false);
+  const autoTries = useRef(0);
+  /* Whether the file has told us which way it reads. A file that could not be fetched yet has not. */
+  const orientKnown = useRef(false);
+  const readOrientation = useCallback((path: string, live: () => boolean) =>
+    loadPdf(path, async () => (await fileBlob(path)).arrayBuffer())
+      .then((doc) => doc.getPage(1))
+      .then((page) => {
+        if (!live()) return;
+        orientKnown.current = true;
+        if (turnChosen.current) return;
+        const v = page.getViewport({ scale: 1 });
+        if (v.height > v.width * 1.01) setTurnRaw(LANDSCAPE_TURN);
+      }), []);
   useEffect(() => {
+    orientKnown.current = false;
     if (turnChosen.current) { setOriented(true); return; }
     if (!viewPath) return;
     let live = true;
     setOriented(false);
     const giveUp = setTimeout(() => { if (live) setOriented(true); }, 2500);
-    loadPdf(viewPath, async () => (await fileBlob(viewPath)).arrayBuffer())
-      .then((doc) => doc.getPage(1))
-      .then((page) => {
-        if (!live || turnChosen.current) return;
-        const v = page.getViewport({ scale: 1 });
-        if (v.height > v.width * 1.01) setTurnRaw(LANDSCAPE_TURN);
-      })
-      .catch(() => undefined)
-      .finally(() => { clearTimeout(giveUp); if (live) setOriented(true); });
+    readOrientation(viewPath, () => live).catch(() => undefined).finally(() => { clearTimeout(giveUp); if (live) setOriented(true); });
     return () => { live = false; clearTimeout(giveUp); };
-  }, [viewPath]);
+  }, [viewPath, attempt]);
+  const onPageState = useCallback((page: number, st: PageState) => { if (page === 0) setPageOne(st); }, []);
+  useEffect(() => { setPageOne('loading'); autoTries.current = 0; }, [viewPath]);
+  /* The page drew although the first look at the file failed (a connection that came back): read which way it lies now. */
+  useEffect(() => {
+    if (pageOne !== 'drawn' || orientKnown.current || !viewPath) return;
+    let live = true;
+    readOrientation(viewPath, () => live).catch(() => undefined);
+    return () => { live = false; };
+  }, [pageOne, viewPath]);
+  /* A file that is slow to arrive says so; one that could not be fetched is asked for again, a few times and when the connection returns. */
+  useEffect(() => {
+    setSlow(false);
+    if (pageOne !== 'loading' || !viewPath) return;
+    const t = setTimeout(() => setSlow(true), 4000);
+    return () => clearTimeout(t);
+  }, [pageOne, viewPath, attempt]);
+  const tryAgain = useCallback(() => { setPageOne('loading'); setAttempt((a) => a + 1); }, []);
+  useEffect(() => {
+    if (pageOne !== 'error') return;
+    const online = () => tryAgain();
+    window.addEventListener('online', online);
+    const t = autoTries.current < 5 ? setTimeout(() => { autoTries.current++; tryAgain(); }, 5000) : null;
+    return () => { window.removeEventListener('online', online); if (t) clearTimeout(t); };
+  }, [pageOne, tryAgain]);
   /* The first drawing opened in a visit: each icon acts once, left to right, so people see what the tools do. */
   useEffect(() => {
     if (d === undefined || d === null || calm()) return;
@@ -560,8 +599,21 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
               : <><span className="min-w-0 flex-1">You are looking at <b>v{viewing!.n}</b>, an older version. Its notes stay with it.</span><Btn kind="plain" onClick={() => setViewId(null)}>Back to v{current?.n}</Btn></>}
           </div>
         )}
+        {viewing && oriented && pageOne === 'error' && (
+          <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center px-3 pb-16" role="alert">
+            <div className="hud-panel-in pointer-events-auto flex max-w-md flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm shadow-xl">
+              <span className="min-w-0 flex-1"><b className="block text-slate-800">The drawing could not be loaded</b><span className="text-slate-600">Check the internet connection. The desk keeps trying by itself.</span></span>
+              <Btn kind="primary" icon={RotateCw} onClick={() => { autoTries.current = 0; tryAgain(); }}>Try again</Btn>
+            </div>
+          </div>
+        )}
+        {viewing && pageOne === 'loading' && slow && (
+          <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center px-3 pb-16" role="status">
+            <span className="hud-panel-in flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-md"><Loader2 size={15} className="animate-spin text-emerald-600" aria-hidden />Still loading the drawing. The connection is slow.</span>
+          </div>
+        )}
         {/* What Changes found, as a small line over the drawing: it takes no room from it. */}
-        {spotting && (diffBusy || (diffNote && diffList.some((x) => x.kind && x.kind !== 'boxes'))) && (
+        {spotting && pageOne === 'drawn' && (diffBusy || (diffNote && diffList.some((x) => x.kind && x.kind !== 'boxes'))) && (
           <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center px-3">
             <span className="flex items-center gap-2 rounded-full bg-amber-100 px-3.5 py-1.5 text-xs font-semibold text-amber-900 shadow-sm">
               {diffBusy ? <><Loader2 size={13} className="animate-spin" aria-hidden />Finding what changed since v{prev?.n}…</>
@@ -573,14 +625,14 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
           onPointerDown={panStart} onPointerMove={panMove} onPointerUp={panEnd} onPointerCancel={panEnd} onPointerEnter={() => { overSheet.current = true; }} onPointerLeave={(e) => { overSheet.current = false; panEnd(e); }}>
           {viewing && !oriented ? (
             <div className="grid h-full min-h-[240px] place-items-center text-slate-400"><Loader2 className="animate-spin" aria-label="Opening the drawing" /></div>
-          ) : viewing ? <div ref={pagesBox}>{Array.from({ length: pages }, (_, i) => (
-            <PageBlock key={`${viewing.id}:${i}`} index={i} pages={pages} pdfPath={viewing.pdfPath} prevPath={prev?.pdfPath || null} compare={compare && !!prev}
+          ) : viewing && pageOne === 'error' ? null : viewing ? <div ref={pagesBox}>{Array.from({ length: pages }, (_, i) => (
+            <PageBlock key={`${viewing.id}:${i}:${attempt}`} index={i} pages={pages} pdfPath={viewing.pdfPath} prevPath={prev?.pdfPath || null} compare={compare && !!prev}
               compareLabel={prev ? [`v${prev.n}`, `v${viewing.n}`] : undefined} spotting={spotting} zoom={zoom} turn={turn}
               marks={onSheet.filter((m) => m.page === i)} draft={draft?.page === i ? draft.shape : null} selected={selected}
               tool={space ? 'select' : tool} canMark={canMark && !draft} onPageCount={setPages}
               onSelect={(id) => { setSelected(id); setTab('notes'); }}
               onShape={(page, shape, anchor) => { setDraft({ page, shape, anchor, text: '', blocking: false }); setTab('notes'); setSelected(null); }}
-              onDiff={onDiff} overlay={composer(i)} hover={hover} onHover={setHover} who={whoWrote} />
+              onDiff={onDiff} overlay={composer(i)} hover={hover} onHover={setHover} who={whoWrote} onPageState={onPageState} />
           ))}</div> : (
             <div className="mx-auto mt-12 max-w-md rounded-2xl border-2 border-dashed border-slate-300 bg-white px-6 py-10 text-center">
               <p className="text-lg font-bold text-slate-800">No PDF yet</p>

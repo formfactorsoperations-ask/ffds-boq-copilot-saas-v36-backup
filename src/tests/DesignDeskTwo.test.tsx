@@ -9,10 +9,15 @@ import { render, screen, fireEvent, cleanup, act, within } from '@testing-librar
   and All drawings.
 */
 
-const h = vi.hoisted(() => ({ org: {} as any, studio: [] as any[], trackers: {} as Record<string, any[]>, submit: null as any, update: null as any, upload: null as any, versions: [] as any[], marks: [] as any[], approve: null as any, ret: null as any, mark: null as any, talk: [] as any[], post: null as any }));
+const h = vi.hoisted(() => ({ org: {} as any, studio: [] as any[], trackers: {} as Record<string, any[]>, submit: null as any, update: null as any, upload: null as any, versions: [] as any[], marks: [] as any[], approve: null as any, ret: null as any, mark: null as any, talk: [] as any[], post: null as any, pdf: 'ok' as 'ok' | 'fail', loads: 0 }));
 
 vi.mock('../../contexts/OrgContext', () => ({ useOrg: () => h.org }));
-vi.mock('../../lib/pdfRender', () => ({ thumbnailOf: vi.fn(async () => null), pageCountOf: vi.fn(async () => 2), loadPdf: vi.fn(() => new Promise(() => undefined)), renderPage: vi.fn() }));
+vi.mock('../../lib/pdfRender', () => ({ thumbnailOf: vi.fn(async () => null), pageCountOf: vi.fn(async () => 2), 
+  /* A drawing that opens (two landscape pages), or one whose file cannot be fetched. */
+  loadPdf: vi.fn(() => { h.loads++; return h.pdf === 'fail' ? Promise.reject(new Error('Failed to fetch')) : Promise.resolve({ numPages: 2, getPage: async () => ({ getViewport: () => ({ width: 1000, height: 700 }) }) }); }),
+  renderPage: vi.fn(async () => ({ width: 1000, height: 700 })),
+  isCancelled: () => false,
+}));
 vi.mock('../../lib/pdfLandscape', () => ({ portraitPages: vi.fn(async () => 0), landscapeFile: vi.fn(async (file: File) => ({ file, turned: 0 })) }));
 vi.mock('../../services/drawingReviewService', () => ({
   watchStudioReviews: (_o: string, cb: (r: any[]) => void) => { cb(h.studio); return () => undefined; },
@@ -59,6 +64,7 @@ const projects = [
 beforeEach(() => {
   cleanup();
   localStorage.clear();
+  h.pdf = 'ok'; h.loads = 0;
   const p1 = [
     sheet('a', 'p1', 'Master Bedroom Wardrobe', 'IN_REVIEW', { by: 'Kabir', targetDate: yesterday, room: 'Master Bedroom' }),
     sheet('b', 'p1', 'Kitchen Elevation A', 'IN_REVIEW'),
@@ -235,6 +241,27 @@ describe('Design Desk 2.0', () => {
     fireEvent.mouseLeave(card);
     fireEvent.keyDown(window, { key: 'b' });
     expect(pin.className).toContain('is-off');
+  });
+
+  it('keeps the notes off an empty page, says the file could not be loaded and tries again', async () => {
+    org('Design Head', 'Head');
+    h.versions = [v1];
+    h.marks = [{ id: 'm1', versionId: 'v1', n: 1, page: 0, shape: { t: 'pin', x: 0.2, y: 0.6 }, text: 'Oven will not fit', blocking: true, status: 'OPEN', by: person('Head'), at: NOW, updatedAt: NOW }];
+    h.pdf = 'fail';
+    render(<DeskTwo projects={projects} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Check this drawing' })[0]);
+    const alert = await screen.findByRole('alert', {}, { timeout: 4000 });
+    expect(within(alert).getByText('The drawing could not be loaded')).toBeTruthy();
+    /* No pin floats over a page that has not been drawn; the note is still in the list. */
+    expect(screen.queryByRole('button', { name: 'Note 1: Oven will not fit' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show note 1 on the drawing' })).toBeTruthy();
+    /* The connection comes back: one press fetches the file again and the pin appears on the page. */
+    h.pdf = 'ok';
+    const before = h.loads;
+    fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('button', { name: 'Note 1: Oven will not fit' }, { timeout: 4000 })).toBeTruthy();
+    expect(h.loads).toBeGreaterThan(before);
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('blocks approval while a must-fix note is open', () => {

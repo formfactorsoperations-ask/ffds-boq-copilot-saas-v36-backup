@@ -50,6 +50,8 @@ interface Props {
   fitWidth?: number;
   /** Named areas on the page (a room on the layout plan), as fractions of the unturned page. */
   areas?: { x: number; y: number; w: number; h: number; label?: string; active?: boolean }[] | null;
+  /** Told when the page is being fetched, has been drawn, or could not be opened, so a screen can wait for it or offer to try again. */
+  onState?: (state: 'loading' | 'drawn' | 'error') => void;
 }
 
 /*
@@ -192,6 +194,8 @@ export default function PdfStage(props: Props) {
   };
 
   const error = main.error || other.error;
+  const state = error ? 'error' : main.size ? 'drawn' : 'loading';
+  useEffect(() => { props.onState?.(state); }, [state]);
   return (
     /* Centred by its margins, not justify-center: a page zoomed wider than the view then starts at its left edge and scrolls, instead of spilling out of reach. */
     <div ref={wrap} className="flex w-full">
