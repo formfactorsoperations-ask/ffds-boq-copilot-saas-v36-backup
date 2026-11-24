@@ -5,6 +5,7 @@ import { usePageHeader } from '../../contexts/PageHeaderContext';
 import { canPresentAssigned, canReview, canRunMeeting, canSetAudience, canUpload, stateOf } from '../../lib/drawingReview';
 import { presentableRooms, sendsApprovals, type DesignMeeting } from '../../lib/designMeeting';
 import { roundsToBill } from '../../lib/deskSmart';
+import { rememberedRepeats } from './ai';
 import { attention, projectLook, reviewQueue, statsOf, type Viewer } from '../../lib/designDesk';
 import { mainAction } from '../../lib/designDesk2';
 import { canUseRoomMessages } from '../../lib/roomMessages';
@@ -255,6 +256,7 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
     goMeetings: meetsTab ? () => go({ at: 'meetings' }) : undefined,
     goMeetingsFor: meetsTab ? (projectId) => { setMeetProject(projectId); go({ at: 'meetings' }); } : undefined,
     rounds: canBill ? roundsToBill(billMeetings, (id) => projectOf(id).name) : undefined,
+    repeats: reviewer ? rememberedRepeats(orgId) : undefined,
     addPdfs: (projectId) => setAdd({ projectId: projectId || null }),
     talk: talks ? { orgId, me: { uid: me.uid, email: me.email, name: me.name }, messages: talk.messages, error: talk.error } : undefined,
   };
@@ -294,6 +296,7 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
           backLabel={backLabel}
           onOpen={(n) => openSheet({ projectId: n.projectId, id: n.drawingId })}
           onUpload={setUp}
+          allRows={rows}
         /></React.Fragment>
         {wizard}
       </div>

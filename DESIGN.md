@@ -200,6 +200,11 @@ The smart features that need no AI are desk parts like the rest (`components/des
   pointer (`LiveIcon tool="measure"`). Lines and their labels on the drawing are the brand blue
   `#3D52A0`, so they cannot be taken for notes (rose) or the client's changes (amber). The strip
   above the tool bar is white with `hud-panel-in`.
+- **What the AI says is always marked as the AI's** (`components/designDesk2/ai.tsx`). The named
+  changes are an amber card under "Where it is now" with a sparkle icon and "Named by AI"; a hint
+  beside a note is a small chip that starts "AI:" (emerald for looks fixed, rose for looks the
+  same, nothing when it cannot tell); a repeat mistake is a rose card with "Found by AI". They sit
+  beside the Design Head's own buttons and never replace one.
 - The tool bar stays one row from 1280px: tool names show only on the tool in hand below 1800px,
   and Compare, Changes and Measure are icons until they are in use.
 

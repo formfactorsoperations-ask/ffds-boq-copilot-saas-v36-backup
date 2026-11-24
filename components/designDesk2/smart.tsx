@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { BellRing, CalendarClock, Check, HardHat, IndianRupee, Loader2, PuzzleIcon, type LucideIcon } from 'lucide-react';
+import { BellRing, CalendarClock, Check, HardHat, IndianRupee, Loader2, PuzzleIcon, Repeat2, type LucideIcon } from 'lucide-react';
+import { REPEAT_WINDOW_DAYS, type RepeatMemo } from '../../lib/deskAi';
+import { stateOf } from '../../lib/drawingReview';
 import { canNudge, cleanDate, missingDrawings, nudgeTarget, siteRisk, siteRisks, type RoundToBill } from '../../lib/deskSmart';
 import type { Viewer } from '../../lib/designDesk';
 import { nudgeHolder, setSiteDate, type ReviewDrawing } from '../../services/drawingReviewService';
@@ -124,6 +126,8 @@ interface WorthProps {
   reviewer: boolean;
   /** Rounds waiting to be billed or waived; only passed for the roles that bill. */
   rounds?: RoundToBill[];
+  /** Mistakes that keep coming back from a designer, as the AI last found them on this device; only passed for reviewers. */
+  repeats?: RepeatMemo[];
   projectName: (id: string) => string;
   open: (d: ReviewDrawing) => void;
   goProject: (id: string) => void;
@@ -131,7 +135,7 @@ interface WorthProps {
 }
 
 /** "Worth knowing" on Home: the things the desk noticed. Nothing is drawn when there is nothing to say. */
-export const WorthKnowing: React.FC<WorthProps> = ({ rows, reviewer, rounds = [], projectName, open, goProject, goMeetings }) => {
+export const WorthKnowing: React.FC<WorthProps> = ({ rows, reviewer, rounds = [], repeats = [], projectName, open, goProject, goMeetings }) => {
   const risks = siteRisks(rows);
   const missing = reviewer ? missingDrawings(rows) : [];
   const list = (names: string[], max = 3) => `${names.slice(0, max).join(' · ')}${names.length > max ? ` and ${names.length - max} more` : ''}`;
@@ -146,6 +150,17 @@ export const WorthKnowing: React.FC<WorthProps> = ({ rows, reviewer, rounds = []
             {r.projectName}. {r.included === 1 ? '1 round is' : `${r.included} rounds are`} included, so this one can be charged. It is waiting to be billed or waived.
           </Item>
         ))}
+        {repeats.slice(0, 2).map((m) => {
+          const r = m.repeats[0];
+          const next = rows.find((d) => stateOf(d.review) === 'IN_REVIEW' && String(d.review?.designer?.email || '').toLowerCase() === m.email);
+          const who = String(m.name || m.email).split(/[\s@]/)[0];
+          return (
+            <Item key={m.email} i={i++} icon={Repeat2} tone="rose" title="A mistake keeps coming back"
+              action={next && <Btn kind="plain" onClick={() => open(next)}>Open {who}'s latest</Btn>}>
+              {who}: {r.title.charAt(0).toLowerCase() + r.title.slice(1)}, noted on {r.drawings} drawings in the last {REPEAT_WINDOW_DAYS} days. Found by AI from your notes.
+            </Item>
+          );
+        })}
         {risks.length > 0 && (
           <Item i={i++} icon={CalendarClock} tone="rose" title={`${risks.length} drawing${risks.length === 1 ? '' : 's'} may miss the site date`}
             action={<Btn kind="plain" onClick={() => open(risks[0].d)}>Open the first</Btn>}>

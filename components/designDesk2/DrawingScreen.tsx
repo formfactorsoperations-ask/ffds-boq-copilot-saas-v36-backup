@@ -18,6 +18,8 @@ import { useSheetChanges } from '../drawingReview/useSheetChanges';
 import { MARK, FIXED, CLIENT, roomLabel, ago, shortDate, firstName, useToast, Initials } from '../drawingReview/ui';
 import type { Me } from '../drawingReview/SheetStudio';
 import { NudgeButton, SiteLine } from './smart';
+import { ChangeAi, ChangesNamed, RepeatCard, VerdictHint, useRepeats, type AiPage } from './ai';
+import { MAX_AI_PAGES } from '../../lib/deskAi';
 import { MeasureBar, MeasureLayer, type Measure } from './measure';
 import { paperMm } from '../../lib/measure';
 import { Btn, Tag, cx } from './parts';
@@ -54,6 +56,8 @@ interface Props {
   onOpen: (next: { projectId: string; drawingId: string }) => void;
   /** Open the three-step upload on this drawing. */
   onUpload: (d: ReviewDrawing) => void;
+  /** Every drawing the desk knows, for the repeat-mistake alert (the designer's other recent drawings). */
+  allRows?: ReviewDrawing[];
 }
 
 const TOOLS: [Tool, string, string, string][] = [
@@ -177,7 +181,7 @@ const PageBlock: React.FC<PageProps> = ({ index, pages, pdfPath, prevPath, compa
 
 /* ------------------------------------------------------------ the screen */
 
-export default function DrawingScreen({ orgId, projectId, drawingId, projectName, role, me, viewer, queue, onClose, backLabel, onOpen, onUpload }: Props) {
+export default function DrawingScreen({ orgId, projectId, drawingId, projectName, role, me, viewer, queue, onClose, backLabel, onOpen, onUpload, allRows }: Props) {
   const toast = useToast();
   const target = { orgId, projectId, drawingId };
   const [d, setD] = useState<ReviewDrawing | null | undefined>(undefined);
@@ -256,6 +260,19 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   const current = versions.find((v) => v.id === r?.versionId) || versions[versions.length - 1] || null;
   const viewing = versions.find((v) => v.id === viewId) || current;
   const isCurrent = !!viewing && viewing.id === current?.id;
+
+  /*
+    ---- The two AI helpers, for the person checking a drawing that is waiting for them (lib/deskAi.ts).
+    Changes found for you: each outlined change named, and a hint on each of the last revision's notes.
+    Repeat mistakes: what this designer keeps being asked for. Both are hints beside the check, never the check.
+  */
+  const checking = canReview(role) && isCurrent && stateOf(d?.review) === 'IN_REVIEW';
+  const [aiPages, setAiPages] = useState<Record<number, AiPage>>({});
+  const [aiAttempt, setAiAttempt] = useState(0);
+  useEffect(() => { setAiPages({}); }, [viewing?.id]);
+  const onAi = useCallback((page: number, st: AiPage) => setAiPages((m) => ({ ...m, [page]: st })), []);
+  const hints = useMemo(() => Object.assign({}, ...(Object.values(aiPages) as AiPage[]).map((s) => s.result?.notes || {})) as Record<string, { verdict: 'fixed' | 'same' | 'unsure'; why: string }>, [aiPages]);
+  const repeats = useRepeats(orgId, checking && d?.review?.designer?.email !== me.email, d?.review?.designer, allRows, { projectId, id: drawingId });
 
   /* ---- Measure: the scale (saved on the drawing) and the lines drawn this visit */
   const scale = scaleNow !== undefined ? scaleNow : d?.scale ?? null;
@@ -673,6 +690,10 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
           )}
         </div>
 
+        {checking && viewing?.pdfPath && prev?.pdfPath && !compare && Array.from({ length: Math.min(pages, MAX_AI_PAGES) }, (_, i) => (
+          <React.Fragment key={`${prev.id}:${viewing.id}:${i}`}><ChangeAi pdfPath={viewing.pdfPath as string} prevPath={prev.pdfPath as string} page={i} pairKey={`${prev.id}>${viewing.id}`}
+            notes={marks.filter((m) => m.versionId === prev.id && m.page === i)} attempt={aiAttempt} onResult={onAi} /></React.Fragment>
+        ))}
         {ticked && <div className="dd2-tick" role="status" aria-label="Approved"><svg viewBox="0 0 24 24" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></div>}
         {viewing && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex flex-col items-center gap-2 px-3">
@@ -745,6 +766,9 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
             {isCurrent && <span className="mt-1.5 block empty:hidden"><NudgeButton d={d} viewer={viewer} projectName={projectName} /></span>}
           </div>
           <SiteLine d={d} canSet={canSetAudience(role)} />
+          {checking && prev && !compare && <ChangesNamed byPage={aiPages} prevNo={prev.n} pages={pages} onRetry={() => setAiAttempt((n) => n + 1)} />}
+          <RepeatCard repeats={repeats} designerName={d.review?.designer?.name}
+            onUse={canMark ? (text) => { const anchor = { x: 0.5, y: 0.45 }; setDraft({ page: 0, shape: turnShape({ t: 'pin', ...anchor }, turn, 'page'), anchor, text, blocking: false }); setTab('notes'); setSelected(null); } : undefined} />
           {state === 'CHANGES_REQUESTED' && isCurrent && lastReturn?.reason && (
             <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700"><b>From {lastReturn.decidedBy?.email === me.email ? 'you' : firstName(lastReturn.decidedBy?.name)}:</b> “{lastReturn.reason}”</p>
           )}
@@ -825,6 +849,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
                       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: FIXED }}>{m.n}</span>
                       <div className="min-w-0 flex-1">
                         <div className="text-sm text-slate-500 line-through decoration-emerald-500">{m.text}</div>
+                        {!c && <VerdictHint hint={hints[m.id]} />}
                         {c ? (
                           <div className="mt-1.5 flex items-center gap-2">
                             <Tag tone={c === 'ok' ? 'good' : 'bad'} icon={c === 'ok' ? Check : Undo2}>{c === 'ok' ? 'Checked by you' : 'Sent back as a must-fix note'}</Tag>

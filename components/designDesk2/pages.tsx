@@ -42,6 +42,8 @@ export interface DeskCtx {
   addPdfs: (projectId?: string) => void;
   /** Revision rounds waiting to be billed or waived, for the roles that bill (Phase 3A). */
   rounds?: RoundToBill[];
+  /** Mistakes that keep coming back from a designer, as last found on this device (lib/deskAi.ts). */
+  repeats?: import('../../lib/deskAi').RepeatMemo[];
   /** Opens Meetings on one project. */
   goMeetingsFor?: (projectId: string) => void;
   /** Room messages of the open project (lib/roomMessages.ts): null while loading, absent for a role that has none. */
@@ -147,7 +149,7 @@ export const Home: React.FC<{ c: DeskCtx; projects: ProjectCard[]; canMeet: bool
         </Card>
       </>}
 
-      <WorthKnowing rows={c.rows} reviewer={c.viewer.reviewer} rounds={c.rounds} projectName={(id) => c.projectOf(id).name}
+      <WorthKnowing rows={c.rows} reviewer={c.viewer.reviewer} rounds={c.rounds} repeats={c.repeats} projectName={(id) => c.projectOf(id).name}
         open={c.open} goProject={c.goProject} goMeetings={c.goMeetingsFor} />
 
       <SectionTitle hint="Open one to see its rooms">Your projects</SectionTitle>
