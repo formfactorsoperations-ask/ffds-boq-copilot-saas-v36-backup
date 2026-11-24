@@ -1,14 +1,14 @@
 import React from 'react';
 
 /**
- * HOME: TOWERS IN THE CLOUDS (DESIGN.md → "Home stories" → "The film behind the greeting").
+ * HOME: THE FINISHED ROOM (DESIGN.md → "Home stories" → "The film behind the greeting").
  *
- * A short, silent film loops behind the greeting at the top of Home: a tower rising
- * out of a sea of fog in warm morning light. The clip is "Skyscraper above Clouds" by
- * Aleksandar Pasaric on Pexels (pexels.com/video/4583679), free to use under the Pexels
- * licence. It was cut to a 12-second seamless loop (the end crossfades into the start),
- * cropped so the tower stands right of the story cards, and is served from /public/home.
- * On a phone the frame is held at 80% across so the tower stays in view.
+ * A short, silent film loops behind the greeting at the top of Home: a bright, finished
+ * living room (white sofa, stone fireplace, sheer curtains moving in the light), the
+ * kind of room the studio hands over. The clip is "A Modern Living Room" from Pexels
+ * (pexels.com/video/7533207), free to use under the Pexels licence. It was cut to a
+ * 7-second seamless loop (the end crossfades into the start) and is served from
+ * /public/home. On a phone the frame is held at 80% across, on the sofa and window.
  *
  * - Muted, looped and inline, so every browser lets it play on its own.
  * - Under prefers-reduced-motion it never plays: the poster (its first frame) stands still.
@@ -17,7 +17,7 @@ import React from 'react';
  * - A white wash sits over it: lighter behind the greeting so the words read, and
  *   white at the foot where the story cards sit.
  */
-const SRC = '/home/hero-clouds';
+const SRC = '/home/hero-room';
 
 export default function HomeHeroVideo() {
   const ref = React.useRef<HTMLVideoElement | null>(null);
