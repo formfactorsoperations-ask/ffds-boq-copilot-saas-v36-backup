@@ -3,8 +3,8 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { contextOf, fail, PEOPLE_REGION, type Ctx } from "./peopleDesk";
-import { notify } from "./notify";
-import { celebrationDrafts, emergencyOpenedDraft, kudosDraft, kudosStudioDraft } from "../../lib/notify";
+import { notify, settle } from "./notify";
+import { celebrationDrafts, emergencyOpenedDraft, kudosDraft, kudosStudioDraft, refs } from "../../lib/notify";
 import { DomainError, businessDate, peopleOf, type Person } from "../../lib/peopleDesk";
 import {
   cleanEmergency, cleanEssentials, cleanKudos, cleanOffice, cleanReason, guideView, isGuideAdmin, occasions, openCards, parseCardId, signCard,
@@ -134,6 +134,8 @@ export const peopleGuideCommand = onCall({ cors: true, region: PEOPLE_REGION }, 
           const wishes = signCard((doc.data()?.wishes || []) as Wish[], card, ctx.me, data.text, now);
           tx.set(ref, plain({ personId: id.personId, kind: id.kind, date: id.date, wishes }));
         });
+        /* Signed: this person is no longer asked to, the rest still are (lib/notify Note.ref). */
+        if (ctx.me.email) await settle(ctx.tenantId, [refs.card(String(data.cardId))], ctx.me.email);
         break;
       }
       case "kudos": {

@@ -83,9 +83,61 @@ const NOTIFY_CSS = `
 /* The "needs you" chip on a row. */
 .nt-needs { box-shadow: 0 0 0 1px rgba(61, 82, 160, 0.18) inset; }
 
+/* While someone is waiting on you the bell sways now and then, so it is seen without being opened. A landing note's swing wins. */
+.nt-waiting .nt-bell-body { animation: nt-nudge 6s ease-in-out 2.5s infinite; }
+.nt-waiting.nt-ring .nt-bell-body { animation: nt-ring 0.7s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+@keyframes nt-nudge {
+  0%, 84%, 100% { transform: perspective(80px) rotate(0) rotateY(0); }
+  88% { transform: perspective(80px) rotate(10deg) rotateY(12deg); }
+  92% { transform: perspective(80px) rotate(-8deg) rotateY(-9deg); }
+  96% { transform: perspective(80px) rotate(4deg) rotateY(4deg); }
+}
+
+/* A note's tile is a coin: it leans to the pointer, and turns over to a tick when the note is done. */
+.nt-coin {
+  position: relative; display: inline-grid; flex: none; align-self: flex-start; transform-style: preserve-3d;
+  transform: perspective(420px) rotateY(0deg); transition: transform 0.5s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+.nt-coin > * { grid-area: 1 / 1; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.nt-coin > .nt-coin-back { transform: rotateY(180deg); display: grid; place-items: center; }
+.nt-row:hover .nt-coin, .nt-row:focus-visible .nt-coin { transform: perspective(420px) rotateY(-18deg) scale(1.06); }
+.nt-coin.is-done, .nt-row:hover .nt-coin.is-done { transform: perspective(420px) rotateY(180deg); }
+
+/* A row that waits on you: a brand edge that draws down as the row turns in. */
+.nt-edge::before {
+  content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0;
+  background: #3D52A0; transform-origin: 50% 0; animation: nt-edge 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+@keyframes nt-edge { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+
+/* Waiting half an hour or more: a rose halo breathes around the tile. */
+.nt-urgent { position: relative; display: inline-grid; }
+.nt-urgent::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 12px; border: 2px solid #E11D48;
+  opacity: 0; pointer-events: none; animation: nt-halo-near 2.4s ease-out infinite;
+}
+@keyframes nt-halo-near { 0% { transform: scale(0.94); opacity: 0.75; } 100% { transform: scale(1.32); opacity: 0; } }
+
+/* More waiting behind the bar: the edges of the next cards show under it, like a deck. */
+.nt-deck {
+  position: absolute; left: 16px; right: 16px; top: 8px; bottom: -8px; border-radius: 22px; pointer-events: none;
+  background: rgba(244, 246, 253, 0.92); border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(61, 82, 160, 0.08), 0 18px 34px -22px rgba(18, 24, 47, 0.45);
+  transform-origin: 50% 100%; animation: nt-deck 0.42s cubic-bezier(0.34, 1.3, 0.64, 1) both;
+}
+.nt-deck-2 { left: 32px; right: 32px; top: 16px; bottom: -15px; background: rgba(236, 240, 251, 0.85); animation-delay: 0.06s; }
+@keyframes nt-deck { from { transform: translateY(-10px) scaleX(0.96); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* The heading of what waits on you, in the bell. */
+.nt-wait-dot { position: relative; width: 8px; height: 8px; border-radius: 9999px; background: #E11D48; flex: none; }
+.nt-wait-dot::after { content: ""; position: absolute; inset: -4px; border-radius: inherit; border: 2px solid #E11D48; opacity: 0; animation: nt-halo 2s ease-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   .nt-sheen::before, .nt-orb-a, .nt-orb-b, .nt-count, .nt-count::after, .nt-dot, .nt-flip,
-  .nt-ring .nt-bell-body, .nt-ring .nt-bell-clap, .nt-live, .nt-live-dot::after { animation: none !important; }
+  .nt-ring .nt-bell-body, .nt-ring .nt-bell-clap, .nt-live, .nt-live-dot::after,
+  .nt-waiting .nt-bell-body, .nt-edge::before, .nt-urgent::after, .nt-deck, .nt-wait-dot::after { animation: none !important; }
+  .nt-coin { transition: none; }
+  .nt-row:hover .nt-coin, .nt-row:focus-visible .nt-coin { transform: perspective(420px) rotateY(0deg); }
 }
 `;
 

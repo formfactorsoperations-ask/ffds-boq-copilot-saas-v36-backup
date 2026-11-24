@@ -302,6 +302,18 @@ linkage, notes, change orders on a frozen BOQ). Do not add a mode or a switch ba
   A lens change swaps the work area with `key={lens}` and `hud-swap`. A Classic BOQ opens on the Sheet.
 - **The library** floats over the stage's left edge (232px): Pieces, Kits and By client tabs, each a
   `Segmented`. It slides in with `pg-slide`.
+- **A custom item** (`CustomItemModal.tsx`, the Modals pattern): a dashed brand tile, "Add a custom item ·
+  Not in the Item Bank", at the top of the library's Pieces and Works, the same offer when a filter finds
+  nothing ("Add “…” as a custom item"), and a link in the Sheet's footer. The studio's finance roles
+  give cost and margin; everyone else gives the client's rate. It is kept with the project (`adHocItems`).
+  From Works it is a **custom work**: by area or length, its quantity is measured from the room (Quantity:
+  Measure from the room | Type it; Measure: the floor, the walls to the ceiling or to 7′, the ceiling,
+  round the walls), with the sum shown, as the Works tab measures the bank's own.
+- **A room renamed in the Brief** is renamed once the name is done (leaving the field or Enter; Escape
+  goes back), and the BOQ follows: its lines, a whole-flat line's share and an offer off the room, in
+  every option but the signed one. A name that is empty, a scope's or another room's is not taken; the
+  field says why in rose `text-[11px]`. Lines left under a name the Brief no longer has show in Rooms
+  as a card reading "Not a room in the Brief now", with **Move to** a room in place of Add.
 - **The right rail** is the Live BOQ (a receipt, room by room, with the work total) until a line or a
   room is picked; then the inspector for it. Each inspector is keyed by what it shows and swaps in with
   `hud-swap`. The rail hides to a "Live BOQ" button on narrow screens.
@@ -1153,8 +1165,25 @@ styles in `notifyStyles.ts` (added to the page when first imported, like
   as a pop-up.
 - Counts: a rose number (`nt-count`, with a breathing halo) when someone is
   waiting on you; a brand dot (`nt-dot`) when there is only something new to
-  read. A count turns over in 3D when it changes (`nt-flip`). It changes the
-  moment a note lands and never waits for an animation.
+  read. The bell follows the same rule as the tabs. A count turns over in 3D
+  when it changes (`nt-flip`). It changes the moment a note lands and never
+  waits for an animation. The number stays until each thing is done, by the
+  person or by the server when the thing itself is dealt with; opening the
+  screen reads the updates and clears only the dot.
+- More motion, asked for by the owner on 24 Nov 2026 ("more animated, more
+  intuitive"), all inside this kit and with the same type and palette:
+  - while someone waits, the bell sways now and then (`nt-waiting`);
+  - the bell's list starts with "Waiting on you" (a rose dot that breathes,
+    `nt-wait-dot`), longest wait first; those rows carry a brand edge that
+    draws down (`nt-edge`);
+  - a note's tile is a coin (`NoteCoin`, `nt-coin`): it leans to the pointer
+    with its row and turns over to a tick when the note is marked done, then
+    the row leaves;
+  - on the Ops Desk a row that has waited half an hour has a rose halo
+    breathing round its tile (`nt-urgent`), and a timer chip turns over each
+    time it changes colour;
+  - the bar counts the wait as you watch, and when more are waiting behind it
+    the edges of the next cards show under it like a deck (`nt-deck`).
 - The bell is the brushed-metal bell of the project hub; one 3D swing when a
   note lands (`nt-ring`). There is one bell on any screen: inside a project, what
   that project is waiting on (`useHubAlerts`, which used to be a second bell

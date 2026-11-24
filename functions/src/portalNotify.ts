@@ -1,8 +1,8 @@
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
-import { decisionDraft, portalDrafts } from "../../lib/notify";
-import { notify, notifyClients } from "./notify";
+import { decisionDraft, portalDrafts, refs } from "../../lib/notify";
+import { notify, notifyClients, settle } from "./notify";
 
 /*
   "NEW FOR YOU" IN THE CLIENT'S PORTAL (lib/notify.ts portalDrafts).
@@ -59,14 +59,18 @@ export const onDecisionAnswered = onDocumentWritten("projects/{projectId}/decisi
   const before = event.data?.before?.exists ? event.data.before.data() : null;
   const after = event.data?.after?.exists ? event.data.after.data() : null;
   const projectId = event.params.projectId;
-  const draft = decisionDraft(before, after, { projectId });
-  if (!draft) return;
+  const decisionId = String(event.params.decisionId);
+  const draft = decisionDraft(before, after, { projectId, id: decisionId });
+  const answered = before?.status === "disputed" && after?.status !== "disputed";
+  if (!draft && !answered) return;
   try {
     /* Only the studio field: the project document is often a large compressed one. */
     const [project] = await db().getAll(db().doc(`projects/${projectId}`), { fieldMask: ["tenantId"] });
     const tenantId = String(project.data()?.tenantId || after?.studioId || "");
     if (!tenantId) return;
-    await notify({ tenantId, projectId }, [draft]);
+    /* The client's question is answered, or the decision is gone: nobody is still asked (lib/notify Note.ref). */
+    if (answered) await settle(tenantId, [refs.decision(projectId, decisionId)]);
+    if (draft) await notify({ tenantId, projectId }, [draft]);
   } catch (e: any) {
     logger.error("[portalNotify] could not tell the studio about a decision", { projectId, message: e?.message });
   }

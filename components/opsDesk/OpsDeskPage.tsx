@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNoteArrivals } from '../notify/NotifyContext';
+import { wantedDeskSection, clearDeskSection, onDeskSection } from '../../lib/deskSection';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Inbox, Clock, IndianRupee, ListChecks, Flag, FileText, Plus, RefreshCw, Search, CalendarClock,
@@ -139,7 +140,13 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
   const ids = useMemo(() => new Set(deskProjects.map((p) => p.id)), [deskProjects]);
   const projectRefs = useMemo(() => live.map(projectRefOf), [live]);
 
-  const [section, setSection] = useState<Section>('today');
+  /* A note can open the desk where the thing is dealt with: Escalations, Leads (lib/deskSection.ts). Only those two are ever asked for. */
+  const noteSection = (x: string): Section | null => (x === 'escalations' || x === 'leads' ? x : null);
+  const [section, setSection] = useState<Section>(() => noteSection(wantedDeskSection()) || 'today');
+  useEffect(() => {
+    clearDeskSection();
+    return onDeskSection((x) => { const want = noteSection(x); if (want) { setSection(want); setLeadOpen(null); setClientId(null); } });
+  }, []);
   const [loading, setLoading] = useState(true);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [escalations, setEscalations] = useState<Escalation[]>([]);

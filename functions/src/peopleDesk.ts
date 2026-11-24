@@ -4,8 +4,8 @@ import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { requireStaff, rateLimiter } from "./guards";
-import { notify } from "./notify";
-import { peopleDrafts } from "../../lib/notify";
+import { notify, settle } from "./notify";
+import { peopleDrafts, refs } from "../../lib/notify";
 import {
   DomainError, addDays, businessDate, canReview, execute, isLate, peopleOf, personByEmail, policyOf, scopeSnapshot, validateConfiguration,
   type Attendance, type Command, type Event, type Person, type Policy, type RequestRecord, type Snapshot, type Store,
@@ -320,6 +320,8 @@ export const peopleOutbox = onDocumentCreated({ document: "peopleDesk/{tenantId}
     const request: RequestRecord | undefined = o.request || undefined;
     const employee = people.find((p) => p.id === (request?.employeeId || session?.employeeId)) || actor;
     const late = o.action === "checkin" && !!session && isLate(session, policy);
+    /* Decided or withdrawn: nobody is still asked to review it (lib/notify Note.ref). */
+    if (request && (o.action === "decide" || o.action === "withdraw")) await settle(tenantId, [refs.request(request.id)]);
     await notify({ tenantId, actorEmail: actor?.email || null, org },
       peopleDrafts({ action: String(o.action), session, request }, { actor, employee, people, timezone: policy.timezone, late }));
   } catch (e: any) {

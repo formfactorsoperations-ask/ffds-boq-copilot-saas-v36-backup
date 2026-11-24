@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { canNudge, cleanDate, daysStillNeeded, heldBy, missingDrawings, nudgeTarget, roundsToBill, siteRisk, siteRisks, type SmartRow } from '../../lib/deskSmart';
-import { nudgeDraft } from '../../lib/notify';
+import { nudgeDraft, refs } from '../../lib/notify';
 import type { DesignMeeting } from '../../lib/designMeeting';
 
 /*
@@ -137,5 +137,11 @@ describe('nudges', () => {
     });
     expect(nudgeDraft({ ...base, who: 'designer', designerEmail: 'Rahul@Studio.in', by: 'Anish' })).toMatchObject({ line: 'Anish sent a reminder: please check it', to: { emails: ['rahul@studio.in'] } });
     expect(nudgeDraft({ ...base, who: 'designer', designerEmail: null })).toBeNull();
+  });
+
+  it('carry the sheet\'s ref, so the reminder is settled when the sheet moves on', () => {
+    const base = { projectId: 'p1', projectName: 'Kapoor Villa', sheet: 'Master wardrobe', days: 2, ask: 'check it', who: 'head' as const };
+    expect(nudgeDraft({ ...base, sheetId: 'd9' })?.ref).toBe(refs.sheet('p1', 'd9'));
+    expect(nudgeDraft(base)?.ref).toBeNull();
   });
 });

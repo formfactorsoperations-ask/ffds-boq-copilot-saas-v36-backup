@@ -16,7 +16,8 @@ import {
   type PdfRoom, type PdfRow, type PdfAnnexSection, type PageKey,
 } from '../../lib/playground/proposal';
 import { buildProposalPdf } from '../../lib/proposalPdf';
-import { proposalTimeline, civilDaysOf, briefHome, answersTo, othersDecide, roomIncludes } from '../../lib/playground/brief';
+import { proposalTimeline, civilDaysOf, briefHome, proposalNotes, answersTo, othersDecide, roomIncludes } from '../../lib/playground/brief';
+import { PMC_AVAILABLE } from '../../lib/engagement';
 import { inr } from './playgroundUi';
 import { useOrg } from '../../contexts/OrgContext';
 import { studioDetailsOf, logoForPdf, addressLines, hasContact, shortWeb, shortInstagram } from '../../lib/playground/studio';
@@ -176,6 +177,16 @@ export interface ProposalPdfProps {
   onClose: () => void;
 }
 
+/*
+  How the client can work with the studio, on the Next step page. Design + PMC
+  is left out while the studio does not offer it (lib/engagement PMC_AVAILABLE).
+*/
+const WAYS: [string, string][] = [
+  ['Turnkey (recommended)', 'Design, materials, labour and quality, from design to handover. The price in this proposal.'],
+  ...(PMC_AVAILABLE ? [['Design + PMC', 'We design and manage your contractors.'] as [string, string]] : []),
+  ['Design only', 'We design; your team executes.'],
+];
+
 export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, termsSettings, paymentStructure, studioName, userName, concern: concern0, booked, decisionMakers, programme, priceDetail, onSent, onPublish, onClose }: ProposalPdfProps) {
   const detail: PriceDetail = priceDetail || ctx.proposal?.priceDetail || 'lines';
   const [concern, setConcern] = useState<string>(ctx.proposal?.shapedFor || concern0 || 'Itemized Costs');
@@ -220,6 +231,7 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
       separate: separatePage(boq, bankMap),
       materials: materialsPage(specBank, options, tier.id),
       home: briefHome(ctx),
+      notes: proposalNotes(ctx),
       answers: answersTo(ctx.clientBrief, boq, bankMap, ctx.rooms || []),
       annex: annexOf({
         terms: termsSettings, studioName, gstRate: terms.rate, after: Math.max(0, deal.sell - deal.execOff), fee: deal.fee - deal.designOff, gst: deal.gst, total: deal.clientPays,
@@ -291,6 +303,7 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
         {T.civil && T.civilDays > 0 ? ` Civil work adds ${T.civilDays} working days: the bathrooms are rebuilt and waterproofed before carpentry goes in.` : ''}
         {' '}Durations are working days, Sundays off, {T.fromTimeline ? 'from the project Timeline' : 'from our standard programme'}.
       </p>
+      {m.notes.timeline.map((t, i) => <p key={i} className="mt-1.5 text-[11px] text-slate-500 leading-snug" data-pdf-note={i ? 'renovation' : 'timeline'}>{t}</p>)}
     </div>
   );
   const H = m.home;
@@ -329,6 +342,7 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
         <div className="mt-4">
           <div className={LABEL_SM}>What design includes</div>
           <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">{H.deliver.map(d => <span key={d.label} className={d.on ? 'text-slate-700' : 'text-slate-400'}>{d.on ? '✓' : '—'} {d.label}{d.on ? '' : ', not in this scope'}</span>)}</div>
+          {m.notes.visits && <p className="mt-1.5 text-[11px] text-slate-500 leading-snug" data-pdf-note="visits">{m.notes.visits}</p>}
         </div>
       )}
       {!timelineFirst && timelineBlock}
@@ -490,7 +504,7 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
   pages.next = [(
     <React.Fragment key="next">
       <Kicker>Next step</Kicker><H2>How you would like to work with us</H2>
-      <div className="mt-4 space-y-2.5">{[['Turnkey (recommended)', 'Design, materials, labour and quality, from design to handover. The price in this proposal.'], ['Design + PMC', 'We design and manage your contractors.'], ['Design only', 'We design; your team executes.']].map(([t, d], i) => (
+      <div className="mt-4 space-y-2.5">{WAYS.map(([t, d], i) => (
         <div key={t} className={`rounded-lg border p-3 ${i ? 'border-slate-200' : 'border-[#3D52A0] bg-[#3D52A0]/[0.04]'}`}><b className="text-[13px] text-slate-800">{t}</b><p className="text-[12px] text-slate-500">{d}</p></div>
       ))}</div>
       <div className="mt-5">
@@ -505,9 +519,7 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
           </tbody>
         </table>
         <div className="mt-3 rounded-md bg-[#3D52A0]/[0.06] px-3 py-2 text-[12px] text-slate-700"><b>To book:</b> {bookLine}. Your portal login follows the booking.</div>
-        <p className="mt-2 text-[11px] text-slate-500">Design + PMC or Design only: the design-fee schedule applies and you pay your contractors directly; any PMC fee is set out in the agreement.</p>
       </div>
-      <p className="mt-2 text-[11px] text-slate-400">Sizes are allowances from the brief. Final quantities follow site measurement and the approved design, in a Detailed BOQ you approve before work starts. Terms are in Annexure A.</p>
     </React.Fragment>
   )];
   const half = m.annex.findIndex(s => s.n === 7);

@@ -20,6 +20,7 @@ import { readLastTabs, recordLastTab, LastTabs } from "./services/lastVisitedTab
 import { readAttentionState, writeAttentionEntry, AttentionState, AttentionEntry } from "./services/attentionState";
 import { buildProjectTemplate } from "./lib/cloneProject";
 import { buildRehearsalCopy, keepLockedTier, lockedTierId } from "./lib/scopeFlow";
+import { renameRoomInTiers, renameRoomInContext } from "./lib/playground/roomRename";
 import { ensureScopeRooms } from "./lib/scopeBuckets";
 import { showSuccessWithNext } from "./components/SuccessWithNextToast";
 import { OfflineIndicator } from "./components/OfflineIndicator";
@@ -177,8 +178,9 @@ import NotifyBell from "./components/notify/NotifyBell";
 import NeedsYouBar from "./components/notify/NeedsYouBar";
 import CatchUp from "./components/notify/CatchUp";
 import { PORTAL_OPEN_EVENT } from "./components/notify/NotifyContext";
-import { STUDIO_ROUTES, staffBox, clientBox, type Stored } from "./lib/notify";
+import { STUDIO_ROUTES, sectionOf, staffBox, clientBox, type Stored } from "./lib/notify";
 import { openPeopleSection } from "./lib/peopleSection";
+import { openDeskSection } from "./lib/deskSection";
 
 // Default Empty Context
 const DEFAULT_CONTEXT: ProjectContext = {
@@ -411,6 +413,18 @@ export default function App() {
     useState<ProjectContext>(DEFAULT_CONTEXT);
   const [tiers, setTiers] = useState<ProposalTier[]>([]);
   const [activeTierId, setActiveTierId] = useState<string | null>(null);
+  /*
+    A room renamed in the Brief: its BOQ lines, a whole-flat line's share in it
+    and an offer off it all follow, in every option but the signed one
+    (lib/playground/roomRename). Before, the BOQ kept the old name as a room of
+    its own beside the new one.
+  */
+  const projectContextRef = useRef(projectContext);
+  projectContextRef.current = projectContext;
+  const renameRoomEverywhere = useCallback((from: string, to: string) => {
+    setTiers(prev => renameRoomInTiers(prev, from, to, lockedTierId(projectContextRef.current)));
+    setProjectContext(prev => renameRoomInContext(prev, from, to));
+  }, []);
 
   const [activeProject, setActiveProject] = useState<ActiveProject | null>(
     null,
@@ -2870,9 +2884,12 @@ export default function App() {
     const roles = currentRoles?.length ? currentRoles : currentRole;
     if (STUDIO_ROUTES.has(n.route) || !n.projectId) {
       const tab = STUDIO_ROUTES.has(n.route) ? n.route : "home";
-      /* A People note can name its section (a birthday card, the kudos wall). */
-      if (tab === "people" && n.section) openPeopleSection(n.section);
-      setActiveTab(mayOpenStudioTab(tab, roles) && limitedMayOpen(roles, tab) ? tab : "home");
+      /* A note opens where it is dealt with: People's Approvals, the desk's Escalations (lib/notify sectionOf). Told before the tab opens, and at once when it is already open. */
+      const may = mayOpenStudioTab(tab, roles) && limitedMayOpen(roles, tab);
+      const section = may ? sectionOf(n) : null;
+      if (tab === "people" && section) openPeopleSection(section);
+      if (tab === "ops-desk" && section) openDeskSection(section);
+      setActiveTab(may ? tab : "home");
       return;
     }
     const project = visibleProjects.find((p) => p.id === n.projectId);
@@ -3637,6 +3654,7 @@ export default function App() {
                           setActiveTab={setActiveTab}
                           aiStrategy={aiStrategy}
                           projectId={activeInternalId || undefined}
+                          onRenameRoom={renameRoomEverywhere}
                         />
                       )}
                       {activeTab === "drawing-tracker" && (
@@ -3827,6 +3845,7 @@ export default function App() {
                       )}
                       {activeTab === "comms-tracker" && (
                         <ClientMessagesPage
+                          projectId={activeInternalId}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           currentUserName={
@@ -4261,6 +4280,7 @@ export default function App() {
                               onSaveProject={handleDownloadBackup}
                               projectId={activeInternalId || undefined}
                               hideExecutionControls={true}
+                              onRenameRoom={renameRoomEverywhere}
                             />
                           </div>
                         ))}
@@ -4303,6 +4323,7 @@ export default function App() {
                           setActiveTab={setActiveTab}
                           aiStrategy={aiStrategy}
                           projectId={activeInternalId || undefined}
+                          onRenameRoom={renameRoomEverywhere}
                         />
                       )}
                       {activeTab === "drawing-tracker" && (
@@ -4491,6 +4512,7 @@ export default function App() {
                       )}
                       {activeTab === "comms-tracker" && (
                         <ClientMessagesPage
+                          projectId={activeInternalId}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           currentUserName={

@@ -6,7 +6,7 @@ import { type Stored } from '../../lib/notify';
 import type { HubAlert } from '../../lib/hubAlerts';
 import { DoneTick, Glide, EASE } from '../people/PeopleBits';
 import { useInbox, useNoteArrivals, type Folded } from './NotifyContext';
-import { AlarmClock, BellGlyph, Count, Faces, NoteTile, SNOOZES, ago, titleOf } from './NotifyBits';
+import { AlarmClock, BellGlyph, Count, Faces, NoteCoin, SNOOZES, TICK_MS, ago, titleOf } from './NotifyBits';
 import NotifySettings from './NotifySettings';
 import { askDesktop, desktopPermission } from './notifyChannels';
 
@@ -18,12 +18,16 @@ const markOffered = () => { try { window.localStorage.setItem(OFFER_KEY, 'done')
 /*
   THE BELL: the one list of everything that reached you.
 
-  Its count is the notes you have not read, and changes the moment a note
-  lands; the bell gives one swing in 3D. The list opens like a card folding
-  down, grouped by project, newest first, with a burst of check-ins folded
-  into one row of faces. Each row opens the screen that owns it; Done and
-  Snooze clear it here and on every other device, because the stamp lives on
-  the note (services/inboxService.ts).
+  Its rose number is who is waiting on you, and stays until each is done, by
+  you or by the server when the thing itself is dealt with; with nobody
+  waiting, a dot says there is something new to read. Both change the moment
+  a note lands, and the bell gives one swing in 3D; while someone waits it
+  sways now and then. The list opens like a card folding down: what waits on
+  you first, longest wait first, then the rest by project, newest first, with
+  a burst of check-ins folded into one row of faces. Each row opens the place
+  where it is dealt with; Done turns its tile over to a tick and it leaves;
+  Done and Snooze clear it here and on every other device, because the stamp
+  lives on the note (services/inboxService.ts).
 */
 
 type View = 'inbox' | 'done';
@@ -72,12 +76,21 @@ const Row: React.FC<{ n: Folded | Stored; view: View; onOpen: () => void }> = ({
   const ids = members.map((m) => m.id);
   const unread = members.some((m) => !m.readAt);
   const needs = n.level === 'needs';
+  /* Done: the tile turns over to a tick, then the row leaves. */
+  const [ticked, setTicked] = useState(false);
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
+  const finish = () => {
+    if (ticked) return;
+    setTicked(true);
+    timer.current = window.setTimeout(() => inbox.done_(ids), TICK_MS);
+  };
   return (
     <motion.li layout variants={rowV} exit="exit" style={{ transformPerspective: 700, transformOrigin: '50% 0%' }}
-      className="group relative flex gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer outline-none focus-visible:bg-slate-50"
+      className={`nt-row group relative flex gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer outline-none focus-visible:bg-slate-50 ${needs && view === 'inbox' ? 'nt-edge' : ''}`}
       tabIndex={0} role="button" aria-label={titleOf(n as Folded)}
       onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}>
-      <NoteTile note={n} size="sm" />
+      <NoteCoin note={n} done={ticked} />
       <div className="min-w-0 flex-1 pr-14">
         <p className={`text-sm leading-snug ${unread ? 'font-bold text-slate-800' : 'font-semibold text-slate-700'}`}>
           {titleOf(n as Folded)}
@@ -96,7 +109,7 @@ const Row: React.FC<{ n: Folded | Stored; view: View; onOpen: () => void }> = ({
         onClick={(e) => e.stopPropagation()}>
         {view === 'inbox' ? (
           <>
-            <button type="button" title="Done" aria-label="Mark done" onClick={() => inbox.done_(ids)}
+            <button type="button" title="Done" aria-label="Mark done" onClick={finish}
               className="w-7 h-7 grid place-items-center rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-200 transition-colors">
               <Check className="w-3.5 h-3.5" />
             </button>
@@ -180,7 +193,12 @@ export default function NotifyBell({ className = '', project }: { className?: st
   const list = view === 'inbox' ? inbox.open : inbox.done.slice(0, 40);
   const alerts = view === 'inbox' ? project?.alerts || [] : [];
   const waiting = project?.alerts.length || 0;
-  const count = inbox.unread + waiting;
+  /* The rose number: who is waiting on you, and what this project is waiting on. Reading a note does not lower it; doing it does. */
+  const count = inbox.needs + waiting;
+  /* In the inbox, what waits on you comes first, longest wait first; the rest stay by project. */
+  const asking = view === 'inbox' ? [...list].filter((n) => n.level === 'needs').sort((a, b) => a.at - b.at) : [];
+  const rest = view === 'inbox' ? list.filter((n) => n.level !== 'needs') : list;
+  const headline = count ? 'waiting on you' : inbox.news ? 'new for you' : 'All caught up';
   const open_ = (n: Folded | Stored) => {
     const members: Stored[] = (n as Folded).members || [n];
     if (members.length > 1) inbox.read(members.map((m) => m.id));
@@ -191,10 +209,10 @@ export default function NotifyBell({ className = '', project }: { className?: st
   return (
     <>
       <button ref={btn} type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="dialog"
-        aria-label={count ? `Notifications, ${count} for you` : 'Notifications'} title="Notifications"
-        className={`relative w-10 h-10 shrink-0 grid place-items-center rounded-xl hover:bg-sky-50 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30 ${ringing ? 'nt-ring' : ''} ${className}`}>
+        aria-label={count ? `Notifications, ${count} waiting on you` : inbox.news ? `Notifications, ${inbox.news} new` : 'Notifications'} title="Notifications"
+        className={`relative w-10 h-10 shrink-0 grid place-items-center rounded-xl hover:bg-sky-50 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/30 ${ringing ? 'nt-ring' : ''} ${count && !open ? 'nt-waiting' : ''} ${className}`}>
         <BellGlyph />
-        <Count needs={count} className="top-0.5 right-0" label={`${count} for you`} />
+        <Count needs={count} unread={inbox.news} className={count ? 'top-0.5 right-0' : 'top-1.5 right-1.5'} label={count ? `${count} waiting on you` : `${inbox.news} new`} />
       </button>
 
       {open && at && createPortal(
@@ -207,7 +225,10 @@ export default function NotifyBell({ className = '', project }: { className?: st
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">Notifications</p>
-                <p className="font-bold text-slate-800">For you</p>
+                <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                  {(count || inbox.news) > 0 && <span key={count || inbox.news} className={`nt-flip tabular-nums ${count ? 'text-rose-600' : 'text-[#3D52A0]'}`}>{count || inbox.news}</span>}
+                  {headline}
+                </p>
               </div>
               <Glide id="nt-view" label="Show" value={view} onChange={setView}
                 options={[{ id: 'inbox', label: inbox.open.length ? `Inbox ${inbox.open.length}` : 'Inbox' }, { id: 'done', label: 'Done' }]} />
@@ -265,7 +286,20 @@ export default function NotifyBell({ className = '', project }: { className?: st
                 <p className="text-xs text-slate-500">{view === 'inbox' ? 'New notes land here the moment they happen.' : 'What you mark done waits here, in case you need it back.'}</p>
               </div>
             ) : (
-              groups(list).map((g) => (
+              <>
+              {asking.length > 0 && (
+                <div>
+                  <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-rose-700 flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-2"><span className="nt-wait-dot" aria-hidden />Waiting on you</span><span>{asking.length}</span>
+                  </p>
+                  <motion.ul initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.035 } } }} className="divide-y divide-slate-100">
+                    <AnimatePresence initial={false}>
+                      {asking.map((n) => <Row key={n.id} n={n} view={view} onOpen={() => open_(n)} />)}
+                    </AnimatePresence>
+                  </motion.ul>
+                </div>
+              )}
+              {groups(rest).map((g) => (
                 <div key={g.name}>
                   <p className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex justify-between"><span>{g.name}</span><span>{g.items.length}</span></p>
                   <motion.ul initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.035 } } }} className="divide-y divide-slate-100">
@@ -274,12 +308,13 @@ export default function NotifyBell({ className = '', project }: { className?: st
                     </AnimatePresence>
                   </motion.ul>
                 </div>
-              ))
+              ))}
+              </>
             )}
           </div>
 
           <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
-            <span className="text-[11px] text-slate-500">{inbox.audience === 'client' ? 'Anything waiting on you shows in red.' : 'Someone waiting on you shows in red, on the bell and the tab.'}</span>
+            <span className="text-[11px] text-slate-500">{inbox.audience === 'client' ? 'A red number is something waiting on you. A dot is something new.' : 'A red number is someone waiting on you, until it is done. A dot is something new.'}</span>
             <button type="button" onClick={() => { setOpen(false); setSettings(true); }}
               className="shrink-0 inline-flex items-center gap-1.5 text-xs font-bold text-[#3D52A0] hover:underline"><SlidersHorizontal className="w-3.5 h-3.5" />{inbox.audience === 'client' ? 'Alerts on this device' : 'What reaches you'}</button>
           </div>

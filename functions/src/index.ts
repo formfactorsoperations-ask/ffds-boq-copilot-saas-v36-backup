@@ -37,7 +37,7 @@ export { googleDrive, driveOAuthCallback } from "./googleDrive";
 /* The Ops Desk: escalation emails and the daily check; see opsDesk.ts. */
 export { onEscalationWritten, opsDeskDailyCheck, opsDeskCheckNow } from "./opsDesk";
 export { onVisitRequestWritten, onDeskMeetingWritten, onMinutesWritten, onDesignMeetingWritten } from "./meetingSync";
-export { leadMatches } from "./leads";
+export { leadMatches, onLeadWritten } from "./leads";
 /* People: attendance and leave; see peopleDesk.ts. */
 export { peopleSnapshot, peopleCommand, peopleOutbox } from "./peopleDesk";
 export { peopleImport } from "./peopleImport";
@@ -48,8 +48,9 @@ export { peopleClaims, peopleClaimsCommand } from "./peopleClaims";
 /* "New for you" in the client portal: a note for each thing the studio releases (lib/notify.ts portalDrafts). */
 export { onPortalViewWritten, onDecisionAnswered } from "./portalNotify";
 import { confirmMeetingByClient, portalSheetFor } from "./designMeeting";
-import { notify } from "./notify";
-import { clientActionDraft, siteDraft } from "../../lib/notify";
+import { notify, settle } from "./notify";
+export { settleNotes } from "./notify";
+import { clientActionDraft, refs, siteDraft } from "../../lib/notify";
 import * as pako from "pako";
 import { buildSignoffPatch, buildDisputePatch } from "../../services/clientApprovalEngine";
 import { recordDocumentView, signIssue } from "../../services/documentIssueEngine";
@@ -1119,6 +1120,7 @@ export const siteAction = onCall({ cors: true }, async (request) => {
     const author = String(profile.displayName || profile.name || "Site Supervisor").slice(0, 80);
 
     let siteProject: any = null;
+    let newBlockerId: string | null = null;
     /* In a transaction for the same reason as a client's action: the studio may be saving this project too. */
     await db.runTransaction(async (tx) => {
         const snap = await tx.get(ref);
@@ -1134,13 +1136,17 @@ export const siteAction = onCall({ cors: true }, async (request) => {
         }
         const payload = writeableProject(next, wasCompressed, stored);
         siteProject = project;
+        /* A blocker just raised is the first in the list (siteActionPatch.ts). */
+        newBlockerId = action?.type === "blocker" ? String(next?.activeProject?.executionData?.blockers?.[0]?.id || "") || null : null;
         tx.set(ref, payload);
         // Both stored copies, as submitClientAction explains.
         tx.set(db.collection(`organizations/${projectTenant}/projects`).doc(projectId), payload);
     });
 
     logger.info("Site action applied", { projectId, type: action?.type, role });
+    /* Resolved: nobody is still asked to open the blocker (lib/notify Note.ref). */
+    if (action?.type === "resolveBlocker") await settle(projectTenant, [refs.blocker(projectId, String(action.blockerId || ""))]);
     await notify({ tenantId: projectTenant, projectId, actorEmail: email, project: siteProject },
-        [siteDraft(action, { projectId, projectName: String(siteProject?.context?.name || "") || null, actor: author })]);
+        [siteDraft(action, { projectId, projectName: String(siteProject?.context?.name || "") || null, actor: author, blockerId: newBlockerId })]);
     return { ok: true };
 });

@@ -25,8 +25,14 @@
   Rules every builder follows:
     - the person who made the change is never told (the resolver drops them);
     - money stays with the finance roles: no note carries an amount;
-    - every note opens the screen that owns the decision (`route`), and
-      nothing is approved or sent from a note without that screen's checks.
+    - every note opens the screen that owns the decision (`route`), at the
+      place it is dealt with (`section`), and nothing is approved or sent
+      from a note without that screen's checks;
+    - a note that waits on someone says what it is about (`ref`), so that
+      when that thing is dealt with -- the leave decided, the escalation
+      closed, the lead called -- the server marks the note done for everyone
+      who was asked. What waits on you is counted until it is done, not
+      until it is looked at (waitsOn).
 */
 import { LEAVE_LABELS, clock12, type Attendance, type Person, type RequestRecord } from './peopleDesk';
 
@@ -66,8 +72,17 @@ export interface Note {
   group: string | null;
   /** Small facts a person's settings can filter on: a check-in that was "late" or from "home". */
   tags?: string[];
-  /** Inside a studio tab, the section to open (People: "celebrations", "kudos"). */
+  /** Inside a studio tab, the section to open (People: "celebrations", "approvals"; the Ops Desk: "escalations", "leads"). */
   section?: string;
+  /**
+   * The thing this note is about ("req:…", "esc:…"), so the server can mark it
+   * done for everyone the moment that thing is dealt with (functions/src/notify.ts
+   * settle). Null when nothing settles it but the person. Notes written before
+   * this existed have no such field at all, and keep the older counting (waitsOn).
+   */
+  ref?: string | null;
+  /** After this the note is no longer open: a birthday card to sign stops asking once the day is over. */
+  expiresAt?: number | null;
   at: number;
   readAt: number | null;
   doneAt: number | null;
@@ -75,8 +90,10 @@ export interface Note {
 }
 
 /** A note as a builder returns it: what it says, and who it is for. */
-export interface Draft extends Omit<Note, 'at' | 'readAt' | 'doneAt' | 'snoozedUntil' | 'initials'> {
+export interface Draft extends Omit<Note, 'at' | 'readAt' | 'doneAt' | 'snoozedUntil' | 'initials' | 'expiresAt'> {
   to: Audience;
+  /** How long the note stays open, in hours, when it should not wait for ever. */
+  lasts?: number;
 }
 
 /** Studio tabs a note can open. Anything else is a tab inside the note's project. */
@@ -114,13 +131,48 @@ export const clientBox = (uid: string | null | undefined) => (uid ? `portalInbox
 
 /** A note ready to store: a draft without its audience, stamped. */
 export function stamp(d: Draft, at: number): Note {
-  const { to: _to, ...rest } = d;
-  return { ...rest, initials: initialsOf(d.actor), at, readAt: null, doneAt: null, snoozedUntil: null };
+  const { to: _to, lasts, ...rest } = d;
+  return { ...rest, ref: d.ref ?? null, expiresAt: lasts ? at + lasts * 3600000 : null, initials: initialsOf(d.actor), at, readAt: null, doneAt: null, snoozedUntil: null };
 }
 
 /** Whether a note is still open in someone's inbox right now. */
-export const isOpen = (n: Pick<Note, 'doneAt' | 'snoozedUntil'>, now = Date.now()) =>
-  !n.doneAt && !(n.snoozedUntil && n.snoozedUntil > now);
+export const isOpen = (n: Pick<Note, 'doneAt' | 'snoozedUntil' | 'expiresAt'>, now = Date.now()) =>
+  !n.doneAt && !(n.snoozedUntil && n.snoozedUntil > now) && !(n.expiresAt && n.expiresAt <= now);
+
+/**
+ * Whether a note counts as waiting on you: on the tab's rose number and the
+ * bell's. A "needs you" note waits until it is done, by you or by the server
+ * when the thing itself is dealt with; reading it is not doing it. A note from
+ * before notes carried `ref` cannot be settled by the server, so it stops
+ * counting once read, as it always did.
+ */
+export const waitsOn = (n: Pick<Note, 'level' | 'readAt' | 'ref'>) =>
+  n.level === 'needs' && (n.ref !== undefined || !n.readAt);
+
+/* What each note is about (Note.ref). The same words write the note and settle it. */
+export const refs = {
+  request: (id: string) => `req:${id}`,
+  claim: (id: string) => `claim:${id}`,
+  card: (id: string) => `card:${id}`,
+  escalation: (projectId: string, id: string) => `esc:${projectId}:${id}`,
+  decided: (projectId: string, id: string) => `escact:${projectId}:${id}`,
+  lead: (id: string) => `lead:${id}`,
+  sheet: (projectId: string, id: string) => `sheet:${projectId}:${id}`,
+  blocker: (projectId: string, id: string) => `blk:${projectId}:${id}`,
+  messages: (projectId: string) => `msg:${projectId}`,
+  finish: (projectId: string, id: string) => `finish:${projectId}:${id}`,
+  decision: (projectId: string, id: string) => `decision:${projectId}:${id}`,
+};
+
+/** Where in People or the Ops Desk each kind is dealt with, for a note that does not say (Note.section). */
+const KIND_SECTION: Record<string, string> = {
+  'people.leave': 'approvals', 'people.correction': 'approvals', 'people.cancel': 'approvals', 'people.withdrawn': 'approvals',
+  'people.decided': 'leave', 'claims.logged': 'approvals', 'claims.decided': 'travel', 'claims.paid': 'travel', 'claims.deleted': 'travel',
+  'ops.escalation': 'escalations', 'ops.decided': 'escalations', 'lead.new': 'leads',
+};
+/** The section a note opens inside its studio tab, or none. A trip to approve is on Approvals, whatever an older note says. */
+export const sectionOf = (n: Pick<Note, 'kind' | 'section'>): string | null =>
+  (n.kind === 'claims.logged' ? 'approvals' : n.section || KIND_SECTION[n.kind]) || null;
 
 /* ── From the client portal ──────────────────────────────────────────────── */
 
@@ -131,11 +183,11 @@ const DOC_NAMES: Record<string, string> = { terms: 'the Terms Docket', contract:
  * and downloading are left out: they belong in a morning summary, not an inbox.
  */
 export function clientActionDraft(action: any, p: { actor: string; projectId: string; projectName: string | null }): Draft | null {
-  const base = { projectId: p.projectId, projectName: p.projectName, actor: p.actor, group: null, area: 'clients' as NoteArea };
+  const base = { projectId: p.projectId, projectName: p.projectName, actor: p.actor, group: null, area: 'clients' as NoteArea, ref: null as string | null };
   const who = p.actor || 'Your client';
   switch (action?.type) {
     case 'sendMessage':
-      return { ...base, kind: 'client.message', level: 'needs', title: `${who} sent you a message`, line: quote(action.text), route: 'comms-tracker', action: 'Reply', to: { project: ['ops'], roles: ['Ops Director'] } };
+      return { ...base, kind: 'client.message', level: 'needs', title: `${who} sent you a message`, line: quote(action.text), route: 'comms-tracker', action: 'Reply', ref: refs.messages(p.projectId), to: { project: ['ops'], roles: ['Ops Director'] } };
     case 'requestIssueChanges':
       return { ...base, kind: 'client.changes', level: 'needs', title: `${who} sent a scope revision back for changes`, line: quote(action.message) || 'Changes asked for', route: 'client-portal', action: 'Open the revision', to: { project: ['ops'], roles: ['Ops Director', 'Owner', 'Design Head'] } };
     case 'approveIssue':
@@ -149,7 +201,7 @@ export function clientActionDraft(action: any, p: { actor: string; projectId: st
     case 'raiseDispute':
       return { ...base, kind: 'client.dispute', level: 'needs', title: `${who} raised a dispute`, line: quote(action.reason), route: 'client-portal', action: 'Open it', to: { project: ['ops'], roles: LEADS } };
     case 'querySelection':
-      return { ...base, kind: 'client.finish', level: 'needs', title: `${who} asked about a finish`, line: quote(action.question), route: 'materials', action: 'Reply', to: { project: ['design', 'ops'] } };
+      return { ...base, kind: 'client.finish', level: 'needs', title: `${who} asked about a finish`, line: quote(action.question), route: 'materials', action: 'Reply', ref: action.selectionId ? refs.finish(p.projectId, String(action.selectionId)) : null, to: { project: ['design', 'ops'] } };
     case 'confirmSelection':
       return { ...base, area: 'design', kind: 'client.finishConfirmed', level: 'update', title: `${who} confirmed a finish`, line: 'On Selections & Orders', route: 'materials', action: null, to: { project: ['design'], roles: ['Design Head'] } };
     case 'confirmMeeting':
@@ -187,7 +239,7 @@ export function peopleDrafts(
   e: { action: string; session?: Attendance; request?: RequestRecord },
   p: { actor: Person; employee: Person; people: Person[]; timezone: string; late?: boolean },
 ): Draft[] {
-  const base = { area: 'team' as NoteArea, projectId: null, projectName: null, route: 'people' };
+  const base = { area: 'team' as NoteArea, projectId: null, projectName: null, route: 'people', ref: null as string | null };
   const approvers = approversOf(p.employee, p.people);
   const name = p.employee.name;
   const s = e.session, r = e.request;
@@ -203,20 +255,20 @@ export function peopleDrafts(
   const label = r.kind === 'correction' ? 'an attendance correction' : (LEAVE_LABELS[r.type] || 'leave').toLowerCase();
   if (e.action === 'request' && r.status === 'Pending') {
     const days = r.days.reduce((n, d) => n + d.units, 0);
-    return [{ ...base, kind: 'people.leave', level: 'needs', title: `${name} asked for ${label}`, line: `${span(r)} · ${days} day${days === 1 ? '' : 's'}${r.reason ? ` · ${quote(r.reason)}` : ''}`, action: 'Review', actor: name, group: null, to: { emails: approvers } }];
+    return [{ ...base, kind: 'people.leave', level: 'needs', title: `${name} asked for ${label}`, line: `${span(r)} · ${days} day${days === 1 ? '' : 's'}${r.reason ? ` · ${quote(r.reason)}` : ''}`, action: 'Review', actor: name, group: null, section: 'approvals', ref: refs.request(r.id), to: { emails: approvers } }];
   }
   if (e.action === 'correction' && r.status === 'Pending') {
-    return [{ ...base, kind: 'people.correction', level: 'needs', title: `${name} asked to correct ${r.start}`, line: r.reason ? quote(r.reason) : 'Check-in or check-out to change', action: 'Review', actor: name, group: null, to: { emails: approvers } }];
+    return [{ ...base, kind: 'people.correction', level: 'needs', title: `${name} asked to correct ${r.start}`, line: r.reason ? quote(r.reason) : 'Check-in or check-out to change', action: 'Review', actor: name, group: null, section: 'approvals', ref: refs.request(r.id), to: { emails: approvers } }];
   }
   if (e.action === 'cancel') {
-    return [{ ...base, kind: 'people.cancel', level: 'needs', title: `${name} asked to cancel approved ${label}`, line: span(r), action: 'Review', actor: name, group: null, to: { emails: approvers } }];
+    return [{ ...base, kind: 'people.cancel', level: 'needs', title: `${name} asked to cancel approved ${label}`, line: span(r), action: 'Review', actor: name, group: null, section: 'approvals', ref: refs.request(r.id), to: { emails: approvers } }];
   }
   if (e.action === 'withdraw') {
     return [{ ...base, kind: 'people.withdrawn', level: 'update', title: `${name} withdrew a request for ${label}`, line: span(r), action: null, actor: name, group: null, to: { emails: approvers } }];
   }
   if (e.action === 'decide' && p.employee.email) {
     const word = r.status === 'Approved' ? 'approved' : r.status === 'Cancelled' ? 'cancelled' : r.status === 'Rejected' ? 'declined' : r.status.toLowerCase();
-    return [{ ...base, kind: 'people.decided', level: 'update', title: `Your ${label} was ${word}`, line: `${span(r)} · by ${p.actor.name}`, action: null, actor: p.actor.name, group: null, to: { emails: [inboxKey(p.employee.email)] } }];
+    return [{ ...base, kind: 'people.decided', level: 'update', title: `Your ${label} was ${word}`, line: `${span(r)} · by ${p.actor.name}`, action: null, actor: p.actor.name, group: null, section: 'leave', to: { emails: [inboxKey(p.employee.email)] } }];
   }
   return [];
 }
@@ -253,7 +305,7 @@ export function kudosStudioDraft(k: { tag: string; text: string; at: string }, p
  *                    the person: happy birthday, and how many have signed.
  */
 export function celebrationDrafts(
-  o: { kind: 'birthday' | 'anniversary'; days: number; date: string; years?: number },
+  o: { kind: 'birthday' | 'anniversary'; days: number; date: string; years?: number; id?: string },
   p: { name: string; email: string; others: string[]; signed: number },
 ): Draft[] {
   const first = p.name.split(/\s+/)[0] || p.name;
@@ -263,13 +315,13 @@ export function celebrationDrafts(
   const out: Draft[] = [];
   if (o.days === 1 && others.length) {
     out.push({ ...base, kind: 'guide.celebration.soon', level: 'update', title: o.kind === 'birthday' ? `${what} is tomorrow` : `Tomorrow, ${what}`,
-      line: 'The card is open. Sign it today so it is full by the morning.', action: null, group: `celebrate:${o.date}`, to: { emails: others } });
+      line: 'The card is open. Sign it today so it is full by the morning.', action: null, group: `celebrate:${o.date}`, lasts: 24, to: { emails: others } });
   }
   if (o.days === 0) {
     if (others.length) {
       out.push({ ...base, kind: 'guide.celebration', level: 'needs', title: o.kind === 'birthday' ? `It's ${what} today` : `Today, ${what}`,
         line: p.signed ? `${p.signed} ${p.signed === 1 ? 'person has' : 'people have'} signed the card` : 'Be the first to sign the card',
-        action: 'Sign the card', group: `celebrate:${o.date}`, to: { emails: others } });
+        action: 'Sign the card', group: `celebrate:${o.date}`, ref: o.id ? refs.card(o.id) : null, lasts: 18, to: { emails: others } });
     }
     if (p.email) {
       out.push({ ...base, kind: 'guide.celebration.mine', level: 'update',
@@ -297,7 +349,7 @@ export function claimLoggedDraft(c: { id: string; date: string; place: string; a
   if (!p.emails.length) return null;
   return {
     kind: 'claims.logged', area: 'team', level: 'needs', title: `${p.name} logged a trip: ${rupee(c.amount)}`, line: [c.purpose, c.forName ? clip(c.forName, 50) : '', clip(c.place, 60)].filter(Boolean).join(' · '),
-    projectId: null, projectName: null, route: 'people', section: 'travel', action: 'Review', actor: p.name,
+    projectId: null, projectName: null, route: 'people', section: 'approvals', action: 'Review', actor: p.name, ref: refs.claim(c.id),
     group: `claims:${p.personId}:${c.date}`, to: { emails: p.emails.map(inboxKey) },
   };
 }
@@ -330,23 +382,24 @@ export function claimDeletedDraft(c: { amount: number; place: string; date: stri
 export function escalationDraft(
   esc: any,
   stage: 'raised' | 'decided',
-  p: { projectId: string; leads: string[]; projectOps: string[] },
+  p: { projectId: string; leads: string[]; projectOps: string[]; id?: string },
 ): Draft {
-  const base = { area: 'clients' as NoteArea, projectId: p.projectId, projectName: esc?.projectName || null, route: 'ops-desk', group: null };
+  const base = { area: 'clients' as NoteArea, projectId: p.projectId, projectName: esc?.projectName || null, route: 'ops-desk', section: 'escalations', group: null };
   if (stage === 'raised') {
-    return { ...base, kind: 'ops.escalation', level: 'needs', title: `Escalation for you: ${clip(esc?.title, 90)}`, line: clip(esc?.detail || esc?.category || ''), action: 'Decide', actor: esc?.auto ? 'The daily check' : esc?.raisedByName || null, to: { emails: p.leads } };
+    return { ...base, kind: 'ops.escalation', level: 'needs', title: `Escalation for you: ${clip(esc?.title, 90)}`, line: clip(esc?.detail || esc?.category || ''), action: 'Decide', actor: esc?.auto ? 'The daily check' : esc?.raisedByName || null, ref: p.id ? refs.escalation(p.projectId, p.id) : null, to: { emails: p.leads } };
   }
   const to = esc?.auto ? p.projectOps : [String(esc?.raisedBy || '')].filter(Boolean);
-  return { ...base, kind: 'ops.decided', level: 'needs', title: `Decided: ${clip(esc?.title, 90)}`, line: quote(esc?.decision) || 'Act on it, then close it', action: 'Act on it', actor: esc?.decidedByName || null, to: { emails: to } };
+  return { ...base, kind: 'ops.decided', level: 'needs', title: `Decided: ${clip(esc?.title, 90)}`, line: quote(esc?.decision) || 'Act on it, then close it', action: 'Act on it', actor: esc?.decidedByName || null, ref: p.id ? refs.decided(p.projectId, p.id) : null, to: { emails: to } };
 }
 
 /* ── Design Desk reviews ─────────────────────────────────────────────────── */
 
 export function reviewDraft(
   kind: 'submit' | 'approve' | 'return' | 'clientReturn',
-  p: { projectId: string; projectName: string | null; sheet: string; actor: string; designerEmail?: string | null; reason?: string | null },
+  p: { projectId: string; projectName: string | null; sheet: string; actor: string; designerEmail?: string | null; reason?: string | null; sheetId?: string },
 ): Draft | null {
-  const base = { area: 'design' as NoteArea, projectId: p.projectId, projectName: p.projectName, route: 'design-review', actor: p.actor, group: null };
+  /* One ref for the sheet: whenever it moves on, the note about where it was is settled (functions/src/drawingReview.ts told). */
+  const base = { area: 'design' as NoteArea, projectId: p.projectId, projectName: p.projectName, route: 'design-review', actor: p.actor, group: null, ref: p.sheetId ? refs.sheet(p.projectId, p.sheetId) : null };
   const sheet = clip(p.sheet || 'A sheet', 60);
   if (kind === 'submit') return { ...base, kind: 'design.submitted', level: 'needs', title: `${p.actor} sent ${sheet} for review`, line: 'Waiting for the Design Head', action: 'Review now', to: { roles: ['Design Head'] } };
   if (!p.designerEmail) return null;
@@ -362,12 +415,14 @@ export function reviewDraft(
  * Design Head when it is waiting for a check, its designer when it is waiting
  * for changes or to be sent. `by` is the person who pressed Nudge.
  */
-export function nudgeDraft(p: { projectId: string; projectName: string | null; sheet: string; who: 'head' | 'designer'; days: number; ask: string; designerEmail?: string | null; by?: string | null }): Draft | null {
+export function nudgeDraft(p: { projectId: string; projectName: string | null; sheet: string; who: 'head' | 'designer'; days: number; ask: string; designerEmail?: string | null; by?: string | null; sheetId?: string }): Draft | null {
   if (p.who === 'designer' && !p.designerEmail) return null;
   const sheet = clip(p.sheet || 'A drawing', 60);
   const waited = p.days >= 1 ? `${p.days} day${p.days === 1 ? '' : 's'}` : 'since today';
   return {
     kind: 'design.nudge', area: 'design', level: 'needs', projectId: p.projectId, projectName: p.projectName, route: 'design-review', group: null,
+    /* The sheet's own ref, so the reminder is settled with the sheet's other notes when it moves on. */
+    ref: p.sheetId ? refs.sheet(p.projectId, p.sheetId) : null,
     actor: p.by || null,
     title: `${sheet} has waited ${waited} for you`,
     line: p.by ? `${p.by} sent a reminder: please ${p.ask}` : `A reminder from the desk: please ${p.ask}`,
@@ -404,10 +459,10 @@ export function roomMessageDraft(
 
 /* ── Site ────────────────────────────────────────────────────────────────── */
 
-export function siteDraft(action: any, p: { projectId: string; projectName: string | null; actor: string }): Draft | null {
+export function siteDraft(action: any, p: { projectId: string; projectName: string | null; actor: string; blockerId?: string | null }): Draft | null {
   const base = { area: 'site' as NoteArea, projectId: p.projectId, projectName: p.projectName, actor: p.actor, group: null, route: 'site-ops' };
   const where = p.projectName || 'a site';
-  if (action?.type === 'blocker') return { ...base, kind: 'site.blocker', level: 'needs', title: `Site blocked at ${where}`, line: quote(action.text), action: 'Open the blocker', to: { project: ['ops'], roles: ['Ops Director', 'Owner'] } };
+  if (action?.type === 'blocker') return { ...base, kind: 'site.blocker', level: 'needs', title: `Site blocked at ${where}`, line: quote(action.text), action: 'Open the blocker', ref: p.blockerId ? refs.blocker(p.projectId, p.blockerId) : null, to: { project: ['ops'], roles: ['Ops Director', 'Owner'] } };
   if (action?.type === 'resolveBlocker') return { ...base, kind: 'site.unblocked', level: 'update', title: `A blocker at ${where} is resolved`, line: `Resolved by ${p.actor}`, action: null, to: { project: ['site', 'ops'], roles: ['Ops Director'] } };
   if (action?.type === 'update') return { ...base, kind: 'site.update', level: 'update', title: `New site update at ${where}`, line: quote(action.text) || 'Posted from site', action: null, to: { project: ['ops'] } };
   return null;
@@ -416,11 +471,40 @@ export function siteDraft(action: any, p: { projectId: string; projectName: stri
 /* ── Leads ───────────────────────────────────────────────────────────────── */
 
 /**
+ * A new enquiry on the Ops Desk (the lead as stored, services/leadsService.ts).
+ * Whoever it was given to is asked to make the first call, unless they added it
+ * themselves; the Ops Director hears of every one, quietly, a day's folded into
+ * one entry. Settled by the first touch on the lead (functions/src/leads.ts).
+ */
+export function leadDrafts(lead: any, p: { id: string }): Draft[] {
+  const people = Array.isArray(lead?.people) ? lead.people : [];
+  const name = clip(lead?.label || people[0]?.name, 60) || 'A new enquiry';
+  const by = clip(lead?.createdByName, 60) || null;
+  const owner = inboxKey(lead?.ownerEmail || ''), maker = inboxKey(lead?.createdBy || '');
+  const line = quote(lead?.enquiry) || [lead?.source, lead?.sourceNote].map((x) => clip(x, 60)).filter(Boolean).join(' · ') || 'On the Ops Desk, under Leads';
+  const base = { area: 'clients' as NoteArea, kind: 'lead.new', projectId: null, projectName: null, route: 'ops-desk', section: 'leads', actor: by };
+  const out: Draft[] = [];
+  if (owner && owner !== maker) {
+    out.push({ ...base, level: 'needs', title: `New lead for you: ${name}`, line, action: 'Open the lead', group: null, ref: refs.lead(p.id), to: { emails: [owner] } });
+  }
+  const day = new Date(Number(lead?.createdAt) || Date.now()).toISOString().slice(0, 10);
+  out.push({ ...base, level: 'update', title: `New lead: ${name}`, line: lead?.ownerName ? `With ${clip(lead.ownerName, 60)}` : line, action: null, group: `leads:${day}`, to: { roles: ['Ops Director'] } });
+  return out;
+}
+
+/** Whether a lead has been picked up since it was added: a call logged, its stage moved, or handed to a project. */
+export function leadPickedUp(before: any, after: any): boolean {
+  if (!after) return true;
+  const n = (x: any) => (Array.isArray(x?.touches) ? x.touches.length : 0);
+  return n(after) > n(before) || after.stage !== before?.stage || (!!after.projectId && !before?.projectId);
+}
+
+/**
  * A client answered a decision in their portal (decisionsService.recordClientSignoff),
  * from the change to projects/{p}/decisions/{d}. Approving is an update; a
  * question waits on the studio. An entry Ops made by hand tells nobody.
  */
-export function decisionDraft(before: any, after: any, p: { projectId: string }): Draft | null {
+export function decisionDraft(before: any, after: any, p: { projectId: string; id?: string }): Draft | null {
   if (!after || before?.status === after.status || !['signed', 'disputed'].includes(after.status)) return null;
   const s = after.signoff || {};
   if (s.ipAddress === 'Internal' || s.clientNameEntered === 'Manual Ops Entry') return null;
@@ -430,7 +514,7 @@ export function decisionDraft(before: any, after: any, p: { projectId: string })
   if (after.status === 'signed') {
     return { ...base, kind: 'client.approved', level: 'update', title: `${who} approved a decision: ${what}`, line: [after.roomName, 'Approved in the client portal'].filter(Boolean).join(' · '), action: null, to: { project: ['ops', 'design'], roles: ['Ops Director'] } };
   }
-  return { ...base, kind: 'client.query', level: 'needs', title: `${who} asked about a decision: ${what}`, line: quote(s.queryText) || 'Asked a question in the client portal', action: 'Answer', to: { project: ['ops', 'design'], roles: ['Ops Director'] } };
+  return { ...base, kind: 'client.query', level: 'needs', title: `${who} asked about a decision: ${what}`, line: quote(s.queryText) || 'Asked a question in the client portal', action: 'Answer', ref: p.id ? refs.decision(p.projectId, p.id) : null, to: { project: ['ops', 'design'], roles: ['Ops Director'] } };
 }
 
 /* ── Who, as email addresses ─────────────────────────────────────────────── */
@@ -497,6 +581,7 @@ export function foldedTitle(e: { kind: string; title: string; count: number; act
   if (e.kind === 'people.checkin') return `${e.count} people checked in`;
   if (e.kind === 'people.checkout') return `${e.count} people checked out`;
   if (e.kind === 'guide.kudos.studio') return `${e.count} thank-yous on the kudos wall today`;
+  if (e.kind === 'lead.new') return `${e.count} new leads today`;
   if (e.kind === 'claims.logged') return `${e.actor || 'Someone'} logged ${e.count} trips`;
   return `${e.title} and ${e.count - 1} more`;
 }
@@ -505,17 +590,19 @@ export function foldedTitle(e: { kind: string; title: string; count: number; act
 export const tabOf = (n: Pick<Note, 'area'>) => AREA_TAB[n.area] || 'home';
 
 /**
- * Counts for the tab badges: what is waiting on you there and new since you last
- * opened the tab, and whether any update is unread. Opening a tab reads its notes
- * (NotifyProvider's `tab`), so the badge clears; what still waits on you stays in
- * the bell, the bar and the Ops Desk queue until it is done.
+ * Counts for the tab badges: the rose number is what is waiting on you there
+ * (waitsOn), and stays until each is done; the dot is an update you have not
+ * read. Opening a tab reads its updates (NotifyProvider's `tab`), so the dot
+ * clears; the number goes down only as things are dealt with.
  */
 export function tabCounts(notes: Note[], now = Date.now()): Record<string, { needs: number; unread: number }> {
   const out: Record<string, { needs: number; unread: number }> = {};
   for (const n of notes) {
-    if (!isOpen(n, now) || n.readAt) continue;
+    if (!isOpen(n, now)) continue;
+    const needs = waitsOn(n);
+    if (!needs && (n.level === 'needs' || n.readAt)) continue;
     const c = (out[tabOf(n)] ||= { needs: 0, unread: 0 });
-    if (n.level === 'needs') c.needs++;
+    if (needs) c.needs++;
     else c.unread++;
   }
   return out;

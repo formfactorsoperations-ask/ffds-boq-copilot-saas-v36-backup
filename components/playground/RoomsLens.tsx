@@ -16,7 +16,7 @@ import { roomDelta, type Changes } from '../../lib/playground/changes';
   (Civil, Functional, Others) follow as cards without a drawing.
 */
 
-export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, sel, selRoom, readOnly, seesMargins, hideFigures, floor, query, onSel, onRoom, onAdd, onShowOnPlan, onDropItem, onReplaceMany, changes, baseName }: {
+export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, sel, selRoom, readOnly, seesMargins, hideFigures, floor, query, onSel, onRoom, onAdd, onShowOnPlan, onDropItem, onReplaceMany, onMoveRoom, changes, baseName }: {
   rooms: Room[];
   models: LineModel[];
   shares: Map<string, ShareRow[]>;
@@ -38,6 +38,8 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
   changes?: Changes | null;
   baseName?: string;
   onReplaceMany: (lines: BoqItem[]) => void;
+  /** Lines left under a name the Brief no longer has (a room renamed or read again), moved into a room. */
+  onMoveRoom?: (from: string, to: string) => void;
 }) {
   const realNames = rooms.map(r => r.name);
   const printed = usePrinted();
@@ -61,6 +63,8 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
         const amk = avgMarkup(billed);
         const on = selRoom === name;
         const roomShares = room ? (shares.get(name) || []) : [];
+        /* Not a room in the Brief and not a scope: a room renamed or read again since these lines were added. */
+        const stray = !room && others.includes(name);
         return (
           <div key={name} data-roomcard={name}
             onDragOver={e => { if (!readOnly) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
@@ -76,7 +80,7 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
               <div className="min-w-0">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 truncate">{name}</div>
                 <div className="text-[11px] text-slate-500 tabular-nums">
-                  {room?.plan ? `${ftin(room.plan.w)} × ${ftin(room.plan.h)} · ${Math.round(room.plan.w * room.plan.h)} sq ft` : room ? (Number(room.size) ? `${Math.round(Number(room.size))} sq ft` : 'Not on the plan yet') : 'Lines for the whole flat'}
+                  {room?.plan ? `${ftin(room.plan.w)} × ${ftin(room.plan.h)} · ${Math.round(room.plan.w * room.plan.h)} sq ft` : room ? (Number(room.size) ? `${Math.round(Number(room.size))} sq ft` : 'Not on the plan yet') : stray ? 'Not a room in the Brief now' : 'Lines for the whole flat'}
                 </div>
                 {changes && !hideFigures && (() => {
                   const v = roomDelta(changes, name, models.map(m => m.line));
@@ -113,6 +117,17 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
                 <div className="mx-1.5 my-1 rounded-xl border-2 border-dashed border-slate-200 text-xs text-slate-400 px-3 py-4 text-center">Drag an item here</div>
               )}
             </div>
+            {stray && !readOnly && onMoveRoom && realNames.length > 0 && (
+              <label className="mx-2 mb-2 flex items-center gap-2 text-[11px] font-semibold text-slate-500" data-move-room={name}>
+                <span className="shrink-0">Move to</span>
+                <span className="sr-only">Move the lines in {name} to</span>
+                <select value="" onChange={e => { if (e.target.value) onMoveRoom(name, e.target.value); }}
+                  className="min-w-0 flex-1 px-2 py-1 rounded-lg border border-slate-200 bg-white text-[11px] font-bold text-[#3D52A0] outline-none focus:border-[#3D52A0]">
+                  <option value="">Pick a room…</option>
+                  {realNames.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </label>
+            )}
             <div className="px-2 py-2 border-t border-slate-100 flex items-center gap-1 whitespace-nowrap">
               {seesMargins && !hideFigures && billed.length > 0 && (
                 <span className="w-[128px]">
@@ -121,7 +136,7 @@ export default function RoomsLens({ rooms, models, shares, roomTotals, bankMap, 
                     className="!text-left !text-[11px] border border-slate-200 !px-2" />
                 </span>
               )}
-              {!readOnly && (
+              {!readOnly && !stray && (
                 <button type="button" onClick={() => onAdd(name)} className="px-2 py-1 rounded-lg text-[11px] font-bold text-[#3D52A0] hover:bg-[#3D52A0]/10 inline-flex items-center gap-1">
                   <Plus className="w-3 h-3" aria-hidden />Add
                 </button>
