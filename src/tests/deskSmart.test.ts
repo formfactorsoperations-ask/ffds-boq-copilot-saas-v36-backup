@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canNudge, cleanDate, dailyNudgeDue, daysStillNeeded, heldBy, missingDrawings, nudgeDue, nudgeTarget, nudgeText, roundsToBill, siteRisk, siteRisks, type SmartRow } from '../../lib/deskSmart';
+import { canNudge, cleanDate, daysStillNeeded, heldBy, missingDrawings, nudgeTarget, roundsToBill, siteRisk, siteRisks, type SmartRow } from '../../lib/deskSmart';
 import { nudgeDraft } from '../../lib/notify';
 import type { DesignMeeting } from '../../lib/designMeeting';
 
@@ -116,31 +116,17 @@ describe('nudges', () => {
     expect(heldBy(undefined, T)).toBeNull();
   });
 
-  it('are due after a day, and not again within 20 hours', () => {
-    expect(nudgeDue(r('IN_REVIEW', { submittedAt: T - 23 * 3600_000 }), T)).toBeNull();
-    expect(nudgeDue(r('IN_REVIEW', { submittedAt: T - 25 * 3600_000 }), T)).toMatchObject({ who: 'head', days: 1 });
-    expect(nudgeDue(r('IN_REVIEW', { submittedAt: T - 3 * DAY, nudgedAt: T - 19 * 3600_000 }), T)).toBeNull();
-    expect(nudgeDue(r('IN_REVIEW', { submittedAt: T - 3 * DAY, nudgedAt: T - 21 * 3600_000 }), T)).toMatchObject({ days: 3 });
-  });
-
-  it('stop the daily reminder after two weeks', () => {
-    expect(dailyNudgeDue(r('DRAFT', { updatedAt: T - 14 * DAY }), T)).toMatchObject({ days: 14 });
-    expect(dailyNudgeDue(r('DRAFT', { updatedAt: T - 15 * DAY }), T)).toBeNull();
-  });
-
   it('let the button be pressed a few hours apart, and say why not', () => {
     expect(canNudge(r('APPROVED'), T)).toMatchObject({ ok: false, why: 'Nobody in the studio is holding this drawing right now.' });
     expect(canNudge(r('IN_REVIEW', { submittedAt: T - 2 * DAY, nudgedAt: T - 3600_000 }), T)).toMatchObject({ ok: false, why: 'A reminder went a short while ago. Try again in a few hours.' });
     expect(canNudge(r('IN_REVIEW', { submittedAt: T - 2 * DAY, nudgedAt: T - 5 * 3600_000 }), T).ok).toBe(true);
   });
 
-  it('name who is reminded, and write the words for WhatsApp', () => {
+  it('name who is reminded', () => {
     const head = heldBy(r('IN_REVIEW', { submittedAt: T - 2 * DAY }), T)!;
     const designer = heldBy(r('CHANGES_REQUESTED', { decidedAt: T - DAY }), T)!;
     expect(nudgeTarget(r('IN_REVIEW'), head)).toBe('the Design Head');
     expect(nudgeTarget(r('CHANGES_REQUESTED'), designer)).toBe('Rahul');
-    expect(nudgeText({ sheet: 'Master wardrobe', projectName: 'Kapoor Villa', held: head, to: 'the Design Head' }))
-      .toBe('Reminder: Master wardrobe (Kapoor Villa) has been waiting 2 days for the Design Head to check it. Please open it in Design Desk.');
   });
 
   it('go to the Design Head role or to the designer, and to nobody when the designer is unknown', () => {
@@ -149,7 +135,7 @@ describe('nudges', () => {
       kind: 'design.nudge', level: 'needs', route: 'design-review', title: 'Master wardrobe has waited 2 days for you',
       line: 'Priya sent a reminder: please check it', to: { roles: ['Design Head'] },
     });
-    expect(nudgeDraft({ ...base, who: 'designer', designerEmail: 'Rahul@Studio.in' })).toMatchObject({ line: 'A reminder from the desk: please check it', to: { emails: ['rahul@studio.in'] } });
+    expect(nudgeDraft({ ...base, who: 'designer', designerEmail: 'Rahul@Studio.in', by: 'Anish' })).toMatchObject({ line: 'Anish sent a reminder: please check it', to: { emails: ['rahul@studio.in'] } });
     expect(nudgeDraft({ ...base, who: 'designer', designerEmail: null })).toBeNull();
   });
 });

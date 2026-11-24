@@ -109,6 +109,30 @@ describe('the Meetings page', () => {
     expect(localStorage.getItem('ffds_dd2_meet_way')).toBe('room');
   });
 
+  it('lists the projects with what each has ready to show, the ready ones first', () => {
+    const onPickProject = vi.fn();
+    render(page({ projectId: null, onPickProject, projects: [
+      { id: 'p3', name: 'Shah Apartment', code: 'SA', color: '#000', ready: [] },
+      { id: 'p2', name: 'Kapoor Villa', code: 'KV', color: '#000', ready: ['Kitchen'] },
+      { id: 'p1', name: 'Mehta Residence', code: 'MR', color: '#000', ready: ['Living & dining', 'Master bedroom', 'General / Project-Wide'] },
+    ] }));
+    expect(screen.getByRole('heading', { name: 'Ready to show a client' })).toBeTruthy();
+    const buttons = screen.getAllByRole('button').map((b) => b.textContent);
+    /* Most rooms ready first, with the rooms named; the project with nothing ready sits apart, below. */
+    expect(buttons[0]).toBe('Mehta ResidenceLiving & dining, Master bedroom, Whole home3 rooms ready');
+    expect(buttons[1]).toBe('Kapoor VillaKitchen1 room ready');
+    expect(screen.getByRole('heading', { name: 'Nothing ready yet' })).toBeTruthy();
+    expect(buttons[2]).toBe('Shah Apartment');
+    fireEvent.click(screen.getByRole('button', { name: /Kapoor Villa/ }));
+    expect(onPickProject).toHaveBeenCalledWith('p2');
+  });
+
+  it('says so when no project has a room ready', () => {
+    render(page({ projectId: null, projects: [{ id: 'p3', name: 'Shah Apartment', code: 'SA', color: '#000', ready: [] }] }));
+    expect(screen.getByText(/No project has a room ready yet\. A room is ready once the Design Head has approved a drawing in it that is for the client\./)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Shah Apartment' })).toBeTruthy();
+  });
+
   it('offers to resume a meeting left open, and starts no second one', () => {
     const onResume = vi.fn();
     const open = meeting({ rooms: [room('Living & dining', [sh('l1', 'Living false ceiling')], { outcome: 'agreed' }), room('Master bedroom', [sh('m1', 'Master bed back', 2)])] });

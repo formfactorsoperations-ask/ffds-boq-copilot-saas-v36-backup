@@ -188,13 +188,14 @@ indigo as before.
 The smart features that need no AI are desk parts like the rest (`components/designDesk2/smart.tsx`,
 `measure.tsx`), in the desk's colours:
 - **Worth knowing** on Home: `Card` rows with a 44px tinted tile, a bold line and one sentence,
-  and at most one `Btn`. Rose for a site date at risk, amber for money and for a missing drawing,
-  emerald for how reminders work. `phd-lift` on hover, `hud-panel-in` one after another.
+  and at most one `Btn`. Rose for a site date at risk, amber for money and for a missing drawing.
+  `phd-lift` on hover, `hud-panel-in` one after another.
 - **Site date**: a rose `Tag` with the hard-hat icon on a drawing's row only when the date is at
   risk (amber when the drawing is approved and only needs sending); on the drawing screen one line
   under "Where it is now", rose, amber or slate.
 - **Nudge**: a quiet `Btn` with the bell on a row, a plain one on the drawing screen. After it is
-  pressed the same place is a text link to WhatsApp.
+  pressed it reads "Reminded" with a tick. Nothing is reminded by itself and nothing goes to
+  WhatsApp (owner, 24 Nov 2026: held back for now).
 - **Measure**: its key joins the drawing screen's tool bar with a ruler that slides under the
   pointer (`LiveIcon tool="measure"`). Lines and their labels on the drawing are the brand blue
   `#3D52A0`, so they cannot be taken for notes (rose) or the client's changes (amber). The strip

@@ -3,7 +3,7 @@ import { Home as HomeIcon, List, Loader2, Presentation, Undo2 } from 'lucide-rea
 import { useOrg } from '../../contexts/OrgContext';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
 import { canPresentAssigned, canReview, canRunMeeting, canSetAudience, canUpload, stateOf } from '../../lib/drawingReview';
-import { sendsApprovals, type DesignMeeting } from '../../lib/designMeeting';
+import { presentableRooms, sendsApprovals, type DesignMeeting } from '../../lib/designMeeting';
 import { roundsToBill } from '../../lib/deskSmart';
 import { attention, projectLook, reviewQueue, statsOf, type Viewer } from '../../lib/designDesk';
 import { mainAction } from '../../lib/designDesk2';
@@ -195,6 +195,15 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
     }).filter((x): x is { email: string; name: string } => !!x);
   };
 
+  /* What each project has ready to show a client (for a Designer, only what the Design Head gave them): the Meetings page's project list. */
+  const readyBy = useMemo(() => {
+    const by = new Map<string, ReviewDrawing[]>();
+    rows.forEach((d) => by.set(d.projectId, [...(by.get(d.projectId) || []), d]));
+    const out: Record<string, string[]> = {};
+    by.forEach((l, id) => { out[id] = presentableRooms(l, presenter && !canRun ? me.email : null).filter((r) => r.ready).map((r) => r.room); });
+    return out;
+  }, [rows, presenter, canRun, me.email]);
+
   /* ------------------------------------------------------------ one drawing open */
   const [request] = useState(() => takeOpenRequest());
   const [open, setOpen] = useState<{ projectId: string; drawingId: string } | null>(() =>
@@ -330,7 +339,7 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
             drawings={meetProject ? rows.filter((d) => d.projectId === meetProject) : []} meetings={meetings} canRun={canRun} canBill={canBill} presenter={presenter} approver={approver} me={me}
             designers={designersOf(meetProject)}
             onResume={(m) => { setRunning(m); window.scrollTo({ top: 0 }); }}
-            projects={cards.map((p) => ({ id: p.id, name: p.name, code: p.code, color: p.color }))} onPickProject={(id) => setMeetProject(id === 'all' ? null : id)} />
+            projects={cards.map((p) => ({ id: p.id, name: p.name, code: p.code, color: p.color, ready: readyBy[p.id] || [] }))} onPickProject={(id) => setMeetProject(id === 'all' ? null : id)} />
         )}
       </main>
 

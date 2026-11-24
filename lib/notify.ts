@@ -360,8 +360,7 @@ export function reviewDraft(
 /**
  * A reminder to whoever is holding a drawing (lib/deskSmart.ts: heldBy): the
  * Design Head when it is waiting for a check, its designer when it is waiting
- * for changes or to be sent. `by` is the person who pressed Nudge; the daily
- * reminder has none.
+ * for changes or to be sent. `by` is the person who pressed Nudge.
  */
 export function nudgeDraft(p: { projectId: string; projectName: string | null; sheet: string; who: 'head' | 'designer'; days: number; ask: string; designerEmail?: string | null; by?: string | null }): Draft | null {
   if (p.who === 'designer' && !p.designerEmail) return null;

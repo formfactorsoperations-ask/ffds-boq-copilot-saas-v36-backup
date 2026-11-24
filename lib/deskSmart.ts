@@ -15,7 +15,9 @@ import type { FlowRow } from './designDesk2';
                   while it is not (the Drawings tab's gap flag);
     rounds        revision rounds past the included ones that nobody has
                   billed or waived yet;
-    nudges        who has held a drawing for more than a day.
+    nudges        who is holding a drawing, for the Nudge button. There is no
+                  automatic reminder and nothing goes to WhatsApp (owner,
+                  24 Nov 2026: held back for now).
 */
 
 const DAY = 86_400_000;
@@ -136,10 +138,6 @@ export function roundsToBill(byProject: Record<string, DesignMeeting[] | undefin
 
 /* ------------------------------------------------------------ nudges */
 
-/** A drawing is nudged once someone has held it this long. */
-export const NUDGE_AFTER_MS = DAY;
-/** The daily reminder does not repeat within this time; a retried run sends nothing twice. */
-export const NUDGE_DAILY_GAP_MS = 20 * 3_600_000;
 /** A person pressing Nudge waits this long after the last reminder. */
 export const NUDGE_BUTTON_GAP_MS = 4 * 3_600_000;
 
@@ -170,22 +168,6 @@ export function heldBy(r: Partial<ReviewSummary> | null | undefined, now = Date.
   return null;
 }
 
-/** The holder is due a reminder: held for more than a day, and not reminded within `gap`. */
-export function nudgeDue(r: (Partial<ReviewSummary> & { nudgedAt?: number | null }) | null | undefined, now = Date.now(), gap = NUDGE_DAILY_GAP_MS): Held | null {
-  const h = heldBy(r, now);
-  if (!h || now - h.since < NUDGE_AFTER_MS) return null;
-  return r?.nudgedAt && now - r.nudgedAt < gap ? null : h;
-}
-
-/** The daily reminder stops after this many days, so a drawing left aside does not ring for ever; Nudge still works. */
-export const NUDGE_DAILY_STOPS_AFTER_DAYS = 14;
-
-/** The holder is due the daily reminder. */
-export function dailyNudgeDue(r: (Partial<ReviewSummary> & { nudgedAt?: number | null }) | null | undefined, now = Date.now()): Held | null {
-  const h = nudgeDue(r, now);
-  return h && h.days <= NUDGE_DAILY_STOPS_AFTER_DAYS ? h : null;
-}
-
 /** Whether Nudge can be pressed now, and if not, why. */
 export function canNudge(r: (Partial<ReviewSummary> & { nudgedAt?: number | null }) | null | undefined, now = Date.now()): { ok: boolean; why: string; held: Held | null } {
   const held = heldBy(r, now);
@@ -197,7 +179,3 @@ export function canNudge(r: (Partial<ReviewSummary> & { nudgedAt?: number | null
 /** Who a nudge goes to, in words: "the Design Head" or the designer's first name. */
 export const nudgeTarget = (r: Partial<ReviewSummary> | null | undefined, h: Held) => (h.who === 'head' ? 'the Design Head' : first(r?.designer?.name));
 
-/** A message to paste into WhatsApp, for a studio without the automatic WhatsApp reminders. */
-export function nudgeText(p: { sheet: string; projectName: string; held: Held; to: string }): string {
-  return `Reminder: ${p.sheet} (${p.projectName}) has been waiting ${p.held.days >= 1 ? plural(p.held.days, 'day') : 'since today'} for ${p.to === 'the Design Head' ? 'the Design Head' : p.to} to ${p.held.ask}. Please open it in Design Desk.`;
-}

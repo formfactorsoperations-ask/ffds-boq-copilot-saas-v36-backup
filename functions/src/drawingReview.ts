@@ -537,7 +537,7 @@ async function setAudience(actor: Actor, orgId: string, projectId: string, drawi
 /*
   Reminds whoever is holding the drawing: the Design Head when it waits for a
   check, its designer when it waits for changes or to be sent (lib/deskSmart:
-  heldBy). Anyone who can open the drawing may press it, a few hours apart at
+  heldBy). There is no automatic reminder. Anyone who can open the drawing may press it, a few hours apart at
   most; the reminder is stamped on the drawing and noted in its history, then
   goes to the holder's bell and phone. It changes nothing about the review.
 */

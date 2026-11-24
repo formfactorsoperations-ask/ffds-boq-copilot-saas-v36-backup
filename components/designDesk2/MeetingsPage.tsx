@@ -47,7 +47,8 @@ interface Props {
   me: { uid: string; email: string; name?: string | null };
   designers: TeamMember[];
   onResume: (m: DesignMeeting) => void;
-  projects: { id: string; name: string; code: string; color: string }[];
+  /** Every project the person can meet about, with the rooms each has ready to show (approved by the Design Head). */
+  projects: { id: string; name: string; code: string; color: string; ready?: string[] }[];
   onPickProject: (id: string) => void;
 }
 
@@ -103,19 +104,46 @@ export default function MeetingsPage({ orgId, projectId, projectName, drawings, 
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Meetings</h1>
         <p className="mt-1 text-base text-slate-600">Show approved drawings to the client, one room at a time. The desk writes down what they say.</p>
-        <SectionTitle hint="A meeting shows one project's ready rooms">Which project are you meeting about?</SectionTitle>
-        {projects.length ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {projects.map((p, i) => (
-              <button key={p.id} type="button" onClick={() => onPickProject(p.id)} style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}
-                className="hud-panel-in phd-lift flex min-h-[64px] min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 text-left shadow-sm hover:border-emerald-300">
-                <ProjectMark code={p.code} color={p.color} size={36} />
-                <span className="min-w-0 flex-1 truncate text-base font-bold text-slate-800">{p.name}</span>
-                <ChevronRight size={18} className="shrink-0 text-slate-400" aria-hidden />
-              </button>
-            ))}
-          </div>
-        ) : <Empty icon={Presentation} title="No projects yet" line="A meeting needs a project with drawings the Design Head has approved." />}
+        {projects.length ? (() => {
+          const count = (p: Props['projects'][number]) => (p.ready || []).length;
+          const ready = projects.filter((p) => count(p) > 0).sort((a, b) => count(b) - count(a) || a.name.localeCompare(b.name));
+          const rest = projects.filter((p) => count(p) === 0);
+          const names = (rooms: string[]) => `${rooms.slice(0, 4).map(roomLabel).join(', ')}${rooms.length > 4 ? ` and ${rooms.length - 4} more` : ''}`;
+          return (
+            <>
+              <SectionTitle hint={ready.length ? 'Pick the project you are meeting about' : undefined}>Ready to show a client</SectionTitle>
+              {ready.length ? (
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {ready.map((p, i) => (
+                    <button key={p.id} type="button" onClick={() => onPickProject(p.id)} style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}
+                      className="hud-panel-in phd-lift flex min-h-[76px] min-w-0 items-center gap-3 rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-left shadow-sm hover:border-emerald-500">
+                      <ProjectMark code={p.code} color={p.color} size={40} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-base font-bold text-slate-800">{p.name}</span>
+                        <span className="block truncate text-sm text-slate-600">{names(p.ready || [])}</span>
+                      </span>
+                      <Tag tone="good" icon={Check}>{plural(count(p), 'room')} ready</Tag>
+                      <ChevronRight size={18} className="shrink-0 text-slate-400" aria-hidden />
+                    </button>
+                  ))}
+                </div>
+              ) : <Card className="px-5 py-5 text-sm text-slate-600">No project has a room ready yet. A room is ready once the Design Head has approved a drawing in it that is for the client{presenter && !canRun ? ', and has given it to you under "Who presents"' : ''}.</Card>}
+              {rest.length > 0 && <>
+                <SectionTitle hint="Open one to see what each room is waiting for, or its past meetings">Nothing ready yet</SectionTitle>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {rest.map((p) => (
+                    <button key={p.id} type="button" onClick={() => onPickProject(p.id)}
+                      className="flex min-h-[52px] min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 text-left hover:border-slate-300 hover:bg-slate-50">
+                      <span className="opacity-60"><ProjectMark code={p.code} color={p.color} size={28} /></span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-600">{p.name}</span>
+                      <ChevronRight size={16} className="shrink-0 text-slate-300" aria-hidden />
+                    </button>
+                  ))}
+                </div>
+              </>}
+            </>
+          );
+        })() : <><SectionTitle>Which project are you meeting about?</SectionTitle><Empty icon={Presentation} title="No projects yet" line="A meeting needs a project with drawings the Design Head has approved." /></>}
       </div>
     );
   }
@@ -154,7 +182,7 @@ export default function MeetingsPage({ orgId, projectId, projectName, drawings, 
         {projects.length > 1 && (
           <label className="flex flex-col text-xs font-bold text-slate-500">Project
             <select value={projectId} onChange={(e) => onPickProject(e.target.value)} className={cx(field, 'mt-1 max-w-[280px] font-semibold')}>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {[...projects].sort((a, b) => (b.ready || []).length - (a.ready || []).length).map((p) => <option key={p.id} value={p.id}>{p.name}{(p.ready || []).length ? ` · ${plural((p.ready || []).length, 'room')} ready` : ''}</option>)}
             </select>
           </label>
         )}

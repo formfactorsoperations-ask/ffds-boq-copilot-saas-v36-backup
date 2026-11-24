@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { BellRing, CalendarClock, Check, HardHat, IndianRupee, Loader2, MessageCircle, PuzzleIcon, type LucideIcon } from 'lucide-react';
-import { canNudge, cleanDate, missingDrawings, nudgeTarget, nudgeText, siteRisk, siteRisks, type RoundToBill } from '../../lib/deskSmart';
+import { BellRing, CalendarClock, Check, HardHat, IndianRupee, Loader2, PuzzleIcon, type LucideIcon } from 'lucide-react';
+import { canNudge, cleanDate, missingDrawings, nudgeTarget, siteRisk, siteRisks, type RoundToBill } from '../../lib/deskSmart';
 import type { Viewer } from '../../lib/designDesk';
 import { nudgeHolder, setSiteDate, type ReviewDrawing } from '../../services/drawingReviewService';
 import { roomLabel, useToast } from '../drawingReview/ui';
@@ -12,10 +12,12 @@ import { Btn, Card, SectionTitle, Tag, cx } from './parts';
 
     WorthKnowing   Home's "Worth knowing": revision rounds waiting to be
                    billed, drawings that may miss the site date, drawings
-                   missing beside their pair, and how reminders work;
+                   missing beside their pair;
     SiteTag        "Site needs it 1 Dec" on a drawing's row, when it matters;
     SiteLine       the same on the drawing screen, where the leads set the date;
-    NudgeButton    reminds whoever is holding a drawing.
+    NudgeButton    reminds whoever is holding a drawing, when a person presses
+                   it. Nothing is reminded by itself and nothing goes to
+                   WhatsApp (owner, 24 Nov 2026: held back for now).
 */
 
 /* ------------------------------------------------------------ the site date */
@@ -71,9 +73,8 @@ export const SiteLine: React.FC<{ d: ReviewDrawing; canSet: boolean }> = ({ d, c
 /* ------------------------------------------------------------ nudges */
 
 /**
- * Reminds whoever is holding the drawing. Shown only when someone else in the
- * studio has had it for a day or more. After the reminder has gone, the same
- * spot offers the words for WhatsApp.
+ * Reminds whoever is holding the drawing, in their bell and on their phone.
+ * Shown only when someone else in the studio has had it for a day or more.
  */
 export const NudgeButton: React.FC<{ d: ReviewDrawing; viewer: Viewer; projectName: string; quiet?: boolean }> = ({ d, viewer, projectName, quiet }) => {
   const toast = useToast();
@@ -85,15 +86,6 @@ export const NudgeButton: React.FC<{ d: ReviewDrawing; viewer: Viewer; projectNa
   /* Nobody nudges themselves. */
   if (held.who === 'head' ? viewer.reviewer : d.review?.designer?.email === viewer.email) return null;
   const to = nudgeTarget(d.review, held);
-  if (sent) {
-    const text = nudgeText({ sheet: d.name, projectName, held, to });
-    return (
-      <a href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-        className="inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-xl px-3 text-sm font-bold text-emerald-700 hover:bg-emerald-50" title="Opens WhatsApp with the reminder written for you">
-        <MessageCircle size={18} aria-hidden />Send on WhatsApp too
-      </a>
-    );
-  }
   const nudge = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setBusy(true);
@@ -106,18 +98,18 @@ export const NudgeButton: React.FC<{ d: ReviewDrawing; viewer: Viewer; projectNa
     } finally { setBusy(false); }
   };
   return (
-    <Btn kind={quiet ? 'quiet' : 'plain'} icon={busy ? Loader2 : BellRing} disabled={busy || !state.ok} onClick={nudge}
-      title={state.ok ? `Remind ${to}: ${d.name} has waited ${held.days === 1 ? '1 day' : `${held.days} days`}` : state.why}
-      className={busy ? '[&>svg]:animate-spin' : undefined} aria-label={`Nudge ${to} about ${d.name}`}>Nudge</Btn>
+    <Btn kind={quiet ? 'quiet' : 'plain'} icon={busy ? Loader2 : sent ? Check : BellRing} disabled={busy || sent || !state.ok} onClick={nudge}
+      title={sent ? `A reminder went to ${to} just now` : state.ok ? `Remind ${to}: ${d.name} has waited ${held.days === 1 ? '1 day' : `${held.days} days`}` : state.why}
+      className={busy ? '[&>svg]:animate-spin' : undefined} aria-label={`Nudge ${to} about ${d.name}`}>{sent ? 'Reminded' : 'Nudge'}</Btn>
   );
 };
 
 /* ------------------------------------------------------------ Home: worth knowing */
 
-const Item: React.FC<{ icon: LucideIcon; tone: 'rose' | 'amber' | 'emerald' | 'slate'; title: string; children: React.ReactNode; action?: React.ReactNode; i: number }> = ({ icon: Icon, tone, title, children, action, i }) => (
+const Item: React.FC<{ icon: LucideIcon; tone: 'rose' | 'amber' | 'slate'; title: string; children: React.ReactNode; action?: React.ReactNode; i: number }> = ({ icon: Icon, tone, title, children, action, i }) => (
   <Card delay={i * 50} className="phd-lift flex flex-wrap items-start gap-x-4 gap-y-3 p-4">
     <span className={cx('grid h-11 w-11 shrink-0 place-items-center rounded-2xl',
-      tone === 'rose' ? 'bg-rose-100 text-rose-700' : tone === 'amber' ? 'bg-amber-100 text-amber-700' : tone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600')}><Icon size={20} aria-hidden /></span>
+      tone === 'rose' ? 'bg-rose-100 text-rose-700' : tone === 'amber' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600')}><Icon size={20} aria-hidden /></span>
     <span className="min-w-0 flex-[1_1_260px]">
       <span className="block text-base font-bold text-slate-800">{title}</span>
       <span className="block text-sm text-slate-600">{children}</span>
@@ -166,10 +158,7 @@ export const WorthKnowing: React.FC<WorthProps> = ({ rows, reviewer, rounds = []
             {missing[0].line}{missing.length > 1 ? ` ${missing.length - 1} more like it.` : ''}
           </Item>
         )}
-        <Item i={i++} icon={BellRing} tone="emerald" title="Reminders go out on their own">
-          Anyone in the studio holding a drawing for more than a day is reminded at 10:00, in the bell and on their phone. You can also press Nudge on a waiting drawing. Clients get their approval reminders on working days 3 and 5.
-        </Item>
-        {i === 1 && <p className="flex items-center gap-2 px-1 text-sm text-slate-500"><Check size={16} className="text-emerald-600" aria-hidden />No site date is at risk and nothing is missing.</p>}
+        {i === 0 && <p className="flex items-center gap-2 px-1 text-sm text-slate-500"><Check size={16} className="text-emerald-600" aria-hidden />No site date is at risk and nothing is missing.</p>}
       </div>
     </>
   );

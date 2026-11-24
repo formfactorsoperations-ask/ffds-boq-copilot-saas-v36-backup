@@ -56,7 +56,8 @@ describe('Worth knowing, on Home', () => {
     expect(screen.getByText('Kitchen elevation B has no drawing uploaded yet, and Kitchen plan, which goes with it, is already ahead.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Open Mehta Residence' }));
     expect(goProject).toHaveBeenCalledWith('p1');
-    expect(screen.getByText('Reminders go out on their own')).toBeTruthy();
+    /* Nothing is promised about reminders going by themselves: there are none. */
+    expect(screen.queryByText(/Reminders go out on their own/)).toBeNull();
   });
 
   it('does not show a Designer the missing drawings or the rounds, and says so when nothing is at risk', () => {
@@ -94,13 +95,15 @@ describe('the site date on a drawing', () => {
 });
 
 describe('Nudge', () => {
-  it('reminds whoever has held the drawing a day or more, then offers the words for WhatsApp', async () => {
+  it('reminds whoever has held the drawing a day or more, once, and offers nothing for WhatsApp', async () => {
     const d = row('b1', 'Master wardrobe', 'IN_REVIEW', { held: 3 });
     render(<NudgeButton d={d} viewer={designer} projectName="Kapoor Villa" />);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Nudge the Design Head about Master wardrobe' })); });
     expect(h.nudge).toHaveBeenCalledWith({ orgId: 's', projectId: 'p1', drawingId: 'b1' });
-    const link = screen.getByRole('link', { name: 'Send on WhatsApp too' }) as HTMLAnchorElement;
-    expect(decodeURIComponent(link.href)).toContain('Reminder: Master wardrobe (Kapoor Villa) has been waiting 3 days for the Design Head to check it.');
+    const done = screen.getByRole('button', { name: 'Nudge the Design Head about Master wardrobe' }) as HTMLButtonElement;
+    expect(done.textContent).toBe('Reminded');
+    expect(done.disabled).toBe(true);
+    expect(screen.queryByRole('link')).toBeNull();
   });
 
   it('is not offered to the person holding it, for a drawing held under a day, or when nobody holds it', () => {
