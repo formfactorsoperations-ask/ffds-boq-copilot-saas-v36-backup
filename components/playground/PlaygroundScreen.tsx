@@ -18,6 +18,8 @@ import { inferBasis } from '../../lib/takeoff';
 import { lockedTierId } from '../../lib/scopeFlow';
 import { ftin } from '../../lib/playground/geometry';
 import SketchModal from './SketchModal';
+import CustomItemModal from './CustomItemModal';
+import { SCOPE_BUCKETS } from '../../lib/scopeBuckets';
 import { CivilPanel } from './CivilParts';
 import {
   civilItems, toggleRoomCivil, addWallCivil, fromBrief, missingStandardItems, briefCivilAsk, toolOf, syncedCivil, SITE_LABEL,
@@ -490,6 +492,15 @@ export default function PlaygroundScreen(props: Props) {
   };
   /* A work from the library (civil, plumbing, electrical…): not drawn, so it joins the room it is dropped on, its
      quantity measured from that room and the sum said (lib/playground/works). */
+  /* A custom item: something the Item Bank does not have, kept with the project (lib/playground/custom). */
+  const [custom, setCustom] = useState<{ name: string; cat?: string } | null>(null);
+  const customRooms = useMemo(() => [...realRooms(rooms).map(r => r.name), ...SCOPE_BUCKETS].filter((n, i, a) => a.indexOf(n) === i), [rooms]);
+  const addCustom = (item: Item, qty: number, roomName: string) => {
+    setProjectContext(p => ({ ...p, adHocItems: [...(p.adHocItems || []), item] }));
+    const line = prepareNew({ id: newId(), bankId: item.id, qty, roomId: roomName, baseRate: item.materials, labor: item.labor, marginOverride: item.margin });
+    commit([...boq, line], `${item.name} added to ${roomName} as a custom item. It is kept with this project, and the Item Bank keeps a copy to pick again.`);
+    setSel(line.id); setSelRoom(null); setCustom(null);
+  };
   const addWork = (item: Item, roomName: string | null) => {
     if (readOnly) { setNote('This option is locked: nothing can be added.'); return; }
     if (!roomName) { setNote('Click a room on the plan first, or drag the work onto a room.'); return; }
@@ -1133,6 +1144,7 @@ export default function PlaygroundScreen(props: Props) {
                     seesMargins={seesMargins} hideFigures={hideFigures} floor={floor} query={query}
                     onSel={pickLine} onReplace={l => replace(l)} onReplaceMany={replaceMany} onDelete={remove}
                     onFullGrid={renderFullGrid ? () => setFullGrid(true) : undefined}
+                    onCustom={() => setCustom({ name: '' })}
                     specBank={specBank} onUpdateLines={offer ? updateLines : undefined}
                     changes={changes} removedName={l => bankMap.get(l.bankId)?.name || (l as { name?: string }).name || 'Line'} />
                 )}
@@ -1169,6 +1181,7 @@ export default function PlaygroundScreen(props: Props) {
                   kits={kits} bankMap={bankMap} hideFigures={hideFigures} kitEstimate={kitCardEstimate} onKit={id => openKit(id)}
                   places={supplyPlaces} onAddSupplied={addSupplied} onAddWork={it => addWork(it, workRoomReal)} workRoom={workRoomReal}
                   measureWork={it => (workRoomReal ? measureWork(it, rooms.find(x => x.name === workRoomReal)) : null)}
+                  onCustom={(name, cat) => setCustom({ name, cat })}
                   artOf={specBank ? (it => { const r = recipeOf(it, specBank); return r ? artOfSpecs(specsFromRecipe(specBank, r, grade), specBank.materials) : {}; }) : undefined} />
               </div>
             )}
@@ -1341,6 +1354,11 @@ export default function PlaygroundScreen(props: Props) {
           onRoom={name => setKitUi(k => k && ({ ...k, rooms: k.rooms.includes(name) ? k.rooms.filter(r => r !== name) : [...k.rooms, name] }))}
           onTick={(key, on) => setKitUi(k => k && ({ ...k, off: { ...k.off, [key]: !on } }))}
           onClose={() => setKitUi(null)} onApply={applyKit} />
+      )}
+      {custom && (
+        <CustomItemModal bank={bank} rooms={customRooms} room={libTarget} name={custom.name} cat={custom.cat}
+          seesMargins={seesMargins && !hideFigures} rounded={!!rules} newId={newId}
+          onAdd={addCustom} onClose={() => setCustom(null)} />
       )}
       {planModal && (
         <div className="fixed inset-0 z-[300] grid place-items-center p-4 phd-scrim" style={{ background: 'rgba(15,23,42,.45)' }} role="dialog" aria-modal="true" aria-label="The plan under this BOQ">

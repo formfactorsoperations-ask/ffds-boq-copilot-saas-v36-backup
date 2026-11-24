@@ -1715,3 +1715,54 @@ describe('one edit, every option (Edit: All options)', () => {
     expect(screen.queryByRole('switch', { name: /Edit all \d options/ })).toBeNull();
   });
 });
+
+describe('a custom item, not in the Item Bank', () => {
+  const form = () => screen.getByRole('dialog', { name: 'Add a custom item' });
+  const field = (name: RegExp) => within(form()).getByLabelText(name) as HTMLInputElement;
+
+  it('from the library: typed in the filter, added to the room, kept with the project and priced', () => {
+    let latest: any[] = [];
+    let ctx: any = null;
+    render(<Harness tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} probeCtx={c => { ctx = c; }} />);
+    const lib = screen.getByRole('complementary', { name: 'Studio design library' });
+    fireEvent.change(within(lib).getByLabelText('Filter the catalogue'), { target: { value: 'Fluted feature wall' } });
+    fireEvent.click(within(lib).getByRole('button', { name: 'Add “Fluted feature wall” as a custom item' }));
+    expect(field(/Item name/).value).toBe('Fluted feature wall');
+    expect((within(form()).getByLabelText(/Trade/) as HTMLSelectElement).value).toBe('Carpentry');
+    fireEvent.change(field(/Quantity/), { target: { value: '40' } });
+    fireEvent.change(within(form()).getByLabelText(/Unit/), { target: { value: 'sq ft' } });
+    // The Owner sees cost and margin.
+    fireEvent.change(field(/Material cost/), { target: { value: '1500' } });
+    fireEvent.change(field(/Labour/), { target: { value: '500' } });
+    fireEvent.change(field(/Margin/), { target: { value: '20' } });
+    expect(within(form()).getByRole('status').textContent).toBe('Comes to ₹96,000 for 40 sq ft.');
+    fireEvent.change(within(form()).getByLabelText(/What the client reads/), { target: { value: 'Walnut veneer, brass inlay' } });
+    fireEvent.click(within(form()).getByRole('button', { name: 'Add to Bedroom' }));
+    expect(screen.queryByRole('dialog', { name: 'Add a custom item' })).toBeNull();
+    const item = ctx.adHocItems.find((i: any) => i.name === 'Fluted feature wall');
+    expect(item).toMatchObject({ cat: 'Carpentry', unit: 'sq ft', materials: 1500, labor: 500, margin: 20, specs: 'Walnut veneer, brass inlay' });
+    expect(latest[0].boq[0]).toMatchObject({ bankId: item.id, qty: 40, roomId: 'Bedroom', baseRate: 1500, labor: 500, marginOverride: 20 });
+    expect(screen.getByRole('status').textContent).toMatch(/added to Bedroom as a custom item/);
+    expect(within(inspector()).getByText('Fluted feature wall')).toBeTruthy();
+  });
+
+  it('from the Sheet; a Designer gives the rate the client pays and never sees cost or margin', () => {
+    org.role = 'Designer';
+    let ctx: any = null;
+    render(<Harness tier={PG} probeCtx={c => { ctx = c; }} />);
+    lens('Sheet');
+    fireEvent.click(screen.getByRole('button', { name: 'Add a custom item' }));
+    expect(within(form()).queryByLabelText(/Material cost/)).toBeNull();
+    expect(within(form()).queryByLabelText(/Margin/)).toBeNull();
+    expect((within(form()).getByRole('button', { name: /^Add to / }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(form()).getByRole('status').textContent).toBe('Give it a name.');
+    fireEvent.change(field(/Item name/), { target: { value: 'Brass handles, set of 12' } });
+    fireEvent.change(within(form()).getByLabelText(/^Room/), { target: { value: 'Kitchen' } });
+    fireEvent.change(within(form()).getByLabelText(/Unit/), { target: { value: 'set' } });
+    fireEvent.change(field(/Rate to the client/), { target: { value: '6,000' } });
+    fireEvent.click(within(form()).getByRole('button', { name: 'Add to Kitchen' }));
+    const item = ctx.adHocItems.find((i: any) => i.name === 'Brass handles, set of 12');
+    expect(item.unit).toBe('set');
+    expect(Math.round((item.materials + item.labor) * (1 + item.margin / 100))).toBe(6000);
+  });
+});

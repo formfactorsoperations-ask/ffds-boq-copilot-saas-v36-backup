@@ -147,6 +147,10 @@ linkage, notes, change orders on a frozen BOQ). Do not add a mode or a switch ba
   A lens change swaps the work area with `key={lens}` and `hud-swap`. A Classic BOQ opens on the Sheet.
 - **The library** floats over the stage's left edge (232px): Pieces, Kits and By client tabs, each a
   `Segmented`. It slides in with `pg-slide`.
+- **A custom item** (`CustomItemModal.tsx`, the Modals pattern): a dashed brand tile, "Add a custom item ·
+  Not in the Item Bank", at the top of the library's Pieces and Works, the same offer when a filter finds
+  nothing ("Add “…” as a custom item"), and a link in the Sheet's footer. The studio's finance roles
+  give cost and margin; everyone else gives the client's rate. It is kept with the project (`adHocItems`).
 - **The right rail** is the Live BOQ (a receipt, room by room, with the work total) until a line or a
   room is picked; then the inspector for it. Each inspector is keyed by what it shows and swaps in with
   `hud-swap`. The rail hides to a "Live BOQ" button on narrow screens.
