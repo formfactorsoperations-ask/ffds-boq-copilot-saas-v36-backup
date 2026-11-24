@@ -246,6 +246,36 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
     return () => { cancelAnimationFrame(raf); sc.removeEventListener('pointerdown', drop); sc.removeEventListener('wheel', drop); };
   }, [zoom]);
 
+  /*
+    Drag to move around the drawing (and the plan), as on the drawing screen:
+    press anywhere on it and pull. A press that does not move is still a
+    click, so pins and buttons work; while a change is being placed the tap
+    belongs to the pin. Touch scrolls by itself. The client's window follows.
+  */
+  const pan = useRef<{ x: number; y: number; left: number; top: number; id: number; on: boolean } | null>(null);
+  const [grabbing, setGrabbing] = useState(false);
+  const canPan = !pinning && !draft;
+  const panStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch' || e.button !== 0 || !canPan) return;
+    if ((e.target as HTMLElement).closest?.('button, a, input, textarea, select, [role="tooltip"]')) return;
+    anchor.current = null;
+    pan.current = { x: e.clientX, y: e.clientY, left: e.currentTarget.scrollLeft, top: e.currentTarget.scrollTop, id: e.pointerId, on: false };
+  };
+  const panMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const p = pan.current;
+    if (!p || p.id !== e.pointerId) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    if (!p.on) {
+      if (Math.hypot(dx, dy) < 4) return;
+      p.on = true;
+      setGrabbing(true);
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* the pointer is already gone */ }
+    }
+    e.currentTarget.scrollLeft = p.left - dx;
+    e.currentTarget.scrollTop = p.top - dy;
+  };
+  const panEnd = () => { pan.current = null; setGrabbing(false); };
+
   /* ------------------------------------------------------------ moving about */
   const go = (i: number) => { setAt(i); setTab(0); setPage(0); setPinning(false); setDraft(null); };
   const pick = (t: Tab) => { setTab(t); setPage(0); setDraft(null); if (t === 'plan') setPinning(false); };
@@ -543,7 +573,9 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
             <button type="button" onClick={() => step1(1)} disabled={tabs.length < 2} aria-label="Next drawing" className={icon}><ChevronRight size={18} /></button>
           </div>
 
-          <div ref={stage} key={`${at}:${showPlan ? 'plan' : sheet}`} onScroll={mirror.onScroll} className="min-h-0 flex-1 overflow-auto p-3 pb-[76px]">
+          <div ref={stage} key={`${at}:${showPlan ? 'plan' : sheet}`} onScroll={mirror.onScroll} className="min-h-0 flex-1 select-none overflow-auto p-3 pb-[76px]"
+            style={{ cursor: grabbing ? 'grabbing' : canPan ? 'grab' : undefined, touchAction: 'pan-x pan-y' }}
+            onPointerDown={panStart} onPointerMove={panMove} onPointerUp={panEnd} onPointerCancel={panEnd} onLostPointerCapture={panEnd}>
             {showPlan && m.layout ? (
               planTurnRaw === undefined ? <div className="grid h-full min-h-[240px] place-items-center text-slate-500"><Loader2 className="animate-spin" aria-label="Opening the layout plan" /></div>
                 : <div className="dd2m-page mx-auto max-w-[1500px] rounded-xl bg-white p-3"><LayoutPanel sheet={m.layout} room={room.room} box={box} turn={planTurn} zoom={zoom} fitHeight={stageH > 240 ? stageH - 60 : undefined} maxWidth={4000} /></div>
@@ -685,7 +717,7 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
           <div className="truncate text-sm font-bold text-slate-100">
             {room.outcome ? `${roomLabel(room.room)}: ${room.outcome === 'agreed' ? 'the client is happy' : `${plural(room.changes.length, 'change')} recorded`}. You can reopen it until the meeting is saved.` : `${roomLabel(room.room)}: what does the client say?`}
           </div>
-          <div className="truncate text-xs text-slate-400">Keys: C add a change{m.layout ? ' · L layout plan' : ''} · ← → drawings · F full screen · Ctrl + scroll to zoom</div>
+          <div className="truncate text-xs text-slate-400">Drag the drawing to move around · Ctrl + scroll to zoom · Keys: C add a change{m.layout ? ' · L layout plan' : ''} · ← → drawings · F full screen</div>
         </div>
         {room.outcome ? (
           <button type="button" disabled={busy} onClick={reopen} className={cx(dark, 'dd2m-key slate min-h-[48px] text-base')}><span className="ico"><Undo2 size={18} aria-hidden /></span>Reopen this room</button>

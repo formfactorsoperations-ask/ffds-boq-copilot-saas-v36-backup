@@ -255,6 +255,27 @@ describe('the meeting screen', () => {
     expect(screen.getByTestId('drawing').getAttribute('data-zoom')).toBe('1.15');
   });
 
+  it('lets the drawing be dragged to move around, but not while a change is being placed', async () => {
+    render(screenOf(meeting()));
+    const stage = (await screen.findByTestId('drawing')).parentElement!.parentElement!.parentElement as HTMLElement;
+    expect(stage.style.cursor).toBe('grab');
+    /* Press and pull: the view moves the way the hand does. */
+    fireEvent.pointerDown(stage, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 400, clientY: 300 });
+    fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'mouse', clientX: 398, clientY: 299 });
+    expect(stage.style.cursor).toBe('grab');
+    fireEvent.pointerMove(stage, { pointerId: 1, pointerType: 'mouse', clientX: 340, clientY: 260 });
+    expect(stage.style.cursor).toBe('grabbing');
+    expect([stage.scrollLeft, stage.scrollTop]).toEqual([60, 40]);
+    fireEvent.pointerUp(stage, { pointerId: 1, pointerType: 'mouse' });
+    expect(stage.style.cursor).toBe('grab');
+    /* With Add a change on, a press on the drawing places the pin instead. */
+    fireEvent.click(screen.getByRole('button', { name: 'Add a change' }));
+    expect(stage.style.cursor).toBe('');
+    fireEvent.pointerDown(stage, { pointerId: 2, pointerType: 'mouse', button: 0, clientX: 400, clientY: 300 });
+    fireEvent.pointerMove(stage, { pointerId: 2, pointerType: 'mouse', clientX: 300, clientY: 200 });
+    expect([stage.scrollLeft, stage.scrollTop]).toEqual([60, 40]);
+  });
+
   it('shows a layout plan stored upright in landscape, and lets it be turned and zoomed', async () => {
     h.upright = true;
     const layout = { drawingId: 'a1', name: 'Layout plan', versionId: 'v1', versionNo: 4, pdfPath: 'plan.pdf', pageCount: 1, rooms: {} };
