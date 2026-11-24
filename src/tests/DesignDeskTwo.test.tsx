@@ -168,6 +168,8 @@ describe('Design Desk 2.0', () => {
     expect(screen.getByText('Your turn')).toBeTruthy();
     /* Every review tool is in one bar under the drawing. */
     const bar = screen.getByRole('toolbar', { name: 'Drawing tools' });
+    /* Each tool carries its own living icon. */
+    ['select', 'pin', 'rect', 'arrow', 'pen'].forEach((t) => expect(bar.querySelector(`[data-tool="${t}"] .dd2-ico svg`)).toBeTruthy());
     ['Select', 'Pin', 'Box', 'Arrow', 'Draw', 'Rotate the drawing', 'Zoom out', 'Zoom in'].forEach((n) => expect(within(bar).getByRole('button', { name: n })).toBeTruthy());
     expect(within(bar).getByRole('button', { name: /Full screen/ })).toBeTruthy();
     fireEvent.click(within(bar).getByRole('button', { name: 'Zoom in' }));
@@ -205,6 +207,8 @@ describe('Design Desk 2.0', () => {
     expect(screen.getByRole('heading', { name: 'Kitchen Elevation A' })).toBeTruthy();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Approve v1' })); });
     expect(h.approve).toHaveBeenCalledWith({ orgId: 's', projectId: 'p1', drawingId: 'b' }, 7);
+    /* Approving draws a big tick over the drawing before the screen moves on. */
+    expect(screen.getByRole('status', { name: 'Approved' })).toBeTruthy();
   });
 
   it("shows a note beside its pin on hover, and lights the pin from the list", async () => {

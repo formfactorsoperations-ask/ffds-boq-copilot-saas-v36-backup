@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Check, ChevronLeft, ChevronRight, Columns2, FileUp, History, Loader2, MapPin, Maximize2, MessageSquare, Minimize2, Minus, MousePointer2,
-  MoveUpRight, PanelRightClose, PanelRightOpen, PenLine, Plus, RotateCcw, RotateCw, Send, Sparkles, Square, Trash2, Undo2,
+  Check, ChevronLeft, ChevronRight, FileUp, History, Loader2, Maximize2, MessageSquare, Minimize2, Minus,
+  PanelRightClose, PanelRightOpen, Plus, RotateCcw, RotateCw, Send, Trash2, Undo2,
 } from 'lucide-react';
 import {
   watchDrawing, watchVersions, watchMarks, watchRounds, watchEvents, submitSheet, withdrawSheet, approveSheet, returnSheet, clientReturn, clientKeep,
@@ -18,7 +18,7 @@ import { useSheetChanges } from '../drawingReview/useSheetChanges';
 import { MARK, FIXED, CLIENT, roomLabel, ago, shortDate, firstName, useToast, Initials } from '../drawingReview/ui';
 import type { Me } from '../drawingReview/SheetStudio';
 import { Btn, Tag, cx } from './parts';
-import { DeskMotionStyles, Tilt } from './motion';
+import { DeskMotionStyles, LiveIcon, Tilt, TOOL_COLOR, type LiveTool } from './motion';
 
 /*
   ONE DRAWING, on the new desk (Design Desk 2.0, Phase 1).
@@ -53,15 +53,17 @@ interface Props {
   onUpload: (d: ReviewDrawing) => void;
 }
 
-const TOOLS: [Tool, string, string, string, React.ComponentType<any>][] = [
-  ['select', 'V', 'Select', 'Click a note to see it. Drag the drawing to move around it.', MousePointer2],
-  ['pin', 'P', 'Pin', 'Click the drawing to drop a numbered note.', MapPin],
-  ['rect', 'B', 'Box', 'Drag across an area to box it.', Square],
-  ['arrow', 'A', 'Arrow', 'Drag from the note to what it points at.', MoveUpRight],
-  ['pen', 'D', 'Draw', 'Sketch freehand on the drawing.', PenLine],
+const TOOLS: [Tool, string, string, string][] = [
+  ['select', 'V', 'Select', 'Click a note to see it. Drag the drawing to move around it.'],
+  ['pin', 'P', 'Pin', 'Click the drawing to drop a numbered note.'],
+  ['rect', 'B', 'Box', 'Drag across an area to box it.'],
+  ['arrow', 'A', 'Arrow', 'Drag from the note to what it points at.'],
+  ['pen', 'D', 'Draw', 'Sketch freehand on the drawing.'],
 ];
-/* Each tool's icon sits in a filled tile: slate to select, the note colour to mark, amber and emerald for the two shapes that point, the brand blue to draw. */
-const TOOL_TILE: Record<Tool, string> = { select: '#334155', pin: '#E11D48', rect: '#D97706', arrow: '#059669', pen: '#3D52A0' };
+/* The order the tool bar shows its icons off, once, the first time a drawing is opened in a visit. */
+const DEMO: LiveTool[] = ['select', 'pin', 'rect', 'arrow', 'pen', 'compare', 'changes'];
+const DEMO_SEEN = 'ffds_dd2_icons_shown';
+const calm = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const SHAPE_WORD: Record<string, string> = { pin: 'Pin', rect: 'Box', arrow: 'Arrow', pen: 'Sketch' };
 const EVENT_WORD: Record<string, string> = { uploaded: 'uploaded', submitted: 'sent it to the Design Head', withdrawn: 'pulled it back', returned: 'asked for changes', approved: 'approved', audience: 'changed who it is for', removed: 'removed the PDF', client: 'showed it to the client', clientKept: 'kept it approved after the meeting' };
 const QUICK = ['Check this dimension', 'Line this up with the ceiling plan', 'Match the material schedule', 'Show the hinge side', 'Add a section through here'];
@@ -86,9 +88,10 @@ function tagSpot(shape: MarkShape, turn: Turn): [number, number] {
 }
 
 /*
-  The pins of one page, over the drawing: each note's number as a raised badge
-  that lifts under the pointer and opens the note beside it, so a note can be
-  read without looking away from the drawing. Hovering a note in the list
+  The pins of one page, over the drawing: each note's number as a round badge
+  that ripples while its note is open, grows under the pointer and springs the
+  note out beside it on a dotted line, so a note can be read without looking
+  away from the drawing. Hovering a note in the list
   rings its pin here. While a marking tool is in hand the pins let the pointer
   through, so a new mark can be drawn over them.
 */
@@ -97,18 +100,22 @@ const Pins: React.FC<{ marks: ReviewMark[]; turn: Turn; hover: string | null; se
     {marks.map((m) => {
       const [x, y] = tagSpot(m.shape, turn);
       const hot = hover === m.id;
+      const below = y < 0.3;
+      /* Where the pin is, across the note that opens beside it: the dotted line and the spring start there. */
+      const at = x > 0.72 ? 'calc(100% - 18px)' : x < 0.28 ? '18px' : '50%';
       return (
         <React.Fragment key={m.id}>
           <button type="button" aria-label={`Note ${m.n}: ${m.text}`} onClick={() => onSelect(m.id)}
             onMouseEnter={() => onHover(m.id)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(m.id)} onBlur={() => onHover(null)}
-            className={cx('dd2-pin', hot && 'is-hot', !hot && selected === m.id && 'is-picked', passive && 'is-off')}
+            className={cx('dd2-pin', m.status !== 'FIXED' && 'is-open', hot && 'is-hot', !hot && selected === m.id && 'is-picked', passive && 'is-off')}
             style={{ left: `${x * 100}%`, top: `${y * 100}%`, ['--pin' as any]: markColor(m) }}><b>{m.n}</b></button>
           {hot && (
             <div className="absolute z-[5] w-[260px] max-w-[70vw]" role="tooltip"
-              style={{ left: `${x * 100}%`, top: `${y * 100}%`, transform: `translate(${x > 0.72 ? 'calc(-100% + 18px)' : x < 0.28 ? '-18px' : '-50%'}, ${y < 0.28 ? '26px' : 'calc(-100% - 26px)'})` }}>
-              <div className="dd2-bubble rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-2xl">
+              style={{ left: `${x * 100}%`, top: `${y * 100}%`, ['--pin' as any]: markColor(m), transform: `translate(${x > 0.72 ? 'calc(-100% + 18px)' : x < 0.28 ? '-18px' : '-50%'}, ${below ? '34px' : 'calc(-100% - 34px)'})` }}>
+              <span className="dd2-lead" style={{ left: at, [below ? 'bottom' : 'top']: '100%' }} aria-hidden />
+              <div className="dd2-bubble rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-2xl" style={{ transformOrigin: `${at} ${below ? 'top' : 'bottom'}` }}>
                 <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                  <span className="dd2-badge grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ ['--pin' as any]: markColor(m) }}>{m.n}</span>
+                  <span className="dd2-badge grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold text-white">{m.n}</span>
                   <span className="min-w-0 flex-1 truncate">{who(m)}</span>
                   {m.status === 'FIXED' ? <Tag tone="good">Fixed</Tag> : m.blocking ? <Tag tone="bad">Must fix</Tag> : null}
                 </div>
@@ -202,6 +209,10 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   /* A short tip when the drawing opens; it goes away by itself. */
   const [diffNote, setDiffNote] = useState(true);
   const [tip, setTip] = useState(true);
+  const [demo, setDemo] = useState<LiveTool | null>(null);
+  const [ticked, setTicked] = useState(false);
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
   useEffect(() => { const t = setTimeout(() => setTip(false), 7000); return () => clearTimeout(t); }, []);
   const [diffs, setDiffs] = useState<Record<number, Diff>>({});
   const checkedKey = `ffds_dr_checked_${me.uid}`;
@@ -286,6 +297,14 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
       .finally(() => { clearTimeout(giveUp); if (live) setOriented(true); });
     return () => { live = false; clearTimeout(giveUp); };
   }, [viewPath]);
+  /* The first drawing opened in a visit: each icon acts once, left to right, so people see what the tools do. */
+  useEffect(() => {
+    if (d === undefined || d === null || calm()) return;
+    try { if (sessionStorage.getItem(DEMO_SEEN)) return; sessionStorage.setItem(DEMO_SEEN, '1'); } catch { return; }
+    const timers = DEMO.map((t, i) => setTimeout(() => setDemo(t), 700 + i * 420));
+    timers.push(setTimeout(() => setDemo(null), 700 + DEMO.length * 420 + 600));
+    return () => timers.forEach(clearTimeout);
+  }, [d === undefined, d === null]);
   useEffect(() => { if (!prev) setCompare(false); }, [prev?.id]);
   useEffect(() => { if (draft) setTimeout(() => draftBox.current?.focus(), 30); }, [!!draft]);
   /* A note picked on the drawing is brought into view in the list. */
@@ -449,7 +468,9 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
       kind === 'approve'
         ? { celebrate: true, title: `v${r.versionNo} approved${self ? ' (self-approved)' : ''}`, sub: rest ? `${rest} more waiting. Opening the next one.` : audience === 'client' ? 'It is ready for the client meeting.' : 'Final. It stays inside the studio.' }
         : { title: `Sent back to ${self ? 'you' : firstName(r.designer?.name)}`, sub: `${onSheet.length ? `${onSheet.length} note${onSheet.length === 1 ? '' : 's'} to fix` : 'With your message'}${rest ? '. Opening the next one.' : '.'}` });
-    if (res) goNext();
+    if (!res) return;
+    /* Approving draws a big tick over the drawing, then moves on. */
+    if (kind === 'approve' && !calm()) { setTicked(true); setTimeout(() => { if (alive.current) goNext(); }, 950); } else goNext();
   }
   async function decideClient(kind: 'send' | 'keep') {
     if (!r) return;
@@ -495,7 +516,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   const steps = stepsOf(d);
   const toolNow = TOOLS.find((t) => t[0] === tool) || TOOLS[0];
   const draftNo = (r?.marksSeq || 0) + 1;
-  const barBtn = (on = false) => cx('dd2-key inline-flex min-h-[44px] min-w-[38px] items-center justify-center gap-1.5 rounded-xl px-1.5 text-sm font-bold disabled:opacity-40', on ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-white hover:text-slate-800');
+  const barBtn = (on = false) => cx('dd2-key inline-flex min-h-[44px] min-w-[38px] items-center justify-center gap-1.5 rounded-full px-2 text-sm font-bold disabled:opacity-40', on ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800');
   const sep = <span className="h-7 w-px shrink-0 bg-slate-200" aria-hidden />;
   const field = 'w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20';
 
@@ -569,42 +590,44 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
           )}
         </div>
 
+        {ticked && <div className="dd2-tick" role="status" aria-label="Approved"><svg viewBox="0 0 24 24" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></div>}
         {viewing && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex flex-col items-center gap-2 px-3">
             {canMark && !draft && tool !== 'select' ? <div className="rounded-full bg-slate-800/90 px-3.5 py-1.5 text-center text-sm font-semibold text-white">{toolNow[2]}: {toolNow[3]}</div>
               : tip && !draft && <div className="rounded-full bg-slate-800/90 px-3.5 py-1.5 text-center text-sm font-semibold text-white">Drag to move around. Ctrl + scroll to zoom.</div>}
-            <div className="dd2-dock pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-0.5 rounded-2xl border border-slate-200 p-1.5" role="toolbar" aria-label="Drawing tools">
+            <div className="dd2-dock pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-0.5 rounded-[28px] border border-slate-200 px-2 py-1" role="toolbar" aria-label="Drawing tools">
               {canMark && <>
-                {TOOLS.map(([t, key, name, hint, Icon]) => (
-                  <button key={t} type="button" onClick={() => { setTool(t); setDraft(null); }} aria-pressed={tool === t} aria-label={name} title={`${name} (${key}). ${hint}`}
-                    className={cx('dd2-key inline-flex min-h-[44px] min-w-[40px] items-center justify-center gap-1.5 rounded-xl px-1 text-sm font-bold', tool === t ? 'bg-slate-200 pr-2.5 text-slate-900' : 'text-slate-600 hover:bg-white hover:text-slate-800')}>
-                    <span className="dd2-ico" style={{ background: TOOL_TILE[t] }}><Icon size={17} strokeWidth={2.4} fill="currentColor" fillOpacity={0.28} aria-hidden /></span><span className={tool === t ? '' : 'hidden 2xl:inline'}>{name}</span>
+                {TOOLS.map(([t, key, name, hint]) => (
+                  <button key={t} type="button" data-tool={t} onClick={() => { setTool(t); setDraft(null); }} aria-pressed={tool === t} aria-label={name} title={`${name} (${key}). ${hint}`}
+                    className={cx('dd2-key is-tool inline-flex min-h-[44px] min-w-[40px] items-center justify-center gap-1.5 rounded-full px-1 text-sm font-bold text-slate-600', tool === t && 'pr-3', demo === t && 'is-demo')} style={{ ['--c' as any]: TOOL_COLOR[t] }}>
+                    <LiveIcon tool={t} /><span className={tool === t ? '' : 'hidden 2xl:inline'}>{name}</span>
                   </button>
                 ))}
                 {sep}
               </>}
               {prev && isCurrent && (
-                <button type="button" onClick={() => { setCompare((c) => !c); setDraft(null); }} aria-pressed={compare} className={barBtn(compare)} title={`Slide between this version and v${prev.n} (C)`}>
-                  <span className="dd2-ico" style={{ background: '#475569' }}><Columns2 size={17} strokeWidth={2.4} fill="currentColor" fillOpacity={0.28} aria-hidden /></span>{compare ? 'Comparing' : 'Compare'}
+                <button type="button" data-tool="compare" onClick={() => { setCompare((c) => !c); setDraft(null); }} aria-pressed={compare} title={`Slide between this version and v${prev.n} (C)`}
+                  className={cx('dd2-key inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-1 pr-2.5 text-sm font-bold', compare ? 'bg-slate-200 text-slate-900' : 'text-slate-600', demo === 'compare' && 'is-demo')} style={{ ['--c' as any]: TOOL_COLOR.compare }}>
+                  <LiveIcon tool="compare" />{compare ? 'Comparing' : 'Compare'}
                 </button>
               )}
               {prev && isCurrent && !compare && (
-                <button type="button" onClick={() => setSpot(!spot)} aria-pressed={spot} title={`Outline what changed since v${prev.n}`}
-                  className={cx('dd2-key inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-1 pr-2 text-sm font-bold', spot ? 'bg-amber-100 text-amber-900' : 'text-slate-600 hover:bg-white hover:text-slate-800')}>
-                  <span className="dd2-ico" style={{ background: '#D97706' }}><Sparkles size={17} strokeWidth={2.4} fill="currentColor" fillOpacity={0.28} aria-hidden /></span>{spot && changeCount ? `Changes · ${changeCount}` : 'Changes'}
+                <button type="button" data-tool="changes" onClick={() => setSpot(!spot)} aria-pressed={spot} title={`Outline what changed since v${prev.n}`}
+                  className={cx('dd2-key inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-1 pr-2.5 text-sm font-bold', spot ? 'bg-amber-100 text-amber-900' : 'text-slate-600', demo === 'changes' && 'is-demo')} style={{ ['--c' as any]: TOOL_COLOR.changes }}>
+                  <LiveIcon tool="changes" />{spot && changeCount ? `Changes · ${changeCount}` : 'Changes'}
                 </button>
               )}
               {prev && isCurrent && sep}
-              <button type="button" onClick={() => { rotate(); setDraft(null); }} aria-label="Rotate the drawing" title="Rotate (R). Notes stay where they belong." className={barBtn()}><RotateCw size={18} aria-hidden />{turn ? `${turn}°` : ''}</button>
-              <button type="button" onClick={() => zoomTo((z) => z - 0.2)} aria-label="Zoom out" title="Zoom out (-, or Ctrl + scroll)" className={barBtn()}><Minus size={18} aria-hidden /></button>
+              <button type="button" onClick={() => { rotate(); setDraft(null); }} aria-label="Rotate the drawing" title="Rotate (R). Notes stay where they belong." className={barBtn()}><RotateCw size={18} className="dd2-plain turn" aria-hidden />{turn ? `${turn}°` : ''}</button>
+              <button type="button" onClick={() => zoomTo((z) => z - 0.2)} aria-label="Zoom out" title="Zoom out (-, or Ctrl + scroll)" className={barBtn()}><Minus size={18} className="dd2-plain pulse" aria-hidden /></button>
               <button type="button" onClick={() => zoomTo(1)} title="Fit the width (0)" aria-label={`Zoom ${Math.round(zoom * 100)} percent. Press to fit the width.`} className={cx(barBtn(), 'min-w-[50px] tabular-nums')}>{Math.round(zoom * 100)}%</button>
-              <button type="button" onClick={() => zoomTo((z) => z + 0.2)} aria-label="Zoom in" title="Zoom in (+, or Ctrl + scroll)" className={barBtn()}><Plus size={18} aria-hidden /></button>
+              <button type="button" onClick={() => zoomTo((z) => z + 0.2)} aria-label="Zoom in" title="Zoom in (+, or Ctrl + scroll)" className={barBtn()}><Plus size={18} className="dd2-plain pulse" aria-hidden /></button>
               {sep}
               <button type="button" onClick={() => (full ? exitFull() : enterFull())} aria-pressed={full} aria-label={full ? 'Exit full screen' : 'Full screen'} title={full ? 'Leave full screen (Esc)' : 'Full screen, with the notes beside the drawing (F)'} className={barBtn(full)}>
-                {full ? <Minimize2 size={18} aria-hidden /> : <Maximize2 size={18} aria-hidden />}<span className="hidden 2xl:inline">{full ? 'Exit full screen' : 'Full screen'}</span>
+                {full ? <Minimize2 size={18} className="dd2-plain grow" aria-hidden /> : <Maximize2 size={18} className="dd2-plain grow" aria-hidden />}<span className="hidden 2xl:inline">{full ? 'Exit full screen' : 'Full screen'}</span>
               </button>
               <button type="button" onClick={() => setPanel(!panel)} aria-pressed={!panel} aria-label={panel ? 'Hide notes' : 'Show notes'} title={panel ? 'Hide the notes so the drawing has the whole width (N)' : 'Show the notes again (N)'} className={barBtn(!panel)}>
-                {panel ? <PanelRightClose size={18} aria-hidden /> : <PanelRightOpen size={18} aria-hidden />}<span className="hidden 2xl:inline">{panel ? 'Hide notes' : 'Show notes'}</span>{!panel && onSheet.length > 0 && <span className="rounded-full bg-white/20 px-1.5 text-xs">{onSheet.length}</span>}
+                {panel ? <PanelRightClose size={18} className="dd2-plain shift" aria-hidden /> : <PanelRightOpen size={18} className="dd2-plain shift" aria-hidden />}<span className="hidden 2xl:inline">{panel ? 'Hide notes' : 'Show notes'}</span>{!panel && onSheet.length > 0 && <span className="rounded-full bg-white/20 px-1.5 text-xs">{onSheet.length}</span>}
               </button>
             </div>
           </div>
@@ -673,9 +696,9 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
               const sel = selected === m.id;
               return (
                 <Tilt key={m.id} data-note={m.id} onMouseEnter={() => setHover(m.id)} onMouseLeave={() => setHover(null)}
-                  className={cx('hud-row-in flex shrink-0 gap-2.5 rounded-xl border bg-white p-3', hover === m.id && 'is-hot', sel ? 'border-rose-400 ring-2 ring-rose-100' : hover === m.id ? 'border-rose-300' : 'border-slate-200')} style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
+                  className={cx('dd2-note hud-row-in flex shrink-0 gap-2.5 rounded-xl border bg-white p-3', hover === m.id && 'is-hot', sel ? 'border-rose-400 ring-2 ring-rose-100' : hover === m.id ? 'border-rose-300' : 'border-slate-200')} style={{ animationDelay: `${Math.min(i, 8) * 30}ms`, ['--pin' as any]: markColor(m) }}>
                   <button type="button" onClick={() => showMark(m)} aria-label={`Show note ${m.n} on the drawing`}
-                    className="dd2-badge grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ ['--pin' as any]: markColor(m) }}>{m.n}</button>
+                    className="dd2-badge grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white">{m.n}</button>
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-bold text-slate-500">{m.source === 'client' ? <span className="text-amber-700">Client</span> : m.by?.email === me.email ? 'You' : firstName(m.by?.name)} · {SHAPE_WORD[m.shape.t]}{pages > 1 ? ` · page ${m.page + 1}` : ''}</div>
                     <div className={cx('mt-0.5 text-sm', done ? 'text-slate-500 line-through decoration-emerald-500' : 'text-slate-800')}>{m.text}</div>
@@ -750,7 +773,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
                   : `Approving signs off v${r?.versionNo} exactly as it is.${self ? ' It is your own drawing, so the history will say self-approved.' : ''}${audience === 'studio' ? ' It stays inside the studio.' : ''}`}
               </p>
               <div className="flex gap-2">
-                <Btn kind="plain" className="dd2-key flex-1 px-3" disabled={!!busy} onClick={() => { setRequestOpen(true); setDraft(null); }}>Request changes</Btn>
+                <Btn kind="plain" className="flex-1 px-3" disabled={!!busy} onClick={() => { setRequestOpen(true); setDraft(null); }}>Request changes</Btn>
                 <Btn kind="primary" icon={busy === 'approve' ? Loader2 : Check} className="dd2-go flex-1 px-3" disabled={!!busy || blockingOpen > 0 || !!draft} title={self ? 'Approve your own drawing' : undefined} onClick={() => decide('approve')}>Approve v{r?.versionNo}</Btn>
               </div>
             </>
