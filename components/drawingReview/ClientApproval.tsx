@@ -38,9 +38,9 @@ export function ApprovalChip({ m }: { m: DesignMeeting }) {
 
 const VIA: Record<string, string> = { email: 'by email', signature: 'by signing in the studio', portal: 'in their portal', deemed: 'taken as approved' };
 
-const input = 'w-full min-h-[40px] rounded-[10px] border border-[#DCDCD5] bg-white px-3 text-[13px] outline-none focus:border-[#4146C8] focus:shadow-[0_0_0_3px_rgba(65,70,200,0.15)]';
+const input = 'w-full min-h-[40px] rounded-[10px] border border-[#DCDCD5] bg-white px-3 text-[13px] outline-none focus:border-[color:var(--dd-accent,#4146C8)] focus:shadow-[0_0_0_3px_var(--dd-accent-ring,rgba(65,70,200,0.15))]';
 const label = 'mb-1 block text-[12px] font-bold text-[#17191E]';
-const primary = 'inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl bg-[#4146C8] px-3.5 text-[13px] font-bold text-white hover:bg-[#3439AD] disabled:opacity-45';
+const primary = 'inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl bg-[color:var(--dd-accent,#4146C8)] px-3.5 text-[13px] font-bold text-white hover:bg-[color:var(--dd-accent-deep,#3439AD)] disabled:opacity-45';
 const secondary = 'inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-[#DCDCD5] bg-white px-3.5 text-[13px] font-bold text-[#17191E] hover:border-[#A9AAA2] disabled:opacity-45';
 
 interface Props {
@@ -56,14 +56,16 @@ interface Props {
   contact?: { name: string; email: string; studio: string } | null;
   /** Told after a change, for a screen that does not watch meetings live (the Ops Desk). */
   onChanged?: () => void;
+  /** Opens with the approval email already drafted, for a meeting just saved that has not been sent yet. */
+  startOpen?: boolean;
 }
 
-export default function ClientApproval({ orgId, projectId, m, mine, lead, me, contact: given, onChanged }: Props) {
+export default function ClientApproval({ orgId, projectId, m, mine, lead, me, contact: given, onChanged, startOpen }: Props) {
   const toast = useToast();
   const stage = approvalStage(m);
   const a = m.approval;
   const sheets = approvalSheets(m);
-  const [mode, setMode] = useState<'send' | 'approved' | 'changes' | null>(null);
+  const [mode, setMode] = useState<'send' | 'approved' | 'changes' | null>(() => (startOpen && mine && stage === 'presented' ? 'send' : null));
   const [busy, setBusy] = useState<string | null>(null);
 
   /* The client's name and address, from the project, to start the email from. */
@@ -227,7 +229,7 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
               <div className="flex flex-col gap-1">
                 {sheets.map((x) => (
                   <label key={x.drawingId} className="flex min-h-[32px] items-center gap-2 text-[13px] text-[#17191E]">
-                    <input type="checkbox" checked={!!ticked[x.drawingId]} disabled={!!busy} onChange={(e) => setTicked((t) => ({ ...t, [x.drawingId]: e.target.checked }))} className="h-4 w-4 accent-[#4146C8]" />
+                    <input type="checkbox" checked={!!ticked[x.drawingId]} disabled={!!busy} onChange={(e) => setTicked((t) => ({ ...t, [x.drawingId]: e.target.checked }))} className="h-4 w-4 accent-[color:var(--dd-accent,#4146C8)]" />
                     <span className="min-w-0 flex-1 truncate">{sheetLine(x.room, x.name)} <span className="text-[#8A8E97]">v{x.versionNo}</span></span>
                     {uploaded[x.drawingId] && <span className="shrink-0 text-[12px] font-bold" style={{ color: uploaded[x.drawingId] === 'copied' || uploaded[x.drawingId] === 'already' ? '#1B6E4F' : '#8F4C07' }}>{RESULT[uploaded[x.drawingId]]}</span>}
                   </label>
@@ -251,10 +253,10 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="mb-1 flex items-center justify-between gap-2">
                 <label className={`${label} !mb-0`} htmlFor={`body-${m.id}`}>Email <span className="font-medium text-[#8A8E97]">(edit freely; links stay clickable)</span></label>
-                {edited && <button type="button" onClick={() => setEdited(false)} className="text-[12px] font-bold text-[#3A3FB8] hover:underline">Standard wording</button>}
+                {edited && <button type="button" onClick={() => setEdited(false)} className="text-[12px] font-bold text-[color:var(--dd-accent-deep,#3A3FB8)] hover:underline">Standard wording</button>}
               </div>
               <textarea id={`body-${m.id}`} value={body} onChange={(e) => { setBody(e.target.value); setEdited(true); }} rows={16} maxLength={8000}
-                className="min-h-[300px] w-full flex-1 rounded-[10px] border border-[#DCDCD5] bg-[#FAFAF7] px-3 py-2.5 text-[13px] leading-relaxed outline-none focus:border-[#4146C8] focus:bg-white focus:shadow-[0_0_0_3px_rgba(65,70,200,0.15)]" />
+                className="min-h-[300px] w-full flex-1 rounded-[10px] border border-[#DCDCD5] bg-[#FAFAF7] px-3 py-2.5 text-[13px] leading-relaxed outline-none focus:border-[color:var(--dd-accent,#4146C8)] focus:bg-white focus:shadow-[0_0_0_3px_var(--dd-accent-ring,rgba(65,70,200,0.15))]" />
             </div>
             <div className="text-[12px] text-[#5F636D]">The reminders on working days 3 and 5 use the standard wording.</div>
           </div>
@@ -267,7 +269,7 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
             <label className={label} htmlFor={`reply-${m.id}`}>{mode === 'approved' ? "The client's reply" : 'What the client asked to change'} {mode === 'approved' && <span className="font-medium text-[#8A8E97]">(optional; paste it for the record)</span>}</label>
             <textarea id={`reply-${m.id}`} value={note} onChange={(e) => setNote(e.target.value)} rows={3}
               placeholder={mode === 'approved' ? 'Approved.' : 'The wardrobe handles in the master bedroom…'}
-              className="w-full rounded-[10px] border border-[#DCDCD5] px-3 py-2.5 text-[13px] outline-none focus:border-[#4146C8] focus:shadow-[0_0_0_3px_rgba(65,70,200,0.15)]" />
+              className="w-full rounded-[10px] border border-[#DCDCD5] px-3 py-2.5 text-[13px] outline-none focus:border-[color:var(--dd-accent,#4146C8)] focus:shadow-[0_0_0_3px_var(--dd-accent-ring,rgba(65,70,200,0.15))]" />
           </div>
           {mode === 'approved' && (
             <div className="max-w-[220px]"><label className={label} htmlFor={`on-${m.id}`}>Date on their reply</label>

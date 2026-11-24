@@ -47,7 +47,7 @@ interface Props {
   onExit: (to?: 'foryou') => void;
 }
 
-type Draft = { shape: MarkShape; page: number; text: string };
+export type Draft = { shape: MarkShape; page: number; text: string };
 
 /* The same per-drawing rotation the review screen remembers, so a sheet turned there is turned here too. */
 const turnKey = (projectId: string, drawingId: string) => `ffds_dr_turn_${projectId}_${drawingId}`;
@@ -659,7 +659,7 @@ interface ViewProps {
   scroll: { x: number; y: number };
 }
 
-const ClientView: React.FC<ViewProps> = ({ projectName, look, meeting: m, step, at, room, sh, sheetIndex, page, pages, zoom, turn, marks, draft, changes, planMode, size, scroll }) => {
+export const ClientView: React.FC<ViewProps> = ({ projectName, look, meeting: m, step, at, room, sh, sheetIndex, page, pages, zoom, turn, marks, draft, changes, planMode, size, scroll }) => {
   const head = (
     <div className="flex h-[68px] shrink-0 items-center gap-3 border-b border-[#E4E4DE] bg-white px-6">
       <ProjectMark code={look.code} color={look.color} size={38} />

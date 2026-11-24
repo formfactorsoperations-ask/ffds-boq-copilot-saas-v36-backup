@@ -110,7 +110,7 @@ export const LayoutRooms: React.FC<{
               {rooms.map((r) => (
                 <div key={r} className="flex items-center gap-2 rounded-[12px] px-2 py-1.5" style={{ background: r === current ? '#FBF1E3' : undefined }}>
                   <button type="button" onClick={() => setCurrent(r)} aria-pressed={r === current} className="flex min-h-[40px] flex-1 items-center gap-2.5 text-left font-bold">
-                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[7px] text-[12px] text-white" style={{ background: boxes[r] ? '#4146C8' : r === current ? CLIENT : '#DCDCD5' }}>{boxes[r] ? <Check size={13} strokeWidth={3} /> : ''}</span>
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[7px] text-[12px] text-white" style={{ background: boxes[r] ? 'var(--dd-accent,#4146C8)' : r === current ? CLIENT : '#DCDCD5' }}>{boxes[r] ? <Check size={13} strokeWidth={3} /> : ''}</span>
                     {roomLabel(r)}
                   </button>
                   {boxes[r] && <button type="button" onClick={() => clear(r)} aria-label={`Redraw ${roomLabel(r)}`} className="grid h-9 w-9 place-items-center rounded-[10px] text-[#5F636D] hover:bg-[#EBEBE5]"><Eraser size={14} /></button>}
@@ -119,7 +119,7 @@ export const LayoutRooms: React.FC<{
             </div>
             <div className="mt-auto flex gap-2 pt-4">
               <button type="button" onClick={onClose} disabled={busy} className="min-h-[44px] flex-1 whitespace-nowrap rounded-xl border border-[#DCDCD5] bg-white px-4 text-[14px] font-bold hover:border-[#A9AAA2]">Cancel</button>
-              <button type="button" onClick={save} disabled={busy} className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#4146C8] px-4 text-[14px] font-bold text-white hover:bg-[#3439AD] disabled:opacity-45">
+              <button type="button" onClick={save} disabled={busy} className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[color:var(--dd-accent,#4146C8)] px-4 text-[14px] font-bold text-white hover:bg-[color:var(--dd-accent-deep,#3439AD)] disabled:opacity-45">
                 {busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={2.6} />}Save rooms
               </button>
             </div>

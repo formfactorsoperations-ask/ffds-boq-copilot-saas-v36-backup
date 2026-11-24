@@ -143,6 +143,29 @@ What stays as everywhere else:
 - The words: a drawing's place is one plain sentence (`lib/designDesk2.ts`, `whereLine`), its steps
   are numbered (`stepsOf`), and it shows one main button (`mainAction`).
 
+### Design Desk 2.0 meetings (Phase 2, from the same approved mockup)
+
+The Meetings page (`MeetingsPage.tsx`) is a desk page like Home: `Card`, `SectionTitle`, `Btn`,
+`Tag`, three numbered steps in emerald discs, and the resume band in the welcome band's gradient.
+
+The meeting screen (`MeetingScreen.tsx`) is the one **dark** screen of the desk, as in the mockup:
+it covers the app (`fixed inset-0 z-[110]`, under the dialogs and toasts at 120) so the drawing is
+the brightest thing in the room or on a shared screen.
+- Background `bg-slate-950`, panels `bg-slate-900`, rows and quiet buttons `bg-slate-800`, text
+  `slate-100` to `slate-400`. Only slate, with the desk's three meanings on top: **emerald** the
+  client is happy, **amber** a change the client asked for, **rose** the clock and Finish.
+- The bar at the bottom holds the three things a room ends with, 48px tall: Add a change (amber),
+  Client is happy with this room (emerald), Finish the meeting (rose).
+- The change box, the finishing page and "Meeting saved" are light, in the desk's own parts.
+- Motion: `hud-swap` when the room or drawing changes, `hud-row-in` for a new change or minute,
+  `phd-pop` for the change box, `dd2-dot` on the clock. Nothing new.
+
+What the client is shown has not changed: the client's window is today's `ClientView`
+(`components/drawingReview/MeetingMode.tsx`), reused as it is. The dialogs the meeting shares with
+today's desk (sign, who presents, room marks, the approval email) keep their layout and take the
+desk's emerald through `--dd-accent` (`DESK_ACCENT` in `meetingBits.tsx`); on today's desk they are
+indigo as before.
+
 ### Design Desk 2.0 motion: Living icons (chosen 24 Nov 2026)
 
 The owner asked for animation on the drawing screen's tools, notes and review panel, was shown four

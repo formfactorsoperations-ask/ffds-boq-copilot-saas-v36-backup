@@ -131,6 +131,8 @@ async function decide(actor: Actor, orgId: string, projectId: string, input: Inp
     if (i < 0) throw new HttpsError("invalid-argument", "That room is not in this meeting.");
     const outcome = input.outcome === "agreed" || input.outcome === "changes" ? input.outcome : null;
     const changes = outcome === "changes" ? cleanChanges(input.changes, m.rooms[i].sheets) : [];
+    /* What a change costs on the BOQ is the leads' to estimate: a Designer's meeting records none. */
+    if (!isLead(actor)) changes.forEach((c) => { delete c.cost; });
     if (outcome === "changes" && !changes.length) throw new HttpsError("invalid-argument", "Pin at least one change on the drawing, or mark the room agreed.");
     const rooms = m.rooms.map((r, k) => (k === i ? { ...r, outcome, changes } : r));
     const next = { ...m, rooms, rev: m.rev + 1 };

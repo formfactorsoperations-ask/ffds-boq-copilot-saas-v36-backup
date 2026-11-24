@@ -13,14 +13,14 @@ import { watchStudioReviews, watchProjectDrawings, takeOpenRequest, returnFromDe
 import { watchMeetings } from '../../services/designMeetingService';
 import type { Me } from '../drawingReview/SheetStudio';
 import AddPdfs from '../drawingReview/AddPdfs';
-import Meetings from '../drawingReview/Meetings';
-import MeetingMode from '../drawingReview/MeetingMode';
 import { ToastHost, ReviewStyles, useToast } from '../drawingReview/ui';
 import { DeskStyles } from '../drawingReview/DeskParts';
 import { MotionStyles } from '../drawingReview/motion';
 import { AllDrawings, Home, ProjectPage, RoomPage, type DeskCtx, type ProjectCard } from './pages';
 import UploadWizard from './UploadWizard';
 import DrawingScreen from './DrawingScreen';
+import MeetingsPage from './MeetingsPage';
+import MeetingScreen from './MeetingScreen';
 import { cx } from './parts';
 import '../projectHeader/projectHeader.css';
 
@@ -33,7 +33,8 @@ import '../projectHeader/projectHeader.css';
   the same data as components/drawingReview/DesignDeskTab and calls the same
   functions. Opening a drawing shows the new drawing screen (DrawingScreen);
   a drawing with no PDF yet goes straight to the three-step upload. Meetings
-  still shows today's meetings inside this frame, until Phase 2.
+  is the new Meetings page and meeting screen (Phase 2), on today's meeting
+  rules.
 */
 
 interface Props {
@@ -159,7 +160,7 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
   const loadingAll = reviewer ? studio === null && !studioError : !Object.keys(trackers).length && list.length > 0;
   const loadingProject = !!pageProject && !trackers[pageProject] && (reviewer || watched.includes(pageProject));
 
-  /* ------------------------------------------------------------ design meetings (today's screens, until Phase 2) */
+  /* ------------------------------------------------------------ design meetings */
   const [meetings, setMeetings] = useState<DesignMeeting[] | null>(null);
   const [running, setRunning] = useState<DesignMeeting | null>(null);
   const meetOn = page.at === 'meetings' && meetsTab && !!meetProject;
@@ -248,11 +249,9 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
 
   if (live && !open && meetProject) {
     return (
-      <div className="mx-auto w-full max-w-[1360px] px-4 pb-36 pt-6 text-[#17191E] md:px-5">
-        <MeetingMode key={live.id} orgId={orgId} projectId={meetProject} projectName={projectOf(meetProject).name} look={projectOf(meetProject)}
-          meeting={live} meetings={meetings || []} lead={canRun}
-          onExit={() => { setRunning(null); go({ at: 'meetings' }); }} />
-      </div>
+      <React.Fragment key={live.id}><MeetingScreen orgId={orgId} projectId={meetProject} projectName={projectOf(meetProject).name} look={projectOf(meetProject)}
+        meeting={live} meetings={meetings || []} lead={canRun} me={me}
+        onExit={(to) => { setRunning(null); go(to === 'home' ? { at: 'home' } : { at: 'meetings' }); }} /></React.Fragment>
     );
   }
   const wizard = upDrawing && (
@@ -311,14 +310,12 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
         ) : page.at === 'all' ? (
           <AllDrawings c={ctx} q={q} setQ={setQ} onlyMine={onlyMine} setOnlyMine={setOnlyMine} partial={reviewer} loading={loadingAll} />
         ) : (
-          <div className="text-[#17191E]">
-            <Meetings orgId={orgId} projectId={meetProject && cards.some((p) => p.id === meetProject) ? meetProject : null}
-              projectName={meetProject ? projectOf(meetProject).name : ''} look={meetProject ? projectOf(meetProject) : null}
-              drawings={meetProject ? rows.filter((d) => d.projectId === meetProject) : []} meetings={meetings} canRun={canRun} canBill={canBill} presenter={presenter} approver={approver} me={me}
-              designers={designersOf(meetProject)}
-              onResume={(m) => { setRunning(m); window.scrollTo({ top: 0 }); }}
-              projects={cards.map((p) => ({ id: p.id, name: p.name, code: p.code, color: p.color }))} onPickProject={(id) => setMeetProject(id === 'all' ? null : id)} />
-          </div>
+          <MeetingsPage orgId={orgId} projectId={meetProject && cards.some((p) => p.id === meetProject) ? meetProject : null}
+            projectName={meetProject ? projectOf(meetProject).name : ''}
+            drawings={meetProject ? rows.filter((d) => d.projectId === meetProject) : []} meetings={meetings} canRun={canRun} canBill={canBill} presenter={presenter} approver={approver} me={me}
+            designers={designersOf(meetProject)}
+            onResume={(m) => { setRunning(m); window.scrollTo({ top: 0 }); }}
+            projects={cards.map((p) => ({ id: p.id, name: p.name, code: p.code, color: p.color }))} onPickProject={(id) => setMeetProject(id === 'all' ? null : id)} />
         )}
       </main>
 
