@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring, u
 import { Check, X, ChevronRight } from '@/lib/lucide-shim';
 import { DoneTick } from '../people/PeopleBits';
 import { useInbox } from './NotifyContext';
-import { NoteTile, ago } from './NotifyBits';
+import { NoteTile, waited } from './NotifyBits';
 
 /*
   THE "NEEDS YOU" BAR: the only note that interrupts.
@@ -17,6 +17,10 @@ import { NoteTile, ago } from './NotifyBits';
 
   It never takes the keyboard or covers the middle of the page, and it stays
   until it is answered, marked done, or closed. Closing keeps it in the bell.
+  It also leaves by itself when the thing is dealt with somewhere else.
+
+  It says how long they have waited, counting as you watch; and when more are
+  waiting behind it, the edges of the next cards show under it like a deck.
 */
 
 /*
@@ -50,6 +54,14 @@ export default function NeedsYouBar() {
   const [ticked, setTicked] = useState<string | null>(null);
   const top = inbox?.arrivals[0] || null;
   const more = Math.max(0, (inbox?.arrivals.length || 0) - 1);
+  /* The wait, counting: only while a bar is up. */
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!top) return;
+    setNow(Date.now());
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [top?.id]);
 
   useEffect(() => {
     if (!ticked || !inbox) return;
@@ -72,6 +84,9 @@ export default function NeedsYouBar() {
             style={{ transformPerspective: 1100, transformOrigin: '50% 100%' }}
             className="pointer-events-auto w-full max-w-[680px]">
             <GlassTilt>
+              <div className="relative">
+              {more > 1 && <span key={`d2-${top.id}`} className="nt-deck nt-deck-2" aria-hidden />}
+              {more > 0 && <span key={`d1-${top.id}`} className="nt-deck" aria-hidden />}
               <div role="status" aria-live="polite" aria-label={`Needs you: ${top.title}`}
                 className="nt-glass relative overflow-hidden rounded-[22px] pl-3 pr-2 py-3 sm:pl-4 flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2">
                 <span className="nt-orb nt-orb-a" aria-hidden />
@@ -87,7 +102,8 @@ export default function NeedsYouBar() {
                     {ticked === top.id ? 'Done' : 'Needs you'}{top.projectName ? ` · ${top.projectName}` : ''}
                   </p>
                   <p className="text-sm font-bold text-slate-800 truncate">{top.title}</p>
-                  {top.line && <p className="hidden sm:block text-xs text-slate-500 truncate">{top.line} · {ago(top.at)}</p>}
+                  {top.line && <p className="hidden sm:block text-xs text-slate-500 truncate">{top.line}</p>}
+                  <p aria-hidden className="text-[10px] font-bold uppercase tracking-wider text-slate-500 tabular-nums truncate">{ticked === top.id ? 'Marked done' : `Waiting ${waited(now - top.at)}`}</p>
                 </div>
 
                 <div className="relative flex items-center gap-2 w-full sm:w-auto justify-end">
@@ -110,6 +126,7 @@ export default function NeedsYouBar() {
                   <X className="w-4 h-4" />
                 </button>
                 </div>
+              </div>
               </div>
             </GlassTilt>
           </motion.div>

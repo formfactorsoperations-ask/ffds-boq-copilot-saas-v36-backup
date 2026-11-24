@@ -5,8 +5,8 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { PLATFORM_OWNER_EMAILS } from "./guards";
 import { escalationRecipientsOf, opsSettingsOf, sweepCandidates, type FollowUp } from "../../lib/opsDesk";
-import { escalationDraft } from "../../lib/notify";
-import { notify } from "./notify";
+import { escalationDraft, refs } from "../../lib/notify";
+import { notify, settle } from "./notify";
 import { syncStudioMeetings } from "./meetingSync";
 
 /*
@@ -66,6 +66,11 @@ export const onEscalationWritten = onDocumentWritten(
   async (event) => {
     const before = event.data?.before?.exists ? event.data.before.data() : null;
     const after = event.data?.after?.exists ? event.data.after.data() : null;
+    const projectId = String(event.params.projectId), escId = String(event.params.escalationId);
+    /* No longer open: the leads are not still asked to decide. No longer waiting to be acted on (closed, or gone): nor is whoever raised it (lib/notify Note.ref). */
+    const tenant = String(after?.tenantId || before?.tenantId || "");
+    if (before?.status === "open" && after?.status !== "open") await settle(tenant, [refs.escalation(projectId, escId)]);
+    if (before?.status === "decided" && after?.status !== "decided") await settle(tenant, [refs.decided(projectId, escId)]);
     if (!after) return;
     const ref = event.data!.after.ref;
 
@@ -74,7 +79,7 @@ export const onEscalationWritten = onDocumentWritten(
       const to = escalationRecipientsOf(org);
       /* In their StudioDesk first, the email after (lib/notify). */
       await notify({ tenantId: after.tenantId, projectId: String(event.params.projectId), actorEmail: after.raisedBy || null, org },
-        [escalationDraft(after, "raised", { projectId: String(event.params.projectId), leads: to, projectOps: [] })]);
+        [escalationDraft(after, "raised", { projectId, id: escId, leads: to, projectOps: [] })]);
       if (!to.length) {
         await ref.update({ notifiedTo: [], notifiedAt: Date.now(), notifyNote: "Nobody to tell: choose people in Studio settings → Ops Desk." });
         return;
@@ -96,7 +101,7 @@ export const onEscalationWritten = onDocumentWritten(
     if (before?.status === "open" && after.status === "decided") {
       const to = after.auto ? await opsMembers(String(event.params.projectId)) : [String(after.raisedBy || "")].filter(Boolean);
       await notify({ tenantId: after.tenantId, projectId: String(event.params.projectId), actorEmail: after.decidedBy || null },
-        [escalationDraft(after, "decided", { projectId: String(event.params.projectId), leads: [], projectOps: to })]);
+        [escalationDraft(after, "decided", { projectId, id: escId, leads: [], projectOps: to })]);
       if (!to.length) return;
       try {
         await sendMail(to, `Decided: ${after.title} · ${after.projectName}`, card(

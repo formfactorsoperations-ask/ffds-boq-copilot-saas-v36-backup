@@ -9,6 +9,7 @@ import { ProjectContext, ProposalTier, Item, MaterialSelection, MaterialSelectio
 import Card from './shared/Card';
 import { PlusIcon, CheckIcon, ClockIcon, AlertCircleIcon, TrashIcon, PhotoIcon, EnvelopeIcon, XCircleIcon, SparklesIcon } from './Icons';
 import { generateId } from '../lib/utils';
+import { settleNotes } from '../services/inboxService';
 import { extractMaterialsFromText } from '../services/aiService';
 import { useOrg } from '../contexts/OrgContext';
 import { useStudioSettings } from '../hooks/useStudioSettings';
@@ -590,6 +591,8 @@ const MaterialTab: React.FC<MaterialTabProps> = ({ projectContext, setProjectCon
         } : s));
         setReplyingTo(null);
         setReplyText('');
+        /* Answered: nobody in the studio is still asked to reply to it (components/notify). */
+        void settleNotes(projectId, 'finish', id);
     };
 
     const handleDirectApprove = (e: React.MouseEvent, id: string) => {

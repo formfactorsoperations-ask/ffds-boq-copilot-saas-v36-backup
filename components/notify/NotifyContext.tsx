@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { counted, foldGroups, interrupts, isOpen, tabCounts, tabOf, type NotifyPrefs, type Stored } from '../../lib/notify';
+import { counted, foldGroups, interrupts, isOpen, tabCounts, tabOf, waitsOn, type NotifyPrefs, type Stored } from '../../lib/notify';
 import { listenInbox, markDone, markRead, snooze as snoozeNotes, undoDone } from '../../services/inboxService';
 import { cachedPrefs, readPrefs, savePrefs } from '../../services/notifyPrefsService';
 import { chime, inFront, setIconDot, showDesktop } from './notifyChannels';
@@ -28,9 +28,11 @@ import { onPhoneTap, refreshPhone } from './notifyPush';
   that is tapped opens its note here, from the worker's message or from
   ?note= when it opened StudioDesk fresh (notifyPush.ts).
 
-  `tab` is the top-bar tab on screen. Its notes are read as soon as it is
-  open, and as they land while it stays open, so its badge clears once you
-  have been there: the screen itself shows what came in.
+  `tab` is the top-bar tab on screen. Its updates are read as soon as it is
+  open, and as they land while it stays open, so its dot clears once you have
+  been there: the screen itself shows what came in. What waits on you there
+  is not read by looking: its rose number stays until each is done, by you or
+  by the server when the thing itself is dealt with (lib/notify waitsOn).
 */
 
 export const NOTE_EVENT = 'studiodesk:note';
@@ -50,8 +52,12 @@ interface InboxState {
   open: Folded[];
   /** Notes marked done, newest first. */
   done: Stored[];
-  /** Open notes not yet read: the bell's count and the tab title's. */
+  /** Open notes not yet read: what "Mark all read" clears. */
   unread: number;
+  /** Open notes waiting on you (lib/notify waitsOn): the bell's rose number, and the tab title's. */
+  needs: number;
+  /** Open updates not yet read: the bell's dot when nothing waits. */
+  news: number;
   /** Per top-bar tab: the number waiting on you, and unread updates. */
   byTab: Record<string, { needs: number; unread: number }>;
   /** Open notes on one project, by the project tab they open: the number waiting on you, and unread updates. */
@@ -140,16 +146,20 @@ export const NotifyProvider: React.FC<{ box: string | null | undefined; audience
     const visible = useMemo(() => notes.filter((n) => counted(n, prefs)), [notes, prefs]);
     const openNotes = useMemo(() => visible.filter((n) => isOpen(n, now)), [visible, now]);
     const unread = useMemo(() => openNotes.filter((n) => !n.readAt).length, [openNotes]);
+    const needs = useMemo(() => openNotes.filter(waitsOn).length, [openNotes]);
+    const news = useMemo(() => openNotes.filter((n) => n.level !== 'needs' && !n.readAt).length, [openNotes]);
+    /* What the browser tab and its icon show: who is waiting, or failing that, what is new. */
+    const flagged = needs || news;
 
     /* "(3) StudioDesk" in the browser tab, so a count shows from another tab. */
     const baseTitle = useRef<string>('');
     useEffect(() => {
       if (!baseTitle.current) baseTitle.current = document.title.replace(/^\(\d+\)\s*/, '');
-      document.title = unread ? `(${unread}) ${baseTitle.current}` : baseTitle.current;
-    }, [unread]);
+      document.title = flagged ? `(${flagged}) ${baseTitle.current}` : baseTitle.current;
+    }, [flagged]);
     useEffect(() => () => { if (baseTitle.current) document.title = baseTitle.current; }, []);
     /* And a rose dot on the tab's icon. */
-    useEffect(() => { setIconDot(unread > 0); }, [unread > 0]);
+    useEffect(() => { setIconDot(flagged > 0); }, [flagged > 0]);
     useEffect(() => () => { setIconDot(false); }, []);
 
     const done_ = useCallback((ids: string[]) => {
@@ -171,10 +181,10 @@ export const NotifyProvider: React.FC<{ box: string | null | undefined; audience
       markRead(box, fresh).catch(() => {});
     }, [box, notes]);
     const readAll = useCallback(() => read(openNotes.filter((n) => !n.readAt).map((n) => n.id)), [openNotes, read]);
-    /* The tab on screen: its badge clears (lib/notify tabCounts). */
+    /* The tab on screen: its updates are read, so its dot clears (lib/notify tabCounts). What waits on you is read when you open it; a note from before notes could be settled is read here too, as it always was. */
     useEffect(() => {
       if (!tab || !ready) return;
-      const seen = openNotes.filter((n) => !n.readAt && tabOf(n) === tab).map((n) => n.id);
+      const seen = openNotes.filter((n) => !n.readAt && tabOf(n) === tab && (n.level !== 'needs' || n.ref === undefined)).map((n) => n.id);
       if (seen.length) read(seen);
     }, [tab, ready, openNotes, read]);
     const openNote = useCallback((n: Stored) => { read([n.id]); setDismissed((d) => [...d, n.id]); openRef.current(n); }, [read]);
@@ -216,7 +226,7 @@ export const NotifyProvider: React.FC<{ box: string | null | undefined; audience
         audience,
         open: foldGroups(visible, now),
         done: visible.filter((n) => n.doneAt).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)),
-        unread,
+        unread, needs, news,
         byTab: tabCounts(visible, now),
         forProject: (id) => (id && byProject.get(id)) || {},
         arrivals,
@@ -225,7 +235,7 @@ export const NotifyProvider: React.FC<{ box: string | null | undefined; audience
         prefs, setPrefs,
         waiting: openNotes.filter((n) => n.level === 'needs').sort((a, b) => a.at - b.at),
       };
-    }, [box, audience, notes, visible, openNotes, now, unread, ready, arrivedIds, dismissed, latest, openNote, done_, undo, snooze, read, readAll, dismiss, prefs, setPrefs]);
+    }, [box, audience, notes, visible, openNotes, now, unread, needs, news, ready, arrivedIds, dismissed, latest, openNote, done_, undo, snooze, read, readAll, dismiss, prefs, setPrefs]);
 
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
   };

@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { notify } from "./notify";
-import { reviewDraft } from "../../lib/notify";
+import { notify, settle } from "./notify";
+import { refs, reviewDraft } from "../../lib/notify";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { isTeamViewMember } from "./teamView";
@@ -542,8 +542,10 @@ async function told<T>(kind: "submit" | "approve" | "return" | "clientReturn", a
   drawingRef: FirebaseFirestore.DocumentReference, result: T): Promise<T> {
   const d: any = (await drawingRef.get().catch(() => null))?.data() || {};
   const review: any = (result as any)?.review || d.review || {};
+  /* The sheet has moved on: whoever was asked about where it was is no longer (lib/notify Note.ref). */
+  await settle(orgId, [refs.sheet(projectId, drawingRef.id)]);
   await notify({ tenantId: orgId, projectId, actorEmail: actor.email }, [reviewDraft(kind, {
-    projectId, projectName: actor.projectName, sheet: String(d.name || ""), actor: actor.name,
+    projectId, sheetId: drawingRef.id, projectName: actor.projectName, sheet: String(d.name || ""), actor: actor.name,
     designerEmail: review.designer?.email || null, reason: kind === "submit" ? null : review.reason || null,
   })]);
   return result;

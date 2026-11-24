@@ -137,7 +137,7 @@ describe('what each person sees, and the totals', () => {
 describe('telling people', () => {
   it('asks the founders, folding a person’s trips in a day', () => {
     const d = claimLoggedDraft({ id: 'x', date: TODAY, place: 'Bandra site', amount: 96, purpose: 'Site visit' }, { name: 'Riya Shah', personId: 'riya', emails: ['anish@studio.in'] })!;
-    expect([d.title, d.level, d.section, d.group]).toEqual(['Riya Shah logged a trip: ₹96', 'needs', 'travel', `claims:riya:${TODAY}`]);
+    expect([d.title, d.level, d.section, d.group]).toEqual(['Riya Shah logged a trip: ₹96', 'needs', 'approvals', `claims:riya:${TODAY}`]);
     expect(foldedTitle({ kind: d.kind, title: d.title, count: 3, actor: d.actor })).toBe('Riya Shah logged 3 trips');
     expect(claimLoggedDraft({ id: 'x', date: TODAY, place: 'x', amount: 1, purpose: 'x' }, { name: 'R', personId: 'r', emails: [] })).toBeNull();
   });

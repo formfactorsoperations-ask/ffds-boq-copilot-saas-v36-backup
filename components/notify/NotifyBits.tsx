@@ -4,7 +4,7 @@ import {
   FileText, HardHat, IndianRupee, Layers, LogOut, MessageSquare, NotebookPen, Palette, PenTool, Sparkles, Undo2, UserPlus, Gavel, Route, Wallet,
 } from '@/lib/lucide-shim';
 import { foldedTitle, type Stored } from '../../lib/notify';
-import { IconTile, type RingTone } from '../people/PeopleBits';
+import { DoneTick, IconTile, type RingTone } from '../people/PeopleBits';
 import './notifyStyles';
 
 /* Shared pieces of the notification kit: what each kind of note looks like, the counts, one row. */
@@ -58,6 +58,29 @@ export const toneOf = (n: Pick<Stored, 'kind' | 'title' | 'tags'>): RingTone =>
 
 export const NoteTile: React.FC<{ note: Pick<Stored, 'kind' | 'title' | 'tags'>; size?: 'sm' | 'md' | 'lg' }> = ({ note, size = 'md' }) =>
   <IconTile icon={kindOf(note).icon} tone={toneOf(note)} size={size} />;
+
+/**
+ * A note's tile as a coin: it leans to the pointer with its row (`nt-row`), and
+ * turns over to a tick when the note is done. `urgent` breathes a rose halo
+ * around it: someone has waited half an hour or more.
+ */
+export const NoteCoin: React.FC<{ note: Pick<Stored, 'kind' | 'title' | 'tags'>; size?: 'sm' | 'md'; done?: boolean; urgent?: boolean }> = ({ note, size = 'sm', done = false, urgent = false }) => (
+  <span className={`nt-coin ${done ? 'is-done' : ''}`}>
+    <span className={urgent && !done ? 'nt-urgent' : 'inline-grid'}><NoteTile note={note} size={size} /></span>
+    <span className="nt-coin-back" aria-hidden>{done && <DoneTick size={size === 'sm' ? 32 : 40} />}</span>
+  </span>
+);
+
+/** How long the tick shows before a note marked done leaves its list. */
+export const TICK_MS = 560;
+
+/** How long someone has waited: "2:05", "1 h 12 min", "3 d 4 h". */
+export function waited(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000)), m = Math.floor(s / 60);
+  if (m >= 24 * 60) return `${Math.floor(m / 1440)} d ${Math.floor((m % 1440) / 60)} h`;
+  if (m >= 60) return `${Math.floor(m / 60)} h ${m % 60} min`;
+  return `${m}:${String(s % 60).padStart(2, '0')}`;
+}
 
 /** "just now", "4 min", "2 h", "Tue". */
 export function ago(at: number, now = Date.now()): string {

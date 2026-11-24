@@ -3,6 +3,7 @@ import {
   ALWAYS_KINDS, DEFAULT_PREFS, cleanPrefs, counted, interrupts, isQuiet, portalDrafts,
   approversOf, clientActionDraft, decisionDraft, escalationDraft, foldGroups, foldedTitle, initialsOf, isOpen,
   peopleDrafts, resolveAudience, reviewDraft, siteDraft, stamp, tabCounts, type Stored,
+  celebrationDrafts, claimLoggedDraft, leadDrafts, leadPickedUp, refs, sectionOf, waitsOn,
 } from '../../lib/notify';
 import type { Person } from '../../lib/peopleDesk';
 
@@ -177,8 +178,10 @@ describe('in the app', () => {
   });
 
   it('counts what needs you, and unread updates, by top-bar tab', () => {
-    const counts = tabCounts([n('a'), n('b', { readAt: 5 }), n('c', { level: 'needs', area: 'clients' }), n('d', { level: 'needs', area: 'clients', doneAt: 9 }), n('e', { level: 'needs', area: 'clients', readAt: 7 })]);
-    expect(counts).toEqual({ people: { needs: 0, unread: 1 }, 'ops-desk': { needs: 1, unread: 0 } });
+    /* What waits on you counts until it is done, read or not (e); one from before notes could be settled stops once read (f). */
+    const counts = tabCounts([n('a'), n('b', { readAt: 5 }), n('c', { level: 'needs', area: 'clients' }), n('d', { level: 'needs', area: 'clients', doneAt: 9 }), n('e', { level: 'needs', area: 'clients', readAt: 7 }),
+      n('f', { level: 'needs', area: 'clients', readAt: 7, ref: undefined }), n('g', { level: 'needs', area: 'clients', expiresAt: 1 })]);
+    expect(counts).toEqual({ people: { needs: 0, unread: 1 }, 'ops-desk': { needs: 2, unread: 0 } });
   });
 
   it('makes initials from a name, without the title', () => {
@@ -304,5 +307,80 @@ describe('the client portal: what is new for the client', () => {
     const d = portalDrafts(view({ documents: { issues: [] } }), view({ documents: { issues } }), p);
     expect(d).toHaveLength(1);
     expect(d[0]).toMatchObject({ kind: 'portal.many', title: '6 new things in your portal', level: 'needs', route: 'overview' });
+  });
+});
+
+describe('what a note is about, and where it opens', () => {
+  const riya = { id: 'p-riya', name: 'Riya Menon', email: 'riya@ff.in', active: true, accessRole: 'employee', managerId: 'p-meera' } as unknown as Person;
+  const meera = { id: 'p-meera', name: 'Meera Das', email: 'meera@ff.in', active: true, accessRole: 'ops', managerId: null } as unknown as Person;
+  const request = { id: 'rq1', kind: 'leave', type: 'planned', status: 'Pending', start: '2026-12-01', end: '2026-12-02', days: [{ units: 1 }, { units: 1 }], reason: '', employeeId: 'p-riya' } as any;
+
+  it('a leave request says which request it is, and opens People at Approvals', () => {
+    const [d] = peopleDrafts({ action: 'request', request }, { actor: riya, employee: riya, people: [riya, meera], timezone: 'Asia/Kolkata' });
+    expect(d.ref).toBe(refs.request('rq1'));
+    expect(sectionOf(d)).toBe('approvals');
+    /* The decision goes back to the person, on Leave, and settles nothing itself. */
+    const [back] = peopleDrafts({ action: 'decide', request: { ...request, status: 'Approved' } }, { actor: meera, employee: riya, people: [riya, meera], timezone: 'Asia/Kolkata' });
+    expect(back.ref).toBeNull();
+    expect(sectionOf(back)).toBe('leave');
+  });
+
+  it('a trip to approve opens Approvals, even on a note written when it said Travel', () => {
+    const d = claimLoggedDraft({ id: 'c1', date: '2026-11-20', place: 'Baner site', amount: 420, purpose: 'Site visit' }, { name: 'Riya Menon', personId: 'p-riya', emails: ['vikram@ff.in'] })!;
+    expect(d.ref).toBe('claim:c1');
+    expect(sectionOf(d)).toBe('approvals');
+    expect(sectionOf({ kind: 'claims.logged', section: 'travel' })).toBe('approvals');
+  });
+
+  it('an escalation opens the desk at Escalations: one ref while it waits to be decided, another while it waits to be acted on', () => {
+    const esc = { title: 'Client wants to pause', projectName: 'Harmony 704', raisedBy: 'riya@ff.in', raisedByName: 'Riya Menon' };
+    const raised = escalationDraft(esc, 'raised', { projectId: 'p1', id: 'e1', leads: ['meera@ff.in'], projectOps: [] });
+    const decided = escalationDraft({ ...esc, decision: 'Pause for two weeks' }, 'decided', { projectId: 'p1', id: 'e1', leads: [], projectOps: [] });
+    expect([raised.ref, decided.ref]).toEqual(['esc:p1:e1', 'escact:p1:e1']);
+    expect([sectionOf(raised), sectionOf(decided)]).toEqual(['escalations', 'escalations']);
+    /* A note from before notes named their section still opens there. */
+    expect(sectionOf({ kind: 'ops.escalation' })).toBe('escalations');
+    expect(sectionOf({ kind: 'people.leave' })).toBe('approvals');
+    expect(sectionOf({ kind: 'people.checkin' })).toBeNull();
+  });
+
+  it('a new lead asks whoever it was given to, tells the Ops Director quietly, and is settled by the first touch', () => {
+    const lead = { tenantId: 't1', createdAt: Date.UTC(2026, 10, 24, 6), createdBy: 'meera@ff.in', createdByName: 'Meera Das', ownerEmail: 'Riya@ff.in', ownerName: 'Riya Menon', people: [{ name: 'Dr Kulkarni' }], enquiry: '3BHK in Baner, possession in March', stage: 'new', touches: [] };
+    const [ask, tell] = leadDrafts(lead, { id: 'L1' });
+    expect(ask).toMatchObject({ kind: 'lead.new', level: 'needs', title: 'New lead for you: Dr Kulkarni', route: 'ops-desk', section: 'leads', ref: 'lead:L1', action: 'Open the lead' });
+    expect(ask.to).toEqual({ emails: ['riya@ff.in'] });
+    expect(tell).toMatchObject({ level: 'update', group: 'leads:2026-11-24', to: { roles: ['Ops Director'] } });
+    expect(foldedTitle({ kind: 'lead.new', title: tell.title, count: 3 })).toBe('3 new leads today');
+    /* Added for oneself: nobody is asked, the Ops Director still hears. */
+    expect(leadDrafts({ ...lead, ownerEmail: 'meera@ff.in' }, { id: 'L2' }).map((d) => d.level)).toEqual(['update']);
+    expect(leadPickedUp(lead, { ...lead, know: { budget: '40L' } })).toBe(false);
+    expect(leadPickedUp(lead, { ...lead, touches: [{ kind: 'call' }] })).toBe(true);
+    expect(leadPickedUp(lead, { ...lead, stage: 'contacted' })).toBe(true);
+    expect(leadPickedUp(lead, null)).toBe(true);
+  });
+
+  it('a client message and a question about a finish say what settles them', () => {
+    expect(clientActionDraft({ type: 'sendMessage', text: 'Hello' }, project)!.ref).toBe('msg:p1');
+    expect(clientActionDraft({ type: 'querySelection', selectionId: 's9', question: 'Matte or gloss?' }, project)!.ref).toBe('finish:p1:s9');
+    expect(clientActionDraft({ type: 'raiseDispute', reason: 'Not as agreed' }, project)!.ref).toBeNull();
+    expect(siteDraft({ type: 'blocker', text: 'No water on site' }, { projectId: 'p1', projectName: 'Harmony 704', actor: 'Sanjay K', blockerId: 'b7' })!.ref).toBe('blk:p1:b7');
+    expect(reviewDraft('submit', { projectId: 'p1', projectName: 'Harmony 704', sheet: 'Kitchen', actor: 'Arjun Rao', sheetId: 'd3' })!.ref).toBe('sheet:p1:d3');
+  });
+
+  it('a stored note always carries ref, so the app can tell it from an older one; a card to sign stops asking when the day is over', () => {
+    const [ask] = celebrationDrafts({ kind: 'birthday', days: 0, date: '2026-11-24', id: 'card-1' }, { name: 'Arjun Rao', email: 'arjun@ff.in', others: ['riya@ff.in'], signed: 0 });
+    const stored = stamp(ask, 1000);
+    expect(stored.ref).toBe('card:card-1');
+    expect((stored as any).lasts).toBeUndefined();
+    expect(isOpen(stored, 1000 + 17 * 3600000)).toBe(true);
+    expect(isOpen(stored, 1000 + 19 * 3600000)).toBe(false);
+    const plain = stamp({ kind: 'client.dispute', area: 'clients', level: 'needs', title: 'x', line: '', projectId: 'p1', projectName: null, route: 'client-portal', action: 'Open it', actor: null, group: null, to: {} }, 1000);
+    expect(plain.ref).toBeNull();
+    expect(plain.expiresAt).toBeNull();
+    /* Waiting until done, read or not; an older note (no ref at all) only until read. */
+    expect(waitsOn({ ...plain, readAt: 5 })).toBe(true);
+    expect(waitsOn({ level: 'needs', readAt: 5 })).toBe(false);
+    expect(waitsOn({ level: 'needs', readAt: null })).toBe(true);
+    expect(waitsOn({ level: 'update', readAt: null, ref: null })).toBe(false);
   });
 });

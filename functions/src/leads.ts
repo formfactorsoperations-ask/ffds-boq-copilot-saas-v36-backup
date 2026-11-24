@@ -1,9 +1,13 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
+import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 import * as pako from "pako";
 import { requireStaff, rateLimiter } from "./guards";
 import { storedProject } from "./designViewStrip";
 import { findMatches, leadName, LEAD_STAGES, sourceLabel, type Lead } from "../../lib/leads";
+import { leadDrafts, leadPickedUp, refs } from "../../lib/notify";
+import { notify, settle } from "./notify";
 
 /*
   LEADS ON THE SERVER (lib/leads.ts).
@@ -12,7 +16,29 @@ import { findMatches, leadName, LEAD_STAGES, sourceLabel, type Lead } from "../.
   earlier lead or a client anywhere in the studio, including leads the caller
   cannot open. It answers with names, stages and owners only; nothing about
   money or the project itself.
+
+  onLeadWritten: a lead is added in the browser (services/leadsService.ts), so
+  it is told from its document. Whoever it was given to is asked to pick it up
+  and the Ops Director hears of it (lib/notify.ts leadDrafts); the first call
+  logged, a change of stage, or deleting it settles that.
 */
+
+export const onLeadWritten = onDocumentWritten("leads/{leadId}", async (event) => {
+  const before = event.data?.before?.exists ? event.data.before.data() : null;
+  const after = event.data?.after?.exists ? event.data.after.data() : null;
+  const id = String(event.params.leadId);
+  const tenantId = String(after?.tenantId || before?.tenantId || "");
+  if (!tenantId) return;
+  try {
+    if (!before && after) {
+      await notify({ tenantId, actorEmail: String(after.createdBy || "") || null }, leadDrafts(after, { id }));
+      return;
+    }
+    if (before && leadPickedUp(before, after)) await settle(tenantId, [refs.lead(id)]);
+  } catch (e: any) {
+    logger.error("[leads] could not tell the desk about a lead", { message: e?.message });
+  }
+});
 
 const db = () => admin.firestore();
 const inflate = (b64: string) => Buffer.from(pako.inflate(Buffer.from(b64, "base64"))).toString("utf-8");

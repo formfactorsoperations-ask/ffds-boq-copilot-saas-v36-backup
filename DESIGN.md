@@ -1010,8 +1010,25 @@ styles in `notifyStyles.ts` (added to the page when first imported, like
   as a pop-up.
 - Counts: a rose number (`nt-count`, with a breathing halo) when someone is
   waiting on you; a brand dot (`nt-dot`) when there is only something new to
-  read. A count turns over in 3D when it changes (`nt-flip`). It changes the
-  moment a note lands and never waits for an animation.
+  read. The bell follows the same rule as the tabs. A count turns over in 3D
+  when it changes (`nt-flip`). It changes the moment a note lands and never
+  waits for an animation. The number stays until each thing is done, by the
+  person or by the server when the thing itself is dealt with; opening the
+  screen reads the updates and clears only the dot.
+- More motion, asked for by the owner on 24 Nov 2026 ("more animated, more
+  intuitive"), all inside this kit and with the same type and palette:
+  - while someone waits, the bell sways now and then (`nt-waiting`);
+  - the bell's list starts with "Waiting on you" (a rose dot that breathes,
+    `nt-wait-dot`), longest wait first; those rows carry a brand edge that
+    draws down (`nt-edge`);
+  - a note's tile is a coin (`NoteCoin`, `nt-coin`): it leans to the pointer
+    with its row and turns over to a tick when the note is marked done, then
+    the row leaves;
+  - on the Ops Desk a row that has waited half an hour has a rose halo
+    breathing round its tile (`nt-urgent`), and a timer chip turns over each
+    time it changes colour;
+  - the bar counts the wait as you watch, and when more are waiting behind it
+    the edges of the next cards show under it like a deck (`nt-deck`).
 - The bell is the brushed-metal bell of the project hub; one 3D swing when a
   note lands (`nt-ring`). There is one bell on any screen: inside a project, what
   that project is waiting on (`useHubAlerts`, which used to be a second bell
