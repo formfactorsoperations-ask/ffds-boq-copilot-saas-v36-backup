@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react';
-import { ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, FileUp, FolderOpen, Loader2, PenTool, Presentation, Search, Send } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, FileUp, FolderOpen, Loader2, MessageSquare, PenTool, Presentation, Search, Send } from 'lucide-react';
 import { GENERAL_ROOM, matchesQuery, needsMe, readyRooms, roomOf, type Viewer } from '../../lib/designDesk';
 import { greeting, holderOf, homeLists, mainAction, stepsOf, whereLine } from '../../lib/designDesk2';
 import { stateOf } from '../../lib/drawingReview';
 import type { ReviewDrawing } from '../../services/drawingReviewService';
 import { ProjectMark, SheetThumb } from '../drawingReview/DeskParts';
 import { firstName, roomLabel } from '../drawingReview/ui';
+import { countByRoom, type MessagePerson, type RoomMessage } from '../../lib/roomMessages';
+import RoomThread from '../roomMessages/RoomThread';
 import { Btn, Card, DueTag, Empty, HolderTag, SectionTitle, StepTrack, Tag, cx } from './parts';
 
 /*
@@ -36,6 +38,8 @@ export interface DeskCtx {
   goRoom: (projectId: string, room: string) => void;
   goMeetings?: () => void;
   addPdfs: (projectId?: string) => void;
+  /** Room messages of the open project (lib/roomMessages.ts): null while loading, absent for a role that has none. */
+  talk?: { orgId: string; me: MessagePerson; messages: RoomMessage[] | null; error: string | null };
 }
 
 const keyOf = (d: ReviewDrawing) => `${d.projectId}/${d.id}`;
@@ -175,6 +179,7 @@ export const ProjectPage: React.FC<{ c: DeskCtx; projectId: string; client?: str
       done: list.filter((d) => stateOf(d.review) === 'APPROVED').length,
     })).sort((a, b) => b.need - a.need || a.room.localeCompare(b.room));
   }, [rows, c.viewer]);
+  const talk = useMemo(() => countByRoom(c.talk?.messages || []), [c.talk?.messages]);
   return (
     <div>
       <Back onClick={onBack}>Home</Back>
@@ -198,6 +203,7 @@ export const ProjectPage: React.FC<{ c: DeskCtx; projectId: string; client?: str
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-base font-bold text-slate-800">{roomLabel(r.room)}</span>
                   <span className="block text-sm text-slate-500">{r.list.length} drawing{r.list.length === 1 ? '' : 's'} · {r.done} approved</span>
+                  {!!talk[r.room] && <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-slate-500"><MessageSquare size={13} aria-hidden />{talk[r.room]} message{talk[r.room] === 1 ? '' : 's'}</span>}
                 </span>
                 {r.need > 0 && <Tag tone="you">{r.need} need{r.need === 1 ? 's' : ''} you</Tag>}
               </span>
@@ -233,6 +239,8 @@ export const RoomPage: React.FC<{ c: DeskCtx; projectId: string; room: string; o
         </div>
         {c.uploader && <Btn kind="plain" icon={FileUp} onClick={() => c.addPdfs(projectId)}>Upload drawings</Btn>}
       </div>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+        <div className="min-w-0 flex-1">
       {rows.length ? (
         <div className="grid gap-3">
           {rows.map((d, i) => {
@@ -263,6 +271,12 @@ export const RoomPage: React.FC<{ c: DeskCtx; projectId: string; room: string; o
           })}
         </div>
       ) : <Empty icon={CheckCircle2} title="No drawings in this room" line="Drawings are added to a room in the project's Drawings tab." />}
+        </div>
+        {c.talk && (
+          <RoomThread orgId={c.talk.orgId} projectId={projectId} room={room} roomName={roomLabel(room)} messages={c.talk.messages} error={c.talk.error} me={c.talk.me}
+            className="max-h-[70vh] xl:sticky xl:top-4 xl:max-h-[calc(100vh-140px)] xl:w-[380px] xl:flex-none" />
+        )}
+      </div>
     </div>
   );
 };

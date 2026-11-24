@@ -6,6 +6,8 @@ import { canPresentAssigned, canReview, canRunMeeting, canSetAudience, canUpload
 import { sendsApprovals, type DesignMeeting } from '../../lib/designMeeting';
 import { attention, projectLook, reviewQueue, statsOf, type Viewer } from '../../lib/designDesk';
 import { mainAction } from '../../lib/designDesk2';
+import { canUseRoomMessages } from '../../lib/roomMessages';
+import { useProjectMessages } from '../roomMessages/useProjectMessages';
 import { useProjectTeam } from '../../services/projectTeam';
 import { watchStudioReviews, watchProjectDrawings, takeOpenRequest, returnFromDesk, submitSheet, type ReviewDrawing, type DeskOrigin } from '../../services/drawingReviewService';
 import { watchMeetings } from '../../services/designMeetingService';
@@ -216,6 +218,10 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
   const setUp = (d: ReviewDrawing | null) => setUpRaw(d);
   const upDrawing = up ? rows.find((d) => d.projectId === up.projectId && d.id === up.id) || up : null;
 
+  /* The open project's room messages, for the roles that have them (lib/roomMessages.ts). */
+  const talks = canUseRoomMessages(role);
+  const talk = useProjectMessages(orgId, pageProject, talks);
+
   const ctx: DeskCtx = {
     rows, viewer, uploader, meName: me.name, projectOf, sending,
     act: (d) => { const k = mainAction(d, viewer, uploader).kind; if (k === 'send') send(d); else if (k === 'upload') setUp(d); else openSheet(d); },
@@ -225,6 +231,7 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
     goRoom: (projectId, room) => go({ at: 'room', projectId, room }),
     goMeetings: meetsTab ? () => go({ at: 'meetings' }) : undefined,
     addPdfs: (projectId) => setAdd({ projectId: projectId || null }),
+    talk: talks ? { orgId, me: { uid: me.uid, email: me.email, name: me.name }, messages: talk.messages, error: talk.error } : undefined,
   };
 
   /* A drawing under review or a meeting in progress has the screen to itself, without the page title. */

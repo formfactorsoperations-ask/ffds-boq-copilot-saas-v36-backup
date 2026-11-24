@@ -35,6 +35,7 @@ const KIND: Record<string, { icon: React.ComponentType<any>; tone: RingTone }> =
   'design.submitted': { icon: PenTool, tone: 'brand' },
   'design.approved': { icon: Check, tone: 'ok' },
   'design.returned': { icon: Undo2, tone: 'warn' },
+  'design.roomMessage': { icon: MessageSquare, tone: 'brand' },
   'site.blocker': { icon: HardHat, tone: 'bad' },
   'site.unblocked': { icon: HardHat, tone: 'ok' },
   'site.update': { icon: HardHat, tone: 'brand' },

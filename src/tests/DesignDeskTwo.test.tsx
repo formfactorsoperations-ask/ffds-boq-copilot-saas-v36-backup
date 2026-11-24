@@ -9,7 +9,7 @@ import { render, screen, fireEvent, cleanup, act, within } from '@testing-librar
   and All drawings.
 */
 
-const h = vi.hoisted(() => ({ org: {} as any, studio: [] as any[], trackers: {} as Record<string, any[]>, submit: null as any, update: null as any, upload: null as any, versions: [] as any[], marks: [] as any[], approve: null as any, ret: null as any, mark: null as any }));
+const h = vi.hoisted(() => ({ org: {} as any, studio: [] as any[], trackers: {} as Record<string, any[]>, submit: null as any, update: null as any, upload: null as any, versions: [] as any[], marks: [] as any[], approve: null as any, ret: null as any, mark: null as any, talk: [] as any[], post: null as any }));
 
 vi.mock('../../contexts/OrgContext', () => ({ useOrg: () => h.org }));
 vi.mock('../../lib/pdfRender', () => ({ thumbnailOf: vi.fn(async () => null), pageCountOf: vi.fn(async () => 2), loadPdf: vi.fn(() => new Promise(() => undefined)), renderPage: vi.fn() }));
@@ -29,6 +29,11 @@ vi.mock('../../services/drawingReviewService', () => ({
   fileBlob: () => Promise.reject(new Error('no files in tests')),
   uploadSheet: (...a: any[]) => h.upload(...a), withdrawSheet: vi.fn(), approveSheet: (...a: any[]) => h.approve(...a), returnSheet: (...a: any[]) => h.ret(...a), createMark: (...a: any[]) => h.mark(...a), deleteMark: vi.fn(),
   updateMark: vi.fn(), fixMark: vi.fn(), setAudience: vi.fn(), removeVersion: vi.fn(), clientReturn: vi.fn(), clientKeep: vi.fn(), call: vi.fn(), ReviewError: class extends Error {},
+}));
+
+vi.mock('../../services/roomMessageService', () => ({
+  watchProjectMessages: (_o: string, p: string, cb: (r: any[]) => void) => { cb(h.talk.filter((m) => m.projectId === p)); return () => undefined; },
+  postRoomMessage: (...a: any[]) => h.post(...a),
 }));
 
 import DesignDeskSwitch from '../../components/designDesk2/DesignDeskSwitch';
@@ -67,7 +72,7 @@ beforeEach(() => {
   h.submit = vi.fn(async () => ({}));
   h.update = vi.fn();
   h.upload = vi.fn(async () => ({ versionNo: 1 }));
-  h.versions = []; h.marks = [];
+  h.versions = []; h.marks = []; h.talk = []; h.post = vi.fn(async () => undefined);
   h.approve = vi.fn(async () => ({})); h.ret = vi.fn(async () => ({})); h.mark = vi.fn(async () => ({ mark: { id: 'new' } }));
   window.scrollTo = vi.fn() as any;
   (globalThis as any).ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
@@ -250,5 +255,24 @@ describe('Design Desk 2.0', () => {
     expect(opts.submit).toBe(true);
     expect(opts.note).toBe('First issue');
     expect(screen.queryByRole('dialog', { name: 'Upload Kitchen Plan' })).toBeNull();
+  });
+
+  it("shows a room's messages beside its drawings, and sends one", async () => {
+    org('Designer', 'Riya');
+    h.talk = [
+      { id: 'm1', tenantId: 's', projectId: 'p1', room: 'Kitchen', text: 'Hob moves 300 left', at: NOW - 60_000, by: person('Head') },
+      { id: 'm2', tenantId: 's', projectId: 'p1', room: 'Foyer', text: 'Ceiling at 2700', at: NOW, by: person('Head') },
+    ];
+    render(<DeskTwo projects={projects} />);
+    fireEvent.click(screen.getByRole('button', { name: /Mehta residence/ }));
+    /* The room card counts its messages. */
+    expect(screen.getAllByText('1 message').length).toBe(2);
+    fireEvent.click(screen.getByRole('button', { name: /Kitchen/ }));
+    const thread = screen.getByRole('region', { name: 'Messages for Kitchen' });
+    expect(within(thread).getByText('Hob moves 300 left')).toBeTruthy();
+    expect(within(thread).queryByText('Ceiling at 2700')).toBeNull();
+    fireEvent.change(within(thread).getByLabelText('Write a message for Kitchen'), { target: { value: 'Done in v4' } });
+    await act(async () => { fireEvent.click(within(thread).getByRole('button', { name: 'Send the message' })); });
+    expect(h.post).toHaveBeenCalledWith({ orgId: 's', projectId: 'p1', room: 'Kitchen', text: 'Done in v4', by: { uid: 'riya', email: 'riya@studio.in', name: 'Riya' } });
   });
 });

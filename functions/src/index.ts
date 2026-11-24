@@ -30,6 +30,8 @@ export { sendFridayDigest } from "./fridayDigest";
 export { drawingReview } from "./drawingReview";
 /* Design meetings: presenting approved rooms to the client; see designMeeting.ts. */
 export { designMeeting, designApprovalReminders } from "./designMeeting";
+/* Room messages on the Design Desk: a note to the people on the project when one is written; see roomMessages.ts. */
+export { onRoomMessageCreated } from "./roomMessages";
 /* Google Drive: the approved drawings operations pick, copied landscape to a folder per project; see googleDrive.ts. */
 export { googleDrive, driveOAuthCallback } from "./googleDrive";
 /* The Ops Desk: escalation emails and the daily check; see opsDesk.ts. */

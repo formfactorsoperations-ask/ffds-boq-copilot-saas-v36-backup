@@ -130,6 +130,11 @@ What the new desk may do that a console screen may not:
 - **Its own parts** (`components/designDesk2/parts.tsx`: `Btn`, `Card`, `Tag`, `StepTrack`,
   `Empty`) instead of the screen kit, because of the size and the colour.
 
+Room messages (`components/roomMessages`) are one thread in two looks. Beside a room's drawings on
+the new desk, `RoomThread` takes the desk's emerald (`tone="desk"`). In a project's Drawings tab the
+"Room messages" button is the kit's `Button`, and its panel follows the modal rules above with the
+brand blue (`tone="console"`), because that screen is a console screen.
+
 What stays as everywhere else:
 - The fonts. The mockup's fonts were not adopted (owner, 24 Nov 2026): the desk uses the app's own.
 - The motion classes: `hud-panel-in`, `hud-row-in`, `hud-swap`, `hud-rail-active`, `phd-lift`.
