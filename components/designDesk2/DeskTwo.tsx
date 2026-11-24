@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Home as HomeIcon, List, Loader2, Presentation, Undo2 } from 'lucide-react';
+import { Home as HomeIcon, List, Loader2, Presentation } from 'lucide-react';
 import { useOrg } from '../../contexts/OrgContext';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
 import { canPresentAssigned, canReview, canRunMeeting, canSetAudience, canUpload, stateOf } from '../../lib/drawingReview';
@@ -43,8 +43,6 @@ interface Props {
   projects: any[];
   /** The project open elsewhere in the app. */
   activeProjectId?: string | null;
-  /** Shown to people who may switch the studio back to today's desk. */
-  onUseClassic?: () => void;
 }
 
 type Page = { at: 'home' } | { at: 'all' } | { at: 'meetings' } | { at: 'project'; projectId: string } | { at: 'room'; projectId: string; room: string };
@@ -63,7 +61,7 @@ export default function DeskTwo(props: Props) {
   );
 }
 
-function Desk({ projects, activeProjectId, onUseClassic }: Props) {
+function Desk({ projects, activeProjectId }: Props) {
   const toast = useToast();
   const { orgData, currentRole, currentRoles, currentUserAuth } = useOrg();
   const orgId = orgData?.tenantId || 'demo-tenant-01';
@@ -316,12 +314,6 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
             </button>
           );
         })}
-        {onUseClassic && (
-          <button type="button" onClick={onUseClassic} title="Switch this studio back to the earlier Design Desk"
-            className="flex min-h-[44px] items-center gap-3 whitespace-nowrap rounded-xl px-3 text-sm font-semibold text-emerald-100 hover:bg-white/10 hover:text-white lg:mt-6">
-            <Undo2 size={18} aria-hidden />Use the old desk
-          </button>
-        )}
       </nav>
 
       <main key={page.at === 'room' ? `room:${page.projectId}:${page.room}` : page.at === 'project' ? `project:${page.projectId}` : page.at} className="hud-swap min-w-0 flex-1">

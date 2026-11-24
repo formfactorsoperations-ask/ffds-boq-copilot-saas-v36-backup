@@ -114,8 +114,11 @@ Use only the motion classes that already exist; do not write new keyframes.
 
 The owner approved a new look for the Design Desk (`components/designDesk2`), from the mockup
 "Design Desk, the easy flow". Designers are its main users, so it is plainer and larger than the
-console screens. It is built in phases behind a studio switch (`DesignDeskSwitch`, the studio's
-`designDesk` field); today's desk (`components/drawingReview`) stays until each phase is accepted.
+console screens. It is built in phases behind a studio switch (the studio's `designDesk` field,
+read by `DesignDeskSwitch`); today's desk (`components/drawingReview`) stays until each phase is
+accepted. The switch is one row in Studio settings > Data & integrations
+(`components/studio/DesignDeskSetting.tsx`, the kit's `Segmented`), saved with the rest of the
+settings draft. Neither desk draws a switch or a way back: people at work see one desk.
 
 What the new desk may do that a console screen may not:
 - **A dark green rail** (`bg-[#0C1F1A]`) with Home, All drawings and Meetings. The active item is

@@ -43,6 +43,10 @@ vi.mock('../../services/roomMessageService', () => ({
 
 import DesignDeskSwitch from '../../components/designDesk2/DesignDeskSwitch';
 import DeskTwo from '../../components/designDesk2/DeskTwo';
+import DesignDeskSetting, { deskChoiceOf } from '../../components/studio/DesignDeskSetting';
+import { searchSettings } from '../../lib/settingsRegistry';
+import fs from 'fs';
+import path from 'path';
 
 const NOW = Date.now();
 const person = (name: string) => ({ uid: name.toLowerCase(), email: `${name.toLowerCase()}@studio.in`, name });
@@ -87,24 +91,47 @@ beforeEach(() => {
 const org = (role: string, name: string, extra: any = {}) => { h.org = { orgData: { tenantId: 's', ...extra }, updateOrgData: h.update, currentRole: role, currentUserAuth: { uid: name.toLowerCase(), email: `${name.toLowerCase()}@studio.in`, displayName: name } }; };
 
 describe('the switch between the two desks', () => {
-  it("keeps today's desk by default and offers the new one to senior roles", () => {
+  it("keeps today's desk by default, with no switch on the desk itself", () => {
     org('Design Head', 'Head');
     render(<DesignDeskSwitch projects={projects} />);
     expect(screen.getByRole('tablist', { name: 'Design Desk views' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Switch the studio to the new desk' }));
-    expect(h.update).toHaveBeenCalledWith({ designDesk: 'new' });
+    expect(screen.queryByRole('button', { name: /new desk/i })).toBeNull();
   });
-  it('does not offer the switch to a Designer', () => {
-    org('Designer', 'Riya');
-    render(<DesignDeskSwitch projects={projects} />);
-    expect(screen.queryByRole('button', { name: 'Switch the studio to the new desk' })).toBeNull();
-  });
-  it('shows the new desk once the studio has switched, with the way back', async () => {
+  it('shows the new desk once the studio has switched, with no way back on the desk', async () => {
     org('Design Head', 'Head', { designDesk: 'new' });
     render(<DesignDeskSwitch projects={projects} />);
     expect(await screen.findByRole('navigation', { name: 'Design Desk' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Use the old desk/ }));
-    expect(h.update).toHaveBeenCalledWith({ designDesk: 'classic' });
+    expect(screen.queryByRole('button', { name: /old desk/i })).toBeNull();
+    expect(h.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('the switch in Studio settings', () => {
+  it('shows the desk the studio is on and hands the other one to the draft', () => {
+    const onChange = vi.fn();
+    render(<DesignDeskSetting value="classic" saved="classic" onChange={onChange} />);
+    expect(screen.getByText('The studio is on the old desk')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Old desk' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('radio', { name: 'New desk' }));
+    expect(onChange).toHaveBeenCalledWith('new');
+  });
+  it('says the change waits for Save', () => {
+    render(<DesignDeskSetting value="new" saved="classic" onChange={() => undefined} />);
+    expect(screen.getByText('Save to move the studio to the new desk')).toBeTruthy();
+  });
+  it('reads a studio with no choice as the old desk, and is found by search under Data & integrations', () => {
+    expect(deskChoiceOf({})).toBe('classic');
+    expect(deskChoiceOf({ designDesk: 'new' })).toBe('new');
+    const found = searchSettings('design desk').find((f) => f.key === 'designDesk');
+    expect(found?.section).toBe('system');
+    /* Optional, so it never counts against the studio's readiness. */
+    expect(found?.criticality).toBe('optional');
+  });
+  it('is drawn in Studio settings and nowhere on the desk', () => {
+    const read = (f: string) => fs.readFileSync(path.join(process.cwd(), f), 'utf8');
+    expect(read('components/studio/StudioSettingsConsole.tsx')).toMatch(/<DesignDeskSetting/);
+    expect(read('components/designDesk2/DesignDeskSwitch.tsx')).not.toMatch(/updateOrgData/);
+    expect(read('components/designDesk2/DeskTwo.tsx')).not.toMatch(/updateOrgData|onUseClassic/);
   });
 });
 

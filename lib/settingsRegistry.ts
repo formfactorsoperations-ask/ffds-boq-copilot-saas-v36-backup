@@ -42,7 +42,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'contract', label: 'Contract terms', blurb: 'Standing wording, fee tranches and lead times' },
   { id: 'portal', label: 'Client portal', blurb: 'What clients see and how they are nudged' },
   { id: 'appearance', label: 'Appearance', blurb: 'Typeface, palette and table density' },
-  { id: 'system', label: 'Data & integrations', blurb: 'Calendar sync, backups and the audit trail' },
+  { id: 'system', label: 'Data & integrations', blurb: 'Calendar sync, backups, which Design Desk the studio uses and the audit trail' },
   { id: 'opsdesk', label: 'Ops Desk', blurb: 'When a payment is late, and who decides escalations' },
   { id: 'people', label: 'People', blurb: 'Working hours, leave, holidays, check-in location and who reports to whom' },
   { id: 'minutes', label: 'Minutes', blurb: 'Bring older minutes into the new format, once' },
@@ -113,6 +113,9 @@ export const SETTINGS_FIELDS: SettingsField[] = [
   { key: 'pmResponseTime', label: 'Response time commitment', section: 'portal', criticality: 'recommended' },
   { key: 'siteVisitPolicy', label: 'Site visit policy', section: 'portal', criticality: 'optional' },
   { key: 'escalationPolicy', label: 'Escalation policy', section: 'portal', criticality: 'optional' },
+
+  // Data & integrations
+  { key: 'designDesk', label: 'Design Desk: old or new', section: 'system', criticality: 'optional', consequence: 'Which Design Desk everyone in the studio works on', aliases: ['design desk', 'new desk', 'old desk', 'desk 2.0', 'drawings'] },
 
   // Appearance
   { key: 'themeColor', label: 'Brand colour', section: 'appearance', criticality: 'recommended', consequence: 'Accent colour across documents' },
