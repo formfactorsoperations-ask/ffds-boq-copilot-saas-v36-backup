@@ -540,12 +540,15 @@ the orbit dial.
 ### The film behind the greeting (asked for 24 Nov 2026)
 
 The owner asked for a background in motion on Home, from a reference of glass towers
-rising out of a sea of clouds. A short, silent film of that loops behind the greeting,
+rising out of a sea of clouds, and for it to cost nothing. A short, silent film of a tower in
+morning fog loops behind the greeting,
 inside the hero card only (`components/home/HomeHeroVideo.tsx`):
 
-- The clip is the studio's own (generated for StudioDesk, not stock), served from
-  `public/home/hero-clouds.webm` and `.mp4`, with `hero-clouds.jpg` (its first frame)
-  as the poster. Keep each file small (a few MB).
+- The clip is "Skyscraper above Clouds" by Aleksandar Pasaric on Pexels (video 4583679),
+  free to use under the Pexels licence, cut to a 12-second seamless loop and cropped so the
+  tower stands right of the story cards. It is served
+  from `public/home/hero-clouds.webm` and `.mp4`, with `hero-clouds.jpg` (its first
+  frame) as the poster. Keep each file small (a few MB).
 - Muted, looped and inline. It never plays under `prefers-reduced-motion` (the poster
   stands still), pauses when Home is scrolled past it or the tab is hidden, and takes
   itself away if it cannot load, leaving the hero as it was.

@@ -3,9 +3,12 @@ import React from 'react';
 /**
  * HOME: TOWERS IN THE CLOUDS (DESIGN.md → "Home stories" → "The film behind the greeting").
  *
- * A short, silent film loops behind the greeting at the top of Home: glass towers
- * rising out of a sea of clouds at golden hour, the camera barely drifting. It is
- * the studio's own clip (generated for StudioDesk), served from /public/home.
+ * A short, silent film loops behind the greeting at the top of Home: a tower rising
+ * out of a sea of fog in warm morning light. The clip is "Skyscraper above Clouds" by
+ * Aleksandar Pasaric on Pexels (pexels.com/video/4583679), free to use under the Pexels
+ * licence. It was cut to a 12-second seamless loop (the end crossfades into the start),
+ * cropped so the tower stands right of the story cards, and is served from /public/home.
+ * On a phone the frame is held at 80% across so the tower stays in view.
  *
  * - Muted, looped and inline, so every browser lets it play on its own.
  * - Under prefers-reduced-motion it never plays: the poster (its first frame) stands still.
@@ -43,7 +46,7 @@ export default function HomeHeroVideo() {
     <div aria-hidden className="absolute inset-0 pointer-events-none">
       <video
         ref={ref}
-        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${ready ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 w-full h-full object-cover object-[80%_50%] md:object-center transition-opacity duration-700 ${ready ? 'opacity-100' : 'opacity-0'}`}
         poster={`${SRC}.jpg`}
         muted loop playsInline preload="metadata"
         onLoadedData={() => setReady(true)}
