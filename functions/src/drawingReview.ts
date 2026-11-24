@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { notify } from "./notify";
-import { reviewDraft } from "../../lib/notify";
+import { reviewDraft, nudgeDraft } from "../../lib/notify";
+import { canNudge, nudgeTarget } from "../../lib/deskSmart";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { isTeamViewMember } from "./teamView";
@@ -531,6 +532,35 @@ async function setAudience(actor: Actor, orgId: string, projectId: string, drawi
   });
 }
 
+/* --------------------------------------------------------- a reminder */
+
+/*
+  Reminds whoever is holding the drawing: the Design Head when it waits for a
+  check, its designer when it waits for changes or to be sent (lib/deskSmart:
+  heldBy). Anyone who can open the drawing may press it, a few hours apart at
+  most; the reminder is stamped on the drawing and noted in its history, then
+  goes to the holder's bell and phone. It changes nothing about the review.
+*/
+async function nudge(actor: Actor, orgId: string, projectId: string, drawingRef: FirebaseFirestore.DocumentReference) {
+  const out = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(drawingRef);
+    if (!snap.exists) throw new HttpsError("not-found", "That drawing is no longer in the tracker.");
+    const s: ReviewSummary | undefined = snap.data()?.review;
+    const now = Date.now();
+    const state = canNudge(s, now);
+    if (!state.ok || !state.held) throw new HttpsError("failed-precondition", state.why);
+    const to = nudgeTarget(s, state.held);
+    tx.update(drawingRef, { "review.nudgedAt": now });
+    tx.set(drawingRef.collection("reviewEvents").doc(), { type: "nudge", at: now, by: person(actor), versionNo: s?.versionNo, text: `Reminder to ${to}` } as ReviewEvent);
+    return { held: state.held, to, sheet: String(snap.data()?.name || ""), designerEmail: s?.designer?.email || null };
+  });
+  await notify({ tenantId: orgId, projectId, actorEmail: actor.email }, [nudgeDraft({
+    projectId, projectName: actor.projectName, sheet: out.sheet, who: out.held.who, days: out.held.days, ask: out.held.ask,
+    designerEmail: out.designerEmail, by: actor.name,
+  })]);
+  return { to: out.to };
+}
+
 /* --------------------------------------------------------- the callable */
 
 /*
@@ -575,6 +605,7 @@ export const drawingReview = onCall({ cors: true, memory: "1GiB", timeoutSeconds
       case "remove": return await removeVersion(actor, drawingRef, input);
       case "clientReturn": return await told("clientReturn", actor, orgId, projectId, drawingRef, await clientDecide(actor, drawingRef, input, "clientReturn"));
       case "clientKeep": return await clientDecide(actor, drawingRef, input, "clientKeep");
+      case "nudge": return await nudge(actor, orgId, projectId, drawingRef);
       default: throw new HttpsError("invalid-argument", "Unknown action.");
     }
   } catch (e: any) {

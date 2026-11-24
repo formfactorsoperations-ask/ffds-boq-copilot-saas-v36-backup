@@ -9,6 +9,8 @@ import { firstName, roomLabel } from '../drawingReview/ui';
 import { countByRoom, type MessagePerson, type RoomMessage } from '../../lib/roomMessages';
 import RoomThread from '../roomMessages/RoomThread';
 import { Btn, Card, DueTag, Empty, HolderTag, SectionTitle, StepTrack, Tag, cx } from './parts';
+import { NudgeButton, SiteTag, WorthKnowing } from './smart';
+import type { RoundToBill } from '../../lib/deskSmart';
 
 /*
   DESIGN DESK 2.0: Home, a project, a room and All drawings.
@@ -38,6 +40,10 @@ export interface DeskCtx {
   goRoom: (projectId: string, room: string) => void;
   goMeetings?: () => void;
   addPdfs: (projectId?: string) => void;
+  /** Revision rounds waiting to be billed or waived, for the roles that bill (Phase 3A). */
+  rounds?: RoundToBill[];
+  /** Opens Meetings on one project. */
+  goMeetingsFor?: (projectId: string) => void;
   /** Room messages of the open project (lib/roomMessages.ts): null while loading, absent for a role that has none. */
   talk?: { orgId: string; me: MessagePerson; messages: RoomMessage[] | null; error: string | null };
 }
@@ -69,9 +75,11 @@ const DrawingRow: React.FC<{ c: DeskCtx; d: ReviewDrawing; i: number; showProjec
         </span>
       </button>
       <span className="flex flex-wrap items-center gap-2">
+        <SiteTag d={d} />
         <DueTag targetDate={d.targetDate} />
         <HolderTag holder={holderOf(d, c.viewer)} />
       </span>
+      <NudgeButton d={d} viewer={c.viewer} projectName={p.name} quiet />
       <MainButton c={c} d={d} />
     </div>
   );
@@ -107,7 +115,7 @@ export const Home: React.FC<{ c: DeskCtx; projects: ProjectCard[]; canMeet: bool
                   <span className="mt-1 block text-base text-white">{whereLine(s, c.viewer)}</span>
                 </span>
               </button>
-              <span className="flex flex-wrap items-center gap-2"><DueTag targetDate={s.targetDate} /></span>
+              <span className="flex flex-wrap items-center gap-2"><SiteTag d={s} /><DueTag targetDate={s.targetDate} /></span>
               <MainButton c={c} d={s} big light />
             </div>
             <div className="mt-5 rounded-xl bg-white px-3 pb-2 pt-3"><StepTrack steps={stepsOf(s)} yours /></div>
@@ -138,6 +146,9 @@ export const Home: React.FC<{ c: DeskCtx; projects: ProjectCard[]; canMeet: bool
           {c.goMeetings && <Btn kind="plain" icon={Presentation} onClick={c.goMeetings}>Go to Meetings</Btn>}
         </Card>
       </>}
+
+      <WorthKnowing rows={c.rows} reviewer={c.viewer.reviewer} rounds={c.rounds} projectName={(id) => c.projectOf(id).name}
+        open={c.open} goProject={c.goProject} goMeetings={c.goMeetingsFor} />
 
       <SectionTitle hint="Open one to see its rooms">Your projects</SectionTitle>
       {projects.length ? (
@@ -255,6 +266,7 @@ export const RoomPage: React.FC<{ c: DeskCtx; projectId: string; room: string; o
                       <span className="mt-0.5 block text-sm text-slate-700">{whereLine(d, c.viewer)}</span>
                       <span className="mt-2 flex flex-wrap items-center gap-2">
                         {d.review?.versionNo ? <Tag>v{d.review.versionNo}</Tag> : null}
+                        <SiteTag d={d} />
                         <DueTag targetDate={d.targetDate} />
                         <HolderTag holder={holderOf(d, c.viewer)} />
                       </span>
@@ -326,7 +338,7 @@ export const AllDrawings: React.FC<{ c: DeskCtx; q: string; setQ: (v: string) =>
                     </td>
                     <td className="px-3 py-3"><span className="inline-flex items-center gap-2 text-sm text-slate-700"><ProjectMark code={p.code} color={p.color} size={24} round />{p.name}</span></td>
                     <td className="px-3 py-3 text-sm text-slate-700">{whereLine(d, c.viewer)}</td>
-                    <td className="px-3 py-3"><DueTag targetDate={d.targetDate} /></td>
+                    <td className="px-3 py-3"><span className="flex flex-wrap gap-1.5"><SiteTag d={d} /><DueTag targetDate={d.targetDate} /></span></td>
                     <td className="px-4 py-3"><HolderTag holder={holderOf(d, c.viewer)} /></td>
                   </tr>
                 );

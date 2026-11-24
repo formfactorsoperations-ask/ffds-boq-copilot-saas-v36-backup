@@ -4,6 +4,7 @@ import { useOrg } from '../../contexts/OrgContext';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
 import { canPresentAssigned, canReview, canRunMeeting, canSetAudience, canUpload, stateOf } from '../../lib/drawingReview';
 import { sendsApprovals, type DesignMeeting } from '../../lib/designMeeting';
+import { roundsToBill } from '../../lib/deskSmart';
 import { attention, projectLook, reviewQueue, statsOf, type Viewer } from '../../lib/designDesk';
 import { mainAction } from '../../lib/designDesk2';
 import { canUseRoomMessages } from '../../lib/roomMessages';
@@ -112,11 +113,14 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
 
   const [trackers, setTrackers] = useState<Record<string, ReviewDrawing[]>>({});
   const focus = pageProject || (page.at === 'meetings' ? meetProject : null);
-  const watched = useMemo(() => {
-    if (reviewer) return focus ? [focus] : [];
-    const ids = list.map((p) => p.id);
-    return ids.length > MAX_WATCHED ? (focus ? [focus] : []) : ids;
-  }, [reviewer, focus, listKey]);
+  /*
+    Everyone watches each of their projects' trackers, so Home knows about the
+    drawings nobody has started (a missing drawing, a site date at risk). Past
+    MAX_WATCHED projects only the open one is watched; a reviewer still has
+    every drawing with a PDF from the studio-wide list.
+  */
+  const watchAll = list.length > 0 && list.length <= MAX_WATCHED;
+  const watched = useMemo(() => (watchAll ? list.map((p) => p.id) : focus ? [focus] : []), [watchAll, focus, listKey]);
   const watchedKey = watched.join(',');
   useEffect(() => {
     const offs = watched.map((id) => watchProjectDrawings(orgId, id,
@@ -159,6 +163,15 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
 
   const loadingAll = reviewer ? studio === null && !studioError : !Object.keys(trackers).length && list.length > 0;
   const loadingProject = !!pageProject && !trackers[pageProject] && (reviewer || watched.includes(pageProject));
+
+  /* Revision rounds waiting to be billed or waived, across the watched projects, for the roles that bill: Home's "Worth knowing". */
+  const [billMeetings, setBillMeetings] = useState<Record<string, DesignMeeting[]>>({});
+  const billOn = canBill && page.at === 'home';
+  useEffect(() => {
+    if (!billOn) return;
+    const offs = watched.map((id) => watchMeetings(orgId, id, (l) => setBillMeetings((m) => ({ ...m, [id]: l })), () => undefined));
+    return () => { offs.forEach((f) => f()); };
+  }, [orgId, watchedKey, billOn]);
 
   /* ------------------------------------------------------------ design meetings */
   const [meetings, setMeetings] = useState<DesignMeeting[] | null>(null);
@@ -231,6 +244,8 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
     goProject: (id) => go({ at: 'project', projectId: id }),
     goRoom: (projectId, room) => go({ at: 'room', projectId, room }),
     goMeetings: meetsTab ? () => go({ at: 'meetings' }) : undefined,
+    goMeetingsFor: meetsTab ? (projectId) => { setMeetProject(projectId); go({ at: 'meetings' }); } : undefined,
+    rounds: canBill ? roundsToBill(billMeetings, (id) => projectOf(id).name) : undefined,
     addPdfs: (projectId) => setAdd({ projectId: projectId || null }),
     talk: talks ? { orgId, me: { uid: me.uid, email: me.email, name: me.name }, messages: talk.messages, error: talk.error } : undefined,
   };
@@ -308,7 +323,7 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
         ) : page.at === 'room' ? (
           <RoomPage c={ctx} projectId={page.projectId} room={page.room} onBack={() => go({ at: 'project', projectId: page.projectId })} />
         ) : page.at === 'all' ? (
-          <AllDrawings c={ctx} q={q} setQ={setQ} onlyMine={onlyMine} setOnlyMine={setOnlyMine} partial={reviewer} loading={loadingAll} />
+          <AllDrawings c={ctx} q={q} setQ={setQ} onlyMine={onlyMine} setOnlyMine={setOnlyMine} partial={reviewer && !watchAll} loading={loadingAll} />
         ) : (
           <MeetingsPage orgId={orgId} projectId={meetProject && cards.some((p) => p.id === meetProject) ? meetProject : null}
             projectName={meetProject ? projectOf(meetProject).name : ''}

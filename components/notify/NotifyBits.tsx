@@ -36,6 +36,7 @@ const KIND: Record<string, { icon: React.ComponentType<any>; tone: RingTone }> =
   'design.approved': { icon: Check, tone: 'ok' },
   'design.returned': { icon: Undo2, tone: 'warn' },
   'design.roomMessage': { icon: MessageSquare, tone: 'brand' },
+  'design.nudge': { icon: AlarmClock, tone: 'warn' },
   'site.blocker': { icon: HardHat, tone: 'bad' },
   'site.unblocked': { icon: HardHat, tone: 'ok' },
   'site.update': { icon: HardHat, tone: 'brand' },

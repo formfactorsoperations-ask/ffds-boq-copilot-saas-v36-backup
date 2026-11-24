@@ -1,4 +1,4 @@
-import { collection, collectionGroup, doc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { collection, collectionGroup, deleteField, doc, onSnapshot, query, updateDoc, where, orderBy } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getBlob } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import { db, storage, functions } from './firebaseClient';
@@ -24,6 +24,10 @@ export interface ReviewDrawing {
   approvedAt?: number | null;
   /** 'issued' once it is released for site from the project's Drawings tab. */
   gfcStatus?: string | null;
+  /** The day site needs this drawing, YYYY-MM-DD (Design Desk 2.0, Phase 3A). */
+  siteDate?: string | null;
+  /** The Drawings tab's gap flag: its companion drawing is ahead of it, or missing. */
+  isGapFlagged?: boolean;
   review?: ReviewSummary;
 }
 
@@ -40,6 +44,8 @@ const toDrawing = (orgId: string, projectId: string, id: string, data: any): Rev
   boqTriggers: data?.boqTriggers || [],
   approvedAt: data?.approvedAt ?? null,
   gfcStatus: data?.gfc?.status || null,
+  siteDate: data?.siteDate || null,
+  isGapFlagged: !!data?.isGapFlagged,
   review: data?.review,
 });
 
@@ -108,6 +114,19 @@ export const withdrawSheet = (t: Target, expectedRev?: number) => call({ ...t, a
 export const approveSheet = (t: Target, expectedRev: number, reason?: string) => call({ ...t, action: 'approve', expectedRev, reason });
 export const returnSheet = (t: Target, expectedRev: number, reason: string) => call({ ...t, action: 'return', expectedRev, reason });
 export const setAudience = (t: Target, audience: 'client' | 'studio') => call({ ...t, action: 'audience', audience });
+
+/**
+ * The day site needs a drawing (YYYY-MM-DD), or null to clear it. A plain
+ * field on the tracker row, like its target date: it decides nothing, so the
+ * browser writes it under the tracker's own rules.
+ */
+export async function setSiteDate(t: Target, date: string | null): Promise<void> {
+  if (!db) return;
+  await updateDoc(doc(db, drawingPath(t.orgId, t.projectId, t.drawingId)), { siteDate: date || deleteField() });
+}
+
+/** Reminds whoever is holding the drawing (the bell and their phone), and notes it in the drawing's history. */
+export const nudgeHolder = (t: Target) => call({ ...t, action: 'nudge' }) as Promise<{ to: string }>;
 /** Take back a PDF nobody has reviewed yet; the sheet returns to the version before it. */
 export const removeVersion = (t: Target, expectedRev: number, versionId: string) => call({ ...t, action: 'remove', expectedRev, versionId });
 export const createMark = (t: Target, page: number, shape: MarkShape, text: string, blocking = false) => call({ ...t, action: 'mark', op: 'create', page, shape, text, blocking });

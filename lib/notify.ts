@@ -355,6 +355,28 @@ export function reviewDraft(
   return { ...base, kind: 'design.returned', level: 'needs', title: `${sheet} came back with changes`, line: p.reason ? quote(p.reason) : kind === 'clientReturn' ? 'Changes the client asked for' : `Returned by ${p.actor}`, action: 'See the marks', to };
 }
 
+/* ── Design Desk reminders ───────────────────────────────────────────────── */
+
+/**
+ * A reminder to whoever is holding a drawing (lib/deskSmart.ts: heldBy): the
+ * Design Head when it is waiting for a check, its designer when it is waiting
+ * for changes or to be sent. `by` is the person who pressed Nudge; the daily
+ * reminder has none.
+ */
+export function nudgeDraft(p: { projectId: string; projectName: string | null; sheet: string; who: 'head' | 'designer'; days: number; ask: string; designerEmail?: string | null; by?: string | null }): Draft | null {
+  if (p.who === 'designer' && !p.designerEmail) return null;
+  const sheet = clip(p.sheet || 'A drawing', 60);
+  const waited = p.days >= 1 ? `${p.days} day${p.days === 1 ? '' : 's'}` : 'since today';
+  return {
+    kind: 'design.nudge', area: 'design', level: 'needs', projectId: p.projectId, projectName: p.projectName, route: 'design-review', group: null,
+    actor: p.by || null,
+    title: `${sheet} has waited ${waited} for you`,
+    line: p.by ? `${p.by} sent a reminder: please ${p.ask}` : `A reminder from the desk: please ${p.ask}`,
+    action: 'Open it',
+    to: p.who === 'head' ? { roles: ['Design Head'] } : { emails: [inboxKey(p.designerEmail as string)] },
+  };
+}
+
 /* ── Design Desk room messages ───────────────────────────────────────────── */
 
 /**

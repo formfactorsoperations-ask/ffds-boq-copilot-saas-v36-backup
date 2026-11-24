@@ -17,6 +17,7 @@ import PdfStage, { type Tool } from '../drawingReview/PdfStage';
 import { useSheetChanges } from '../drawingReview/useSheetChanges';
 import { MARK, FIXED, CLIENT, roomLabel, ago, shortDate, firstName, useToast, Initials } from '../drawingReview/ui';
 import type { Me } from '../drawingReview/SheetStudio';
+import { NudgeButton, SiteLine } from './smart';
 import { Btn, Tag, cx } from './parts';
 import { DeskMotionStyles, LiveIcon, Tilt, TOOL_COLOR, type LiveTool } from './motion';
 
@@ -65,7 +66,7 @@ const DEMO: LiveTool[] = ['select', 'pin', 'rect', 'arrow', 'pen', 'compare', 'c
 const DEMO_SEEN = 'ffds_dd2_icons_shown';
 const calm = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const SHAPE_WORD: Record<string, string> = { pin: 'Pin', rect: 'Box', arrow: 'Arrow', pen: 'Sketch' };
-const EVENT_WORD: Record<string, string> = { uploaded: 'uploaded', submitted: 'sent it to the Design Head', withdrawn: 'pulled it back', returned: 'asked for changes', approved: 'approved', audience: 'changed who it is for', removed: 'removed the PDF', client: 'showed it to the client', clientKept: 'kept it approved after the meeting' };
+const EVENT_WORD: Record<string, string> = { uploaded: 'uploaded', submitted: 'sent it to the Design Head', withdrawn: 'pulled it back', returned: 'asked for changes', approved: 'approved', audience: 'changed who it is for', nudge: 'sent a reminder', removed: 'removed the PDF', client: 'showed it to the client', clientKept: 'kept it approved after the meeting' };
 const QUICK = ['Check this dimension', 'Line this up with the ceiling plan', 'Match the material schedule', 'Show the hinge side', 'Add a section through here'];
 
 const read = <T,>(key: string, fallback: T): T => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) as T : fallback; } catch { return fallback; } };
@@ -704,7 +705,9 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
               <span className="text-xs opacity-80">{steps.current >= steps.labels.length ? `All ${steps.labels.length} steps done` : `Step ${steps.current + 1} of ${steps.labels.length}: ${steps.labels[steps.current]}`}</span>
             </span>
             <span className="block">{whereLine(d, viewer)}</span>
+            {isCurrent && <span className="mt-1.5 block empty:hidden"><NudgeButton d={d} viewer={viewer} projectName={projectName} /></span>}
           </div>
+          <SiteLine d={d} canSet={canSetAudience(role)} />
           {state === 'CHANGES_REQUESTED' && isCurrent && lastReturn?.reason && (
             <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700"><b>From {lastReturn.decidedBy?.email === me.email ? 'you' : firstName(lastReturn.decidedBy?.name)}:</b> “{lastReturn.reason}”</p>
           )}
