@@ -146,6 +146,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   const [panel, setPanelRaw] = useState<boolean>(() => read(panelKey, true));
   const setPanel = (v: boolean) => { setPanelRaw(v); write(panelKey, v); };
   /* A short tip when the drawing opens; it goes away by itself. */
+  const [diffNote, setDiffNote] = useState(true);
   const [tip, setTip] = useState(true);
   useEffect(() => { const t = setTimeout(() => setTip(false), 7000); return () => clearTimeout(t); }, []);
   const [diffs, setDiffs] = useState<Record<number, Diff>>({});
@@ -153,6 +154,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   const [checked, setCheckedRaw] = useState<Record<string, 'ok' | 'open'>>(() => read(checkedKey, {}));
   const setChecked = (id: string, v: 'ok' | 'open' | null) => setCheckedRaw((c) => { const n = { ...c }; if (v) n[id] = v; else delete n[id]; write(checkedKey, n); return n; });
   const draftBox = useRef<HTMLTextAreaElement>(null);
+  const notesBox = useRef<HTMLDivElement>(null);
   /* The drawing and its panel fill what is left of the window, so the decision stays in view without scrolling the page. */
   const stage = useRef<HTMLDivElement>(null);
   const [stageH, setStageH] = useState<number | null>(null);
@@ -232,6 +234,11 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   }, [viewPath]);
   useEffect(() => { if (!prev) setCompare(false); }, [prev?.id]);
   useEffect(() => { if (draft) setTimeout(() => draftBox.current?.focus(), 30); }, [!!draft]);
+  /* A note picked on the drawing is brought into view in the list. */
+  useEffect(() => {
+    if (!selected || tab !== 'notes') return;
+    notesBox.current?.querySelector(`[data-note="${selected}"]`)?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [selected, tab]);
   const onDiff = useCallback((page: number, x: Diff | null) => setDiffs((m) => {
     if (!x) { if (!(page in m)) return m; const n = { ...m }; delete n[page]; return n; }
     const o = m[page];
@@ -240,6 +247,9 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   const diffList = Object.values(diffs) as Diff[];
   const changeCount = diffList.reduce((n, x) => n + x.count, 0);
   const diffBusy = diffList.some((x) => x.busy);
+  /* The line about what changed stays while it is being worked out and a few seconds after, then leaves the drawing clear. */
+  const diffKey = diffList.map((x) => `${x.busy}:${x.kind}`).join('|');
+  useEffect(() => { setDiffNote(true); const t = setTimeout(() => setDiffNote(false), 6000); return () => clearTimeout(t); }, [diffKey, viewing?.id]);
 
   /* ------------------------------------------------------------ moving around: drag, Ctrl + scroll, pinch, full screen */
   const [full, setFull] = useState(false);
@@ -475,7 +485,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
           </div>
         )}
         {/* What Changes found, as a small line over the drawing: it takes no room from it. */}
-        {spotting && (diffBusy || diffList.some((x) => x.kind && x.kind !== 'boxes')) && (
+        {spotting && (diffBusy || (diffNote && diffList.some((x) => x.kind && x.kind !== 'boxes'))) && (
           <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center px-3">
             <span className="flex items-center gap-2 rounded-full bg-amber-100 px-3.5 py-1.5 text-xs font-semibold text-amber-900 shadow-sm">
               {diffBusy ? <><Loader2 size={13} className="animate-spin" aria-hidden />Finding what changed since v{prev?.n}…</>
@@ -535,11 +545,11 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
               <button type="button" onClick={() => zoomTo(1)} title="Fit the width (0)" aria-label={`Zoom ${Math.round(zoom * 100)} percent. Press to fit the width.`} className={cx(barBtn(), 'min-w-[56px] tabular-nums')}>{Math.round(zoom * 100)}%</button>
               <button type="button" onClick={() => zoomTo((z) => z + 0.2)} aria-label="Zoom in" title="Zoom in (+, or Ctrl + scroll)" className={barBtn()}><Plus size={18} aria-hidden /></button>
               {sep}
-              <button type="button" onClick={() => (full ? exitFull() : enterFull())} aria-pressed={full} title={full ? 'Leave full screen (Esc)' : 'Full screen, with the notes beside the drawing (F)'} className={barBtn(full)}>
-                {full ? <Minimize2 size={18} aria-hidden /> : <Maximize2 size={18} aria-hidden />}<span className="hidden md:inline">{full ? 'Exit full screen' : 'Full screen'}</span>
+              <button type="button" onClick={() => (full ? exitFull() : enterFull())} aria-pressed={full} aria-label={full ? 'Exit full screen' : 'Full screen'} title={full ? 'Leave full screen (Esc)' : 'Full screen, with the notes beside the drawing (F)'} className={barBtn(full)}>
+                {full ? <Minimize2 size={18} aria-hidden /> : <Maximize2 size={18} aria-hidden />}<span className="hidden 2xl:inline">{full ? 'Exit full screen' : 'Full screen'}</span>
               </button>
-              <button type="button" onClick={() => setPanel(!panel)} aria-pressed={!panel} title={panel ? 'Hide the notes so the drawing has the whole width (N)' : 'Show the notes again (N)'} className={barBtn(!panel)}>
-                {panel ? <PanelRightClose size={18} aria-hidden /> : <PanelRightOpen size={18} aria-hidden />}<span className="hidden md:inline">{panel ? 'Hide notes' : `Show notes${onSheet.length ? ` · ${onSheet.length}` : ''}`}</span>
+              <button type="button" onClick={() => setPanel(!panel)} aria-pressed={!panel} aria-label={panel ? 'Hide notes' : 'Show notes'} title={panel ? 'Hide the notes so the drawing has the whole width (N)' : 'Show the notes again (N)'} className={barBtn(!panel)}>
+                {panel ? <PanelRightClose size={18} aria-hidden /> : <PanelRightOpen size={18} aria-hidden />}<span className="hidden 2xl:inline">{panel ? 'Hide notes' : 'Show notes'}</span>{!panel && onSheet.length > 0 && <span className="rounded-full bg-white/20 px-1.5 text-xs">{onSheet.length}</span>}
               </button>
             </div>
           </div>
@@ -547,10 +557,10 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
       </div>
 
       {/* ---- the panel */}
-      <aside hidden={!panel} className={cx('min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white lg:w-[360px] lg:flex-none', panel ? 'flex' : 'hidden', full && 'max-h-[45vh] lg:max-h-none')}>
-        <div className="border-b border-slate-100 px-4 pt-4">
+      <aside hidden={!panel} className={cx('min-w-0 flex-col overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 bg-white lg:w-[360px] lg:flex-none', panel ? 'flex' : 'hidden', full && 'max-h-[45vh] lg:max-h-none')}>
+        <div className="shrink-0 border-b border-slate-100 px-4 pt-3">
           <div className="flex items-center gap-3">
-            <Initials name={r?.designer?.name || viewing?.by?.name || d.name} size={36} color="#059669" />
+            <Initials name={r?.designer?.name || viewing?.by?.name || d.name} size={32} color="#059669" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-bold text-slate-800">{self ? (reviewer ? 'Your own drawing' : 'Your drawing') : r?.designer?.name || 'No PDF yet'}</div>
               <div className="truncate text-xs text-slate-500">
@@ -558,24 +568,26 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
               </div>
             </div>
           </div>
-          <div className={cx('mt-3 rounded-xl px-3.5 py-3 text-sm', yours ? 'bg-amber-50 text-amber-900' : 'bg-slate-50 text-slate-700')}>
-            <b className="block">{yours ? 'Your turn' : 'Where it is now'}</b>{whereLine(d, viewer)}
-            <span className="mt-1 block text-xs opacity-80">{steps.current >= steps.labels.length ? `All ${steps.labels.length} steps done` : `Step ${steps.current + 1} of ${steps.labels.length}: ${steps.labels[steps.current]}`}</span>
-            {self && reviewer && state === 'IN_REVIEW' && <span className="mt-1 block">As Design Head you can approve your own drawing. The history will say it was self-approved.</span>}
+          <div className={cx('mt-2.5 rounded-xl px-3 py-2 text-sm', yours ? 'bg-amber-50 text-amber-900' : 'bg-slate-50 text-slate-700')}>
+            <span className="flex flex-wrap items-baseline gap-x-2">
+              <b>{yours ? 'Your turn' : 'Where it is now'}</b>
+              <span className="text-xs opacity-80">{steps.current >= steps.labels.length ? `All ${steps.labels.length} steps done` : `Step ${steps.current + 1} of ${steps.labels.length}: ${steps.labels[steps.current]}`}</span>
+            </span>
+            <span className="block">{whereLine(d, viewer)}</span>
           </div>
           {state === 'CHANGES_REQUESTED' && isCurrent && lastReturn?.reason && (
-            <p className="mt-2 rounded-xl bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700"><b>From {lastReturn.decidedBy?.email === me.email ? 'you' : firstName(lastReturn.decidedBy?.name)}:</b> “{lastReturn.reason}”</p>
+            <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700"><b>From {lastReturn.decidedBy?.email === me.email ? 'you' : firstName(lastReturn.decidedBy?.name)}:</b> “{lastReturn.reason}”</p>
           )}
           {state === 'CHANGES_REQUESTED' && isCurrent && onSheet.length > 0 && (
-            <div className="mt-3">
-              <div className="mb-1.5 flex justify-between text-xs font-bold text-slate-700"><span>{fixedN} of {onSheet.length} fixed</span><span className="text-slate-500">{Math.round((fixedN / onSheet.length) * 100)}%</span></div>
+            <div className="mt-2.5">
+              <div className="mb-1 flex justify-between text-xs font-bold text-slate-700"><span>{fixedN} of {onSheet.length} fixed</span><span className="text-slate-500">{Math.round((fixedN / onSheet.length) * 100)}%</span></div>
               <div className="h-2 overflow-hidden rounded-full bg-slate-100"><i className="block h-full rounded-full bg-emerald-600 transition-[width] duration-500" style={{ width: `${(fixedN / onSheet.length) * 100}%` }} /></div>
             </div>
           )}
-          <div className="mt-2 flex gap-1" role="tablist" aria-label="Panel">
+          <div className="mt-1.5 flex gap-1" role="tablist" aria-label="Panel">
             {(['notes', 'history'] as const).map((t) => (
               <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
-                className={cx('inline-flex min-h-[44px] items-center gap-1.5 px-3 text-sm font-bold', tab === t ? 'text-slate-800 shadow-[inset_0_-2px_0_#059669]' : 'text-slate-500 hover:text-slate-800')}>
+                className={cx('inline-flex min-h-[40px] items-center gap-1.5 px-3 text-sm font-bold', tab === t ? 'text-slate-800 shadow-[inset_0_-2px_0_#059669]' : 'text-slate-500 hover:text-slate-800')}>
                 {t === 'notes' ? <><MessageSquare size={16} aria-hidden />Notes{onSheet.length ? ` · ${onSheet.length}` : ''}</> : <><History size={16} aria-hidden />History</>}
               </button>
             ))}
@@ -583,7 +595,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
         </div>
 
         {tab === 'history' ? (
-          <div className="flex-1 overflow-auto px-5 py-4">
+          <div className="min-h-[200px] flex-1 overflow-auto px-5 py-4">
             <div className="flex flex-col gap-3 border-l-2 border-slate-200 pl-4">
               {[...events].reverse().map((e, i) => (
                 <div key={i} className="hud-row-in relative text-sm text-slate-800" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
@@ -597,7 +609,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
             </div>
           </div>
         ) : (
-          <div className="flex flex-1 flex-col gap-2 overflow-auto p-3.5">
+          <div ref={notesBox} className="flex min-h-[200px] flex-1 flex-col gap-2 overflow-auto p-3">
             {canMark && !draft && (
               <Btn kind="quiet" icon={Plus} className="self-start" onClick={() => { const anchor = { x: 0.5, y: 0.45 }; setDraft({ page: 0, shape: turnShape({ t: 'pin', ...anchor }, turn, 'page'), anchor, text: '', blocking: false }); setSelected(null); }}>Add a note</Btn>
             )}
@@ -605,7 +617,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
               const done = m.status === 'FIXED';
               const sel = selected === m.id;
               return (
-                <div key={m.id} className={cx('hud-row-in flex gap-2.5 rounded-xl border bg-white p-3', sel ? 'border-rose-400 ring-2 ring-rose-100' : 'border-slate-200')} style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
+                <div key={m.id} data-note={m.id} className={cx('hud-row-in flex shrink-0 gap-2.5 rounded-xl border bg-white p-3', sel ? 'border-rose-400 ring-2 ring-rose-100' : 'border-slate-200')} style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
                   <button type="button" onClick={() => showMark(m)} aria-label={`Show note ${m.n} on the drawing`}
                     className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: done ? FIXED : m.source === 'client' ? CLIENT : MARK }}>{m.n}</button>
                   <div className="min-w-0 flex-1">
@@ -674,15 +686,16 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
         )}
 
         {/* ---- the decision */}
-        <div className="flex flex-col gap-2.5 border-t border-slate-100 bg-slate-50 px-4 pb-4 pt-3.5">
+        <div className="flex shrink-0 flex-col gap-2 border-t border-slate-100 bg-slate-50 px-4 pb-3 pt-3">
           {canDecide && !requestOpen && (
             <>
-              <p className={cx('text-sm', blockingOpen ? 'font-semibold text-rose-700' : 'text-slate-500')}>
-                {blockingOpen ? `${blockingOpen} must-fix note${blockingOpen === 1 ? ' is' : 's are'} open. Send it back, or untick Must fix to approve.` : `Approving signs off v${r?.versionNo} exactly as it is.${audience === 'studio' ? ' This drawing stays inside the studio.' : ''}`}
+              <p className={cx('text-xs', blockingOpen ? 'font-semibold text-rose-700' : 'text-slate-500')}>
+                {blockingOpen ? `${blockingOpen} must-fix note${blockingOpen === 1 ? ' is' : 's are'} open. Send it back, or untick Must fix to approve.`
+                  : `Approving signs off v${r?.versionNo} exactly as it is.${self ? ' It is your own drawing, so the history will say self-approved.' : ''}${audience === 'studio' ? ' It stays inside the studio.' : ''}`}
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Btn kind="plain" icon={Undo2} className="flex-[1_1_150px]" disabled={!!busy} onClick={() => { setRequestOpen(true); setDraft(null); }}>Request changes</Btn>
-                <Btn kind="primary" icon={busy === 'approve' ? Loader2 : Check} className="flex-[1_1_150px]" disabled={!!busy || blockingOpen > 0 || !!draft} onClick={() => decide('approve')}>{self ? 'Approve your own drawing' : `Approve v${r?.versionNo}`}</Btn>
+              <div className="flex gap-2">
+                <Btn kind="plain" className="flex-1 px-3" disabled={!!busy} onClick={() => { setRequestOpen(true); setDraft(null); }}>Request changes</Btn>
+                <Btn kind="primary" icon={busy === 'approve' ? Loader2 : Check} className="flex-1 px-3" disabled={!!busy || blockingOpen > 0 || !!draft} title={self ? 'Approve your own drawing' : undefined} onClick={() => decide('approve')}>Approve v{r?.versionNo}</Btn>
               </div>
             </>
           )}
@@ -737,10 +750,13 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
           )}
 
           {canPullBack && (
-            <>
-              <p className="text-sm text-slate-500">With the Design Head since {ago(r?.submittedAt)}. Pull it back to change the PDF.</p>
-              <Btn kind="plain" icon={busy === 'pull' ? Loader2 : RotateCcw} disabled={!!busy} onClick={() => act('pull', () => withdrawSheet(target, r!.rev), { title: 'Pulled back', sub: 'It is with you again. Upload the new PDF and send it.' })}>Pull it back</Btn>
-            </>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <p className="min-w-0 flex-1 text-xs text-slate-500">With the Design Head since {ago(r?.submittedAt)}. Pull it back to change the PDF.</p>
+              <button type="button" disabled={!!busy} onClick={() => act('pull', () => withdrawSheet(target, r!.rev), { title: 'Pulled back', sub: 'It is with you again. Upload the new PDF and send it.' })}
+                className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                {busy === 'pull' ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <RotateCcw size={14} aria-hidden />}Pull it back
+              </button>
+            </div>
           )}
 
           {canUploadNew && viewing && (
