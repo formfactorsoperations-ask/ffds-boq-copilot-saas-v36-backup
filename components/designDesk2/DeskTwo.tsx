@@ -5,6 +5,7 @@ import { usePageHeader } from '../../contexts/PageHeaderContext';
 import { canPresentAssigned, canReview, canRunMeeting, canSetAudience, canUpload, stateOf } from '../../lib/drawingReview';
 import { sendsApprovals, type DesignMeeting } from '../../lib/designMeeting';
 import { attention, projectLook, reviewQueue, statsOf, type Viewer } from '../../lib/designDesk';
+import { mainAction } from '../../lib/designDesk2';
 import { useProjectTeam } from '../../services/projectTeam';
 import { watchStudioReviews, watchProjectDrawings, takeOpenRequest, returnFromDesk, submitSheet, type ReviewDrawing, type DeskOrigin } from '../../services/drawingReviewService';
 import { watchMeetings } from '../../services/designMeetingService';
@@ -16,6 +17,7 @@ import { ToastHost, ReviewStyles, useToast } from '../drawingReview/ui';
 import { DeskStyles } from '../drawingReview/DeskParts';
 import { MotionStyles } from '../drawingReview/motion';
 import { AllDrawings, Home, ProjectPage, RoomPage, type DeskCtx, type ProjectCard } from './pages';
+import UploadWizard from './UploadWizard';
 import { cx } from './parts';
 import '../projectHeader/projectHeader.css';
 
@@ -28,6 +30,7 @@ import '../projectHeader/projectHeader.css';
   the same data as components/drawingReview/DesignDeskTab and calls the same
   functions. Until their own screens are built, opening a drawing shows
   today's review screen and Meetings shows today's meetings, inside this frame.
+  A drawing with no PDF yet goes straight to the three-step upload.
 */
 
 interface Props {
@@ -207,11 +210,15 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
     }
   }, [orgId, toast]);
   const [add, setAdd] = useState<{ projectId: string | null } | null>(null);
+  /* The drawing the three-step upload is open on, by key, so the wizard always has its latest revision. */
+  const [up, setUp] = useState<string | null>(null);
+  const upDrawing = up ? rows.find((d) => `${d.projectId}/${d.id}` === up) || null : null;
 
   const ctx: DeskCtx = {
     rows, viewer, uploader, meName: me.name, projectOf, sending,
-    act: (d) => (stateOf(d.review) === 'DRAFT' && d.review?.designer?.email === me.email ? send(d) : openSheet(d)),
+    act: (d) => { const k = mainAction(d, viewer, uploader).kind; if (k === 'send') send(d); else if (k === 'upload') setUp(`${d.projectId}/${d.id}`); else openSheet(d); },
     open: openSheet,
+    upload: (d) => setUp(`${d.projectId}/${d.id}`),
     goProject: (id) => go({ at: 'project', projectId: id }),
     goRoom: (projectId, room) => go({ at: 'room', projectId, room }),
     goMeetings: meetsTab ? () => go({ at: 'meetings' }) : undefined,
@@ -300,6 +307,11 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
           </div>
         )}
       </main>
+
+      {upDrawing && (
+        <UploadWizard orgId={orgId} me={me} drawing={upDrawing} projectName={projectOf(upDrawing.projectId).name}
+          siblings={rows.filter((d) => d.projectId === upDrawing.projectId)} onClose={() => setUp(null)} />
+      )}
 
       {add && (
         <AddPdfs orgId={orgId} me={me} files={[]} projectId={add.projectId}

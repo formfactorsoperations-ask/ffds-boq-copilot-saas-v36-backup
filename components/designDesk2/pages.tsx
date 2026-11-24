@@ -30,6 +30,8 @@ export interface DeskCtx {
   /** Do the drawing's one main thing: send it, or open it. */
   act: (d: ReviewDrawing) => void;
   open: (d: ReviewDrawing) => void;
+  /** Open the three-step upload on this drawing. */
+  upload: (d: ReviewDrawing) => void;
   goProject: (id: string) => void;
   goRoom: (projectId: string, room: string) => void;
   goMeetings?: () => void;
@@ -250,7 +252,10 @@ export const RoomPage: React.FC<{ c: DeskCtx; projectId: string; room: string; o
                       </span>
                     </span>
                   </button>
-                  <MainButton c={c} d={d} />
+                  <span className="flex flex-wrap items-center gap-2">
+                    {c.uploader && yours && stateOf(d.review) === 'CHANGES_REQUESTED' && <Btn kind="plain" icon={FileUp} onClick={() => c.upload(d)}>Upload the fixed drawing</Btn>}
+                    <MainButton c={c} d={d} />
+                  </span>
                 </div>
                 <div className="mt-4 border-t border-slate-100 pt-3"><StepTrack steps={stepsOf(d)} yours={yours} /></div>
               </Card>

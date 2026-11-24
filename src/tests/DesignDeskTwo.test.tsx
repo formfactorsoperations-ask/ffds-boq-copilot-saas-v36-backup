@@ -5,13 +5,15 @@ import { render, screen, fireEvent, cleanup, act, within } from '@testing-librar
 /*
   Design Desk 2.0 on screen (components/designDesk2), with the studio's data
   stubbed: the switch between the two desks, Home's "Start here", a project's
-  rooms, a room's drawings with their steps, sending, and All drawings.
+  rooms, a room's drawings with their steps, sending, the three-step upload
+  and All drawings.
 */
 
-const h = vi.hoisted(() => ({ org: {} as any, studio: [] as any[], trackers: {} as Record<string, any[]>, submit: null as any, update: null as any }));
+const h = vi.hoisted(() => ({ org: {} as any, studio: [] as any[], trackers: {} as Record<string, any[]>, submit: null as any, update: null as any, upload: null as any }));
 
 vi.mock('../../contexts/OrgContext', () => ({ useOrg: () => h.org }));
-vi.mock('../../lib/pdfRender', () => ({ thumbnailOf: vi.fn(async () => null), loadPdf: vi.fn(() => new Promise(() => undefined)), renderPage: vi.fn() }));
+vi.mock('../../lib/pdfRender', () => ({ thumbnailOf: vi.fn(async () => null), pageCountOf: vi.fn(async () => 2), loadPdf: vi.fn(() => new Promise(() => undefined)), renderPage: vi.fn() }));
+vi.mock('../../lib/pdfLandscape', () => ({ portraitPages: vi.fn(async () => 0), landscapeFile: vi.fn(async (file: File) => ({ file, turned: 0 })) }));
 vi.mock('../../services/drawingReviewService', () => ({
   watchStudioReviews: (_o: string, cb: (r: any[]) => void) => { cb(h.studio); return () => undefined; },
   watchProjectDrawings: (_o: string, p: string, cb: (r: any[]) => void) => { cb(h.trackers[p] || []); return () => undefined; },
@@ -25,7 +27,7 @@ vi.mock('../../services/drawingReviewService', () => ({
   submitSheet: (...a: any[]) => h.submit(...a),
   fileUrl: () => Promise.reject(new Error('no files in tests')),
   fileBlob: () => Promise.reject(new Error('no files in tests')),
-  uploadSheet: vi.fn(), withdrawSheet: vi.fn(), approveSheet: vi.fn(), returnSheet: vi.fn(), createMark: vi.fn(), deleteMark: vi.fn(),
+  uploadSheet: (...a: any[]) => h.upload(...a), withdrawSheet: vi.fn(), approveSheet: vi.fn(), returnSheet: vi.fn(), createMark: vi.fn(), deleteMark: vi.fn(),
   updateMark: vi.fn(), fixMark: vi.fn(), setAudience: vi.fn(), removeVersion: vi.fn(), clientReturn: vi.fn(), clientKeep: vi.fn(), call: vi.fn(), ReviewError: class extends Error {},
 }));
 
@@ -64,6 +66,7 @@ beforeEach(() => {
   h.studio = [...p1, ...p2].filter((d) => d.review);
   h.submit = vi.fn(async () => ({}));
   h.update = vi.fn();
+  h.upload = vi.fn(async () => ({ versionNo: 1 }));
   window.scrollTo = vi.fn() as any;
   (globalThis as any).ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
 });
@@ -154,5 +157,36 @@ describe('Design Desk 2.0', () => {
     expect(screen.getByRole('heading', { name: 'Master Bedroom Wardrobe' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Design Desk/ }));
     expect(screen.getByText('Start here')).toBeTruthy();
+  });
+
+  it('uploads a drawing in three steps: choose, check, send', async () => {
+    org('Designer', 'Riya');
+    render(<DeskTwo projects={projects} />);
+    fireEvent.click(screen.getByRole('button', { name: /Mehta residence/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Kitchen/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Upload the drawing' }));
+    const dialog = screen.getByRole('dialog', { name: 'Upload Kitchen Plan' });
+    expect(within(dialog).getByText(/step 1 of 3/)).toBeTruthy();
+    const input = dialog.querySelector('input[type="file"]') as HTMLInputElement;
+    /* A CAD file is turned away in words, and nothing moves on. */
+    fireEvent.change(input, { target: { files: [new File(['x'], 'kitchen plan.dwg')] } });
+    expect(within(dialog).getByRole('alert').textContent).toMatch(/CAD file/);
+    /* A PDF named after another drawing of the project is flagged, not refused. */
+    await act(async () => { fireEvent.change(input, { target: { files: [new File(['x'], 'Foyer Ceiling Plan.pdf', { type: 'application/pdf' })] } }); });
+    expect(within(dialog).getByText(/step 2 of 3/)).toBeTruthy();
+    expect(within(dialog).getByText('Foyer Ceiling Plan')).toBeTruthy();
+    expect(within(dialog).getByText(/a different drawing/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes, this is it' }));
+    expect(within(dialog).getByText(/step 3 of 3/)).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText(/A note for the Design Head/), { target: { value: 'First issue' } });
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: 'Send to the Design Head' })); });
+    expect(h.upload).toHaveBeenCalledTimes(1);
+    const [target, uid, file, opts] = h.upload.mock.calls[0];
+    expect(target).toEqual({ orgId: 's', projectId: 'p1', drawingId: 'd' });
+    expect(uid).toBe('riya');
+    expect(file.name).toBe('Foyer Ceiling Plan.pdf');
+    expect(opts.submit).toBe(true);
+    expect(opts.note).toBe('First issue');
+    expect(screen.queryByRole('dialog', { name: 'Upload Kitchen Plan' })).toBeNull();
   });
 });
