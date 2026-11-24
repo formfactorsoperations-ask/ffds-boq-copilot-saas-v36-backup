@@ -537,6 +537,26 @@ the orbit dial.
   of the card in front is lit. Fan with arrows, a swipe, the arrow keys or a
   tap on a side card. Motion stops under `prefers-reduced-motion`.
 
+### The scene behind Home (asked for 24 Nov 2026)
+
+The owner asked for a 3D, immersive background on Home. It is the studio in
+blueprint (`components/home/HomeScene3D.tsx`), drawn behind everything on Home:
+
+- A floor grid running to the horizon, a floor plan whose walls stand up out of it
+  (doors swinging open in brass, a stair, furniture as plain boxes), the Home
+  materials turning in the air as swatches, and dust in the light.
+- The camera sways slowly, leans towards the pointer and walks in through the front
+  door as you scroll down Home.
+- Home's materials only (indigo, periwinkle, navy, brass, rose, sage), faint, so the
+  page stays milky white. Lines fade with distance.
+- One canvas, no 3D library. It is fixed to the window under Home's content, takes no
+  pointer events and is hidden from screen readers. It draws at 30 frames a second,
+  stops when the tab is hidden or Home is out of view, and draws one still frame
+  under `prefers-reduced-motion`.
+- The hero card (`StoryDeck`) is see-through (`bg-white/45`, its wash at half
+  strength) so the room shows behind the greeting. The board, Ask and the footer stay
+  solid white, so the work reads on white.
+
 ### Home widgets (approved 12 Oct 2026)
 
 The Home widgets (`components/home/HomeWidgets.tsx`, rules in

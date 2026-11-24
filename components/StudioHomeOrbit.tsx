@@ -10,6 +10,7 @@ import StoryDeck from "./home/StoryDeck";
 import { useHomeFeeds } from "./home/useHomeFeeds";
 import { useAttentionRows } from "./home/useAttention";
 import AskStudio from "./home/AskStudio";
+import HomeScene3D from "./home/HomeScene3D";
 
 /**
  * STUDIO HOME (the owner's chosen design, Option 6; DESIGN.md → "Home stories"
@@ -62,8 +63,11 @@ export default function StudioHomeOrbit({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="w-full px-3 lg:px-6 pb-16 space-y-6 font-['Plus_Jakarta_Sans']"
+      className="relative isolate w-full px-3 lg:px-6 pb-16 space-y-6 font-['Plus_Jakarta_Sans']"
     >
+      {/* The studio in blueprint: a 3D room behind everything on Home (DESIGN.md → "The scene behind Home"). */}
+      <HomeScene3D />
+
       {/* The top of Home: greeting, recent projects, story rings, the fanned deck and the swatches. */}
       <StoryDeck feeds={feeds} projects={projects} role={role} roles={roles} userName={userName}
         counts={{ active: data.activeCount, pipeline: data.pipelineCount, booked: data.bookedValue, open: data.openValue, winRate: data.winRate }}
