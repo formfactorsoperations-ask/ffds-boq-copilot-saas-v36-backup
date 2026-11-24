@@ -153,8 +153,12 @@ async function close(actor: Actor, orgId: string, projectId: string, input: Inpu
     mustRunThis(actor, m);
     if (m.state !== "OPEN") throw new HttpsError("failed-precondition", "This meeting is already closed.");
     if (input.expectedRev !== undefined && Number(input.expectedRev) !== m.rev) throw new HttpsError("aborted", "The meeting changed a moment ago. Refresh and try again.");
+    /*
+      A meeting can end with no room decided: the client saw the drawings and
+      wants to think. It is saved as held, nothing is recorded on any drawing
+      or for the client, and every room can be shown again.
+    */
     const decided = m.rooms.filter((r) => r.outcome);
-    if (!decided.length) throw new HttpsError("failed-precondition", "Mark at least one room agreed or with changes, or cancel the meeting.");
 
     /* Every read before any write. */
     const ids = [...new Set(decided.flatMap((r) => r.sheets.map((s) => s.drawingId)))];

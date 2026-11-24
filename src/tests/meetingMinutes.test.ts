@@ -79,7 +79,7 @@ describe('minutes that write themselves', () => {
     const text = minutesOf({ meeting: m, ending: true }).map((l) => l.text);
     expect(text).toContain('Living & dining: the client is happy with Living false ceiling v2 as shown.');
     expect(text).toContain('Kitchen: 2 changes to make. They go to the Design Head, pinned on the drawing.');
-    expect(text).toContain('Whole home: not finished. It waits for the next meeting.');
+    expect(text).toContain('Whole home: no decision at this meeting. It can be shown again at the next one.');
   });
 
   it('mark rounds, billing and costs as studio only, and leave them out of what is copied', () => {
@@ -96,6 +96,23 @@ describe('minutes that write themselves', () => {
     expect(copied).toContain('- Living & dining, change 1 on Living false ceiling: Cove light on a dimmer');
     expect(copied).not.toMatch(/₹|round 3|bill/);
     expect(minutesText('x', lines, true)).toMatch(/round 3 goes on the list to bill/);
+  });
+
+  it('record a meeting that ended with no room decided, and keep it out of what the client sees', () => {
+    const m = meeting({ state: 'CLOSED', closedAt: 9 });
+    const text = minutesOf({ meeting: m }).map((l) => l.text);
+    expect(text).toEqual([
+      'Meeting started with Mrs Mehta.',
+      'Living & dining: no decision at this meeting. It can be shown again at the next one.',
+      'Kitchen: no decision at this meeting. It can be shown again at the next one.',
+      'Whole home: no decision at this meeting. It can be shown again at the next one.',
+      'Meeting saved with no room decided.',
+    ]);
+    /* Nothing was recorded for the client, so their portal has no entry for it; a meeting with a decision still shows. */
+    const decided = meeting({ id: 'm2', state: 'CLOSED', closedAt: 12 });
+    decided.rooms[0] = { ...decided.rooms[0], outcome: 'agreed' };
+    expect(portalDesignRecord([m])).toEqual([]);
+    expect(portalDesignRecord([m, decided]).map((x) => x.id)).toEqual(['m2']);
   });
 
   it('read the same from a saved meeting, with the waiver and the signature', () => {

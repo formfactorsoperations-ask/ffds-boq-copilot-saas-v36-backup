@@ -219,6 +219,12 @@ describe('a design meeting', { timeout: 60000 }, () => {
     const m = await users.head.meet({ action: 'start', rooms: ['Living Room'] });
     await users.head.meet({ action: 'cancel', meetingId: m.meeting.id });
     expect((await read(`${P}/designMeetings/${m.meeting.id}`)).state).toBe('CANCELLED');
+    /* A meeting can also be finished with no room decided: it is kept as held, nothing is recorded, and the room can be shown again. */
+    const quiet = await users.head.meet({ action: 'start', rooms: ['Living Room'] });
+    const held = await users.head.meet({ action: 'close', meetingId: quiet.meeting.id, charges: {} });
+    expect(held.meeting.state).toBe('CLOSED');
+    expect(held.meeting.rooms[0].outcome).toBeNull();
+    expect(held.meeting.approval).toBeNull();
     const again = await users.head.meet({ action: 'start', rooms: ['Living Room'] });
     expect(again.meeting.state).toBe('OPEN');
   });

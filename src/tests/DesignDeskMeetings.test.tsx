@@ -197,6 +197,25 @@ describe('the meeting screen', () => {
     expect(screen.getByRole('button', { name: 'Client signs now' })).toBeTruthy();
   });
 
+  it('can be finished and saved when the client has not decided on any room', async () => {
+    const m = meeting();
+    h.close = vi.fn(async () => ({ ...m, state: 'CLOSED', closedAt: NOW, rev: 2, approval: null }));
+    render(screenOf(m));
+    /* Finish is not held back until a room is marked happy or given a change. */
+    const finish = screen.getByRole('button', { name: 'Finish the meeting' }) as HTMLButtonElement;
+    expect(finish.disabled).toBe(false);
+    fireEvent.click(finish);
+    expect(screen.getByText(/The client did not decide on any room\. You can still save the meeting/)).toBeTruthy();
+    expect(screen.getAllByText('No decision')).toHaveLength(2);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save the meeting' })); });
+    expect(h.close).toHaveBeenCalledWith({ orgId: 's', projectId: 'p1' }, 'm9', 1, {});
+    expect(screen.getByRole('heading', { name: 'Meeting saved' })).toBeTruthy();
+    expect(screen.getByText('Meeting saved with no room decided.')).toBeTruthy();
+    /* Nothing was agreed, so there is no approval to ask for and nothing to sign. */
+    expect(screen.queryByTestId('approval')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Client signs now' })).toBeNull();
+  });
+
   it('shows a Designer the round warning but no cost, no fees and no billing choice', async () => {
     const m = meeting();
     h.decide = answer(m);

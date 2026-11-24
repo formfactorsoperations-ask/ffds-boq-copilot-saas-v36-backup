@@ -752,10 +752,14 @@ export interface PortalDesignMeeting {
 
 export const MAX_PORTAL_MEETINGS = 40;
 
-/** Closed meetings, newest first, reduced to what the client may see. */
+/**
+ * Closed meetings, newest first, reduced to what the client may see. A meeting
+ * that ended with no room decided recorded nothing for the client, so it is
+ * not in their record.
+ */
 export function portalDesignRecord(meetings: DesignMeeting[]): PortalDesignMeeting[] {
   return meetings
-    .filter((m) => m.state === 'CLOSED')
+    .filter((m) => m.state === 'CLOSED' && m.rooms.some((r) => r.outcome))
     .sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0))
     .slice(0, MAX_PORTAL_MEETINGS)
     .map((m) => ({

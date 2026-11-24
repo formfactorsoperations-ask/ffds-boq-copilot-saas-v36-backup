@@ -372,7 +372,9 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
               <Btn kind="quiet" icon={ArrowLeft} className="self-start" onClick={() => setStep('present')}>Back to the meeting</Btn>
               <div>
                 <h1 className="text-2xl font-bold text-slate-800">Finish the meeting</h1>
-                <p className="mt-1 text-base text-slate-600">{plural(happy, 'room')} the client is happy with, {plural(withChanges.length, 'room')} with changes{open.length ? `, ${plural(open.length, 'room')} not finished` : ''}. Check it, then save.</p>
+                <p className="mt-1 text-base text-slate-600">{decided.length
+                  ? `${plural(happy, 'room')} the client is happy with, ${plural(withChanges.length, 'room')} with changes${open.length ? `, ${plural(open.length, 'room')} with no decision` : ''}. Check it, then save.`
+                  : 'The client did not decide on any room. You can still save the meeting: it is kept as held, and every room can be shown again.'}</p>
               </div>
               <div className="flex flex-col gap-2">{m.rooms.map((r) => <RoomResult key={r.room} r={r} included={m.includedRounds} studio={lead} round={roundOf(r)} />)}</div>
               {chargeable.map((r) => (
@@ -404,7 +406,7 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
               </div>
               <div className="flex flex-wrap items-center justify-end gap-3">
                 {!ready && <span className="text-sm text-rose-700">Choose to bill or waive each round first.</span>}
-                <Btn kind="primary" big icon={busy ? Loader2 : Check} disabled={busy || !ready || !decided.length} onClick={save} className={busy ? '[&>svg]:animate-spin' : undefined}>Save the meeting</Btn>
+                <Btn kind="primary" big icon={busy ? Loader2 : Check} disabled={busy || !ready} onClick={save} className={busy ? '[&>svg]:animate-spin' : undefined}>Save the meeting</Btn>
               </div>
             </>
           ) : (
@@ -412,7 +414,7 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
               <div className="hud-panel-in rounded-3xl bg-gradient-to-r from-[#0C1F1A] to-emerald-900 px-6 py-6 text-white">
                 <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10"><Check size={26} strokeWidth={2.6} aria-hidden /></span>
                 <h1 className="mt-3 text-2xl font-bold">Meeting saved</h1>
-                <p className="mt-1 text-base text-emerald-100">{projectName} · {shortDate(m.closedAt || Date.now())}{m.attendees ? ` · with ${m.attendees}` : ''}. The desk wrote this during the meeting. Check it, then ask the client to approve.</p>
+                <p className="mt-1 text-base text-emerald-100">{projectName} · {shortDate(m.closedAt || Date.now())}{m.attendees ? ` · with ${m.attendees}` : ''}. {decided.length ? `The desk wrote this during the meeting. Check it${needsApproval(m) ? ', then ask the client to approve' : ''}.` : 'The client did not decide on any room. Nothing went to the client or onto a drawing, and every room can be shown again.'}</p>
               </div>
               <section>
                 <h2 className="mb-2 text-lg font-bold text-slate-800">What was decided</h2>
@@ -433,14 +435,14 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
                   <div className="rounded-2xl bg-white"><ClientApproval orgId={orgId} projectId={projectId} m={m} mine lead={lead} me={me} startOpen /></div>
                 </section>
               )}
-              <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+              {decided.length > 0 && <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
                 {m.confirmation?.at ? <BadgeCheck size={22} className="shrink-0 text-emerald-600" aria-hidden /> : <PenLine size={22} className="shrink-0 text-slate-400" aria-hidden />}
                 <span className="min-w-0 flex-[1_1_240px] text-sm text-slate-600">
                   <b className="block text-base text-slate-800">{m.confirmation?.at ? `Signed by ${m.confirmation.name}` : 'Is the client with you?'}</b>
                   {m.confirmation?.at ? 'The record is confirmed.' : 'They can sign the record on this screen now. Their signature counts as their written approval of the rooms they were happy with.'}
                 </span>
                 {!m.confirmation?.at && <Btn kind="plain" icon={PenLine} onClick={() => setSigning(true)}>Client signs now</Btn>}
-              </section>
+              </section>}
               <div className="flex flex-wrap justify-end gap-3">
                 {totalChanges > 0 && <Btn kind="plain" onClick={() => onExit('home')}>See the client's changes on Home</Btn>}
                 <Btn kind="primary" big onClick={() => onExit()}>Back to Meetings</Btn>
@@ -697,7 +699,7 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
             {mine.length ? `Done: ${plural(mine.length, 'change')} for this room` : 'Client is happy with this room'}
           </button>
         </>)}
-        <button type="button" onClick={() => { exitFull(); setPinning(false); setDraft(null); setStep('wrap'); }} disabled={!done} title={done ? undefined : 'Decide at least one room first, or leave for now'}
+        <button type="button" onClick={() => { exitFull(); setPinning(false); setDraft(null); setStep('wrap'); }} title={done ? undefined : 'You can finish even if the client has not decided on a room'}
           className={cx(dark, 'dd2m-key rose min-h-[48px] text-base')}>
           <span className="ico"><PhoneOff size={18} aria-hidden /></span>Finish the meeting
         </button>

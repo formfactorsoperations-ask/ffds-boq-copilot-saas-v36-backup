@@ -43,7 +43,7 @@ export interface MinutesInput {
   /** The billing choices made on the finishing page, before the meeting is saved. */
   charges?: Record<string, 'to_bill' | 'waived'>;
   way?: MeetingWay | null;
-  /** The page is the end of the meeting: rooms nobody decided are written down as not discussed. */
+  /** The page is the end of the meeting: rooms nobody decided are written down as having no decision. */
   ending?: boolean;
 }
 
@@ -77,13 +77,14 @@ export function minutesOf({ meeting: m, live = {}, used = {}, charges = {}, way,
     if (r.outcome === 'changes') {
       out.push({ kind: 'sent', room: r.room, text: `${room}: ${plural(r.changes.length, 'change')} to make. ${r.changes.length === 1 ? 'It goes' : 'They go'} to the Design Head, pinned on the drawing.` });
     } else if (ending || closed) {
-      out.push({ kind: 'open', room: r.room, text: `${room}: not finished. It waits for the next meeting.` });
+      out.push({ kind: 'open', room: r.room, text: `${room}: no decision at this meeting. It can be shown again at the next one.` });
     }
   });
 
   if (closed) {
     const agreed = m.rooms.filter((r) => r.outcome === 'agreed').length;
-    out.push({ kind: 'saved', text: agreed ? `Meeting saved. ${plural(agreed, 'room')} ${agreed === 1 ? 'waits' : 'wait'} for the client's approval in writing.` : 'Meeting saved.' });
+    const none = !m.rooms.some((r) => r.outcome);
+    out.push({ kind: 'saved', text: agreed ? `Meeting saved. ${plural(agreed, 'room')} ${agreed === 1 ? 'waits' : 'wait'} for the client's approval in writing.` : none ? 'Meeting saved with no room decided.' : 'Meeting saved.' });
     if (m.confirmation?.at) out.push({ kind: 'signed', text: `${m.confirmation.name} ${m.confirmation.via === 'portal' ? 'confirmed the record in the portal' : "signed the record on the studio's screen"}.` });
   }
   return out;

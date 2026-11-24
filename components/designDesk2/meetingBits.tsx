@@ -115,7 +115,7 @@ export const RoomResult: React.FC<{ r: MeetingRoom; included: number; studio: bo
         <b className="text-base text-slate-800">{roomLabel(r.room)}</b>
         {r.outcome === 'agreed' ? <Tag tone="good" icon={Check}>Client is happy</Tag>
           : r.outcome === 'changes' ? <Tag tone="you" icon={MapPin}>{plural(r.changes.length, 'change')} to make</Tag>
-          : <Tag>Not finished</Tag>}
+          : <Tag>No decision</Tag>}
         {studio && n > 0 && <Tag tone={n > included ? 'bad' : 'plain'}>Round {n} of {included} included</Tag>}
         {studio && r.charge && <Tag tone={r.charge.status === 'to_bill' ? 'bad' : r.charge.status === 'billed' ? 'good' : 'plain'}>{r.charge.status === 'to_bill' ? 'To bill' : r.charge.status === 'billed' ? 'Billed' : 'Waived'}{r.charge.fee !== null ? ` · ${inr(r.charge.fee)}` : ''}</Tag>}
       </div>
@@ -128,7 +128,7 @@ export const RoomResult: React.FC<{ r: MeetingRoom; included: number; studio: bo
           </span>
         </div>
       ))}
-      {!r.outcome && <div className="mt-1 text-sm text-slate-500">It waits for the next meeting. Nothing was recorded for the client.</div>}
+      {!r.outcome && <div className="mt-1 text-sm text-slate-500">The client did not decide. It can be shown again at the next meeting; nothing was recorded for the client.</div>}
     </div>
   );
 };

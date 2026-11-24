@@ -318,7 +318,7 @@ export default function MeetingsPage({ orgId, projectId, projectName, drawings, 
                 <button type="button" onClick={() => setOpenPast(isOpen ? null : m.id)} aria-expanded={isOpen} className="flex min-h-[60px] w-full items-center gap-3 rounded-xl px-3 text-left hover:bg-slate-50">
                   <CalendarCheck size={20} className="shrink-0 text-slate-400" aria-hidden />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-base font-bold text-slate-800">{shortDate(m.closedAt || m.startedAt)} · {m.outside ? 'Shown outside the desk' : meetingSummary(m)}</span>
+                    <span className="block text-base font-bold text-slate-800">{shortDate(m.closedAt || m.startedAt)} · {m.outside ? 'Shown outside the desk' : m.rooms.some((r) => r.outcome) ? meetingSummary(m) : 'Held, no room decided'}</span>
                     <span className="block truncate text-sm text-slate-500">{[m.attendees, `shown by ${firstName(m.startedBy?.name)}`].filter(Boolean).join(' · ')}</span>
                   </span>
                   {stage === 'approved' ? <Tag tone="good" icon={BadgeCheck}>Approved by the client</Tag>
@@ -339,7 +339,7 @@ export default function MeetingsPage({ orgId, projectId, projectName, drawings, 
                       <MinutesList lines={canBill ? lines : lines.filter((l) => !l.studio)} />
                     </div>
                     <ClientApproval orgId={orgId} projectId={projectId} m={m} mine={mine(m) || !!approver} lead={canRun} me={me} />
-                    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
+                    {m.rooms.some((r) => r.outcome) && <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
                       {isConfirmed(m) ? <BadgeCheck size={18} className="shrink-0 text-emerald-600" aria-hidden /> : <Clock size={18} className="shrink-0 text-amber-600" aria-hidden />}
                       <span className="min-w-0 flex-[1_1_240px]">
                         <b className="text-slate-800">{confirmationLine(m.confirmation, shortDate)}</b>
@@ -351,7 +351,7 @@ export default function MeetingsPage({ orgId, projectId, projectName, drawings, 
                       </span>
                       {m.confirmation?.signature && <img src={m.confirmation.signature} alt={`Signature of ${m.confirmation.name}`} className="h-12 max-w-[180px] rounded-lg border border-slate-200 bg-white object-contain" />}
                       {!isConfirmed(m) && mine(m) && <Btn kind="plain" icon={PenLine} onClick={() => setSigning(m)}>Client signs here</Btn>}
-                    </div>
+                    </div>}
                   </div>
                 )}
               </div>
