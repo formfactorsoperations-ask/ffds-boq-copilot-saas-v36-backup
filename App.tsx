@@ -103,7 +103,7 @@ const SupervisorMobileApp = lazyWithRetry(() => import("./components/SupervisorM
 const OpsDeskPage = lazyWithRetry(() => import("./components/opsDesk/OpsDeskPage"));
 const PeoplePage = lazyWithRetry(() => import("./components/people/PeoplePage"));
 /* Whole tabs, loaded when first opened rather than with the app (each renders inside the tab's Suspense). */
-const DesignDeskTab = lazyWithRetry(() => import("./components/drawingReview/DesignDeskTab"));
+const DesignDeskTab = lazyWithRetry(() => import("./components/designDesk2/DesignDeskSwitch"));
 const StartProjectModal = lazyWithRetry(() => import("./components/projects/StartProjectModal"));
 const BoqSlideOver = lazyWithRetry(() => import("./components/pricing/BoqSlideOver"));
 const DataPrivacyPage = lazyWithRetry(() => import("./components/studio/DataPrivacyPage"));

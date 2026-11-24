@@ -20,6 +20,10 @@ export interface ReviewDrawing {
   targetDate?: string;
   companionOf?: string | null;
   boqTriggers?: string[];
+  /** When the drawing was finally approved, from the project's tracker. */
+  approvedAt?: number | null;
+  /** 'issued' once it is released for site from the project's Drawings tab. */
+  gfcStatus?: string | null;
   review?: ReviewSummary;
 }
 
@@ -34,6 +38,8 @@ const toDrawing = (orgId: string, projectId: string, id: string, data: any): Rev
   targetDate: data?.targetDate,
   companionOf: data?.companionOf || null,
   boqTriggers: data?.boqTriggers || [],
+  approvedAt: data?.approvedAt ?? null,
+  gfcStatus: data?.gfc?.status || null,
   review: data?.review,
 });
 

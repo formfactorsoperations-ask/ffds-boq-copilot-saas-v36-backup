@@ -4,6 +4,8 @@ export interface OrganizationContext {
     orgName: string;
     /** BOQ Playground preview: the new plan-based BOQ tools for this studio. Off unless switched on. */
     playground?: boolean;
+    /** Which Design Desk this studio uses: today's ('classic', the default) or Design Desk 2.0 ('new'). */
+    designDesk?: 'classic' | 'new';
     /** The engagements this studio takes on (lib/engagement.ts). Absent: turnkey and design only. */
     engagementTypesOffered?: import('./lib/engagement').EngagementType[];
     /** Pre-fills the fee, in rupees per sq ft, when a project is set up as design only. */

@@ -87,7 +87,8 @@ People, the Ops Desk and Pricing keep their approved motion by passing their own
 and fonts of their own in every app file. A file may only go down from the counts recorded on
 16 Nov 2026 (`designGuard.baseline.json`), and a new file starts at zero. After cleaning a file up,
 run `UPDATE_DESIGN_BASELINE=1 npx vitest run src/tests/designGuard.test.ts`. Design Desk
-(`components/drawingReview`) keeps its own colours.
+(`components/drawingReview`) keeps its own colours. Design Desk 2.0 (`components/designDesk2`) has
+its own section below.
 
 ## Modals
 
@@ -108,6 +109,34 @@ Use only the motion classes that already exist; do not write new keyframes.
 - Figures count up with `CountUp`. Loading states use `Dot live` or `hud-scanning`.
 - Modals use `phd-scrim` and `phd-pop`. Small hover lifts use `phd-lift`.
 - Reduced motion is already handled in the CSS; do not add motion that bypasses it.
+
+## Design Desk 2.0 (mockup approved 24 Nov 2026)
+
+The owner approved a new look for the Design Desk (`components/designDesk2`), from the mockup
+"Design Desk, the easy flow". Designers are its main users, so it is plainer and larger than the
+console screens. It is built in phases behind a studio switch (`DesignDeskSwitch`, the studio's
+`designDesk` field); today's desk (`components/drawingReview`) stays until each phase is accepted.
+
+What the new desk may do that a console screen may not:
+- **A dark green rail** (`bg-[#0C1F1A]`) with Home, All drawings and Meetings. The active item is
+  `bg-emerald-600 text-white hud-rail-active`; the others are `text-emerald-100`. On a phone the
+  rail is a row of tabs above the page.
+- **Emerald for the main action** (`bg-emerald-600`, hover `emerald-700`) and for done steps, in
+  place of the brand blue. **Amber for "your turn" and the client.** Rose for late. Slate for the
+  rest. No other colours.
+- **Larger controls and type:** buttons are 44px tall (48px for the one in "Start here"), names are
+  `text-base font-bold`, the sentence under a name is `text-sm text-slate-700`.
+- **The welcome band** on Home: a `from-[#0C1F1A] to-emerald-900` gradient with "Start here" inside.
+- **Its own parts** (`components/designDesk2/parts.tsx`: `Btn`, `Card`, `Tag`, `StepTrack`,
+  `Empty`) instead of the screen kit, because of the size and the colour.
+
+What stays as everywhere else:
+- The fonts. The mockup's fonts were not adopted (owner, 24 Nov 2026): the desk uses the app's own.
+- The motion classes: `hud-panel-in`, `hud-row-in`, `hud-swap`, `hud-rail-active`, `phd-lift`.
+  No new keyframes.
+- The guard: `designGuard.test.ts` counts the new folder like any other, and it is at zero.
+- The words: a drawing's place is one plain sentence (`lib/designDesk2.ts`, `whereLine`), its steps
+  are numbered (`stepsOf`), and it shows one main button (`mainAction`).
 
 ### Playground library motion (approved 20 Nov 2026)
 
