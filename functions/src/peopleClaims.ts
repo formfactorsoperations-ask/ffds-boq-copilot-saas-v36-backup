@@ -1,8 +1,8 @@
 import { onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { contextOf, fail, PEOPLE_REGION, type Ctx } from "./peopleDesk";
-import { notify } from "./notify";
-import { claimDecidedDraft, claimDeletedDraft, claimLoggedDraft } from "../../lib/notify";
+import { notify, settle } from "./notify";
+import { claimDecidedDraft, claimDeletedDraft, claimLoggedDraft, refs } from "../../lib/notify";
 import { DomainError, addDays, businessDate } from "../../lib/peopleDesk";
 import {
   DEFAULT_RATES, FOR_LABELS, PURPOSE_LABELS, canDecide, canDelete, claimsView, cleanClaim, cleanRates, decideClaim, isFounder, payClaim, withdrawClaim,
@@ -138,6 +138,7 @@ export const peopleClaimsCommand = onCall({ cors: true, region: PEOPLE_REGION, m
           tx.delete(db().doc(`${root}/claimReceipts/${id}`));
           return c;
         });
+        if (gone) await settle(ctx.tenantId, [refs.claim(id)]);
         const person = gone && gone.personId !== ctx.me.id ? ctx.people.find((p) => p.id === gone.personId) : null;
         if (gone && person?.email) await notify(by, [claimDeletedDraft(gone, { byName: ctx.me.name, toEmail: person.email })]);
         break;
@@ -160,6 +161,8 @@ export const peopleClaimsCommand = onCall({ cors: true, region: PEOPLE_REGION, m
           }
           return out;
         });
+        /* Decided: the founders are no longer asked to review these trips (lib/notify Note.ref). */
+        await settle(ctx.tenantId, decided.map((c) => refs.claim(c.id)));
         await tell(ctx, decided, decision === "approve" ? "Approved" : "Rejected", String(data.note || ""));
         break;
       }

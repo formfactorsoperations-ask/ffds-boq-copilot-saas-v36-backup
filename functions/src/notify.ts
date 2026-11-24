@@ -1,8 +1,10 @@
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { requireStaff } from "./guards";
 import { cleanEmails } from "./designViewStrip";
 import { supervisorEmails } from "./teamView";
-import { cleanPrefs, clientBox, interrupts, resolveAudience, staffBox, stamp, type Draft, type Note } from "../../lib/notify";
+import { cleanPrefs, clientBox, inboxKey, interrupts, refs, resolveAudience, staffBox, stamp, type Draft, type Note } from "../../lib/notify";
 
 /*
   WRITING NOTES (lib/notify.ts decides what they say and who they are for).
@@ -28,6 +30,12 @@ import { cleanPrefs, clientBox, interrupts, resolveAudience, staffBox, stamp, ty
   message carries data only -- the note's id, title and line -- and the
   service worker shows it (sw/firebase-messaging-sw.ts). A token the browser
   has dropped is deleted the first time a send to it fails.
+
+  A note that says what it is about (Note.ref: a leave request, an escalation)
+  is also listed at noteRefs/{studio}/refs/{ref}, so that when that thing is
+  dealt with, `settle` can mark the note done in every inbox it went to: the
+  approver who did not decide it stops being asked. Only the Admin SDK reads or
+  writes that list (firestore.rules denies what it does not name).
 */
 
 const db = () => admin.firestore();
@@ -94,16 +102,65 @@ async function push(box: string, notes: { id: string; note: Note }[]): Promise<v
   }
 }
 
+/** Where the notes about one thing are listed, for `settle`. */
+const refDoc = (tenantId: string, ref: string) =>
+  db().doc(`noteRefs/${tenantId}/refs/${ref.replace(/[^A-Za-z0-9:_-]/g, "_").slice(0, 300)}`);
+
+/**
+ * The thing these notes were about is dealt with: mark them done wherever they
+ * went, so nobody is still asked. `onlyEmail` settles one person's copy and
+ * leaves the rest (a birthday card is signed by each person for themselves).
+ * Never throws.
+ */
+export async function settle(tenantId: string, list: (string | null | undefined)[], onlyEmail?: string | null): Promise<number> {
+  const wanted = [...new Set(list.filter(Boolean) as string[])];
+  if (!tenantId || !wanted.length) return 0;
+  const only = onlyEmail ? `${staffBox(inboxKey(onlyEmail))}/` : null;
+  if (onlyEmail && !only) return 0;
+  let n = 0;
+  for (const ref of wanted) {
+    try {
+      const reg = refDoc(tenantId, ref);
+      const all: string[] = ((await reg.get()).data()?.paths || []).filter((x: any) => typeof x === "string");
+      const paths = only ? all.filter((x) => x.startsWith(only)) : all;
+      if (!paths.length) continue;
+      const now = Date.now();
+      for (let i = 0; i < paths.length; i += 400) {
+        const batch = db().batch();
+        /* Merged, so a note that is somehow gone is not a failure for the rest. */
+        paths.slice(i, i + 400).forEach((x) => batch.set(db().doc(x), { doneAt: now, settledAt: now }, { merge: true }));
+        await batch.commit();
+      }
+      if (paths.length === all.length) await reg.delete();
+      else await reg.update({ paths: admin.firestore.FieldValue.arrayRemove(...paths) });
+      n += paths.length;
+    } catch (e: any) {
+      logger.warn("[notify] could not settle notes", { ref: ref.split(":")[0], message: e?.message });
+    }
+  }
+  return n;
+}
+
 /** Write notes, then send the phone notifications they call for. Never throws. */
 export async function deliver(list: Delivery[]): Promise<number> {
   if (!list.length) return 0;
   try {
     const batch = db().batch();
     const byBox = new Map<string, { id: string; note: Note }[]>();
+    const byRef = new Map<string, { tenantId: string; ref: string; paths: string[] }>();
     for (const d of list) {
       const ref = db().doc(d.box).collection("notes").doc();
       batch.set(ref, d.note);
       byBox.set(d.box, [...(byBox.get(d.box) || []), { id: ref.id, note: d.note }]);
+      if (d.note.ref && d.note.tenantId) {
+        const key = `${d.note.tenantId}|${d.note.ref}`;
+        const g = byRef.get(key) || { tenantId: d.note.tenantId, ref: d.note.ref, paths: [] };
+        g.paths.push(ref.path);
+        byRef.set(key, g);
+      }
+    }
+    for (const g of byRef.values()) {
+      batch.set(refDoc(g.tenantId, g.ref), { paths: admin.firestore.FieldValue.arrayUnion(...g.paths), at: Date.now() }, { merge: true });
     }
     await batch.commit();
     await Promise.all([...byBox.entries()].map(([box, notes]) => push(box, notes)));
@@ -151,3 +208,25 @@ export async function notifyClients(tenantId: string, uids: string[], drafts: Dr
   }
   return deliver(out);
 }
+
+/*
+  Some things are dealt with in the browser, with no server call of their own
+  to settle from: the studio marking a client's messages dealt with, or
+  answering a question about a finish (both are saved with the project). The
+  screen says so here. Any member of the studio may, for a project of their
+  own studio; all it can do is mark those notes done, and a note marked done
+  can be brought back from the bell's Done list.
+*/
+export const settleNotes = onCall({ cors: true }, async (request) => {
+  const staff = await requireStaff(request);
+  const projectId = String(request.data?.projectId || "");
+  const what = String(request.data?.what || "");
+  const id = String(request.data?.id || "");
+  if (!/^[A-Za-z0-9_-]{1,120}$/.test(projectId) || (id && !/^[A-Za-z0-9_.:-]{1,120}$/.test(id))) throw new HttpsError("invalid-argument", "Which project?");
+  const [project] = await db().getAll(db().doc(`projects/${projectId}`), { fieldMask: ["tenantId"] });
+  const tenantId = String(project.data()?.tenantId || "");
+  if (!tenantId || (!staff.platformOwner && tenantId !== staff.tenantId)) throw new HttpsError("permission-denied", "That project is not in your studio.");
+  const ref = what === "messages" ? refs.messages(projectId) : what === "finish" && id ? refs.finish(projectId, id) : null;
+  if (!ref) throw new HttpsError("invalid-argument", "Nothing to settle.");
+  return { ok: true, settled: await settle(tenantId, [ref]) };
+});

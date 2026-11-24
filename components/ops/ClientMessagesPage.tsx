@@ -3,6 +3,7 @@ import { MessageSquare, Check } from '@/lib/lucide-shim';
 import { ProjectContext } from '../../types';
 import { Dot } from '../ui/HudBits';
 import { EmptyState } from '../ui/kit';
+import { settleNotes } from '../../services/inboxService';
 
 /*
   Client Messages: what the client has sent the studio from their portal.
@@ -38,6 +39,8 @@ interface Props {
   projectContext: ProjectContext;
   setProjectContext?: React.Dispatch<React.SetStateAction<ProjectContext>>;
   currentUserName: string;
+  /** The project, so that once every message is dealt with nobody is still asked to reply (components/notify). */
+  projectId?: string | null;
   /** Roles that only read this project (Designer, Client Relations, Site Supervisor). */
   readOnly?: boolean;
 }
@@ -47,7 +50,7 @@ const when = (iso?: string | null) =>
     ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
     : '';
 
-export default function ClientMessagesPage({ projectContext, setProjectContext, currentUserName, readOnly }: Props) {
+export default function ClientMessagesPage({ projectContext, setProjectContext, currentUserName, projectId, readOnly }: Props) {
   const messages = [...clientMessagesOf(projectContext)].sort((a, b) => {
     // Unanswered first, newest first within each group.
     if (!a.readAt !== !b.readAt) return a.readAt ? 1 : -1;
@@ -59,6 +62,8 @@ export default function ClientMessagesPage({ projectContext, setProjectContext, 
   const markDealtWith = (id: string) => {
     if (!setProjectContext) return;
     const at = new Date().toISOString();
+    /* The last one waiting: the notes that asked for a reply are done, for everyone who got one. */
+    if (!messages.some((m) => !m.readAt && m.id !== id)) void settleNotes(projectId, 'messages');
     setProjectContext((prev: any) => ({
       ...prev,
       clientMessages: clientMessagesOf(prev).map((m) =>

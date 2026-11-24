@@ -178,8 +178,9 @@ import NotifyBell from "./components/notify/NotifyBell";
 import NeedsYouBar from "./components/notify/NeedsYouBar";
 import CatchUp from "./components/notify/CatchUp";
 import { PORTAL_OPEN_EVENT } from "./components/notify/NotifyContext";
-import { STUDIO_ROUTES, staffBox, clientBox, type Stored } from "./lib/notify";
+import { STUDIO_ROUTES, sectionOf, staffBox, clientBox, type Stored } from "./lib/notify";
 import { openPeopleSection } from "./lib/peopleSection";
+import { openDeskSection } from "./lib/deskSection";
 
 // Default Empty Context
 const DEFAULT_CONTEXT: ProjectContext = {
@@ -2883,9 +2884,12 @@ export default function App() {
     const roles = currentRoles?.length ? currentRoles : currentRole;
     if (STUDIO_ROUTES.has(n.route) || !n.projectId) {
       const tab = STUDIO_ROUTES.has(n.route) ? n.route : "home";
-      /* A People note can name its section (a birthday card, the kudos wall). */
-      if (tab === "people" && n.section) openPeopleSection(n.section);
-      setActiveTab(mayOpenStudioTab(tab, roles) && limitedMayOpen(roles, tab) ? tab : "home");
+      /* A note opens where it is dealt with: People's Approvals, the desk's Escalations (lib/notify sectionOf). Told before the tab opens, and at once when it is already open. */
+      const may = mayOpenStudioTab(tab, roles) && limitedMayOpen(roles, tab);
+      const section = may ? sectionOf(n) : null;
+      if (tab === "people" && section) openPeopleSection(section);
+      if (tab === "ops-desk" && section) openDeskSection(section);
+      setActiveTab(may ? tab : "home");
       return;
     }
     const project = visibleProjects.find((p) => p.id === n.projectId);
@@ -3841,6 +3845,7 @@ export default function App() {
                       )}
                       {activeTab === "comms-tracker" && (
                         <ClientMessagesPage
+                          projectId={activeInternalId}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           currentUserName={
@@ -4507,6 +4512,7 @@ export default function App() {
                       )}
                       {activeTab === "comms-tracker" && (
                         <ClientMessagesPage
+                          projectId={activeInternalId}
                           projectContext={projectContext}
                           setProjectContext={setProjectContext}
                           currentUserName={

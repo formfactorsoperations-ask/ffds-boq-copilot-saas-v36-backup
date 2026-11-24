@@ -75,20 +75,45 @@ describe('notifications in the app', () => {
     setup();
     serve([note('a'), checkin('b', 'Arjun Rao')]);
     expect(screen.getByTestId('tabs').textContent).toBe('ops-desk:1/0 people:0/1');
-    expect(screen.getByRole('button', { name: 'Notifications, 2 for you' })).toBeTruthy();
-    expect(document.title).toBe('(2) StudioDesk');
+    /* The bell's number is who is waiting; the check-in is only new. */
+    expect(screen.getByRole('button', { name: 'Notifications, 1 waiting on you' })).toBeTruthy();
+    expect(document.title).toBe('(1) StudioDesk');
   });
 
-  it('clears a tab\'s badge once its screen is open, and keeps what waits on you in the bell', () => {
+  it('with nobody waiting, the bell shows a dot for what is new, not a number', () => {
+    setup();
+    serve([checkin('b', 'Arjun Rao')]);
+    const bell = screen.getByRole('button', { name: 'Notifications, 1 new' });
+    expect(bell.querySelector('.nt-dot')).toBeTruthy();
+    expect(bell.querySelector('.nt-count')).toBeNull();
+    expect(bell.className).not.toContain('nt-waiting');
+  });
+
+  it('opening a tab reads its updates, and what waits on you there stays counted until it is done', () => {
+    setup(vi.fn(), 'people');
+    const leave = note('a', { kind: 'people.leave', area: 'team', title: 'Riya Menon asked for planned leave', projectId: null, projectName: null, route: 'people', action: 'Review' });
+    serve([leave, checkin('b', 'Arjun Rao')]);
+    /* The check-in is read by being there; the leave request is not done by being looked at. */
+    expect(h.read).toHaveBeenCalledWith('inbox/riya@ff.in', ['b']);
+    expect(screen.getByTestId('tabs').textContent).toBe('people:1/0');
+    const bell = screen.getByRole('button', { name: 'Notifications, 1 waiting on you' });
+    /* While someone waits, the bell sways. */
+    expect(bell.className).toContain('nt-waiting');
+    /* Opened and read: still waiting. */
+    serve([{ ...leave, readAt: 5 }, { ...checkin('b', 'Arjun Rao'), readAt: 5 }]);
+    expect(screen.getByTestId('tabs').textContent).toBe('people:1/0');
+    /* Decided in People: the server marks the note done, and the count goes. */
+    serve([{ ...leave, readAt: 5, doneAt: 9 }, { ...checkin('b', 'Arjun Rao'), readAt: 5 }]);
+    expect(screen.getByTestId('tabs').textContent).toBe('');
+    expect(screen.getByRole('button', { name: 'Notifications' })).toBeTruthy();
+  });
+
+  it('a note from before notes could be settled still clears when its tab is opened', () => {
     setup(vi.fn(), 'ops-desk');
-    serve([note('a'), checkin('b', 'Arjun Rao')]);
-    expect(screen.getByTestId('tabs').textContent).toBe('people:0/1');
+    const { ref: _ref, ...old } = note('a');
+    serve([old as Stored, checkin('b', 'Arjun Rao')]);
     expect(h.read).toHaveBeenCalledWith('inbox/riya@ff.in', ['a']);
-    expect(screen.getByRole('button', { name: 'Notifications, 1 for you' })).toBeTruthy();
-    /* One that lands while the tab is open is read too. */
-    serve([note('c'), note('a', { readAt: 1 }), checkin('b', 'Arjun Rao')]);
     expect(screen.getByTestId('tabs').textContent).toBe('people:0/1');
-    expect(h.read).toHaveBeenLastCalledWith('inbox/riya@ff.in', ['c']);
   });
 
   it('does not interrupt for what was already there, only for what arrives', () => {
@@ -131,13 +156,37 @@ describe('notifications in the app', () => {
     setup();
     const t = Date.now();
     serve([note('m', { at: t }), { ...checkin('k1', 'Arjun Rao'), at: t - 3000 }, { ...checkin('k2', 'Kabir Shah'), at: t - 2000 }, { ...checkin('k3', 'Neha Kulkarni'), at: t - 1000 }]);
-    fireEvent.click(screen.getByRole('button', { name: /Notifications, \d for you/ }));
+    serve([note('m', { at: t }), note('older', { at: t - 60000, title: 'Mrs Rao asked about a clause' }), { ...note('u', { at: t - 500 }), level: 'update', title: 'Mr Prasad Naik signed a document', action: null }, { ...checkin('k1', 'Arjun Rao'), at: t - 3000 }, { ...checkin('k2', 'Kabir Shah'), at: t - 2000 }, { ...checkin('k3', 'Neha Kulkarni'), at: t - 1000 }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications, 2 waiting on you' }));
     const panel = screen.getByRole('dialog', { name: 'Notifications' });
+    /* What waits on you is first, longest wait first; the rest stay by project. */
+    const text = panel.textContent || '';
+    expect(text.indexOf('Waiting on you')).toBeGreaterThan(-1);
+    expect(text.indexOf('Mrs Rao asked about a clause')).toBeLessThan(text.indexOf('Mr Prasad Naik sent you a message'));
+    expect(text.indexOf('Mr Prasad Naik sent you a message')).toBeLessThan(text.indexOf('Mr Prasad Naik signed a document'));
     expect(within(panel).getByText('Harmony 704')).toBeTruthy();
     expect(within(panel).getByText('3 people checked in')).toBeTruthy();
-    const row = within(panel).getByText('Mr Prasad Naik sent you a message').closest('li')!;
-    fireEvent.click(within(row as HTMLElement).getByRole('button', { name: 'Mark done' }));
-    expect(h.done).toHaveBeenCalledWith('inbox/riya@ff.in', ['m']);
+    /* Done turns the tile over to a tick, then the note is marked done. */
+    vi.useFakeTimers();
+    try {
+      const row = within(panel).getByText('Mr Prasad Naik sent you a message').closest('li')!;
+      fireEvent.click(within(row as HTMLElement).getByRole('button', { name: 'Mark done' }));
+      expect(row.querySelector('.nt-coin.is-done')).toBeTruthy();
+      expect(h.done).not.toHaveBeenCalled();
+      act(() => { vi.advanceTimersByTime(700); });
+      expect(h.done).toHaveBeenCalledWith('inbox/riya@ff.in', ['m']);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('the bar counts the wait, and shows a deck when more are waiting behind it', () => {
+    setup();
+    serve([]);
+    serve([note('x', { at: Date.now() - 100000 })]);
+    const bar = screen.getByRole('status');
+    expect(within(bar).getByText(/^Waiting 1:4\d$/)).toBeTruthy();
+    expect(document.querySelector('.nt-deck')).toBeNull();
+    serve([note('y', { title: 'Site blocked at Harmony 704' }), note('x', { at: Date.now() - 100000 })]);
+    expect(document.querySelectorAll('.nt-deck').length).toBe(1);
   });
 });
 
@@ -291,7 +340,7 @@ describe('one bell inside a project', () => {
     const onGo = vi.fn(), onDismiss = vi.fn();
     render(<NotifyProvider box="inbox/riya@ff.in" onOpen={vi.fn()}><NotifyBell project={{ name: 'New Project · ABC test client', alerts: [alert], onGo, onDismiss }} /></NotifyProvider>);
     serve([note('m1')]);
-    const bell = screen.getByRole('button', { name: 'Notifications, 2 for you' });
+    const bell = screen.getByRole('button', { name: 'Notifications, 2 waiting on you' });
     fireEvent.click(bell);
     const panel = await screen.findByRole('dialog', { name: 'Notifications' });
     expect(within(panel).getByText(/On this project · New Project · ABC test client/)).toBeTruthy();
@@ -306,7 +355,7 @@ describe('one bell inside a project', () => {
   it('with nothing else, the project\'s alerts are the list, not "All caught up"', async () => {
     render(<NotifyProvider box="inbox/riya@ff.in" onOpen={vi.fn()}><NotifyBell project={{ name: 'Harmony 704', alerts: [alert], onGo: vi.fn(), onDismiss: vi.fn() }} /></NotifyProvider>);
     serve([]);
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications, 1 for you' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications, 1 waiting on you' }));
     const panel = await screen.findByRole('dialog', { name: 'Notifications' });
     expect(within(panel).queryByText('All caught up')).toBeNull();
     expect(within(panel).getByText('Your client asked about Laminate')).toBeTruthy();
