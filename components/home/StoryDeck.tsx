@@ -16,6 +16,7 @@ import { greetingWord } from './useStudioHomeData';
 import { EDGE } from './homeStyles';
 import '../people/peopleStyles';
 import { Tilt } from '../people/PeopleBits';
+import HomeHeroVideo from './HomeHeroVideo';
 
 /*
   THE TOP OF HOME (lib/homeStories.ts): a greeting, the projects you were last
@@ -83,11 +84,12 @@ export default function StoryDeck({ feeds, counts, projects, role, roles, userNa
   const loading = (feeds.desk && feeds.rows === null) || (feeds.visitsOn && feeds.visits === null);
 
   return (
-    <section className="relative w-full max-w-[1400px] mx-auto rounded-[40px] bg-white/45 border border-slate-200/60 shadow-[0_40px_100px_-24px_rgba(0,0,0,0.07)] overflow-hidden">
+    <section className="relative w-full max-w-[1400px] mx-auto rounded-[40px] bg-white border border-slate-200/60 shadow-[0_40px_100px_-24px_rgba(0,0,0,0.07)] overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
-        {/* See-through, so the studio in blueprint (HomeScene3D) shows behind the greeting. */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#F4F6FC] via-white to-[#FAF7F1] opacity-50" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#F4F6FC] via-white to-[#FAF7F1]" />
         <div className="aurora-a absolute -top-48 right-[-6rem] w-[38rem] h-[38rem] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(61, 82, 160,.12), transparent 70%)' }} />
+        {/* Towers in the clouds: a silent film behind the greeting (DESIGN.md → "The film behind the greeting"). */}
+        <HomeHeroVideo />
       </div>
       <div className="relative px-5 md:px-12 pt-9 pb-8 flex flex-col items-center text-center">
         <DateClock />

@@ -537,25 +537,20 @@ the orbit dial.
   of the card in front is lit. Fan with arrows, a swipe, the arrow keys or a
   tap on a side card. Motion stops under `prefers-reduced-motion`.
 
-### The scene behind Home (asked for 24 Nov 2026)
+### The film behind the greeting (asked for 24 Nov 2026)
 
-The owner asked for a 3D, immersive background on Home. It is the studio in
-blueprint (`components/home/HomeScene3D.tsx`), drawn behind everything on Home:
+The owner asked for a background in motion on Home, from a reference of glass towers
+rising out of a sea of clouds. A short, silent film of that loops behind the greeting,
+inside the hero card only (`components/home/HomeHeroVideo.tsx`):
 
-- A floor grid running to the horizon, a floor plan whose walls stand up out of it
-  (doors swinging open in brass, a stair, furniture as plain boxes), the Home
-  materials turning in the air as swatches, and dust in the light.
-- The camera sways slowly, leans towards the pointer and walks in through the front
-  door as you scroll down Home.
-- Home's materials only (indigo, periwinkle, navy, brass, rose, sage), faint, so the
-  page stays milky white. Lines fade with distance.
-- One canvas, no 3D library. It is fixed to the window under Home's content, takes no
-  pointer events and is hidden from screen readers. It draws at 30 frames a second,
-  stops when the tab is hidden or Home is out of view, and draws one still frame
-  under `prefers-reduced-motion`.
-- The hero card (`StoryDeck`) is see-through (`bg-white/45`, its wash at half
-  strength) so the room shows behind the greeting. The board, Ask and the footer stay
-  solid white, so the work reads on white.
+- The clip is the studio's own (generated for StudioDesk, not stock), served from
+  `public/home/hero-clouds.webm` and `.mp4`, with `hero-clouds.jpg` (its first frame)
+  as the poster. Keep each file small (a few MB).
+- Muted, looped and inline. It never plays under `prefers-reduced-motion` (the poster
+  stands still), pauses when Home is scrolled past it or the tab is hidden, and takes
+  itself away if it cannot load, leaving the hero as it was.
+- A white wash sits over it: lighter behind the greeting so the words read, and white
+  at the foot where the story cards sit. The rest of Home stays solid white.
 
 ### Home widgets (approved 12 Oct 2026)
 
