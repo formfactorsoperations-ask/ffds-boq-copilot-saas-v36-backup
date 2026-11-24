@@ -1796,3 +1796,25 @@ describe('a custom item, not in the Item Bank', () => {
     expect(Math.round((item.materials + item.labor) * (1 + item.margin / 100))).toBe(6000);
   });
 });
+
+describe('a room renamed in the Brief: lines left under the old name', () => {
+  beforeEach(() => { org.role = 'Super Admin'; });
+
+  it('show as not a room in the Brief now, and move into a room from their card in Rooms', () => {
+    let latest: any[] = [];
+    // The Bedroom was "M. Bedroom" when these two lines were added.
+    const boq = [...baseBoq(), { id: 'l4', bankId: 'bed', qty: 1, roomId: 'M. Bedroom' }, { id: 'l5', bankId: 'paint', qty: 200, roomId: 'M. Bedroom' }];
+    render(<Harness tier={{ ...PG, boq }} probe={t => { latest = t; }} />);
+    lens('Rooms');
+    const card = document.querySelector('[data-roomcard="M. Bedroom"]') as HTMLElement;
+    expect(card.textContent).toMatch(/Not a room in the Brief now/);
+    const move = within(card).getByLabelText(/Move the lines in M\. Bedroom to/) as HTMLSelectElement;
+    expect([...move.options].map(o => o.value)).toEqual(['', 'Bedroom', 'Kitchen']);
+    fireEvent.change(move, { target: { value: 'Bedroom' } });
+    expect(latest[0].boq.filter((l: any) => l.roomId === 'Bedroom').map((l: any) => l.id)).toEqual(['l1', 'l2', 'l4', 'l5']);
+    expect(document.querySelector('[data-roomcard="M. Bedroom"]')).toBeNull();
+    expect(screen.getAllByRole('status').some(e => /2 lines in M\. Bedroom moved to Bedroom\. Undo puts them back\./.test(e.textContent || ''))).toBe(true);
+    // The scopes are not offered the move: they are not rooms gone astray.
+    expect(document.querySelector('[data-move-room]')).toBeNull();
+  });
+});

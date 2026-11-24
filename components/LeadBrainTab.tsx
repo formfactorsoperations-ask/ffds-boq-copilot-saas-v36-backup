@@ -17,6 +17,8 @@ interface LeadBrainTabProps {
   setActiveTab?: (tab: string) => void;
   aiStrategy?: AIStrategy;
   projectId?: string;
+  /** A room renamed in the Brief: App carries the name into the BOQ (lib/playground/roomRename). */
+  onRenameRoom?: (from: string, to: string) => void;
 }
 
 const LeadBrainTab: React.FC<LeadBrainTabProps> = ({
@@ -24,6 +26,7 @@ const LeadBrainTab: React.FC<LeadBrainTabProps> = ({
   setProjectContext,
   aiStrategy = "balanced",
   projectId,
+  onRenameRoom,
 }) => {
   usePageHeader({
     vitals: [
@@ -38,6 +41,7 @@ const LeadBrainTab: React.FC<LeadBrainTabProps> = ({
       projectContext={projectContext}
       setProjectContext={setProjectContext}
       projectId={projectId}
+      onRenameRoom={onRenameRoom}
     />
   );
 };

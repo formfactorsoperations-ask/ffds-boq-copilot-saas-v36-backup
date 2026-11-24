@@ -154,6 +154,11 @@ linkage, notes, change orders on a frozen BOQ). Do not add a mode or a switch ba
   From Works it is a **custom work**: by area or length, its quantity is measured from the room (Quantity:
   Measure from the room | Type it; Measure: the floor, the walls to the ceiling or to 7′, the ceiling,
   round the walls), with the sum shown, as the Works tab measures the bank's own.
+- **A room renamed in the Brief** is renamed once the name is done (leaving the field or Enter; Escape
+  goes back), and the BOQ follows: its lines, a whole-flat line's share and an offer off the room, in
+  every option but the signed one. A name that is empty, a scope's or another room's is not taken; the
+  field says why in rose `text-[11px]`. Lines left under a name the Brief no longer has show in Rooms
+  as a card reading "Not a room in the Brief now", with **Move to** a room in place of Add.
 - **The right rail** is the Live BOQ (a receipt, room by room, with the work total) until a line or a
   room is picked; then the inspector for it. Each inspector is keyed by what it shows and swaps in with
   `hud-swap`. The rail hides to a "Live BOQ" button on narrow screens.

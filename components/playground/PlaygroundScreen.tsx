@@ -54,6 +54,7 @@ import { kitsOf, kitStartRooms, kitApply, kitAddsDebris, kitEstimate, kitFits, r
 import { ADDON_BUNDLES, priceForOption, type TemplateData } from '../../lib/standardPackages';
 import { optionSetupOf } from '../../lib/optionSetup';
 import { scopeEdit, isEmptyEdit, applyScopeEdit, namesOf } from '../../lib/playground/allOptions';
+import { moveRoomLines } from '../../lib/playground/roomRename';
 import { templateLines } from '../../lib/playground/templateBuild';
 import { workLine, measureWork } from '../../lib/playground/works';
 import type { Grade } from '../../lib/materialSpecs';
@@ -458,6 +459,11 @@ export default function PlaygroundScreen(props: Props) {
     return () => clearTimeout(t);
   }, [fresh]);
   const replace = (line: BoqItem, msg?: string) => commit(boq.map(l => (l.id === line.id ? line : l)), msg);
+  /* Lines left under a room name the Brief no longer has, moved into one of its rooms (lib/playground/roomRename). */
+  const moveRoom = (from: string, to: string) => {
+    const n = boq.filter(l => l.roomId === from).length;
+    commit(moveRoomLines(boq, from, to), `${n === 1 ? 'The line' : `${n} lines`} in ${from} moved to ${to}. Undo puts ${n === 1 ? 'it' : 'them'} back.`);
+  };
   const replaceMany = (lines: BoqItem[]) => { const m = new Map(lines.map(l => [l.id, l])); commit(boq.map(l => m.get(l.id) || l)); };
   const remove = (ids: string[]) => { const s = new Set(ids); commit(boq.filter(l => !s.has(l.id)), `${ids.length === 1 ? 'Line' : `${ids.length} lines`} deleted. Undo puts ${ids.length === 1 ? 'it' : 'them'} back.`); if (sel && s.has(sel)) setSel(null); };
   const undo = () => {
@@ -1131,7 +1137,7 @@ export default function PlaygroundScreen(props: Props) {
                     onShowOnPlan={name => { setLens('plan'); pickRoom(name); setFitSignal(s => s + 1); }}
                     changes={changes} baseName={prevName}
                     onDropItem={(id, room) => { if (id.startsWith(KIT_DRAG)) { openKit(id.slice(KIT_DRAG.length), room); return; } const it = bank.find(i => i.id === id); if (it) { if (drawOf(it)) addToRoom(it, room); else addWork(it, room); } }}
-                    onReplaceMany={replaceMany} />
+                    onReplaceMany={replaceMany} onMoveRoom={moveRoom} />
                 )}
                 {lens === 'sheet' && fullGrid && renderFullGrid && (
                   <div className="p-3">

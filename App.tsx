@@ -20,6 +20,7 @@ import { readLastTabs, recordLastTab, LastTabs } from "./services/lastVisitedTab
 import { readAttentionState, writeAttentionEntry, AttentionState, AttentionEntry } from "./services/attentionState";
 import { buildProjectTemplate } from "./lib/cloneProject";
 import { buildRehearsalCopy, keepLockedTier, lockedTierId } from "./lib/scopeFlow";
+import { renameRoomInTiers, renameRoomInContext } from "./lib/playground/roomRename";
 import { ensureScopeRooms } from "./lib/scopeBuckets";
 import { showSuccessWithNext } from "./components/SuccessWithNextToast";
 import { OfflineIndicator } from "./components/OfflineIndicator";
@@ -411,6 +412,18 @@ export default function App() {
     useState<ProjectContext>(DEFAULT_CONTEXT);
   const [tiers, setTiers] = useState<ProposalTier[]>([]);
   const [activeTierId, setActiveTierId] = useState<string | null>(null);
+  /*
+    A room renamed in the Brief: its BOQ lines, a whole-flat line's share in it
+    and an offer off it all follow, in every option but the signed one
+    (lib/playground/roomRename). Before, the BOQ kept the old name as a room of
+    its own beside the new one.
+  */
+  const projectContextRef = useRef(projectContext);
+  projectContextRef.current = projectContext;
+  const renameRoomEverywhere = useCallback((from: string, to: string) => {
+    setTiers(prev => renameRoomInTiers(prev, from, to, lockedTierId(projectContextRef.current)));
+    setProjectContext(prev => renameRoomInContext(prev, from, to));
+  }, []);
 
   const [activeProject, setActiveProject] = useState<ActiveProject | null>(
     null,
@@ -3637,6 +3650,7 @@ export default function App() {
                           setActiveTab={setActiveTab}
                           aiStrategy={aiStrategy}
                           projectId={activeInternalId || undefined}
+                          onRenameRoom={renameRoomEverywhere}
                         />
                       )}
                       {activeTab === "drawing-tracker" && (
@@ -4261,6 +4275,7 @@ export default function App() {
                               onSaveProject={handleDownloadBackup}
                               projectId={activeInternalId || undefined}
                               hideExecutionControls={true}
+                              onRenameRoom={renameRoomEverywhere}
                             />
                           </div>
                         ))}
@@ -4303,6 +4318,7 @@ export default function App() {
                           setActiveTab={setActiveTab}
                           aiStrategy={aiStrategy}
                           projectId={activeInternalId || undefined}
+                          onRenameRoom={renameRoomEverywhere}
                         />
                       )}
                       {activeTab === "drawing-tracker" && (
