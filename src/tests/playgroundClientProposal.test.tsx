@@ -216,4 +216,25 @@ describe('how the client books, on the proposal', () => {
     expect(pdf().textContent).toContain('Covered by the fee');
     expect(pdf().textContent).toMatch(/Project Initiation Fee of ₹4,999 is adjusted against the Design 1 invoice/);
   });
+
+  it('says what the timeline and the site visits depend on; Design + PMC and the payment notes are gone', () => {
+    const extra = { config: '2-BHK', designScope: { hasSiteVisits: true, visitCount: 5, has3DRenders: true } };
+    render(<Harness extra={extra} />);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' }));
+    const d = pdf();
+    expect(d.querySelector('[data-pdf-note="timeline"]')!.textContent).toMatch(/^These dates are a plan, not a promise\. They hold when design approvals and payments are made on time/);
+    expect(d.querySelector('[data-pdf-note="renovation"]')).toBeNull();
+    expect(d.querySelector('[data-pdf-note="visits"]')!.textContent).toBe('The 5 site visits are by your designer, planned with you in advance, at the stages the work needs them. More visits are on request and may be charged. Our site team’s day-to-day supervision of the work is separate and not counted in them.');
+    const text = d.textContent || '';
+    expect(text).toContain('Turnkey (recommended)');
+    expect(text).toContain('Design only');
+    expect(text).not.toContain('Design + PMC');
+    expect(text).not.toContain('Sizes are allowances from the brief');
+  });
+
+  it('a renovation says its timeline is a vacant flat’s for now, confirmed after the site measurement', () => {
+    render(<Harness extra={{ config: '2-BHK', propertyStatus: 'finished' }} />);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' }));
+    expect(pdf().querySelector('[data-pdf-note="renovation"]')!.textContent).toBe('Your home is a renovation, and this timeline is the one for a vacant flat. A renovation also needs time to take out what is there today, and the work goes more slowly if you live in the home while it is done. We confirm the timeline for your home after the site measurement.');
+  });
 });

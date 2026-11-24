@@ -13,6 +13,7 @@ import { resolveBoqLine } from '../boqPricing';
 import { resolveCivilScope } from '../civilScope';
 import { kindOf } from './rooms';
 import { basisOfUnit } from '../boqSize';
+import { engagementOf } from '../engagement';
 
 /** The studio's working days for civil work, when the Timeline does not give them. */
 export const DEFAULT_CIVIL_DAYS = 12;
@@ -196,6 +197,43 @@ export function briefHome(ctx: ProjectContext): BriefHome {
       { label: visits ? `${visits} site visits during the work` : 'Site visits during the work', on: !!ds.hasSiteVisits },
       { label: 'VR walkthrough', on: !!ds.hasVrWalkthrough },
     ] : [],
+  };
+}
+
+/*
+  What the proposal says under its timeline and under its site visits (the
+  owner, Nov 2026): the dates are a plan that holds on conditions, and the
+  visits are counted. A renovation (a finished flat) is timed like a vacant
+  flat for now, so it says so and that its own timeline follows the site
+  measurement; renovation timelines of their own come later.
+*/
+export interface ProposalNotes {
+  /** Under "Your timeline", in order. */
+  timeline: string[];
+  /** Under "What design includes", when site visits are in it. */
+  visits: string | null;
+  /** A renovation: timed like a vacant flat for now. */
+  renovation: boolean;
+}
+
+export const TIMELINE_NOTE = 'These dates are a plan, not a promise. They hold when design approvals and payments are made on time, the site is handed over ready for work, and the materials you choose are available. A change to the design or scope after approval, society permissions and work hours, holidays, and delays outside our control move them; we tell you as soon as they do.';
+export const RENOVATION_NOTE = 'Your home is a renovation, and this timeline is the one for a vacant flat. A renovation also needs time to take out what is there today, and the work goes more slowly if you live in the home while it is done. We confirm the timeline for your home after the site measurement.';
+
+export function proposalNotes(ctx: ProjectContext): ProposalNotes {
+  const ds: any = ctx.designScope || {};
+  const visits = Number(ds.visitCount) || 0;
+  const renovation = ctx.propertyStatus === 'finished';
+  const turnkey = engagementOf(ctx) === 'turnkey';
+  return {
+    timeline: [TIMELINE_NOTE, ...(renovation ? [RENOVATION_NOTE] : [])],
+    visits: ctx.designScope && ds.hasSiteVisits
+      ? [
+        `${visits ? `The ${visits} site visit${visits > 1 ? 's are' : ' is'}` : 'Site visits are'} by your designer, planned with you in advance, at the stages the work needs them.`,
+        'More visits are on request and may be charged.',
+        ...(turnkey ? ['Our site team’s day-to-day supervision of the work is separate and not counted in them.'] : []),
+      ].join(' ')
+      : null,
+    renovation,
   };
 }
 
