@@ -44,7 +44,9 @@ describe('the Vendor directory', () => {
     expect(within(card).getByText('8 days')).toBeTruthy();
     expect(within(card).getByText('1 project')).toBeTruthy();
     expect(within(screen.getByRole('article', { name: 'Kiran Timbers' })).getByText('Inactive')).toBeTruthy();
-    expect(stats).toHaveBeenLastCalledWith({ total: 3, active: 2, reachable: 1 });
+    // onStats fires from an effect after the cards commit, so the card can be on screen
+    // while the last call still carries the empty list reported on mount.
+    await waitFor(() => expect(stats).toHaveBeenLastCalledWith({ total: 3, active: 2, reachable: 1 }));
     // A vendor with no phone cannot be messaged, and the button says why.
     const noPhone = within(screen.getByRole('article', { name: 'Royal Woodcrafters' })).getByRole('button', { name: 'Message' }) as HTMLButtonElement;
     expect(noPhone.disabled).toBe(true);
