@@ -493,12 +493,12 @@ export default function PlaygroundScreen(props: Props) {
   /* A work from the library (civil, plumbing, electrical…): not drawn, so it joins the room it is dropped on, its
      quantity measured from that room and the sum said (lib/playground/works). */
   /* A custom item: something the Item Bank does not have, kept with the project (lib/playground/custom). */
-  const [custom, setCustom] = useState<{ name: string; cat?: string } | null>(null);
+  const [custom, setCustom] = useState<{ name: string; cat?: string; work?: boolean } | null>(null);
   const customRooms = useMemo(() => [...realRooms(rooms).map(r => r.name), ...SCOPE_BUCKETS].filter((n, i, a) => a.indexOf(n) === i), [rooms]);
-  const addCustom = (item: Item, qty: number, roomName: string) => {
+  const addCustom = (item: Item, qty: number, roomName: string, how?: string) => {
     setProjectContext(p => ({ ...p, adHocItems: [...(p.adHocItems || []), item] }));
     const line = prepareNew({ id: newId(), bankId: item.id, qty, roomId: roomName, baseRate: item.materials, labor: item.labor, marginOverride: item.margin });
-    commit([...boq, line], `${item.name} added to ${roomName} as a custom item. It is kept with this project, and the Item Bank keeps a copy to pick again.`);
+    commit([...boq, line], `${item.name} added to ${roomName} as a custom item${how ? `: ${qty} ${item.unit}, ${how}` : ''}. It is kept with this project, and the Item Bank keeps a copy to pick again.`);
     setSel(line.id); setSelRoom(null); setCustom(null);
   };
   const addWork = (item: Item, roomName: string | null) => {
@@ -1181,7 +1181,7 @@ export default function PlaygroundScreen(props: Props) {
                   kits={kits} bankMap={bankMap} hideFigures={hideFigures} kitEstimate={kitCardEstimate} onKit={id => openKit(id)}
                   places={supplyPlaces} onAddSupplied={addSupplied} onAddWork={it => addWork(it, workRoomReal)} workRoom={workRoomReal}
                   measureWork={it => (workRoomReal ? measureWork(it, rooms.find(x => x.name === workRoomReal)) : null)}
-                  onCustom={(name, cat) => setCustom({ name, cat })}
+                  onCustom={(name, cat, work) => setCustom({ name, cat, work })}
                   artOf={specBank ? (it => { const r = recipeOf(it, specBank); return r ? artOfSpecs(specsFromRecipe(specBank, r, grade), specBank.materials) : {}; }) : undefined} />
               </div>
             )}
@@ -1356,7 +1356,8 @@ export default function PlaygroundScreen(props: Props) {
           onClose={() => setKitUi(null)} onApply={applyKit} />
       )}
       {custom && (
-        <CustomItemModal bank={bank} rooms={customRooms} room={libTarget} name={custom.name} cat={custom.cat}
+        <CustomItemModal bank={bank} rooms={customRooms} room={(custom.work && workRoomReal) || libTarget} name={custom.name} cat={custom.cat}
+          work={!!custom.work} roomOf={name => rooms.find(r => r.name === name)}
           seesMargins={seesMargins && !hideFigures} rounded={!!rules} newId={newId}
           onAdd={addCustom} onClose={() => setCustom(null)} />
       )}

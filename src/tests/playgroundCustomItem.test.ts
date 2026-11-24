@@ -4,7 +4,7 @@
   the client pays with the trade's usual margin behind it.
 */
 import { describe, it, expect } from 'vitest';
-import { customItem, customDefaults } from '../../lib/playground/custom';
+import { customItem, customDefaults, measureRoom, suggestMeasure, measuresFor } from '../../lib/playground/custom';
 import { calculateSellPrice } from '../../lib/utils';
 
 const bank: any[] = [
@@ -41,5 +41,28 @@ describe('a custom item', () => {
     expect(customItem({ ...base, qty: 0, rate: 10 }, 'rate', newId)).toEqual({ ok: false, problem: 'Give it a quantity.' });
     expect(customItem(base, 'rate', newId)).toEqual({ ok: false, problem: 'Give it a rate.' });
     expect(customItem(base, 'cost', newId)).toEqual({ ok: false, problem: 'Give it a cost.' });
+  });
+});
+
+describe('a custom work, measured from its room', () => {
+  const room: any = { name: 'Bedroom', size: 120, unit: 'sq ft', plan: { x: 0, y: 0, w: 12, h: 10 }, height: 10, doors: 1 };
+  it('the floor, the walls, the ceiling, or round the walls, as the Works tab measures', () => {
+    expect(measureRoom('floor', room)).toEqual({ qty: 120, how: 'the floor, 12′ × 10′' });
+    expect(measureRoom('walls', room)).toEqual({ qty: 419, how: '44′ of wall × 10′, less 1 door' });
+    expect(measureRoom('walls7', room)).toEqual({ qty: 287, how: '44′ of wall × 7′, less 1 door' });
+    expect(measureRoom('ceiling', room)!.qty).toBe(120);
+    expect(measureRoom('perimeter', room)).toEqual({ qty: 44, how: 'round the walls, 44′' });
+    expect(measureRoom('skirting', room)!.qty).toBe(41);
+    expect(measureRoom('floor', { name: 'Store', unit: 'sq ft' } as any)).toBeNull();
+  });
+  it('what its name and unit suggest: wooden flooring by the floor, skirting round the walls, a count not measured', () => {
+    expect(suggestMeasure('Wooden flooring replacement', 'sq ft')).toBe('floor');
+    expect(suggestMeasure('Texture paint, feature wall', 'sq ft')).toBe('walls');
+    expect(suggestMeasure('Dado tiles', 'sq ft')).toBe('walls7');
+    expect(suggestMeasure('Cove lighting ceiling', 'sq ft')).toBe('ceiling');
+    expect(suggestMeasure('Wooden skirting', 'r ft')).toBe('skirting');
+    expect(suggestMeasure('Door closer', 'nos')).toBeNull();
+    expect(measuresFor('nos')).toEqual([]);
+    expect(measuresFor('r ft').map(m => m.id)).toEqual(['perimeter', 'skirting']);
   });
 });

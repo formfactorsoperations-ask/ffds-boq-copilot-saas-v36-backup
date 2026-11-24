@@ -65,22 +65,22 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
   workRoom?: string | null;
   /** What a work comes to in that room, and how (lib/playground/works). */
   measureWork?: (item: Item) => { qty: number; how: string } | null;
-  /** Something the Item Bank does not have: opens the custom item form, with what was typed and the tab's trade. */
-  onCustom?: (name: string, cat?: string) => void;
+  /** Something the Item Bank does not have: opens the custom item form, with what was typed, the tab's trade, and whether it is a work (measured from its room). */
+  onCustom?: (name: string, cat?: string, work?: boolean) => void;
 }) {
   /* "Not in the bank?": a tile at the top of Pieces and Works, and the offer when a filter finds nothing. */
-  const customTile = (cat?: string) => onCustom && !readOnly && (
-    <button type="button" onClick={() => onCustom(q.trim(), cat)} data-custom-item
+  const customTile = (cat?: string, work = false) => onCustom && !readOnly && (
+    <button type="button" onClick={() => onCustom(q.trim(), cat, work)} data-custom-item
       className="hud-row-in col-span-2 rounded-xl border border-dashed border-[#3D52A0]/40 bg-[#3D52A0]/[0.03] px-3 py-2 text-left inline-flex items-center gap-2 hover:bg-[#3D52A0]/[0.07] hover:border-[#3D52A0]/60 active:scale-[0.98] transition-[background-color,border-color,scale] duration-150">
       <span className="w-7 h-7 rounded-lg bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><Plus className="w-3.5 h-3.5" aria-hidden /></span>
-      <span className="min-w-0"><span className="block text-xs font-bold text-[#3D52A0]">Add a custom item</span><span className="block text-[11px] text-slate-500">Not in the Item Bank</span></span>
+      <span className="min-w-0"><span className="block text-xs font-bold text-[#3D52A0]">{work ? 'Add a custom work' : 'Add a custom item'}</span><span className="block text-[11px] text-slate-500">{work ? 'Not in the Item Bank · measured from the room' : 'Not in the Item Bank'}</span></span>
     </button>
   );
-  const noneFound = (what: string, cat?: string) => (
+  const noneFound = (what: string, cat?: string, work = false) => (
     <div className="col-span-2 px-1 text-xs text-slate-500">
       {what}
       {onCustom && !readOnly && q.trim() && (
-        <button type="button" onClick={() => onCustom(q.trim(), cat)} className="block mt-1.5 font-bold text-[#3D52A0] hover:underline text-left">Add “{q.trim()}” as a custom item</button>
+        <button type="button" onClick={() => onCustom(q.trim(), cat, work)} className="block mt-1.5 font-bold text-[#3D52A0] hover:underline text-left">Add “{q.trim()}” as a custom {work ? 'work' : 'item'}</button>
       )}
     </div>
   );
@@ -171,7 +171,7 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
         </div>
       ) : tab === 'works' ? (
         <div key="works" className="hud-swap flex-1 overflow-auto p-3 grid grid-cols-2 gap-2 content-start">
-          {customTile(workCat !== 'All' ? workCat : undefined)}
+          {customTile(workCat !== 'All' ? workCat : 'Civil', true)}
           {workList.map((item, i) => {
             const Icon = tradeIcon(`${item.name} ${item.cat}`);
             const m = workRoom ? measureWork?.(item) : null;
@@ -193,7 +193,7 @@ export default function Catalogue({ bank, readOnly, onClose, onAdd, addLabel, ar
               </LibTile></React.Fragment>
             );
           })}
-          {workList.length === 0 && noneFound('No work in the bank by that name.', workCat !== 'All' ? workCat : undefined)}
+          {workList.length === 0 && noneFound('No work in the bank by that name.', workCat !== 'All' ? workCat : 'Civil', true)}
         </div>
       ) : tab === 'kits' ? (
         <KitLibrary kits={kits} bankMap={bankMap || new Map(bank.map(i => [i.id, i]))} readOnly={readOnly} hideFigures={hideFigures}

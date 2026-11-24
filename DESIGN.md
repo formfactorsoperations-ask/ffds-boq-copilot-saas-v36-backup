@@ -151,6 +151,9 @@ linkage, notes, change orders on a frozen BOQ). Do not add a mode or a switch ba
   Not in the Item Bank", at the top of the library's Pieces and Works, the same offer when a filter finds
   nothing ("Add “…” as a custom item"), and a link in the Sheet's footer. The studio's finance roles
   give cost and margin; everyone else gives the client's rate. It is kept with the project (`adHocItems`).
+  From Works it is a **custom work**: by area or length, its quantity is measured from the room (Quantity:
+  Measure from the room | Type it; Measure: the floor, the walls to the ceiling or to 7′, the ceiling,
+  round the walls), with the sum shown, as the Works tab measures the bank's own.
 - **The right rail** is the Live BOQ (a receipt, room by room, with the work total) until a line or a
   room is picked; then the inspector for it. Each inspector is keyed by what it shows and swaps in with
   `hud-swap`. The rail hides to a "Live BOQ" button on narrow screens.

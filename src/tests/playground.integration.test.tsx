@@ -1746,6 +1746,36 @@ describe('a custom item, not in the Item Bank', () => {
     expect(within(inspector()).getByText('Fluted feature wall')).toBeTruthy();
   });
 
+  it('a custom work from Works: wooden flooring replacement, measured from the room’s floor, or typed', () => {
+    let latest: any[] = [];
+    let ctx: any = null;
+    render(<Harness tier={{ ...PG, boq: [] }} probe={t => { latest = t; }} probeCtx={c => { ctx = c; }} />);
+    const lib = screen.getByRole('complementary', { name: 'Studio design library' });
+    fireEvent.click(within(lib).getByRole('radio', { name: 'Works' }));
+    fireEvent.click(within(lib).getByRole('button', { name: /Add a custom work/ }));
+    fireEvent.change(field(/Item name/), { target: { value: 'Wooden flooring replacement' } });
+    expect((within(form()).getByLabelText(/^Unit/) as HTMLSelectElement).value).toBe('sq ft');
+    expect((within(form()).getByLabelText(/^Measure/) as HTMLSelectElement).value).toBe('floor');
+    // The Bedroom is 12′ × 10′ on the plan.
+    expect(form().querySelector('[data-measured]')!.textContent).toMatch(/120 sq ft: the floor, 12′ × 10′, in Bedroom/);
+    fireEvent.change(field(/Material cost/), { target: { value: '300' } });
+    fireEvent.change(field(/Labour/), { target: { value: '60' } });
+    fireEvent.change(field(/Margin/), { target: { value: '25' } });
+    expect(within(form()).getByRole('status').textContent).toBe('Comes to ₹54,000 for 120 sq ft.');
+    // Measured by the walls instead, then typed.
+    fireEvent.change(within(form()).getByLabelText(/^Measure/), { target: { value: 'perimeter' } });
+    expect(within(form()).getByLabelText(/^Measure/)).toBeTruthy();
+    fireEvent.change(within(form()).getByLabelText(/^Measure/), { target: { value: 'floor' } });
+    fireEvent.click(within(form()).getByRole('radio', { name: 'Type it' }));
+    fireEvent.change(field(/Quantity, typed/), { target: { value: '100' } });
+    expect(within(form()).getByRole('status').textContent).toBe('Comes to ₹45,000 for 100 sq ft.');
+    fireEvent.click(within(form()).getByRole('radio', { name: 'Measure from the room' }));
+    fireEvent.click(within(form()).getByRole('button', { name: 'Add to Bedroom' }));
+    const item = ctx.adHocItems.find((i: any) => i.name === 'Wooden flooring replacement');
+    expect(latest[0].boq[0]).toMatchObject({ bankId: item.id, qty: 120, roomId: 'Bedroom' });
+    expect(screen.getAllByRole('status').some(e => /as a custom item: 120 sq ft, the floor, 12′ × 10′\./.test(e.textContent || ''))).toBe(true);
+  });
+
   it('from the Sheet; a Designer gives the rate the client pays and never sees cost or margin', () => {
     org.role = 'Designer';
     let ctx: any = null;
