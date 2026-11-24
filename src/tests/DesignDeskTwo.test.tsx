@@ -9,7 +9,7 @@ import { render, screen, fireEvent, cleanup, act, within } from '@testing-librar
   and All drawings.
 */
 
-const h = vi.hoisted(() => ({ org: {} as any, studio: [] as any[], trackers: {} as Record<string, any[]>, submit: null as any, update: null as any, upload: null as any }));
+const h = vi.hoisted(() => ({ org: {} as any, studio: [] as any[], trackers: {} as Record<string, any[]>, submit: null as any, update: null as any, upload: null as any, versions: [] as any[], marks: [] as any[], approve: null as any, ret: null as any, mark: null as any }));
 
 vi.mock('../../contexts/OrgContext', () => ({ useOrg: () => h.org }));
 vi.mock('../../lib/pdfRender', () => ({ thumbnailOf: vi.fn(async () => null), pageCountOf: vi.fn(async () => 2), loadPdf: vi.fn(() => new Promise(() => undefined)), renderPage: vi.fn() }));
@@ -18,8 +18,8 @@ vi.mock('../../services/drawingReviewService', () => ({
   watchStudioReviews: (_o: string, cb: (r: any[]) => void) => { cb(h.studio); return () => undefined; },
   watchProjectDrawings: (_o: string, p: string, cb: (r: any[]) => void) => { cb(h.trackers[p] || []); return () => undefined; },
   watchDrawing: (_o: string, p: string, d: string, cb: (r: any) => void) => { cb([...h.studio, ...Object.values(h.trackers).flat()].find((x) => x.projectId === p && x.id === d) || null); return () => undefined; },
-  watchVersions: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb([]); return () => undefined; },
-  watchMarks: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb([]); return () => undefined; },
+  watchVersions: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb(h.versions); return () => undefined; },
+  watchMarks: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb(h.marks); return () => undefined; },
   watchRounds: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb([]); return () => undefined; },
   watchEvents: (_o: string, _p: string, _d: string, cb: (r: any[]) => void) => { cb([]); return () => undefined; },
   takeOpenRequest: () => null,
@@ -27,7 +27,7 @@ vi.mock('../../services/drawingReviewService', () => ({
   submitSheet: (...a: any[]) => h.submit(...a),
   fileUrl: () => Promise.reject(new Error('no files in tests')),
   fileBlob: () => Promise.reject(new Error('no files in tests')),
-  uploadSheet: (...a: any[]) => h.upload(...a), withdrawSheet: vi.fn(), approveSheet: vi.fn(), returnSheet: vi.fn(), createMark: vi.fn(), deleteMark: vi.fn(),
+  uploadSheet: (...a: any[]) => h.upload(...a), withdrawSheet: vi.fn(), approveSheet: (...a: any[]) => h.approve(...a), returnSheet: (...a: any[]) => h.ret(...a), createMark: (...a: any[]) => h.mark(...a), deleteMark: vi.fn(),
   updateMark: vi.fn(), fixMark: vi.fn(), setAudience: vi.fn(), removeVersion: vi.fn(), clientReturn: vi.fn(), clientKeep: vi.fn(), call: vi.fn(), ReviewError: class extends Error {},
 }));
 
@@ -67,6 +67,8 @@ beforeEach(() => {
   h.submit = vi.fn(async () => ({}));
   h.update = vi.fn();
   h.upload = vi.fn(async () => ({ versionNo: 1 }));
+  h.versions = []; h.marks = [];
+  h.approve = vi.fn(async () => ({})); h.ret = vi.fn(async () => ({})); h.mark = vi.fn(async () => ({ mark: { id: 'new' } }));
   window.scrollTo = vi.fn() as any;
   (globalThis as any).ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
 });
@@ -150,13 +152,73 @@ describe('Design Desk 2.0', () => {
     expect(screen.getByText('4 drawings')).toBeTruthy();
   });
 
-  it("opens a drawing in the review screen and comes back", () => {
+  const v1 = { id: 'v1', n: 1, pdfPath: 'x.pdf', thumbPath: null, fileName: 'x.pdf', size: 1, pageCount: 1, note: '', by: person('Kabir'), at: NOW, source: 'upload' };
+
+  it('opens a drawing on the new drawing screen and goes back where the person was', () => {
     org('Design Head', 'Head');
+    h.versions = [v1];
     render(<DeskTwo projects={projects} />);
     fireEvent.click(screen.getAllByRole('button', { name: 'Check this drawing' })[0]);
     expect(screen.getByRole('heading', { name: 'Master Bedroom Wardrobe' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Design Desk/ }));
+    expect(screen.getByText('Your turn')).toBeTruthy();
+    /* Every review tool is in one bar under the drawing. */
+    const bar = screen.getByRole('toolbar', { name: 'Drawing tools' });
+    ['Select', 'Pin', 'Box', 'Arrow', 'Draw', 'Rotate the drawing', 'Zoom out', 'Zoom in'].forEach((n) => expect(within(bar).getByRole('button', { name: n })).toBeTruthy());
+    expect(within(bar).getByRole('button', { name: /Full screen/ })).toBeTruthy();
+    fireEvent.click(within(bar).getByRole('button', { name: 'Zoom in' }));
+    expect(within(bar).getByRole('button', { name: /Zoom 120 percent/ })).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'p' });
+    expect(within(bar).getByRole('button', { name: 'Pin' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Home' }));
     expect(screen.getByText('Start here')).toBeTruthy();
+  });
+
+  it('lets the Design Head add a note, ask for changes and approve, with the same calls as today', async () => {
+    org('Design Head', 'Head');
+    h.versions = [v1];
+    render(<DeskTwo projects={projects} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Check this drawing' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Add a note' }));
+    fireEvent.change(screen.getByPlaceholderText('What should change here?'), { target: { value: 'Shutter 450 wide' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add the note' })); });
+    expect(h.mark).toHaveBeenCalledWith({ orgId: 's', projectId: 'p1', drawingId: 'a' }, 0, { t: 'pin', x: 0.5, y: 0.45 }, 'Shutter 450 wide', false);
+    /* Sending back with no notes on the sheet needs a line. */
+    fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Send back to Kabir' })); });
+    expect(h.ret).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(/A line for Kabir/), { target: { value: 'Redo the loft' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Send back to Kabir' })); });
+    expect(h.ret).toHaveBeenCalledWith({ orgId: 's', projectId: 'p1', drawingId: 'a' }, 7, 'Redo the loft');
+    /* The next drawing waiting opens by itself; approve that one. */
+    expect(screen.getByRole('heading', { name: 'Kitchen Elevation A' })).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Approve v1' })); });
+    expect(h.approve).toHaveBeenCalledWith({ orgId: 's', projectId: 'p1', drawingId: 'b' }, 7);
+  });
+
+  it('blocks approval while a must-fix note is open', () => {
+    org('Design Head', 'Head');
+    h.versions = [v1];
+    h.marks = [{ id: 'm1', versionId: 'v1', n: 1, page: 0, shape: { t: 'pin', x: 0.2, y: 0.2 }, text: 'Oven will not fit', blocking: true, status: 'OPEN', by: person('Head'), at: NOW, updatedAt: NOW }];
+    render(<DeskTwo projects={projects} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Check this drawing' })[0]);
+    expect(screen.getByText(/1 must-fix note is open/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Approve v1' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("gives a designer a sent-back drawing with its notes to tick and the upload button", () => {
+    org('Designer', 'Riya');
+    h.versions = [{ ...v1, by: person('Riya') }];
+    h.marks = [{ id: 'm1', versionId: 'v1', n: 1, page: 0, shape: { t: 'pin', x: 0.2, y: 0.2 }, text: 'Deck level 150 below', blocking: false, status: 'OPEN', by: person('Head'), at: NOW, updatedAt: NOW }];
+    render(<DeskTwo projects={projects} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Fix and upload again' })[0]);
+    expect(screen.getByRole('heading', { name: 'Pool Deck Plan' })).toBeTruthy();
+    expect(screen.getByText('0 of 1 fixed')).toBeTruthy();
+    expect(screen.getByLabelText('Mark fixed')).toBeTruthy();
+    /* A designer never gets the marking tools or the decision. */
+    expect(screen.queryByRole('button', { name: 'Pin' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Approve/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Upload the fixed drawing' }));
+    expect(screen.getByRole('dialog', { name: 'Upload Pool Deck Plan' })).toBeTruthy();
   });
 
   it('uploads a drawing in three steps: choose, check, send', async () => {

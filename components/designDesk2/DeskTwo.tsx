@@ -9,7 +9,7 @@ import { mainAction } from '../../lib/designDesk2';
 import { useProjectTeam } from '../../services/projectTeam';
 import { watchStudioReviews, watchProjectDrawings, takeOpenRequest, returnFromDesk, submitSheet, type ReviewDrawing, type DeskOrigin } from '../../services/drawingReviewService';
 import { watchMeetings } from '../../services/designMeetingService';
-import SheetStudio, { type Me } from '../drawingReview/SheetStudio';
+import type { Me } from '../drawingReview/SheetStudio';
 import AddPdfs from '../drawingReview/AddPdfs';
 import Meetings from '../drawingReview/Meetings';
 import MeetingMode from '../drawingReview/MeetingMode';
@@ -18,6 +18,7 @@ import { DeskStyles } from '../drawingReview/DeskParts';
 import { MotionStyles } from '../drawingReview/motion';
 import { AllDrawings, Home, ProjectPage, RoomPage, type DeskCtx, type ProjectCard } from './pages';
 import UploadWizard from './UploadWizard';
+import DrawingScreen from './DrawingScreen';
 import { cx } from './parts';
 import '../projectHeader/projectHeader.css';
 
@@ -28,9 +29,9 @@ import '../projectHeader/projectHeader.css';
   Home says what to do first; a project opens to its rooms, a room to its
   drawings. The drawings, their states and every rule are today's: this reads
   the same data as components/drawingReview/DesignDeskTab and calls the same
-  functions. Until their own screens are built, opening a drawing shows
-  today's review screen and Meetings shows today's meetings, inside this frame.
-  A drawing with no PDF yet goes straight to the three-step upload.
+  functions. Opening a drawing shows the new drawing screen (DrawingScreen);
+  a drawing with no PDF yet goes straight to the three-step upload. Meetings
+  still shows today's meetings inside this frame, until Phase 2.
 */
 
 interface Props {
@@ -211,14 +212,15 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
   }, [orgId, toast]);
   const [add, setAdd] = useState<{ projectId: string | null } | null>(null);
   /* The drawing the three-step upload is open on, by key, so the wizard always has its latest revision. */
-  const [up, setUp] = useState<string | null>(null);
-  const upDrawing = up ? rows.find((d) => `${d.projectId}/${d.id}` === up) || null : null;
+  const [up, setUpRaw] = useState<ReviewDrawing | null>(null);
+  const setUp = (d: ReviewDrawing | null) => setUpRaw(d);
+  const upDrawing = up ? rows.find((d) => d.projectId === up.projectId && d.id === up.id) || up : null;
 
   const ctx: DeskCtx = {
     rows, viewer, uploader, meName: me.name, projectOf, sending,
-    act: (d) => { const k = mainAction(d, viewer, uploader).kind; if (k === 'send') send(d); else if (k === 'upload') setUp(`${d.projectId}/${d.id}`); else openSheet(d); },
+    act: (d) => { const k = mainAction(d, viewer, uploader).kind; if (k === 'send') send(d); else if (k === 'upload') setUp(d); else openSheet(d); },
     open: openSheet,
-    upload: (d) => setUp(`${d.projectId}/${d.id}`),
+    upload: (d) => setUp(d),
     goProject: (id) => go({ at: 'project', projectId: id }),
     goRoom: (projectId, room) => go({ at: 'room', projectId, room }),
     goMeetings: meetsTab ? () => go({ at: 'meetings' }) : undefined,
@@ -246,19 +248,24 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
       </div>
     );
   }
+  const wizard = upDrawing && (
+    <UploadWizard orgId={orgId} me={me} drawing={upDrawing} projectName={projectOf(upDrawing.projectId).name}
+      siblings={rows.filter((d) => d.projectId === upDrawing.projectId)} onClose={() => setUp(null)} />
+  );
   if (open) {
+    /* Back goes where the person came from: another part of the app, or the page of the desk they were on. */
+    const backLabel = origin?.label || (page.at === 'room' ? (page.room === 'General / Project-Wide' ? 'Whole home' : page.room) : page.at === 'project' ? projectOf(page.projectId).name : page.at === 'all' ? 'All drawings' : page.at === 'meetings' ? 'Meetings' : 'Home');
     return (
-      <div className="mx-auto w-full max-w-[1360px] px-4 pb-36 pt-6 text-[#17191E] md:px-5">
-        <SheetStudio
-          key={`${open.projectId}/${open.drawingId}`}
+      <div className="w-full pb-24">
+        <React.Fragment key={`${open.projectId}/${open.drawingId}`}><DrawingScreen
           orgId={orgId} projectId={open.projectId} drawingId={open.drawingId} projectName={projectOf(open.projectId).name}
-          look={projectOf(open.projectId)} projectNeeds={attention(rows.filter((d) => d.projectId === open.projectId && d.id !== open.drawingId), viewer)}
-          role={role} me={me} queue={queue}
-          onClose={() => setOpen(null)}
-          onBack={origin ? goBack : undefined}
-          backLabel={origin?.label}
+          role={role} me={me} viewer={viewer} queue={queue}
+          onClose={origin ? goBack : () => setOpen(null)}
+          backLabel={backLabel}
           onOpen={(n) => openSheet({ projectId: n.projectId, id: n.drawingId })}
-        />
+          onUpload={setUp}
+        /></React.Fragment>
+        {wizard}
       </div>
     );
   }
@@ -308,10 +315,7 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
         )}
       </main>
 
-      {upDrawing && (
-        <UploadWizard orgId={orgId} me={me} drawing={upDrawing} projectName={projectOf(upDrawing.projectId).name}
-          siblings={rows.filter((d) => d.projectId === upDrawing.projectId)} onClose={() => setUp(null)} />
-      )}
+      {wizard}
 
       {add && (
         <AddPdfs orgId={orgId} me={me} files={[]} projectId={add.projectId}
