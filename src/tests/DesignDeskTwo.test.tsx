@@ -44,6 +44,8 @@ vi.mock('../../services/roomMessageService', () => ({
 import DesignDeskSwitch from '../../components/designDesk2/DesignDeskSwitch';
 import DeskTwo from '../../components/designDesk2/DeskTwo';
 import DesignDeskSetting, { deskChoiceOf } from '../../components/studio/DesignDeskSetting';
+import ProjectList from '../../components/designDesk2/ProjectList';
+import { useRailFollow } from '../../components/designDesk2/rail';
 import { searchSettings } from '../../lib/settingsRegistry';
 import fs from 'fs';
 import path from 'path';
@@ -132,6 +134,110 @@ describe('the switch in Studio settings', () => {
     expect(read('components/studio/StudioSettingsConsole.tsx')).toMatch(/<DesignDeskSetting/);
     expect(read('components/designDesk2/DesignDeskSwitch.tsx')).not.toMatch(/updateOrgData/);
     expect(read('components/designDesk2/DeskTwo.tsx')).not.toMatch(/updateOrgData|onUseClassic/);
+  });
+});
+
+describe('the rail beside every page', () => {
+  it('counts the drawings, lists the projects that have some and opens one', () => {
+    org('Design Head', 'Head');
+    render(<DeskTwo projects={projects} />);
+    const rail = screen.getByRole('navigation', { name: 'Design Desk' });
+    /* Six drawings, one approved; two waiting for a check, one being changed. */
+    expect(within(rail).getByText('1 of 6 drawings approved')).toBeTruthy();
+    expect(within(rail).getByText('Being checked')).toBeTruthy();
+    expect(within(rail).getByText('Being changed')).toBeTruthy();
+    const list = within(rail).getByRole('region', { name: 'Projects with drawings' });
+    expect(within(list).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Open Harmony 704', 'Open Palm Grove Villa']);
+    fireEvent.click(within(list).getByRole('button', { name: 'Open Palm Grove Villa' }));
+    expect(screen.getByRole('heading', { name: 'Palm Grove Villa' })).toBeTruthy();
+    expect(within(list).getByRole('button', { name: 'Open Palm Grove Villa' }).getAttribute('aria-current')).toBe('true');
+  });
+  it('offers Upload drawings to someone who uploads', () => {
+    org('Designer', 'Riya');
+    render(<DeskTwo projects={projects} />);
+    expect(within(screen.getByRole('navigation', { name: 'Design Desk' })).getByRole('button', { name: 'Upload drawings' })).toBeTruthy();
+  });
+
+  /* The rail stays in view by being pinned, because `sticky` cannot work under the app's root (rail.tsx). */
+  const Probe = ({ slotTop, railRect }: { slotTop: number; railRect: { top: number; left: number } }) => {
+    const slot = React.useRef<HTMLDivElement>(null), rail = React.useRef<HTMLElement>(null);
+    React.useLayoutEffect(() => {
+      slot.current!.getBoundingClientRect = () => ({ top: slotTop, left: 24, width: 256, height: 0, bottom: slotTop, right: 280 }) as DOMRect;
+      slot.current!.parentElement!.getBoundingClientRect = () => ({ top: slotTop, left: 24, width: 1200, height: 5000, bottom: slotTop + 5000, right: 1224 }) as DOMRect;
+      rail.current!.getBoundingClientRect = () => ({ ...railRect, width: 256, height: 600, bottom: railRect.top + 600, right: 280 }) as DOMRect;
+    });
+    useRailFollow(slot, rail);
+    return <div><div ref={slot}><nav ref={rail} data-testid="rail" /></div></div>;
+  };
+  const wide = () => { window.matchMedia = ((q: string) => ({ matches: /min-width/.test(q), addEventListener() {}, removeEventListener() {} })) as any; };
+  it('leaves the rail in its place at the top of the page and fills the screen below it', () => {
+    wide();
+    render(<Probe slotTop={150} railRect={{ top: 150, left: 24 }} />);
+    const rail = screen.getByTestId('rail');
+    expect(rail.style.position).toBe('');
+    expect(rail.style.height).toBe(`${window.innerHeight - 16 - 150}px`);
+  });
+  it('pins the rail once its place has scrolled off the top', () => {
+    wide();
+    render(<Probe slotTop={-400} railRect={{ top: 16, left: 24 }} />);
+    const rail = screen.getByTestId('rail');
+    expect(rail.style.position).toBe('fixed');
+    expect(rail.style.top).toBe('16px');
+    expect(rail.style.left).toBe('24px');
+    expect(rail.style.width).toBe('256px');
+  });
+  it('moves the rail with a transform when pinning would measure from a parent', () => {
+    wide();
+    render(<Probe slotTop={-400} railRect={{ top: 300, left: 24 }} />);
+    const rail = screen.getByTestId('rail');
+    expect(rail.style.position).toBe('');
+    expect(rail.style.transform).toBe('translateY(416px)');
+  });
+  it('leaves a phone alone', () => {
+    window.matchMedia = (() => ({ matches: false, addEventListener() {}, removeEventListener() {} })) as any;
+    render(<Probe slotTop={-400} railRect={{ top: 16, left: 24 }} />);
+    expect(screen.getByTestId('rail').getAttribute('style') || '').toBe('');
+  });
+});
+
+describe("Home's project list", () => {
+  const row = (id: string, name: string, total: number, done: number, need: number, client?: string) => ({ id, name, client, code: name.slice(0, 2).toUpperCase(), color: '#334155', total, done, need });
+  const many = [
+    row('a', 'Pali Hills Bungalow', 15, 3, 3, 'Mr Pawar'), row('b', 'Lodha Splendora', 6, 6, 0), row('c', 'Icon Dhokali', 2, 0, 0),
+    ...['Green World', 'Harmony 704', 'Kalpataru Elitus', 'Lake Pleasant', 'Majiwada 2-BHK', 'Hiranandani One'].map((n, i) => row(`x${i}`, n, 0, 0, 0, i === 0 ? 'Mrs Sneha' : undefined)),
+  ];
+  it('lists the projects with drawings in one tidy list and folds the empty ones away', () => {
+    const onOpen = vi.fn();
+    render(<ProjectList projects={many} onOpen={onOpen} />);
+    const list = screen.getByRole('region', { name: 'Your projects' });
+    expect(within(list).getByText('3 of 15 approved')).toBeTruthy();
+    expect(within(list).getByText('3 need you')).toBeTruthy();
+    expect(within(list).getByText('All approved')).toBeTruthy();
+    expect(within(list).getByText('Nothing for you')).toBeTruthy();
+    /* Six projects have no drawing: one line says so, and they are not drawn until asked for. */
+    expect(screen.queryByText('Green World')).toBeNull();
+    const fold = screen.getByRole('button', { name: '6 projects with no drawings yet' });
+    expect(fold.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(fold);
+    expect(fold.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: /Green World/ }));
+    expect(onOpen).toHaveBeenCalledWith('x0');
+    fireEvent.click(screen.getByRole('button', { name: /Pali Hills Bungalow/ }));
+    expect(onOpen).toHaveBeenCalledWith('a');
+  });
+  it('finds a project by its name or its client, empty ones included', () => {
+    render(<ProjectList projects={many} onOpen={() => undefined} />);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Find a project' }), { target: { value: 'sneha' } });
+    expect(screen.getByRole('button', { name: /Green World/ })).toBeTruthy();
+    expect(screen.queryByText('Pali Hills Bungalow')).toBeNull();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Find a project' }), { target: { value: 'zzz' } });
+    expect(screen.getByText('No project matches “zzz”.')).toBeTruthy();
+  });
+  it('shows the empty projects straight away when none has a drawing, and no search for a short list', () => {
+    render(<ProjectList projects={many.slice(3, 6)} onOpen={() => undefined} />);
+    expect(screen.getByText('None of these has a drawing yet.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Harmony 704/ })).toBeTruthy();
+    expect(screen.queryByRole('searchbox')).toBeNull();
   });
 });
 

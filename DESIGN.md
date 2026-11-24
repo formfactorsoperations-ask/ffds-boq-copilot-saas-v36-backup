@@ -121,9 +121,20 @@ accepted. The switch is one row in Studio settings > Data & integrations
 settings draft. Neither desk draws a switch or a way back: people at work see one desk.
 
 What the new desk may do that a console screen may not:
-- **A dark green rail** (`bg-[#0C1F1A]`) with Home, All drawings and Meetings. The active item is
-  `bg-emerald-600 text-white hud-rail-active`; the others are `text-emerald-100`. On a phone the
-  rail is a row of tabs above the page.
+- **A dark green rail** (`components/designDesk2/rail.tsx`, `#0C1F1A`) with Home, All drawings and
+  Meetings. The active item is `bg-emerald-600 text-white hud-rail-active`; the others are
+  `text-emerald-100`. On a wide screen it is a full-height side panel that stays in view while the
+  page scrolls, and under the three pages it carries, in this order: a ring with how many of the
+  drawings are approved, three small counts (Need you, Being checked, Being changed), "Projects with
+  drawings" (one click opens a project; the open one is `bg-white/15`), a line-drawn plan in what
+  room is left, and Upload drawings for someone who uploads. On a phone it is a row of tabs above the
+  page and the rest is left out. **Do not use CSS `sticky` for it:** the app's root has
+  `overflow-x: hidden`, so nothing sticks to the window; `useRailFollow` pins it instead.
+- **Home's project list** (`ProjectList.tsx`) is one list, a line per project that has drawings, in
+  fixed columns: mark, name and client, "n of m approved" with a bar, one tag (amber "n need you",
+  emerald "All approved" or slate "Nothing for you"), an arrow. Projects with no drawing are folded
+  under one line ("14 projects with no drawings yet") and open as small tiles. From nine projects up
+  there is a "Find a project" box. Do not go back to a grid of equal cards.
 - **Emerald for the main action** (`bg-emerald-600`, hover `emerald-700`) and for done steps, in
   place of the brand blue. **Amber for "your turn" and the client.** Rose for late. Slate for the
   rest. No other colours.
@@ -141,10 +152,30 @@ brand blue (`tone="console"`), because that screen is a console screen.
 What stays as everywhere else:
 - The fonts. The mockup's fonts were not adopted (owner, 24 Nov 2026): the desk uses the app's own.
 - The motion classes on its pages: `hud-panel-in`, `hud-row-in`, `hud-swap`, `hud-rail-active`,
-  `phd-lift`. The drawing screen has more: see "Design Desk 2.0 motion" below.
+  `phd-lift`, plus the desk's own `dd2h-*` set (see "Design Desk 2.0 pages in motion" below). The
+  drawing screen has more: see "Design Desk 2.0 motion" below.
 - The guard: `designGuard.test.ts` counts the new folder like any other, and it is at zero.
 - The words: a drawing's place is one plain sentence (`lib/designDesk2.ts`, `whereLine`), its steps
   are numbered (`stepsOf`), and it shows one main button (`mainAction`).
+
+### Design Desk 2.0 pages in motion (owner, 25 Nov 2026)
+
+The owner asked for animation on the desk's pages. It lives in `HomeMotionStyles`
+(`components/designDesk2/motion.tsx`, classes `dd2h-*`), mounted once by the desk, and is for the
+desk only. Same fonts; emerald, amber and slate.
+
+- **The welcome band** (`dd2h-band`): two slow lights drift behind it. The drawing in "Start here"
+  floats (`dd2h-thumb`); its button's arrow leans forward and a light passes over it (`dd2h-go`).
+- **The numbered steps**: the done line draws itself (`dd2h-line`), each done step pops in
+  (`dd2h-step`), and the current step beats amber when it is the person's turn (`dd2h-now`).
+- **A row** (`dd2h-row`): under the pointer the drawing lifts and tips, the project's mark tips, and
+  the arrow slides. A project's approved bar fills from empty (`dd2h-bar`).
+- **The rail**: the ring draws to its value, the counts use `CountUp`, the Home count pops
+  (`dd2h-pop`), a project slides under the pointer (`dd2h-proj`), and the plan at the bottom draws
+  itself wall by wall once (`dd2h-plan`), only when there is room for it.
+- **Sections below the fold** rise the first time they are scrolled to (`Reveal`); a section already
+  on screen, or a browser that cannot tell, just shows it.
+- Everything stops under `prefers-reduced-motion`, and nothing is hidden waiting for an animation.
 
 ### Design Desk 2.0 meetings (Phase 2, from the same approved mockup)
 

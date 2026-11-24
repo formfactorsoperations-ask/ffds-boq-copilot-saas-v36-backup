@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 /*
   DESIGN DESK 2.0 MOTION: "Living icons" (DESIGN.md, "Design Desk 2.0
@@ -251,4 +251,106 @@ export const Tilt: React.FC<{ children: React.ReactNode; className?: string; sty
       <span className="dd2-light" aria-hidden />
     </div>
   );
+};
+
+/*
+  THE DESK'S PAGES IN MOTION (owner, 25 Nov 2026: "can we add some
+  animations"; DESIGN.md, "Design Desk 2.0 pages in motion"). Home, the rail
+  and the project list, in the same language as the drawing screen and the
+  meeting: the welcome band has two slow lights behind it, the drawing in
+  "Start here" floats and its button's arrow leans forward, the steps draw
+  themselves and "your turn" beats, a row's drawing lifts under the pointer,
+  the rail's ring and the projects' bars fill, and a section rises as it is
+  scrolled to (Reveal). Colours are the desk's: emerald, amber, slate.
+  Everything stops under reduced motion.
+*/
+export const HomeMotionStyles = () => (
+  <style>{`
+    @keyframes dd2hDrift { 0%, 100% { transform: translate3d(0,0,0) scale(1) } 50% { transform: translate3d(7%, 9%, 0) scale(1.1) } }
+    @keyframes dd2hRise { from { opacity: 0; transform: translateY(18px) } to { opacity: 1; transform: none } }
+    @keyframes dd2hGrow { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+    @keyframes dd2hRing { from { stroke-dashoffset: var(--len) } to { stroke-dashoffset: var(--off) } }
+    @keyframes dd2hBeat { 0% { box-shadow: 0 0 0 0 rgba(245,158,11,.55) } 70%, 100% { box-shadow: 0 0 0 10px rgba(245,158,11,0) } }
+    @keyframes dd2hLean { 0%, 100% { transform: translateX(0) } 50% { transform: translateX(4px) } }
+    @keyframes dd2hSheen { 0% { transform: translateX(-140%) skewX(-20deg) } 55%, 100% { transform: translateX(320%) skewX(-20deg) } }
+    @keyframes dd2hFloat { 0%, 100% { transform: translateY(0) rotate(-1deg) } 50% { transform: translateY(-5px) rotate(.6deg) } }
+    @keyframes dd2hInk { to { stroke-dashoffset: 0 } }
+    @keyframes dd2hPop { 0% { transform: scale(.5) } 60% { transform: scale(1.12) } 100% { transform: none } }
+
+    /* ---- the welcome band */
+    .dd2h-band { position: relative; isolation: isolate }
+    .dd2h-band::before, .dd2h-band::after { content: ''; position: absolute; z-index: -1; border-radius: 9999px; filter: blur(64px); pointer-events: none; animation: dd2hDrift 16s ease-in-out infinite }
+    .dd2h-band::before { right: -8%; top: -55%; width: 46%; height: 130%; background: rgba(16,185,129,.38) }
+    .dd2h-band::after { left: 18%; bottom: -70%; width: 40%; height: 110%; background: rgba(245,158,11,.16); animation-delay: -8s }
+    .dd2h-start { box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 26px 40px -30px rgba(0,0,0,.9); animation: dd2hRise .55s cubic-bezier(.22,1,.36,1) .08s both }
+    .dd2h-thumb { display: block; animation: dd2hFloat 6s ease-in-out infinite; filter: drop-shadow(0 14px 16px rgba(0,0,0,.45)); transition: scale .25s cubic-bezier(.3,1.5,.5,1) }
+    button:hover > .dd2h-thumb { scale: 1.05 }
+    .dd2h-go { position: relative; overflow: hidden; transition: scale .2s cubic-bezier(.3,1.5,.5,1), background-color .15s, box-shadow .2s; box-shadow: 0 14px 24px -14px rgba(0,0,0,.7) }
+    .dd2h-go:hover:not(:disabled) { scale: 1.04 }
+    .dd2h-go svg { animation: dd2hLean 1.5s ease-in-out infinite }
+    .dd2h-go::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 34%; background: linear-gradient(90deg, rgba(16,185,129,0), rgba(16,185,129,.22), rgba(16,185,129,0)); animation: dd2hSheen 3.6s ease-in-out infinite; pointer-events: none }
+
+    /* ---- the numbered steps */
+    .dd2h-line { transform-origin: 0 50%; animation: dd2hGrow .6s cubic-bezier(.22,1,.36,1) both; animation-delay: calc(var(--i, 0) * 150ms) }
+    .dd2h-step { animation: dd2hPop .45s cubic-bezier(.3,1.6,.5,1) both; animation-delay: calc(var(--i, 0) * 150ms + 80ms) }
+    .dd2h-now { animation: dd2hPop .45s cubic-bezier(.3,1.6,.5,1) both, dd2hBeat 1.9s ease-out 1s infinite; animation-delay: calc(var(--i, 0) * 150ms + 80ms), 1s }
+
+    /* ---- a drawing's row, a project's row */
+    .dd2h-row .dd2h-sheet, .dd2h-row .dd2h-mark { transition: transform .25s cubic-bezier(.3,1.5,.5,1) }
+    .dd2h-row:hover .dd2h-sheet { transform: translateY(-3px) rotate(-1.5deg) scale(1.05) }
+    .dd2h-row:hover .dd2h-mark { transform: rotate(-6deg) scale(1.08) }
+    .dd2h-row .dd2h-chev { transition: transform .2s cubic-bezier(.3,1.5,.5,1), color .15s }
+    .dd2h-row:hover .dd2h-chev { transform: translateX(4px); color: #059669 }
+    .dd2h-row button svg { transition: transform .2s cubic-bezier(.3,1.5,.5,1) }
+    .dd2h-row:hover button:not(:disabled) > svg:first-child { transform: translateX(3px) }
+    .dd2h-bar { overflow: hidden }
+    .dd2h-bar > i { display: block; height: 100%; border-radius: inherit; transform-origin: 0 50%; animation: dd2hGrow .9s cubic-bezier(.22,1,.36,1) .15s both }
+    .dd2h-pop { animation: dd2hPop .45s cubic-bezier(.3,1.6,.5,1) both }
+    .dd2h-chip { transition: transform .18s cubic-bezier(.3,1.5,.5,1), border-color .15s, box-shadow .2s }
+    .dd2h-chip:hover { transform: translateY(-2px); border-color: #10B981; box-shadow: 0 12px 18px -14px rgba(5,150,105,.7) }
+
+    /* ---- the rail */
+    .dd2h-rail { background: linear-gradient(180deg, #0C1F1A, #0A1915); box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 24px 40px -30px rgba(12,31,26,.9) }
+    .dd2h-tile { background: linear-gradient(180deg, rgba(255,255,255,.1), rgba(255,255,255,.04)); box-shadow: inset 0 1px 0 rgba(255,255,255,.09) }
+    .dd2h-ring .val { stroke-dasharray: var(--len); stroke-dashoffset: var(--off); animation: dd2hRing 1.2s cubic-bezier(.22,1,.36,1) .2s both }
+    .dd2h-proj { transition: transform .18s cubic-bezier(.3,1.5,.5,1), background-color .15s }
+    .dd2h-proj:hover { transform: translateX(3px) }
+    .dd2h-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.22) transparent }
+    .dd2h-fill { container-type: size }
+    .dd2h-plan { display: none; margin: 12px 0 4px }
+    .dd2h-plan path { fill: none; stroke: rgba(110,231,183,.42); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: dd2hInk 1.6s cubic-bezier(.4,0,.2,1) forwards; animation-delay: calc(var(--i, 0) * 320ms + 600ms) }
+    @container (min-height: 190px) { .dd2h-plan { display: block } }
+
+    /* ---- a section that rises as it is scrolled to */
+    .dd2h-wait { opacity: 0; transform: translateY(18px) }
+    .dd2h-show { animation: dd2hRise .55s cubic-bezier(.22,1,.36,1) both }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dd2h-band::before, .dd2h-band::after, .dd2h-start, .dd2h-thumb, .dd2h-go svg, .dd2h-go::after, .dd2h-line, .dd2h-step, .dd2h-now, .dd2h-bar > i, .dd2h-pop, .dd2h-ring .val, .dd2h-show { animation: none !important }
+      .dd2h-go, .dd2h-thumb, .dd2h-row .dd2h-sheet, .dd2h-row .dd2h-mark, .dd2h-row .dd2h-chev, .dd2h-row button svg, .dd2h-chip, .dd2h-proj { transition: none !important }
+      .dd2h-row:hover .dd2h-sheet, .dd2h-row:hover .dd2h-mark, .dd2h-row:hover .dd2h-chev, .dd2h-row:hover button > svg, .dd2h-chip:hover, .dd2h-proj:hover { transform: none !important }
+      .dd2h-go:hover:not(:disabled), button:hover > .dd2h-thumb { scale: 1 }
+      .dd2h-wait { opacity: 1; transform: none }
+      .dd2h-plan path { animation: none !important; stroke-dashoffset: 0 }
+    }
+  `}</style>
+);
+
+/** A section that rises into place the first time it is scrolled to. Already on screen, or with no way to tell, it just shows. */
+export const Reveal: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => {
+  const el = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<'plain' | 'wait' | 'show'>('plain');
+  useEffect(() => {
+    const node = el.current;
+    if (!node || typeof IntersectionObserver !== 'function' || typeof window.matchMedia !== 'function') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (node.getBoundingClientRect().top < window.innerHeight) return;
+    setState('wait');
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) { setState('show'); io.disconnect(); }
+    }, { rootMargin: '0px 0px -6% 0px' });
+    io.observe(node);
+    return () => io.disconnect();
+  }, []);
+  return <div ref={el} className={`${className} ${state === 'wait' ? 'dd2h-wait' : state === 'show' ? 'dd2h-show' : ''}`}>{children}</div>;
 };

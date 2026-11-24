@@ -17,7 +17,7 @@ new work must look like part of the existing app, not a new design.
   the Projects screen's glass folders (`components/projects/`, `components/ui/glass-folder-cards.tsx`),
   the Money board (`components/money/board/`), the Item bank and the rest of the studio library (`components/BankTab.tsx`, `components/BankItemCard.tsx`,
   `components/bank/`, `components/TemplateEditorTab.tsx`, `components/templates/`, `components/VendorsManager.tsx`) and the BOQ Playground (`components/playground/`, its design
-  library and the drawers it opens) also use the richer motion the owner approved: see "People motion",
+  library and the drawers it opens) and the new Design Desk (`components/designDesk2/`) also use the richer motion the owner approved: see "People motion", "Design Desk 2.0 pages in motion",
   "Ops Desk motion", "Ops Desk 2.1", "Pricing & Tiers motion", "Project sidebar", "Projects as glass folders",
   "Money motion", "Item bank motion", "Playground library motion" and "BOQ Playground" in DESIGN.md.
   Same fonts and colours.

@@ -99,8 +99,9 @@ export const StepTrack: React.FC<{ steps: Steps; yours?: boolean; compact?: bool
       const now = i === steps.current;
       return (
         <li key={label} className="relative flex min-w-0 flex-1 flex-col items-center text-center" aria-current={now ? 'step' : undefined}>
-          {i > 0 && <span aria-hidden className={cx('absolute right-1/2 top-3.5 h-0.5 w-full -translate-y-1/2', done || now ? 'bg-emerald-500' : 'bg-slate-200')} />}
-          <span className={cx('relative z-[1] grid h-7 w-7 place-items-center rounded-full text-xs font-bold',
+          {i > 0 && <span aria-hidden className="absolute right-1/2 top-3.5 h-0.5 w-full -translate-y-1/2 bg-slate-200" />}
+          {i > 0 && (done || now) && <span aria-hidden className="dd2h-line absolute right-1/2 top-3.5 h-0.5 w-full -translate-y-1/2 bg-emerald-500" style={{ '--i': i - 1 } as React.CSSProperties} />}
+          <span style={{ '--i': i } as React.CSSProperties} className={cx('relative z-[1] grid h-7 w-7 place-items-center rounded-full text-xs font-bold', done && 'dd2h-step', now && yours && 'dd2h-now',
             done ? 'bg-emerald-600 text-white' : now ? (yours ? 'bg-amber-500 text-white ring-4 ring-amber-100' : 'bg-white text-emerald-700 ring-2 ring-emerald-500') : 'bg-slate-100 text-slate-400')}>
             {done ? <Check size={14} strokeWidth={3} aria-label="Done" /> : i + 1}
           </span>

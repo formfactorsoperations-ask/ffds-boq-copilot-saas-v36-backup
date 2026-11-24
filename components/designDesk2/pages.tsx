@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 import { ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, FileUp, FolderOpen, Loader2, MessageSquare, PenTool, Presentation, Search, Send } from 'lucide-react';
+import ProjectList from './ProjectList';
+import { Reveal } from './motion';
 import { GENERAL_ROOM, matchesQuery, needsMe, readyRooms, roomOf, type Viewer } from '../../lib/designDesk';
 import { greeting, holderOf, homeLists, mainAction, stepsOf, whereLine } from '../../lib/designDesk2';
 import { stateOf } from '../../lib/drawingReview';
@@ -58,7 +60,7 @@ const MainButton: React.FC<{ c: DeskCtx; d: ReviewDrawing; big?: boolean; light?
   const a = mainAction(d, c.viewer, c.uploader);
   const busy = c.sending.has(keyOf(d));
   return (
-    <Btn kind={light ? 'light' : a.primary ? 'primary' : 'plain'} big={big} disabled={busy}
+    <Btn kind={light ? 'light' : a.primary ? 'primary' : 'plain'} big={big} disabled={busy} className={big && light ? 'dd2h-go' : undefined}
       icon={busy ? Loader2 : a.kind === 'send' ? Send : a.kind === 'upload' ? FileUp : ArrowRight}
       onClick={(e) => { e.stopPropagation(); c.act(d); }}>{a.label}</Btn>
   );
@@ -67,9 +69,9 @@ const MainButton: React.FC<{ c: DeskCtx; d: ReviewDrawing; big?: boolean; light?
 const DrawingRow: React.FC<{ c: DeskCtx; d: ReviewDrawing; i: number; showProject?: boolean }> = ({ c, d, i, showProject }) => {
   const p = c.projectOf(d.projectId);
   return (
-    <div className="hud-row-in flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 hover:bg-slate-50" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
+    <div className="dd2h-row hud-row-in flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 hover:bg-slate-50" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
       <button type="button" onClick={() => c.open(d)} className="flex min-w-0 flex-[1_1_320px] items-center gap-3 text-left">
-        <SheetThumb d={d} className="w-[84px]" />
+        <SheetThumb d={d} className="dd2h-sheet w-[84px]" />
         <span className="min-w-0">
           <span className="block truncate text-base font-bold text-slate-800">{d.name}</span>
           <span className="block truncate text-sm text-slate-500">{showProject ? `${p.name} · ` : ''}{roomLabel(d.roomName)}{d.review?.versionNo ? ` · v${d.review.versionNo}` : ''}</span>
@@ -102,15 +104,15 @@ export const Home: React.FC<{ c: DeskCtx; projects: ProjectCard[]; canMeet: bool
   const s = lists.start;
   return (
     <div>
-      <section className="hud-panel-in overflow-hidden rounded-3xl bg-gradient-to-br from-[#0C1F1A] to-emerald-900 p-5 text-white shadow-sm sm:p-7">
+      <section className="dd2h-band hud-panel-in overflow-hidden rounded-3xl bg-gradient-to-br from-[#0C1F1A] to-emerald-900 p-5 text-white shadow-sm sm:p-7">
         <p className="text-sm font-semibold text-emerald-100">{greeting()}, {firstName(c.meName)}</p>
         <h2 className="mt-1 text-2xl font-bold tracking-tight">{n ? `${n} drawing${n === 1 ? ' needs' : 's need'} you today` : 'Nothing needs you right now'}</h2>
         {s ? (
-          <div className="mt-5 rounded-2xl bg-white/10 p-4 ring-1 ring-white/15 sm:p-5">
+          <div className="dd2h-start mt-5 rounded-2xl bg-white/10 p-4 ring-1 ring-white/15 sm:p-5">
             <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Start here</p>
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-4">
               <button type="button" onClick={() => c.open(s)} className="flex min-w-0 flex-[1_1_340px] items-center gap-4 text-left">
-                <SheetThumb d={s} className="w-[120px]" />
+                <span className="dd2h-thumb shrink-0"><SheetThumb d={s} className="w-[120px]" /></span>
                 <span className="min-w-0">
                   <span className="block truncate text-xl font-bold">{s.name}</span>
                   <span className="block truncate text-sm text-emerald-100">{c.projectOf(s.projectId).name} · {roomLabel(s.roomName)}</span>
@@ -127,17 +129,17 @@ export const Home: React.FC<{ c: DeskCtx; projects: ProjectCard[]; canMeet: bool
         )}
       </section>
 
-      {lists.todo.length > 0 && <>
+      {lists.todo.length > 0 && <Reveal>
         <SectionTitle hint="In the order they are due">Then do these</SectionTitle>
         <RowList c={c} rows={lists.todo} showProject />
-      </>}
+      </Reveal>}
 
-      {lists.waiting.length > 0 && <>
+      {lists.waiting.length > 0 && <Reveal>
         <SectionTitle hint="Nothing for you to do yet">Waiting for someone else</SectionTitle>
         <RowList c={c} rows={lists.waiting} showProject />
-      </>}
+      </Reveal>}
 
-      {canMeet && ready.length > 0 && <>
+      {canMeet && ready.length > 0 && <Reveal>
         <SectionTitle hint="Approved in the studio, not yet shown to the client">Ready for the next client meeting</SectionTitle>
         <Card className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-700"><Presentation size={20} aria-hidden /></span>
@@ -147,27 +149,14 @@ export const Home: React.FC<{ c: DeskCtx; projects: ProjectCard[]; canMeet: bool
           </span>
           {c.goMeetings && <Btn kind="plain" icon={Presentation} onClick={c.goMeetings}>Go to Meetings</Btn>}
         </Card>
-      </>}
+      </Reveal>}
 
-      <WorthKnowing rows={c.rows} reviewer={c.viewer.reviewer} rounds={c.rounds} repeats={c.repeats} projectName={(id) => c.projectOf(id).name}
-        open={c.open} goProject={c.goProject} goMeetings={c.goMeetingsFor} />
+      <Reveal>
+        <WorthKnowing rows={c.rows} reviewer={c.viewer.reviewer} rounds={c.rounds} repeats={c.repeats} projectName={(id) => c.projectOf(id).name}
+          open={c.open} goProject={c.goProject} goMeetings={c.goMeetingsFor} />
+      </Reveal>
 
-      <SectionTitle hint="Open one to see its rooms">Your projects</SectionTitle>
-      {projects.length ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {projects.map((p, i) => (
-            <button key={p.id} type="button" onClick={() => c.goProject(p.id)} style={{ animationDelay: `${Math.min(i, 9) * 30}ms` }}
-              className="hud-row-in phd-lift flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-emerald-500 hover:shadow-md">
-              <ProjectMark code={p.code} color={p.color} size={44} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-base font-bold text-slate-800">{p.name}</span>
-                <span className="block truncate text-sm text-slate-500">{p.client ? `${p.client} · ` : ''}{p.total} drawing{p.total === 1 ? '' : 's'}{p.total ? ` · ${p.done} approved` : ''}</span>
-              </span>
-              {p.need > 0 ? <Tag tone="you">{p.need} need{p.need === 1 ? 's' : ''} you</Tag> : <ChevronRight size={18} className="text-slate-400" aria-hidden />}
-            </button>
-          ))}
-        </div>
-      ) : <Empty icon={PenTool} title="No projects yet" line="When the studio assigns you to a project, its drawings appear here." />}
+      <Reveal><ProjectList projects={projects} onOpen={c.goProject} /></Reveal>
     </div>
   );
 };

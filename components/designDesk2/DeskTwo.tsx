@@ -23,7 +23,8 @@ import UploadWizard from './UploadWizard';
 import DrawingScreen from './DrawingScreen';
 import MeetingsPage from './MeetingsPage';
 import MeetingScreen from './MeetingScreen';
-import { cx } from './parts';
+import { DeskRail } from './rail';
+import { HomeMotionStyles } from './motion';
 import '../projectHeader/projectHeader.css';
 
 /*
@@ -56,6 +57,7 @@ export default function DeskTwo(props: Props) {
       <ReviewStyles />
       <DeskStyles />
       <MotionStyles />
+      <HomeMotionStyles />
       <Desk {...props} />
     </ToastHost>
   );
@@ -264,6 +266,7 @@ function Desk({ projects, activeProjectId }: Props) {
   usePageHeader({ hidden: fullScreen }, [fullScreen]);
 
   const need = attention(rows, viewer);
+  const all = useMemo(() => statsOf(rows), [rows]);
   const tabs: { at: 'home' | 'all' | 'meetings'; label: string; icon: typeof HomeIcon; count?: number }[] = [
     { at: 'home', label: 'Home', icon: HomeIcon, count: need },
     { at: 'all', label: 'All drawings', icon: List },
@@ -303,18 +306,10 @@ function Desk({ projects, activeProjectId }: Props) {
 
   return (
     <div className="flex w-full flex-col gap-5 pb-24 lg:flex-row lg:items-start">
-      <nav aria-label="Design Desk" className="hud-panel-in flex shrink-0 gap-1 overflow-x-auto rounded-2xl bg-[#0C1F1A] p-2 lg:sticky lg:top-4 lg:w-[212px] lg:flex-col lg:p-3">
-        {tabs.map((t) => {
-          const on = tabOn === t.at;
-          return (
-            <button key={t.at} type="button" onClick={() => go({ at: t.at })} aria-current={on ? 'page' : undefined}
-              className={cx('flex min-h-[44px] items-center gap-3 whitespace-nowrap rounded-xl px-3 text-sm font-semibold transition-colors', on ? 'bg-emerald-600 text-white shadow-sm hud-rail-active' : 'text-emerald-100 hover:bg-white/10 hover:text-white')}>
-              <t.icon size={18} aria-hidden />{t.label}
-              {!!t.count && <span className="ml-auto grid h-6 min-w-[24px] place-items-center rounded-full bg-amber-400 px-1.5 text-xs font-bold text-amber-950" title="Drawings that need you">{t.count}</span>}
-            </button>
-          );
-        })}
-      </nav>
+      <DeskRail tabs={tabs} on={tabOn} go={(at) => go({ at })}
+        stats={{ total: all.total, approved: all.approved, need, review: all.review, changes: all.changes }}
+        projects={cards.filter((p) => p.total > 0)} openProject={pageProject} goProject={(id) => go({ at: 'project', projectId: id })}
+        onUpload={uploader ? () => setAdd({ projectId: pageProject }) : undefined} />
 
       <main key={page.at === 'room' ? `room:${page.projectId}:${page.room}` : page.at === 'project' ? `project:${page.projectId}` : page.at} className="hud-swap min-w-0 flex-1">
         {studioError ? (
