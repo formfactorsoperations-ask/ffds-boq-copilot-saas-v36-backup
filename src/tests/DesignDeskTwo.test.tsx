@@ -174,6 +174,12 @@ describe('Design Desk 2.0', () => {
     expect(within(bar).getByRole('button', { name: /Zoom 120 percent/ })).toBeTruthy();
     fireEvent.keyDown(window, { key: 'p' });
     expect(within(bar).getByRole('button', { name: 'Pin' }).getAttribute('aria-pressed')).toBe('true');
+    /* The notes can be put away so the drawing has the whole width, and brought back. */
+    fireEvent.click(within(bar).getByRole('button', { name: /Hide notes/ }));
+    expect(screen.getByText('Your turn').closest('aside')?.hidden).toBe(true);
+    fireEvent.click(within(bar).getByRole('button', { name: /Show notes/ }));
+    expect(screen.getByText('Your turn').closest('aside')?.hidden).toBe(false);
+    expect(screen.getByText('Step 2 of 4: Design Head checks')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Home' }));
     expect(screen.getByText('Start here')).toBeTruthy();
   });
@@ -184,7 +190,8 @@ describe('Design Desk 2.0', () => {
     render(<DeskTwo projects={projects} />);
     fireEvent.click(screen.getAllByRole('button', { name: 'Check this drawing' })[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Add a note' }));
-    fireEvent.change(screen.getByPlaceholderText('What should change here?'), { target: { value: 'Shutter 450 wide' } });
+    /* The pages wait a moment to learn which way the drawing reads; the note box comes with them. */
+    fireEvent.change(await screen.findByPlaceholderText('What should change here?', {}, { timeout: 4000 }), { target: { value: 'Shutter 450 wide' } });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add the note' })); });
     expect(h.mark).toHaveBeenCalledWith({ orgId: 's', projectId: 'p1', drawingId: 'a' }, 0, { t: 'pin', x: 0.5, y: 0.45 }, 'Shutter 450 wide', false);
     /* Sending back with no notes on the sheet needs a line. */

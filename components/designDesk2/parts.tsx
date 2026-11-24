@@ -25,7 +25,7 @@ const BTN: Record<BtnKind, string> = {
   light: 'bg-white text-emerald-900 shadow-sm hover:bg-emerald-50',
 };
 export const btnClass = (kind: BtnKind = 'plain', big = false) =>
-  cx('inline-flex items-center justify-center gap-2 rounded-xl font-bold transition-colors disabled:opacity-50', big ? 'min-h-[48px] px-5 text-base' : 'min-h-[44px] px-4 text-sm', BTN[kind]);
+  cx('inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl font-bold transition-colors disabled:opacity-50', big ? 'min-h-[48px] px-5 text-base' : 'min-h-[44px] px-4 text-sm', BTN[kind]);
 
 export const Btn: React.FC<{
   kind?: BtnKind; big?: boolean; icon?: LucideIcon; children: React.ReactNode; onClick?: (e: React.MouseEvent) => void;

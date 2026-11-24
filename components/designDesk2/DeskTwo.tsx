@@ -263,7 +263,7 @@ function Desk({ projects, activeProjectId, onUseClassic }: Props) {
     /* Back goes where the person came from: another part of the app, or the page of the desk they were on. */
     const backLabel = origin?.label || (page.at === 'room' ? (page.room === 'General / Project-Wide' ? 'Whole home' : page.room) : page.at === 'project' ? projectOf(page.projectId).name : page.at === 'all' ? 'All drawings' : page.at === 'meetings' ? 'Meetings' : 'Home');
     return (
-      <div className="w-full pb-24">
+      <div className="w-full pb-2">
         <React.Fragment key={`${open.projectId}/${open.drawingId}`}><DrawingScreen
           orgId={orgId} projectId={open.projectId} drawingId={open.drawingId} projectName={projectOf(open.projectId).name}
           role={role} me={me} viewer={viewer} queue={queue}

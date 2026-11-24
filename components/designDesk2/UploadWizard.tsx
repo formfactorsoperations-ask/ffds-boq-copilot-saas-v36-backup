@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, FileUp, Loader2, Send, X } from 'lucide-react';
+import { AlertTriangle, Check, FileUp, Loader2, RotateCcw, RotateCw, Send, X } from 'lucide-react';
 import { uploadSheet, type ReviewDrawing } from '../../services/drawingReviewService';
 import { allowed, matchFile, refusal, stateOf, MAX_PDF_BYTES } from '../../lib/drawingReview';
 import { thumbnailOf, pageCountOf } from '../../lib/pdfRender';
-import { landscapeFile, portraitPages } from '../../lib/pdfLandscape';
+import { landscapeFile, portraitPages, type TurnWay } from '../../lib/pdfLandscape';
 import { roomLabel, useToast } from '../drawingReview/ui';
 import type { Me } from '../drawingReview/SheetStudio';
 import { Btn, cx } from './parts';
@@ -15,7 +15,7 @@ import '../projectHeader/projectHeader.css';
   One drawing, one PDF, three small steps: choose the PDF, check it is the
   right drawing, send it to the Design Head. The checks are today's: the name
   match from Add PDFs (lib/drawingReview matchFile), portrait pages turned to
-  landscape (lib/pdfLandscape), and the server deciding whether this drawing
+  landscape, either way round (lib/pdfLandscape), and the server deciding whether this drawing
   can take a new PDF now (uploadSheet). Nothing is uploaded until step three.
 */
 
@@ -40,7 +40,9 @@ export default function UploadWizard({ orgId, me, drawing: d, projectName, sibli
   const [problem, setProblem] = useState<string | null>(null);
   const [over, setOver] = useState(false);
   /* What step two shows: page one as it will be stored, how many pages, how many were turned. */
-  const [look, setLook] = useState<{ url: string | null; pages: number | null; turned: number } | null>(null);
+  const [look, setLook] = useState<{ url: string | null; pages: number | null; upright: number } | null>(null);
+  /* Which way upright pages are turned to landscape. Anticlockwise first, as the studio's CAD exports read; the preview shows the result. */
+  const [way, setWay] = useState<TurnWay>('left');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<{ label: string; fraction?: number } | null>(null);
   const picker = useRef<HTMLInputElement>(null);
@@ -71,31 +73,31 @@ export default function UploadWizard({ orgId, me, drawing: d, projectName, sibli
     let made: string | null = null;
     setLook(null);
     (async () => {
-      let stored = file, turned = 0;
+      let stored = file, upright = 0;
       try {
-        const portrait = await portraitPages(await file.arrayBuffer());
-        if (portrait) { const t = await landscapeFile(file, 'right'); stored = t.file; turned = t.turned; }
+        upright = (await portraitPages(await file.arrayBuffer())) || 0;
+        if (upright && way !== 'keep') stored = (await landscapeFile(file, way)).file;
       } catch { /* a PDF that cannot be read is caught by the server's check */ }
       const [blob, pages] = await Promise.all([thumbnailOf(stored, 720).catch(() => null), pageCountOf(stored).catch(() => null)]);
       if (!live) return;
       made = blob ? URL.createObjectURL(blob) : null;
-      setLook({ url: made, pages, turned });
+      setLook({ url: made, pages, upright });
     })();
     return () => { live = false; if (made) URL.revokeObjectURL(made); };
-  }, [file]);
+  }, [file, way]);
 
   function choose(f: File | undefined | null) {
     if (!f) return;
     if (!/\.pdf$/i.test(f.name)) { setProblem(/\.(dwg|dxf)$/i.test(f.name) ? 'That is a CAD file. Export the drawing as a PDF and choose that.' : 'Only a PDF can be uploaded. Export the drawing as a PDF and choose that.'); return; }
     if (f.size >= MAX_PDF_BYTES) { setProblem('That PDF is over 25 MB. Export it smaller and try again.'); return; }
-    setProblem(null); setFile(f); setStep(1);
+    setProblem(null); setWay('left'); setFile(f); setStep(1);
   }
 
   async function upload(submit: boolean) {
     if (!file) return;
     setBusy({ label: 'Getting the PDF ready…' });
     try {
-      const { file: stored } = await landscapeFile(file, 'right').catch(() => ({ file }));
+      const { file: stored } = await landscapeFile(file, way).catch(() => ({ file }));
       const thumb = await thumbnailOf(stored).catch(() => null);
       const res = await uploadSheet({ orgId, projectId: d.projectId, drawingId: d.id }, me.uid, stored, {
         thumb, submit, note: note.trim(), expectedRev: d.review?.rev,
@@ -166,7 +168,19 @@ export default function UploadWizard({ orgId, me, drawing: d, projectName, sibli
                   {look?.pages ? <div><dt className="text-slate-500">Pages</dt><dd className="font-semibold text-slate-800">{look.pages}</dd></div> : null}
                 </dl>
                 {other && <p className="mt-3 flex gap-2 rounded-2xl bg-amber-50 p-3 text-sm text-amber-900"><AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" aria-hidden /><span>The file name looks like <b>{other.name}</b>, a different drawing. Check before you go on.</span></p>}
-                {!!look?.turned && <p className="mt-3 rounded-2xl bg-slate-100 p-3 text-sm text-slate-700">{look.turned} page{look.turned === 1 ? ' was' : 's were'} upright and will be turned to landscape, as every drawing on the desk is.</p>}
+                {!!look?.upright && (
+                  <div className="mt-3 rounded-2xl bg-slate-100 p-3 text-sm text-slate-700">
+                    <p>{way === 'keep' ? `${look.upright} upright page${look.upright === 1 ? ' is' : 's are'} kept as exported.` : `${look.upright} upright page${look.upright === 1 ? ' is' : 's are'} turned to landscape. If the preview is upside down, turn it the other way.`}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="How upright pages are turned">
+                      {([['left', RotateCcw, 'Turn left'], ['right', RotateCw, 'Turn right'], ['keep', null, 'Keep upright']] as const).map(([w, Icon, label]) => (
+                        <button key={w} type="button" aria-pressed={way === w} onClick={() => setWay(w)}
+                          className={cx('inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold', way === w ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50')}>
+                          {Icon && <Icon size={14} aria-hidden />}{label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import {
   Check, ChevronLeft, ChevronRight, Columns2, FileUp, History, Loader2, MapPin, Maximize2, MessageSquare, Minimize2, Minus, MousePointer2,
-  MoveUpRight, PenLine, Plus, RotateCcw, RotateCw, Send, Sparkles, Square, Trash2, Undo2,
+  MoveUpRight, PanelRightClose, PanelRightOpen, PenLine, Plus, RotateCcw, RotateCw, Send, Sparkles, Square, Trash2, Undo2,
 } from 'lucide-react';
 import {
   watchDrawing, watchVersions, watchMarks, watchRounds, watchEvents, submitSheet, withdrawSheet, approveSheet, returnSheet, clientReturn, clientKeep,
-  createMark, deleteMark, updateMark, fixMark, setAudience, removeVersion, type ReviewDrawing, type ReviewError,
+  createMark, deleteMark, updateMark, fixMark, setAudience, removeVersion, fileBlob, type ReviewDrawing, type ReviewError,
 } from '../../services/drawingReviewService';
+import { loadPdf } from '../../lib/pdfRender';
 import { canReview, canUpload, canSetAudience, allowed, clientPending, stateOf, guessAudience, turnShape, type Turn, type MarkShape, type ReviewMark, type ReviewVersion, type ReviewRound, type ReviewEvent } from '../../lib/drawingReview';
 import { roundWarn, INCLUDED_ROUNDS, needsMe, type Viewer } from '../../lib/designDesk';
 import { stepsOf, whereLine } from '../../lib/designDesk2';
@@ -16,13 +17,15 @@ import PdfStage, { type Tool } from '../drawingReview/PdfStage';
 import { useSheetChanges } from '../drawingReview/useSheetChanges';
 import { MARK, FIXED, CLIENT, roomLabel, ago, shortDate, firstName, useToast, Initials } from '../drawingReview/ui';
 import type { Me } from '../drawingReview/SheetStudio';
-import { Btn, StepTrack, Tag, cx } from './parts';
+import { Btn, Tag, cx } from './parts';
 
 /*
   ONE DRAWING, on the new desk (Design Desk 2.0, Phase 1).
 
   The drawing's pages one under the other on the left, with scroll, zoom
-  (buttons, Ctrl + scroll, pinch), drag to move, rotate and full screen. The
+  (buttons, Ctrl + scroll, pinch), drag to move, rotate and full screen. A
+  drawing stored upright opens turned to landscape. The notes panel can be
+  put away so the drawing has the whole width. The
   tools sit in one bar under it: Select, Pin, Box, Arrow, Draw, Compare and
   Changes. On the right: whose turn it is in a sentence, the notes and the
   history, and the decision at the foot.
@@ -62,7 +65,9 @@ const QUICK = ['Check this dimension', 'Line this up with the ceiling plan', 'Ma
 
 const read = <T,>(key: string, fallback: T): T => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) as T : fallback; } catch { return fallback; } };
 const write = (key: string, v: unknown) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* storage off */ } };
-const clampZoom = (z: number) => Math.min(4, Math.max(0.4, Math.round(z * 10) / 10));
+const clampZoom = (z: number) => Math.min(5, Math.max(0.4, Math.round(z * 20) / 20));
+/* A drawing stored upright opens turned this way (anticlockwise), which is how the studio's CAD exports read; R turns it on. */
+const LANDSCAPE_TURN: Turn = 270;
 
 type Draft = { page: number; shape: MarkShape; anchor: { x: number; y: number }; text: string; blocking: boolean };
 type Diff = { busy: boolean; kind?: string; count: number };
@@ -119,7 +124,10 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   /* How this person has the drawing turned; remembered per drawing on this device, shared with today's desk. */
   const turnKey = `ffds_dr_turn_${projectId}_${drawingId}`;
   const [turn, setTurnRaw] = useState<Turn>(() => { const v = Number(read(turnKey, 0)); return ([0, 90, 180, 270].includes(v) ? v : 0) as Turn; });
-  const rotate = () => setTurnRaw((t) => { const n = (((t + 90) % 360) as Turn); write(turnKey, n); return n; });
+  /* Whether this person has turned this drawing themselves; until they do, an upright drawing is turned to landscape for them. */
+  const turnChosen = useRef<boolean>(read<number | null>(turnKey, null) !== null);
+  const [oriented, setOriented] = useState<boolean>(turnChosen.current);
+  const rotate = () => setTurnRaw((t) => { const n = (((t + 90) % 360) as Turn); write(turnKey, n); turnChosen.current = true; return n; });
   const [compare, setCompare] = useState(false);
   const spotKey = `ffds_dr_spot_${me.uid}`;
   const [spot, setSpotRaw] = useState<boolean>(() => read(spotKey, true));
@@ -133,6 +141,13 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   const [busy, setBusy] = useState<string | null>(null);
   const [tab, setTab] = useState<'notes' | 'history'>('notes');
   const [confirmRemove, setConfirmRemove] = useState(false);
+  /* The notes panel can be put away, on this device, so the drawing has the whole width. */
+  const panelKey = `ffds_dd2_panel_${me.uid}`;
+  const [panel, setPanelRaw] = useState<boolean>(() => read(panelKey, true));
+  const setPanel = (v: boolean) => { setPanelRaw(v); write(panelKey, v); };
+  /* A short tip when the drawing opens; it goes away by itself. */
+  const [tip, setTip] = useState(true);
+  useEffect(() => { const t = setTimeout(() => setTip(false), 7000); return () => clearTimeout(t); }, []);
   const [diffs, setDiffs] = useState<Record<number, Diff>>({});
   const checkedKey = `ffds_dr_checked_${me.uid}`;
   const [checked, setCheckedRaw] = useState<Record<string, 'ok' | 'open'>>(() => read(checkedKey, {}));
@@ -185,11 +200,36 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   const who = self ? 'yourself' : firstName(r?.designer?.name);
 
   useEffect(() => {
-    const fit = () => { const el = stage.current; if (el) setStageH(Math.max(520, Math.round(window.innerHeight - el.getBoundingClientRect().top - window.scrollY - 16))); };
+    const fit = () => { const el = stage.current; if (el) setStageH(Math.max(420, Math.round(window.innerHeight - el.getBoundingClientRect().top - window.scrollY - 12))); };
     fit();
+    const again = setTimeout(fit, 400);
     window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    return () => { clearTimeout(again); window.removeEventListener('resize', fit); };
   }, [d === undefined, d === null]);
+  /*
+    DRAWINGS READ LANDSCAPE. A PDF stored upright (uploaded before uploads were
+    turned, or kept upright on purpose) opens turned to landscape, unless this
+    person has already turned this drawing themselves. The pages wait a moment
+    for this, so the drawing does not appear upright and then jump.
+  */
+  const viewPath = viewing?.pdfPath || null;
+  useEffect(() => {
+    if (turnChosen.current) { setOriented(true); return; }
+    if (!viewPath) return;
+    let live = true;
+    setOriented(false);
+    const giveUp = setTimeout(() => { if (live) setOriented(true); }, 2500);
+    loadPdf(viewPath, async () => (await fileBlob(viewPath)).arrayBuffer())
+      .then((doc) => doc.getPage(1))
+      .then((page) => {
+        if (!live || turnChosen.current) return;
+        const v = page.getViewport({ scale: 1 });
+        if (v.height > v.width * 1.01) setTurnRaw(LANDSCAPE_TURN);
+      })
+      .catch(() => undefined)
+      .finally(() => { clearTimeout(giveUp); if (live) setOriented(true); });
+    return () => { live = false; clearTimeout(giveUp); };
+  }, [viewPath]);
   useEffect(() => { if (!prev) setCompare(false); }, [prev?.id]);
   useEffect(() => { if (draft) setTimeout(() => draftBox.current?.focus(), 30); }, [!!draft]);
   const onDiff = useCallback((page: number, x: Diff | null) => setDiffs((m) => {
@@ -202,14 +242,44 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   const diffBusy = diffList.some((x) => x.busy);
 
   /* ------------------------------------------------------------ moving around: drag, Ctrl + scroll, pinch, full screen */
+  const [full, setFull] = useState(false);
   const scroller = useRef<HTMLDivElement | null>(null);
+  const viewerBox = useRef<HTMLDivElement | null>(null);
+  const pagesBox = useRef<HTMLDivElement | null>(null);
+  /* The zoom as it is being changed (a trackpad pinch moves it by tiny amounts); the page is redrawn at steps of 5%. */
+  const zoomExact = useRef(1);
+  /* The spot of the drawing to keep still while it is redrawn at the new size: the pointer's, or the middle of the view. */
+  const anchor = useRef<{ fx: number; fy: number; px: number; py: number; at: number } | null>(null);
+  const zoomTo = useCallback((next: number | ((z: number) => number), at?: { x: number; y: number }) => {
+    const el = scroller.current;
+    const target = Math.min(5, Math.max(0.4, typeof next === 'function' ? next(zoomExact.current) : next));
+    zoomExact.current = target;
+    if (el && el.scrollWidth && el.scrollHeight) {
+      const r = el.getBoundingClientRect();
+      const px = at ? at.x - r.left : el.clientWidth / 2;
+      const py = at ? at.y - r.top : el.clientHeight / 2;
+      anchor.current = { fx: (el.scrollLeft + px) / el.scrollWidth, fy: (el.scrollTop + py) / el.scrollHeight, px, py, at: Date.now() };
+    }
+    setZoom(clampZoom(target));
+  }, []);
+  useEffect(() => {
+    const el = scroller.current, box = pagesBox.current;
+    if (!el || !box || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      const a = anchor.current;
+      if (!a || Date.now() - a.at > 2500) return;
+      el.scrollLeft = a.fx * el.scrollWidth - a.px;
+      el.scrollTop = a.fy * el.scrollHeight - a.py;
+    });
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [d === undefined, full, oriented]);
   const pan = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const touches = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; zoom: number } | null>(null);
   const [grabbing, setGrabbing] = useState(false);
   const [space, setSpace] = useState(false);
   const overSheet = useRef(false);
-  const [full, setFull] = useState(false);
   const enterFull = useCallback(() => { setFull(true); document.documentElement.requestFullscreen?.().catch(() => undefined); }, []);
   const exitFull = useCallback(() => { if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined); setFull(false); }, []);
   useEffect(() => {
@@ -218,13 +288,19 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
     return () => { document.removeEventListener('fullscreenchange', onFs); if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined); };
   }, []);
   useEffect(() => {
-    const el = scroller.current;
+    /* On the whole viewer, tools and banners included, so the browser never zooms the page instead. */
+    const el = viewerBox.current;
     if (!el) return;
-    /* Ctrl + scroll, and a trackpad pinch (which browsers report the same way), zoom the drawing instead of the page. */
-    const wheel = (e: WheelEvent) => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); setZoom((z) => clampZoom(z * (e.deltaY < 0 ? 1.1 : 0.9))); };
+    /* Ctrl + scroll, and a trackpad pinch (which browsers report the same way), zoom the drawing around the pointer. */
+    const wheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const step = Math.max(-0.35, Math.min(0.35, -e.deltaY * (e.deltaMode === 1 ? 0.06 : 0.002)));
+      zoomTo((z) => z * Math.exp(step), { x: e.clientX, y: e.clientY });
+    };
     el.addEventListener('wheel', wheel, { passive: false });
     return () => el.removeEventListener('wheel', wheel);
-  }, [d === undefined, full]);
+  }, [d === undefined, full, zoomTo]);
   useEffect(() => {
     const typing = () => { const el = document.activeElement as HTMLElement | null; return !!el && /INPUT|TEXTAREA|SELECT/.test(el.tagName); };
     const down = (e: KeyboardEvent) => { if (e.key === ' ' && overSheet.current && !typing()) { e.preventDefault(); setSpace(true); } };
@@ -245,12 +321,14 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
       if (k === 'c' && prev) setCompare((c) => !c);
       if (k === 'r') rotate();
       if (k === 'f') { if (full) exitFull(); else enterFull(); }
-      if (e.key === '+' || e.key === '=') setZoom((z) => clampZoom(z + 0.2));
-      if (e.key === '-') setZoom((z) => clampZoom(z - 0.2));
+      if (k === 'n') setPanel(!panel);
+      if (e.key === '+' || e.key === '=') zoomTo((z) => z + 0.2);
+      if (e.key === '-') zoomTo((z) => z - 0.2);
+      if (e.key === '0') zoomTo(1);
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [canMark, prev?.id, !!draft, tool, full]);
+  }, [canMark, prev?.id, !!draft, tool, full, panel]);
 
   const moving = space || tool === 'select' || !canMark;
   const dist = () => { const [a, b] = [...touches.current.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
@@ -259,7 +337,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
     if (!el) return;
     if (e.pointerType === 'touch') {
       touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (touches.current.size === 2) { pinch.current = { dist: dist(), zoom }; pan.current = null; setGrabbing(false); return; }
+      if (touches.current.size === 2) { pinch.current = { dist: dist(), zoom: zoomExact.current }; pan.current = null; setGrabbing(false); return; }
     }
     if (e.button !== 1 && (e.button !== 0 || !moving)) return;
     if (e.button === 0 && (e.target as HTMLElement).closest('button, a, input, textarea, select, label')) return;
@@ -272,7 +350,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
     if (!el) return;
     if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) {
       touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pinch.current && touches.current.size === 2 && pinch.current.dist > 0) { setZoom(clampZoom(pinch.current.zoom * (dist() / pinch.current.dist))); return; }
+      if (pinch.current && touches.current.size === 2 && pinch.current.dist > 0) { zoomTo(pinch.current.zoom * (dist() / pinch.current.dist)); return; }
     }
     const p = pan.current;
     if (!p) return;
@@ -349,6 +427,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
   );
 
   const yours = needsMe(d, viewer);
+  const steps = stepsOf(d);
   const toolNow = TOOLS.find((t) => t[0] === tool) || TOOLS[0];
   const draftNo = (r?.marksSeq || 0) + 1;
   const barBtn = (on = false) => cx('inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-xl px-2.5 text-sm font-bold transition-colors disabled:opacity-40', on ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800');
@@ -388,18 +467,27 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
     <div ref={full ? undefined : stage} className={cx('flex min-w-0 flex-col gap-4 lg:flex-row lg:items-stretch', full ? 'fixed inset-0 z-[110] bg-slate-100 p-3' : 'lg:h-[var(--dd2-stage)]')}
       style={full ? undefined : ({ '--dd2-stage': `${stageH || 640}px` } as React.CSSProperties)}>
       {/* ---- the drawing */}
-      <div className={cx('relative flex min-h-[420px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-200', !full && 'h-[70vh] lg:h-auto')}>
-        {(fromClient || (!isCurrent && viewing) || (spotting && (diffBusy || diffList.some((x) => x.kind && x.kind !== 'boxes')))) && (
+      <div ref={viewerBox} className={cx('relative flex min-h-[380px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-200', !full && 'h-[72vh] lg:h-auto')}>
+        {(fromClient || (!isCurrent && viewing)) && (
           <div className="flex flex-wrap items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
             {fromClient ? <span className="min-w-0 flex-1">{reviewer ? <>The client asked for <b>{r?.clientChanges?.count || onSheet.length} change{(r?.clientChanges?.count || onSheet.length) === 1 ? '' : 's'}</b> at the meeting. Edit or add notes, then send them to {who} or keep the drawing approved.</> : 'The client asked for changes at the meeting. The Design Head looks at them first.'}</span>
-              : !isCurrent && viewing ? <><span className="min-w-0 flex-1">You are looking at <b>v{viewing.n}</b>, an older version. Its notes stay with it.</span><Btn kind="plain" onClick={() => setViewId(null)}>Back to v{current?.n}</Btn></>
-                : diffBusy ? <span className="flex items-center gap-2"><Loader2 size={15} className="animate-spin" aria-hidden />Finding what changed since v{prev?.n}…</span>
-                  : <span>{diffList.every((x) => x.kind === 'same') ? `Nothing changed since v${prev?.n}.` : `Some pages changed too much to outline. Use Compare to see v${prev?.n} beside this one.`}</span>}
+              : <><span className="min-w-0 flex-1">You are looking at <b>v{viewing!.n}</b>, an older version. Its notes stay with it.</span><Btn kind="plain" onClick={() => setViewId(null)}>Back to v{current?.n}</Btn></>}
           </div>
         )}
-        <div ref={scroller} className="flex-1 overflow-auto p-4 pb-[120px] sm:p-6 sm:pb-[120px]" style={{ cursor: grabbing ? 'grabbing' : moving ? 'grab' : undefined, touchAction: 'pan-x pan-y' }}
+        {/* What Changes found, as a small line over the drawing: it takes no room from it. */}
+        {spotting && (diffBusy || diffList.some((x) => x.kind && x.kind !== 'boxes')) && (
+          <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center px-3">
+            <span className="flex items-center gap-2 rounded-full bg-amber-100 px-3.5 py-1.5 text-xs font-semibold text-amber-900 shadow-sm">
+              {diffBusy ? <><Loader2 size={13} className="animate-spin" aria-hidden />Finding what changed since v{prev?.n}…</>
+                : diffList.every((x) => x.kind === 'same') ? `Nothing changed since v${prev?.n}.` : `Some pages changed too much to outline. Use Compare to see v${prev?.n}.`}
+            </span>
+          </div>
+        )}
+        <div ref={scroller} className="flex-1 overflow-auto p-3 pb-[92px]" style={{ cursor: grabbing ? 'grabbing' : moving ? 'grab' : undefined, touchAction: 'pan-x pan-y' }}
           onPointerDown={panStart} onPointerMove={panMove} onPointerUp={panEnd} onPointerCancel={panEnd} onPointerEnter={() => { overSheet.current = true; }} onPointerLeave={(e) => { overSheet.current = false; panEnd(e); }}>
-          {viewing ? Array.from({ length: pages }, (_, i) => (
+          {viewing && !oriented ? (
+            <div className="grid h-full min-h-[240px] place-items-center text-slate-400"><Loader2 className="animate-spin" aria-label="Opening the drawing" /></div>
+          ) : viewing ? <div ref={pagesBox}>{Array.from({ length: pages }, (_, i) => (
             <PageBlock key={`${viewing.id}:${i}`} index={i} pages={pages} pdfPath={viewing.pdfPath} prevPath={prev?.pdfPath || null} compare={compare && !!prev}
               compareLabel={prev ? [`v${prev.n}`, `v${viewing.n}`] : undefined} spotting={spotting} zoom={zoom} turn={turn}
               marks={onSheet.filter((m) => m.page === i)} draft={draft?.page === i ? draft.shape : null} selected={selected}
@@ -407,7 +495,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
               onSelect={(id) => { setSelected(id); setTab('notes'); }}
               onShape={(page, shape, anchor) => { setDraft({ page, shape, anchor, text: '', blocking: false }); setTab('notes'); setSelected(null); }}
               onDiff={onDiff} overlay={composer(i)} />
-          )) : (
+          ))}</div> : (
             <div className="mx-auto mt-12 max-w-md rounded-2xl border-2 border-dashed border-slate-300 bg-white px-6 py-10 text-center">
               <p className="text-lg font-bold text-slate-800">No PDF yet</p>
               <p className="mt-1 text-sm text-slate-500">{canUploadNew ? 'Upload the PDF of this drawing. It becomes v1.' : 'Nobody has uploaded this drawing yet.'}</p>
@@ -418,7 +506,8 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
 
         {viewing && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex flex-col items-center gap-2 px-3">
-            {canMark && !draft && <div className="rounded-full bg-slate-800/90 px-3.5 py-1.5 text-center text-sm font-semibold text-white">{toolNow[2]}: {toolNow[3]}</div>}
+            {canMark && !draft && tool !== 'select' ? <div className="rounded-full bg-slate-800/90 px-3.5 py-1.5 text-center text-sm font-semibold text-white">{toolNow[2]}: {toolNow[3]}</div>
+              : tip && !draft && <div className="rounded-full bg-slate-800/90 px-3.5 py-1.5 text-center text-sm font-semibold text-white">Drag to move around. Ctrl + scroll to zoom.</div>}
             <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-0.5 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl" role="toolbar" aria-label="Drawing tools">
               {canMark && <>
                 {TOOLS.map(([t, key, name, hint, Icon]) => (
@@ -442,12 +531,15 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
               )}
               {prev && isCurrent && sep}
               <button type="button" onClick={() => { rotate(); setDraft(null); }} aria-label="Rotate the drawing" title="Rotate (R). Notes stay where they belong." className={barBtn()}><RotateCw size={18} aria-hidden />{turn ? `${turn}°` : ''}</button>
-              <button type="button" onClick={() => setZoom((z) => clampZoom(z - 0.2))} aria-label="Zoom out" className={barBtn()}><Minus size={18} aria-hidden /></button>
-              <button type="button" onClick={() => setZoom(1)} title="Fit the width" aria-label={`Zoom ${Math.round(zoom * 100)} percent. Press to fit the width.`} className={cx(barBtn(), 'min-w-[56px] tabular-nums')}>{Math.round(zoom * 100)}%</button>
-              <button type="button" onClick={() => setZoom((z) => clampZoom(z + 0.2))} aria-label="Zoom in" className={barBtn()}><Plus size={18} aria-hidden /></button>
+              <button type="button" onClick={() => zoomTo((z) => z - 0.2)} aria-label="Zoom out" title="Zoom out (-, or Ctrl + scroll)" className={barBtn()}><Minus size={18} aria-hidden /></button>
+              <button type="button" onClick={() => zoomTo(1)} title="Fit the width (0)" aria-label={`Zoom ${Math.round(zoom * 100)} percent. Press to fit the width.`} className={cx(barBtn(), 'min-w-[56px] tabular-nums')}>{Math.round(zoom * 100)}%</button>
+              <button type="button" onClick={() => zoomTo((z) => z + 0.2)} aria-label="Zoom in" title="Zoom in (+, or Ctrl + scroll)" className={barBtn()}><Plus size={18} aria-hidden /></button>
               {sep}
               <button type="button" onClick={() => (full ? exitFull() : enterFull())} aria-pressed={full} title={full ? 'Leave full screen (Esc)' : 'Full screen, with the notes beside the drawing (F)'} className={barBtn(full)}>
                 {full ? <Minimize2 size={18} aria-hidden /> : <Maximize2 size={18} aria-hidden />}<span className="hidden md:inline">{full ? 'Exit full screen' : 'Full screen'}</span>
+              </button>
+              <button type="button" onClick={() => setPanel(!panel)} aria-pressed={!panel} title={panel ? 'Hide the notes so the drawing has the whole width (N)' : 'Show the notes again (N)'} className={barBtn(!panel)}>
+                {panel ? <PanelRightClose size={18} aria-hidden /> : <PanelRightOpen size={18} aria-hidden />}<span className="hidden md:inline">{panel ? 'Hide notes' : `Show notes${onSheet.length ? ` · ${onSheet.length}` : ''}`}</span>
               </button>
             </div>
           </div>
@@ -455,7 +547,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
       </div>
 
       {/* ---- the panel */}
-      <aside className={cx('flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white lg:w-[400px] lg:flex-none', full && 'max-h-[45vh] lg:max-h-none')}>
+      <aside hidden={!panel} className={cx('min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white lg:w-[360px] lg:flex-none', panel ? 'flex' : 'hidden', full && 'max-h-[45vh] lg:max-h-none')}>
         <div className="border-b border-slate-100 px-4 pt-4">
           <div className="flex items-center gap-3">
             <Initials name={r?.designer?.name || viewing?.by?.name || d.name} size={36} color="#059669" />
@@ -468,6 +560,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
           </div>
           <div className={cx('mt-3 rounded-xl px-3.5 py-3 text-sm', yours ? 'bg-amber-50 text-amber-900' : 'bg-slate-50 text-slate-700')}>
             <b className="block">{yours ? 'Your turn' : 'Where it is now'}</b>{whereLine(d, viewer)}
+            <span className="mt-1 block text-xs opacity-80">{steps.current >= steps.labels.length ? `All ${steps.labels.length} steps done` : `Step ${steps.current + 1} of ${steps.labels.length}: ${steps.labels[steps.current]}`}</span>
             {self && reviewer && state === 'IN_REVIEW' && <span className="mt-1 block">As Design Head you can approve your own drawing. The history will say it was self-approved.</span>}
           </div>
           {state === 'CHANGES_REQUESTED' && isCurrent && lastReturn?.reason && (
@@ -663,27 +756,27 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
 
   return (
     <div className="hud-panel-in">
-      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <button type="button" onClick={onClose} className="inline-flex min-h-[44px] items-center gap-1 rounded-xl pl-2 pr-3 text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-800">
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <button type="button" onClick={onClose} className="inline-flex min-h-[40px] items-center gap-1 rounded-xl pl-2 pr-3 text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-800">
           <ChevronLeft size={18} aria-hidden />{backLabel}
         </button>
         <div className="min-w-0 flex-[1_1_260px]">
-          <h1 className="truncate text-2xl font-bold tracking-tight text-slate-800">{d.name}</h1>
-          <p className="truncate text-sm text-slate-500">{projectName} · {roomLabel(d.roomName)}</p>
+          <h1 className="truncate text-lg font-bold tracking-tight text-slate-800">{d.name}</h1>
+          <p className="truncate text-xs text-slate-500">{projectName} · {roomLabel(d.roomName)}</p>
         </div>
         {round > 0 && <Tag tone="bad" title={`${INCLUDED_ROUNDS} review rounds are included. Further rounds may count as chargeable revisions.`}>Round {round} · {INCLUDED_ROUNDS} included</Tag>}
         {reviewer && qIndex >= 0 && queue.length > 1 && (
           <div className="inline-flex items-center gap-0.5">
-            <button type="button" onClick={() => onOpen(queue[(qIndex - 1 + queue.length) % queue.length])} aria-label="Previous drawing waiting" className="grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-slate-100"><ChevronLeft size={18} /></button>
+            <button type="button" onClick={() => onOpen(queue[(qIndex - 1 + queue.length) % queue.length])} aria-label="Previous drawing waiting" className="grid h-10 w-10 place-items-center rounded-xl text-slate-600 hover:bg-slate-100"><ChevronLeft size={18} /></button>
             <span className="min-w-[96px] text-center text-sm font-bold text-slate-700">{qIndex + 1} of {queue.length} waiting</span>
-            <button type="button" onClick={() => onOpen(queue[(qIndex + 1) % queue.length])} aria-label="Next drawing waiting" className="grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-slate-100"><ChevronRight size={18} /></button>
+            <button type="button" onClick={() => onOpen(queue[(qIndex + 1) % queue.length])} aria-label="Next drawing waiting" className="grid h-10 w-10 place-items-center rounded-xl text-slate-600 hover:bg-slate-100"><ChevronRight size={18} /></button>
           </div>
         )}
         {canSetAudience(role) ? (
           <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-600">For
             <select value={audience} disabled={busy === 'audience'} aria-label="Who this drawing is for"
               onChange={(e) => act('audience', () => setAudience(target, e.target.value as any), { title: e.target.value === 'client' ? 'It can be shown to the client' : 'It stays inside the studio', sub: d.name })}
-              className="min-h-[44px] rounded-xl border border-slate-300 bg-white px-2.5 text-sm font-bold text-slate-800">
+              className="min-h-[40px] rounded-xl border border-slate-300 bg-white px-2.5 text-sm font-bold text-slate-800">
               <option value="client">the client</option>
               <option value="studio">the studio only</option>
             </select>
@@ -691,12 +784,11 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
         ) : <Tag>{audience === 'studio' ? 'Studio only' : 'For the client'}</Tag>}
         {versions.length > 1 && (
           <select value={viewing?.id || ''} aria-label="Version" onChange={(e) => { setViewId(e.target.value === current?.id ? null : e.target.value); setCompare(false); setSelected(null); setDraft(null); }}
-            className="min-h-[44px] rounded-xl border border-slate-300 bg-white px-2.5 text-sm font-bold text-slate-800">
+            className="min-h-[40px] rounded-xl border border-slate-300 bg-white px-2.5 text-sm font-bold text-slate-800">
             {[...versions].reverse().map((v) => <option key={v.id} value={v.id}>v{v.n}{v.id === current?.id ? ' (latest)' : ''} · {firstName(v.by?.name)}, {shortDate(v.at)}</option>)}
           </select>
         )}
       </div>
-      <div className="mb-3 rounded-2xl border border-slate-200 bg-white px-3 pb-2 pt-3"><StepTrack steps={stepsOf(d)} yours={yours} /></div>
       {full ? createPortal(body, document.body) : body}
     </div>
   );
