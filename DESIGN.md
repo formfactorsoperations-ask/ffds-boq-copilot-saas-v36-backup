@@ -1184,6 +1184,22 @@ Super Admin, the lead it came from. Kept for the visit, so going back to a clien
   or a portal action answers it).
 - **Days:** Earlier / This week / Yesterday / Today, in India's time. The thread opens at the bottom.
 
+**The composer as built (PR C, 25 Nov 2026).** Everything it writes goes to the Ops Desk follow-up log, so it
+is on the Ops Desk too (`lib/clientCompose.ts`, pure and tested).
+- **Open in WhatsApp** opens `wa.me` on the click and then logs a WhatsApp reminder with the text as sent and
+  the template as its subject. The milestone template, while an invoice is out, takes that payment's own
+  subject (`pay:{milestoneId}`) so the Ops Desk counts the reminder. A line that could not be saved says
+  "Not logged" with Try again; the bubble says "logged" only for a line that was.
+- **Log their reply**: Positive / Needs a call / Wants changes / No answer, what they said, and from WhatsApp /
+  Call / Email / Meeting. No answer is `no_answer`; the rest are `replied` with "Mood: …." as `moodOf` reads it.
+  **Add a note** writes a team line. With several projects, a picker chooses which (the liveliest first).
+- **Viewer** cannot write to the log (firestore.rules `mayWriteOps`): they can open WhatsApp, are told it is
+  not logged, and see no Log their reply or Add a note.
+- **The old browser notes** are listed in the dossier until someone presses "Move to follow-ups". Each keeps its
+  day and author and an id of its own, so a second move writes nothing twice, and leaves the browser only once
+  it is saved. New notes are never kept in the browser.
+- What you log yourself does not mark the client as new activity for you.
+
 ### Summary-first sections (approved 16 Nov 2026)
 
 Execution & Site used to nest tabs five levels deep. The owner chose option C of plan item 9:

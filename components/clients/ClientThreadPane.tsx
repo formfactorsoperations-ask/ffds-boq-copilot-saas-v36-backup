@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, MessageCircle, PanelRight, FileText, Globe, IndianRupee, PenTool, MapPin, NotebookPen, Info, MessagesSquare } from '@/lib/lucide-shim';
-import { Button, Chip, EmptyState, INPUT, Segmented, type Tone } from '../ui/kit';
+import { ArrowLeft, MessageCircle, PanelRight, FileText, Globe, IndianRupee, PenTool, MapPin, NotebookPen, Info, MessagesSquare, Reply } from '@/lib/lucide-shim';
+import { Button, Chip, EmptyState, INPUT, LABEL, Segmented, type Tone } from '../ui/kit';
 import { Dot } from '../ui/HudBits';
 import type { FullProjectData } from '../../types';
 import type { ClientMoney } from '../../lib/clientMoney';
 import type { ClientRow } from '../../lib/clientList';
 import type { TemplateId } from '../../lib/clientNextMove';
 import { buildThread, groupThread, SOURCE_LABEL, type ThreadEntry, type ThreadRecords, type ThreadSource } from '../../lib/clientThread';
+import { REPLY_FROM, REPLY_MOODS, noteLine, replyLine, sendSubject, sentLine, type FollowUpLine, type ReplyFrom, type ReplyMood } from '../../lib/clientCompose';
 import { ClientPhoto, KindSticker, WHATSAPP_TEMPLATES, daysAgo, whatsAppLink } from './parts';
 
 /*
@@ -121,7 +122,7 @@ function Entry({ e, now }: { e: ThreadEntry; now: number }) {
   );
 }
 
-export default function ClientThreadPane({ row, now, studioName, money, records, loading, onOpenProject, onBack, onDetails }: {
+export default function ClientThreadPane({ row, now, studioName, money, records, loading, canLog, onLog, onOpenProject, onBack, onDetails }: {
   row: ClientRow;
   now: number;
   studioName: string;
@@ -130,6 +131,10 @@ export default function ClientThreadPane({ row, now, studioName, money, records,
   /** The client's records, once read; null while they load. */
   records: ThreadRecords | null;
   loading: boolean;
+  /** May write to the follow-up log (every studio role but Viewer: firestore.rules mayWriteOps). */
+  canLog: boolean;
+  /** Writes one line to a project's follow-up log; resolves once it is saved. */
+  onLog: (projectId: string, line: FollowUpLine) => Promise<void>;
   onOpenProject: (project: FullProjectData, targetTab?: string) => void;
   /** Below 768px: back to the list. */
   onBack: () => void;
@@ -171,6 +176,63 @@ export default function ClientThreadPane({ row, now, studioName, money, records,
   }, [template, project?.id, c.clientName, studioName]);
 
   const link = whatsAppLink(c.clientPhone, text);
+
+  /*
+    What the composer writes (lib/clientCompose): the send, a reply, a note.
+    WhatsApp opens first, on the click itself, so the browser does not block
+    it; the line is then logged. A line that could not be saved says so, with
+    a retry: the bubble only ever says "logged" for a line that was.
+  */
+  const [mode, setMode] = useState<'send' | 'reply' | 'note'>('send');
+  const [mood, setMood] = useState<ReplyMood>('positive');
+  const [said, setSaid] = useState('');
+  const [from, setFrom] = useState<ReplyFrom>('whatsapp');
+  const [noteText, setNoteText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState<{ projectId: string; line: FollowUpLine; what: string } | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  useEffect(() => { setMode('send'); setSaid(''); setNoteText(''); setFailed(null); setSaved(null); }, [c.clientKey]);
+  useEffect(() => {
+    if (!saved) return;
+    const t = window.setTimeout(() => setSaved(null), 2500);
+    return () => window.clearTimeout(t);
+  }, [saved]);
+
+  const log = async (projectId: string, line: FollowUpLine, what: string): Promise<boolean> => {
+    setSaving(true);
+    setFailed(null);
+    try {
+      await onLog(projectId, line);
+      setSaved(what);
+      return true;
+    } catch (e: any) {
+      console.warn('Clients: log', e?.code || e);
+      setFailed({ projectId, line, what });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const send = () => {
+    if (!link || !text.trim()) return;
+    window.open(link, '_blank', 'noopener,noreferrer');
+    if (!canLog) return;
+    const t = WHATSAPP_TEMPLATES.find((x) => x.id === template) || WHATSAPP_TEMPLATES[0];
+    void log(project.id, sentLine(text, sendSubject(t, money[project.id]?.milestones || [])), 'Message logged');
+  };
+  const saveReply = async () => {
+    if (await log(project.id, replyLine(mood, said, from), 'Reply logged')) { setSaid(''); setMode('send'); }
+  };
+  const saveNote = async () => {
+    if (!noteText.trim()) return;
+    if (await log(project.id, noteLine(noteText), 'Note added')) { setNoteText(''); setMode('send'); }
+  };
+  const projectPicker = projects.length > 1 && (
+    <select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="About which project" className={`${INPUT} !py-1.5 text-xs`}>
+      {projects.map((p) => <option key={p.id} value={p.id}>{p.context?.name || 'Untitled project'}</option>)}
+    </select>
+  );
   const total = thread.length;
   let n = 0;
 
@@ -222,29 +284,71 @@ export default function ClientThreadPane({ row, now, studioName, money, records,
       </div>
 
       <div className="border-t border-slate-100 p-3 space-y-2.5 bg-white">
-        <Segmented<TemplateId> label="Message template" size="sm" value={template} onChange={setTemplate}
-          options={WHATSAPP_TEMPLATES.map((t) => ({ id: t.id, label: t.title }))} />
-        <div className="flex flex-col xl:flex-row gap-2.5">
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} aria-label="Message"
-            className={`${INPUT} resize-none flex-1`} />
-          <div className="flex flex-wrap items-center xl:flex-col xl:items-stretch xl:flex-nowrap gap-2 xl:w-48 shrink-0">
-            {projects.length > 1 && (
-              <select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="About which project" className={`${INPUT} !py-1.5 text-xs`}>
-                {projects.map((p) => <option key={p.id} value={p.id}>{p.context?.name || 'Untitled project'}</option>)}
-              </select>
-            )}
-            <Button variant="primary" icon={MessageCircle} disabled={!link || !text.trim()}
-              title={link ? 'Opens WhatsApp with this message' : 'Add a phone number first'}
-              onClick={() => link && window.open(link, '_blank', 'noopener,noreferrer')}>
-              Open in WhatsApp
-            </Button>
-            {!c.clientPhone && (
-              <button type="button" onClick={() => onOpenProject(row.primary)} className="text-xs font-bold text-[#3D52A0] hover:underline self-center">
-                Add phone
-              </button>
-            )}
+        {mode === 'send' && (
+          <>
+            <Segmented<TemplateId> label="Message template" size="sm" value={template} onChange={setTemplate}
+              options={WHATSAPP_TEMPLATES.map((t) => ({ id: t.id, label: t.title }))} />
+            <div className="flex flex-col xl:flex-row gap-2.5">
+              <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} aria-label="Message"
+                className={`${INPUT} resize-none flex-1`} />
+              <div className="flex flex-wrap items-center xl:flex-col xl:items-stretch xl:flex-nowrap gap-2 xl:w-48 shrink-0">
+                {projectPicker}
+                <Button variant="primary" icon={MessageCircle} disabled={!link || !text.trim() || saving}
+                  title={link ? (canLog ? 'Opens WhatsApp with this message and logs it' : 'Opens WhatsApp with this message') : 'Add a phone number first'}
+                  onClick={send}>
+                  Open in WhatsApp
+                </Button>
+                {!c.clientPhone && (
+                  <button type="button" onClick={() => onOpenProject(row.primary)} className="text-xs font-bold text-[#3D52A0] hover:underline self-center">
+                    Add phone
+                  </button>
+                )}
+                {canLog && <Button icon={Reply} onClick={() => setMode('reply')}>Log their reply</Button>}
+                {canLog && <Button variant="quiet" size="sm" icon={NotebookPen} onClick={() => setMode('note')}>Add a note</Button>}
+              </div>
+            </div>
+          </>
+        )}
+
+        {mode === 'reply' && (
+          <div className="space-y-2.5 hud-swap">
+            <p className={LABEL}>How did they reply?</p>
+            <Segmented<ReplyMood> label="How did they reply?" size="sm" value={mood} onChange={setMood} options={REPLY_MOODS} />
+            <textarea value={said} onChange={(e) => setSaid(e.target.value)} rows={2} aria-label="What they said"
+              placeholder={mood === 'none' ? 'Anything to add (optional)' : 'What they said, in their words'} className={`${INPUT} resize-none`} />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={LABEL}>From</span>
+              <Segmented<ReplyFrom> label="Where they replied" size="sm" value={from} onChange={setFrom} options={REPLY_FROM} />
+              {projectPicker}
+              <span className="flex-1" />
+              <Button onClick={() => setMode('send')} disabled={saving}>Cancel</Button>
+              <Button variant="primary" onClick={saveReply} disabled={saving}>{saving ? 'Saving…' : 'Log reply'}</Button>
+            </div>
           </div>
-        </div>
+        )}
+
+        {mode === 'note' && (
+          <div className="space-y-2.5 hud-swap">
+            <p className={LABEL}>A note for the team</p>
+            <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={2} aria-label="Note"
+              placeholder="What the team should know about this client" className={`${INPUT} resize-none`} />
+            <div className="flex flex-wrap items-center gap-2">
+              {projectPicker}
+              <span className="flex-1" />
+              <Button onClick={() => setMode('send')} disabled={saving}>Cancel</Button>
+              <Button variant="primary" onClick={saveNote} disabled={saving || !noteText.trim()}>{saving ? 'Saving…' : 'Add note'}</Button>
+            </div>
+          </div>
+        )}
+
+        {failed && (
+          <p className="flex flex-wrap items-center gap-2 text-xs font-semibold text-rose-700" role="alert">
+            Not logged: the follow-up could not be saved.
+            <Button size="sm" variant="danger" disabled={saving} onClick={() => log(failed.projectId, failed.line, failed.what)}>Try again</Button>
+          </p>
+        )}
+        {saved && !failed && <p className="text-xs font-semibold text-emerald-700" role="status">{saved}. It is on the Ops Desk too.</p>}
+        {!canLog && mode === 'send' && <p className="text-[11px] text-slate-500">Viewers can open WhatsApp from here; what is sent is not logged.</p>}
       </div>
     </div>
   );
