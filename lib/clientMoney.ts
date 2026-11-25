@@ -26,6 +26,8 @@ export interface ClientMilestone {
   invoiceDate: string | null;
   /** The planned date, when the studio set one. */
   date: string | null;
+  /** The day it was marked paid (YYYY-MM-DD). Older payments have none. */
+  paidDate?: string | null;
   /** Unpaid and held in an open payment dispute (lib/disputes): owed, but not to be chased. */
   disputed?: boolean;
 }
@@ -71,6 +73,7 @@ export function clientMoneyOf(project: any): ClientMoney | null {
         invoiceNumber: m.invoiceNumber ? String(m.invoiceNumber) : null,
         invoiceDate: m.invoiceDate ? String(m.invoiceDate) : null,
         date: m.date ? String(m.date) : null,
+        paidDate: m.paidDate ? String(m.paidDate) : null,
         ...(heldInDispute(ctx, m) ? { disputed: true } : {}),
       })),
     };

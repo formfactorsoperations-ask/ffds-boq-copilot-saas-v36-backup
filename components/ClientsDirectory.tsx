@@ -10,6 +10,8 @@ import { groupClients } from "../lib/clientGroups";
 import { clientMoneyOf, withoutAmounts, type ClientMoney } from "../lib/clientMoney";
 import { buildRows, filterRows, matchesSearch, sortRows, type ClientFilter, type SeenMarks } from "../lib/clientList";
 import { loadStudioFollowUps } from "../services/opsDeskService";
+import { loadClientRecords } from "../services/clientThreadService";
+import type { ThreadRecords } from "../lib/clientThread";
 import type { FollowUp } from "../lib/opsDesk";
 import ClientList from "./clients/ClientList";
 import ClientThreadPane from "./clients/ClientThreadPane";
@@ -128,6 +130,28 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
   }, [wide, current, shown]);
   useEffect(() => { if (!current) setDossierOpen(false); }, [current]);
 
+  /*
+    The opened client's records, for their thread: one batch when they are
+    opened (services/clientThreadService), kept for this visit so going back
+    to a client costs nothing. Leads are read only by those who may.
+  */
+  const [records, setRecords] = useState<Record<string, ThreadRecords>>({});
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+  const currentKey = current?.client.clientKey || null;
+  const mayReadLeads = canPortal;
+  useEffect(() => {
+    if (!current || records[current.client.clientKey]) return;
+    const key = current.client.clientKey;
+    let live = true;
+    setLoadingKey(key);
+    loadClientRecords(tenantId, current.client.projects.map((p) => ({ id: p.id, name: p.context?.name || '', leadId: (p.context as any)?.leadId || null })), { leads: mayReadLeads })
+      .then((r) => { if (live) setRecords((prev) => ({ ...prev, [key]: r })); })
+      .catch((e) => { console.warn('Clients: thread', e?.code || e); if (live) setRecords((prev) => ({ ...prev, [key]: { followUps: [], visits: [], moms: [], meetings: [], leadCreatedAt: {} } })); })
+      .finally(() => { if (live) setLoadingKey((k) => (k === key ? null : k)); });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentKey, tenantId]);
+
   const select = (key: string) => {
     setSelected(key);
     setThreadOpen(true);
@@ -205,6 +229,7 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
             {current ? (
               <div key={current.client.clientKey} className="hud-swap h-full">
                 <ClientThreadPane row={current} now={now} studioName={orgData?.orgName || 'our studio'} onOpenProject={onOpenProject}
+                  money={moneyByProject} records={records[current.client.clientKey] || null} loading={loadingKey === current.client.clientKey}
                   onBack={() => setThreadOpen(false)} onDetails={() => setCardOpen(true)} />
               </div>
             ) : (

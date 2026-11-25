@@ -1166,6 +1166,24 @@ WhatsApp green button, its green live dot and its 8px, 9px and 13.5px text do no
 - **Drawers** (the card below 1024px, the dossier) slide in with `phd-drawer` over a `phd-scrim`, as the
   project's Details drawer does.
 
+**The thread as built (PR B, 25 Nov 2026).** `lib/clientThread.ts` (pure, tested) works it out from what one
+batch reads when a client is opened (`services/clientThreadService.ts`): each project's follow-ups (the latest
+200), visit requests, logged visits and minutes, Design Desk meetings and, for Owner, Admin, Ops Director and
+Super Admin, the lead it came from. Kept for the visit, so going back to a client reads nothing.
+- **Sent** (a follow-up logged as a reminder): "Opened in WhatsApp · logged" for WhatsApp, "Logged · a call" and so
+  on otherwise, with the template as its chip. **Said**: a reply, a promise, no answer, a captured chat or call
+  (with its mood) and a message from the client's portal. **Team notes**: every other line.
+- **Events:** enquiry received (the lead's date), proposal sent (each WhatsApp or download send, else the day the
+  status said so), visits and meetings done, minutes shared and confirmed, Design Desk meetings held, records
+  confirmed and drawings signed off, invoices raised and stages paid, and the client's portal actions (questions
+  on a clause, approvals, changes asked for, downloads once a day per document, finishes confirmed or queried),
+  plus portal links issued and access given or removed. Studio events sit on the right, the client's on the left.
+- **Stickers:** Design terms / Agreement / Handover signed (gold; a gate filled in as `legacy` or
+  `auto-sync-journey` is not counted), Unpaid · n days (rose, the longest invoice unpaid more than 15 days, never a
+  disputed one) and No reply in n days (amber, when our message is the last word and 10 or more days old; a reply
+  or a portal action answers it).
+- **Days:** Earlier / This week / Yesterday / Today, in India's time. The thread opens at the bottom.
+
 ### Summary-first sections (approved 16 Nov 2026)
 
 Execution & Site used to nest tabs five levels deep. The owner chose option C of plan item 9:
