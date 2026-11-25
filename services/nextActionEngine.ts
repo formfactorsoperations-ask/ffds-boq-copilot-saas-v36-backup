@@ -1,4 +1,5 @@
 import { heldInDispute } from '../lib/disputes';
+import { addDays, dayKey, toMs } from '../lib/opsDesk';
 export interface NextAction {
     id: string;
     title: string;
@@ -8,6 +9,14 @@ export interface NextAction {
     priority: 'blocker' | 'due' | 'suggested';
     roles: string[];
     blockedBy?: string;
+    /**
+     * The day the step falls due, YYYY-MM-DD in India's time, where its own
+     * record says: a payment invoiced is due the studio's payment terms after
+     * the invoice date (Ops Desk settings), else on the milestone's planned
+     * date. Steps with no such record have none; a day set by hand on the
+     * Projects screen is kept on the project (lib/projectsJourney).
+     */
+    dueKey?: string;
 }
 
 export function getNextActions(context: {
@@ -22,8 +31,18 @@ export function getNextActions(context: {
      * shows no amounts (DESIGN.md "Projects: journey, needs you, one list").
      */
     hideAmounts?: boolean;
+    /** The studio's payment terms in days (Ops Desk settings, paymentDueDays). 7 when not given. */
+    paymentDueDays?: number;
 }, role: string): NextAction[] {
     const { project, designPaymentStages, designGate, drawingTrackerSummary, scopeAdditionsSummary, timeline, hideAmounts } = context;
+    const termDays = Number.isFinite(context.paymentDueDays) ? Number(context.paymentDueDays) : 7;
+    /* When a payment step falls due: invoiced, the terms after the invoice; otherwise its planned date. */
+    const dueOf = (m: any): string | undefined => {
+        const invoiced = toMs(m?.invoiceDate);
+        if (invoiced != null && (m?.status === 'invoiced' || m?.status === 'advance_requested')) return addDays(dayKey(invoiced), termDays);
+        const planned = toMs(m?.date);
+        return planned != null ? dayKey(planned) : undefined;
+    };
     const actions: NextAction[] = [];
 
     // The platform owner works a studio as its Admin. No list below names
@@ -97,6 +116,7 @@ export function getNextActions(context: {
                 why: 'Work should not commence without sign-up advance.',
                 ctaLabel: isOwner ? 'Log Payment' : 'View Status',
                 route: 'payment-calc?focus=d1',
+                dueKey: dueOf(d1),
                 priority: 'blocker',
                 roles: ['Admin', 'Owner', 'Designer', 'Ops Director']
             });
@@ -111,6 +131,7 @@ export function getNextActions(context: {
                 why: isOwner ? 'Invoice raised for Design Development phase.' : 'Design Development stage pending.',
                 ctaLabel: isOwner ? 'Log Payment' : 'View Status',
                 route: 'payment-calc?focus=d2',
+                dueKey: dueOf(d2),
                 priority: 'due',
                 roles: ['Admin', 'Owner', 'Designer', 'Ops Director']
             });
@@ -166,6 +187,7 @@ export function getNextActions(context: {
                 why: 'Hard gate: No POs or vendors can be mobilized before E1 clears.',
                 ctaLabel: isOwner ? 'Log Payment' : 'View Status',
                 route: 'payment-calc?focus=e1',
+                dueKey: dueOf(e1),
                 priority: 'blocker',
                 roles: ['Admin', 'Owner', 'Designer', 'Ops Director']
             });
@@ -194,6 +216,7 @@ export function getNextActions(context: {
                 why: 'Hard gate: Vendor POs blocked until E1 clears.',
                 ctaLabel: isOwner ? 'Log Payment' : 'View Status',
                 route: 'payment-calc?focus=e1',
+                dueKey: dueOf(e1),
                 priority: 'blocker',
                 roles: ['Admin', 'Owner', 'Designer', 'Ops Director', 'Site Supervisor']
             });
@@ -219,6 +242,7 @@ export function getNextActions(context: {
                 why: 'Structure / First-Fix payment is due.',
                 ctaLabel: isOwner ? 'Log Payment' : 'View Status',
                 route: 'payment-calc?focus=e2',
+                dueKey: dueOf(e2),
                 priority: 'due',
                 roles: ['Admin', 'Owner', 'Designer', 'Ops Director']
             });
@@ -234,6 +258,7 @@ export function getNextActions(context: {
                 why: 'Finishing payment is due.',
                 ctaLabel: isOwner ? 'Log Payment' : 'View Status',
                 route: 'payment-calc?focus=e3',
+                dueKey: dueOf(e3),
                 priority: 'due',
                 roles: ['Admin', 'Owner', 'Designer', 'Ops Director']
             });
@@ -263,6 +288,7 @@ export function getNextActions(context: {
                 why: 'Final payment required for handover.',
                 ctaLabel: isOwner ? 'Log Payment' : 'View Status',
                 route: 'payment-calc?focus=e4',
+                dueKey: dueOf(e4),
                 priority: 'blocker',
                 roles: ['Admin', 'Owner', 'Designer', 'Ops Director']
             });

@@ -3,7 +3,7 @@
 
   Pins: the shared logic (stage counts, needs-you order, grouping by stage and
   designer, the command bar, the lane → status map, the route hint stripped
-  before a screen opens, snoozing to tomorrow); the screen (the journey strip
+  before a screen opens, due days, the week); the screen (the journey strip
   filters and a second click clears it, the next step opens its screen, a
   sticker click never opens the project, a board drop opens the status window
   at that stage, Ctrl K, the triage keys, no amounts); and the studio switch
@@ -23,14 +23,23 @@ vi.mock('firebase/firestore', async (orig) => {
 vi.mock('../../contexts/OrgContext', () => ({ useOrg: () => ({ ...org, updateOrgData: async () => {}, teamMembers: [] }) }));
 /* Each project's next step comes from its own record here, so the tests choose it. */
 vi.mock('../../services/nextActionEngine', () => ({ getNextActions: (c: any) => (c?.project?._next ? [c.project._next] : []) }));
+/* Drawing counts as functions/src/projectHealth.ts keeps them. */
+vi.mock('../../services/projectHealthService', () => ({ useProjectHealth: () => new Map([['p4', { total: 10, issued: 7 }]]) }));
 
 import {
   buildRow, projectIntel, stripStages, needsYouOrder, groupRows, commandResults, statusForStage, routeTab, toggleStage,
-  needsCounts, snoozeKey, snoozeUntilTomorrow, activeSnoozes, unsnooze, startOfTomorrow, matchesStage,
+  needsCounts, matchesStage, dueOfStep, withDue, weekDays, dueLabel, isDueThisWeek, journeyCounts, todayKey,
 } from '../../lib/projectsJourney';
 
 afterEach(cleanup);
-beforeEach(() => { try { localStorage.clear(); } catch { /* none */ } });
+/* Wednesday 25 Nov 2026, 2:30 pm in India: the week is Mon 23 to Sat 28. */
+const NOW = Date.parse('2026-11-25T09:00:00Z');
+beforeEach(() => {
+  try { localStorage.clear(); } catch { /* none */ }
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW);
+});
+afterEach(() => { vi.useRealTimers(); });
 
 const step = (id: string, title: string, priority: 'blocker' | 'due' | 'suggested', route = 'site-ops') =>
   ({ id, title, why: '', ctaLabel: title, route, priority, roles: [] });
@@ -73,10 +82,15 @@ describe('the shared logic', () => {
     expect(toggleStage('won', 'closed')).toBe('closed');
   });
 
-  it('puts blockers first, then due, then the rest, and leaves out a snoozed step', () => {
+  it('puts blockers first, then due, then the rest; the earlier day first; a snoozed step stays out until its day', () => {
     const rows = rowsOf();
-    expect(needsYouOrder(rows).map((r) => r.id)).toEqual(['p3', 'p4', 'p2', 'p1']);
-    expect(needsYouOrder(rows, new Set([snoozeKey(rows[2])])).map((r) => r.id)).toEqual(['p4', 'p2', 'p1']);
+    expect(needsYouOrder(rows, NOW).map((r) => r.id)).toEqual(['p3', 'p4', 'p2', 'p1']);
+    const dated = rowsOf(BOOK.map((p) => p.id === 'p4' ? project('p4', 'execution', { ...p.context, nextStepDue: { a4: { day: '2026-11-24', at: 1 } } })
+      : p.id === 'p3' ? project('p3', 'won', { ...p.context, nextStepDue: { a3: { day: '2026-11-27', at: 1 } } }) : p));
+    expect(needsYouOrder(dated, NOW).map((r) => r.id).slice(0, 2)).toEqual(['p4', 'p3']);
+    const snoozed = rowsOf(BOOK.map((p) => p.id === 'p3' ? project('p3', 'won', { ...p.context, nextStepDue: { a3: { day: '2026-11-26', at: 1, snoozed: true } } }) : p));
+    expect(needsYouOrder(snoozed, NOW).map((r) => r.id)).toEqual(['p4', 'p2', 'p1']);
+    expect(needsYouOrder(snoozed, Date.parse('2026-11-26T05:00:00Z')).map((r) => r.id)).toContain('p3');
   });
 
   it('the Needs-you counts follow the Actual / Dummy switch only', () => {
@@ -120,15 +134,36 @@ describe('the shared logic', () => {
     expect(routeTab(undefined)).toBeUndefined();
   });
 
-  it('a snooze lasts until tomorrow and can be lifted', () => {
-    const now = new Date(2026, 10, 25, 15, 0).getTime();
-    expect(startOfTomorrow(now)).toBe(new Date(2026, 10, 26, 0, 0).getTime());
-    snoozeUntilTomorrow('p3:a3', now);
-    expect(activeSnoozes(now).has('p3:a3')).toBe(true);
-    expect(activeSnoozes(startOfTomorrow(now) + 1).has('p3:a3')).toBe(false);
-    snoozeUntilTomorrow('p3:a3', now);
-    unsnooze(['p3:a3']);
-    expect(activeSnoozes(now).size).toBe(0);
+  it('a step\'s day: the one set on the project, else its own record, else none', () => {
+    const a = step('a1', 'Collect', 'due', 'payment-calc') as any;
+    expect(dueOfStep(undefined, a)).toBeNull();
+    expect(dueOfStep(undefined, { ...a, dueKey: '2026-11-27' })).toEqual({ day: '2026-11-27', source: 'record' });
+    expect(dueOfStep({ a1: { day: '2026-11-24', at: 1 } }, { ...a, dueKey: '2026-11-27' })).toEqual({ day: '2026-11-24', source: 'set' });
+    expect(dueOfStep({ other: { day: '2026-11-24', at: 1 } }, a)).toBeNull();
+    const map = withDue({ x: { day: '2026-11-20', at: 1 } }, 'a1', '2026-11-26', 'me@studio.in', 5, true);
+    expect(map).toEqual({ x: { day: '2026-11-20', at: 1 }, a1: { day: '2026-11-26', at: 5, by: 'me@studio.in', snoozed: true } });
+    expect(withDue(map, 'a1', null)).toEqual({ x: { day: '2026-11-20', at: 1 } });
+  });
+
+  it('the week is Monday to Saturday in India\'s time; labels read Overdue, Today, a day or a date', () => {
+    expect(todayKey(NOW)).toBe('2026-11-25');
+    expect(weekDays(NOW)).toEqual(['2026-11-23', '2026-11-24', '2026-11-25', '2026-11-26', '2026-11-27', '2026-11-28']);
+    /* Late on Sunday night in India is still Sunday: the week shown is the one ending the day before. */
+    expect(weekDays(Date.parse('2026-11-29T17:00:00Z'))[0]).toBe('2026-11-23');
+    expect(weekDays(Date.parse('2026-11-29T19:00:00Z'))[0]).toBe('2026-11-30');
+    expect(['2026-11-24', '2026-11-25', '2026-11-27', '2026-12-02'].map((d) => dueLabel(d, NOW))).toEqual(['Overdue', 'Today', 'Fri', '2 Dec']);
+  });
+
+  it('due this week: a Due step on or before Saturday, overdue, or with no day; the chips count them', () => {
+    const r = (priority: any, day?: string, extra: any = {}) => ({ action: step('a', 't', priority), due: day ? { day, source: 'set' as const, ...extra } : null });
+    expect(isDueThisWeek(r('due', '2026-11-28'), NOW)).toBe(true);
+    expect(isDueThisWeek(r('due', '2026-11-20'), NOW)).toBe(true);
+    expect(isDueThisWeek(r('due', '2026-11-30'), NOW)).toBe(false);
+    expect(isDueThisWeek(r('due', '2026-11-27', { snoozed: true }), NOW)).toBe(false);
+    expect(isDueThisWeek(r('due'), NOW)).toBe(true);
+    expect(isDueThisWeek(r('suggested', '2026-11-25'), NOW)).toBe(false);
+    expect(isDueThisWeek(r('blocker', '2026-11-25'), NOW)).toBe(false);
+    expect(journeyCounts(rowsOf(), NOW)).toEqual({ blocker: 2, due: 1 });
   });
 });
 
@@ -206,8 +241,9 @@ describe('the Projects screen', () => {
   });
 
   it('the triage deck counts through; left snoozes to tomorrow, right does the step', async () => {
-    const { onOpenProject } = await mount();
+    const { onOpenProject, onQuickUpdate } = await mount();
     vi.useFakeTimers();
+    vi.setSystemTime(NOW);
     try {
       fireEvent.click(screen.getByRole('button', { name: 'Go through them' }));
       const deck = screen.getByRole('dialog', { name: 'Go through what needs you' });
@@ -215,8 +251,8 @@ describe('the Projects screen', () => {
       fireEvent.keyDown(window, { key: 'ArrowLeft' });
       act(() => { vi.advanceTimersByTime(400); });
       expect(deck.textContent).toContain('2 of 4');
-      /* The most recently touched blocker comes first. */
-      expect(activeSnoozes().has('p4:a4')).toBe(true);
+      /* The most recently touched blocker comes first; left puts its step off to tomorrow, on the project. */
+      expect(onQuickUpdate).toHaveBeenCalledWith('p4', 'nextStepDue', { a4: expect.objectContaining({ day: '2026-11-26', snoozed: true }) });
       fireEvent.keyDown(window, { key: 'ArrowRight' });
       act(() => { vi.advanceTimersByTime(400); });
       expect(onOpenProject).toHaveBeenCalledWith(expect.objectContaining({ id: 'p3' }), 'payment-calc');
@@ -225,12 +261,56 @@ describe('the Projects screen', () => {
     }
   });
 
-  it('shows no amounts, and no rings or This week yet', async () => {
+  it('shows no amounts', async () => {
     const { view } = await mount();
-    const text = view.container.textContent || '';
-    expect(text).not.toMatch(/₹|\bRs\.?\s?\d|\blakhs?\b|\bcrores?\b/i);
-    expect(screen.queryByRole('radio', { name: 'This week' })).toBeNull();
-    expect(text).not.toMatch(/dwg|Health/);
+    expect(view.container.textContent || '').not.toMatch(/₹|\bRs\.?\s?\d|\blakhs?\b|\bcrores?\b/i);
+  });
+
+  const DATED = () => BOOK.map((p) =>
+    p.id === 'p2' ? project('p2', 'proposal_sent', { ...p.context, _next: { ...p.context._next, dueKey: '2026-11-27' } })
+    : p.id === 'p3' ? project('p3', 'won', { ...p.context, nextStepDue: { a3: { day: '2026-11-20', at: 1 } } })
+    : p.id === 'p4' ? project('p4', 'execution', { ...p.context, snagList: [{ status: 'open' }, { status: 'verified' }, { status: 'resolved' }] })
+    : p);
+
+  it('a row says when its step is due, and its health: journey, drawings issued, open snags', async () => {
+    await mount(DATED());
+    expect(within(screen.getByTestId('journey-row-p2')).getByText('Fri')).toBeTruthy();
+    expect(within(screen.getByTestId('journey-row-p3')).getByText('Overdue')).toBeTruthy();
+    const p4 = screen.getByTestId('journey-row-p4');
+    expect(p4.textContent).toMatch(/7\/10\s*dwg/);
+    expect(p4.textContent).toMatch(/1\s*snag(?!s)/);
+    expect(within(p4).getByLabelText(/Drawings 7\/10 issued · Snags 2\/3 closed/)).toBeTruthy();
+    expect(screen.getByTestId('journey-row-p1').textContent).toContain('No dwg');
+  });
+
+  it('the Needs-you chip counts what is due this week', async () => {
+    await mount(DATED());
+    expect(screen.getByRole('button', { name: /2 blockers/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /1 due this week/ })).toBeTruthy();
+  });
+
+  it('This week lays the steps on their days; a drop moves the day, kept on the project', async () => {
+    const { onQuickUpdate } = await mount(DATED());
+    fireEvent.click(screen.getByRole('radio', { name: 'This week' }));
+    expect(within(screen.getByTestId('day-2026-11-27')).getByTestId('week-card-p2')).toBeTruthy();
+    const off = screen.getByRole('region', { name: 'Not on a day this week' });
+    expect(within(off).getByText(/Overdue from before Monday/)).toBeTruthy();
+    expect(within(off).getByTestId('week-card-p3')).toBeTruthy();
+    expect(within(off).getByTestId('week-card-p1')).toBeTruthy();
+    expect(within(screen.getByTestId('day-2026-11-25')).getByText('Today')).toBeTruthy();
+    const store: Record<string, string> = {};
+    const dataTransfer = { setData: (k: string, v: string) => { store[k] = v; }, getData: (k: string) => store[k], effectAllowed: '' };
+    fireEvent.dragStart(screen.getByTestId('week-card-p1'), { dataTransfer });
+    fireEvent.drop(screen.getByTestId('day-2026-11-24'), { dataTransfer });
+    expect(onQuickUpdate).toHaveBeenCalledWith('p1', 'nextStepDue', { a1: expect.objectContaining({ day: '2026-11-24' }) });
+  });
+
+  it('··· sets the step\'s day too, for a touch screen', async () => {
+    const { onQuickUpdate } = await mount(DATED());
+    fireEvent.click(screen.getByRole('button', { name: 'More for Project p2' }));
+    expect(screen.getByText('Due · Fri')).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Tomorrow' }));
+    expect(onQuickUpdate).toHaveBeenCalledWith('p2', 'nextStepDue', { a2: expect.objectContaining({ day: '2026-11-26' }) });
   });
 });
 

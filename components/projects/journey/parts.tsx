@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { AlertTriangle, Check, Ruler } from 'lucide-react';
 import { STAGE, KIND_LABEL, type FolderStage, type KindTag } from '../../../lib/projectFolders';
 import { BOQ_TAG_LABEL, type BoqTag } from '../../../lib/playground/versions';
-import { FLOW, type JourneyRow } from '../../../lib/projectsJourney';
+import { FLOW, dueLabel, type JourneyRow } from '../../../lib/projectsJourney';
+import { share, type Health } from '../../../lib/projectHealth';
 import { initialsOf } from '../../../services/projectTeam';
 import { buttonClass } from '../../ui/kit';
 
@@ -221,4 +222,51 @@ export function PopMenu({ anchor, items, onClose }: { anchor: DOMRect; items: Me
     </div>,
     document.body,
   );
+}
+
+/**
+ * The three health rings (DESIGN.md "Projects: journey, needs you, one
+ * list"): the journey in the stage colour, drawings issued in brand, snags
+ * closed in emerald, with "n/n dwg" and the open snags beside them. A ring
+ * with nothing to count stays empty; snags show from the first one.
+ */
+export function HealthRings({ stage, health }: { stage: FolderStage; health: Health }) {
+  const { journey, drawings, snags } = health;
+  const ring = (r: number, v: number, colour: string) => {
+    const c = 2 * Math.PI * r;
+    return (
+      <g key={r}>
+        <circle cx="20" cy="20" r={r} fill="none" stroke={colour} strokeOpacity=".15" strokeWidth="4" />
+        <circle className="v" cx="20" cy="20" r={r} fill="none" stroke={colour} strokeWidth="4" strokeLinecap="round"
+          strokeDasharray={c} strokeDashoffset={c * (1 - v)} transform="rotate(-90 20 20)" />
+      </g>
+    );
+  };
+  const openSnags = snags.total - snags.closed;
+  const title = [
+    journey == null ? 'Closed' : `Journey ${Math.round(journey * 5)}/5`,
+    drawings ? `Drawings ${drawings.issued}/${drawings.total} issued` : 'Drawings not counted yet',
+    snags.total ? `Snags ${snags.closed}/${snags.total} closed` : 'No snags',
+  ].join(' · ');
+  return (
+    <div className="flex items-center gap-2" title={title} aria-label={title}>
+      <svg className="pj-ring3 shrink-0" width="40" height="40" viewBox="0 0 40 40" aria-hidden>
+        {ring(17, journey ?? 0, STAGE[stage].color)}
+        {ring(11.5, drawings ? share(drawings.issued, drawings.total) : 0, '#3D52A0')}
+        {snags.total > 0 && ring(6, share(snags.closed, snags.total), '#047857')}
+      </svg>
+      <p className="text-[11px] text-slate-500 leading-snug">
+        {drawings && drawings.total ? <><span className="tabular-nums">{drawings.issued}/{drawings.total}</span> dwg</> : 'No dwg'}
+        <br />
+        {snags.total ? <><span className="tabular-nums">{openSnags}</span> snag{openSnags === 1 ? '' : 's'}</> : '—'}
+      </p>
+    </div>
+  );
+}
+
+/** When a step is due: "Overdue" in rose, "Today", a day or a date. Nothing when it has no day. */
+export function DueLabel({ row, now = Date.now(), className }: { row: Pick<JourneyRow, 'due'>; now?: number; className?: string }) {
+  if (!row.due) return null;
+  const label = dueLabel(row.due.day, now);
+  return <span className={cx('text-[11px] font-semibold', label === 'Overdue' ? 'text-rose-700' : 'text-slate-500', className)}>{label}</span>;
 }

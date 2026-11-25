@@ -17,6 +17,7 @@ import { engagementOf, type EngagementType } from './engagement';
 import { boqTagOf, type BoqTag } from './playground/versions';
 import { assignedDesignersFor, type ProjectDesignersMap } from './roleAccess';
 import { coverCandidates } from './coverPhoto';
+import { addDays, dayKey } from './opsDesk';
 import {
   STAGE, stageOfProject, kindOf, folderFiles, folderNext,
   type FolderStage, type KindTag, type RoutedFile, type FolderNext,
@@ -38,7 +39,7 @@ export interface ProjectIntel {
  * Needs-you counts, the carousel and every row want the same answers, so they
  * are worked out once and read many times.
  */
-export function projectIntel(projects: FullProjectData[], role?: string | null): Map<string, ProjectIntel> {
+export function projectIntel(projects: FullProjectData[], role?: string | null, opts: { paymentDueDays?: number } = {}): Map<string, ProjectIntel> {
   const map = new Map<string, ProjectIntel>();
   for (const proj of projects) {
     const c: any = proj.context || {};
@@ -57,6 +58,7 @@ export function projectIntel(projects: FullProjectData[], role?: string | null):
             timeline: null,
             /* No amounts on the Projects screens: "Collect Execution Advance", not "… (₹2,50,000)". */
             hideAmounts: true,
+            paymentDueDays: opts.paymentDueDays,
           },
           role || 'Admin',
         );
@@ -154,6 +156,8 @@ export interface JourneyRow {
   /** Every photo it could show, best first: the next is tried when one fails to load. */
   photos: string[];
   updated: number;
+  /** When the next step is due, or null when nobody has said (lib/projectsJourney dueOfStep). */
+  due: StepDue | null;
 }
 
 /**
@@ -201,6 +205,7 @@ export function buildRow(
     designers: assignedDesignersFor(project, designersMap),
     ...(() => { const photos = photosOf(project); return { photos, photo: photos[0] || null }; })(),
     updated: Number(project.lastModified) || 0,
+    due: dueOfStep(c.nextStepDue, action),
   };
 }
 
@@ -226,67 +231,123 @@ export function stripStages(rows: JourneyRow[]): { stages: StripStage[]; closed:
 /** A click on a stage filters to it; a second click shows every stage again. */
 export const toggleStage = (current: StageFilter, clicked: StageFilter): StageFilter => (current === clicked ? 'all' : clicked);
 
+/* ── Due days (Phase 3) ─────────────────────────────────────────────────── */
+
+/*
+  A next step's day is a calendar day, YYYY-MM-DD in India's time, like the
+  Ops Desk's payment terms (lib/opsDesk dayKey). It comes from:
+    - the project's own record of it, context.nextStepDue[action id]: moved on
+      the This week board, set from a row's ··· menu, or snoozed to tomorrow
+      from the triage deck;
+    - else the step's own record (services/nextActionEngine dueKey): a payment
+      invoiced is due the studio's payment terms after the invoice, else on
+      the milestone's planned date;
+    - else nobody has said, and the step has no day.
+*/
+
+/** One step's day as the project keeps it. */
+export interface DueEntry {
+  day: string;
+  /** Set by: an email. */
+  by?: string;
+  at: number;
+  /** Put off from the triage deck: kept out of Needs you until its day. */
+  snoozed?: boolean;
+}
+export type DueMap = Record<string, DueEntry>;
+
+export interface StepDue {
+  day: string;
+  source: 'set' | 'record';
+  snoozed?: boolean;
+}
+
+/** Today, YYYY-MM-DD in India's time. */
+export const todayKey = (now: number = Date.now()) => dayKey(now);
+export const addDayKeys = (key: string, n: number) => addDays(key, n);
+const weekdayOf = (key: string) => new Date(`${key}T00:00:00Z`).getUTCDay();
+
+/** The step's day: the project's record of it, else the step's own, else none. */
+export function dueOfStep(map: DueMap | null | undefined, action: NextAction | null | undefined): StepDue | null {
+  if (!action) return null;
+  const set = map?.[action.id];
+  if (set?.day && /^\d{4}-\d{2}-\d{2}$/.test(set.day)) return { day: set.day, source: 'set', ...(set.snoozed ? { snoozed: true } : {}) };
+  return action.dueKey ? { day: action.dueKey, source: 'record' } : null;
+}
+
+/** The project's map with one step's day set (or cleared with null). */
+export function withDue(map: DueMap | null | undefined, actionId: string, day: string | null, by?: string | null, now: number = Date.now(), snoozed = false): DueMap {
+  const next: DueMap = { ...(map || {}) };
+  if (!day) delete next[actionId];
+  else next[actionId] = { day, at: now, ...(by ? { by } : {}), ...(snoozed ? { snoozed: true } : {}) };
+  return next;
+}
+
+/** This week, Monday to Saturday, as day keys. */
+export function weekDays(now: number = Date.now()): string[] {
+  const today = todayKey(now);
+  const back = (weekdayOf(today) + 6) % 7; // Monday is 0
+  const monday = addDays(today, -back);
+  return [0, 1, 2, 3, 4, 5].map((i) => addDays(monday, i));
+}
+
+const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Overdue", "Today", a day this week ("Thu"), or a date ("2 Dec"). */
+export function dueLabel(day: string, now: number = Date.now()): string {
+  const today = todayKey(now);
+  if (day < today) return 'Overdue';
+  if (day === today) return 'Today';
+  const week = weekDays(now);
+  if (day <= week[week.length - 1]) return WEEKDAY[weekdayOf(day)];
+  const [, m, d] = day.split('-').map(Number);
+  return `${d} ${MONTH[m - 1]}`;
+}
+
+export const isOverdue = (r: Pick<JourneyRow, 'due'>, now: number = Date.now()) => !!r.due && r.due.day < todayKey(now);
+
+/** Put off from the triage deck and not yet at its day: kept out of Needs you. */
+export const isSnoozed = (r: Pick<JourneyRow, 'due'>, now: number = Date.now()) => !!r.due?.snoozed && r.due.day > todayKey(now);
+
+/**
+ * Due this week: a step the engine marks due (the gold "Due" ones) whose day
+ * is on or before Saturday, overdue included, or that has no day yet. Blockers
+ * have their own chip; a "Next" step with a day shows its day, not this chip.
+ */
+export function isDueThisWeek(r: Pick<JourneyRow, 'due' | 'action'>, now: number = Date.now()): boolean {
+  if (r.action?.priority !== 'due') return false;
+  if (r.due) return !(r.due.snoozed && r.due.day > todayKey(now)) && r.due.day <= weekDays(now)[5];
+  return true;
+}
+
 /* ── Needs you ──────────────────────────────────────────────────────────── */
 
 export const rankOf = (r: JourneyRow) =>
   !r.action ? 3 : r.action.priority === 'blocker' ? 0 : r.action.priority === 'due' ? 1 : 2;
 
-/** A snoozed step's key: one project's one action. */
-export const snoozeKey = (r: Pick<JourneyRow, 'id' | 'action'>) => `${r.id}:${r.action?.id || 'next'}`;
-
-/** Projects with a next step, blockers first, then due, then the rest; snoozed ones left out. */
-export function needsYouOrder(rows: JourneyRow[], snoozed: Set<string> = new Set()): JourneyRow[] {
+/**
+ * Projects with a next step, blockers first, then due, then the rest; within
+ * each, the earliest day first and steps with no day after them. A step put
+ * off from the triage deck stays out until its day.
+ */
+export function needsYouOrder(rows: JourneyRow[], now: number = Date.now()): JourneyRow[] {
+  const dayOf = (r: JourneyRow) => r.due?.day || '9999-12-31';
   return rows
-    .filter((r) => r.next && !snoozed.has(snoozeKey(r)))
+    .filter((r) => r.next && !isSnoozed(r, now))
     .map((r, i) => ({ r, i }))
-    .sort((a, b) => rankOf(a.r) - rankOf(b.r) || a.i - b.i)
+    .sort((a, b) => rankOf(a.r) - rankOf(b.r) || dayOf(a.r).localeCompare(dayOf(b.r)) || a.i - b.i)
     .map(({ r }) => r);
 }
 
-/*
-  Snoozing from the triage deck ("left snoozes to tomorrow"). Phase 1 keeps it
-  on this device, by project and step; when next steps carry due dates
-  (Phase 3) a snooze moves the date on the project instead.
-*/
-const SNOOZE_KEY = 'sd.projects.snoozed';
-
-export const startOfTomorrow = (now: number) => {
-  const d = new Date(now);
-  d.setHours(24, 0, 0, 0);
-  return d.getTime();
-};
-
-function readSnoozes(): Record<string, number> {
-  try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(SNOOZE_KEY) : null;
-    const v = raw ? JSON.parse(raw) : {};
-    return v && typeof v === 'object' ? v : {};
-  } catch {
-    return {};
+/** The Needs-you chips on the new screen: blockers, and steps due this week. Follow the Actual / Dummy switch only. */
+export function journeyCounts(rows: JourneyRow[], now: number = Date.now()): { blocker: number; due: number } {
+  let blocker = 0, due = 0;
+  for (const r of rows) {
+    if (r.action?.priority === 'blocker') blocker++;
+    else if (isDueThisWeek(r, now)) due++;
   }
-}
-
-function writeSnoozes(v: Record<string, number>) {
-  try { localStorage.setItem(SNOOZE_KEY, JSON.stringify(v)); } catch { /* private mode: the snooze lasts for this visit */ }
-}
-
-/** The steps still snoozed at `now`; expired ones are dropped. */
-export function activeSnoozes(now: number = Date.now()): Set<string> {
-  const all = readSnoozes();
-  const live: Record<string, number> = {};
-  for (const [k, until] of Object.entries(all)) if (Number(until) > now) live[k] = Number(until);
-  if (Object.keys(live).length !== Object.keys(all).length) writeSnoozes(live);
-  return new Set(Object.keys(live));
-}
-
-export function snoozeUntilTomorrow(key: string, now: number = Date.now()) {
-  writeSnoozes({ ...readSnoozes(), [key]: startOfTomorrow(now) });
-}
-
-export function unsnooze(keys: string[]) {
-  const all = readSnoozes();
-  for (const k of keys) delete all[k];
-  writeSnoozes(all);
+  return { blocker, due };
 }
 
 /* ── Group by stage or designer ─────────────────────────────────────────── */

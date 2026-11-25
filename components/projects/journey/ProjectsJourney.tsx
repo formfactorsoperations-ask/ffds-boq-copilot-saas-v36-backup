@@ -13,11 +13,15 @@ import { STAGE, FOLDER_STAGES, type FolderStage } from '../../../lib/projectFold
 import {
   projectIntel, buildRow, needsCounts, matchesKind, matchesStage, matchesBoq, matchesEngagement, matchesAlert,
   stripStages, toggleStage, needsYouOrder, groupRows, statusForStage, routeTab,
-  activeSnoozes, snoozeKey, snoozeUntilTomorrow, unsnooze,
-  type AlertFilter, type CommandItem, type JourneyRow, type KindFilter, type StageFilter,
+  withDue, journeyCounts, isDueThisWeek, todayKey, addDayKeys, dueLabel,
+  type AlertFilter, type DueEntry, type CommandItem, type JourneyRow, type KindFilter, type StageFilter,
 } from '../../../lib/projectsJourney';
 import { Button, EmptyState, Segmented, LABEL } from '../../ui/kit';
 import { Dot } from '../../ui/HudBits';
+import { opsSettingsOf } from '../../../lib/opsDesk';
+import { auth } from '../../../services/firebaseClient';
+import { useProjectHealth } from '../../../services/projectHealthService';
+import ProjectWeek from './ProjectWeek';
 import AssignProjectsModal from '../../projectHeader/AssignProjectsModal';
 import ProjectStatusTransitionModal from '../../ProjectStatusTransitionModal';
 import JourneyStrip from './JourneyStrip';
@@ -40,8 +44,10 @@ import '../../projectHeader/projectHeader.css';
   engagement). Then the journey strip, the Needs-you carousel, and one list
   seen as a List or a Board. No amounts on this screen.
 
-  Health rings, "This week" and the Overdue / Today labels wait for their data
-  (drawing counts, due dates on next steps) and are not drawn yet.
+  Phase 3: each next step has a day (lib/projectsJourney: kept on the project
+  when someone sets it, else its own record, a payment's terms), shown as
+  Overdue / Today / a day, and laid out on "This week"; and each List row has
+  its health rings, drawings counted by functions/src/projectHealth.ts.
 
   Shown in place of the glass folders when the studio picks it in Studio
   settings (components/projects/ProjectsScreenSwitch).
@@ -59,7 +65,7 @@ interface Props {
   loading?: boolean;
 }
 
-type View = 'list' | 'board';
+type View = 'list' | 'board' | 'week';
 type GroupBy = 'stage' | 'designer';
 const PREFS = 'sd.projects.journey';
 
@@ -94,12 +100,17 @@ export default function ProjectsJourney({
   const [statusFor, setStatusFor] = useState<{ project: FullProjectData; to?: ProjectStatus } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleteIds, setDeleteIds] = useState<string[] | null>(null);
-  const [snoozed, setSnoozed] = useState<Set<string>>(() => activeSnoozes());
-  const [snoozedHere, setSnoozedHere] = useState<string[]>([]);
+  /* What the triage deck put off this time, with what each step's day was before: "Start again" puts it back. */
+  const [snoozedHere, setSnoozedHere] = useState<Array<{ row: JourneyRow; was: DueEntry | undefined }>>([]);
+  /* The clock the labels read: moves on each minute, so Today turns over at midnight. */
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(t); }, []);
+  const drawings = useProjectHealth(orgData?.tenantId, currentRole);
 
   /* ── What every part reads ── */
   const displayNames = useMemo(() => buildDisplayNames(projects), [projects]);
-  const intel = useMemo(() => projectIntel(projects, currentRole), [projects, currentRole]);
+  const paymentDueDays = opsSettingsOf(orgData).paymentDueDays;
+  const intel = useMemo(() => projectIntel(projects, currentRole, { paymentDueDays }), [projects, currentRole, paymentDueDays]);
   const rows = useMemo(
     () => projects.map((p) => buildRow(p, displayNames.get(p.id) || p.context?.name || 'Unnamed project', intel, orgData?.projectDesigners)),
     [projects, displayNames, intel, orgData?.projectDesigners],
@@ -110,14 +121,17 @@ export default function ProjectsJourney({
     return m?.name || email.split('@')[0];
   }, [orgData?.team]);
 
+  /* Unsigned and at risk (the Filters menu); the chips' blockers and due this week follow the Actual / Dummy switch only. */
   const counts = useMemo(() => needsCounts(projects, kind, intel), [projects, kind, intel]);
+  const chips = useMemo(() => journeyCounts(rows.filter((r) => matchesKind(r.project, kind)), now), [rows, kind, now]);
+  const alertOk = useCallback((r: JourneyRow) => (alert === 'due' ? isDueThisWeek(r, now) : matchesAlert(r.project, alert, intel)), [alert, now, intel]);
   /* Everything but the stage: the strip counts each stage under the other filters. */
   const filtered = useMemo(() => rows.filter((r) =>
-    matchesKind(r.project, kind) && matchesBoq(r.project, boq) && matchesEngagement(r.project, engagement) && matchesAlert(r.project, alert, intel),
-  ), [rows, kind, boq, engagement, alert, intel]);
+    matchesKind(r.project, kind) && matchesBoq(r.project, boq) && matchesEngagement(r.project, engagement) && alertOk(r),
+  ), [rows, kind, boq, engagement, alertOk]);
   const shown = useMemo(() => [...filtered.filter((r) => matchesStage(r.project, stage))].sort((a, b) => b.updated - a.updated), [filtered, stage]);
   const strip = useMemo(() => stripStages(filtered), [filtered]);
-  const needs = useMemo(() => needsYouOrder(shown, snoozed), [shown, snoozed]);
+  const needs = useMemo(() => needsYouOrder(shown, now), [shown, now]);
   const groups = useMemo(() => groupRows(shown, group, nameOf), [shown, group, nameOf]);
   const hasUntagged = useMemo(() => projects.some((p) => classifyProject(p) === 'untagged'), [projects]);
   const engagementsInUse = useMemo(() => ENGAGEMENTS.filter((d) => projects.some((p) => engagementOf(p.context) === d.id)), [projects]);
@@ -135,6 +149,25 @@ export default function ProjectsJourney({
   const runCommand = (it: CommandItem) => {
     if (it.kind === 'project') { setCmd(false); setPeek(it.row.id); return; }
     open(it.row, it.route);
+  };
+  /* A next step's day, kept on the project (context.nextStepDue). Null takes a day set by hand off. */
+  const setDue = (r: JourneyRow, day: string | null, snoozed = false) => {
+    if (!r.action || !onQuickUpdate) return;
+    onQuickUpdate(r.id, 'nextStepDue', withDue((r.project.context as any)?.nextStepDue, r.action.id, day, auth?.currentUser?.email, Date.now(), snoozed));
+  };
+  const snooze = (r: JourneyRow) => {
+    const was = (r.project.context as any)?.nextStepDue?.[r.action!.id] as DueEntry | undefined;
+    setSnoozedHere((s) => [...s, { row: r, was }]);
+    setDue(r, addDayKeys(todayKey(Date.now()), 1), true);
+  };
+  const unsnoozeHere = () => {
+    for (const { row, was } of snoozedHere) {
+      if (!row.action || !onQuickUpdate) continue;
+      const map = { ...((row.project.context as any)?.nextStepDue || {}) };
+      if (was) map[row.action.id] = was; else delete map[row.action.id];
+      onQuickUpdate(row.id, 'nextStepDue', map);
+    }
+    setSnoozedHere([]);
   };
   const clearFilters = () => { setStage('all'); setKind('all'); setAlert(null); setBoq('all'); setEngagement('all'); };
 
@@ -199,6 +232,14 @@ export default function ProjectsJourney({
     { divider: true },
     { heading: 'Change stage' },
     ...FOLDER_STAGES.filter((s) => s.id !== r.stage && s.id !== 'terminated').map((s) => ({ label: s.label, dot: s.color, onSelect: () => changeStage(r, s.id) })),
+    ...(r.action && onQuickUpdate ? [
+      { divider: true },
+      { heading: r.due ? `Due · ${dueLabel(r.due.day, now)}` : 'Due · no day yet' },
+      { label: 'Today', checked: r.due?.day === todayKey(now), onSelect: () => setDue(r, todayKey(Date.now())) },
+      { label: 'Tomorrow', checked: r.due?.day === addDayKeys(todayKey(now), 1), onSelect: () => setDue(r, addDayKeys(todayKey(Date.now()), 1)) },
+      { label: 'In a week', checked: r.due?.day === addDayKeys(todayKey(now), 7), onSelect: () => setDue(r, addDayKeys(todayKey(Date.now()), 7)) },
+      ...(r.due?.source === 'set' ? [{ label: 'Clear the day', onSelect: () => setDue(r, null) }] : []),
+    ] : []),
     { divider: true },
     { label: 'Clone as template', onSelect: () => onDuplicateProject(r.project) },
     { label: selected.has(r.id) ? 'Unselect' : 'Select', onSelect: () => setSelected((s) => { const n = new Set(s); n.has(r.id) ? n.delete(r.id) : n.add(r.id); return n; }) },
@@ -210,21 +251,21 @@ export default function ProjectsJourney({
       {/* Needs you, the Actual / Dummy switch and the Filters menu */}
       <div className="flex flex-wrap items-center gap-2.5">
         <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl pl-3.5 pr-2 py-1.5 shadow-sm">
-          {counts.blocker + counts.due === 0 ? (
+          {chips.blocker + chips.due === 0 ? (
             <span className="flex items-center gap-2 text-xs font-semibold text-slate-600 py-1"><Dot tone="good" /> Nothing is waiting on you.</span>
           ) : (
             <>
               <span className={LABEL}>Needs you</span>
-              {counts.blocker > 0 && (
+              {chips.blocker > 0 && (
                 <button type="button" aria-pressed={alert === 'blocker'} onClick={() => setAlert(alert === 'blocker' ? null : 'blocker')}
                   className={cx('px-3 py-1 rounded-full text-xs font-bold border border-rose-200 bg-rose-50 text-rose-700 transition-shadow', alert === 'blocker' && 'ring-[3px] ring-rose-500/20')}>
-                  <span className="tabular-nums">{counts.blocker}</span> blocker{counts.blocker === 1 ? '' : 's'}
+                  <span className="tabular-nums">{chips.blocker}</span> blocker{chips.blocker === 1 ? '' : 's'}
                 </button>
               )}
-              {counts.due > 0 && (
+              {chips.due > 0 && (
                 <button type="button" aria-pressed={alert === 'due'} onClick={() => setAlert(alert === 'due' ? null : 'due')}
                   className={cx('px-3 py-1 rounded-full text-xs font-bold border border-amber-200 bg-amber-50 text-amber-700 transition-shadow', alert === 'due' && 'ring-[3px] ring-amber-600/20')}>
-                  <span className="tabular-nums">{counts.due}</span> due now
+                  <span className="tabular-nums">{chips.due}</span> due this week
                 </button>
               )}
             </>
@@ -263,7 +304,7 @@ export default function ProjectsJourney({
         <>
           <JourneyStrip stages={strip.stages} closed={strip.closed} selected={stage} onSelect={(s) => setStage((cur) => toggleStage(cur, s))} />
 
-          <NeedsYou rows={needs} onOpen={(r) => setPeek(r.id)} onDo={doStep} onTriage={() => setTriage(true)} />
+          <NeedsYou rows={needs} now={now} onOpen={(r) => setPeek(r.id)} onDo={doStep} onTriage={() => setTriage(true)} />
 
           <div className="flex flex-wrap items-center gap-2.5 pt-1.5">
             <b className="font-bold text-slate-800">{listLabel}</b>
@@ -280,7 +321,7 @@ export default function ProjectsJourney({
               </span>
             )}
             <Segmented<View> label="View" size="sm" glide value={view} onChange={setView}
-              options={[{ id: 'list', label: 'List' }, { id: 'board', label: 'Board' }]} />
+              options={[{ id: 'list', label: 'List' }, { id: 'board', label: 'Board' }, { id: 'week', label: 'This week' }]} />
           </div>
 
           {selected.size > 0 && (
@@ -298,12 +339,15 @@ export default function ProjectsJourney({
               <EmptyState icon={Search} title="No project matches" text="Nothing here under these filters."
                 action={<Button size="sm" onClick={clearFilters}>Clear the filters</Button>} />
             ) : view === 'list' ? (
-              <ProjectList groups={groups} by={group} selected={selected} nameOf={nameOf}
+              <ProjectList groups={groups} by={group} selected={selected} nameOf={nameOf} drawings={drawings} now={now}
                 onOpen={(r) => setPeek(r.id)} onDo={doStep} onFile={(r, route) => open(r, route)}
                 onMenu={(r, at) => setMenu({ id: r.id, at })} onTag={tag} />
-            ) : (
+            ) : view === 'board' ? (
               <ProjectBoard rows={shown} stage={stage} nameOf={nameOf}
                 onOpen={(r) => setPeek(r.id)} onDo={doStep} onMove={(r, to) => changeStage(r, to)} onTag={tag} />
+            ) : (
+              <ProjectWeek rows={shown} nameOf={nameOf} now={now}
+                onOpen={(r) => setPeek(r.id)} onDo={doStep} onMove={(r, day) => setDue(r, day)} />
             )}
           </div>
         </>
@@ -312,7 +356,7 @@ export default function ProjectsJourney({
       {filtersAt && <PopMenu anchor={filtersAt} items={filterItems} onClose={() => setFiltersAt(null)} />}
       {menu && menuRow && <PopMenu anchor={menu.at} items={rowMenu(menuRow)} onClose={() => setMenu(null)} />}
       {peekRow && (
-        <ProjectPeek row={peekRow} nameOf={nameOf} onClose={() => setPeek(null)}
+        <ProjectPeek row={peekRow} nameOf={nameOf} now={now} onClose={() => setPeek(null)}
           onOpenProject={(r) => open(r)} onFile={(r, route) => open(r, route)} onDo={doStep}
           onChangeStage={(r) => { setPeek(null); changeStage(r); }} onClone={(r) => { setPeek(null); onDuplicateProject(r.project); }} onTag={tag} />
       )}
@@ -320,8 +364,8 @@ export default function ProjectsJourney({
       {triage && (
         <TriageDeck rows={needs} onClose={() => setTriage(false)} onDo={doStep}
           onOpen={(r) => { setTriage(false); setPeek(r.id); }}
-          onSnooze={(r) => { const k = snoozeKey(r); snoozeUntilTomorrow(k); setSnoozedHere((s) => [...s, k]); setSnoozed(activeSnoozes()); }}
-          onRestart={() => { unsnooze(snoozedHere); setSnoozedHere([]); setSnoozed(activeSnoozes()); }} />
+          onSnooze={snooze}
+          onRestart={unsnoozeHere} />
       )}
       {assignOpen && <AssignProjectsModal onClose={() => setAssignOpen(false)} />}
       {statusFor && (
