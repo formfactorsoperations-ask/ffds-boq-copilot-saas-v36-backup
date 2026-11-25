@@ -54,7 +54,9 @@ export const PanelHead: React.FC<PanelHeadProps> = ({ icon, chip, title, blurb, 
   </div>
 );
 
-export interface PanelProps extends PanelHeadProps {
+export interface PanelProps extends Omit<PanelHeadProps, 'title'> {
+  /** The card's title. Leave it out only on a `flush` card, whose body carries its own heads. */
+  title?: React.ReactNode;
   children?: React.ReactNode;
   /** A strip under the body (`bg-slate-50`, top rule): a note, a total, a link. */
   foot?: React.ReactNode;
@@ -62,19 +64,28 @@ export interface PanelProps extends PanelHeadProps {
   className?: string;
   /** Stagger when several cards arrive together (ms). */
   delay?: number;
+  /** The body runs edge to edge with no padding: a list of rows with its own column heads. */
+  flush?: boolean;
 }
 
 /** The content card: `bg-white rounded-2xl border-slate-200 shadow-sm p-6`, arriving with `hud-panel-in`. */
-export const Panel: React.FC<PanelProps> = ({ children, foot, id, className, delay, ...head }) => (
+export const Panel: React.FC<PanelProps> = ({ children, foot, id, className, delay, flush, title, ...head }) => (
   <section
     id={id}
-    className={cx('bg-white rounded-2xl border border-slate-200 shadow-sm hud-panel-in flex flex-col min-w-0', foot && 'overflow-hidden', className)}
+    className={cx('bg-white rounded-2xl border border-slate-200 shadow-sm hud-panel-in flex flex-col min-w-0', (foot || flush) && 'overflow-hidden', className)}
     style={delay ? { animationDelay: `${delay}ms` } : undefined}
   >
-    <div className="p-6 flex-1 min-w-0">
-      <PanelHead {...head} />
-      {children != null && children !== false && <div className="mt-5">{children}</div>}
-    </div>
+    {flush ? (
+      <div className="flex-1 min-w-0">
+        {title != null && <div className="px-6 pt-6 pb-4"><PanelHead title={title} {...head} /></div>}
+        {children}
+      </div>
+    ) : (
+      <div className="p-6 flex-1 min-w-0">
+        <PanelHead title={title} {...head} />
+        {children != null && children !== false && <div className="mt-5">{children}</div>}
+      </div>
+    )}
     {foot && <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 text-[11px] text-slate-500 mt-auto">{foot}</div>}
   </section>
 );
@@ -151,16 +162,29 @@ export const StateDot: React.FC<{ tone: Exclude<Tone, 'brand'>; className?: stri
 
 /* ── Segmented choice ───────────────────────────────────────────────────── */
 
-export function Segmented<T extends string>({ value, options, onChange, label, size = 'md' }: {
+export function Segmented<T extends string>({ value, options, onChange, label, size = 'md', glide = false }: {
   value: T | null;
   options: Array<{ id: T; label: React.ReactNode; count?: number }>;
   onChange: (v: T) => void;
   /** Names the choice for screen readers. */
   label: string;
   size?: 'md' | 'sm';
+  /** The white pill slides from the old choice to the new one (a view switch). */
+  glide?: boolean;
 }) {
+  const box = React.useRef<HTMLDivElement | null>(null);
+  const [pill, setPill] = React.useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  React.useLayoutEffect(() => {
+    if (!glide) return;
+    const on = box.current?.querySelector<HTMLElement>('[aria-checked="true"]');
+    setPill(on ? { left: on.offsetLeft, top: on.offsetTop, width: on.offsetWidth, height: on.offsetHeight } : null);
+  }, [glide, value, options.length]);
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap gap-0.5 p-1 rounded-xl bg-slate-100">
+    <div ref={box} role="radiogroup" aria-label={label} className={cx('inline-flex flex-wrap gap-0.5 p-1 rounded-xl bg-slate-100', glide && 'relative')}>
+      {glide && pill && (
+        <span aria-hidden className="absolute rounded-lg bg-white shadow-sm transition-all duration-300 ease-out motion-reduce:transition-none"
+          style={{ left: pill.left, top: pill.top, width: pill.width, height: pill.height }} />
+      )}
       {options.map((o) => {
         const on = value === o.id;
         return (
@@ -168,7 +192,8 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
             className={cx(
               size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-sm',
               'rounded-lg font-semibold whitespace-nowrap transition-colors inline-flex items-center gap-1.5',
-              on ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+              glide && 'relative',
+              on ? cx('text-slate-800', (!glide || !pill) && 'bg-white shadow-sm') : 'text-slate-500 hover:text-slate-700',
             )}>
             {o.label}
             {o.count != null && <span className={cx('text-[11px] font-bold tabular-nums', on ? 'text-[#3D52A0]' : 'text-slate-400')}>{o.count}</span>}

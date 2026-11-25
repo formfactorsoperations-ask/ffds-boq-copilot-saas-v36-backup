@@ -315,6 +315,8 @@ interface ProjectStatusTransitionModalProps {
    */
   onClassificationChange?: (isDummy: boolean) => void;
   currentUserRole?: string;
+  /** The status picked when the window opens: a Projects board lane the card was dropped on. Defaults to the current status. */
+  initialStatus?: ProjectStatus;
 }
 
 export const ProjectStatusTransitionModal: React.FC<ProjectStatusTransitionModalProps> = ({
@@ -323,12 +325,13 @@ export const ProjectStatusTransitionModal: React.FC<ProjectStatusTransitionModal
   project,
   onStatusChange,
   onClassificationChange,
-  currentUserRole = 'Ops Director'
+  currentUserRole = 'Ops Director',
+  initialStatus,
 }) => {
   const rawStatus = project.context?.status;
   const isValidStatus = ALL_PROJECT_STATUSES.some(s => s.id === rawStatus);
   const currentStatus: ProjectStatus = (isValidStatus ? rawStatus : 'draft') as ProjectStatus;
-  const [selectedStatus, setSelectedStatus] = useState<ProjectStatus>(currentStatus);
+  const [selectedStatus, setSelectedStatus] = useState<ProjectStatus>(initialStatus || currentStatus);
   const [transitionNote, setTransitionNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -344,7 +347,7 @@ export const ProjectStatusTransitionModal: React.FC<ProjectStatusTransitionModal
   useEffect(() => {
     if (isOpen) {
       const valid = ALL_PROJECT_STATUSES.some(s => s.id === project.context?.status);
-      setSelectedStatus((valid ? project.context?.status : 'draft') as ProjectStatus);
+      setSelectedStatus(initialStatus || ((valid ? project.context?.status : 'draft') as ProjectStatus));
       setTransitionNote('');
       const isDummyVal = project.context?.isDummy ?? (
         project.context?.projectCategory === 'dummy' ||
@@ -354,7 +357,7 @@ export const ProjectStatusTransitionModal: React.FC<ProjectStatusTransitionModal
       );
       setIsDummy(isDummyVal);
     }
-  }, [isOpen, project.id, project.context?.status, project.context?.isDummy, project.context?.projectCategory, project.context?.name]);
+  }, [isOpen, initialStatus, project.id, project.context?.status, project.context?.isDummy, project.context?.projectCategory, project.context?.name]);
 
   if (!isOpen) return null;
 

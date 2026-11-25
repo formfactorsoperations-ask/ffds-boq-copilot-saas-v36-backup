@@ -1,0 +1,197 @@
+/*
+  Projects: journey, needs you, one list (DESIGN.md, approved 25 Nov 2026).
+
+  The motion the owner approved with the mockup
+  (public/mockups/projects-journey-final-mockup.html): the journey strip that
+  is always moving, the needs-you carousel, the board's glass lanes, the
+  triage deck and the stickers that press on, peel and explain themselves.
+  Brand, slate, rose, amber and emerald, plus the stage colours approved for
+  this screen (lib/projectFolders), passed in as --c. Plus Jakarta Sans only.
+  Everything stops under prefers-reduced-motion (the end of this file).
+*/
+
+.pj { --pj-ease: cubic-bezier(.2, .8, .2, 1); }
+.pj-noscroll { scrollbar-width: none; }
+.pj-noscroll::-webkit-scrollbar { display: none; }
+
+/* ── Photo: the project's render, or the stage-tinted "No render yet" tile ── */
+.pj-ph {
+  position: relative; overflow: hidden; flex: none;
+  background:
+    radial-gradient(120% 90% at 20% 10%, rgba(255, 255, 255, .55), transparent 55%),
+    linear-gradient(135deg, color-mix(in srgb, var(--c) 28%, #fff), color-mix(in srgb, var(--c) 55%, #e2e8f0));
+}
+.pj-ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .6s var(--pj-ease); }
+.pj-ph-none {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  color: color-mix(in srgb, var(--c) 70%, #1e293b); font-size: 11px; font-weight: 700;
+}
+.pj-ph-none svg { opacity: .7; }
+
+/* ── Journey bar under a row (five steps, filled to the stage) ── */
+.pj-bar { display: flex; gap: 3px; align-items: center; }
+.pj-bar i { height: 5px; flex: 1; border-radius: 9px; background: #e2e8f0; display: block; }
+.pj-bar i.f { background: var(--c); }
+
+/* ── Journey strip, always in motion ── */
+.pj-strip { display: flex; align-items: center; padding: 10px; overflow-x: auto; }
+.pj-st {
+  flex: 1; min-width: 190px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; text-align: left;
+  transition: background-color .25s var(--pj-ease), box-shadow .25s var(--pj-ease);
+}
+.pj-st:hover { background-color: #f8fafc; }
+.pj-st.on {
+  background-color: color-mix(in srgb, var(--c) 9%, #fff); box-shadow: inset 0 0 0 1.5px var(--c);
+  background-image: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .75) 50%, transparent 70%);
+  background-size: 200% 100%; animation: pj-sheen 3.2s linear infinite;
+}
+.pj-ring {
+  position: relative; width: 18px; height: 18px; border-radius: 50%; border: 5px solid var(--c); background: #fff; flex: none;
+  transition: transform .25s var(--pj-ease);
+}
+.pj-st.on .pj-ring { transform: scale(1.2); }
+/* An arc of the stage colour circles each ring, each stage at its own speed (--sp). */
+.pj-ring::after {
+  content: ""; position: absolute; inset: -9px; border-radius: 50%; opacity: .7;
+  background: conic-gradient(from 0deg, var(--c) 0 22%, transparent 22% 100%);
+  -webkit-mask: radial-gradient(circle, transparent 11px, #000 12px, #000 14px, transparent 15px);
+  mask: radial-gradient(circle, transparent 11px, #000 12px, #000 14px, transparent 15px);
+  animation: pj-spin var(--sp, 2.6s) linear infinite;
+}
+/* A stage with a blocker sends out a soft rose pulse. */
+.pj-st.blk .pj-ring { animation: pj-halo 1.8s ease-out infinite; }
+
+.pj-toks { display: flex; margin-left: auto; padding-left: 8px; align-items: center; }
+.pj-tok-in { animation: pj-tok-in .45s cubic-bezier(.34, 1.56, .64, 1) both; margin-left: -9px; flex: none; }
+.pj-tok {
+  width: 28px; height: 28px; border-radius: 50%; overflow: hidden; border: 2px solid #fff; box-shadow: 0 0 0 1px #e2e8f0;
+  animation: pj-bob 2.8s ease-in-out infinite;
+}
+.pj-tok .pj-ph { width: 100%; height: 100%; }
+.pj-tok .pj-ph-none span, .pj-tok .pj-ph-none svg { display: none; }
+
+/* Connectors: dashes flowing towards handover in the two stages' colours, a glowing dot travelling along. */
+.pj-line { position: relative; width: 46px; height: 4px; border-radius: 9px; flex: none; }
+.pj-line::before {
+  content: ""; position: absolute; inset: 0; border-radius: 9px; opacity: .7;
+  background: linear-gradient(90deg, var(--a), var(--b));
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 8px, transparent 8px 16px);
+  mask: repeating-linear-gradient(90deg, #000 0 8px, transparent 8px 16px);
+  animation: pj-flow .7s linear infinite;
+}
+.pj-line i {
+  position: absolute; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; background: var(--b);
+  box-shadow: 0 0 8px 2px color-mix(in srgb, var(--b) 60%, transparent);
+  animation: pj-comet 1.8s cubic-bezier(.45, 0, .55, 1) infinite; animation-delay: var(--d, 0s);
+}
+.pj-closed { flex: none; margin-left: 10px; padding: 9px 13px; border-radius: 12px; border: 1px dashed #cbd5e1; white-space: nowrap; }
+.pj-closed.on { background: #f1f5f9; border-style: solid; }
+
+/* ── Needs-you carousel ── */
+.pj-nc { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; padding: 2px 2px 10px; }
+.pj-ncard {
+  flex: 0 0 300px; scroll-snap-align: start; position: relative; overflow: hidden; cursor: pointer;
+  transition: transform .25s var(--pj-ease), box-shadow .25s;
+}
+.pj-ncard:hover { transform: translateY(-3px); box-shadow: 0 18px 30px -18px rgba(15, 23, 42, .45); }
+.pj-ncard:hover .pj-ph img, .pj-row:hover .pj-ph img, .pj-lcard:hover .pj-ph img { transform: scale(1.06); }
+.pj-edge { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; z-index: 2; }
+
+/* ── List rows: the files slide out on hover ── */
+.pj-cols { display: grid; grid-template-columns: minmax(300px, 2.4fr) 1.1fr 1.3fr 40px; gap: 16px; align-items: center; }
+.pj-row { position: relative; cursor: pointer; transition: background-color .15s; }
+.pj-row:hover { background-color: #f8fafc; }
+.pj-files { display: flex; flex-wrap: wrap; gap: 6px; max-height: 0; opacity: 0; overflow: hidden; transition: max-height .3s var(--pj-ease), opacity .25s, margin .3s var(--pj-ease); }
+.pj-row:hover .pj-files, .pj-row:focus-within .pj-files { max-height: 40px; opacity: 1; margin-top: 6px; }
+@media (max-width: 760px) {
+  .pj-cols { grid-template-columns: 1fr 32px; gap: 8px; }
+  .pj-cols .pj-c2, .pj-head { display: none; }
+  .pj-cols .pj-c3 { grid-column: 1; }
+}
+
+/* ── Board: glass lanes tinted with the stage colour ── */
+.pj-lanes { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; align-items: flex-start; }
+.pj-lane {
+  flex: 0 0 268px; scroll-snap-align: start; border-radius: 20px; padding: 10px; min-height: 420px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 10%, rgba(255, 255, 255, .6)), rgba(255, 255, 255, .35));
+  border: 1px solid rgba(255, 255, 255, .8); backdrop-filter: blur(10px); transition: box-shadow .2s;
+}
+.pj-lane.over { box-shadow: 0 0 0 2px var(--c) inset; }
+.pj-lcard { cursor: grab; transition: transform .2s var(--pj-ease), box-shadow .2s, opacity .2s; }
+.pj-lcard:hover { transform: translateY(-2px); box-shadow: 0 12px 24px -12px rgba(15, 23, 42, .25); }
+.pj-lcard.drag { opacity: .4; }
+
+/* ── Triage deck ── */
+.pj-deck { position: relative; height: 500px; }
+.pj-tc { position: absolute; inset: 0; overflow: hidden; touch-action: none; user-select: none; transition: transform .4s var(--pj-ease), opacity .4s; }
+.pj-tc.front { cursor: grab; }
+.pj-stamp {
+  position: absolute; top: 24px; z-index: 3; opacity: 0; padding: 6px 14px; border-radius: 10px; border: 3px solid;
+  font-size: 20px; font-weight: 900; letter-spacing: .1em; background: rgba(255, 255, 255, .85);
+}
+.pj-stamp.yes { left: 20px; color: #047857; transform: rotate(-12deg); }
+.pj-stamp.no { right: 20px; color: #475569; transform: rotate(12deg); }
+.pj-dbtn { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; transition: transform .2s var(--pj-ease); }
+.pj-dbtn:hover { transform: scale(1.08); }
+
+/* ── Stickers: press on, peel on hover, explain themselves ── */
+@property --pj-p { syntax: '<length>'; inherits: true; initial-value: 4px; }
+.pj-stk {
+  --pj-p: 4px; position: relative; display: inline-flex; transform: rotate(var(--r)); cursor: pointer;
+  filter: drop-shadow(0 1px 1px rgba(15, 23, 42, .18));
+  animation: pj-stick .6s cubic-bezier(.34, 1.56, .64, 1) backwards .12s;
+  transition: transform .3s cubic-bezier(.34, 1.56, .64, 1), filter .3s, --pj-p .3s var(--pj-ease);
+}
+.pj-stk.seal-w { animation-delay: .24s; }
+.pj-stk > .pj-face {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  padding: 3px 7px; border-radius: 6px; white-space: nowrap; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--pj-p)), calc(100% - var(--pj-p)) 100%, 0 100%);
+  background: linear-gradient(180deg, #fff, #f1f5f9); color: #3D52A0;
+}
+.pj-face.dummy { color: #b45309; background: linear-gradient(180deg, #fffbeb, #fef3c7); }
+.pj-face.untagged { color: #be123c; background: linear-gradient(180deg, #fff1f2, #ffe4e6); animation: pj-nudge 3.6s ease-in-out 1.4s infinite; }
+.pj-stk:hover > .pj-face.untagged { animation-play-state: paused; }
+.pj-face.seal { padding: 3px 8px; border-radius: 99px; color: #475569; background: linear-gradient(180deg, #fff, #eef2ff); }
+.pj-face.seal.pg { color: #fff; background: linear-gradient(180deg, #5a6fc0, #3D52A0); }
+.pj-fold {
+  position: absolute; right: 0; bottom: 0; width: var(--pj-p); height: var(--pj-p); border-radius: 0 0 3px 0;
+  background: linear-gradient(315deg, transparent 50%, #e2e8f0 50%, #f8fafc 70%, #cbd5e1); box-shadow: -1px -1px 2px rgba(15, 23, 42, .18);
+}
+.pj-stk:hover, .pj-stk:focus-visible {
+  z-index: 8; --pj-p: 10px; outline: none;
+  transform: rotate(calc(var(--r) * -0.6)) translateY(-2px) scale(1.06); filter: drop-shadow(0 6px 6px rgba(15, 23, 42, .22));
+}
+.pj-stk.slap { animation: pj-slap .5s cubic-bezier(.34, 1.56, .64, 1); }
+.pj-stk::after {
+  content: attr(data-tip); position: absolute; left: calc(100% + 10px); top: 50%; z-index: 5; white-space: nowrap; pointer-events: none;
+  transform: translateY(-50%) translateX(-4px) rotate(calc(var(--r) * -1)); opacity: 0;
+  background: #1e293b; color: #fff; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; padding: 5px 9px; border-radius: 8px;
+  box-shadow: 0 8px 18px -8px rgba(15, 23, 42, .5); transition: opacity .2s, transform .25s var(--pj-ease);
+}
+.pj-stk:hover::after, .pj-stk:focus-visible::after { opacity: 1; transform: translateY(-50%) translateX(0) rotate(calc(var(--r) * -1)); }
+
+/* ── Keyframes ── */
+@keyframes pj-spin { to { transform: rotate(360deg); } }
+@keyframes pj-flow { to { -webkit-mask-position: 16px 0; mask-position: 16px 0; } }
+@keyframes pj-comet { 0% { left: -6px; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { left: calc(100% - 2px); opacity: 0; } }
+@keyframes pj-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes pj-halo { 0% { box-shadow: 0 0 0 0 rgba(225, 29, 72, .45); } 70% { box-shadow: 0 0 0 9px rgba(225, 29, 72, 0); } 100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); } }
+@keyframes pj-sheen { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+@keyframes pj-tok-in { from { opacity: 0; transform: translateX(10px) scale(.5); } to { opacity: 1; transform: none; } }
+@keyframes pj-stick {
+  0% { opacity: 0; transform: translateY(-10px) scale(1.5) rotate(calc(var(--r) - 14deg)); filter: drop-shadow(0 14px 10px rgba(15, 23, 42, .25)); }
+  55% { opacity: 1; transform: scale(.92) rotate(calc(var(--r) + 2deg)); filter: drop-shadow(0 1px 1px rgba(15, 23, 42, .18)); }
+  100% { opacity: 1; transform: rotate(var(--r)); }
+}
+@keyframes pj-slap {
+  0% { transform: rotate(var(--r)) scale(1); }
+  25% { transform: translateY(-8px) rotate(calc(var(--r) - 10deg)) scale(1.25); }
+  60% { transform: rotate(calc(var(--r) + 2deg)) scale(.9); }
+  100% { transform: rotate(var(--r)) scale(1); }
+}
+@keyframes pj-nudge { 0%, 88%, 100% { transform: rotate(0); } 92% { transform: rotate(-8deg); } 96% { transform: rotate(6deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pj *, .pj *::before, .pj *::after, .pj-overlay *, .pj-overlay *::before, .pj-overlay *::after { animation: none !important; transition: none !important; }
+}

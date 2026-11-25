@@ -6,6 +6,8 @@ export interface OrganizationContext {
     playground?: boolean;
     /** Which Design Desk this studio uses: today's ('classic', the default) or Design Desk 2.0 ('new'). */
     designDesk?: 'classic' | 'new';
+    /** Which Projects screen this studio uses: the glass folders ('folders', the default) or the journey screen ('journey'). */
+    projectsScreen?: 'folders' | 'journey';
     /** The engagements this studio takes on (lib/engagement.ts). Absent: turnkey and design only. */
     engagementTypesOffered?: import('./lib/engagement').EngagementType[];
     /** Pre-fills the fee, in rupees per sq ft, when a project is set up as design only. */
