@@ -23,6 +23,8 @@ import ClientCard from "./clients/ClientCard";
 import ClientDossier from "./clients/ClientDossier";
 import { SideDrawer } from "./clients/parts";
 import EditClientModal from "./clients/EditClientModal";
+import ClientPortalModal from "./clients/ClientPortalModal";
+import { portalLink, type SaveProject } from "./clients/portalActions";
 import { formOf, keyAfter, mergesWith, patchFor, type ClientForm } from "../lib/clientEdit";
 
 /*
@@ -375,9 +377,26 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew,
     await writeEdit(targets, f, current.primary.id, merged, targets.length);
   };
 
+  /*
+    The client portal window (ClientPortalModal) for the roles the login
+    functions accept; project changes go through the same safe save as Edit.
+  */
+  const [portalOpen, setPortalOpen] = useState<{ focus: 'reset' | null } | null>(null);
+  const canPortalWindow = canPortal && !!onUpdateClientProject;
+  const savePortal: SaveProject = async (projectId, patch) => {
+    if (!onUpdateClientProject) throw new Error('This screen cannot save projects here.');
+    return onUpdateClientProject(projectId, patch);
+  };
+  useEffect(() => { setPortalOpen(null); }, [current?.client.clientKey]);
+
   const card = current && (
     <ClientCard row={current} tenantId={tenantId} canPortal={canPortal} onOpenProject={onOpenProject} portalLines={portalLines}
-      onOpenDossier={() => setDossierOpen(true)} onEdit={canEdit ? openEdit : undefined} />
+      onOpenDossier={() => setDossierOpen(true)} onEdit={canEdit ? openEdit : undefined}
+      onPortal={canPortalWindow ? (focus) => { setCardOpen(false); setPortalOpen({ focus: focus || null }); } : undefined}
+      onCopyLink={canPortalWindow ? async () => {
+        const url = await portalLink(current.primary, savePortal);
+        try { await navigator.clipboard?.writeText(url); } catch { /* shown as copied all the same */ }
+      } : undefined} />
   );
 
   return (
@@ -417,6 +436,23 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew,
       {dossierOpen && current && (
         <ClientDossier client={current.client} author={author} onClose={() => setDossierOpen(false)} onOpenProject={(p) => onOpenProject(p)}
           canLog={canLog} projectId={current.primary.id} onMove={(line) => writeLine(current.primary.id, line)} />
+      )}
+      {portalOpen && current && (
+        <ClientPortalModal
+          clientName={current.client.clientName}
+          clientPhone={current.client.clientPhone}
+          projects={[current.primary, ...current.client.projects.filter((p) => p.id !== current.primary.id)]}
+          initialProjectId={current.primary.id}
+          tenantId={tenantId}
+          studioName={orgData?.orgName || 'our studio'}
+          me={currentUserAuth?.email || null}
+          save={savePortal}
+          portalLines={portalLines}
+          focus={portalOpen.focus}
+          onChangeEmail={() => { setPortalOpen(null); openEdit(); }}
+          onOpenProject={onOpenProject}
+          onClose={() => setPortalOpen(null)}
+        />
       )}
       {editing && (
         <EditClientModal mode={editing.mode} initial={editing.initial} onClose={() => setEditing(null)} onSave={saveForm}

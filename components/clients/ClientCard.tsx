@@ -1,15 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { httpsCallable } from 'firebase/functions';
-import { Phone, Mail, MapPin, KeyRound, Copy, RefreshCw, Check, NotebookPen, ArrowRight, Pencil } from '@/lib/lucide-shim';
+import { Phone, Mail, MapPin, KeyRound, Copy, Check, NotebookPen, ArrowRight, Pencil, MoreHorizontal } from '@/lib/lucide-shim';
 import { Button, Chip, LABEL, type Tone } from '../ui/kit';
 import { StageChip } from '../projects/journey/parts';
 import { stageOfProject } from '../../lib/projectFolders';
 import { clientPeople, normEmail, type ClientPerson, type PortalAccessMark } from '../../lib/clientContacts';
 import { formatINR } from '../../lib/utils';
-import { publicAppOrigin } from '../../lib/publicUrl';
-import { issuePortalAccess, portalTokenOf } from '../../services/portalAccessService';
-import { db } from '../../services/dbService';
-import { functions as fbFunctions } from '../../services/firebaseClient';
+import { portalTokenOf } from '../../services/portalAccessService';
 import type { FullProjectData } from '../../types';
 import type { ClientRow } from '../../lib/clientList';
 import { ClientPhoto, PortalLineText } from './parts';
@@ -23,9 +19,9 @@ import type { PortalLine } from '../../lib/portalVisits';
 
   The portal buttons are for Owner, Admin and Ops Director (and Super Admin):
   the roles the login callables accept (functions/src/index.ts
-  CLIENT_LOGIN_ROLES). Everyone else sees the state only. A login is an email
-  and a temporary password the studio issues, made on the server so the
-  studio is never signed out of its own account.
+  CLIENT_LOGIN_ROLES). Everyone else sees the state and the status line only.
+  Reset password, Give access and More open the client portal window
+  (ClientPortalModal); Copy link copies here.
 */
 
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
@@ -72,9 +68,9 @@ const NEXT_TONE: Record<'warn' | 'go' | 'plain', string> = {
   plain: 'bg-slate-50 text-slate-700 border-slate-200',
 };
 
-export default function ClientCard({ row, tenantId, canPortal, onOpenProject, onOpenDossier, portalLines = [], onEdit }: {
+export default function ClientCard({ row, canPortal, onOpenProject, onOpenDossier, portalLines = [], onEdit, onPortal, onCopyLink }: {
   row: ClientRow;
-  tenantId: string;
+  tenantId?: string;
   /** Owner, Admin, Ops Director, Super Admin: may give, reset and copy portal access. */
   canPortal: boolean;
   onOpenProject: (project: FullProjectData, targetTab?: string) => void;
@@ -83,6 +79,10 @@ export default function ClientCard({ row, tenantId, canPortal, onOpenProject, on
   portalLines?: Array<{ projectId: string; name: string; line: PortalLine }>;
   /** Owner, Admin, Ops Director, Super Admin: Edit client. */
   onEdit?: () => void;
+  /** The client portal window; 'reset' opens it with Reset password ready for its second click. */
+  onPortal?: (focus?: 'reset') => void;
+  /** Copies the primary project's portal link, making one first if it has none. */
+  onCopyLink?: () => Promise<void>;
 }) {
   const c = row.client;
   const p = row.primary;
@@ -91,53 +91,24 @@ export default function ClientCard({ row, tenantId, canPortal, onOpenProject, on
   const portal = portalStateOf(c.projects);
   const loginEmail = String(ctx.clientEmail || c.clientEmail || '').split(',')[0].trim();
 
-  /* ── Portal actions, as the old directory had them ─────────────────────── */
-  const [busy, setBusy] = useState<string | null>(null);
+  /* Copy link here; everything else about the portal is in its window (ClientPortalModal). */
+  const [copying, setCopying] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [issued, setIssued] = useState<{ email: string; password: string; reissued: boolean } | null>(null);
-  const [copiedBoth, setCopiedBoth] = useState(false);
-  const [copied, setCopied] = useState<'link' | 'newlink' | null>(null);
-  /* Reset and Reissue replace what the client already has, so each takes a second click within five seconds. */
-  const [armed, setArmed] = useState<'reset' | 'reissue' | null>(null);
-  useEffect(() => {
-    if (!armed) return;
-    const t = window.setTimeout(() => setArmed(null), 5000);
-    return () => window.clearTimeout(t);
-  }, [armed]);
-  useEffect(() => { setIssued(null); setError(null); setArmed(null); setCopied(null); }, [c.clientKey]);
-
-  const login = async (reset: boolean) => {
-    if (!loginEmail) { setError('Add a client email to this project first — it is their username.'); return; }
-    if (!fbFunctions) { setError('Cannot reach the server. Check your connection and try again.'); return; }
+  useEffect(() => { setCopied(false); setError(null); }, [c.clientKey]);
+  const copyLink = async () => {
+    if (!onCopyLink) return;
+    setCopying(true);
     setError(null);
-    setBusy(reset ? 'reset' : 'give');
     try {
-      const fn = httpsCallable(fbFunctions, reset ? 'resetClientPassword' : 'createClientLogin');
-      const res: any = await fn({ email: loginEmail, projectId: p.id, tenantId, clientName: c.clientName });
-      setIssued({ email: res?.data?.email || loginEmail, password: res?.data?.tempPassword || '', reissued: reset });
-      setCopiedBoth(false);
+      await onCopyLink();
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
     } catch (e: any) {
-      setError(e?.message || 'Could not set up the login. Please try again.');
+      setError(e?.message || 'The link could not be made. Try again.');
     } finally {
-      setBusy(null);
+      setCopying(false);
     }
-  };
-
-  /* The link is `?portal=<token>`. A new one is minted only on Reissue, or when none exists; reissuing stops the old one working. */
-  const copyLink = async (fresh: boolean) => {
-    let token = fresh ? null : portalTokenOf(p.context);
-    if (!token) {
-      const access = issuePortalAccess(p.id, ctx.clientEmail);
-      token = access.token;
-      try {
-        await db.saveProject({ ...p, context: { ...ctx, portalAccess: access }, lastModified: Date.now() } as FullProjectData);
-      } catch (e) {
-        console.error('Could not save the portal link:', e);
-      }
-    }
-    try { await navigator.clipboard?.writeText(`${publicAppOrigin()}/?portal=${token}`); } catch { /* shown as copied all the same */ }
-    setCopied(fresh ? 'newlink' : 'link');
-    window.setTimeout(() => setCopied(null), 2500);
   };
 
   const money = row.money;
@@ -191,48 +162,20 @@ export default function ClientCard({ row, tenantId, canPortal, onOpenProject, on
         {canPortal && (
           <div className="mt-3 flex flex-wrap gap-2">
             {portal.label === 'Active' ? (
-              <Button size="sm" icon={KeyRound} disabled={busy != null}
-                onClick={() => { if (armed !== 'reset') { setArmed('reset'); return; } setArmed(null); login(true); }}>
-                {busy === 'reset' ? 'Resetting…' : armed === 'reset' ? 'Confirm reset' : 'Reset password'}
-              </Button>
+              <>
+                <Button size="sm" icon={KeyRound} onClick={() => onPortal?.('reset')}>Reset password</Button>
+                <Button size="sm" icon={copied ? Check : Copy} disabled={copying} onClick={copyLink}>{copied ? 'Copied' : 'Copy link'}</Button>
+                <Button size="sm" variant="quiet" icon={MoreHorizontal} onClick={() => onPortal?.()}>More</Button>
+              </>
             ) : (
-              <Button size="sm" icon={KeyRound} disabled={busy != null} onClick={() => login(false)}>
-                {busy === 'give' ? 'Giving access…' : 'Give access'}
-              </Button>
+              <>
+                <Button size="sm" variant="primary" icon={KeyRound} onClick={() => onPortal?.()}>Give access</Button>
+                <Button size="sm" variant="quiet" icon={MoreHorizontal} onClick={() => onPortal?.()}>More</Button>
+              </>
             )}
-            <Button size="sm" icon={copied === 'link' ? Check : Copy} onClick={() => copyLink(false)}>
-              {copied === 'link' ? 'Copied' : 'Copy link'}
-            </Button>
-            <Button size="sm" variant="quiet" icon={copied === 'newlink' ? Check : RefreshCw}
-              title="Replace the client's link with a new one. The old link stops working."
-              onClick={() => { if (armed !== 'reissue') { setArmed('reissue'); return; } setArmed(null); copyLink(true); }}>
-              {copied === 'newlink' ? 'New link copied' : armed === 'reissue' ? 'Confirm reissue' : 'Reissue link'}
-            </Button>
           </div>
         )}
         {error && <p className="mt-2 text-xs font-semibold text-rose-700" role="alert">{error}</p>}
-        {issued && (
-          /* Shown once: Firebase Auth keeps only a hash, so a lost password is reset, never looked up. */
-          <div className="mt-3 rounded-xl border border-slate-200 overflow-hidden hud-swap">
-            <div className="px-3 py-2 bg-slate-50">
-              <p className={LABEL}>Email</p>
-              <p className="text-xs font-bold text-slate-800 break-all">{issued.email}</p>
-            </div>
-            <div className="px-3 py-2 border-t border-slate-100">
-              <p className={LABEL}>Temporary password</p>
-              <p className="text-sm font-black text-slate-800 tabular-nums select-all">{issued.password}</p>
-            </div>
-            <p className="px-3 py-2 border-t border-slate-100 text-[11px] text-amber-800 bg-amber-50">
-              Shown once. They must change it at first sign-in.
-            </p>
-            <div className="px-3 py-2 border-t border-slate-100 flex justify-end gap-2">
-              <Button size="sm" onClick={() => setIssued(null)}>Done</Button>
-              <Button size="sm" variant="primary" onClick={async () => {
-                try { await navigator.clipboard?.writeText(`Email: ${issued.email}\nTemporary password: ${issued.password}`); setCopiedBoth(true); } catch { setCopiedBoth(false); }
-              }}>{copiedBoth ? 'Copied' : 'Copy both'}</Button>
-            </div>
-          </div>
-        )}
       </Section>
 
       <Section title="People on this account">

@@ -1246,6 +1246,24 @@ is on the Ops Desk too (`lib/clientCompose.ts`, pure and tested).
   quick-add form, filled in (`StartProjectModal` `prefill`); a dummy client becomes a practice project with those
   details. A role that cannot start projects gets the start window as before.
 
+**The client portal as built (PR F, 25 Nov 2026).** `components/clients/ClientPortalModal.tsx` and
+`components/clients/portalActions.ts`, on the `AssignProjectsModal` pattern; the login functions are unchanged
+(owner's decision D4).
+- **Card:** the state chip and each project's status line for everyone; for Owner, Admin, Ops Director and Super
+  Admin, Reset password, Copy link and More when access is on, Give access and More when it is not.
+- **The window,** one project at a time (a picker when there are several): its state, the status lines, "Signs in
+  with {email}" with Change (Edit client). Tiles: Give access or Reset password (a second click within 5 s; the
+  temporary password shown once, "They must change it at first sign-in"), Copy portal link, Reissue link ("The old
+  link stops working", a second click) and See it as the client (the project's Client Portal preview). No email:
+  "Add a client email to this project first — it is their username", with Add email.
+- **Sharing:** the invite (link and username) on WhatsApp or copied; the temporary password only when "Include the
+  password" is ticked, off by default.
+- **People:** with more than one person or project, the project's people panel (`ClientPeoplePanel`), each person
+  with their own login; a portal change there is saved at once, typing after a pause.
+- **Remove access** is a rose button that asks again; it calls `revokeClientLogin` and marks the project
+  (`withPortalMark`). Every project change, a new link included, goes through the safe save of Edit client.
+- The window says "They'll see the portal tabs you've already approved for clients. Nothing new is added."
+
 ### Summary-first sections (approved 16 Nov 2026)
 
 Execution & Site used to nest tabs five levels deep. The owner chose option C of plan item 9:
