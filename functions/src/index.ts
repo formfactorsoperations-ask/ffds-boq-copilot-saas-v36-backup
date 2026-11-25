@@ -49,6 +49,8 @@ export { peopleGuide, peopleGuideCommand, peopleCelebrations } from "./peopleGui
 export { peopleClaims, peopleClaimsCommand } from "./peopleClaims";
 /* "New for you" in the client portal: a note for each thing the studio releases (lib/notify.ts portalDrafts). */
 export { onPortalViewWritten, onDecisionAnswered } from "./portalNotify";
+/* Portal visits: which approved tab a signed-in client has open (lib/portalVisits). */
+export { portalPing } from "./portalVisits";
 import { confirmMeetingByClient, portalSheetFor } from "./designMeeting";
 import { notify, settle } from "./notify";
 export { settleNotes } from "./notify";

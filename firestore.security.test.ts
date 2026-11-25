@@ -477,3 +477,47 @@ describe("the founders' goals are for the two founders only", () => {
     await assertFails(setDoc(doc(owner(), `organizations/${STUDIO}/founderGoals/other`), good));
   });
 });
+
+describe('portal visits are for the studio, not a Viewer, and only the server writes them', () => {
+  const PATH = 'projects/p1/portalVisits/client';
+  const visit = { uid: 'client', email: 'c@x.com', tenantId: STUDIO, projectId: 'p1', firstAt: 1, lastAt: 2, lastTab: 'documents', sessions: 1, tabs: { documents: 1 }, recent: [{ at: 1, tabs: ['documents'] }] };
+  const viewer = () => env.authenticatedContext('viewer', { email: 'v@a.com', email_verified: true }).firestore();
+  const head = () => env.authenticatedContext('head', { email: 'h@a.com', email_verified: true }).firestore();
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'users/viewer'), { email: 'v@a.com', tenantId: STUDIO, role: 'Viewer' });
+      await setDoc(doc(db, 'users/head'), { email: 'h@a.com', tenantId: STUDIO, role: 'Design Head' });
+      await setDoc(doc(db, PATH), visit);
+      await setDoc(doc(db, 'projects/q1/portalVisits/someone'), { ...visit, tenantId: OTHER, projectId: 'q1' });
+    });
+  });
+
+  it('lets the studio staff read them, one by one and as the list query', async () => {
+    for (const db of [member(), head(), owner()]) {
+      await assertSucceeds(getDoc(doc(db, PATH)));
+    }
+    await assertSucceeds(getDocs(query(collectionGroup(member(), 'portalVisits'), where('tenantId', '==', STUDIO))));
+  });
+
+  it('keeps them from a Viewer in the same studio', async () => {
+    await assertFails(getDoc(doc(viewer(), PATH)));
+    await assertFails(getDocs(query(collectionGroup(viewer(), 'portalVisits'), where('tenantId', '==', STUDIO))));
+  });
+
+  it('keeps them from the client, a Designer, another studio and strangers', async () => {
+    for (const db of [client(), designer(), otherAdmin(), stranger(), anon()]) {
+      await assertFails(getDoc(doc(db, PATH)));
+    }
+    await assertFails(getDocs(query(collectionGroup(otherAdmin(), 'portalVisits'), where('tenantId', '==', STUDIO))));
+    await assertFails(getDocs(query(collectionGroup(client(), 'portalVisits'), where('tenantId', '==', STUDIO))));
+  });
+
+  it('lets nobody write them from a browser: only the portalPing function does', async () => {
+    for (const db of [client(), member(), owner(), viewer()]) {
+      await assertFails(setDoc(doc(db, PATH), { ...visit, lastAt: 3 }));
+      await assertFails(setDoc(doc(db, 'projects/p1/portalVisits/new'), visit));
+    }
+  });
+});

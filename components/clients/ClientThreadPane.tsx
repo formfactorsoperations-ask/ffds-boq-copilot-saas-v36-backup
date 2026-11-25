@@ -8,7 +8,8 @@ import type { ClientRow } from '../../lib/clientList';
 import type { TemplateId } from '../../lib/clientNextMove';
 import { buildThread, groupThread, SOURCE_LABEL, type ThreadEntry, type ThreadRecords, type ThreadSource } from '../../lib/clientThread';
 import { REPLY_FROM, REPLY_MOODS, noteLine, replyLine, sendSubject, sentLine, type FollowUpLine, type ReplyFrom, type ReplyMood } from '../../lib/clientCompose';
-import { ClientPhoto, KindSticker, WHATSAPP_TEMPLATES, daysAgo, whatsAppLink } from './parts';
+import { ClientPhoto, KindSticker, LiveDot, WHATSAPP_TEMPLATES, daysAgo, whatsAppLink } from './parts';
+import type { PortalLine, PortalVisit } from '../../lib/portalVisits';
 
 /*
   The middle pane (DESIGN.md "Clients: conversations"): the client's header,
@@ -122,7 +123,7 @@ function Entry({ e, now }: { e: ThreadEntry; now: number }) {
   );
 }
 
-export default function ClientThreadPane({ row, now, studioName, money, records, loading, canLog, onLog, onOpenProject, onBack, onDetails }: {
+export default function ClientThreadPane({ row, now, studioName, money, records, loading, canLog, onLog, onOpenProject, onBack, onDetails, portalVisits = [], portalLine = null }: {
   row: ClientRow;
   now: number;
   studioName: string;
@@ -140,6 +141,10 @@ export default function ClientThreadPane({ row, now, studioName, money, records,
   onBack: () => void;
   /** Below 1024px: the client card, as a drawer. */
   onDetails: () => void;
+  /** Their portal visits, for the thread; none for a Viewer. */
+  portalVisits?: PortalVisit[];
+  /** The client's best portal line: the header says so when they are on the portal now. */
+  portalLine?: PortalLine | null;
 }) {
   const c = row.client;
   const home = row.primary?.context?.name || 'Untitled project';
@@ -153,8 +158,9 @@ export default function ClientThreadPane({ row, now, studioName, money, records,
     projects: projects.map((p) => ({ id: p.id, name: p.context?.name || 'Untitled project', context: p.context })),
     money,
     records,
+    portalVisits,
     now,
-  }) : [], [records, projects, money, c.clientName, now]);
+  }) : [], [records, projects, money, c.clientName, now, portalVisits]);
   const groups = useMemo(() => groupThread(thread, now), [thread, now]);
 
   /* The latest is at the bottom, so the thread opens there. */
@@ -245,9 +251,13 @@ export default function ClientThreadPane({ row, now, studioName, money, records,
         <ClientPhoto project={row.primary} className="w-11 h-11 rounded-xl overflow-hidden" />
         <div className="min-w-0 flex-1">
           <h2 className="text-base font-bold text-slate-900 truncate">{c.clientName}</h2>
-          <p className="text-xs text-slate-500 truncate">
-            {home} · {row.lastContactAt != null ? `last contact ${daysAgo(row.lastContactAt, now)}` : 'no contact logged yet'}
-          </p>
+          {portalLine?.live ? (
+            <p className="text-xs font-semibold text-[#3D52A0] truncate flex items-center gap-1.5"><LiveDot /> {portalLine.text}</p>
+          ) : (
+            <p className="text-xs text-slate-500 truncate">
+              {home} · {row.lastContactAt != null ? `last contact ${daysAgo(row.lastContactAt, now)}` : 'no contact logged yet'}
+            </p>
+          )}
         </div>
         <span className="hidden sm:inline-flex"><KindSticker isDummy={c.isDummy} /></span>
         <Button size="sm" icon={PanelRight} onClick={onDetails} className="lg:hidden">Details</Button>

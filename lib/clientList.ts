@@ -17,7 +17,12 @@
     three days. Projects carry no created date; a project opened from a lead
     (or started blank) records when in `scopeFlow.enabledAt`, so that is used.
 
-  Sorted newly added first, then new activity, then most recent contact.
+  - **On the portal now** is a client login that pinged in the last 2 minutes
+    (lib/portalVisits), from the studio's recent visits read in one query;
+    never for a Viewer, whose screen passes none.
+
+  Sorted newly added first, then on the portal now, then new activity, then
+  most recent contact.
 
   Pure, so the tests run it.
 */
@@ -27,6 +32,7 @@ import type { ClientMoney, ClientMilestone } from './clientMoney';
 import { heardFromClient } from './clientCare';
 import { STATUS_TO_BUCKET, type AggregatedClient } from './clientGroups';
 import { nextMove, owesNow, QUIET_AFTER_DAYS, type NextMove } from './clientNextMove';
+import { ON_NOW_MS, tabLabel, type PortalVisit } from './portalVisits';
 
 const DAY = 24 * 60 * 60 * 1000;
 export const NEW_FOR_DAYS = 3;
@@ -51,8 +57,10 @@ export interface ClientRow {
   money: ClientMoneySummary;
   lastContactAt: number | null;
   quietDays: number | null;
-  /** The one-line preview: what was last logged. */
-  preview: { who: 'you' | 'logged'; text: string; at: number } | null;
+  /** The one-line preview: on the portal now, else what was last logged. */
+  preview: { who: 'you' | 'logged' | 'portal'; text: string; at: number } | null;
+  /** The tab a client login has open now, when one is on the portal. */
+  onPortalNow: string | null;
   /** The last thing the client did, when known. */
   clientActivityAt: number | null;
   isNew: boolean;
@@ -104,8 +112,14 @@ export function buildRows(
   clients: AggregatedClient[],
   moneyByProject: Record<string, ClientMoney | null>,
   followUps: FollowUp[],
-  opts: { amountsHidden: boolean; now: number },
+  opts: { amountsHidden: boolean; now: number; visits?: PortalVisit[] },
 ): ClientRow[] {
+  const visitsBy = new Map<string, PortalVisit[]>();
+  for (const v of opts.visits || []) {
+    const list = visitsBy.get(v.projectId) || [];
+    list.push(v);
+    visitsBy.set(v.projectId, list);
+  }
   const byProject = new Map<string, FollowUp[]>();
   for (const f of followUps) {
     const list = byProject.get(f.projectId) || [];
@@ -120,14 +134,19 @@ export function buildRows(
     const added = client.projects.map(addedAtOf);
     const isNew = added.every((t) => t != null) && Math.min(...(added as number[])) > opts.now - NEW_FOR_DAYS * DAY;
     const money = moneySummary(client, moneyByProject, opts.amountsHidden);
+    const visits = client.projects.flatMap((p) => visitsBy.get(p.id) || []).sort((a, b) => b.lastAt - a.lastAt);
+    const live = visits[0] && opts.now - visits[0].lastAt <= ON_NOW_MS ? visits[0] : null;
+    const activity = Math.max(lastClientActivity(client.projects, lines) || 0, visits[0]?.lastAt || 0) || null;
     return {
       client,
       primary: primaryProject(client.projects),
       money,
       lastContactAt,
       quietDays,
-      preview: last ? { who: last.outcome === 'reminded' ? 'you' : 'logged', text: lineText(last.note), at: last.at } : null,
-      clientActivityAt: lastClientActivity(client.projects, lines),
+      preview: live ? { who: 'portal', text: `On the portal now · ${tabLabel(live.lastTab)}`, at: live.lastAt }
+        : last ? { who: last.outcome === 'reminded' ? 'you' : 'logged', text: lineText(last.note), at: last.at } : null,
+      onPortalNow: live ? live.lastTab : null,
+      clientActivityAt: activity,
       isNew,
       nextMove: nextMove({ bucket: client.bucket, milestones: money.milestones, quietDays, now: opts.now }),
     };
@@ -158,10 +177,11 @@ export function filterRows(rows: ClientRow[], f: ClientFilter, marks: SeenMarks)
   return rows;
 }
 
-/** Newly added, then new activity, then the most recent contact (none last), then the latest change. */
+/** Newly added, then on the portal now, then new activity, then the most recent contact (none last), then the latest change. */
 export function sortRows(rows: ClientRow[], marks: SeenMarks): ClientRow[] {
   return [...rows].sort((a, b) =>
     (Number(b.isNew) - Number(a.isNew))
+    || (Number(b.onPortalNow != null) - Number(a.onPortalNow != null))
     || (Number(hasNewActivity(b, marks)) - Number(hasNewActivity(a, marks)))
     || ((b.lastContactAt ?? -1) - (a.lastContactAt ?? -1))
     || (b.client.lastActivity - a.client.lastActivity));

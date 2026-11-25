@@ -4,6 +4,7 @@ import { signInWithEmailAndPassword, updatePassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebaseClient';
 import { buildWhatsAppURL } from '../lib/whatsappUtils';
+import { privacyLine } from '../lib/portalVisits';
 
 const MotionDiv = motion.div as any;
 const MotionImg = motion.img as any;
@@ -485,6 +486,8 @@ export default function ClientLoginScreen({
                   >
                     {busy ? 'Signing in…' : 'Sign in'}
                   </MotionButton>
+                  {/* Portal visits are recorded (lib/portalVisits): said here, under the button (owner approved, 25 Nov 2026). */}
+                  <p className="mt-2 text-xs text-slate-500">{privacyLine(studio?.name)}</p>
                 </MotionDiv>
 
                 <MotionDiv variants={rise}>{helpLine}</MotionDiv>

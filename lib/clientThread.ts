@@ -20,7 +20,9 @@
   A client with several projects gets one thread, each entry tagged with its
   project. Where amounts are hidden the money arrives without them
   (lib/clientMoney withoutAmounts), so a payment reads "Paid a stage" with no
-  figure. Portal visits join with the visit tracking.
+  figure. Portal visits (lib/portalVisits) add "First opened the portal" and
+  one card a day listing the tabs the client opened; a Viewer's screen passes
+  none, so they see none.
 
   Pure, so the tests run it.
 */
@@ -33,6 +35,7 @@ import { dueAtOf, CHASE_AFTER_DAYS, QUIET_AFTER_DAYS } from './clientNextMove';
 import { lineText } from './clientList';
 import { normEmail } from './clientContacts';
 import { formatINR } from './utils';
+import { TAB_LABEL, tabLabel, type PortalVisit } from './portalVisits';
 
 /** Where an entry came from: its chip, by DESIGN.md's colours. */
 export type ThreadSource = 'sent' | 'proposals' | 'portal' | 'payments' | 'design' | 'site' | 'team';
@@ -94,6 +97,8 @@ export interface ThreadInput {
   /** Each project's money as the client sees it, already without amounts where they are hidden. */
   money: Record<string, ClientMoney | null>;
   records: ThreadRecords;
+  /** Portal visits on the client's projects; left out for a Viewer. */
+  portalVisits?: PortalVisit[];
   now: number;
 }
 
@@ -292,6 +297,31 @@ export function buildThread(i: ThreadInput): ThreadEntry[] {
         text: a.status === 'approved' ? `Signed off the drawings${agreed.length ? ` · ${agreed.join(', ')}` : ''}`
           : a.status === 'deemed' ? 'Drawings taken as signed off' : 'Asked for changes to the drawings',
         detail: a.note || null, projectId: m.projectId, projectName: tag,
+      });
+    }
+  }
+
+  /* Portal visits: when they first opened it, and one card a day with the tabs they opened. */
+  for (const v of i.portalVisits || []) {
+    if (!mine.has(v.projectId)) continue;
+    const tag = tagOf.get(v.projectId) ?? null;
+    if (v.firstAt) out.push({ id: `pf-${v.projectId}-${v.uid}`, at: v.firstAt, kind: 'event', side: 'client', source: 'portal', text: 'First opened the portal', meta: v.email || null, projectId: v.projectId, projectName: tag });
+    const days = new Map<string, { at: number; tabs: Set<string>; n: number }>();
+    for (const s of v.recent || []) {
+      const key = new Date(s.at + 5.5 * 3600000).toISOString().slice(0, 10);
+      const d = days.get(key) || { at: 0, tabs: new Set<string>(), n: 0 };
+      d.at = Math.max(d.at, s.at);
+      d.n += 1;
+      (s.tabs || []).forEach((t) => d.tabs.add(t));
+      days.set(key, d);
+    }
+    for (const [key, d] of days) {
+      /* In the portal's own order. */
+      const order = Object.keys(TAB_LABEL);
+      const tabs = [...d.tabs].sort((x, y) => order.indexOf(x) - order.indexOf(y)).map(tabLabel);
+      out.push({
+        id: `pv-${v.projectId}-${v.uid}-${key}`, at: d.at, kind: 'event', side: 'client', source: 'portal',
+        text: `On the portal · ${tabs.join(', ')}`, meta: d.n > 1 ? `${d.n} visits` : null, projectId: v.projectId, projectName: tag,
       });
     }
   }

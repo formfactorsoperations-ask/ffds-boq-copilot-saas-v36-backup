@@ -3,7 +3,7 @@ import { Search, X, Users } from '@/lib/lucide-shim';
 import { Chip, EmptyState, Segmented } from '../ui/kit';
 import { STAGE, stageOfProject } from '../../lib/projectFolders';
 import { hasNewActivity, type ClientFilter, type ClientRow, type SeenMarks } from '../../lib/clientList';
-import { ClientPhoto, whenShort } from './parts';
+import { ClientPhoto, LiveDot, whenShort } from './parts';
 
 /*
   The list pane (DESIGN.md "Clients: conversations"): search, then All / New
@@ -60,16 +60,19 @@ export default function ClientList({ rows, selected, onSelect, query, onQuery, f
                 on ? 'border-l-[#3D52A0] bg-[#3D52A0]/5' : 'border-l-transparent hover:bg-slate-50',
               )}
               style={{ animationDelay: `${Math.min(i, 12) * 35}ms` }}>
-              <ClientPhoto project={r.primary} className="w-10 h-10 rounded-full overflow-hidden" />
+              <span className="relative shrink-0">
+                <ClientPhoto project={r.primary} className="w-10 h-10 rounded-full overflow-hidden" />
+                {r.onPortalNow != null && <LiveDot className="absolute -right-0.5 -bottom-0.5 w-2.5 h-2.5 ring-2 ring-white" />}
+              </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline gap-2">
                   <span className="text-sm font-bold text-slate-800 truncate flex-1">{c.clientName}</span>
                   {r.lastContactAt != null && <span className="text-[11px] text-slate-400 shrink-0">{whenShort(r.lastContactAt, now)}</span>}
                 </span>
                 <span className="mt-0.5 flex items-center gap-2">
-                  <span className="text-xs text-slate-500 truncate flex-1">
+                  <span className={cx('text-xs truncate flex-1', r.preview?.who === 'portal' ? 'text-[#3D52A0] font-semibold' : 'text-slate-500')}>
                     {r.preview
-                      ? <>{r.preview.who === 'you' ? 'You: ' : 'Logged: '}{r.preview.text}</>
+                      ? <>{r.preview.who === 'you' ? 'You: ' : r.preview.who === 'logged' ? 'Logged: ' : ''}{r.preview.text}</>
                       : <>{stage.label} · {r.primary?.context?.name || 'Untitled project'}</>}
                   </span>
                   {!r.money.hidden && r.money.owes && <Chip tone="bad" title="An invoice is raised and not yet paid">₹ Owes</Chip>}

@@ -1011,6 +1011,16 @@ service cloud.firestore {
         allow delete: if false;
       }
       /*
+        PORTAL VISITS (lib/portalVisits.ts): when a client opened their portal
+        and which approved tab they had open. Written only by the portalPing
+        function, with the Admin SDK. Read by the studio's own staff, but not
+        a Viewer (owner, 25 Nov 2026), and never by the client.
+      */
+      match /portalVisits/{uid} {
+        allow read: if ownsParentProject() && getUserData().get('role', '') != 'Viewer';
+        allow write: if false;
+      }
+      /*
         THE FRIDAY DIGEST (lib/fridayDigest.ts): one short update a week per
         client, kept per week (the Friday's date). Client Relations on an
         assigned project, or the studio's staff, write it and send it for
@@ -1477,6 +1487,11 @@ service cloud.firestore {
     */
     match /{path=**}/followUps/{fid} {
       allow list: if isAuthenticated() && isSameTenant(resource.data.tenantId);
+    }
+    /* The Clients list: its studio's recent portal visits in one query. Not a Viewer, never a client. */
+    match /{path=**}/portalVisits/{uid} {
+      allow list: if isAuthenticated() && isSameTenant(resource.data.tenantId)
+        && getUserData().get('role', '') != 'Viewer';
     }
     match /{path=**}/escalations/{eid} {
       allow list: if isAuthenticated() && (isSameTenant(resource.data.tenantId) || isSuperAdmin());
