@@ -1022,8 +1022,8 @@ and Needs-you counts from it) and its motion in `projectsJourney.css`.
 - **Triage.** Right opens the step's screen; left snoozes it to tomorrow, kept on the device until next
   steps carry due dates.
 - **Board.** A drop opens the status window at the lane's stage, so its checks and a termination still apply.
-- **Not drawn yet:** the health rings (waiting for drawing counts), "This week" and the Overdue / Today
-  labels (waiting for due dates on next steps).
+- **No amounts** in a step's title either: the steps are worked out with `hideAmounts`, so an Owner reads
+  "Collect Execution Advance", not the amount.
 
 **Cover photos as built (Phase 2, 25 Nov 2026).** `lib/coverPhoto.ts` decides, in the order above:
 - **The cover.** `context.coverPhoto`. "Upload cover" in Details (`ProjectContextTier`) puts a JPG, PNG,
@@ -1038,6 +1038,28 @@ and Needs-you counts from it) and its motion in `projectsJourney.css`.
   that is not shared with "anyone with the link" fails to load and the next photo is tried. Folders and
   drawings that are not renders are never used.
 - The cover is the studio's: the client's portal does not show it.
+
+**Due days and health as built (Phase 3, 25 Nov 2026).**
+- **A next step's day** is a calendar day in India's time. It is the one kept on the project
+  (`context.nextStepDue`, by step: moved on This week, set from a row's ··· menu as Today / Tomorrow / In a
+  week, or put off from the triage deck), else the step's own record: a payment invoiced is due the
+  studio's payment terms after the invoice (Ops Desk settings), else on the milestone's planned date.
+  Other steps have no day until someone gives one.
+- **Labels:** Overdue (rose), Today, the day this week ("Thu"), or a date ("2 Dec"), beside the chip on a
+  Needs-you card, under the next-step button on a row, and in the preview.
+- **The Needs-you chip** reads "n due this week": the Due (gold) steps on or before Saturday, overdue
+  included, or with no day yet. Needs you puts the earlier day first within blockers, due and the rest.
+- **Triage:** left puts the step off to tomorrow on the project; it leaves Needs you until then.
+- **This week:** Monday to Saturday as in the mockup, with every step of the week on a day (owner,
+  25 Nov 2026): a step nobody has given a day sits on today (Saturday when today is Sunday), and one
+  overdue from before Monday sits on Monday under its Overdue chip. A step due after Saturday is not on
+  this week. Dragging a card to a day, today included, gives it that day.
+- **Health rings** (a Health column between Journey and Next step): the journey in the stage colour,
+  drawings issued in brand, snags closed in emerald, with "n/n dwg" and the open snags. Drawings are
+  counted by a Cloud Function into `organizations/{orgId}/projectHealth/{projectId}` (only the function
+  writes it); a drawing counts once a round has gone to the client or the GFC is out. Snags are the
+  project's own (`snagList`), closed when resolved or verified. Rings fill over 1.2 s and stop under
+  reduced motion.
 
 ### Summary-first sections (approved 16 Nov 2026)
 

@@ -37,6 +37,8 @@ export { googleDrive, driveOAuthCallback } from "./googleDrive";
 /* The Ops Desk: escalation emails and the daily check; see opsDesk.ts. */
 export { onEscalationWritten, opsDeskDailyCheck, opsDeskCheckNow } from "./opsDesk";
 export { onVisitRequestWritten, onDeskMeetingWritten, onMinutesWritten, onDesignMeetingWritten } from "./meetingSync";
+// The Projects screen's drawing counts (health rings).
+export { onDrawingTrackerWrittenHealth, rebuildProjectHealth } from "./projectHealth";
 export { leadMatches, onLeadWritten } from "./leads";
 /* People: attendance and leave; see peopleDesk.ts. */
 export { peopleSnapshot, peopleCommand, peopleOutbox } from "./peopleDesk";

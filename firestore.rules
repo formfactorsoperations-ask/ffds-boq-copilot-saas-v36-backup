@@ -710,7 +710,8 @@ service cloud.firestore {
     match /{collectionId}/{document=**} {
          /* Not ownerReports or founderGoals: their own rules above are narrower, and rules only ever widen. */
          allow read: if !(collectionId in ['ownerReports', 'founderGoals']) && isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin());
-         allow write: if !(collectionId in ['ownerReports', 'founderGoals']) && isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
+         /* Not projectHealth either: only functions/src/projectHealth.ts writes the Projects screen's drawing counts. */
+         allow write: if !(collectionId in ['ownerReports', 'founderGoals', 'projectHealth']) && isAuthenticated() && (isSameTenant(orgId) || isSuperAdmin())
            && reviewUntouched(string(document)) && minutesApprovalOk(string(document));
       }
     }

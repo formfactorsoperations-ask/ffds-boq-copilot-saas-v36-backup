@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FileText, X } from 'lucide-react';
 import { STAGE } from '../../../lib/projectFolders';
-import { STEP_WORDS, stepSub, type JourneyRow } from '../../../lib/projectsJourney';
+import { STEP_WORDS, dueLabel, stepSub, type JourneyRow } from '../../../lib/projectsJourney';
 import { Button, LABEL } from '../../ui/kit';
 import { NextStepButton, ProjectPhoto, StageChip, Stickers } from './parts';
 import { ago } from './ProjectList';
@@ -17,9 +17,10 @@ import '../../projectHeader/projectHeader.css';
 
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
 
-export default function ProjectPeek({ row, nameOf, onClose, onOpenProject, onFile, onDo, onChangeStage, onClone, onTag }: {
+export default function ProjectPeek({ row, nameOf, now = Date.now(), onClose, onOpenProject, onFile, onDo, onChangeStage, onClone, onTag }: {
   row: JourneyRow;
   nameOf: (email: string) => string;
+  now?: number;
   onClose: () => void;
   onOpenProject: (r: JourneyRow) => void;
   onFile: (r: JourneyRow, route: string) => void;
@@ -78,7 +79,7 @@ export default function ProjectPeek({ row, nameOf, onClose, onOpenProject, onFil
                 <p className={LABEL}>Next step</p>
                 <p className="font-bold text-slate-800">{row.action?.title || row.next.label}</p>
                 <p className="text-[11px] text-slate-500">
-                  {[stepSub(row).replace(`${row.name} · `, ''), who ? `designer ${who}` : null, row.updated ? `updated ${ago(row.updated).toLowerCase()}` : null].filter(Boolean).join(' · ')}
+                  {[row.due ? (dueLabel(row.due.day, now) === 'Overdue' ? 'Overdue' : `Due ${dueLabel(row.due.day, now) === 'Today' ? 'today' : dueLabel(row.due.day, now)}`) : null, stepSub(row).replace(`${row.name} · `, ''), who ? `designer ${who}` : null, row.updated ? `updated ${ago(row.updated).toLowerCase()}` : null].filter(Boolean).join(' · ')}
                 </p>
               </div>
               <NextStepButton row={row} onDo={onDo} size="md" />

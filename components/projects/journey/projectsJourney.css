@@ -98,14 +98,14 @@
 .pj-edge { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; z-index: 2; }
 
 /* ── List rows: the files slide out on hover ── */
-.pj-cols { display: grid; grid-template-columns: minmax(300px, 2.4fr) 1.1fr 1.3fr 40px; gap: 16px; align-items: center; }
+.pj-cols { display: grid; grid-template-columns: minmax(300px, 2.4fr) 1.1fr 120px 1.3fr 40px; gap: 16px; align-items: center; }
 .pj-row { position: relative; cursor: pointer; transition: background-color .15s; }
 .pj-row:hover { background-color: #f8fafc; }
 .pj-files { display: flex; flex-wrap: wrap; gap: 6px; max-height: 0; opacity: 0; overflow: hidden; transition: max-height .3s var(--pj-ease), opacity .25s, margin .3s var(--pj-ease); }
 .pj-row:hover .pj-files, .pj-row:focus-within .pj-files { max-height: 40px; opacity: 1; margin-top: 6px; }
 @media (max-width: 760px) {
   .pj-cols { grid-template-columns: 1fr 32px; gap: 8px; }
-  .pj-cols .pj-c2, .pj-head { display: none; }
+  .pj-cols .pj-c2, .pj-cols .pj-c5, .pj-head { display: none; }
   .pj-cols .pj-c3 { grid-column: 1; }
 }
 
@@ -120,6 +120,18 @@
 .pj-lcard { cursor: grab; transition: transform .2s var(--pj-ease), box-shadow .2s, opacity .2s; }
 .pj-lcard:hover { transform: translateY(-2px); box-shadow: 0 12px 24px -12px rgba(15, 23, 42, .25); }
 .pj-lcard.drag { opacity: .4; }
+
+/* ── This week: Monday to Saturday ── */
+.pj-wk { display: grid; grid-template-columns: repeat(6, minmax(180px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.pj-wk-col { background: rgba(255, 255, 255, .65); border: 1px solid #e2e8f0; border-radius: 18px; padding: 10px; min-height: 420px; transition: box-shadow .2s; }
+.pj-wk-col.today { background: #fff; box-shadow: inset 0 0 0 2px #3D52A0; }
+.pj-wk-col.past { background: repeating-linear-gradient(135deg, rgba(241, 245, 249, .9) 0 8px, rgba(255, 255, 255, .7) 8px 16px); }
+.pj-wk-col.over { box-shadow: inset 0 0 0 2px #94a3b8; }
+.pj-wk-card { cursor: grab; transition: transform .2s var(--pj-ease), box-shadow .2s; }
+.pj-wk-card:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -12px rgba(15, 23, 42, .35); }
+
+/* ── Health rings ── */
+.pj-ring3 circle.v { transition: stroke-dashoffset 1.2s var(--pj-ease); }
 
 /* ── Triage deck ── */
 .pj-deck { position: relative; height: 500px; }

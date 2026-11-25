@@ -4,7 +4,8 @@ import { STAGE } from '../../../lib/projectFolders';
 import { STEP_WORDS, type JourneyRow, type RowGroup } from '../../../lib/projectsJourney';
 import { timeAgo } from '../../../lib/utils';
 import { LABEL, Panel } from '../../ui/kit';
-import { Face, JourneyBar, NextStepButton, ProjectPhoto, Stickers } from './parts';
+import { DueLabel, Face, HealthRings, JourneyBar, NextStepButton, ProjectPhoto, Stickers } from './parts';
+import { healthOf, type DrawingCounts } from '../../../lib/projectHealth';
 
 /*
   List (DESIGN.md "Projects: journey, needs you, one list"): one Panel of rows,
@@ -14,8 +15,9 @@ import { Face, JourneyBar, NextStepButton, ProjectPhoto, Stickers } from './part
   next-step button; and ···. Hovering a row slides out its files (the screens
   that matter at its stage), one click each.
 
-  The health rings (journey, drawings issued, snags closed) wait for drawing
-  counts (Phase 3), and the step's day for due dates.
+  Health is three rings: the journey, drawings issued (counted by
+  functions/src/projectHealth.ts) and snags closed, with "n/n dwg" and the
+  open snags. Under the next-step button, the day it is due.
 */
 
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
@@ -27,11 +29,14 @@ export function ago(ms: number) {
   return timeAgo(ms).replace(' ago', '');
 }
 
-export default function ProjectList({ groups, by, selected, nameOf, onOpen, onDo, onFile, onMenu, onTag }: {
+export default function ProjectList({ groups, by, selected, nameOf, drawings, now, onOpen, onDo, onFile, onMenu, onTag }: {
   groups: RowGroup[];
   by: 'stage' | 'designer';
   selected: Set<string>;
   nameOf: (email: string) => string;
+  /** Drawing counts by project (services/projectHealthService). */
+  drawings: Map<string, DrawingCounts>;
+  now: number;
   onOpen: (r: JourneyRow) => void;
   onDo: (r: JourneyRow) => void;
   onFile: (r: JourneyRow, route: string) => void;
@@ -44,6 +49,7 @@ export default function ProjectList({ groups, by, selected, nameOf, onOpen, onDo
       <div className="pj-cols pj-head px-5 py-3 border-b border-slate-100">
         <span className={LABEL}>Project</span>
         <span className={cx(LABEL, 'pj-c2')}>Journey</span>
+        <span className={cx(LABEL, 'pj-c5')}>Health</span>
         <span className={cx(LABEL, 'pj-c3')}>Next step</span>
         <span />
       </div>
@@ -99,8 +105,12 @@ export default function ProjectList({ groups, by, selected, nameOf, onOpen, onDo
                     {[def.step >= 0 ? STEP_WORDS[def.step] : def.label, ago(r.updated), by === 'stage' && who ? nameOf(who).split(' ')[0] : null].filter(Boolean).join(' · ')}
                   </p>
                 </div>
+                <div className="pj-c5 min-w-0">
+                  <HealthRings stage={r.stage} health={healthOf(def.step, drawings.get(r.id), r.project.context)} />
+                </div>
                 <div className="pj-c3 min-w-0 flex flex-col items-start gap-1">
                   <NextStepButton row={r} onDo={onDo} />
+                  {r.next && <DueLabel row={r} now={now} />}
                 </div>
                 <div className="flex justify-end">
                   <button type="button" aria-label={`More for ${r.name}`} aria-haspopup="menu"

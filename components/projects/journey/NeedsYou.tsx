@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { STAGE } from '../../../lib/projectFolders';
 import type { JourneyRow } from '../../../lib/projectsJourney';
 import { Button, Chip, StateDot } from '../../ui/kit';
-import { NextStepButton, ProjectPhoto } from './parts';
+import { DueLabel, NextStepButton, ProjectPhoto } from './parts';
 
 /*
   Needs you (DESIGN.md "Projects: journey, needs you, one list"): a carousel of
@@ -13,14 +13,14 @@ import { NextStepButton, ProjectPhoto } from './parts';
   name with its client, the step, and one button that does it. "Go through
   them" opens the triage deck.
 
-  The day a step is due (Overdue / Today / a day) comes with due dates on
-  next steps (Phase 3); until then the card shows the stage there.
+  Beside the chip, when the step is due: Overdue in rose, Today, or the day.
 */
 
 const EDGE = { red: '#e11d48', gold: '#B8923A', brand: '#3D52A0' } as const;
 
-export default function NeedsYou({ rows, onOpen, onDo, onTriage }: {
+export default function NeedsYou({ rows, now, onOpen, onDo, onTriage }: {
   rows: JourneyRow[];
+  now: number;
   onOpen: (r: JourneyRow) => void;
   onDo: (r: JourneyRow) => void;
   onTriage: () => void;
@@ -69,6 +69,7 @@ export default function NeedsYou({ rows, onOpen, onDo, onTriage }: {
               <div className="px-3.5 pt-3 pb-3.5">
                 <div className="flex items-center gap-1.5">
                   <Chip tone={tone === 'red' ? 'bad' : tone === 'gold' ? 'warn' : 'brand'}>{tone === 'red' ? 'Blocking' : tone === 'gold' ? 'Due' : 'Next'}</Chip>
+                  <DueLabel row={r} now={now} className="!font-bold" />
                   <span className="ml-auto text-[11px] text-slate-500">{STAGE[r.stage].label}</span>
                 </div>
                 <p className="mt-2 mb-0.5 flex items-baseline gap-2 min-w-0 whitespace-nowrap">
