@@ -22,6 +22,8 @@ import ClientThreadPane from "./clients/ClientThreadPane";
 import ClientCard from "./clients/ClientCard";
 import ClientDossier from "./clients/ClientDossier";
 import { SideDrawer } from "./clients/parts";
+import EditClientModal from "./clients/EditClientModal";
+import { formOf, keyAfter, mergesWith, patchFor, type ClientForm } from "../lib/clientEdit";
 
 /*
   CLIENTS: CONVERSATIONS (DESIGN.md "Clients: conversations", approved by the
@@ -43,6 +45,10 @@ interface ClientsDirectoryProps {
   projects: FullProjectData[];
   onOpenProject: (project: FullProjectData, targetTab?: string) => void;
   onCreateNew: () => void;
+  /** New client: a lead with these details filled in, or a practice project for a dummy client (App.tsx). */
+  onCreateClient?: (client: { name: string; phone: string; email: string; where: string; dummy?: boolean }) => void;
+  /** Edit client: one project's new details, saved; "open" for the project open in the workspace (App.tsx). */
+  onUpdateClientProject?: (projectId: string, patch: Record<string, any>) => Promise<'saved' | 'open'>;
 }
 
 type ProjectKindFilter = 'all' | 'actual' | 'dummy';
@@ -78,13 +84,15 @@ function useWide(query: string): boolean {
   return on;
 }
 
-export default function ClientsDirectory({ projects, onOpenProject, onCreateNew }: ClientsDirectoryProps) {
+export default function ClientsDirectory({ projects, onOpenProject, onCreateNew, onCreateClient, onUpdateClientProject }: ClientsDirectoryProps) {
   const { orgData, currentRole, currentRoles, currentUserAuth } = useOrg() as any;
   const roles = currentRoles?.length ? currentRoles : currentRole;
   const amountsHidden = !holdsFinanceRole(roles);
   const canPortal = hasRole(roles, CLIENT_LOGIN_ROLES);
   /* The follow-up log takes every studio role but Viewer (firestore.rules mayWriteOps). */
   const canLog = primaryRole(roles) !== 'Viewer';
+  /* Editing a client changes their portal username, so it is for the same roles as portal access (Phase 0, Q3). */
+  const canEdit = canPortal && !!onUpdateClientProject;
   /* Portal visits are not for a Viewer (owner, 25 Nov 2026): their screen never reads them, and the rules refuse it anyway. */
   const seesVisits = primaryRole(roles) !== 'Viewer';
   const tenantId: string = orgData?.tenantId || '';
@@ -308,19 +316,68 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
         <Segmented<ProjectKindFilter> label="Actual or dummy clients" size="sm" value={kind} onChange={setKind}
           options={[{ id: 'actual', label: 'Actual' }, { id: 'dummy', label: 'Dummy' }, { id: 'all', label: 'All' }]} />
         <Button icon={Download} onClick={handleExportCSV} title="Export the client list as a CSV file">Export CSV</Button>
-        <Button variant="primary" icon={Plus} onClick={onCreateNew}>New client</Button>
+        <Button variant="primary" icon={Plus} onClick={() => (canEdit && onCreateClient ? openNew() : onCreateNew())}>New client</Button>
       </div>
     ),
-  }, [kind, clients, amountsHidden, onCreateNew]);
+  }, [kind, clients, amountsHidden, onCreateNew, canEdit, onCreateClient]);
 
   const author = currentUserAuth?.displayName || currentUserAuth?.email?.split('@')[0] || currentRole || 'Studio Team';
   const emptyText = scoped.length === 0
     ? (kind === 'dummy' ? 'No dummy clients. Practice projects tagged Dummy show here.' : 'Clients appear here from their projects. Start one with New client.')
     : 'Nothing matches. Try All, or another search.';
 
+  /*
+    Edit client / New client (lib/clientEdit, EditClientModal). Edit writes to
+    every project of the client and says how it went: "Saved to n projects",
+    or a rose note naming each project that was not saved, with Retry. The
+    screen follows the client to their new key, merged where another client
+    already had it.
+  */
+  const [editing, setEditing] = useState<{ mode: 'edit' | 'new'; initial: ClientForm } | null>(null);
+  const [toast, setToast] = useState<{ tone: 'good' | 'bad'; text: string; retry?: () => void } | null>(null);
+  useEffect(() => {
+    if (!toast || toast.tone === 'bad') return;
+    const t = window.setTimeout(() => setToast(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+  const openEdit = () => { if (canEdit && current) setEditing({ mode: 'edit', initial: formOf(current.client, current.primary) }); };
+  const openNew = () => setEditing({
+    mode: 'new',
+    initial: { name: '', phone: '', email: '', home: '', place: '', config: '', dummy: kind === 'dummy', people: [] },
+  });
+
+  const writeEdit = async (targets: FullProjectData[], f: ClientForm, primaryId: string, merged: string | null, total: number) => {
+    if (!onUpdateClientProject) return;
+    const results = await Promise.allSettled(targets.map((p) => onUpdateClientProject(p.id, patchFor(p.context, f, p.id === primaryId))));
+    const failed = targets.filter((_, i) => results[i].status === 'rejected');
+    setSelected(keyAfter(f));
+    if (failed.length) {
+      setToast({
+        tone: 'bad',
+        text: `Not saved: ${failed.map((p) => p.context?.name || 'Untitled project').join(', ')}. ${total - failed.length ? `Saved to the other ${total - failed.length}.` : ''}`,
+        retry: () => { setToast(null); void writeEdit(failed, f, primaryId, merged, total); },
+      });
+    } else {
+      setToast({ tone: 'good', text: `Saved to ${total} project${total === 1 ? '' : 's'}${merged ? `. Merged with ${merged}` : ''}.` });
+    }
+  };
+  const saveForm = async (f: ClientForm) => {
+    if (!editing) return;
+    if (editing.mode === 'new') {
+      setEditing(null);
+      onCreateClient?.({ name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim(), where: f.place.trim(), dummy: f.dummy });
+      return;
+    }
+    if (!current) return;
+    const merged = mergesWith(clients, current.client.clientKey, f)?.clientName || null;
+    const targets = current.client.projects;
+    setEditing(null);
+    await writeEdit(targets, f, current.primary.id, merged, targets.length);
+  };
+
   const card = current && (
     <ClientCard row={current} tenantId={tenantId} canPortal={canPortal} onOpenProject={onOpenProject} portalLines={portalLines}
-      onOpenDossier={() => setDossierOpen(true)} />
+      onOpenDossier={() => setDossierOpen(true)} onEdit={canEdit ? openEdit : undefined} />
   );
 
   return (
@@ -339,7 +396,7 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
                   money={moneyByProject} records={records[current.client.clientKey] || null} loading={loadingKey === current.client.clientKey}
                   canLog={canLog} onLog={async (pid, line) => { await writeLine(pid, line); }}
                   portalVisits={seesVisits ? liveVisits || [] : []} portalLine={bestLine(portalLines.map((x) => x.line))}
-                  onBack={() => setThreadOpen(false)} onDetails={() => setCardOpen(true)} />
+                  onBack={() => setThreadOpen(false)} onDetails={() => setCardOpen(true)} onEdit={canEdit ? openEdit : undefined} />
               </div>
             ) : (
               <div className="p-6">
@@ -360,6 +417,20 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
       {dossierOpen && current && (
         <ClientDossier client={current.client} author={author} onClose={() => setDossierOpen(false)} onOpenProject={(p) => onOpenProject(p)}
           canLog={canLog} projectId={current.primary.id} onMove={(line) => writeLine(current.primary.id, line)} />
+      )}
+      {editing && (
+        <EditClientModal mode={editing.mode} initial={editing.initial} onClose={() => setEditing(null)} onSave={saveForm}
+          projectCount={current?.client.projects.length || 1} primaryName={current?.primary.context?.name}
+          mergeName={(f) => (current ? mergesWith(clients, current.client.clientKey, f)?.clientName || null : null)} />
+      )}
+      {toast && (
+        <div role={toast.tone === 'bad' ? 'alert' : 'status'}
+          className={cx('phd-pop fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-sm z-[320] rounded-2xl border shadow-xl px-4 py-3 flex items-start gap-3 bg-white',
+            toast.tone === 'bad' ? 'border-rose-200' : 'border-emerald-200')}>
+          <p className={cx('text-sm font-semibold flex-1', toast.tone === 'bad' ? 'text-rose-700' : 'text-emerald-700')}>{toast.text}</p>
+          {toast.retry && <Button size="sm" variant="danger" onClick={toast.retry}>Retry</Button>}
+          <button type="button" onClick={() => setToast(null)} aria-label="Dismiss" className="text-slate-400 hover:text-slate-600 text-sm font-bold px-1">×</button>
+        </div>
       )}
     </div>
   );

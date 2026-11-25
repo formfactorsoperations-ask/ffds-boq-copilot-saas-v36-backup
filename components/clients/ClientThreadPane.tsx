@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, MessageCircle, PanelRight, FileText, Globe, IndianRupee, PenTool, MapPin, NotebookPen, Info, MessagesSquare, Reply } from '@/lib/lucide-shim';
+import { ArrowLeft, MessageCircle, PanelRight, Pencil, FileText, Globe, IndianRupee, PenTool, MapPin, NotebookPen, Info, MessagesSquare, Reply } from '@/lib/lucide-shim';
 import { Button, Chip, EmptyState, INPUT, LABEL, Segmented, type Tone } from '../ui/kit';
 import { Dot } from '../ui/HudBits';
 import type { FullProjectData } from '../../types';
@@ -123,7 +123,7 @@ function Entry({ e, now }: { e: ThreadEntry; now: number }) {
   );
 }
 
-export default function ClientThreadPane({ row, now, studioName, money, records, loading, canLog, onLog, onOpenProject, onBack, onDetails, portalVisits = [], portalLine = null }: {
+export default function ClientThreadPane({ row, now, studioName, money, records, loading, canLog, onLog, onOpenProject, onBack, onDetails, portalVisits = [], portalLine = null, onEdit }: {
   row: ClientRow;
   now: number;
   studioName: string;
@@ -145,6 +145,8 @@ export default function ClientThreadPane({ row, now, studioName, money, records,
   portalVisits?: PortalVisit[];
   /** The client's best portal line: the header says so when they are on the portal now. */
   portalLine?: PortalLine | null;
+  /** Owner, Admin, Ops Director, Super Admin: Edit client. */
+  onEdit?: () => void;
 }) {
   const c = row.client;
   const home = row.primary?.context?.name || 'Untitled project';
@@ -260,6 +262,10 @@ export default function ClientThreadPane({ row, now, studioName, money, records,
           )}
         </div>
         <span className="hidden sm:inline-flex"><KindSticker isDummy={c.isDummy} /></span>
+        {onEdit && (
+          <button type="button" onClick={onEdit} aria-label={`Edit ${c.clientName}`} title="Edit client"
+            className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:text-[#3D52A0] hover:border-[#3D52A0]/40"><Pencil className="w-4 h-4" /></button>
+        )}
         <Button size="sm" icon={PanelRight} onClick={onDetails} className="lg:hidden">Details</Button>
       </div>
 
@@ -309,7 +315,7 @@ export default function ClientThreadPane({ row, now, studioName, money, records,
                   Open in WhatsApp
                 </Button>
                 {!c.clientPhone && (
-                  <button type="button" onClick={() => onOpenProject(row.primary)} className="text-xs font-bold text-[#3D52A0] hover:underline self-center">
+                  <button type="button" onClick={() => (onEdit ? onEdit() : onOpenProject(row.primary))} className="text-xs font-bold text-[#3D52A0] hover:underline self-center">
                     Add phone
                   </button>
                 )}

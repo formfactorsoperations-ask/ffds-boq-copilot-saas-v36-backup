@@ -1221,6 +1221,21 @@ is on the Ops Desk too (`lib/clientCompose.ts`, pure and tested).
   the portal's tab order; Next move says "Opened the portal n times since your last message".
 - **A Viewer** sees "Portal access given" / "No portal access yet" and no visit anywhere: nothing is read for them.
 
+**Edit client and New client as built (PR E, 25 Nov 2026).** `lib/clientEdit.ts` (tested) and
+`components/clients/EditClientModal.tsx`, on the `AssignProjectsModal` pattern.
+- **Who:** Owner, Admin, Ops Director and Super Admin (Phase 0, Q3): Edit on the card, the pencil in the thread
+  header, and "Add phone" / "Add email" open it. Everyone else sees no Edit.
+- **Edit** writes name, phone, email, area / city, home type, Actual / Dummy and the people on the account to every
+  project of the client; the home name goes only to the project the card shows. Each project is loaded whole
+  before it is saved (App.tsx `handleClientProjectUpdate`), the open project takes it in its own state, and a
+  save is read back, so the screen says "Saved to n projects" or names each project that was not, with Retry.
+- **Email:** changing it warns "{Name} signs in with {old email}. Their sign-in stays on the old email until you
+  give access again." Nothing touches their login from here. The screen follows the client to the new key, and
+  says "Merged with {name}" when another client already had it.
+- **New client** asks for name, phone, email, area / city and Actual / Dummy, then opens the start window on its
+  quick-add form, filled in (`StartProjectModal` `prefill`); a dummy client becomes a practice project with those
+  details. A role that cannot start projects gets the start window as before.
+
 ### Summary-first sections (approved 16 Nov 2026)
 
 Execution & Site used to nest tabs five levels deep. The owner chose option C of plan item 9:
