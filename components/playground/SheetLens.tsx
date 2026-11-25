@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layers } from 'lucide-react';
+import { Layers, GripVertical } from 'lucide-react';
 import { Chip } from '../ui/kit';
 import type { BoqItem, Room } from '../../types';
 import { SCOPE_BUCKETS } from '../../lib/scopeBuckets';
@@ -10,14 +10,22 @@ import type { ShareRow } from './LiveBoq';
 import { currentVersion, type MaterialSpecsBank } from '../../lib/materialSpecs';
 import type { Changes } from '../../lib/playground/changes';
 import { TagChip, Delta } from './ChangesParts';
+import { withLineSupply } from '../../lib/playground/supply';
+import { movable } from '../../lib/playground/roomRename';
 
 /*
   The Sheet lens (was Excel): every line in a grid, grouped by room, each with
   its picture, the words the client reads, and its numbers. Drag a number
   sideways to change it (Shift for fine steps) or click it to type. Pick lines
-  to change their markup together, mark them bought by the client, or delete
-  them. A whole-flat line opens out into its rooms.
+  to change their markup together, set how they are supplied (in the price,
+  at actuals, bought by the client), move them to a room, or delete them. A
+  line is dragged to another room by its grip; picked lines go together, and
+  while one is dragged every room shows, empty ones too. A whole-flat line
+  opens out into its rooms.
 */
+
+/** What a dragged Sheet line carries: the ids, never a bank item (which the plan and Rooms take as text/plain). */
+const LINE_DRAG = 'application/x-boq-lines';
 
 const STATUS_CHIP: Record<string, [string, 'warn' | 'slate' | 'good']> = {
   client_procured: ['By client', 'slate'],
@@ -26,7 +34,7 @@ const STATUS_CHIP: Record<string, [string, 'warn' | 'slate' | 'good']> = {
   pending_finalisation: ['To confirm', 'warn'],
 };
 
-export default function SheetLens({ rooms, models, shares, roomTotals, sel, readOnly, seesMargins, hideFigures, floor, query, onSel, onReplace, onReplaceMany, onDelete, onFullGrid, specBank, onUpdateLines, changes, removedName, onCustom }: {
+export default function SheetLens({ rooms, models, shares, roomTotals, sel, readOnly, seesMargins, hideFigures, floor, query, onSel, onReplace, onReplaceMany, onMoveLines, onDelete, onFullGrid, specBank, onUpdateLines, changes, removedName, onCustom }: {
   rooms: Room[];
   models: LineModel[];
   shares: Map<string, ShareRow[]>;
@@ -39,7 +47,9 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
   query: (m: LineModel) => boolean;
   onSel: (id: string) => void;
   onReplace: (line: BoqItem) => void;
-  onReplaceMany: (lines: BoqItem[]) => void;
+  onReplaceMany: (lines: BoqItem[], msg?: string) => void;
+  /** Lines moved to another room: dragged by their grip, or from the picked bar. */
+  onMoveLines?: (ids: string[], room: string) => void;
   onDelete: (ids: string[]) => void;
   /** Opens the full grid (statuses, linkage, notes, labour), as the Excel view had it. */
   onFullGrid?: () => void;
@@ -81,7 +91,26 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
   const order = [...realNames, ...SCOPE_BUCKETS, ...models.map(m => m.room)].filter((n, i, a) => a.indexOf(n) === i);
   const goneIn = (name: string) => !!changes && [...changes.out.values()].some(e => e.gone && (e.was!.roomId || 'Whole flat') === name);
   const order2 = changes ? [...order, ...[...changes.out.values()].filter(e => e.gone).map(e => e.was!.roomId || 'Whole flat')].filter((n, i, a) => a.indexOf(n) === i) : order;
-  const groups = order2.map(name => ({ name, ms: models.filter(m => m.room === name && query(m)) })).filter(g => g.ms.length || goneIn(g.name));
+  /* A line being dragged: its ids and the room it left; every room shows while it is, so an empty one takes it too. */
+  const [drag, setDrag] = useState<{ ids: string[]; from: string } | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const canDrag = !readOnly && !!onMoveLines;
+  const places = [...realNames, ...SCOPE_BUCKETS].filter((n, i, a) => a.indexOf(n) === i);
+  const groups = order2.map(name => ({ name, ms: models.filter(m => m.room === name && query(m)) })).filter(g => g.ms.length || goneIn(g.name) || (drag && places.includes(g.name)));
+  const dropOn = (name: string) => canDrag && drag ? {
+    onDragOver: (e: React.DragEvent) => { if (name === drag.from) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (over !== name) setOver(name); },
+    onDragLeave: (e: React.DragEvent) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setOver(o => (o === name ? null : o)); },
+    onDrop: (e: React.DragEvent) => { e.preventDefault(); const ids = drag.ids; setDrag(null); setOver(null); if (name !== drag.from) { onMoveLines!(ids, name); setPicks(new Set()); } },
+  } : {};
+  const startDrag = (e: React.DragEvent, m: LineModel) => {
+    const ids = picks.has(m.line.id) ? models.filter(x => picks.has(x.line.id) && movable(x.line)).map(x => x.line.id) : [m.line.id];
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(LINE_DRAG, ids.join(','));
+    const row = (e.currentTarget as HTMLElement).closest('tr');
+    if (row && e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(row, 24, 16);
+    setDrag({ ids, from: m.room });
+  };
+  const endDrag = () => { setDrag(null); setOver(null); };
   const toggle = (set: Set<string>, id: string, on?: boolean) => { const s = new Set(set); (on ?? !s.has(id)) ? s.add(id) : s.delete(id); return s; };
   const picked = models.filter(m => picks.has(m.line.id));
   const total = models.filter(m => m.billable && !m.separate).reduce((a, m) => a + m.amount, 0);
@@ -97,12 +126,17 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
     const isOpen = open.has(l.id);
     return (
       <React.Fragment key={l.id}>
-        <tr onClick={() => onSel(l.id)} className={`border-t border-slate-100 cursor-pointer ${sel === l.id ? 'bg-[#3D52A0]/[0.07]' : 'bg-white hover:bg-slate-50'}${printed(l.id)}`}>
+        <tr onClick={() => onSel(l.id)} {...dropOn(m.room)} className={`border-t border-slate-100 cursor-pointer ${drag?.ids.includes(l.id) ? 'opacity-50' : ''} ${sel === l.id ? 'bg-[#3D52A0]/[0.07]' : 'bg-white hover:bg-slate-50'}${printed(l.id)}`}>
           <td className="px-2" onClick={e => e.stopPropagation()}>
             <input type="checkbox" checked={picks.has(l.id)} disabled={readOnly} onChange={() => setPicks(p => toggle(p, l.id))} aria-label={`Pick ${m.name}`} className="w-4 h-4 accent-[#3D52A0]" />
           </td>
           <td className="px-2 py-1.5">
             <div className="flex items-center gap-2 min-w-0">
+              {canDrag && (movable(l)
+                ? <span draggable onDragStart={e => startDrag(e, m)} onDragEnd={endDrag} onClick={e => e.stopPropagation()} data-drag-line={l.id}
+                    title="Drag to another room" aria-label={`Drag ${m.name} to another room`} role="button" tabIndex={-1}
+                    className="-ml-1 shrink-0 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500"><GripVertical className="w-3.5 h-4" aria-hidden /></span>
+                : <span className="-ml-1 w-3.5 shrink-0" title={l.civil ? 'Measured from its room on the plan' : 'Shared into the rooms'} />)}
               <span className="w-9 h-7 shrink-0">
                 {m.draw && m.size ? <PieceThumb kind={m.draw.kind} w={m.size.w} d={m.size.d} words={m.words} {...m.art} className="w-9 h-7" /> : <span className="w-9 h-7 grid place-items-center text-slate-300"><Layers className="w-3.5 h-3.5" aria-hidden /></span>}
               </span>
@@ -181,7 +215,7 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
               const mg = sell > 0 ? ((sell - cost) / sell) * 100 : 0;
               return (
                 <React.Fragment key={g.name}>
-                  <tr className="bg-slate-100/90">
+                  <tr {...dropOn(g.name)} data-sheet-room={g.name} className={over === g.name ? 'bg-[#3D52A0]/10 ring-2 ring-inset ring-[#3D52A0]/40' : 'bg-slate-100/90'}>
                     <td className="px-2 py-1.5">
                       <input type="checkbox" checked={all} disabled={readOnly} aria-label={`Pick every line in ${g.name}`} className="w-4 h-4 accent-[#3D52A0]"
                         onChange={() => setPicks(p => { let s = p; g.ms.forEach(m => { s = toggle(s, m.line.id, !all); }); return s; })} />
@@ -196,6 +230,9 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
                     </td>
                   </tr>
                   {g.ms.map(row)}
+                  {drag && !g.ms.length && (
+                    <tr {...dropOn(g.name)}><td /><td colSpan={N - 1} className={`px-2 py-2 text-xs ${over === g.name ? 'text-[#3D52A0] font-bold' : 'text-slate-400'}`}>Drop here to move {drag.ids.length === 1 ? 'it' : `the ${drag.ids.length} lines`} to {g.name}</td></tr>
+                  )}
                   {changes && [...changes.out].filter(([, e]) => e.gone && (e.was!.roomId || 'Whole flat') === g.name).map(([id, e]) => (
                     <tr key={`gone-${id}`} className="border-t border-slate-100 bg-rose-50/50" data-gone={id}>
                       <td />
@@ -212,7 +249,7 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
             <tr className="border-t-2 border-slate-200 bg-slate-50">
               <td />
               <td colSpan={N - 2} className="px-2 py-2 text-xs text-slate-500">
-                Drag a number sideways to change it · Shift for fine steps · click it to type
+                Drag a number sideways to change it · Shift for fine steps · click it to type{canDrag ? ' · drag a line by its grip to another room' : ''}
                 {onFullGrid && <> · <button type="button" onClick={onFullGrid} className="font-bold text-[#3D52A0] hover:underline">Open the full grid</button> for status, linkage and notes</>}
                 {onCustom && !readOnly && <> · <button type="button" onClick={onCustom} className="font-bold text-[#3D52A0] hover:underline">Add a custom item</button>, not in the Item Bank</>}
               </td>
@@ -229,7 +266,18 @@ export default function SheetLens({ rooms, models, shares, roomTotals, sel, read
             <button type="button" onClick={() => onReplaceMany(picked.map(m => withMarkup(m, m.markup + 1)))} className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">Markup +1%</button>
           </>}
           {onUpdateLines && <button type="button" onClick={() => onUpdateLines(picked.map(m => m.line.id))} className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">Update specs</button>}
-          <button type="button" onClick={() => onReplaceMany(picked.map(m => ({ ...m.line, boqStatus: 'client_procured' } as BoqItem)))} className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">Client procured</button>
+          {([['studio', 'In the price', 'back in the price'], ['actuals', 'At actuals', 'at actuals now, on the separate list'], ['client', 'By client', 'bought by the client now, on the separate list']] as const).map(([k, label, words]) => (
+            <button key={k} type="button" data-supply-all={k}
+              onClick={() => onReplaceMany(picked.map(m => withLineSupply(m.line, k === 'studio' ? null : k)), `${picked.length === 1 ? picked[0].name : `${picked.length} lines`} ${picked.length === 1 ? 'is' : 'are'} ${words}. Undo puts ${picked.length === 1 ? 'it' : 'them'} back.`)}
+              className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">{label}</button>
+          ))}
+          {onMoveLines && (
+            <select aria-label="Move the picked lines to" value="" onChange={e => { if (e.target.value) { onMoveLines(picked.map(m => m.line.id), e.target.value); setPicks(new Set()); } }}
+              className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-white outline-none [&>option]:text-slate-800">
+              <option value="">Move to…</option>
+              {places.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          )}
           <button type="button" onClick={() => { onDelete([...picks]); setPicks(new Set()); }} className="px-2 py-1 rounded-lg bg-rose-500/80 hover:bg-rose-500 text-xs font-bold">Delete</button>
           <button type="button" onClick={() => setPicks(new Set())} className="ml-auto text-xs font-bold text-white/70 hover:text-white">Clear</button>
         </div>

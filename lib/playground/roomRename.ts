@@ -80,3 +80,39 @@ export function renameProblem(names: string[], from: string, to: string): string
   if (names.some(n => n !== from && n.trim().toLowerCase() === t.toLowerCase())) return `There is already a room called ${t}.`;
   return null;
 }
+
+/*
+  Lines moved to another room by hand: dragged in the Sheet, or picked in a
+  line's Room. A whole-flat line shared into the rooms stays where it is (its
+  shares are its rooms), and so does a civil line, which is measured from its
+  room on the plan. A piece drawn on the plan leaves it: its place is in the
+  room it came from, so it is placed again in the new one.
+*/
+export const movable = (l: BoqItem) => !l.byRoom && !l.civil;
+
+export interface MovedLines { boq: BoqItem[]; moved: number; offPlan: number; kept: number }
+
+export function moveLinesTo(boq: BoqItem[], ids: string[], to: string): MovedLines {
+  const want = new Set(ids);
+  const room = (to || '').trim();
+  let moved = 0, offPlan = 0, kept = 0;
+  if (!room) return { boq, moved, offPlan, kept };
+  const out = boq.map(l => {
+    if (!want.has(l.id) || l.roomId === room) return l;
+    if (!movable(l)) { kept++; return l; }
+    moved++;
+    if (l.place) { offPlan++; const { place: _p, ...rest } = l; return { ...rest, roomId: room }; }
+    return { ...l, roomId: room };
+  });
+  return { boq: moved ? out : boq, moved, offPlan, kept };
+}
+
+/** What a move says: how many went, and what came off the plan or stayed. */
+export function movedWords(r: MovedLines, to: string, name?: string): string {
+  const what = r.moved === 1 && name ? name : `${r.moved} line${r.moved === 1 ? '' : 's'}`;
+  const parts = [`${what} moved to ${to}.`];
+  if (r.offPlan) parts.push(r.offPlan === 1 && r.moved === 1 ? 'It was drawn on the plan in its old room, so it is off the plan now: place it again from its panel.' : `${r.offPlan} of them came off the plan: place them again from their panels.`);
+  if (r.kept) parts.push(`${r.kept} stayed where ${r.kept === 1 ? 'it was' : 'they were'}: a whole-flat or civil line follows its rooms.`);
+  parts.push(`Undo puts ${r.moved === 1 ? 'it' : 'them'} back.`);
+  return parts.join(' ');
+}

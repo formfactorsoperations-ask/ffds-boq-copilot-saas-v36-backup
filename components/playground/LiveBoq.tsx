@@ -15,6 +15,8 @@ import { resizedTo, turnedLine } from '../../lib/playground/board';
 import { ISSUE_LABEL, type IssueKind } from '../../lib/playground/issues';
 import { basisOfUnit, readSize, parseSize, formatSize, sizeUpdates } from '../../lib/boqSize';
 import { PieceThumb } from './pieceArt';
+import { lineSupply, withLineSupply, actualsByName } from '../../lib/playground/supply';
+import { moveLinesTo, movedWords, movable } from '../../lib/playground/roomRename';
 import { CivilBlock, CivilRoom } from './CivilParts';
 import { inr, lakh, marginTone, Scrub, withCost, withMarkup, withRate, usePrinted, LineMark, type LineModel } from './playgroundUi';
 
@@ -334,6 +336,8 @@ export function LineInspector({ m, index, count, issues, rooms, measure, bankMap
         </div>
       )}
 
+      <LineWhere m={m} rooms={rooms} bankMap={bankMap} readOnly={readOnly} hideFigures={hideFigures} onReplace={onReplace} />
+
       {!readOnly && (
         <div className="flex flex-wrap gap-2">
           {placed && <Button size="sm" icon={RotateCw} onClick={() => onReplace(turnedLine(line, 90))}>Turn 90°</Button>}
@@ -343,6 +347,55 @@ export function LineInspector({ m, index, count, issues, rooms, measure, bankMap
           <Button size="sm" variant="danger" icon={Trash2} onClick={onDelete}>Delete</Button>
         </div>
       )}
+    </div>
+  );
+}
+
+/*
+  Where a line is and who supplies it, in the line's panel: its room (a piece
+  on the plan comes off it when it moves; a whole-flat or civil line follows its
+  rooms), and whether it is in the price, at actuals or bought by the client.
+  The last two go on the separate list and change no figure.
+*/
+type SupplyPick = 'studio' | 'actuals' | 'client';
+const SUPPLY_NOTE: Record<SupplyPick, string> = {
+  studio: 'In the price: the studio supplies it.',
+  actuals: 'Paid to the vendor at actual cost. It goes on the separate list with an estimate, and is not in the price.',
+  client: 'Bought by the client. It goes on the separate list, and is not in the price.',
+};
+function LineWhere({ m, rooms, bankMap, readOnly, hideFigures, onReplace }: {
+  m: LineModel; rooms: Room[]; bankMap: Map<string, Item>; readOnly: boolean; hideFigures: boolean; onReplace: (line: BoqItem, msg?: string) => void;
+}) {
+  const line = m.line;
+  const places = [...rooms.map(r => r.name), ...SCOPE_BUCKETS].filter((n, i, a) => a.indexOf(n) === i);
+  const here = places.includes(m.room) ? places : [m.room, ...places];
+  const supply: SupplyPick = lineSupply(line, bankMap) || 'studio';
+  const byName = actualsByName(line, bankMap);
+  const canMove = movable(line);
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 space-y-2" data-line-where>
+      <label className="flex items-center gap-2">
+        <span className={`${LABEL} w-16 shrink-0`}>Room</span>
+        <select aria-label="Room" value={m.room} disabled={readOnly || !canMove}
+          onChange={e => { const r = moveLinesTo([line], [line.id], e.target.value); if (r.moved) onReplace(r.boq[0], movedWords(r, e.target.value, m.name)); }}
+          className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 outline-none focus:border-[#3D52A0]">
+          {here.map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+      </label>
+      {!canMove && <p className="text-[11px] text-slate-500">{line.civil ? 'Measured from its room on the plan, so it stays in it.' : 'Shared into the rooms, so it stays with the whole flat.'}</p>}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`${LABEL} w-16 shrink-0`}>Supplied</span>
+        {readOnly ? <Chip tone="slate">{supply === 'studio' ? 'In the price' : supply === 'actuals' ? 'At actuals' : 'By client'}</Chip> : (
+          <Segmented<SupplyPick> size="sm" label="Supplied" value={supply}
+            onChange={v => {
+              if (v === supply) return;
+              onReplace(withLineSupply(line, v === 'studio' ? null : v),
+                `${m.name} ${v === 'studio' ? 'is back in the price' : v === 'actuals' ? 'is at actuals now, on the separate list' : 'is bought by the client now, on the separate list'}. Undo puts it back.`);
+            }}
+            options={[{ id: 'studio', label: 'In the price' }, { id: 'actuals', label: 'At actuals' }, { id: 'client', label: 'By client' }]} />
+        )}
+      </div>
+      <p className="text-[11px] text-slate-500">{byName && supply === 'actuals' ? 'Its name says “as actuals”, so it stays at actuals: rename the item in the Item Bank to bring it into the price.' : hideFigures ? SUPPLY_NOTE[supply].replace(/ with an estimate/, '') : SUPPLY_NOTE[supply]}</p>
     </div>
   );
 }
