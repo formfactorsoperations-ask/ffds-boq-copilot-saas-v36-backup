@@ -137,6 +137,7 @@ import {
 import { db, dbWriteCount, hydrateProjectDetail, projectFromDoc } from "./services/dbService";
 import { mergeClientOwned } from "./lib/clientOwned";
 import { engagementOf, isRouteHidden } from "./lib/engagement";
+import { shouldWinOnSignup, winOnSignup } from "./lib/signupWon";
 import { landingAfterSetup } from "./components/navConfig";
 import { db as firestoreDb } from "./services/firebaseClient";
 import { collection, doc, getDoc, getDocs, writeBatch, serverTimestamp, onSnapshot, query, orderBy } from "firebase/firestore";
@@ -1558,6 +1559,20 @@ export default function App() {
     }
     await persistProject(buildProjectToSave());
   };
+
+  /*
+    The sign-up payment wins the project (lib/signupWon), turnkey or design
+    only. Payments are recorded on the open project, so this watches its
+    schedule; the auto-save writes the change with the payment.
+  */
+  useEffect(() => {
+    if (!activeInternalId || !projectContext || isLimitedRole(currentRole)) return;
+    if (!shouldWinOnSignup(projectContext)) return;
+    const actor = String(currentUserAuth?.displayName || currentUserAuth?.email || orgData?.role || 'Studio');
+    setProjectContext((prev) => (prev && shouldWinOnSignup(prev) ? winOnSignup(prev, Date.now(), actor) : prev));
+    showSuccessWithNext('Sign-up payment received: the project is now Won.');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeInternalId, projectContext?.paymentMilestones, projectContext?.status, currentRole]);
 
   // Auto-promote project to Stage 5 (Execution) ONLY if project is 'won' and all Stage 4 design gates are completed
   useEffect(() => {

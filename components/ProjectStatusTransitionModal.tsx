@@ -158,9 +158,8 @@ export const ALL_PROJECT_STATUSES: StatusDetail[] = [
     ]
   },
   /*
-    Won is the client signing up with the studio: often no more than the
-    design sign-up fee paid, and on a design-only project there is no
-    execution at all. It used to read "Contract Signed" under the Execution
+    Won is the client's sign-up payment coming in, on every project, turnkey
+    or design only; on a design-only project there is no execution at all. It used to read "Contract Signed" under the Execution
     phase, and marking it ticked every design step in the Ops Matrix.
   */
   {
@@ -172,8 +171,13 @@ export const ALL_PROJECT_STATUSES: StatusDetail[] = [
     bg: 'bg-emerald-50/80',
     border: 'border-emerald-200',
     icon: Trophy,
-    summary: 'The client has signed up with the studio, for example the design sign-up fee is paid. Design work starts or carries on from here.',
+    summary: 'The client\'s sign-up payment is in, on a turnkey or a design-only project. Design work starts from here.',
     downstreamImpacts: [
+      {
+        title: 'Set by the sign-up payment',
+        description: 'Recording the sign-up payment (D1) as paid on Money moves a project to Won by itself. Mark it here when the payment came in some other way.',
+        type: 'financial'
+      },
       {
         title: 'Booked on the Projects board',
         description: 'Moves the card to Won and counts its value as booked.',
