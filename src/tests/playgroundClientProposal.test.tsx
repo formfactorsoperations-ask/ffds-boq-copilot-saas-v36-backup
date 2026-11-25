@@ -237,4 +237,19 @@ describe('how the client books, on the proposal', () => {
     fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' }));
     expect(pdf().querySelector('[data-pdf-note="renovation"]')!.textContent).toBe('Your home is a renovation, and this timeline is the one for a vacant flat. A renovation also needs time to take out what is there today, and the work goes more slowly if you live in the home while it is done. We confirm the timeline for your home after the site measurement.');
   });
+
+  it('what it comes to: the work and the design fee each with their own GST, and how the fee is applied', () => {
+    render(<Harness extra={{ config: '2-BHK' }} />);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' }));
+    const d = pdf();
+    const inv = d.querySelector('[data-pdf-investment]')!;
+    const amt = (k: string) => Number((inv.querySelector(`[data-pdf-inv="${k}"]`)!.textContent || '').replace(/.*₹/, '').replace(/[^0-9]/g, ''));
+    expect(inv.querySelector('[data-pdf-fee-basis]')!.textContent).toMatch(/^10% of the work, ₹[\d,]+/);
+    expect(inv.querySelector('[data-pdf-inv="gst-work"]')!.textContent).toMatch(/^GST 18% on the work/);
+    expect(inv.querySelector('[data-pdf-inv="gst-fee"]')!.textContent).toMatch(/^GST 18% on the design fee/);
+    expect(amt('work-total')).toBe(amt('work') + amt('gst-work'));
+    expect(Math.abs(amt('fee-total') - (amt('fee') + amt('gst-fee')))).toBeLessThanOrEqual(1);
+    const pays = Number(d.querySelector('[data-pdf-pays]')!.textContent!.replace(/[^0-9]/g, ''));
+    expect(Math.abs(pays - (amt('work-total') + amt('fee-total')))).toBeLessThanOrEqual(1);
+  });
 });
