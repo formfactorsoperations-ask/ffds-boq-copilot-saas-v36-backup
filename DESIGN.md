@@ -1200,6 +1200,27 @@ is on the Ops Desk too (`lib/clientCompose.ts`, pure and tested).
   it is saved. New notes are never kept in the browser.
 - What you log yourself does not mark the client as new activity for you.
 
+**Portal visits as built (PR D, 25 Nov 2026).** `lib/portalVisits.ts` (shared with the functions, tested),
+`functions/src/portalVisits.ts` (`portalPing`) and `services/portalVisitsService.ts`.
+- **The portal** pings once when it loads, on every tab change and every minute while on screen, for a real
+  client only (`source === 'client'`; the studio's preview never pings, and the function refuses every studio
+  role). The tab is an approved lens, or Design & Scope's half; anything else is stored as "other". Nothing about
+  the portal changes but the privacy line: under the sign-in button and in the account menu, `text-xs
+  text-slate-500`, with the studio's name or "the studio".
+- **The visit doc** `projects/{projectId}/portalVisits/{uid}` (uid, email, tenantId, firstAt, lastAt, lastTab,
+  sessions, tabs, the last 20 sessions) is written only by the function; the project document is never touched.
+  Staff of the studio read it, a Viewer does not, and nobody writes it from a browser.
+- **The status line** (`portalStatus`, one rule per row of the handoff's table) shows on the card for each project,
+  and "● On the portal now · {tab}" replaces the thread header's last contact while it holds. Tracking began on
+  `PORTAL_TRACKING_SINCE` (the day the function went live).
+- **The list** reads the studio's visits of the last day in one query (index `portalVisits` tenantId, lastAt desc),
+  on load and every 2 minutes while on screen: a client on the portal now gets a breathing brand dot on their
+  photo (the project sidebar's `psb-breathe`, still under reduced motion), "On the portal now · {tab}" as their
+  preview, and a place second in the order. The opened client alone has a live listener.
+- **The thread** adds "First opened the portal" and one card a day, "On the portal · Documents, Payments", in
+  the portal's tab order; Next move says "Opened the portal n times since your last message".
+- **A Viewer** sees "Portal access given" / "No portal access yet" and no visit anywhere: nothing is read for them.
+
 ### Summary-first sections (approved 16 Nov 2026)
 
 Execution & Site used to nest tabs five levels deep. The owner chose option C of plan item 9:

@@ -26,6 +26,7 @@ import { clientMaySee } from '../lib/minutes';
 import { recordClientSignoff, recordManualSignoff } from '../services/decisionsService';
 import ClientDecisionCard from './client/ClientDecisionCard';
 import ClientAccountMenu from './client/ClientAccountMenu';
+import { usePortalPing } from '../services/portalVisitsService';
 import NotifyBell from './notify/NotifyBell';
 import { PORTAL_OPEN_EVENT } from './notify/NotifyContext';
 import { buildClientBoqRows, groupClientBoq, ClientBoqRow } from '../lib/clientBoq';
@@ -352,6 +353,8 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
      * a scroll.
      */
     const [designScopeTab, setDesignScopeTab] = useState<ApprovedDesignScopeTab>('drawings');
+    /* Portal visits (lib/portalVisits): the tab open, for the studio's follow-up. A real client only, never the studio's preview. */
+    usePortalPing(projectData?.id, activeTab === 'designScope' ? designScopeTab : activeTab, source === 'client');
     /* A "New for you" note opens the lens that owns it (App.tsx, lib/notify.ts portalDrafts). */
     useEffect(() => {
         const LENS = new Set<PortalTab>(['overview', 'timeline', 'decisions', 'documents', 'financials', 'approvals', 'roadmap', 'feed', 'designs', 'materials', 'scope', 'designScope']);
@@ -2276,6 +2279,7 @@ export default function ClientPortal({ projectData, bank, onLogout, onProjectUpd
                     <ClientAccountMenu
                       clientName={(context as any)?.clientName}
                       projectName={(context as any)?.name}
+                      studioName={studioCompanyName}
                       onSignOut={onLogout}
                     />
                   ) : (

@@ -6,6 +6,7 @@ import { coverCandidates } from '../../lib/coverPhoto';
 import { stageOfProject } from '../../lib/projectFolders';
 import { ProjectPhoto } from '../projects/journey/parts';
 import type { TemplateId } from '../../lib/clientNextMove';
+import type { PortalLine } from '../../lib/portalVisits';
 
 /*
   The small pieces the Clients screen shares (DESIGN.md "Clients:
@@ -119,5 +120,25 @@ export function SideDrawer({ label, onClose, children, width = 'max-w-[380px]' }
       </aside>
     </div>,
     document.body,
+  );
+}
+
+/** The "on the portal now" dot: brand, breathing with the project sidebar's keyframe; still under reduced motion. */
+export function LiveDot({ className }: { className?: string }) {
+  return <span aria-hidden className={cx('inline-block w-2 h-2 rounded-full bg-[#3D52A0] shrink-0 animate-[psb-breathe_2.4s_infinite] motion-reduce:animate-none', className)} />;
+}
+
+/** A portal status line (lib/portalVisits portalStatus): brand when on now, amber when not opened or no access, slate otherwise. */
+export function PortalLineText({ line, prefix, className }: { line: PortalLine; prefix?: string | null; className?: string }) {
+  const tone = line.tone === 'brand' ? 'text-[#3D52A0]' : line.tone === 'warn' ? 'text-amber-700' : 'text-slate-500';
+  const [head, ...rest] = line.text.split(' · ');
+  return (
+    <span className={cx('inline-flex items-center gap-1.5 text-xs', tone, className)}>
+      {line.live && <LiveDot />}
+      <span className="min-w-0">
+        {prefix && <span className="text-slate-500">{prefix}: </span>}
+        <b className="font-bold">{head}</b>{rest.length ? ` · ${rest.join(' · ')}` : ''}
+      </span>
+    </span>
   );
 }

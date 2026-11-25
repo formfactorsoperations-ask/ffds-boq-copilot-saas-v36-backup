@@ -11,6 +11,9 @@ import { clientMoneyOf, withoutAmounts, type ClientMoney } from "../lib/clientMo
 import { buildRows, filterRows, matchesSearch, sortRows, type ClientFilter, type SeenMarks } from "../lib/clientList";
 import { loadStudioFollowUps, logFollowUp, logFollowUpOnce } from "../services/opsDeskService";
 import type { FollowUpLine } from "../lib/clientCompose";
+import { loadRecentVisits, watchClientVisits } from "../services/portalVisitsService";
+import { bestLine, portalStatus, portalStatusForViewer, sessionsSince, type PortalLine, type PortalVisit } from "../lib/portalVisits";
+import { nextMove } from "../lib/clientNextMove";
 import { loadClientRecords } from "../services/clientThreadService";
 import type { ThreadRecords } from "../lib/clientThread";
 import type { FollowUp } from "../lib/opsDesk";
@@ -82,6 +85,8 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
   const canPortal = hasRole(roles, CLIENT_LOGIN_ROLES);
   /* The follow-up log takes every studio role but Viewer (firestore.rules mayWriteOps). */
   const canLog = primaryRole(roles) !== 'Viewer';
+  /* Portal visits are not for a Viewer (owner, 25 Nov 2026): their screen never reads them, and the rules refuse it anyway. */
+  const seesVisits = primaryRole(roles) !== 'Viewer';
   const tenantId: string = orgData?.tenantId || '';
   const uid: string | undefined = currentUserAuth?.uid;
 
@@ -118,14 +123,82 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
     }
     return out;
   }, [projects, amountsHidden]);
-  const rows = useMemo(() => buildRows(clients, moneyByProject, followUps, { amountsHidden, now }), [clients, moneyByProject, followUps, amountsHidden, now]);
+  /*
+    Portal visits for the list: the studio's visits of the last day, in one
+    query, on load and every 2 minutes while the screen is on view. No
+    listener for the list; the opened client has its own (below).
+  */
+  const [recentVisits, setRecentVisits] = useState<PortalVisit[]>([]);
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!seesVisits || !tenantId) { setRecentVisits([]); return; }
+    let live = true;
+    const read = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      loadRecentVisits(tenantId, Date.now() - 24 * 3600000)
+        .then((v) => { if (live) { setRecentVisits(v); setClock(Date.now()); } })
+        .catch((e) => console.warn('Clients: portal visits', e?.code || e));
+    };
+    read();
+    const t = window.setInterval(read, 2 * 60000);
+    const back = () => { if (document.visibilityState === 'visible') read(); };
+    document.addEventListener('visibilitychange', back);
+    return () => { live = false; window.clearInterval(t); document.removeEventListener('visibilitychange', back); };
+  }, [seesVisits, tenantId]);
+
+  const rows = useMemo(
+    () => buildRows(clients, moneyByProject, followUps, { amountsHidden, now: Math.max(now, clock), visits: recentVisits }),
+    [clients, moneyByProject, followUps, amountsHidden, now, clock, recentVisits],
+  );
 
   const scoped = useMemo(() => rows.filter((r) => kind === 'all' || (kind === 'dummy' ? r.client.isDummy : !r.client.isDummy)), [rows, kind]);
   const shown = useMemo(
     () => sortRows(filterRows(scoped.filter((r) => matchesSearch(r, query)), filter, marks), marks),
     [scoped, query, filter, marks],
   );
-  const current = (selected && scoped.find((r) => r.client.clientKey === selected)) || null;
+  /* The opened clients' records for their threads (loaded below), kept for the visit. */
+  const [records, setRecords] = useState<Record<string, ThreadRecords>>({});
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+  const pickedRow = (selected && scoped.find((r) => r.client.clientKey === selected)) || null;
+
+  /* The opened client's visits, live, so "on the portal now" follows them. */
+  const [liveVisits, setLiveVisits] = useState<PortalVisit[] | null>(null);
+  const pickedProjects = pickedRow ? pickedRow.client.projects.map((p) => p.id).join(',') : '';
+  useEffect(() => {
+    setLiveVisits(null);
+    if (!seesVisits || !pickedProjects) return;
+    return watchClientVisits(pickedProjects.split(','), (v) => { setLiveVisits(v); setClock(Date.now()); });
+  }, [seesVisits, pickedProjects]);
+  /* "On now" lapses 2 minutes after the last ping, so the opened client's line is read again each half minute. */
+  useEffect(() => {
+    if (!pickedRow) return;
+    const t = window.setInterval(() => setClock(Date.now()), 30000);
+    return () => window.clearInterval(t);
+  }, [pickedRow?.client.clientKey]);
+
+  /* Each project's portal line (lib/portalVisits portalStatus), the client's best, and Next move with the portal opens since our last message. */
+  const portalLines = useMemo<Array<{ projectId: string; name: string; line: PortalLine }>>(() => {
+    if (!pickedRow) return [];
+    const at = Math.max(now, clock);
+    return pickedRow.client.projects.map((p) => ({
+      projectId: p.id,
+      name: p.context?.name || 'Untitled project',
+      line: seesVisits ? portalStatus(p, (liveVisits || []).filter((v) => v.projectId === p.id), at) : portalStatusForViewer(p),
+    }));
+  }, [pickedRow, liveVisits, seesVisits, now, clock]);
+  const current = useMemo(() => {
+    if (!pickedRow) return null;
+    if (!seesVisits || !liveVisits?.length) return pickedRow;
+    const sent = (records[pickedRow.client.clientKey]?.followUps || followUps)
+      .filter((f) => f.outcome === 'reminded' && pickedRow.client.projects.some((p) => p.id === f.projectId))
+      .reduce((m, f) => Math.max(m, f.at), 0);
+    const opens = sent ? sessionsSince(liveVisits, sent) : 0;
+    return {
+      ...pickedRow,
+      nextMove: nextMove({ bucket: pickedRow.client.bucket, milestones: pickedRow.money.milestones, quietDays: pickedRow.quietDays, portalOpensSinceLastMessage: opens, now: Math.max(now, clock) }),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedRow, liveVisits, seesVisits, followUps, now, clock]);
 
   /* On a wide screen a client is always open: the first in the list until one is picked. */
   useEffect(() => {
@@ -138,8 +211,6 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
     opened (services/clientThreadService), kept for this visit so going back
     to a client costs nothing. Leads are read only by those who may.
   */
-  const [records, setRecords] = useState<Record<string, ThreadRecords>>({});
-  const [loadingKey, setLoadingKey] = useState<string | null>(null);
   const currentKey = current?.client.clientKey || null;
   const mayReadLeads = canPortal;
   useEffect(() => {
@@ -248,7 +319,7 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
     : 'Nothing matches. Try All, or another search.';
 
   const card = current && (
-    <ClientCard row={current} tenantId={tenantId} canPortal={canPortal} onOpenProject={onOpenProject}
+    <ClientCard row={current} tenantId={tenantId} canPortal={canPortal} onOpenProject={onOpenProject} portalLines={portalLines}
       onOpenDossier={() => setDossierOpen(true)} />
   );
 
@@ -267,6 +338,7 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
                 <ClientThreadPane row={current} now={now} studioName={orgData?.orgName || 'our studio'} onOpenProject={onOpenProject}
                   money={moneyByProject} records={records[current.client.clientKey] || null} loading={loadingKey === current.client.clientKey}
                   canLog={canLog} onLog={async (pid, line) => { await writeLine(pid, line); }}
+                  portalVisits={seesVisits ? liveVisits || [] : []} portalLine={bestLine(portalLines.map((x) => x.line))}
                   onBack={() => setThreadOpen(false)} onDetails={() => setCardOpen(true)} />
               </div>
             ) : (

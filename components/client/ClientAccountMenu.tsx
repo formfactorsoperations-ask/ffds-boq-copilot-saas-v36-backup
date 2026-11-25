@@ -7,6 +7,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../services/firebaseClient';
+import { privacyLine } from '../../lib/portalVisits';
 
 const MotionDiv = motion.div as any;
 
@@ -15,6 +16,8 @@ interface Props {
   clientName?: string;
   /** Which project this session is looking at. */
   projectName?: string;
+  /** The studio's name, for the line saying portal visits are recorded. */
+  studioName?: string;
   onSignOut: () => void;
 }
 
@@ -31,7 +34,7 @@ interface Props {
  * makes an unattended, still-signed-in browser enough to take the account, and
  * it fails with `auth/requires-recent-login` on an older session anyway.
  */
-export default function ClientAccountMenu({ clientName, projectName, onSignOut }: Props) {
+export default function ClientAccountMenu({ clientName, projectName, studioName, onSignOut }: Props) {
   const [open, setOpen] = useState(false);
   const [changing, setChanging] = useState(false);
   const [current, setCurrent] = useState('');
@@ -176,6 +179,8 @@ export default function ClientAccountMenu({ clientName, projectName, onSignOut }
                     >
                       Sign out
                     </button>
+                    {/* Portal visits are recorded (lib/portalVisits): said here too (owner approved, 25 Nov 2026). */}
+                    <p className="px-3 pt-2 text-xs text-slate-500">{privacyLine(studioName)}</p>
                   </MotionDiv>
                 ) : (
                   <MotionDiv

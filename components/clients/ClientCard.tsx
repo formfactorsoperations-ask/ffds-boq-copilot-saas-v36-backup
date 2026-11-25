@@ -12,7 +12,8 @@ import { db } from '../../services/dbService';
 import { functions as fbFunctions } from '../../services/firebaseClient';
 import type { FullProjectData } from '../../types';
 import type { ClientRow } from '../../lib/clientList';
-import { ClientPhoto } from './parts';
+import { ClientPhoto, PortalLineText } from './parts';
+import type { PortalLine } from '../../lib/portalVisits';
 
 /*
   The client card (DESIGN.md "Clients: conversations"): the photo, name and
@@ -71,13 +72,15 @@ const NEXT_TONE: Record<'warn' | 'go' | 'plain', string> = {
   plain: 'bg-slate-50 text-slate-700 border-slate-200',
 };
 
-export default function ClientCard({ row, tenantId, canPortal, onOpenProject, onOpenDossier }: {
+export default function ClientCard({ row, tenantId, canPortal, onOpenProject, onOpenDossier, portalLines = [] }: {
   row: ClientRow;
   tenantId: string;
   /** Owner, Admin, Ops Director, Super Admin: may give, reset and copy portal access. */
   canPortal: boolean;
   onOpenProject: (project: FullProjectData, targetTab?: string) => void;
   onOpenDossier: () => void;
+  /** Each project's portal status line (lib/portalVisits); Viewer's carry no visits. */
+  portalLines?: Array<{ projectId: string; name: string; line: PortalLine }>;
 }) {
   const c = row.client;
   const p = row.primary;
@@ -170,6 +173,13 @@ export default function ClientCard({ row, tenantId, canPortal, onOpenProject, on
       </Section>
 
       <Section title="Client portal" aside={<Chip tone={portal.tone}>{portal.label}</Chip>}>
+        {portalLines.length > 0 && (
+          <ul className="space-y-1 mb-2">
+            {portalLines.map((x) => (
+              <li key={x.projectId}><PortalLineText line={x.line} prefix={portalLines.length > 1 ? x.name : null} /></li>
+            ))}
+          </ul>
+        )}
         <p className="text-xs text-slate-500">
           {loginEmail ? <>Signs in with <span className="font-semibold text-slate-700 break-all">{loginEmail}</span></> : 'Add a client email first — it is their username.'}
         </p>
