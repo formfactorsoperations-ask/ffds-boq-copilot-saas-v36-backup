@@ -24,7 +24,7 @@ export const GATE_ITEM_DEFS: GateItemDef[] = [
   { key: 'elevations', label: 'Elevations / joinery drawings approved', hint: 'Approved elevation or woodwork drawings', auto: { match: ['elevation', 'joinery', 'woodwork'] } },
   { key: 'mep', label: 'Electrical / MEP layout approved', hint: 'Approved electrical / MEP / plumbing layout', auto: { match: ['electrical', 'mep', 'looping', 'plumbing'] } },
   { key: 'gfc', label: 'GFC drawing set marked final', hint: 'At least one drawing issued for construction (GFC)', ownerOnly: true, auto: { kind: 'gfc' } },
-  { key: 'client_signoff', label: 'Client sign-off on final drawing set', hint: 'Recorded client approval reference (email / WhatsApp)', needsReference: true },
+  { key: 'client_signoff', label: 'Client sign-off on final drawing set', hint: 'Recorded client sign-off reference (email / WhatsApp)', needsReference: true },
 ];
 
 export const GATE_ITEM_COUNT = GATE_ITEM_DEFS.length;
@@ -112,7 +112,7 @@ export function autoEvidence(ctx: ProjectContext | null | undefined): Record<str
       } else if (hasAgreement) {
         ev[def.key] = 'Signed Execution Agreement on file';
       } else if (commsLog['design_approved']?.status === 'sent' || commsLog['contract_sent']?.status === 'sent') {
-        ev[def.key] = 'Client approval logged in Communications';
+        ev[def.key] = 'Client sign-off logged in Communications';
       } else if (isExecutionOrLater) {
         ev[def.key] = 'Recorded in project activation';
       } else {

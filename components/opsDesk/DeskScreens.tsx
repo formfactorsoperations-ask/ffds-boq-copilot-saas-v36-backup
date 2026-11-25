@@ -437,8 +437,8 @@ export function ApprovalsScreen({ projects, lead, onChanged }: { projects: { id:
 
   return (
     <>
-      <Band eyebrow="Drawings for approval" title="From the meeting to the client’s written yes"
-        sub="Pick the project, upload the drawings you choose to its Drive folder, send the approval email (it goes in your name, and replies come to you), then record their answer. Reminders go on working days 3 and 5.">
+      <Band eyebrow="Drawings for sign-off" title="From the meeting to the client’s written yes"
+        sub="Pick the project, upload the drawings you choose to its Drive folder, send the sign-off email (it goes in your name, and replies come to you), then record their answer. Reminders go on working days 3 and 5.">
         <Tiles tiles={[
           { count: n('presented'), title: 'To send', sub: 'Shown, not emailed yet' },
           { count: n('sent') + n('overdue'), title: 'With clients', sub: 'Waiting on an answer' },
@@ -489,7 +489,7 @@ const ApCard: React.FC<{ i: ApprovalItem; k: number; lead: boolean; stage: Appro
   const r = runwayOf(stage, i.approval, d.now);
   const rooms = new Map<string, ApprovalItem['sheets']>();
   i.sheets.forEach((s) => rooms.set(s.room, [...(rooms.get(s.room) || []), s]));
-  const chip = { presented: ['warn', 'Send for approval'], sent: ['warn', 'Awaiting client'], overdue: ['bad', 'Approval overdue'], approved: ['good', 'Approved by client'], changes: ['bad', 'Client changes'] }[stage];
+  const chip = { presented: ['warn', 'Send for sign-off'], sent: ['warn', 'Awaiting client'], overdue: ['bad', 'Sign-off overdue'], approved: ['good', 'Signed off by client'], changes: ['bad', 'Client changes'] }[stage];
   const owner = d.isLead ? d.clients.find((c) => c.id === i.projectId) : null;
   return (
     <div className={`od-apcard od-in ${stage}`} style={{ ['--i' as any]: Math.min(k, 10) }}>

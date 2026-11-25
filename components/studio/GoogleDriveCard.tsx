@@ -64,7 +64,7 @@ const GoogleDriveCard: React.FC = () => {
           <div>
             <div className="flex items-center gap-2"><h3 className="text-base font-bold text-slate-900">Google Drive</h3>{pill}</div>
             <p className="text-xs text-slate-500 mt-0.5">
-              {connected ? `Drawings you pick are uploaded to ${status?.email || 'your Drive'}` : 'Upload the drawings you pick to a Drive folder per project, and put its link in the approval email.'}
+              {connected ? `Drawings you pick are uploaded to ${status?.email || 'your Drive'}` : 'Upload the drawings you pick to a Drive folder per project, and put its link in the sign-off email.'}
             </p>
           </div>
         </div>
@@ -84,9 +84,9 @@ const GoogleDriveCard: React.FC = () => {
           <div className="flex items-start gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-xl p-3">
             <CheckCircle className="w-4 h-4 mt-0.5 text-emerald-600 shrink-0" />
             <span>
-              When operations send a client the approval email, they tick which of the meeting's drawings to upload. Only those are copied,
+              When operations send a client the sign-off email, they tick which of the meeting's drawings to upload. Only those are copied,
               landscape, into <b>My Drive / {ROOT_FOLDER} / &lt;Project&gt;</b>. Nothing is copied by itself.
-              That folder is shared as <b>view-only to anyone with the link</b>, and the link goes into the approval email.
+              That folder is shared as <b>view-only to anyone with the link</b>, and the link goes into the sign-off email.
               Studio-only drawings are never copied. The app can see only the folders and files it made, nothing else in the account.
             </span>
           </div>

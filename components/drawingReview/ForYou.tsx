@@ -107,7 +107,7 @@ export default function ForYou(props: Props) {
       { key: 'back', icon: Undo2, tone: 'amber', title: 'Back with designers', sub: 'Changes requested, or uploaded and not sent', fold: true, empty: 'Nothing is back with the designers.',
         rows: back.map((d, i) => row(d, i, { who: true, detail: stateOf(d.review) === 'CHANGES_REQUESTED' ? 'progress' : 'due',
           action: d.review?.designer?.email ? { label: 'Remind', icon: Mail, quiet: true, run: () => onRemind(d) } : null })) },
-      { key: 'approved', icon: Check, tone: 'green', title: 'Approved', sub: 'Recently signed off', fold: true, empty: 'Nothing approved yet.', rows: recentApproved.map((d, i) => row(d, i, { who: true, detail: 'approved' })) },
+      { key: 'approved', icon: Check, tone: 'green', title: 'Approved', sub: 'Recently approved by you', fold: true, empty: 'Nothing approved yet.', rows: recentApproved.map((d, i) => row(d, i, { who: true, detail: 'approved' })) },
     ];
     const q0 = queue[0];
     const due = q0 && dueOf(q0.targetDate);
@@ -125,7 +125,7 @@ export default function ForYou(props: Props) {
       ...(uploader && notStarted.length ? [{ key: 'none', icon: Circle, tone: 'grey' as Tone, title: 'Not started', sub: 'No PDF yet. Drop one anywhere on this page.', fold: true, defaultOpen: !myFix.length && !myReady.length,
         rows: notStarted.map((d, i) => row(d, i, { action: { label: 'Upload', icon: Upload, quiet: true, run: () => onOpen(d) } })) }] : []),
       { key: 'withHead', icon: Eye, tone: 'indigo', title: 'With the Design Head', sub: 'Waiting for a decision', fold: true, empty: 'Nothing is waiting for a decision.', rows: withHead.map((d, i) => row(d, i, { detail: 'sent' })) },
-      { key: 'approved', icon: Check, tone: 'green', title: 'Approved', sub: 'Signed off by the Design Head', fold: true, empty: 'Nothing approved yet.', rows: recentApproved.filter(mine).map((d, i) => row(d, i, { detail: 'approved' })) },
+      { key: 'approved', icon: Check, tone: 'green', title: 'Approved', sub: 'Approved by the Design Head', fold: true, empty: 'Nothing approved yet.', rows: recentApproved.filter(mine).map((d, i) => row(d, i, { detail: 'approved' })) },
     ];
     const needs = myFix.length + myReady.length;
     const elseNames = [...new Set(elsewhere.map((d) => d.projectId))];

@@ -84,7 +84,7 @@ export function minutesOf({ meeting: m, live = {}, used = {}, charges = {}, way,
   if (closed) {
     const agreed = m.rooms.filter((r) => r.outcome === 'agreed').length;
     const none = !m.rooms.some((r) => r.outcome);
-    out.push({ kind: 'saved', text: agreed ? `Meeting saved. ${plural(agreed, 'room')} ${agreed === 1 ? 'waits' : 'wait'} for the client's approval in writing.` : none ? 'Meeting saved with no room decided.' : 'Meeting saved.' });
+    out.push({ kind: 'saved', text: agreed ? `Meeting saved. ${plural(agreed, 'room')} ${agreed === 1 ? 'waits' : 'wait'} for the client's sign-off in writing.` : none ? 'Meeting saved with no room decided.' : 'Meeting saved.' });
     if (m.confirmation?.at) out.push({ kind: 'signed', text: `${m.confirmation.name} ${m.confirmation.via === 'portal' ? 'confirmed the record in the portal' : "signed the record on the studio's screen"}.` });
   }
   return out;

@@ -24,7 +24,7 @@ const kabir = { reviewer: false, email: 'kabir@studio.in' };
 
 describe('steps', () => {
   it('walks a client drawing through four steps', () => {
-    expect(stepsOf(row('a', null))).toEqual({ labels: ['Upload the drawing', 'Design Head checks', 'Client approves', 'Sent to site'], current: 0 });
+    expect(stepsOf(row('a', null))).toEqual({ labels: ['Upload the drawing', 'Design Head checks', 'Client signs off', 'Sent to site'], current: 0 });
     expect(stepsOf(row('a', 'DRAFT')).current).toBe(0);
     expect(stepsOf(row('a', 'IN_REVIEW')).current).toBe(1);
     expect(stepsOf(row('a', 'APPROVED')).current).toBe(2);
@@ -56,8 +56,8 @@ describe('where it is now', () => {
     expect(whereLine(row('a', null), riya)).toBe('Nobody has uploaded this drawing yet.');
   });
   it('says what happens after the studio approves', () => {
-    expect(whereLine(row('a', 'APPROVED'), head)).toBe('Approved in the studio. Show it to the client at the next meeting.');
-    expect(whereLine(row('a', 'APPROVED', { approvedAt: 5 }), head)).toBe('The client approved it. It can go to site.');
+    expect(whereLine(row('a', 'APPROVED'), head)).toBe('Approved by the studio. Show it to the client at the next meeting.');
+    expect(whereLine(row('a', 'APPROVED', { approvedAt: 5 }), head)).toBe('The client signed it off. It can go to site.');
     expect(whereLine(row('a', 'APPROVED', { audience: 'studio' }), head)).toBe('Approved. It stays inside the studio and can go to site.');
     expect(whereLine(row('a', 'APPROVED', { approvedAt: 5, gfc: 'issued' }), riya)).toBe('Sent to site.');
     expect(whereLine(row('a', 'APPROVED', { client: 2 }), head)).toBe('The client asked for 2 changes at the meeting. Decide what goes to Riya.');

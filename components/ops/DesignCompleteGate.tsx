@@ -96,7 +96,7 @@ export default function DesignCompleteGate({
       }]),
       {
         label: 'Drawings',
-        value: `${approvedDrawingsCount}/${drawingsCount} approved`,
+        value: `${approvedDrawingsCount}/${drawingsCount} signed off`,
       },
     ],
   }, [activated, readiness, frozenCount, drawingsCount, approvedDrawingsCount]);
@@ -499,7 +499,7 @@ export default function DesignCompleteGate({
                 <span className="text-[11px] font-medium text-slate-500 block mb-1">Drawing Tracker</span>
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-xl font-black text-slate-900">{approvedDrawingsCount}</span>
-                  <span className="text-xs text-slate-400 font-bold">/ {drawingsCount} approved</span>
+                  <span className="text-xs text-slate-400 font-bold">/ {drawingsCount} signed off</span>
                 </div>
               </div>
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
@@ -638,7 +638,7 @@ export default function DesignCompleteGate({
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Record Client Sign-Off</h3>
-                <p className="text-xs text-slate-500">Capture supporting evidence for final drawing approval</p>
+                <p className="text-xs text-slate-500">Capture supporting evidence for the client's final sign-off of the drawings</p>
               </div>
             </div>
             {heldMeetings.length > 0 && (
@@ -673,13 +673,13 @@ export default function DesignCompleteGate({
               </div>
             )}
             <p className="text-xs text-slate-600 my-3 leading-relaxed">
-              {heldMeetings.length > 0 ? 'Or enter' : 'Enter'} the email thread subject, WhatsApp date/timestamp, or shared drive link where the client approved the final drawings:
+              {heldMeetings.length > 0 ? 'Or enter' : 'Enter'} the email thread subject, WhatsApp date/timestamp, or shared drive link where the client signed off the final drawings:
             </p>
             <input
               autoFocus
               value={signoffRef}
               onChange={e => setSignoffRef(e.target.value)}
-              placeholder="e.g., WhatsApp approval on 14 Aug — 'Drawings approved, start procurement'"
+              placeholder="e.g., WhatsApp sign-off on 14 Aug — 'Drawings approved, start procurement'"
               className="w-full text-xs p-3 rounded-xl border border-slate-300 bg-slate-50/50 outline-none focus:ring-2 focus:ring-[#3D52A0]-300 text-slate-800"
             />
             <div className="flex justify-end gap-2 mt-4">

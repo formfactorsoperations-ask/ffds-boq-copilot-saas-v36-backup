@@ -140,7 +140,7 @@ export const Home: React.FC<{ c: DeskCtx; projects: ProjectCard[]; canMeet: bool
       </Reveal>}
 
       {canMeet && ready.length > 0 && <Reveal>
-        <SectionTitle hint="Approved in the studio, not yet shown to the client">Ready for the next client meeting</SectionTitle>
+        <SectionTitle hint="Approved by the studio, not yet shown to the client">Ready for the next client meeting</SectionTitle>
         <Card className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-700"><Presentation size={20} aria-hidden /></span>
           <span className="min-w-0 flex-[1_1_260px]">

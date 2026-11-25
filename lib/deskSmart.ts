@@ -92,7 +92,7 @@ export function siteRisk(d: SmartRow, now = new Date()): SiteRisk | null {
   const need = daysStillNeeded(d);
   if (days < 0) return { state: 'late', days, date, label: `Site needed it ${date}`, line: `Site needed it on ${date}. It is not sent to site yet.` };
   if (need > days) return { state: 'risk', days, date, label: `Site needs it ${date}`, line: `Site needs it on ${date}. At this pace it will be late: it still needs about ${plural(need, 'day')} and there ${days === 1 ? 'is' : 'are'} ${days}.` };
-  if (need === 0 && days <= 3) return { state: 'ready', days, date, label: `Site needs it ${date}`, line: `Site needs it on ${date}. It is approved: send it to site.` };
+  if (need === 0 && days <= 3) return { state: 'ready', days, date, label: `Site needs it ${date}`, line: `Site needs it on ${date}. It is ready: send it to site.` };
   return { state: 'ok', days, date, label: `Site needs it ${date}`, line: `Site needs it on ${date}. It is on track.` };
 }
 

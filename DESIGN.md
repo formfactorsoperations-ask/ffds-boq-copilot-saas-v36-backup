@@ -158,6 +158,29 @@ What stays as everywhere else:
 - The words: a drawing's place is one plain sentence (`lib/designDesk2.ts`, `whereLine`), its steps
   are numbered (`stepsOf`), and it shows one main button (`mainAction`).
 
+### Words: approve and sign off (Design Head and co-owner, 25 Nov 2026)
+
+**The studio approves a drawing. The client signs it off.** With "approved by the studio" and
+"approved by the client" on the same screens, nobody could tell which of the two a drawing had. On
+every screen where staff follow a drawing (both Design Desks, Ops Desk → Drawings for sign-off, a
+project's Drawings tab, the design gate, and the lines the server writes into a drawing's history):
+
+- **Approve, approved, approval** are the Design Head's (or the studio's) only: "Approve v2",
+  "Approved by the studio", "Keep it approved", "3 of 15 approved".
+- **Sign off, signed off, sign-off** are the client's only: the step "Client signs off", "Signed off
+  by the client", "Send for sign-off", "the sign-off email", "Sign-off overdue", "Take as signed
+  off", "Record sign-off", "written sign-off".
+- Never "approved by the client", "client approval", "approval email", and never "signed off" for
+  the Design Head. `src/tests/signOffWords.test.ts` holds this.
+- In a project's Drawings tab a drawing that is final shows **Signed off**, or **Approved · studio
+  only** when it never goes to the client; one the Design Head has approved and the client has not
+  seen shows **Approved · ready for client**.
+- Names in the code and in stored data keep the old word (`approvedAt`, `approval.status`,
+  `ClientApproval`, the status key `'Approved'`): only what people read changed.
+- What the client reads is not covered: the studio's own email to the client keeps its wording
+  ("Drawings for approval", reply "Approved" to confirm your formal sign-off), and the portal says
+  "confirm". Change those only when the owner asks.
+
 ### Design Desk 2.0 pages in motion (owner, 25 Nov 2026)
 
 The owner asked for animation on the desk's pages. It lives in `HomeMotionStyles`

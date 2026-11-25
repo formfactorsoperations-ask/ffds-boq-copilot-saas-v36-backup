@@ -444,7 +444,7 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
               <div className="hud-panel-in rounded-3xl bg-gradient-to-r from-[#0C1F1A] to-emerald-900 px-6 py-6 text-white">
                 <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10"><Check size={26} strokeWidth={2.6} aria-hidden /></span>
                 <h1 className="mt-3 text-2xl font-bold">Meeting saved</h1>
-                <p className="mt-1 text-base text-emerald-100">{projectName} · {shortDate(m.closedAt || Date.now())}{m.attendees ? ` · with ${m.attendees}` : ''}. {decided.length ? `The desk wrote this during the meeting. Check it${needsApproval(m) ? ', then ask the client to approve' : ''}.` : 'The client did not decide on any room. Nothing went to the client or onto a drawing, and every room can be shown again.'}</p>
+                <p className="mt-1 text-base text-emerald-100">{projectName} · {shortDate(m.closedAt || Date.now())}{m.attendees ? ` · with ${m.attendees}` : ''}. {decided.length ? `The desk wrote this during the meeting. Check it${needsApproval(m) ? ', then ask the client to sign off' : ''}.` : 'The client did not decide on any room. Nothing went to the client or onto a drawing, and every room can be shown again.'}</p>
               </div>
               <section>
                 <h2 className="mb-2 text-lg font-bold text-slate-800">What was decided</h2>
@@ -460,8 +460,8 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
               </section>
               {needsApproval(m) && (
                 <section>
-                  <h2 className="mb-1 text-lg font-bold text-slate-800">Ask the client to approve</h2>
-                  <p className="mb-2 text-sm text-slate-600">Agreeing in the meeting is not the approval. The email is drafted for you: check the address, then send it. Reminders go by themselves on working days 3 and 5.</p>
+                  <h2 className="mb-1 text-lg font-bold text-slate-800">Ask the client to sign off</h2>
+                  <p className="mb-2 text-sm text-slate-600">Agreeing in the meeting is not the sign-off. The email is drafted for you: check the address, then send it. Reminders go by themselves on working days 3 and 5.</p>
                   <div className="rounded-2xl bg-white"><ClientApproval orgId={orgId} projectId={projectId} m={m} mine lead={lead} me={me} startOpen /></div>
                 </section>
               )}
@@ -469,7 +469,7 @@ export default function MeetingScreen({ orgId, projectId, projectName, look, mee
                 {m.confirmation?.at ? <BadgeCheck size={22} className="shrink-0 text-emerald-600" aria-hidden /> : <PenLine size={22} className="shrink-0 text-slate-400" aria-hidden />}
                 <span className="min-w-0 flex-[1_1_240px] text-sm text-slate-600">
                   <b className="block text-base text-slate-800">{m.confirmation?.at ? `Signed by ${m.confirmation.name}` : 'Is the client with you?'}</b>
-                  {m.confirmation?.at ? 'The record is confirmed.' : 'They can sign the record on this screen now. Their signature counts as their written approval of the rooms they were happy with.'}
+                  {m.confirmation?.at ? 'The record is confirmed.' : 'They can sign the record on this screen now. Their signature counts as their written sign-off of the rooms they were happy with.'}
                 </span>
                 {!m.confirmation?.at && <Btn kind="plain" icon={PenLine} onClick={() => setSigning(true)}>Client signs now</Btn>}
               </section>}

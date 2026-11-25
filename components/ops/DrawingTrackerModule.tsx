@@ -257,7 +257,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         if (!projectId || !canSetAudience(currentRole as any) || reconciled.current.has(projectId)) return;
         reconciled.current.add(projectId);
         reconcileApprovals({ orgId, projectId })
-            .then(r => { if (r?.reclaimed) addLog('info', `${r.reclaimed} drawing${r.reclaimed === 1 ? '' : 's'} went back to waiting for the client's written approval.`); })
+            .then(r => { if (r?.reclaimed) addLog('info', `${r.reclaimed} drawing${r.reclaimed === 1 ? '' : 's'} went back to waiting for the client's written sign-off.`); })
             .catch(err => console.warn('Could not check approvals against the client\'s answers', err));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [projectId, orgId, currentRole]);
@@ -607,7 +607,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
             rounds: newRounds
         });
         setExpandedRevisionId(null);
-        addLog('success', `Drawing "${drawing.name}" successfully approved on Round ${roundNumber}.`);
+        addLog('success', `Drawing "${drawing.name}" signed off by the client on Round ${roundNumber}.`);
     };
 
     const handleQuickStatusChange = async (drawing: DrawingTrackerItem, newStatus: 'pending' | 'approved' | 'rejected') => {
@@ -660,7 +660,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
         try {
             await updateDoc(doc(db, `organizations/${orgId}/projects/${projectId}/drawingTracker`, drawing.id), updates);
-            const statusLabel = newStatus === 'approved' ? 'Approved' : newStatus === 'rejected' ? 'Rejected' : 'Pending (In Review)';
+            const statusLabel = newStatus === 'approved' ? 'Signed off' : newStatus === 'rejected' ? 'Rejected' : 'Pending (In Review)';
             addLog('success', `Quick status for "${drawing.name}" updated to ${statusLabel}.`);
         } catch (err) {
             console.error("Failed to update drawing quick status:", err);
@@ -756,14 +756,14 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
     const handleIssueGfc = async (d: DrawingTrackerItem) => {
         if (!d.approvedAt) {
-            addLog('warning', `Drawing "${d.name}" must be approved before you can issue GFC.`);
+            addLog('warning', `Drawing "${d.name}" needs its final sign-off before you can issue GFC.`);
             return;
         }
 
         const companions = drawings.filter(other => other.companionOf === d.id || d.companionOf === other.id);
         const unapprovedCompanions = companions.filter(c => c.approvedAt === null);
         if (unapprovedCompanions.length > 0) {
-            addLog('error', `Cannot issue GFC. The following companion drawings must be approved first: ${unapprovedCompanions.map(c => c.name).join(', ')}`);
+            addLog('error', `Cannot issue GFC. The following companion drawings need their final sign-off first: ${unapprovedCompanions.map(c => c.name).join(', ')}`);
             return;
         }
 
@@ -855,7 +855,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
     const handleBatchIssueGfc = async () => {
         const readyDrawings = drawings.filter(d => d.approvedAt !== null && (!d.gfc || d.gfc.status !== 'issued'));
         if (readyDrawings.length === 0) {
-            addLog('info', 'No approved drawings currently pending GFC release.');
+            addLog('info', 'No signed-off drawings currently pending GFC release.');
             return;
         }
 
@@ -984,7 +984,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         { key: 'Studio Review', label: 'Submitted for review' },
         { key: 'Client Review', label: 'With client' },
         { key: 'Not Started', label: 'Not started' },
-        { key: 'Approved', label: 'Approved' },
+        { key: 'Approved', label: 'Signed off' },
         { key: 'GFC Issued', label: 'Released' },
         { key: 'Missing', label: 'Missing' },
     ];
@@ -1025,7 +1025,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
 
         const gateSub = issues.length > 0
             ? `${issues.length} ${issues.length === 1 ? 'gap blocks' : 'gaps block'} the gate`
-            : `${stats.approved} of ${stats.total} approved and signed off`;
+            : `${stats.approved} of ${stats.total} signed off`;
 
         const worst = turnaround.worst;
         const clientSub = turnaround.withClient === 0
@@ -1138,7 +1138,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
             "Mandatory",
             "Current Round",
             "Status",
-            "Approved Date",
+            "Signed off date",
             "GFC Status",
             "GFC Released Date",
             "GFC Released By",
@@ -1167,7 +1167,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                 `"${d.boqTriggers.join(', ')}"`,
                 d.isMandatory ? 'Yes' : 'No',
                 `Round ${d.currentRound || 0}`,
-                `"${status}"`,
+                `"${statusWord(status, d)}"`,
                 `"${approvedDate}"`,
                 `"${gfcStatus}"`,
                 `"${gfcDate}"`,
@@ -1208,7 +1208,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
         
         text += `📊 *Summary*:\n`;
         text += `• 🛡️ *GFC Released to Site*: ${gfcList.length}\n`;
-        text += `• 🟢 *Client Approved*: ${completedCount}\n`;
+        text += `• 🟢 *Client signed off*: ${completedCount}\n`;
         text += `• 🔍 *In Client Review*: ${inReviewList.length}\n`;
         text += `• ⏳ *Drafting / Pending*: ${pendingList.length}\n`;
         if (issues.length > 0) {
@@ -1256,6 +1256,15 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
     };
 
     // Custom Status Badge Renderer
+    /*
+      The studio approves a drawing; the client signs it off (Design Head and
+      co-owner, 25 Nov 2026). The table's final status keeps its key,
+      'Approved', and is shown as "Signed off" for a drawing the client sees
+      and "Approved · studio only" for one that never goes to the client.
+    */
+    const finalWord = (d?: DrawingTrackerItem) => (d?.review?.audience === 'studio' ? 'Approved · studio only' : 'Signed off');
+    const statusWord = (status: string, d?: DrawingTrackerItem) => (status === 'Approved' ? finalWord(d) : status === 'Ready for Client' ? 'Approved · ready for client' : status);
+
     const renderStatusBadge = (status: string, d?: DrawingTrackerItem) => {
         const aw = d ? awaiting[d.id] : undefined;
         switch (status) {
@@ -1266,7 +1275,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
             case 'Missing':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-rose-50 text-rose-800 border border-rose-200 shadow-2xs"><FileWarning className="w-3.5 h-3.5 text-rose-600" />Missing</span>;
             case 'Approved':
-                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />Approved</span>;
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />{finalWord(d)}</span>;
             case 'Client Review':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs"><User className="w-3.5 h-3.5 text-[#2E7D6B]" />Client Review</span>;
             case 'Site Hold':
@@ -1274,13 +1283,13 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
             case 'Returned':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs"><AlertCircle className="w-3.5 h-3.5 text-amber-600" />Returned</span>;
             case 'Ready for Client':
-                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs"><CheckCircle2 className="w-3.5 h-3.5 text-[#2E7D6B]" />Ready for client</span>;
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs"><CheckCircle2 className="w-3.5 h-3.5 text-[#2E7D6B]" />Approved · ready for client</span>;
             case 'Presented':
-                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs" title="Agreed at the design meeting. Send the approval email from Design Desk, Meetings."><Send className="w-3.5 h-3.5 text-[#2E7D6B]" />Presented · send for approval</span>;
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs" title="Agreed at the design meeting. Send the sign-off email from Design Desk, Meetings."><Send className="w-3.5 h-3.5 text-[#2E7D6B]" />Presented · send for sign-off</span>;
             case 'Awaiting Client':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-[#F1F7F5] text-[#12332E] border border-[#9EC9BC] shadow-2xs"><Clock className="w-3.5 h-3.5 text-[#2E7D6B]" />Awaiting client{aw?.sentAt ? ` · day ${aw.days}` : ''}{aw?.dueAt ? ` · by ${approvalDate(aw.dueAt)}` : ''}</span>;
             case 'Client Overdue':
-                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-rose-50 text-rose-800 border border-rose-200 shadow-2xs"><AlertCircle className="w-3.5 h-3.5 text-rose-600" />Client approval overdue{aw?.dueAt ? ` · was due ${approvalDate(aw.dueAt)}` : ''}</span>;
+                return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-rose-50 text-rose-800 border border-rose-200 shadow-2xs"><AlertCircle className="w-3.5 h-3.5 text-rose-600" />Client sign-off overdue{aw?.dueAt ? ` · was due ${approvalDate(aw.dueAt)}` : ''}</span>;
             case 'Client Changes':
                 return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs"><User className="w-3.5 h-3.5 text-amber-600" />Client changes</span>;
             case 'In Progress':
@@ -1419,7 +1428,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                                         className="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
                                                     >
                                                         <Check className="w-3.5 h-3.5" />
-                                                        <span>Approve Round</span>
+                                                        <span>Sign off round</span>
                                                     </button>
                                                 )}
                                                 <button 
@@ -1610,7 +1619,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                     <div>
                         <span className="text-slate-400 text-[10px] block uppercase font-bold tracking-tight">Approval Reference</span>
                         <span className="text-slate-800 truncate block italic">
-                            {d.gfc.clientApprovalRef ? `Round ${d.gfc.clientApprovalRef.roundNumber || d.currentRound} Approved` : 'Formal Client Signoff'}
+                            {d.gfc.clientApprovalRef ? `Round ${d.gfc.clientApprovalRef.roundNumber || d.currentRound} signed off` : 'Formal Client Signoff'}
                         </span>
                     </div>
                 </div>
@@ -1852,7 +1861,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 ? 'approved' : status === 'Site Hold' ? 'rejected' : 'pending';
                             const opts: [string, 'pending' | 'approved' | 'rejected', string][] = [
                                 ['Pending', 'pending', 'bg-[#1F4D45] text-white'],
-                                ['Approved', 'approved', 'bg-emerald-600 text-white'],
+                                ['Signed off', 'approved', 'bg-emerald-600 text-white'],
                                 ['On hold', 'rejected', 'bg-rose-600 text-white'],
                             ];
                             return (
@@ -2300,8 +2309,8 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                         className="w-full flex flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 rounded-2xl">
                         <FileCheck2 className="w-4 h-4 text-[#2E7D6B] shrink-0" />
                         <span className="min-w-0 flex-1 text-sm text-slate-700">
-                            <b className="text-slate-900">Client approval</b>
-                            <span className="text-slate-500"> · {approvalItems === null ? 'checking…' : approvalsWaiting ? `${approvalsWaiting} waiting for the client` : 'nothing waiting'} · send the approval email, upload drawings to Drive, or record drawings presented outside the Studio Desk</span>
+                            <b className="text-slate-900">Client sign-off</b>
+                            <span className="text-slate-500"> · {approvalItems === null ? 'checking…' : approvalsWaiting ? `${approvalsWaiting} waiting for the client` : 'nothing waiting'} · send the sign-off email, upload drawings to Drive, or record drawings presented outside the Studio Desk</span>
                         </span>
                         <span className="text-xs font-bold text-[#2E7D6B]">{approvalsOpen ? 'Hide' : 'Open'}</span>
                     </button>
@@ -2603,7 +2612,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                         <th className="p-3">Scope / Category</th>
                                         <th className="p-3">Status</th>
                                         <th className="p-3">Round</th>
-                                        <th className="p-3">Approved On</th>
+                                        <th className="p-3">Signed off on</th>
                                         <th className="p-3">GFC Hash Ref</th>
                                     </tr>
                                 </thead>
@@ -2809,7 +2818,7 @@ export default function DrawingTrackerModule({ projectId, projectContext, fullBo
                                 />
                                 <div>
                                     <div className="font-bold text-slate-900 text-xs">Mandatory Gate Item</div>
-                                    <div className="text-[10px] text-slate-500 font-normal">Must be formally approved by client before activating Design Complete Gate</div>
+                                    <div className="text-[10px] text-slate-500 font-normal">Must be formally signed off by the client before activating Design Complete Gate</div>
                                 </div>
                             </label>
                         </div>

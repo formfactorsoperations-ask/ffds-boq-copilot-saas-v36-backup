@@ -197,7 +197,7 @@ async function close(actor: Actor, orgId: string, projectId: string, input: Inpu
         const s = drawingSnaps.get(sh.drawingId)!.data()!.review as ReviewSummary;
         const mine = r.changes.filter((c) => c.drawingId === sh.drawingId);
         if (r.outcome === "agreed" || !mine.length) {
-          tx.set(dref.collection("reviewEvents").doc(), { type: "client", at: now, by, versionNo: sh.versionNo, text: r.outcome === "agreed" ? "Agreed with the client at the design meeting; waiting for their approval in writing" : "Shown at the design meeting; the client's changes were on other sheets of the room" } as ReviewEvent);
+          tx.set(dref.collection("reviewEvents").doc(), { type: "client", at: now, by, versionNo: sh.versionNo, text: r.outcome === "agreed" ? "Agreed with the client at the design meeting; waiting for their sign-off in writing" : "Shown at the design meeting; the client's changes were on other sheets of the room" } as ReviewEvent);
           /* Agreeing at the meeting is not the approval: that comes back in writing (recordApproval, below). */
           continue;
         }
@@ -270,7 +270,7 @@ async function sign(actor: Actor, orgId: string, projectId: string, input: Input
     const confirmation: MeetingConfirmation = { via: "studio", name, email: null, uid: null, at: now, signature, recordedBy: person(actor) };
     /* The client's signature on the record is their approval in writing. */
     const approval = settleApproval(m, "approved", "signature", now, `Signed by ${name} in the studio`, person(actor), now);
-    const result = writeApprovedSheets(tx, orgId, projectId, m, snaps, now, person(actor), "Approved by the client: signed the meeting record in the studio");
+    const result = writeApprovedSheets(tx, orgId, projectId, m, snaps, now, person(actor), "Signed off by the client: signed the meeting record in the studio");
     tx.update(ref, { confirmation, rev: m.rev + 1, ...(approval ? { approval } : {}) });
     return { meeting: { ...m, confirmation, rev: m.rev + 1, ...(approval ? { approval } : {}) }, ...result };
   });
@@ -306,7 +306,7 @@ export async function confirmMeetingByClient(p: {
     };
     const client = { uid: p.uid, email: p.email || "", name };
     const approval = settleApproval(m, "approved", "portal", now, `Confirmed by ${name} in the portal`, client, now);
-    writeApprovedSheets(tx, orgId, p.projectId, m, snaps, now, client, "Approved by the client: confirmed the meeting record in the portal");
+    writeApprovedSheets(tx, orgId, p.projectId, m, snaps, now, client, "Signed off by the client: confirmed the meeting record in the portal");
     tx.update(ref, { confirmation, rev: m.rev + 1, ...(approval ? { approval } : {}) });
   });
   return refreshPortalRecord(orgId, p.projectId);
@@ -491,9 +491,9 @@ function settleApproval(m: DesignMeeting, status: "approved" | "deemed" | "chang
 
 function mustAwait(m: DesignMeeting) {
   if (m.state !== "CLOSED") throw new HttpsError("failed-precondition", "Save the meeting first.");
-  if (!needsApproval(m)) throw new HttpsError("failed-precondition", "The client did not agree any room at this meeting, so there is nothing to approve.");
+  if (!needsApproval(m)) throw new HttpsError("failed-precondition", "The client did not agree any room at this meeting, so there is nothing to sign off.");
   if (m.confirmation?.at || m.approval?.status === "approved" || m.approval?.status === "deemed") {
-    throw new HttpsError("failed-precondition", "The client's approval is already recorded for this meeting.");
+    throw new HttpsError("failed-precondition", "The client's sign-off is already recorded for this meeting.");
   }
 }
 
@@ -567,7 +567,7 @@ async function sendApproval(actor: Actor, orgId: string, projectId: string, inpu
 
 async function recordApproval(actor: Actor, orgId: string, projectId: string, input: Input) {
   const outcome = input.outcome === "approved" || input.outcome === "changes" || input.outcome === "deemed" ? input.outcome : null;
-  if (!outcome) throw new HttpsError("invalid-argument", "Approved, changes, or taken as approved?");
+  if (!outcome) throw new HttpsError("invalid-argument", "Signed off, changes, or taken as signed off?");
   const note = cleanText(input.note, 2000) || null;
   if (outcome === "changes" && !note) throw new HttpsError("invalid-argument", "Paste what the client asked to change.");
   const ref = meetingRef(orgId, projectId, input.meetingId);
@@ -579,19 +579,19 @@ async function recordApproval(actor: Actor, orgId: string, projectId: string, in
     mustAwait(m);
     const now = Date.now();
     if (outcome === "deemed") {
-      if (!isLead(actor)) throw new HttpsError("permission-denied", "Only the Design Head, the Owner or an Admin takes drawings as approved.");
-      if (!mayDeem(m.approval, now)) throw new HttpsError("failed-precondition", "The date in the approval email has not passed yet.");
+      if (!isLead(actor)) throw new HttpsError("permission-denied", "Only the Design Head, the Owner or an Admin takes drawings as signed off.");
+      if (!mayDeem(m.approval, now)) throw new HttpsError("failed-precondition", "The date in the sign-off email has not passed yet.");
     }
     /* The date on the client's reply: not before the meeting, not in the future. Taken as approved: the date in the email. */
     const asked = Number(input.answeredAt);
     const answeredAt = outcome === "deemed" ? m.approval!.dueAt! : Number.isFinite(asked) && asked >= (m.closedAt || 0) && asked <= now ? asked : now;
     const snaps = outcome === "changes" ? new Map() as Snaps : await readAgreedSheets(tx, orgId, projectId, m);
     const approval = settleApproval(m, outcome, outcome === "deemed" ? "deemed" : "email", answeredAt,
-      outcome === "deemed" ? note || `No answer by ${new Date(m.approval!.dueAt!).toISOString().slice(0, 10)}; taken as approved, as the approval email said.` : note, person(actor), now)!;
+      outcome === "deemed" ? note || `No answer by ${new Date(m.approval!.dueAt!).toISOString().slice(0, 10)}; taken as signed off, as the sign-off email said.` : note, person(actor), now)!;
     let result = { approved: [] as string[], movedOn: [] as string[] };
     if (outcome !== "changes") {
       result = writeApprovedSheets(tx, orgId, projectId, m, snaps, answeredAt, person(actor),
-        outcome === "deemed" ? "Taken as approved: the client did not answer by the date in the approval email" : "Approved by the client in writing (email)");
+        outcome === "deemed" ? "Taken as signed off: the client did not answer by the date in the sign-off email" : "Signed off by the client in writing (email)");
     }
     tx.update(ref, { approval, rev: m.rev + 1 });
     return { meeting: { ...m, approval, rev: m.rev + 1 }, ...result };
@@ -635,7 +635,7 @@ async function approvals(actor: Actor, orgId: string, projectId: string): Promis
 */
 function mustSendApprovals(actor: Actor) {
   if (!sendsApprovals(actor.roles) && !isLead(actor) && !canPresentAssigned(actor.roles)) {
-    throw new HttpsError("permission-denied", "This account does not send approval emails.");
+    throw new HttpsError("permission-denied", "This account does not send sign-off emails.");
   }
 }
 
@@ -671,7 +671,7 @@ async function presentedOutside(actor: Actor, orgId: string, projectId: string, 
       const data = snap.data();
       const s = data?.review as ReviewSummary | undefined;
       if (!snap.exists || !s || s.state !== "APPROVED" || !s.versionId || (s.audience || "client") !== "client" || clientPending(s)) {
-        throw new HttpsError("failed-precondition", `${data?.name || "A drawing"} is not approved by the Design Head for the client, so it cannot be sent for approval yet.`);
+        throw new HttpsError("failed-precondition", `${data?.name || "A drawing"} is not approved by the Design Head for the client, so it cannot be sent for sign-off yet.`);
       }
       const room = String(data!.roomName || GENERAL_ROOM);
       byRoom.set(room, [...(byRoom.get(room) || []), {
@@ -688,7 +688,7 @@ async function presentedOutside(actor: Actor, orgId: string, projectId: string, 
     };
     tx.set(ref, meeting);
     snaps.forEach((snap) => tx.set(snap.ref.collection("reviewEvents").doc(), {
-      type: "client", at: now, by, versionNo: (snap.data()!.review as ReviewSummary).versionNo, text: `Shown to the client outside the Studio Desk (${how}); waiting for their approval in writing`,
+      type: "client", at: now, by, versionNo: (snap.data()!.review as ReviewSummary).versionNo, text: `Shown to the client outside the Studio Desk (${how}); waiting for their sign-off in writing`,
     } as ReviewEvent));
     return { meeting };
   });
@@ -734,7 +734,7 @@ async function reconcile(actor: Actor, orgId: string, projectId: string) {
     const patch = reclaimPatch(data as any, review, agreements[d.id], closedAt[d.id] || []);
     if (patch) { Object.assign(write, patch); reclaimed++; }
     if (Object.keys(write).length) await d.ref.update(write);
-    if (patch) await d.ref.collection("reviewEvents").add({ type: "client", at: Date.now(), by: person(actor), versionNo: review.versionNo, text: "Back to waiting for the client: approved in the table before the client approved it in writing" } as ReviewEvent);
+    if (patch) await d.ref.collection("reviewEvents").add({ type: "client", at: Date.now(), by: person(actor), versionNo: review.versionNo, text: "Back to waiting for the client: marked signed off in the table before the client signed it off in writing" } as ReviewEvent);
   }
   return { audience, reclaimed };
 }

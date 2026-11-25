@@ -887,7 +887,7 @@ export default function DrawingScreen({ orgId, projectId, drawingId, projectName
             <>
               <p className={cx('text-xs', blockingOpen ? 'font-semibold text-rose-700' : 'text-slate-500')}>
                 {blockingOpen ? `${blockingOpen} must-fix note${blockingOpen === 1 ? ' is' : 's are'} open. Send it back, or untick Must fix to approve.`
-                  : `Approving signs off v${r?.versionNo} exactly as it is.${self ? ' It is your own drawing, so the history will say self-approved.' : ''}${audience === 'studio' ? ' It stays inside the studio.' : ''}`}
+                  : `Approving passes v${r?.versionNo} exactly as it is.${self ? ' It is your own drawing, so the history will say self-approved.' : ''}${audience === 'studio' ? ' It stays inside the studio.' : ''}`}
               </p>
               <div className="flex gap-2">
                 <Btn kind="plain" className="flex-1 px-3" disabled={!!busy} onClick={() => { setRequestOpen(true); setDraft(null); }}>Request changes</Btn>
