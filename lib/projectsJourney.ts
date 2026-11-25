@@ -54,6 +54,8 @@ export function projectIntel(projects: FullProjectData[], role?: string | null):
               pending: (c.scopeAdditions || []).filter((sa: any) => sa.status === 'pending_approval' || sa.status === 'pending').length,
             },
             timeline: null,
+            /* No amounts on the Projects screens: "Collect Execution Advance", not "… (₹2,50,000)". */
+            hideAmounts: true,
           },
           role || 'Admin',
         );
