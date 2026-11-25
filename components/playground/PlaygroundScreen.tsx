@@ -54,7 +54,7 @@ import { kitsOf, kitStartRooms, kitApply, kitAddsDebris, kitEstimate, kitFits, r
 import { ADDON_BUNDLES, priceForOption, type TemplateData } from '../../lib/standardPackages';
 import { optionSetupOf } from '../../lib/optionSetup';
 import { scopeEdit, isEmptyEdit, applyScopeEdit, namesOf } from '../../lib/playground/allOptions';
-import { moveRoomLines } from '../../lib/playground/roomRename';
+import { moveRoomLines, moveLinesTo, movedWords } from '../../lib/playground/roomRename';
 import { templateLines } from '../../lib/playground/templateBuild';
 import { workLine, measureWork } from '../../lib/playground/works';
 import type { Grade } from '../../lib/materialSpecs';
@@ -464,7 +464,14 @@ export default function PlaygroundScreen(props: Props) {
     const n = boq.filter(l => l.roomId === from).length;
     commit(moveRoomLines(boq, from, to), `${n === 1 ? 'The line' : `${n} lines`} in ${from} moved to ${to}. Undo puts ${n === 1 ? 'it' : 'them'} back.`);
   };
-  const replaceMany = (lines: BoqItem[]) => { const m = new Map(lines.map(l => [l.id, l])); commit(boq.map(l => m.get(l.id) || l)); };
+  const replaceMany = (lines: BoqItem[], msg?: string) => { const m = new Map(lines.map(l => [l.id, l])); commit(boq.map(l => m.get(l.id) || l), msg); };
+  /* Lines dragged to another room in the Sheet, or moved from its picked bar (lib/playground/roomRename moveLinesTo). */
+  const moveLines = (ids: string[], room: string) => {
+    const r = moveLinesTo(boq, ids, room);
+    const one = ids.length === 1 ? byId.get(ids[0])?.name : undefined;
+    if (r.moved) commit(r.boq, movedWords(r, room, one));
+    else if (r.kept) setNote(`${r.kept === 1 ? 'It stays' : 'They stay'} where ${r.kept === 1 ? 'it is' : 'they are'}: a whole-flat or civil line follows its rooms.`);
+  };
   const remove = (ids: string[]) => { const s = new Set(ids); commit(boq.filter(l => !s.has(l.id)), `${ids.length === 1 ? 'Line' : `${ids.length} lines`} deleted. Undo puts ${ids.length === 1 ? 'it' : 'them'} back.`); if (sel && s.has(sel)) setSel(null); };
   const undo = () => {
     const r = undoHistory(hist, boq);
@@ -1148,7 +1155,7 @@ export default function PlaygroundScreen(props: Props) {
                 {lens === 'sheet' && !(fullGrid && renderFullGrid) && (
                   <SheetLens rooms={rooms} models={models} shares={shares} roomTotals={totals.byRoom} sel={sel} readOnly={readOnly}
                     seesMargins={seesMargins} hideFigures={hideFigures} floor={floor} query={query}
-                    onSel={pickLine} onReplace={l => replace(l)} onReplaceMany={replaceMany} onDelete={remove}
+                    onSel={pickLine} onReplace={l => replace(l)} onReplaceMany={replaceMany} onMoveLines={moveLines} onDelete={remove}
                     onFullGrid={renderFullGrid ? () => setFullGrid(true) : undefined}
                     onCustom={() => setCustom({ name: '' })}
                     specBank={specBank} onUpdateLines={offer ? updateLines : undefined}

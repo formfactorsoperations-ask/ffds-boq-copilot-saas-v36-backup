@@ -1818,3 +1818,78 @@ describe('a room renamed in the Brief: lines left under the old name', () => {
     expect(document.querySelector('[data-move-room]')).toBeNull();
   });
 });
+
+describe('how a line is supplied, and moving lines between rooms', () => {
+  beforeEach(() => { org.role = 'Super Admin'; });
+  const dt = () => { const data: Record<string, string> = {}; return { setData: (k: string, v: string) => { data[k] = v; }, getData: (k: string) => data[k] || '', effectAllowed: '', dropEffect: '', types: [] as string[] }; };
+
+  it('in the line’s panel: at actuals, bought by the client, or back in the price; and its room', () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: [...baseBoq(), placedWardrobe] }} probe={t => { latest = t; }} focus={{ ids: ['l2'], at: 0 }} />);
+    const supplied = () => within(inspector()).getByRole('radiogroup', { name: 'Supplied' });
+    expect(within(supplied()).getByRole('radio', { name: 'In the price' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(within(supplied()).getByRole('radio', { name: 'At actuals' }));
+    expect(latest[0].boq.find((l: any) => l.id === 'l2').boqStatus).toBe('as_actuals');
+    expect(within(inspector()).getByText(/Paid to the vendor at actual cost/)).toBeTruthy();
+    fireEvent.click(within(supplied()).getByRole('radio', { name: 'By client' }));
+    expect(latest[0].boq.find((l: any) => l.id === 'l2').boqStatus).toBe('client_procured');
+    fireEvent.click(within(supplied()).getByRole('radio', { name: 'In the price' }));
+    expect(latest[0].boq.find((l: any) => l.id === 'l2').boqStatus).toBeUndefined();
+    expect(screen.getAllByRole('status').some(e => /Wall paint is back in the price\. Undo puts it back\./.test(e.textContent || ''))).toBe(true);
+    // Its room.
+    fireEvent.change(within(inspector()).getByRole('combobox', { name: 'Room' }), { target: { value: 'Kitchen' } });
+    expect(latest[0].boq.find((l: any) => l.id === 'l2').roomId).toBe('Kitchen');
+    expect(screen.getAllByRole('status').some(e => /Wall paint moved to Kitchen\. Undo puts it back\./.test(e.textContent || ''))).toBe(true);
+  });
+
+  it('a piece on the plan moved to another room comes off the plan, and says so', () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: [...baseBoq(), placedWardrobe] }} probe={t => { latest = t; }} focus={{ ids: ['p1'], at: 0 }} />);
+    fireEvent.change(within(inspector()).getByRole('combobox', { name: 'Room' }), { target: { value: 'Kitchen' } });
+    const p = latest[0].boq.find((l: any) => l.id === 'p1');
+    expect(p.roomId).toBe('Kitchen');
+    expect(p.place).toBeUndefined();
+    expect(screen.getAllByRole('status').some(e => /off the plan now: place it again from its panel/.test(e.textContent || ''))).toBe(true);
+  });
+
+  it('in the Sheet: a line dragged by its grip to another room; every room shows while it is dragged', () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: baseBoq() }} probe={t => { latest = t; }} />);
+    lens('Sheet');
+    expect(document.querySelector('[data-sheet-room="Functional"]')).toBeNull();
+    const d = dt();
+    fireEvent.dragStart(document.querySelector('[data-drag-line="l2"]') as HTMLElement, { dataTransfer: d });
+    // An empty scope shows to take it.
+    expect(document.querySelector('[data-sheet-room="Functional"]')).toBeTruthy();
+    expect(screen.getByText('Drop here to move it to Functional')).toBeTruthy();
+    const kitchen = document.querySelector('[data-sheet-room="Kitchen"]') as HTMLElement;
+    fireEvent.dragOver(kitchen, { dataTransfer: d });
+    fireEvent.drop(kitchen, { dataTransfer: d });
+    expect(latest[0].boq.find((l: any) => l.id === 'l2').roomId).toBe('Kitchen');
+    expect(document.querySelector('[data-sheet-room="Functional"]')).toBeNull();
+    expect(screen.getAllByRole('status').some(e => /Wall paint moved to Kitchen\./.test(e.textContent || ''))).toBe(true);
+  });
+
+  it('picked lines: set how they are supplied together, drag them together, or move them from the bar', () => {
+    let latest: any[] = [];
+    render(<Harness tier={{ ...PG, boq: baseBoq() }} probe={t => { latest = t; }} />);
+    lens('Sheet');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Pick Sliding wardrobe' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Pick Wall paint' }));
+    fireEvent.click(document.querySelector('[data-supply-all="actuals"]') as HTMLElement);
+    expect(latest[0].boq.filter((l: any) => l.boqStatus === 'as_actuals').map((l: any) => l.id)).toEqual(['l1', 'l2']);
+    fireEvent.click(document.querySelector('[data-supply-all="studio"]') as HTMLElement);
+    expect(latest[0].boq.some((l: any) => l.boqStatus)).toBe(false);
+    // Dragging one picked line takes both.
+    const d = dt();
+    fireEvent.dragStart(document.querySelector('[data-drag-line="l1"]') as HTMLElement, { dataTransfer: d });
+    const kitchen = document.querySelector('[data-sheet-room="Kitchen"]') as HTMLElement;
+    fireEvent.dragOver(kitchen, { dataTransfer: d });
+    fireEvent.drop(kitchen, { dataTransfer: d });
+    expect(latest[0].boq.filter((l: any) => l.roomId === 'Kitchen').map((l: any) => l.id)).toEqual(['l1', 'l2', 'l3']);
+    // From the bar.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Pick Kitchen counter' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Move the picked lines to' }), { target: { value: 'Bedroom' } });
+    expect(latest[0].boq.find((l: any) => l.id === 'l3').roomId).toBe('Bedroom');
+  });
+});

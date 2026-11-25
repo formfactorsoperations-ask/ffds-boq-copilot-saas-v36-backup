@@ -337,6 +337,12 @@ linkage, notes, change orders on a frozen BOQ). Do not add a mode or a switch ba
   every option but the signed one. A name that is empty, a scope's or another room's is not taken; the
   field says why in rose `text-[11px]`. Lines left under a name the Brief no longer has show in Rooms
   as a card reading "Not a room in the Brief now", with **Move to** a room in place of Add.
+- **A line's room and supply** sit together in its panel (`LineWhere` in `LiveBoq.tsx`): Room, a select
+  (a piece on the plan comes off it when it moves; a whole-flat or civil line stays), and Supplied, a
+  kit Segmented: In the price | At actuals | By client, with one line saying what that means. The
+  Sheet's picked bar has the same three as buttons and **Move to…**; a line is dragged to another room
+  by its grip (`GripVertical`, picked lines go together), the room under it ringed in brand, and every
+  room shows while it is dragged so an empty one takes it too.
 - **The right rail** is the Live BOQ (a receipt, room by room, with the work total) until a line or a
   room is picked; then the inspector for it. Each inspector is keyed by what it shows and swaps in with
   `hud-swap`. The rail hides to a "Live BOQ" button on narrow screens.

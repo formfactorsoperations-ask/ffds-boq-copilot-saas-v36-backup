@@ -49,6 +49,28 @@ export function withSupply(line: BoqItem, item: Pick<Item, 'supply'> | null | un
   return { ...line, boqStatus: SUPPLY_STATUS[s] };
 }
 
+/**
+ * A line already in the BOQ, set to how it is supplied: at actuals, bought by
+ * the client, or (null) back in the price. Only the supply statuses are
+ * touched: a line that is provisional or to confirm stays so until it is
+ * marked one of these. The old `asActuals` flag goes with it.
+ */
+export function withLineSupply(line: BoqItem, supply: ItemSupply | null): BoqItem {
+  const { asActuals: _old, ...rest } = line;
+  if (supply) return { ...rest, boqStatus: SUPPLY_STATUS[supply] };
+  if (line.boqStatus === 'client_procured' || line.boqStatus === 'as_actuals') {
+    const { boqStatus: _s, ...inPrice } = rest;
+    return inPrice;
+  }
+  return rest;
+}
+
+/** Its name says "(actuals)", so it stays at actuals whatever its status says (lib/boqPricing isAsActuals). */
+export const actualsByName = (line: BoqItem, bankMap: Map<string, Item>) => {
+  const name = bankMap.get(line.bankId)?.name || (line as { name?: string }).name || '';
+  return isAsActuals({ boqStatus: undefined, asActuals: false }, name);
+};
+
 const live = (l: BoqItem) => l.boqStatus !== 'deleted' && l.boqStatus !== 'substituted';
 
 /**
