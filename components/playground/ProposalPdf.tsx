@@ -6,7 +6,7 @@ import type { BoqItem, Item, ProjectContext, ProposalTier, TermsSettings, Paymen
 import { scopeSplit, splitPricingOf, dealFor, complimentaryKeys, type OfferDiscount } from '../../lib/offers';
 import { gstTermsOf, scheduleFor, type ScheduleStage } from '../../lib/paymentSchedule';
 import { playgroundTierSummary } from '../../lib/playground/versions';
-import { isPlaygroundTier } from '../../lib/playground/pricing';
+import { isPlaygroundTier, feeBasisWords } from '../../lib/playground/pricing';
 import { proposalValidity, discountsOf, bookingOf } from '../../lib/playground/deal';
 import { optionChains, latestOf } from '../../lib/optionChains';
 import { hasCivilWork } from '../../lib/annexure';
@@ -222,12 +222,14 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
     const items = itemsOf({ boq, bankMap, pricing, rooms: ctx.rooms || [], free, specBank });
     const options = optionChains(tiers).map(latestOf).map(t => (t.id === tier.id ? tier : t));
     const optionRows = options.map(t => ({ t, split: scopeSplit(t, bankMap, splitPricingOf(t, ctx.rooms, bankMap)), work: summaryOf(t)?.totalSell || 0 }));
-    const offers = discounts.map(d => ({ name: d.name, value: d.type === 'percentage' ? (d.target === 'design' ? deal.fee : deal.sell) * (d.value / 100) : d.value }));
+    const offers = discounts.map(d => ({ name: d.name, design: d.target === 'design', value: d.type === 'percentage' ? (d.target === 'design' ? deal.fee : deal.sell) * (d.value / 100) : d.value }));
+    /* How the design fee is applied, as the Brief sets it (Engagement & fees). */
+    const feeBasis = feeBasisWords(ctx, { work: summary?.totalSell || 0, asActuals: (summary as any)?.asActualsTotal || 0, rules: tier.pricingRules, offers: deal.execOff > 0 });
     const civil = hasCivilWork(boq.map(l => ({ ...l, name: bankMap.get(l.bankId)?.name, cat: bankMap.get(l.bankId)?.cat })));
     /* From booking (the day the proposal holds until) to the keys (PR B). */
     const timeline = proposalTimeline({ start: validity.until, programme, config: ctx.config, civil, civilDays: civilDaysOf(termsSettings), target: (ctx as any).targetHandoverDate });
     return {
-      summary, deal, schedule, validity, booking, items, options: optionRows, offers, civil, timeline,
+      summary, deal, schedule, validity, booking, items, options: optionRows, offers, feeBasis, civil, timeline,
       separate: separatePage(boq, bankMap),
       materials: materialsPage(specBank, options, tier.id),
       home: briefHome(ctx),
@@ -490,12 +492,32 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
           </table>
         </>
       )}
-      <div className="mt-6 text-[13px]">
+      <div className="mt-6 text-[13px]" data-pdf-investment>
         <div className="font-bold text-slate-800 mb-1">{tier.name}, all in</div>
-        <div className="flex justify-between py-1.5 border-b border-slate-100"><span>The work</span><b className="tabular-nums">{inr(deal.sell)}</b></div>
-        {m.offers.map(o => <div key={o.name} className="flex justify-between py-1.5 border-b border-slate-100 text-emerald-700"><span>{o.name}</span><b className="tabular-nums">−{inr(o.value)}</b></div>)}
-        <div className="flex justify-between py-1.5 border-b border-slate-100"><span>Design fee</span><b className="tabular-nums">{inr(deal.fee)}</b></div>
-        <div className="flex justify-between py-1.5 border-b border-slate-100"><span>GST {gstTermsOf(ctx).rate}%</span><b className="tabular-nums">{inr(deal.gst)}</b></div>
+        {(() => {
+          const t = gstTermsOf(ctx);
+          const exec = Math.max(0, deal.sell - deal.execOff), design = Math.max(0, deal.fee - deal.designOff);
+          const execPct = t.billablePercent, designPct = t.designBillablePercent ?? 100;
+          const row = (label: React.ReactNode, value: string, key: string, cls = '') => (
+            <div key={key} className={`flex justify-between gap-4 py-1.5 border-b border-slate-100 ${cls}`} data-pdf-inv={key}><span>{label}</span><b className="tabular-nums shrink-0">{value}</b></div>
+          );
+          const sub = (label: string, value: number, key: string) => (
+            <div key={key} className="flex justify-between py-1.5 border-b-2 border-slate-200 font-bold text-slate-800" data-pdf-inv={key}><span>{label}</span><span className="tabular-nums">{inr(value)}</span></div>
+          );
+          const execOffers = m.offers.filter(o => !o.design), designOffers = m.offers.filter(o => o.design);
+          return (
+            <>
+              {row('The work', inr(deal.sell), 'work')}
+              {execOffers.map(o => row(o.name, `−${inr(o.value)}`, `off-${o.name}`, 'text-emerald-700'))}
+              {deal.gstExec > 0 && row(`GST ${t.rate}% on the work${execPct < 100 ? `, on the ${execPct}% billed with GST` : ''}`, inr(deal.gstExec), 'gst-work')}
+              {(deal.gstExec > 0 || execOffers.length > 0) && sub(deal.gstExec > 0 ? 'The work, with GST' : 'The work, after offers', exec + deal.gstExec, 'work-total')}
+              {row(<>Design fee<span className="block text-[11px] text-slate-500 font-normal" data-pdf-fee-basis>{m.feeBasis}</span></>, inr(deal.fee), 'fee')}
+              {designOffers.map(o => row(o.name, `−${inr(o.value)}`, `off-${o.name}`, 'text-emerald-700'))}
+              {deal.gstDesign > 0 && row(`GST ${t.rate}% on the design fee${designPct < 100 ? `, on the ${designPct}% billed with GST` : ''}`, inr(deal.gstDesign), 'gst-fee')}
+              {(deal.gstDesign > 0 || designOffers.length > 0) && sub(deal.gstDesign > 0 ? 'The design fee, with GST' : 'The design fee, after offers', design + deal.gstDesign, 'fee-total')}
+            </>
+          );
+        })()}
         <div className="flex justify-between items-baseline pt-3"><span className="text-base font-bold">Your investment</span><b className="text-2xl font-black tabular-nums" data-pdf-pays>{inr(deal.clientPays)}</b></div>
         {deal.execOff + deal.designOff > 0 && <div className="mt-2 rounded-md bg-emerald-50 px-3 py-2 text-emerald-800 font-semibold">You save {inr(deal.execOff + deal.designOff)}. Offers valid until {dateOf(v.until)}.</div>}
       </div>

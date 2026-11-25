@@ -173,6 +173,32 @@ export function designFeeForTier(
   return rules ? ceilTo(fee, rules.roundUpTo) : fee;
 }
 
+/**
+ * How the design fee is applied, in the client's words, as the Brief sets it
+ * (Engagement & fees: % of cost, ₹/sq ft or a fixed sum) and as
+ * designFeeForTier works it out: a percentage of the work before offers (with
+ * the items at actuals when the rules say so), a rate on the carpet area, or a
+ * fixed sum; on a Playground version, rounded up like every line.
+ */
+export function feeBasisWords(
+  ctx: { designFeeType?: string; designFee?: number; area?: number } | null | undefined,
+  a: { work: number; asActuals?: number; rules?: PricingRules | null; offers?: boolean },
+): string {
+  const c: any = ctx || {};
+  const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+  const rules = a.rules && Number(a.rules.roundUpTo) > 0 ? a.rules : null;
+  const raw = designFeeFor(c, a.work, !rules || rules.feeOnActuals ? (a.asActuals || 0) : 0);
+  const rounded = rules && ceilTo(raw, rules.roundUpTo) !== Math.round(raw) ? `, rounded up to the next ${inr(rules.roundUpTo)}` : '';
+  if (c.designFeeType === 'fixed_lumpsum') return 'A fixed fee for the design.';
+  if (c.designFeeType === 'fixed_sqft') {
+    const area = Number(c.area) || 0;
+    return `${inr(Number(c.designFee) || 0)} per sq ft on ${area.toLocaleString('en-IN')} sq ft of carpet area${rounded}.`;
+  }
+  const pct = Number(c.designFee) || 10;
+  const actuals = (!rules || rules.feeOnActuals) && (a.asActuals || 0) > 0 ? ` and the items at actuals, ${inr(a.asActuals!)}` : '';
+  return `${pct}% of the work${a.offers ? ' before offers' : ''}, ${inr(a.work)}${actuals}${rounded}.`;
+}
+
 /* ───────────────────────────── documents (PR R) ───────────────────────────── */
 
 /**

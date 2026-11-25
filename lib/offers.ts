@@ -297,6 +297,9 @@ export interface Deal {
   execOff: number;
   designOff: number;
   gst: number;
+  /** The GST on the work and on the design fee, which `gst` adds up (the proposal shows them apart). */
+  gstExec: number;
+  gstDesign: number;
   clientPays: number;
   margin: { before: number | null; after: number | null };
 }
@@ -316,6 +319,8 @@ export function dealFor(
   return {
     sell, fee, execOff, designOff,
     gst: g.execution + g.design,
+    gstExec: g.execution,
+    gstDesign: g.design,
     clientPays: taxExec + taxDesign + g.execution + g.design,
     margin: marginWith(sell, summary?.totalCost || 0, execOff),
   };
