@@ -22,22 +22,43 @@ const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean)
  * client approved, else its latest render), trying the next when one fails to
  * load; the stage-tinted "No render yet" tile when none does.
  */
-export function ProjectPhoto({ row, className, label = true, eager = false }: {
-  row: Pick<JourneyRow, 'photo' | 'stage'> & { photos?: string[] };
+export function ProjectPhoto({ row, className, label = true, eager = false, mark }: {
+  row: Pick<JourneyRow, 'photo' | 'stage'> & { photos?: string[]; defaultPhotos?: string[] };
   className?: string;
   /** "No render yet" under the ruler; off on the small round photos. */
   label?: boolean;
   eager?: boolean;
+  /**
+   * How a default picture (lib/defaultPhotos) says it is one: "text", a
+   * "No render yet" tag; "icon", a small ruler badge for a row's thumbnail;
+   * "none" on the smallest photos. Defaults to text where the label shows.
+   */
+  mark?: 'text' | 'icon' | 'none';
 }) {
   const list = row.photos?.length ? row.photos : row.photo ? [row.photo] : [];
   const key = list.join('|');
   const [at, setAt] = useState(0);
   useEffect(() => setAt(0), [key]);
   const src = list[at];
+  const isDefault = !!src && !!row.defaultPhotos?.includes(src);
+  const how = mark || (label ? 'text' : 'none');
   return (
     <div className={cx('pj-ph', className)} style={{ ['--c' as any]: STAGE[row.stage].color }}>
       {src ? (
-        <img key={src} src={src} alt="" loading={eager ? undefined : 'lazy'} referrerPolicy="no-referrer" onError={() => setAt((i) => i + 1)} />
+        <>
+          <img key={src} src={src} alt="" loading={eager ? undefined : 'lazy'} referrerPolicy="no-referrer" onError={() => setAt((i) => i + 1)} />
+          {isDefault && how === 'text' && (
+            <span className="absolute left-2 bottom-2 z-[1] inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 text-slate-600 text-[10px] font-bold uppercase tracking-wider shadow-sm">
+              <Ruler className="w-3 h-3" aria-hidden />No render yet
+            </span>
+          )}
+          {isDefault && how === 'icon' && (
+            <span title="No render yet: a default photo" aria-label="No render yet"
+              className="absolute right-1 bottom-1 z-[1] w-[18px] h-[18px] rounded-full bg-white/90 text-slate-600 grid place-items-center shadow-sm">
+              <Ruler className="w-3 h-3" aria-hidden />
+            </span>
+          )}
+        </>
       ) : (
         <div className="pj-ph-none"><Ruler className="w-5 h-5" aria-hidden />{label && <span>No render yet</span>}</div>
       )}

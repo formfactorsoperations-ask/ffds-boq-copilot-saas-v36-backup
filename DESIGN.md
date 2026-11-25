@@ -1009,7 +1009,8 @@ No amounts on this screen. The stage colours above stay approved here.
 - **Stickers** keep their look and the motion recorded under "Stickers" above.
 - **Cover photos.** A project's photo is, in order: the photo set as its cover, else its latest render
   the client approved, else its latest render link (its thumbnail link too, with Drive links turned into
-  images), else the stage-tinted "No render yet" tile. "Set as cover" is on every render under Drawings →
+  images), else a default picture (owner, 25 Nov 2026; see "Default pictures" below), else, when no
+  picture loads, the stage-tinted "No render yet" tile. "Set as cover" is on every render under Drawings →
   Renders; "Upload cover" is in the project's Details (owner, 25 Nov 2026).
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel
   sizes.
@@ -1044,6 +1045,15 @@ and Needs-you counts from it) and its motion in `projectsJourney.css`.
   that is not shared with "anyone with the link" fails to load and the next photo is tried. Folders and
   drawings that are not renders are never used.
 - The cover is the studio's: the client's portal does not show it.
+
+**Default pictures (owner, 25 Nov 2026).** A project with no cover and no render shows a default picture
+instead of the tile (`lib/defaultPhotos.ts`): the studio's own default photo, uploaded in Studio settings →
+Data & integrations → Default project photo (kept in Storage at `studios/{tenantId}/projectPhoto/`), else an
+interior photo for its type (apartment, bungalow or villa, shop or office, wardrobe or kitchen), one of a few
+per type picked steadily by the project's id, with no people in them. A default picture always says so:
+a "No render yet" tag (white, slate type, the ruler icon) on Needs-you, Board, triage and This week cards,
+a small ruler badge on a List row's thumbnail, and a "No render yet" chip beside the stage chip in the preview.
+The smallest photos (the strip's stack, Ctrl K, the week cards' thumbnails) carry no mark.
 
 **Due days and health as built (Phase 3, 25 Nov 2026).**
 - **A next step's day** is a calendar day in India's time. It is the one kept on the project

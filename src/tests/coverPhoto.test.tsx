@@ -12,6 +12,8 @@ import React, { useState } from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act, waitFor } from '@testing-library/react';
 
+const org: any = { orgData: { tenantId: 's1' }, currentRole: 'Admin' };
+vi.mock('../../contexts/OrgContext', () => ({ useOrg: () => org }));
 vi.mock('../../services/firebaseClient', () => ({ db: {}, auth: { currentUser: { email: 'mayuri@studio.in' } }, storage: {}, functions: null, isFirebaseConfigured: () => true }));
 const upload = vi.fn(async () => ({ url: 'https://storage.test/projects/p1/cover/1.jpg', storagePath: 'projects/p1/cover/1.jpg' }));
 const removeCover = vi.fn(async () => {});

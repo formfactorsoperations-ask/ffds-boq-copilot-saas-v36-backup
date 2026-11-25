@@ -16,7 +16,7 @@ import { classifyProject } from './projectClassification';
 import { engagementOf, type EngagementType } from './engagement';
 import { boqTagOf, type BoqTag } from './playground/versions';
 import { assignedDesignersFor, type ProjectDesignersMap } from './roleAccess';
-import { coverCandidates } from './coverPhoto';
+import { coverCandidates, isDefaultSource } from './coverPhoto';
 import { addDays, dayKey } from './opsDesk';
 import {
   STAGE, stageOfProject, kindOf, folderFiles, folderNext,
@@ -155,6 +155,8 @@ export interface JourneyRow {
   photo: string | null;
   /** Every photo it could show, best first: the next is tried when one fails to load. */
   photos: string[];
+  /** Those of its photos that are default pictures (lib/defaultPhotos), marked "No render yet". */
+  defaultPhotos: string[];
   updated: number;
   /** When the next step is due, or null when nobody has said (lib/projectsJourney dueOfStep). */
   due: StepDue | null;
@@ -166,12 +168,21 @@ export interface JourneyRow {
  * links turned into images). The screen draws the first that loads, and the
  * stage-tinted "No render yet" tile when none does.
  */
-export function photosOf(project: FullProjectData): string[] {
-  return coverCandidates(project.context as any, 900).map((c) => c.url!).filter(Boolean);
+export function photosOf(project: FullProjectData, studioPhoto?: string | null): string[] {
+  return photoChoicesOf(project, studioPhoto).photos;
+}
+
+/** The project's photos and which of them are default pictures (the studio's photo, the one by type). */
+export function photoChoicesOf(project: FullProjectData, studioPhoto?: string | null): { photos: string[]; defaultPhotos: string[] } {
+  const all = coverCandidates(project.context as any, 900, { studioPhoto, project });
+  return {
+    photos: all.map((c) => c.url!).filter(Boolean),
+    defaultPhotos: all.filter((c) => isDefaultSource(c.source)).map((c) => c.url!),
+  };
 }
 
 /** The project's photo: the first of its photos, or null. */
-export const photoOf = (project: FullProjectData): string | null => photosOf(project)[0] || null;
+export const photoOf = (project: FullProjectData, studioPhoto?: string | null): string | null => photosOf(project, studioPhoto)[0] || null;
 
 export function metaOf(project: FullProjectData): string {
   const c: any = project.context || {};
@@ -187,6 +198,8 @@ export function buildRow(
   name: string,
   intel: Map<string, ProjectIntel>,
   designersMap?: ProjectDesignersMap | null,
+  /** The studio's default project photo (organizations/{tenant}.defaultProjectPhoto.url). */
+  studioPhoto?: string | null,
 ): JourneyRow {
   const c: any = project.context || {};
   const action = intel.get(project.id)?.action || null;
@@ -203,7 +216,7 @@ export function buildRow(
     next: folderNext(action),
     action,
     designers: assignedDesignersFor(project, designersMap),
-    ...(() => { const photos = photosOf(project); return { photos, photo: photos[0] || null }; })(),
+    ...(() => { const { photos, defaultPhotos } = photoChoicesOf(project, studioPhoto); return { photos, defaultPhotos, photo: photos[0] || null }; })(),
     updated: Number(project.lastModified) || 0,
     due: dueOfStep(c.nextStepDue, action),
   };

@@ -4,7 +4,8 @@ import { MapPin, Phone, Ruler, Palette, Flag, Info, X, Mail, Maximize2 } from '@
 import { ProjectContext } from '../types';
 import { ImageUp } from 'lucide-react';
 import { auth } from '../services/firebaseClient';
-import { coverOf, COVER_SOURCE_WORDS } from '../lib/coverPhoto';
+import { coverOf, COVER_SOURCE_WORDS, isDefaultSource } from '../lib/coverPhoto';
+import { useOrg } from '../contexts/OrgContext';
 import { uploadCover, removeCover, coverFileProblem } from '../services/coverStorage';
 import { Button } from './ui/kit';
 import './projectHeader/projectHeader.css';
@@ -30,7 +31,8 @@ export function CoverPhotoPanel({ projectContext, projectId, setProjectContext }
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
-  const cover = coverOf(projectContext, 900);
+  const { orgData } = useOrg();
+  const cover = coverOf(projectContext, 900, { studioPhoto: orgData?.defaultProjectPhoto?.url, project: { id: projectId, context: projectContext } });
   const set = projectContext.coverPhoto;
   useEffect(() => setFailed(false), [cover.url]);
 
@@ -77,6 +79,7 @@ export function CoverPhotoPanel({ projectContext, projectId, setProjectContext }
           {busy ? 'Uploading…' : 'Upload cover'}
         </Button>
         {set && !busy && <Button size="sm" variant="quiet" onClick={remove}>Remove cover</Button>}
+        {isDefaultSource(cover.source) && !failed && <span className="self-center text-[11px] font-semibold text-slate-500">No render yet</span>}
         <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" className="hidden"
           aria-label="Choose a cover photo" onChange={(e) => choose(e.target.files?.[0])} />
       </div>
