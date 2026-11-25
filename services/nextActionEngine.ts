@@ -17,8 +17,13 @@ export function getNextActions(context: {
     drawingTrackerSummary?: any;
     scopeAdditionsSummary?: any;
     timeline?: any;
+    /**
+     * Leave amounts out of the titles whatever the role: the Projects screen
+     * shows no amounts (DESIGN.md "Projects: journey, needs you, one list").
+     */
+    hideAmounts?: boolean;
 }, role: string): NextAction[] {
-    const { project, designPaymentStages, designGate, drawingTrackerSummary, scopeAdditionsSummary, timeline } = context;
+    const { project, designPaymentStages, designGate, drawingTrackerSummary, scopeAdditionsSummary, timeline, hideAmounts } = context;
     const actions: NextAction[] = [];
 
     // The platform owner works a studio as its Admin. No list below names
@@ -37,7 +42,7 @@ export function getNextActions(context: {
 
     // Helper for formatting INR safely for Owners
     const safeFormatINR = (amount: number) => {
-        if (!isOwner || amount == null) return '';
+        if (!isOwner || hideAmounts || amount == null) return '';
         return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
     };
 
@@ -85,7 +90,7 @@ export function getNextActions(context: {
     if (stage === 2) {
         const d1 = milestones.find((m: any) => m.id === 'd1' || m.phase === 'sign_up' || m.name?.includes('Sign'));
         if (d1 && d1.status !== 'paid') {
-            const amountStr = isOwner && d1.amount ? ` (${safeFormatINR(d1.amount)})` : '';
+            const amountStr = isOwner && !hideAmounts && d1.amount ? ` (${safeFormatINR(d1.amount)})` : '';
             actions.push({
                 id: 'stage2_d1',
                 title: isOwner ? `Collect Design Advance${amountStr}` : 'D1 Payment Pending',
@@ -99,7 +104,7 @@ export function getNextActions(context: {
 
         const d2 = milestones.find((m: any) => m.id === 'd2' || m.phase === 'design_development' || m.name?.includes('Development'));
         if (d2 && (d2.status === 'invoiced' || d2.status === 'advance_requested') && d2.status !== 'paid') {
-            const amountStr = isOwner && d2.amount ? ` (${safeFormatINR(d2.amount)})` : '';
+            const amountStr = isOwner && !hideAmounts && d2.amount ? ` (${safeFormatINR(d2.amount)})` : '';
             actions.push({
                 id: 'stage2_d2',
                 title: isOwner ? `Collect D2 Payment${amountStr}` : 'D2 Payment Pending',
@@ -154,7 +159,7 @@ export function getNextActions(context: {
     if (stage === 4) {
         const e1 = milestones.find((m: any) => m.id === 'e1' || m.phase === 'material_advance' || m.name?.includes('Material') || m.name?.includes('Execution'));
         if (e1 && e1.status !== 'paid') {
-            const amountStr = isOwner && e1.amount ? ` (${safeFormatINR(e1.amount)})` : '';
+            const amountStr = isOwner && !hideAmounts && e1.amount ? ` (${safeFormatINR(e1.amount)})` : '';
             actions.push({
                 id: 'stage4_e1',
                 title: isOwner ? `Collect Execution Advance${amountStr}` : 'E1 Payment Pending',
@@ -182,7 +187,7 @@ export function getNextActions(context: {
         // 5a. Material Orders (Blocker if E1 unpaid)
         const e1 = milestones.find((m: any) => m.id === 'e1' || m.phase === 'material_advance' || m.name?.includes('Material') || m.name?.includes('Execution'));
         if (e1 && e1.status !== 'paid') {
-            const amountStr = isOwner && e1.amount ? ` (${safeFormatINR(e1.amount)})` : '';
+            const amountStr = isOwner && !hideAmounts && e1.amount ? ` (${safeFormatINR(e1.amount)})` : '';
             actions.push({
                 id: 'stage5_e1',
                 title: isOwner ? `Collect Execution Advance${amountStr}` : 'E1 Payment Pending',
@@ -207,7 +212,7 @@ export function getNextActions(context: {
         // 5b. Structure / First-Fix (E2)
         const e2 = milestones.find((m: any) => m.id === 'e2' || m.phase === 'structure' || m.name?.includes('Structure'));
         if (e2 && (e2.status === 'invoiced' || e2.status === 'advance_requested') && e2.status !== 'paid') {
-            const amountStr = isOwner && e2.amount ? ` (${safeFormatINR(e2.amount)})` : '';
+            const amountStr = isOwner && !hideAmounts && e2.amount ? ` (${safeFormatINR(e2.amount)})` : '';
             actions.push({
                 id: 'stage5_e2',
                 title: isOwner ? `Collect E2 Advance${amountStr}` : 'E2 Payment Pending',
@@ -222,7 +227,7 @@ export function getNextActions(context: {
         // 5c. Finishing (E3)
         const e3 = milestones.find((m: any) => m.id === 'e3' || m.phase === 'finishing' || m.name?.includes('Finishing'));
         if (e3 && (e3.status === 'invoiced' || e3.status === 'advance_requested') && e3.status !== 'paid') {
-            const amountStr = isOwner && e3.amount ? ` (${safeFormatINR(e3.amount)})` : '';
+            const amountStr = isOwner && !hideAmounts && e3.amount ? ` (${safeFormatINR(e3.amount)})` : '';
             actions.push({
                 id: 'stage5_e3',
                 title: isOwner ? `Collect E3 Advance${amountStr}` : 'E3 Payment Pending',
@@ -251,7 +256,7 @@ export function getNextActions(context: {
     if (stage === 6 || isSubstantiallyComplete) {
         const e4 = milestones.find((m: any) => m.id === 'e4' || m.phase === 'handover' || m.name?.includes('Handover'));
         if (e4 && (e4.status === 'invoiced' || e4.status === 'advance_requested') && e4.status !== 'paid') {
-            const amountStr = isOwner && e4.amount ? ` (${safeFormatINR(e4.amount)})` : '';
+            const amountStr = isOwner && !hideAmounts && e4.amount ? ` (${safeFormatINR(e4.amount)})` : '';
             actions.push({
                 id: 'stage6_e4',
                 title: isOwner ? `Collect Handover Payment${amountStr}` : 'E4 Payment Pending',
