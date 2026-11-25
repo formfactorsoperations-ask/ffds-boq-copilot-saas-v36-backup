@@ -4,12 +4,13 @@ import type { FullProjectData } from "../types";
 import { useOrg } from "../contexts/OrgContext";
 import { usePageHeader } from "../contexts/PageHeaderContext";
 import { Button, EmptyState, Panel, Segmented } from "./ui/kit";
-import { hasRole } from "../lib/roles";
+import { hasRole, primaryRole } from "../lib/roles";
 import { holdsFinanceRole } from "../lib/roleAccess";
 import { groupClients } from "../lib/clientGroups";
 import { clientMoneyOf, withoutAmounts, type ClientMoney } from "../lib/clientMoney";
 import { buildRows, filterRows, matchesSearch, sortRows, type ClientFilter, type SeenMarks } from "../lib/clientList";
-import { loadStudioFollowUps } from "../services/opsDeskService";
+import { loadStudioFollowUps, logFollowUp, logFollowUpOnce } from "../services/opsDeskService";
+import type { FollowUpLine } from "../lib/clientCompose";
 import { loadClientRecords } from "../services/clientThreadService";
 import type { ThreadRecords } from "../lib/clientThread";
 import type { FollowUp } from "../lib/opsDesk";
@@ -79,6 +80,8 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
   const roles = currentRoles?.length ? currentRoles : currentRole;
   const amountsHidden = !holdsFinanceRole(roles);
   const canPortal = hasRole(roles, CLIENT_LOGIN_ROLES);
+  /* The follow-up log takes every studio role but Viewer (firestore.rules mayWriteOps). */
+  const canLog = primaryRole(roles) !== 'Viewer';
   const tenantId: string = orgData?.tenantId || '';
   const uid: string | undefined = currentUserAuth?.uid;
 
@@ -160,6 +163,39 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
     try { localStorage.setItem(seenKey(uid), JSON.stringify(next)); } catch { /* kept for this visit only */ }
   };
 
+  /*
+    One line to a project's follow-up log (lib/clientCompose), in this
+    person's name. It joins the opened client's thread and the list's preview
+    at once, and is on the Ops Desk too: the same collection. A moved note
+    carries its own id and is written only once.
+  */
+  const writeLine = async (projectId: string, line: FollowUpLine & { id?: string; at?: number }): Promise<FollowUp | null> => {
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) throw new Error('That project is not loaded.');
+    const me = { email: String(currentUserAuth?.email || ''), name: currentUserAuth?.displayName || currentUserAuth?.email || 'Studio' };
+    const base = {
+      tenantId: (project as any).tenantId || tenantId, projectId, projectName: project.context?.name || 'Untitled project',
+      me, channel: line.channel, outcome: line.outcome, note: line.note, subject: line.subject, next: null,
+    };
+    const f = line.id
+      ? await logFollowUpOnce({ ...base, id: line.id, at: line.at }).then((r) => (r.written ? r.line : null))
+      : await logFollowUp({ ...base, at: line.at });
+    if (f) {
+      const key = clients.find((c) => c.projects.some((p) => p.id === projectId))?.clientKey;
+      if (key) {
+        setRecords((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], followUps: [f, ...prev[key].followUps] } } : prev));
+        /* What you log yourself is not news to you: the client counts as seen up to it. */
+        setMarks((prev) => {
+          const next: SeenMarks = { ...prev, seen: { ...prev.seen, [key]: Math.max(prev.seen[key] || 0, f.at, Date.now()) } };
+          try { localStorage.setItem(seenKey(uid), JSON.stringify(next)); } catch { /* kept for this visit only */ }
+          return next;
+        });
+      }
+      setFollowUps((prev) => [f, ...prev]);
+    }
+    return f;
+  };
+
   /* Today's export, unchanged: every account, whichever side of the switch, with the value only where values are shown. */
   const handleExportCSV = () => {
     if (clients.length === 0) return;
@@ -230,6 +266,7 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
               <div key={current.client.clientKey} className="hud-swap h-full">
                 <ClientThreadPane row={current} now={now} studioName={orgData?.orgName || 'our studio'} onOpenProject={onOpenProject}
                   money={moneyByProject} records={records[current.client.clientKey] || null} loading={loadingKey === current.client.clientKey}
+                  canLog={canLog} onLog={async (pid, line) => { await writeLine(pid, line); }}
                   onBack={() => setThreadOpen(false)} onDetails={() => setCardOpen(true)} />
               </div>
             ) : (
@@ -249,7 +286,8 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew 
         <SideDrawer label="Client details" onClose={() => setCardOpen(false)} width="max-w-[360px]">{card}</SideDrawer>
       )}
       {dossierOpen && current && (
-        <ClientDossier client={current.client} author={author} onClose={() => setDossierOpen(false)} onOpenProject={(p) => onOpenProject(p)} />
+        <ClientDossier client={current.client} author={author} onClose={() => setDossierOpen(false)} onOpenProject={(p) => onOpenProject(p)}
+          canLog={canLog} projectId={current.primary.id} onMove={(line) => writeLine(current.primary.id, line)} />
       )}
     </div>
   );

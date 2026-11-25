@@ -8,7 +8,7 @@
 */
 import { revisionsWaiting } from './minutesService';
 import {
-  collection, collectionGroup, doc, getDocs, limit, orderBy, query, setDoc, updateDoc, where,
+  collection, collectionGroup, doc, getDoc, getDocs, limit, orderBy, query, setDoc, updateDoc, where,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebaseClient';
@@ -136,18 +136,32 @@ export interface NewFollowUp {
   note: string;
   subject: Subject | null;
   next: NextStep | null;
+  /** A line moved from elsewhere keeps its own id (so it is written once) and its own time. */
+  id?: string;
+  at?: number;
 }
 
 /** Add a line to a project's follow-up log, in the writer's own name. */
 export async function logFollowUp(f: NewFollowUp): Promise<FollowUp> {
-  const id = newId();
+  const id = f.id || newId();
   const line: Omit<FollowUp, 'id'> = {
-    tenantId: f.tenantId, projectId: f.projectId, projectName: f.projectName, at: Date.now(),
+    tenantId: f.tenantId, projectId: f.projectId, projectName: f.projectName, at: f.at ?? Date.now(),
     by: f.me.email.toLowerCase(), byName: f.me.name, channel: f.channel, note: f.note.slice(0, 2000),
     subject: f.subject, outcome: f.outcome, next: f.next, nextDone: false, manual: true,
   };
   await setDoc(doc(db!, `projects/${f.projectId}/followUps`, id), line);
   return { id, ...line };
+}
+
+/**
+ * A line moved from elsewhere, written once: when a line with its id is
+ * already there (moved before), that one is returned and nothing is written.
+ */
+export async function logFollowUpOnce(f: NewFollowUp & { id: string }): Promise<{ line: FollowUp; written: boolean }> {
+  const ref = doc(db!, `projects/${f.projectId}/followUps`, f.id);
+  const there = await getDoc(ref);
+  if (there.exists()) return { line: { id: f.id, ...(there.data() as any) }, written: false };
+  return { line: await logFollowUp(f), written: true };
 }
 
 export async function markNextDone(projectId: string, followUpId: string, me: string): Promise<void> {
