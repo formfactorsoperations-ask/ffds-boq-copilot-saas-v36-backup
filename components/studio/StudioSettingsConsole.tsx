@@ -32,6 +32,7 @@ import MinutesMigration from './MinutesMigration';
 import PeopleSettings from './PeopleSettings';
 import EngagementSettings from './EngagementSettings';
 import DesignDeskSetting, { deskChoiceOf } from './DesignDeskSetting';
+import ProjectsScreenSetting, { projectsScreenOf } from './ProjectsScreenSetting';
 import ConsoleHeader from '../ui/ConsoleHeader';
 import {
   SETTINGS_SECTIONS, SETTINGS_FIELDS, SectionId, SettingsField,
@@ -621,6 +622,19 @@ export default function StudioSettingsConsole(props: {
                   saved={deskChoiceOf(orgData)}
                   onChange={(v) => setField('designDesk', v)}
                   highlight={jumpKey === 'designDesk'}
+                />
+              </div>
+
+              {/* Which Projects screen the studio sees (the journey screen's rollout). Saved with the rest of the draft. */}
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">
+                  Projects screen
+                </h3>
+                <ProjectsScreenSetting
+                  value={projectsScreenOf(draft)}
+                  saved={projectsScreenOf(orgData)}
+                  onChange={(v) => setField('projectsScreen', v)}
+                  highlight={jumpKey === 'projectsScreen'}
                 />
               </div>
 

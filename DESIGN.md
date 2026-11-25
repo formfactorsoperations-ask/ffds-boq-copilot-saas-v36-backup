@@ -921,7 +921,8 @@ bottom when there is more to scroll.
 
 ### Projects as glass folders (approved 16 Nov 2026; replaced 25 Nov 2026)
 
-Being replaced by "Projects: journey, needs you, one list" below. Keep these rules only until that screen ships.
+Being replaced by "Projects: journey, needs you, one list" below. Keep these rules while the studio switch
+still offers the folders (until the owner accepts the new screen).
 
 
 The owner chose this for the Projects screen (plan item 10): every project is a glass folder on one
@@ -1005,6 +1006,24 @@ No amounts on this screen. The stage colours above stay approved here.
   images), else the stage-tinted "No render yet" tile. (Owner to confirm where "Set as cover" lives.)
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel
   sizes.
+
+**As built (Phase 1, 25 Nov 2026).** `components/projects/journey/`, with its logic in `lib/projectsJourney.ts`
+(built on `lib/projectFolders.ts` and `services/nextActionEngine`; the folder desk reads the same filters
+and Needs-you counts from it) and its motion in `projectsJourney.css`.
+- **The switch.** Until the owner accepts the screen, the studio picks it in Studio settings → Data &
+  integrations → Projects screen ("Glass folders" / "New screen", the `projectsScreen` field on the studio's
+  record); the folders stay the default, as Design Desk 2.0 did (`components/projects/ProjectsScreenSwitch.tsx`).
+- **Filters.** The Needs-you chips are blockers and due; Untagged, unsigned contracts, at risk, BOQ and
+  engagement sit in one Filters menu beside the All / Actual / Dummy switch (owner, 25 Nov 2026).
+- **A click on a row or card** opens the project's preview (as in the mockup): photo, journey, next step,
+  the screens inside, and Open project / Change stage / Clone as template. The next-step button and the
+  files open their screen directly.
+- **Triage.** Right opens the step's screen; left snoozes it to tomorrow, kept on the device until next
+  steps carry due dates.
+- **Board.** A drop opens the status window at the lane's stage, so its checks and a termination still apply.
+- **Not drawn yet:** the health rings (waiting for drawing counts), "This week" and the Overdue / Today
+  labels (waiting for due dates on next steps). The photo is the latest render that is a picture until
+  cover photos (Phase 2).
 
 ### Summary-first sections (approved 16 Nov 2026)
 

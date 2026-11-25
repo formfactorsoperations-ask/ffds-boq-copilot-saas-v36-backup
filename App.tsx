@@ -56,7 +56,8 @@ const DocumentsHub = lazyWithRetry(() => import("./components/DocumentsHub"));
 const TemplatesAndBankTab = lazyWithRetry(() => import("./components/TemplatesAndBankTab"));
 const Dashboard = lazyWithRetry(() => import("./components/Dashboard"));
 const StudioDashboard = lazyWithRetry(() => import("./components/StudioDashboard"));
-const ProjectListTab = lazyWithRetry(() => import("./components/ProjectListTab"));
+/* The Projects tab: the glass folders or the new journey screen, as the studio has chosen (components/projects/ProjectsScreenSwitch). */
+const ProjectsScreen = lazyWithRetry(() => import("./components/projects/ProjectsScreenSwitch"));
 const BankTab = lazyWithRetry(() => import("./components/BankTab"));
 const TemplateEditorTab = lazyWithRetry(() => import("./components/TemplateEditorTab"));
 const AIStrategyTab = lazyWithRetry(() => import("./components/AIStrategyTab"));
@@ -3436,7 +3437,7 @@ export default function App() {
                     />
                   )}
                   {activeTab === "projects" && (
-                    <ProjectListTab
+                    <ProjectsScreen
                       projects={visibleProjects}
                       loading={libraryLoading}
                       activeProjectId={activeInternalId}
@@ -4103,7 +4104,7 @@ export default function App() {
                     />
                   )}
                   {activeTab === "projects" && (
-                    <ProjectListTab
+                    <ProjectsScreen
                       projects={visibleProjects}
                       loading={libraryLoading}
                       activeProjectId={activeInternalId}

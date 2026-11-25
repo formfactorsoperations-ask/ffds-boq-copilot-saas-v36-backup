@@ -14,11 +14,11 @@ new work must look like part of the existing app, not a new design.
   `phd-scrim`, `phd-pop`, `CountUp`).
   People (`components/people/`), the Ops Desk (`components/opsDesk/`), Pricing & Tiers
   (`components/pricing/`, `components/TierManager.tsx`), the project sidebar (`components/projectNav/`),
-  the Projects screen's glass folders (`components/projects/`, `components/ui/glass-folder-cards.tsx`),
+  the Projects screen (`components/projects/`, `components/projects/journey/`),
   the Money board (`components/money/board/`), the Item bank and the rest of the studio library (`components/BankTab.tsx`, `components/BankItemCard.tsx`,
   `components/bank/`, `components/TemplateEditorTab.tsx`, `components/templates/`, `components/VendorsManager.tsx`) and the BOQ Playground (`components/playground/`, its design
   library and the drawers it opens) and the new Design Desk (`components/designDesk2/`) also use the richer motion the owner approved: see "People motion", "Design Desk 2.0 pages in motion",
-  "Ops Desk motion", "Ops Desk 2.1", "Pricing & Tiers motion", "Project sidebar", "Projects as glass folders",
+  "Ops Desk motion", "Ops Desk 2.1", "Pricing & Tiers motion", "Project sidebar", "Projects: journey, needs you, one list",
   "Money motion", "Item bank motion", "Playground library motion" and "BOQ Playground" in DESIGN.md.
   Same fonts and colours.
 - Do not use half-pixel font sizes, new accent colours or new fonts.

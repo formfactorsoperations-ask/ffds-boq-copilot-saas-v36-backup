@@ -39,6 +39,7 @@ import { Dot } from "./ui/HudBits";
 import ProjectFolder from "./projects/ProjectFolder";
 import { FOLDER_STAGES, STAGE, stageOf, stageOfProject, kindOf, folderFiles, folderNext, type FolderStage } from "../lib/projectFolders";
 import { boqTagOf, type BoqTag } from "../lib/playground/versions";
+import { projectIntel, matchesKind, matchesStage, matchesBoq, matchesEngagement, matchesAlert, matchesSearch, needsCounts, routeTab } from "../lib/projectsJourney";
 import { usePageHeader } from "../contexts/PageHeaderContext";
 import { LayoutGrid, Rows3, Search as SearchIcon, X as XIcon, Check as CheckIcon } from "lucide-react";
 
@@ -235,7 +236,6 @@ const AnimatedRing = ({
 const valueOf = (p: FullProjectData): number => getSingleProjectValue(p);
 
 /** Nothing is owed on a project that is finished, lost or filed away. */
-const DORMANT = ['completed', 'lost', 'archived'];
 
 const getProjectMetrics = (project: any) => {
     return {
@@ -346,39 +346,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
     "chase the contract" above a bar reporting nothing outstanding is worse
     than either of them alone.
   */
-  const intel = useMemo(() => {
-    const role = currentRole || 'Admin';
-    const map = new Map<
-      string,
-      { action: NextAction | null; docs: DocumentCompleteness }
-    >();
-    for (const proj of projects) {
-      const status = (proj.context?.status || 'draft') as string;
-      const actions = DORMANT.includes(status)
-        ? []
-        : getNextActions(
-            {
-              project: proj.context,
-              designPaymentStages: proj.context?.paymentMilestones,
-              designGate: (proj.context as any)?.designGate,
-              drawingTrackerSummary: null,
-              scopeAdditionsSummary: {
-                pending: ((proj.context as any)?.scopeAdditions || []).filter(
-                  (sa: any) =>
-                    sa.status === 'pending_approval' || sa.status === 'pending',
-                ).length,
-              },
-              timeline: null,
-            },
-            role,
-          );
-      map.set(proj.id, {
-        action: actions[0] || null,
-        docs: buildDocumentCompleteness(proj.context),
-      });
-    }
-    return map;
-  }, [projects, currentRole]);
+  const intel = useMemo(() => projectIntel(projects, currentRole), [projects, currentRole]);
 
   const pipelineStats = useMemo(() => ({
     pendingDecisions: projects.filter(p => p.context?.status === 'proposal_sent' || p.context?.status === 'negotiation').length,
@@ -397,22 +365,17 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
     every test except its own. A single fused filter cannot answer that, which
     is why the pills carried no counts and you could click into an empty phase.
   */
-  const matchesKind = (proj: FullProjectData, kind: typeof kindFilter) =>
-    kind === 'all' || classifyProject(proj) === (kind === 'dummy' ? 'test' : kind);
+  /* The predicates are shared with the new Projects screen (lib/projectsJourney). */
+  const matchesPhase = (proj: FullProjectData, phase: string) => matchesStage(proj, phase);
 
-  /* The phase tabs are the folder stages (lib/projectFolders stageOf), so a tab and its folders always agree. */
-  const matchesPhase = (proj: FullProjectData, phase: string) =>
-    phase === 'all' || stageOfProject(proj) === phase;
-
-  const matchesSearch = (proj: FullProjectData) => {
-    if (!searchQuery) return true;
+  const matchesQuery = (proj: FullProjectData) => {
     const st = (proj.context?.status || 'draft') as string;
     /* The phase word is what people actually type -- "execution", "lost" --
        and searching for one used to return nothing at all. */
     /* The pill's own word too, not just the raw status: the Execution pill
        counts seven, so typing "execution" had better not return four. */
     const bucket = STAGE[stageOfProject(proj)];
-    return [
+    return matchesSearch(searchQuery, [
       /* The label on the card, not just the stored name -- otherwise typing
          the very detail the row shows you returns nothing. */
       displayName(proj),
@@ -422,27 +385,12 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
       STATUS_CONFIG[st]?.label,
       bucket?.label,
       st,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
+    ]);
   };
 
-  const matchesAlert = (proj: FullProjectData) => {
-    if (!alertFilter) return true;
-    const it = intel.get(proj.id);
-    if (alertFilter === 'unsigned') return !!it?.docs.unsignedContract;
-    if (alertFilter === 'risk')
-      return ((proj as any).decisionBrainOutput?.riskScore || 0) > 0;
-    return it?.action?.priority === alertFilter;
-  };
-
-  const matchesBoq = (proj: FullProjectData, b: "all" | BoqTag = boqFilter) =>
-    b === "all" || boqTagOf(proj.tiers) === b;
-
-  const matchesEngagement = (proj: FullProjectData, e: "all" | EngagementType = engagementFilter) =>
-    e === "all" || engagementOf(proj.context) === e;
+  const matchesAlertNow = (proj: FullProjectData) => matchesAlert(proj, alertFilter, intel);
+  const matchesBoqNow = (proj: FullProjectData, b: "all" | BoqTag = boqFilter) => matchesBoq(proj, b);
+  const matchesEngagementNow = (proj: FullProjectData, e: "all" | EngagementType = engagementFilter) => matchesEngagement(proj, e);
 
   /* Only worth a filter once the studio has more than one kind of project. */
   const engagementsInUse = useMemo(
@@ -456,10 +404,10 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
         (proj) =>
           matchesKind(proj, kindFilter) &&
           matchesPhase(proj, statusFilter) &&
-          matchesEngagement(proj) &&
-          matchesBoq(proj) &&
-          matchesSearch(proj) &&
-          matchesAlert(proj),
+          matchesEngagementNow(proj) &&
+          matchesBoqNow(proj) &&
+          matchesQuery(proj) &&
+          matchesAlertNow(proj),
       ),
     [projects, kindFilter, statusFilter, engagementFilter, boqFilter, searchQuery, alertFilter, intel],
   );
@@ -530,21 +478,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
     page. Scoping it to the kind switch only means demo projects stay out of it
     without the real ones ever going quiet.
   */
-  const alarm = useMemo(() => {
-    let blocker = 0;
-    let due = 0;
-    let unsigned = 0;
-    let risk = 0;
-    for (const proj of projects) {
-      if (!matchesKind(proj, kindFilter)) continue;
-      const it = intel.get(proj.id);
-      if (it?.action?.priority === 'blocker') blocker++;
-      else if (it?.action?.priority === 'due') due++;
-      if (it?.docs.unsignedContract) unsigned++;
-      if (((proj as any).decisionBrainOutput?.riskScore || 0) > 0) risk++;
-    }
-    return { blocker, due, unsigned, risk, total: blocker + due + unsigned + risk };
-  }, [projects, kindFilter, intel]);
+  const alarm = useMemo(() => needsCounts(projects, kindFilter, intel), [projects, kindFilter, intel]);
 
   /* The four figures above the grid, counted over what is on screen. */
   const deck = useMemo(() => {
@@ -944,7 +878,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
               {([{ id: 'all', label: 'All', color: '#3D52A0' }, ...FOLDER_STAGES] as { id: string; label: string; color: string }[]).map((st) => {
                 const live = statusFilter === st.id;
                 const n = projects.filter(
-                  (proj) => matchesKind(proj, kindFilter) && matchesPhase(proj, st.id) && matchesEngagement(proj) && matchesBoq(proj) && matchesSearch(proj) && matchesAlert(proj),
+                  (proj) => matchesKind(proj, kindFilter) && matchesPhase(proj, st.id) && matchesEngagementNow(proj) && matchesBoqNow(proj) && matchesQuery(proj) && matchesAlertNow(proj),
                 ).length;
                 return (
                   <button
@@ -1040,7 +974,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                           <button key={b.key} type="button" role="menuitem" onClick={() => { setBoqFilter(b.key); setFiltersOpen(false); }}>
                             {b.label}
                             <span className="flex items-center gap-2">
-                              {projects.filter((proj) => matchesBoq(proj, b.key)).length}
+                              {projects.filter((proj) => matchesBoqNow(proj, b.key)).length}
                               {boqFilter === b.key && <CheckIcon className="w-3.5 h-3.5 text-[#3D52A0]" />}
                             </span>
                           </button>
@@ -1052,7 +986,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                               <button key={e.id} type="button" role="menuitem" onClick={() => { setEngagementFilter(e.id); setFiltersOpen(false); }}>
                                 {e.short}
                                 <span className="flex items-center gap-2">
-                                  {projects.filter((proj) => matchesEngagement(proj, e.id)).length}
+                                  {projects.filter((proj) => matchesEngagementNow(proj, e.id)).length}
                                   {engagementFilter === e.id && <CheckIcon className="w-3.5 h-3.5 text-[#3D52A0]" />}
                                 </span>
                               </button>
@@ -1116,7 +1050,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
                         index={index}
                         active={activeProjectId === project.id}
                         selected={selectedForDelete.has(project.id)}
-                        onOpen={(route) => onOpenProject(project, route)}
+                        onOpen={(route) => onOpenProject(project, routeTab(route))}
                         onChangeStage={() => setStatusModalProject(project)}
                         onDuplicate={() => onDuplicateProject(project)}
                         onToggleSelect={() => toggleSelected(project.id)}

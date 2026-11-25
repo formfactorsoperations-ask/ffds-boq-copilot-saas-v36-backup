@@ -116,6 +116,7 @@ export const SETTINGS_FIELDS: SettingsField[] = [
 
   // Data & integrations
   { key: 'designDesk', label: 'Design Desk: old or new', section: 'system', criticality: 'optional', consequence: 'Which Design Desk everyone in the studio works on', aliases: ['design desk', 'new desk', 'old desk', 'desk 2.0', 'drawings'] },
+  { key: 'projectsScreen', label: 'Projects screen: folders or new', section: 'system', criticality: 'optional', consequence: 'Which Projects screen everyone in the studio sees', aliases: ['projects screen', 'glass folders', 'journey', 'projects list', 'new projects'] },
 
   // Appearance
   { key: 'themeColor', label: 'Brand colour', section: 'appearance', criticality: 'recommended', consequence: 'Accent colour across documents' },

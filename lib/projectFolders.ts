@@ -87,7 +87,7 @@ export const KIND_LABEL: Record<KindTag, string> = { actual: 'Actual', dummy: 'D
 export type RoutedFile = FolderFile & { route: string };
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const isPicture = (url?: string) => !!url && /\.(png|jpe?g|webp|avif|gif)(\?|$)/i.test(url);
+export const isPicture = (url?: string) => !!url && /\.(png|jpe?g|webp|avif|gif)(\?|$)/i.test(url);
 
 /**
  * What is inside the folder: up to four screens of the project that matter at
