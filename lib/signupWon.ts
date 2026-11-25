@@ -33,9 +33,20 @@ export const signupPaid = (ctx: Pick<ProjectContext, 'paymentMilestones'> | null
 
 /** Whether the sign-up payment should move this project to Won now. */
 export function shouldWinOnSignup(ctx: ProjectContext | null | undefined): boolean {
-  if (!ctx || ctx.signupWonAt || (ctx as any).termination) return false;
-  if (!PIPELINE.has(String(ctx.status || 'draft'))) return false;
-  return signupPaid(ctx);
+  return signupAction(ctx) === 'win';
+}
+
+/**
+ * What the sign-up payment asks of the project now: win it, only note that
+ * it has been seen (the project is already past the pipeline, whether the
+ * Ops Matrix or the studio took it there), or nothing.
+ *
+ * Noting it is what keeps this to once: a project moved back into the
+ * pipeline by hand afterwards is not won again.
+ */
+export function signupAction(ctx: ProjectContext | null | undefined): 'win' | 'note' | null {
+  if (!ctx || ctx.signupWonAt || (ctx as any).termination || !signupPaid(ctx)) return null;
+  return PIPELINE.has(String(ctx.status || 'draft')) ? 'win' : 'note';
 }
 
 /** The project moved to Won on its sign-up payment. */

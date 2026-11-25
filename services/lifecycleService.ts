@@ -145,7 +145,7 @@ export const advance = async (
 const getLegacyStatusFromStage = (stage: number): string => {
     switch (stage) {
         case 1: return 'lead';
-        // As the journey's auto-sync: won from Stage 4, once Contracting is through.
+        // As the journey's auto-sync: won from Stage 4, on the sign-up payment.
         case 2: return 'draft';
         case 3: return 'proposal_sent';
         case 4: return 'won';

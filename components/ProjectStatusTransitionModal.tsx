@@ -184,8 +184,8 @@ export const ALL_PROJECT_STATUSES: StatusDetail[] = [
         type: 'financial'
       },
       {
-        title: 'Ops Matrix is not ticked for you',
-        description: 'Only Acquisition counts as done. Design and contracting steps stay open until the work is done or you tick them.',
+        title: 'Ops Matrix: signed up, design ahead',
+        description: 'Acquisition and Sign-up count as done. Design comes after sign-up, so its steps stay open until the work is done or you tick them.',
         type: 'info'
       },
       {

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { signupMilestone, shouldWinOnSignup, winOnSignup } from '../../lib/signupWon';
-import { inferenceStage } from '../../services/journeyEngine';
+import { signupMilestone, shouldWinOnSignup, signupAction, winOnSignup } from '../../lib/signupWon';
+import { lastPhaseBehind } from '../../services/journeyEngine';
+import { PHASE } from '../../constants/journeyConstants';
 import type { ProjectContext } from '../../types';
 
 const ms = (id: string, type: 'design' | 'execution', status: string) =>
@@ -48,12 +49,22 @@ describe('the sign-up payment wins the project', () => {
     expect(shouldWinOnSignup(movedBack)).toBe(false);
   });
 
-  it('is the Won the status window sets, so the Ops Matrix ticks no design step', () => {
+  it('notes a payment on a project already past the pipeline, so moving it back later sticks', () => {
+    // The Ops Matrix can win the project on the payment before the app does.
+    const wonByMatrix = ctx({ status: 'won', paymentMilestones: paidD1 });
+    expect(signupAction(wonByMatrix)).toBe('note');
+    expect(signupAction({ ...wonByMatrix, signupWonAt: 5 })).toBeNull();
+    expect(signupAction({ ...wonByMatrix, status: 'draft', signupWonAt: 5 })).toBeNull();
+    expect(signupAction(ctx({ status: 'won' }))).toBeNull();
+  });
+
+  it('is the Won the status window sets: signed up, with the design ahead', () => {
     const won = winOnSignup(ctx({ paymentMilestones: paidD1, lifecycle: { stage: 3 } as any }), 1000, 'Anita');
     expect(won.status).toBe('won');
     expect(won.lifecycle?.stage).toBe(4);
     expect(won.statusPin).toEqual({ status: 'won', stage: 4, at: 1000, journeyStage: null });
     expect(won.history?.[0]).toMatchObject({ actor: 'Anita', summary: 'Status updated from "negotiation" to "won"', detail: 'Sign-up payment received (D1).' });
-    expect(inferenceStage(won)).toBe(2);
+    // Stage 4 puts Sign-up behind the project, not Design.
+    expect(lastPhaseBehind(won.lifecycle!.stage as number)).toBe(PHASE.signup);
   });
 });

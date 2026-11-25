@@ -18,7 +18,8 @@ import type { StepWithStatus } from '../services/journeyEngine';
 import type { DrawingTrackerItem, PaymentMilestone, ProjectDecisionRecord, MOM, FullBoqItem } from '../types';
 import type { ScheduleResult as PaymentResult } from './paymentSchedule';
 import { turnaroundOf, msOf } from './drawingIntel';
-import { PHASES } from '../constants/journeyConstants';
+import { PHASES, PHASE } from '../constants/journeyConstants';
+import { signupMilestone } from './signupWon';
 
 export const DAY = 86400000;
 export const isoOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -219,9 +220,11 @@ export interface PaymentModel {
 /**
  * Which payments are due now.
  *
- * The studio's terms put each payment BEFORE the work it releases. So once the
- * design phase has started, every design payment is due; once contracting has
- * started, the first execution payment (the mobilisation advance) is due. An
+ * The studio's terms put each payment BEFORE the work it releases. So once
+ * sign-up has started the sign-up payment is due; once the design phase has
+ * started, every design payment is due; once pre-execution has started (the
+ * execution agreement), the first execution payment (the mobilisation
+ * advance) is due. An
  * invoice that has been raised and not paid is always due. Everything else is
  * later. Planned milestone dates are deliberately not used: they are plans,
  * not facts, and clients dispute dates that were never agreed.
@@ -235,8 +238,11 @@ export function paymentModel(
   const empty = { gross: 0, collected: 0, dueNow: 0, later: 0, rungs: [], due: [], laterCount: 0 };
   if (!result || !result.amounts?.length) return empty;
   const byId = new Map((milestones || []).map(m => [m.id, m]));
-  const designStarted = (phaseProgress[1]?.done || 0) > 0;
-  const contractingStarted = (phaseProgress[2]?.done || 0) > 0;
+  const signupStarted = (phaseProgress[PHASE.signup]?.done || 0) > 0;
+  const designStarted = (phaseProgress[PHASE.design]?.done || 0) > 0;
+  /* The execution agreement opens pre-execution. */
+  const contractingStarted = (phaseProgress[PHASE.preExecution]?.done || 0) > 0;
+  const signupId = signupMilestone({ paymentMilestones: milestones })?.id;
   let firstExecSeen = false;
 
   const rungs: PaymentRung[] = result.amounts.map(a => {
@@ -247,6 +253,7 @@ export function paymentModel(
     if (paid) state = 'paid';
     else if (ended) state = 'up'; // terminated: never due, whatever was raised or reached
     else if (invoiced) state = 'due';
+    else if (a.id === signupId && (signupStarted || designStarted)) state = 'due';
     else if (a.type === 'design' && designStarted) state = 'due';
     else if (a.type === 'execution' && contractingStarted && !firstExecSeen) state = 'due';
     if (a.type === 'execution' && !paid) firstExecSeen = true;

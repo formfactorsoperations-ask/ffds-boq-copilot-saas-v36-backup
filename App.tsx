@@ -137,7 +137,7 @@ import {
 import { db, dbWriteCount, hydrateProjectDetail, projectFromDoc } from "./services/dbService";
 import { mergeClientOwned } from "./lib/clientOwned";
 import { engagementOf, isRouteHidden } from "./lib/engagement";
-import { shouldWinOnSignup, winOnSignup } from "./lib/signupWon";
+import { signupAction, winOnSignup } from "./lib/signupWon";
 import { landingAfterSetup } from "./components/navConfig";
 import { db as firestoreDb } from "./services/firebaseClient";
 import { collection, doc, getDoc, getDocs, writeBatch, serverTimestamp, onSnapshot, query, orderBy } from "firebase/firestore";
@@ -1567,9 +1567,14 @@ export default function App() {
   */
   useEffect(() => {
     if (!activeInternalId || !projectContext || isLimitedRole(currentRole)) return;
-    if (!shouldWinOnSignup(projectContext)) return;
+    const action = signupAction(projectContext);
+    if (!action) return;
+    if (action === 'note') {
+      setProjectContext((prev) => (prev && signupAction(prev) === 'note' ? { ...prev, signupWonAt: Date.now() } : prev));
+      return;
+    }
     const actor = String(currentUserAuth?.displayName || currentUserAuth?.email || orgData?.role || 'Studio');
-    setProjectContext((prev) => (prev && shouldWinOnSignup(prev) ? winOnSignup(prev, Date.now(), actor) : prev));
+    setProjectContext((prev) => (prev && signupAction(prev) === 'win' ? winOnSignup(prev, Date.now(), actor) : prev));
     showSuccessWithNext('Sign-up payment received: the project is now Won.');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeInternalId, projectContext?.paymentMilestones, projectContext?.status, currentRole]);

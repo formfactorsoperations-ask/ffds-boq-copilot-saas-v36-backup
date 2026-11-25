@@ -29,7 +29,7 @@ import { db as storageDb } from '../../services/dbService';
 import type { ProjectContext, FullBoqItem, DrawingTrackerItem, MOM, ProjectSchedule, PurchaseOrder, Item } from '../../types';
 import type { JourneyContextType } from '../../services/journeyEngine';
 import type { NextAction } from '../../services/nextActionEngine';
-import { PHASES, STAGE_LABELS } from '../../constants/journeyConstants';
+import { PHASES, PHASE, STAGE_LABELS } from '../../constants/journeyConstants';
 import { engagementOf, stageLabel } from '../../lib/engagement';
 
 /* A stage's name as this project's engagement calls it. */
@@ -196,7 +196,7 @@ function Home(p: ProjectHomeProps) {
     } catch { return { rows: [] as GanttRow[], finishISO: null, targetISO: null }; }
   }, [savedSchedule, ctx, p.fullBoq, phases]);
   const pins = useMemo(() => gatePins(payments.due, programme.rows), [payments.due, programme.rows]);
-  const designDone = (journey.phaseProgress[1]?.pct || 0) >= 100;
+  const designDone = (journey.phaseProgress[PHASE.design]?.pct || 0) >= 100;
   const programmeStale = designDone && programme.rows.some(r => r.kind === 'design' && r.status !== 'completed');
 
   const cost = useMemo(() => costModel(p.fullBoq, ctx.rooms || []), [p.fullBoq, ctx.rooms]);
@@ -686,7 +686,7 @@ function buildRows(a: {
   }
 
   // 2 — design money behind the work it was meant to precede.
-  const designDone = (p.journey.phaseProgress[1]?.pct || 0) >= 100;
+  const designDone = (p.journey.phaseProgress[PHASE.design]?.pct || 0) >= 100;
   const engineHasDesignMoney = engine.some(x => /d2|d3|design advance|design.*payment/i.test(x.title));
   const owed = finance && designDone && !engineHasDesignMoney ? payments.due.find(r => r.type === 'design' && !r.invoiced && !/gfc|good.for.construction/i.test(r.trigger)) : undefined;
   if (owed) {
@@ -832,7 +832,7 @@ function stageAdvance(stage: number, ctx: any, journey: JourneyContextType):
   if (stage === 4) return { label: 'Sign Contract & Mobilise Execution', sub: 'Move to stage 5', to: 5 };
   if (stage === 5) {
     const gateDone = !!ctx.lifecycle?.gates?.designGateActive?.done;
-    const execDone = journey.phaseProgress?.[4]?.done || 0;
+    const execDone = journey.phaseProgress?.[PHASE.execution]?.done || 0;
     if (!gateDone) return { label: 'Unlock the Design Gate', sub: 'Needed before execution can start', tab: 'design-gate' };
     if (execDone === 0) return { label: 'Initiate project handover', sub: 'Complete execution steps in the Ops Matrix first', disabled: true };
     return { label: 'Initiate project handover', sub: 'Move to stage 6', to: 6 };
