@@ -32,7 +32,7 @@ const META: Record<string, PageMeta> = {
   // ---- Studio level -------------------------------------------------------
   home:                   { title: 'Home',              subtitle: 'Studio activity and what needs attention', scope: 'studio' },
   projects:               { title: 'Projects',          subtitle: 'Every project, where it stands, and the one thing it needs next.', scope: 'studio' },
-  clients:                { title: 'Clients',           subtitle: 'Portfolio tracking and account values', scope: 'studio' },
+  clients:                { title: 'Clients',           subtitle: 'Every client as one running thread: what we sent, what they did, what was paid, and what to send next.', scope: 'studio' },
   reports:                { title: 'Reports',           subtitle: 'Studio performance across projects', scope: 'studio' },
   'design-review':        { title: 'Design Desk',       subtitle: 'Drawings to review, send and present', scope: 'studio' },
   'ops-desk':             { title: 'Ops Desk',          subtitle: 'Follow-ups, meetings and leads for every client', scope: 'studio' },

@@ -1067,6 +1067,105 @@ and Needs-you counts from it) and its motion in `projectsJourney.css`.
   project's own (`snagList`), closed when resolved or verified. Rings fill over 1.2 s and stop under
   reduced motion.
 
+### Clients: conversations (approved 25 Nov 2026)
+
+The owner approved this screen on 25 Nov 2026, after comparing directions as clickable mockups. The
+approved mockup is `public/mockups/clients-conversations-final-mockup.html`. It replaces the grid, table
+and dossier drawer on the Clients tab. It is meant to look like it came from the same designer as
+Projects, not to copy it. The implementation handoff is `Claude outputs/HANDOFF-clients-overhaul.md`.
+**Where the mockup and this section differ, this section wins.** The mockup's teal portal chip, its
+WhatsApp green button, its green live dot and its 8px, 9px and 13.5px text do not ship.
+
+- **One `Panel`, three panes:** the client list (~300px), the thread (flexible) and the client card (~320px).
+  - Below 1024px the card becomes a drawer behind a "Details" button.
+  - Below 768px the list is the screen, and a tap opens the thread full width with a back arrow.
+- **Title row:** `ConsoleHeader` "Clients" with a one-line blurb, the Actual / Dummy switch, Export CSV
+  and "+ New client". **No studio-level numbers** (owner, 25 Nov 2026): no header vitals, no KPI strip, no
+  counters, no counts on the filter labels. The only figures are one client's own Money section.
+- **List:**
+  - Search, then a `Segmented` of All / New activity / Owes us / Quiet.
+  - A row has the cover photo (round, 40px), the client name (14px bold slate-800), and a one-line preview of the
+    last thing on the thread ("You: …", "Logged: …", or "On the portal now · Proposal" in brand).
+  - It also has a rose ₹ chip when they owe (hidden where amounts are hidden), and a brand dot (no number) for new
+    client activity.
+- **Thread:**
+  - **Header:** the photo, the name (16px bold slate-900), "home · last contact", the stickers and an Edit icon button.
+  - **Strip:** under the header, a permanent slate strip: "**Not live chat.** Built from StudioDesk records. Their WhatsApp
+    replies appear only when someone logs them."
+  - **Day dividers:** Earlier / This week / Yesterday / Today.
+  - **Three kinds of entry:**
+    - what the studio sent: a brand bubble on the right, "Opened in WhatsApp · logged · time" and its template chip (never "delivered" or "read");
+    - what happened: an event card with an icon, a bold line and a source chip;
+    - what the client said, logged by the team: a white quoted bubble on the left with "Name · from WhatsApp / a call".
+  - **Milestones** (Agreement signed, Unpaid · n days, No reply in n days) are stickers centred in the thread, with the
+    Stickers look and motion.
+  - **Source chips** are an icon and a label, never colour alone:
+    - brand for Sent from StudioDesk, Proposals and Client portal;
+    - emerald for Payments;
+    - gold `#B8923A` for Design Desk;
+    - amber for Site & meetings;
+    - slate for Logged by the team.
+- **Composer:**
+  - The four message templates as chips, with the one Next move suggests already selected, and a textarea.
+  - **Open in WhatsApp** is the primary brand button with the WhatsApp icon (not WhatsApp green).
+  - **Log their reply** is secondary. It opens an inline form: Positive / Needs a call / Wants changes / No answer, then what they said.
+- **Client card:**
+  - At the top: the cover photo, name, home · type · place, the stage chip and Edit.
+  - Sections divided by slate-100 rules:
+    - Details (with "Add phone" / "Add email" when missing);
+    - Client portal (state chip Active emerald / Invite sent amber / No access slate / Revoked rose, the portal
+      status line, its buttons for Owner, Admin and Ops Director only);
+    - People on this account;
+    - Next move;
+    - Money (hidden where amounts are hidden);
+    - Dossier & notes.
+- **Portal status line** (one rule everywhere, per project, first match wins; a client shows their best):
+  "● On the portal now · {tab}" (brand); "Last visit {when} · opened n times" (slate); "Portal not opened
+  yet · access given {date}" (amber); "Portal not opened since tracking began on {date}" (amber); "Project
+  not won — no portal yet" (slate); "Legacy project — handed over before the portal" (slate); "No portal
+  access yet" with Give access (amber). **Viewer sees no visit information** (owner, 25 Nov 2026).
+- **Portal privacy line** (owner approved, 25 Nov 2026): one `text-xs text-slate-500` line under the portal's
+  sign-in button and in its existing footer or account area: "We record when you open this portal and which
+  pages you view, so {studio name} can follow up on time." Not a tab, banner or pop-up.
+- **Edit client / New client** and **Client portal** are modals on the `AssignProjectsModal` pattern.
+  - Remove access is a rose text button with a confirm.
+  - The portal modal says: "They'll see the portal tabs you've already approved for clients. Nothing new is added."
+- **Motion:**
+  - Panes use `hud-panel-in`; switching client uses `hud-swap`.
+  - Thread entries use `hud-row-in`, staggered 35 ms and capped at 12.
+  - Stickers move as recorded under "Stickers". Modals use `phd-scrim` / `phd-pop`.
+  - A slow breathing brand dot marks a client who is on the portal now (an existing keyframe, not a new one).
+  - Everything stops under `prefers-reduced-motion`.
+  - No new fonts, no new accent colours, no half-pixel sizes, nothing below 10px.
+
+**Decided after the Phase 0 audit (owner, 25 Nov 2026).**
+- **Who sees amounts:** Owner, Admin, Ops Director and Super Admin (`holdsFinanceRole`). A Designer never
+  reaches this tab; Design Head and Viewer see the screen without amounts, taken out as the money is
+  loaded (`withoutAmounts`), with no ₹ chip and no "Owes us" filter.
+- **Who edits a client:** the same four roles, because the email is the portal username.
+- **No "Proposal" portal tab exists:** the status line and Next move name the portal tab the client opened
+  (Overview, Documents, Payments…), and Next move says "Opened the portal n times since your last message".
+- **The portal privacy line** goes under the sign-in button and in the portal's account menu
+  (`components/client/ClientAccountMenu.tsx`): the portal has no footer.
+
+**As built (PR A, 25 Nov 2026).** `components/ClientsDirectory.tsx` (the shell), `components/clients/`
+(`ClientList`, `ClientThreadPane`, `ClientCard`, `ClientDossier`, `parts`), with the logic in
+`lib/clientGroups.ts` (the grouping, which Home imports), `lib/clientList.ts` and `lib/clientNextMove.ts`.
+- **Title row:** the shell's own title row, as on Projects, with the blurb in `components/pageMeta.ts` and the
+  Actual / Dummy switch, Export CSV and New client through `usePageHeader` (actions only, no vitals). A
+  `ConsoleHeader` under it would have put the title on screen twice.
+- **Last contact** is the latest Ops Desk follow-up line for any of the client's projects, read for the whole
+  list in one query (the Ops Desk's, already indexed). **Newly added** reads `scopeFlow.enabledAt`, which is
+  set as a project is opened: projects carry no created date.
+- **New activity** is a reply logged or a message from the client's portal since this person last opened
+  the client, remembered in this browser (`ffds_clients_seen:{uid}`) for v1.
+- **The thread pane** shows the client's projects and the template composer (Open in WhatsApp, not yet
+  logged) until the thread itself is built. **The card** is read-only; its portal buttons are today's (Give
+  access, Reset password, Copy link, Reissue link), for the four roles above. Reset and Reissue take a
+  second click within 5 s. The dossier keeps today's notes in this browser until they move to follow-ups.
+- **Drawers** (the card below 1024px, the dossier) slide in with `phd-drawer` over a `phd-scrim`, as the
+  project's Details drawer does.
+
 ### Summary-first sections (approved 16 Nov 2026)
 
 Execution & Site used to nest tabs five levels deep. The owner chose option C of plan item 9:

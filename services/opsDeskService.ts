@@ -114,6 +114,18 @@ export async function loadStudioOps(tenantId: string): Promise<{ followUps: Foll
   return { followUps: followUps as FollowUp[], escalations: escalations as Escalation[], moms: [...moms, ...revisions] };
 }
 
+/**
+ * The studio's follow-up lines of the last `days` days, newest first: what the
+ * Clients list reads for each client's last contact and preview. One query for
+ * the whole list (the same one and index as the Ops Desk's), never one per row.
+ */
+export async function loadStudioFollowUps(tenantId: string, days = 120): Promise<FollowUp[]> {
+  if (!db || !tenantId) return [];
+  const since = Date.now() - days * DAY;
+  return getDocs(query(collectionGroup(db, 'followUps'), where('tenantId', '==', tenantId), where('at', '>=', since), orderBy('at', 'desc'), limit(1000)))
+    .then((s) => rows(s) as FollowUp[]);
+}
+
 export interface NewFollowUp {
   tenantId: string;
   projectId: string;

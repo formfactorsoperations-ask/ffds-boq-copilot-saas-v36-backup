@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { FullProjectData } from "../../types";
 import { getNextActions } from "../../services/nextActionEngine";
 import { getSingleProjectValue } from "../../lib/financialsUtils";
+import { clientKeyOf } from "../../lib/clientGroups";
 
 /**
  * The studio's home-page figures, in one place.
@@ -78,10 +79,9 @@ export function useStudioHomeData(projects: FullProjectData[], role: string): St
           studio's own inbox counted as one. Home reported 24 clients while the
           Clients directory -- fixed earlier -- reported 27, and the two
           screens disagreed about how many people the studio works for.
-          Matches the grouping in ClientsDirectory exactly.
+          The key comes from lib/clientGroups, which the Clients screen groups by.
         */
-        const norm = (v?: string | null) => (v || "").toLowerCase().trim();
-        clientKeys.add(`${norm(clientEmail)}|${norm(clientName)}`);
+        clientKeys.add(clientKeyOf(clientEmail, clientName));
       }
 
       // Build Cross-Project Worklist (Only non-closed)
