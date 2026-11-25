@@ -16,8 +16,9 @@ import { classifyProject } from './projectClassification';
 import { engagementOf, type EngagementType } from './engagement';
 import { boqTagOf, type BoqTag } from './playground/versions';
 import { assignedDesignersFor, type ProjectDesignersMap } from './roleAccess';
+import { coverCandidates } from './coverPhoto';
 import {
-  STAGE, stageOfProject, kindOf, folderFiles, folderNext, isPicture,
+  STAGE, stageOfProject, kindOf, folderFiles, folderNext,
   type FolderStage, type KindTag, type RoutedFile, type FolderNext,
 } from './projectFolders';
 
@@ -148,22 +149,23 @@ export interface JourneyRow {
   designers: string[];
   /** The project's photo, or null for the stage-tinted "No render yet" tile. */
   photo: string | null;
+  /** Every photo it could show, best first: the next is tried when one fails to load. */
+  photos: string[];
   updated: number;
 }
 
 /**
- * The project's photo for now: its latest render that is a picture. Phase 2
- * puts the cover the studio sets, and Drive thumbnail links, ahead of it.
+ * The project's photos, best first (lib/coverPhoto): the cover set for it,
+ * else the latest render the client approved, else the latest render (Drive
+ * links turned into images). The screen draws the first that loads, and the
+ * stage-tinted "No render yet" tile when none does.
  */
-export function photoOf(project: FullProjectData): string | null {
-  const docs: any[] = (project.context as any)?.designDocuments || [];
-  let best: any = null;
-  for (const d of docs) {
-    if (!isPicture(d?.url)) continue;
-    if (!best || (Number(d.addedAt) || 0) >= (Number(best.addedAt) || 0)) best = d;
-  }
-  return best?.url || null;
+export function photosOf(project: FullProjectData): string[] {
+  return coverCandidates(project.context as any, 900).map((c) => c.url!).filter(Boolean);
 }
+
+/** The project's photo: the first of its photos, or null. */
+export const photoOf = (project: FullProjectData): string | null => photosOf(project)[0] || null;
 
 export function metaOf(project: FullProjectData): string {
   const c: any = project.context || {};
@@ -195,7 +197,7 @@ export function buildRow(
     next: folderNext(action),
     action,
     designers: assignedDesignersFor(project, designersMap),
-    photo: photoOf(project),
+    ...(() => { const photos = photosOf(project); return { photos, photo: photos[0] || null }; })(),
     updated: Number(project.lastModified) || 0,
   };
 }

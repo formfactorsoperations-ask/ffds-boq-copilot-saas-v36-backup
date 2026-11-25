@@ -28,6 +28,10 @@ import {
     Camera
 } from '@/lib/lucide-shim';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ImageUp } from 'lucide-react';
+import { auth } from '../../services/firebaseClient';
+import { canBeCover, coverFromRender, imageOfDoc, isCoverDoc } from '../../lib/coverPhoto';
+import { removeCover } from '../../services/coverStorage';
 
 interface ExtendedDesignDocument extends DesignDocument {
     docType?: '3d_render' | 'gfc_drawing' | 'layout' | 'moodboard';
@@ -165,6 +169,26 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
         });
     };
 
+    /*
+        "Set as cover" (DESIGN.md "Projects: journey, needs you, one list",
+        Cover photos): the render becomes the photo the Projects screen shows
+        for this project. A second click on the cover takes it off, and the
+        screen goes back to the latest render. Studio only: the client's
+        portal does not show the cover.
+    */
+    const toggleCover = (doc: ExtendedDesignDocument, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        const on = isCoverDoc(projectContext, doc);
+        /* An uploaded cover this replaces is taken out of Storage, so a project keeps one. */
+        const was = projectContext.coverPhoto;
+        if (was?.source === 'upload' && was.storagePath) void removeCover(was.storagePath);
+        setProjectContext(prev => ({
+            ...prev,
+            coverPhoto: on ? null : coverFromRender(doc, auth?.currentUser?.email || null),
+        }));
+        showToast(on ? 'Cover taken off. The Projects screen shows the latest render' : `"${doc.title}" is now the project's cover`);
+    };
+
     // Filter docs
     const filteredDocs = docs.filter(d => {
         // Search filter
@@ -209,7 +233,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
     const activeLightboxDoc = lightboxIndex !== null && filteredDocs[lightboxIndex] ? filteredDocs[lightboxIndex] : null;
 
     const isDirectImage = (docItem: ExtendedDesignDocument) => {
-        return Boolean(docItem.thumbnailUrl || (docItem.url && docItem.url.match(/\.(jpeg|jpg|png|webp|avif)/i)));
+        return Boolean(imageOfDoc(docItem, 800));
     };
 
     const getDocTypeBadge = (type?: string) => {
@@ -667,7 +691,8 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                             >
                                                 {hasImg ? (
                                                     <img 
-                                                        src={doc.thumbnailUrl || doc.url} 
+                                                        src={imageOfDoc(doc, 800) || doc.url}
+                                                        referrerPolicy="no-referrer" 
                                                         alt={doc.title} 
                                                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
                                                     />
@@ -681,6 +706,11 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                                 <span className={`absolute top-2 left-2 px-2 py-0.5 rounded text-[9px] uppercase tracking-wider shadow-2xs ${badge.bg}`}>
                                                     {badge.label}
                                                 </span>
+                                                {isCoverDoc(projectContext, doc) && (
+                                                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#3D52A0] text-white shadow-sm">
+                                                        Cover
+                                                    </span>
+                                                )}
 
                                                 <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                                     <button
@@ -728,6 +758,17 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                                     </a>
 
                                                     <div className="flex items-center gap-1">
+                                                        {canBeCover(doc) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => toggleCover(doc, e)}
+                                                                aria-pressed={isCoverDoc(projectContext, doc)}
+                                                                className={`px-1.5 py-1 rounded text-[11px] font-bold transition-colors cursor-pointer ${isCoverDoc(projectContext, doc) ? 'text-[#3D52A0] hover:text-slate-500' : 'text-slate-500 hover:text-[#3D52A0]'}`}
+                                                                title={isCoverDoc(projectContext, doc) ? 'Take this render off as the cover' : "Show this render as the project's photo on the Projects screen"}
+                                                            >
+                                                                {isCoverDoc(projectContext, doc) ? 'Cover ✓' : 'Set as cover'}
+                                                            </button>
+                                                        )}
                                                         <button 
                                                             type="button"
                                                             onClick={(e) => handleCopyLink(doc.url, doc.title, e)}
@@ -770,7 +811,7 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                             onClick={() => setLightboxIndex(docIndex >= 0 ? docIndex : null)}
                                         >
                                             {isDirectImage(doc) ? (
-                                                <img src={doc.thumbnailUrl || doc.url} alt={doc.title} className="w-full h-full object-cover" />
+                                                <img src={imageOfDoc(doc, 200) || doc.url} referrerPolicy="no-referrer" alt={doc.title} className="w-full h-full object-cover" />
                                             ) : (
                                                 <FileText className="w-5 h-5 text-slate-400" />
                                             )}
@@ -790,6 +831,18 @@ export default function DesignDocumentsManager({ projectContext, setProjectConte
                                             {badge.label}
                                         </span>
 
+                                        {canBeCover(doc) && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => toggleCover(doc, e)}
+                                                aria-pressed={isCoverDoc(projectContext, doc)}
+                                                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isCoverDoc(projectContext, doc) ? 'bg-[#3D52A0] text-white' : 'text-slate-500 bg-slate-100 hover:bg-slate-200 hover:text-[#3D52A0]'}`}
+                                                title={isCoverDoc(projectContext, doc) ? "The project's cover. Click to take it off" : 'Set as cover'}
+                                                aria-label={isCoverDoc(projectContext, doc) ? 'Take off as cover' : 'Set as cover'}
+                                            >
+                                                <ImageUp className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
                                         <button
                                             type="button"
                                             onClick={() => setLightboxIndex(docIndex >= 0 ? docIndex : null)}

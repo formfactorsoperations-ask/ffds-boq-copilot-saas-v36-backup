@@ -1003,7 +1003,8 @@ No amounts on this screen. The stage colours above stay approved here.
 - **Stickers** keep their look and the motion recorded under "Stickers" above.
 - **Cover photos.** A project's photo is, in order: the photo set as its cover, else its latest render
   the client approved, else its latest render link (its thumbnail link too, with Drive links turned into
-  images), else the stage-tinted "No render yet" tile. (Owner to confirm where "Set as cover" lives.)
+  images), else the stage-tinted "No render yet" tile. "Set as cover" is on every render under Drawings →
+  Renders; "Upload cover" is in the project's Details (owner, 25 Nov 2026).
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel
   sizes.
 
@@ -1022,8 +1023,21 @@ and Needs-you counts from it) and its motion in `projectsJourney.css`.
   steps carry due dates.
 - **Board.** A drop opens the status window at the lane's stage, so its checks and a termination still apply.
 - **Not drawn yet:** the health rings (waiting for drawing counts), "This week" and the Overdue / Today
-  labels (waiting for due dates on next steps). The photo is the latest render that is a picture until
-  cover photos (Phase 2).
+  labels (waiting for due dates on next steps).
+
+**Cover photos as built (Phase 2, 25 Nov 2026).** `lib/coverPhoto.ts` decides, in the order above:
+- **The cover.** `context.coverPhoto`. "Upload cover" in Details (`ProjectContextTier`) puts a JPG, PNG,
+  WebP, AVIF or GIF of up to 10 MB in Firebase Storage at `projects/{projectId}/cover/` and replaces any
+  earlier upload. "Set as cover" (a text button on a render's card, an icon in the list view; a brand
+  "Cover" chip marks it) points at the render, and goes when that render is removed. A second click, or
+  Remove cover, takes it off.
+- **The latest render the client approved.** The photo of a design decision the client confirmed (the
+  decision ledger's `photoUrl`); renders themselves carry no approval of their own.
+- **The latest render.** Newest by when it was added: its thumbnail link, else its own link when that is a
+  picture or a Google Drive file. Drive file links are drawn through Drive's thumbnail address; a file
+  that is not shared with "anyone with the link" fails to load and the next photo is tried. Folders and
+  drawings that are not renders are never used.
+- The cover is the studio's: the client's portal does not show it.
 
 ### Summary-first sections (approved 16 Nov 2026)
 
