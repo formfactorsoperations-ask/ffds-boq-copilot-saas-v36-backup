@@ -121,7 +121,7 @@ describe('minutes that write themselves', () => {
     m.rooms[1] = { ...m.rooms[1], outcome: 'agreed' };
     const text = minutesOf({ meeting: m }).map((l) => l.text);
     expect(text).toContain('Living & dining: round 3 is waived this time.');
-    expect(text).toContain("Meeting saved. 1 room waits for the client's approval in writing.");
+    expect(text).toContain("Meeting saved. 1 room waits for the client's sign-off in writing.");
     expect(text[text.length - 1]).toBe("Mrs Mehta signed the record on the studio's screen.");
   });
 });

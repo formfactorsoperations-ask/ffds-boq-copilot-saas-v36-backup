@@ -453,7 +453,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
       { id: 'clients', label: 'Clients', icon: Layers, n: deskProjects.length },
       { id: 'pulse', label: 'Client pulse', icon: Activity, n: n.pulse, alert: true },
       { id: 'leads', label: 'Leads', icon: UserPlus, n: n.leads, alert: true },
-      ...(sendsDrawingApprovals ? [{ id: 'approvals' as Section, label: 'Drawings for approval', icon: FileCheck2, n: n.approvals, alert: (approvalItems || []).some((i) => approvalStage({ approval: i.approval, confirmation: i.confirmation as any }) === 'overdue') }] : []),
+      ...(sendsDrawingApprovals ? [{ id: 'approvals' as Section, label: 'Drawings for sign-off', icon: FileCheck2, n: n.approvals, alert: (approvalItems || []).some((i) => approvalStage({ approval: i.approval, confirmation: i.confirmation as any }) === 'overdue') }] : []),
       { id: 'payments', label: 'Payments', icon: IndianRupee, n: n.payments },
       { id: 'digest', label: 'Friday digest', icon: Send, n: digestItems.length, alert: digestItems.some((x) => x.id.startsWith('dg:approve') || x.id.startsWith('dg:returned')) },
     ] },

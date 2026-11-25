@@ -345,10 +345,10 @@ function Story({ c, sf, setSf, proposal }: { c: DeskClient; sf: StoryFilter; set
 
 function Drawings({ items }: { items: ApprovalItem[] }) {
   const d = useDesk();
-  if (d.approvals === null) return <div className="od-lockbox"><FileCheck2 /><b>Drawings for approval are with operations and the leads</b></div>;
+  if (d.approvals === null) return <div className="od-lockbox"><FileCheck2 /><b>Drawings for sign-off are with operations and the leads</b></div>;
   return (
     <section className="od-card">
-      <div className="od-ch"><span className="od-tile"><FileCheck2 /></span><div><h3>Drawings for approval</h3><p>Only the client’s written yes, or the Design Head taking it as approved, counts.</p></div>
+      <div className="od-ch"><span className="od-tile"><FileCheck2 /></span><div><h3>Drawings for sign-off</h3><p>Only the client’s written yes, or the Design Head taking it as signed off, counts.</p></div>
         <div className="od-r"><button type="button" className="od-btn sm" onClick={() => d.act.go('approvals')}><FileCheck2 />Open approvals</button></div></div>
       {!items.length ? <div className="od-empty2">No drawings shown to the client yet.</div> : (
         <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
@@ -542,7 +542,7 @@ function Files({ projectId, link, name }: { projectId: string; link: string | nu
       <div className="od-ch"><span className="od-tile"><FolderOpen /></span><div><h3>Google Drive</h3><p>{name} · the approved drawings the client can open</p></div></div>
       {found === undefined ? <div className="od-empty2">Looking for the folder…</div> : found ? (
         <a className="od-btn pri" href={found} target="_blank" rel="noopener noreferrer"><ExternalLink />Open the folder</a>
-      ) : <div className="od-empty2">No folder yet. It is made the first time drawings are uploaded from Drawings for approval.</div>}
+      ) : <div className="od-empty2">No folder yet. It is made the first time drawings are uploaded from Drawings for sign-off.</div>}
     </section>
   );
 }

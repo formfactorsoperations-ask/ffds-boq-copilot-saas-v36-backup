@@ -27,7 +27,7 @@ const issued = (d: FlowRow) => d.gfcStatus === 'issued';
 
 /* ------------------------------------------------------------ steps */
 
-const CLIENT_STEPS = ['Upload the drawing', 'Design Head checks', 'Client approves', 'Sent to site'];
+const CLIENT_STEPS = ['Upload the drawing', 'Design Head checks', 'Client signs off', 'Sent to site'];
 const STUDIO_STEPS = ['Upload the drawing', 'Design Head checks', 'Sent to site'];
 
 export interface Steps {
@@ -77,7 +77,7 @@ export function whereLine(d: FlowRow, v: Viewer): string {
   }
   if (issued(d)) return 'Sent to site.';
   if (studioOnly(d)) return 'Approved. It stays inside the studio and can go to site.';
-  return d.approvedAt != null ? 'The client approved it. It can go to site.' : 'Approved in the studio. Show it to the client at the next meeting.';
+  return d.approvedAt != null ? 'The client signed it off. It can go to site.' : 'Approved by the studio. Show it to the client at the next meeting.';
 }
 
 /** Who has the drawing now: 'You', a first name, 'Design Head', 'Client', 'Ready for site', 'Sent to site', or null when nobody has started. */

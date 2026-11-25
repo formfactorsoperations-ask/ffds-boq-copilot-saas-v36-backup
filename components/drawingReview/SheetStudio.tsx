@@ -691,7 +691,7 @@ const SheetStudio: React.FC<Props> = ({ orgId, projectId, drawingId, projectName
             {canDecide && !requestOpen && (
               <>
                 <div className="text-[12.5px]" style={{ color: blockingOpen ? '#B4232F' : '#5F636D' }}>
-                  {blockingOpen ? `${blockingOpen} must-fix note${blockingOpen === 1 ? '' : 's'} open. Send it back, or untick Must fix to approve.` : `Approving signs off v${r?.versionNo} exactly as it is${audience === 'studio' ? '. This sheet stays inside the studio.' : '.'}`}
+                  {blockingOpen ? `${blockingOpen} must-fix note${blockingOpen === 1 ? '' : 's'} open. Send it back, or untick Must fix to approve.` : `Approving passes v${r?.versionNo} exactly as it is${audience === 'studio' ? '. This sheet stays inside the studio.' : '.'}`}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" disabled={!!busy} onClick={() => { setRequestOpen(true); setDraft(null); }}

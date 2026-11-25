@@ -253,7 +253,7 @@ describe('Design Desk 2.0', () => {
     /* Back with a designer, and approved but not yet shown to the client. */
     expect(screen.getByText('Waiting for someone else')).toBeTruthy();
     expect(screen.getByText('Riya is making 2 changes.')).toBeTruthy();
-    expect(screen.getByText('Approved in the studio. Show it to the client at the next meeting.')).toBeTruthy();
+    expect(screen.getByText('Approved by the studio. Show it to the client at the next meeting.')).toBeTruthy();
   });
 
   it('opens a project to its rooms and a room to its drawings with their steps', () => {

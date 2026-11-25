@@ -62,7 +62,7 @@ describe('the site date', () => {
     expect(late.line).toBe('Site needed it on 20 Nov. It is not sent to site yet.');
     const ready = siteRisk(row('a', 'APPROVED', { siteDate: '2026-11-26', approvedAt: T }), NOW)!;
     expect(ready.state).toBe('ready');
-    expect(ready.line).toBe('Site needs it on 26 Nov. It is approved: send it to site.');
+    expect(ready.line).toBe('Site needs it on 26 Nov. It is ready: send it to site.');
   });
 
   it('lists the drawings at risk, the most urgent first, and leaves out the ones on track', () => {

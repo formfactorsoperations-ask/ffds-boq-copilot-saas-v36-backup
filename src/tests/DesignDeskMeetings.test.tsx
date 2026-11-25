@@ -214,7 +214,7 @@ describe('the meeting screen', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save the meeting' })); });
     expect(h.close).toHaveBeenCalledWith({ orgId: 's', projectId: 'p1' }, 'm9', 1, { 'Living & dining': 'waived' });
     expect(screen.getByRole('heading', { name: 'Meeting saved' })).toBeTruthy();
-    expect(screen.getByText("Meeting saved. 1 room waits for the client's approval in writing.")).toBeTruthy();
+    expect(screen.getByText("Meeting saved. 1 room waits for the client's sign-off in writing.")).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy the minutes' })).toBeTruthy();
     /* The approval email opens already drafted. */
     expect(screen.getByTestId('approval').getAttribute('data-open')).toBe('yes');

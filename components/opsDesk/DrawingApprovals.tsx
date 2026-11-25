@@ -62,7 +62,7 @@ export function PresentedOutside({ orgId, projectId, projectName, onDone, onCanc
     setBusy(true); setErr(null);
     try {
       await recordPresentedOutside({ orgId, projectId }, picked, how, new Date(`${on}T12:00:00+05:30`).getTime());
-      toast({ ok: true, title: `${picked.length} drawing${picked.length === 1 ? '' : 's'} ready to send for approval`, sub: 'Upload them to Drive and send the approval email below.' });
+      toast({ ok: true, title: `${picked.length} drawing${picked.length === 1 ? '' : 's'} ready to send for sign-off`, sub: 'Upload them to Drive and send the sign-off email below.' });
       onDone();
     } catch (e: any) {
       setErr(e?.message || 'Not recorded.');
@@ -78,7 +78,7 @@ export function PresentedOutside({ orgId, projectId, projectName, onDone, onCanc
         <button type="button" onClick={onCancel} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" /></button>
       </div>
       {list === null && !err ? <Loading rows={2} /> : list && !list.length ? (
-        <p className="text-sm text-slate-600">No drawing here is waiting for the client: none is approved by the Design Head for the client, or they are already approved by the client.</p>
+        <p className="text-sm text-slate-600">No drawing here is waiting for the client: none is approved by the Design Head for the client, or they are already signed off by the client.</p>
       ) : (
         <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
           {(list || []).map((d) => (
@@ -135,8 +135,8 @@ export default function DrawingApprovals({ orgId, items, projects, me, lead, onC
   const [recording, setRecording] = useState(false);
 
   return (
-    <Panel icon={FileCheck2} title="Drawings for approval"
-      blurb={`Drawings the client has seen, in a design meeting or outside the Studio Desk. ${fixedProjectId ? '' : 'Pick the project, '}upload the drawings you choose to its Drive folder, send the approval email (it goes in your name, and replies come to you), then record their answer. Reminders go on working days 3 and 5.`}
+    <Panel icon={FileCheck2} title="Drawings for sign-off"
+      blurb={`Drawings the client has seen, in a design meeting or outside the Studio Desk. ${fixedProjectId ? '' : 'Pick the project, '}upload the drawings you choose to its Drive folder, send the sign-off email (it goes in your name, and replies come to you), then record their answer. Reminders go on working days 3 and 5.`}
       right={fixedProjectId ? undefined :
         <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Project
           <select value={projectId} onChange={(e) => { setPick(e.target.value); setRecording(false); }} className={`${field} max-w-[260px] font-semibold`}>
@@ -161,7 +161,7 @@ export default function DrawingApprovals({ orgId, items, projects, me, lead, onC
           {!project && <p className="text-xs text-slate-500">Pick a project to record drawings presented outside the Studio Desk.</p>}
 
           {items === null ? <Loading /> : !open.length ? (
-            <Empty icon={FileCheck2} text={project ? `Nothing from ${project.name} is waiting for the client's approval.` : 'No drawings are waiting for the client\'s approval.'} />
+            <Empty icon={FileCheck2} text={project ? `Nothing from ${project.name} is waiting for the client's sign-off.` : 'No drawings are waiting for the client\'s sign-off.'} />
           ) : open.map((i) => {
             const m = asMeeting(i);
             return (

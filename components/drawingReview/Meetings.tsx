@@ -246,7 +246,7 @@ export default function Meetings({ orgId, projectId, projectName, look, drawings
                         <span className="block text-[12.5px] text-[#5F636D]">
                           {isConfirmed(m)
                             ? (m.confirmation!.via === 'studio' ? `Taken on the studio's screen by ${firstName(m.confirmation!.recordedBy?.name)}.` : 'Signed in to their portal; their login, address and the time are recorded.')
-                            : 'If the client is with you, they can sign the record here. Their signature counts as their written approval of the agreed rooms.'}
+                            : 'If the client is with you, they can sign the record here. Their signature counts as their written sign-off of the agreed rooms.'}
                         </span>
                       </span>
                       {m.confirmation?.signature && <img src={m.confirmation.signature} alt={`Signature of ${m.confirmation.name}`} className="h-12 max-w-[180px] rounded-lg border border-[#EEEEEA] bg-white object-contain" />}

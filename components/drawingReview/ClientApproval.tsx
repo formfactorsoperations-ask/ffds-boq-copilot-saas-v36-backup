@@ -24,10 +24,10 @@ import { Chip, type Tone } from './DeskParts';
 */
 
 const STAGE: Record<ApprovalStage, { label: string; tone: Tone; Icon: typeof Clock }> = {
-  presented: { label: 'Send for approval', tone: 'amber', Icon: Mail },
+  presented: { label: 'Send for sign-off', tone: 'amber', Icon: Mail },
   sent: { label: 'Awaiting client', tone: 'amber', Icon: Clock },
-  overdue: { label: 'Approval overdue', tone: 'red', Icon: CalendarClock },
-  approved: { label: 'Approved by client', tone: 'green', Icon: BadgeCheck },
+  overdue: { label: 'Sign-off overdue', tone: 'red', Icon: CalendarClock },
+  approved: { label: 'Signed off by client', tone: 'green', Icon: BadgeCheck },
   changes: { label: 'Client changes', tone: 'red', Icon: MessageSquareWarning },
 };
 
@@ -36,7 +36,7 @@ export function ApprovalChip({ m }: { m: DesignMeeting }) {
   return <Chip tone={s.tone} icon={s.Icon} small>{s.label}</Chip>;
 }
 
-const VIA: Record<string, string> = { email: 'by email', signature: 'by signing in the studio', portal: 'in their portal', deemed: 'taken as approved' };
+const VIA: Record<string, string> = { email: 'by email', signature: 'by signing in the studio', portal: 'in their portal', deemed: 'taken as signed off' };
 
 const input = 'w-full min-h-[40px] rounded-[10px] border border-[#DCDCD5] bg-white px-3 text-[13px] outline-none focus:border-[color:var(--dd-accent,#4146C8)] focus:shadow-[0_0_0_3px_var(--dd-accent-ring,rgba(65,70,200,0.15))]';
 const label = 'mb-1 block text-[12px] font-bold text-[#17191E]';
@@ -145,7 +145,7 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
     setBusy('send');
     try {
       const r = await sendApproval(t, m.id, { to, cc, clientName: greet, driveLink: drive.trim(), ...(edited ? { subject, body } : {}) });
-      toast({ ok: true, title: r?.sandbox ? 'Approval email simulated' : 'Approval email sent', sub: r?.sandbox ? 'The email service is not set up, so nothing left the studio.' : `Reminders go on working days ${REMINDER_WORKING_DAYS.join(' and ')}. Replies come to you.` });
+      toast({ ok: true, title: r?.sandbox ? 'Sign-off email simulated' : 'Sign-off email sent', sub: r?.sandbox ? 'The email service is not set up, so nothing left the studio.' : `Reminders go on working days ${REMINDER_WORKING_DAYS.join(' and ')}. Replies come to you.` });
       setMode(null);
       onChanged?.();
     } catch (e: any) {
@@ -161,8 +161,8 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
       const moved = r?.movedOn?.length ? `${r.movedOn.join(', ')} changed since the meeting and stayed as it is.` : undefined;
       toast({
         ok: !moved,
-        title: outcome === 'changes' ? 'Changes recorded' : `${r?.approved?.length || 0} drawing${r?.approved?.length === 1 ? '' : 's'} approved`,
-        sub: moved || (outcome === 'changes' ? 'Upload the revised sheets in Design Desk and present them again.' : 'The Drawings table shows them approved.'),
+        title: outcome === 'changes' ? 'Changes recorded' : `${r?.approved?.length || 0} drawing${r?.approved?.length === 1 ? '' : 's'} signed off`,
+        sub: moved || (outcome === 'changes' ? 'Upload the revised sheets in Design Desk and present them again.' : 'The Drawings table shows them signed off.'),
       });
       setMode(null); setNote('');
       onChanged?.();
@@ -175,15 +175,15 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
   const s = STAGE[stage];
   const reminders = a?.reminders?.length || 0;
   const line = stage === 'approved'
-    ? `Approved ${VIA[a?.via || (m.confirmation?.via === 'portal' ? 'portal' : 'signature')] || ''}, ${shortDate(a?.answeredAt || m.confirmation?.at || 0)}`
+    ? `Signed off ${VIA[a?.via || (m.confirmation?.via === 'portal' ? 'portal' : 'signature')] || ''}, ${shortDate(a?.answeredAt || m.confirmation?.at || 0)}`
     : stage === 'changes' ? `The client asked for changes, ${shortDate(a?.answeredAt || 0)}`
-    : stage === 'presented' ? (m.outside ? 'Shown to the client outside the Studio Desk. Send the approval email next.' : 'Agreed at the meeting. Send the approval email next.')
+    : stage === 'presented' ? (m.outside ? 'Shown to the client outside the Studio Desk. Send the sign-off email next.' : 'Agreed at the meeting. Send the sign-off email next.')
     : stage === 'overdue' ? `No answer by ${approvalDate(a!.dueAt!)}`
     : `Emailed ${shortDate(a!.sentAt!)} to ${a!.sentTo.join(', ')}. Answer by ${approvalDate(a!.dueAt!)}.`;
   const sub = stage === 'approved' ? (a?.note || (a?.recordedBy ? `Recorded by ${firstName(a.recordedBy.name)}.` : ''))
     : stage === 'changes' ? a?.note || ''
-    : stage === 'presented' ? `${sheets.length === 1 ? '1 drawing waits' : `${sheets.length} drawings wait`} for the client's written approval. ${sheets.length === 1 ? 'It is' : 'They are'} not approved in the Drawings table until it comes back.`
-    : stage === 'overdue' ? (lead ? 'The email said the drawings would be taken as approved. You can do that, or record their answer if it came.' : 'The Design Head can take the drawings as approved, as the email said.')
+    : stage === 'presented' ? `${sheets.length === 1 ? '1 drawing waits' : `${sheets.length} drawings wait`} for the client's written sign-off. ${sheets.length === 1 ? 'It is' : 'They are'} not signed off in the Drawings table until it comes back.`
+    : stage === 'overdue' ? (lead ? 'The email said the drawings would be taken as signed off. You can do that, or record their answer if it came.' : 'The Design Head can take the drawings as signed off, as the email said.')
     : `${reminders ? `${reminders} reminder${reminders === 1 ? '' : 's'} sent.` : `Reminders go on working days ${REMINDER_WORKING_DAYS.join(' and ')}.`} Replies go to ${firstName(a?.sentBy?.name)}.`;
 
   return (
@@ -197,13 +197,13 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
         {mine && stage !== 'approved' && !mode && (
           <span className="flex flex-wrap gap-2">
             {(stage === 'presented' || stage === 'sent' || stage === 'overdue') && (
-              <button type="button" onClick={() => setMode('send')} className={stage === 'presented' ? primary : secondary}><Send size={15} />{stage === 'presented' ? 'Send for approval' : 'Send again'}</button>
+              <button type="button" onClick={() => setMode('send')} className={stage === 'presented' ? primary : secondary}><Send size={15} />{stage === 'presented' ? 'Send for sign-off' : 'Send again'}</button>
             )}
-            {stage !== 'presented' && <button type="button" onClick={() => setMode('approved')} className={primary}><Check size={15} />Client approved</button>}
+            {stage !== 'presented' && <button type="button" onClick={() => setMode('approved')} className={primary}><Check size={15} />Client signed off</button>}
             {stage !== 'presented' && stage !== 'changes' && <button type="button" onClick={() => setMode('changes')} className={secondary}><MessageSquareWarning size={15} />Asked for changes</button>}
             {lead && mayDeem(a) && (
               <button type="button" disabled={!!busy} onClick={() => record('deemed')} className={secondary}>
-                {busy === 'deemed' ? <Loader2 size={15} className="animate-spin" /> : <BadgeCheck size={15} />}Take as approved
+                {busy === 'deemed' ? <Loader2 size={15} className="animate-spin" /> : <BadgeCheck size={15} />}Take as signed off
               </button>
             )}
           </span>
@@ -242,7 +242,7 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
               <input id={`drive-${m.id}`} value={drive} onChange={(e) => setDrive(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" className={input} style={{ borderColor: !driveOk ? '#B4232F' : undefined }} /></div>
             <div className="flex flex-wrap gap-2 pt-1">
               <button type="button" disabled={!toOk || !ccOk || !driveOk || greet.trim().length < 2 || !bodyOk || !!busy} onClick={send} className={primary}>
-                {busy === 'send' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}Send approval email
+                {busy === 'send' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}Send sign-off email
               </button>
               <button type="button" onClick={() => setMode(null)} disabled={!!busy} className={secondary}><X size={15} />Cancel</button>
             </div>
@@ -277,12 +277,12 @@ export default function ClientApproval({ orgId, projectId, m, mine, lead, me, co
           )}
           <div className="text-[12px] text-[#5F636D]">
             {mode === 'approved'
-              ? `Approves ${sheets.map((x) => sheetLine(x.room, x.name)).join(', ')} in the Drawings table, on the versions shown at the meeting.`
-              : 'The drawings stay approved by the Design Head and wait for a revised set. Nothing is approved in the Drawings table.'}
+              ? `Marks ${sheets.map((x) => sheetLine(x.room, x.name)).join(', ')} as signed off by the client in the Drawings table, on the versions shown at the meeting.`
+              : 'The drawings stay approved by the Design Head and wait for a revised set. Nothing is signed off in the Drawings table.'}
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={!!busy || (mode === 'changes' && !note.trim())} onClick={() => record(mode)} className={primary}>
-              {busy === mode ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}{mode === 'approved' ? 'Record approval' : 'Record changes'}
+              {busy === mode ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}{mode === 'approved' ? 'Record sign-off' : 'Record changes'}
             </button>
             <button type="button" onClick={() => setMode(null)} disabled={!!busy} className={secondary}><X size={15} />Cancel</button>
           </div>

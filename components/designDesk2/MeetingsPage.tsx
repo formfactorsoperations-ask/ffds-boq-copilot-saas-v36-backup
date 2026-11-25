@@ -297,8 +297,8 @@ export default function MeetingsPage({ orgId, projectId, projectName, drawings, 
           <Card className="flex flex-wrap items-center gap-4 p-5">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700"><History size={20} aria-hidden /></span>
             <div className="min-w-0 flex-[1_1_260px]">
-              <p className="text-base font-bold text-slate-800">Record it, so the approval days still start</p>
-              <p className="text-sm text-slate-600">The drawings go to the client for approval, just as they would after a meeting here.</p>
+              <p className="text-base font-bold text-slate-800">Record it, so the sign-off days still start</p>
+              <p className="text-sm text-slate-600">The drawings go to the client for sign-off, just as they would after a meeting here.</p>
             </div>
             <Btn kind="plain" onClick={() => setOutside(true)}>Record it</Btn>
           </Card>
@@ -349,7 +349,7 @@ export default function MeetingsPage({ orgId, projectId, projectName, drawings, 
                     <span className="block text-base font-bold text-slate-800">{shortDate(m.closedAt || m.startedAt)} · {m.outside ? 'Shown outside the desk' : m.rooms.some((r) => r.outcome) ? meetingSummary(m) : 'Held, no room decided'}</span>
                     <span className="block truncate text-sm text-slate-500">{[m.attendees, `shown by ${firstName(m.startedBy?.name)}`].filter(Boolean).join(' · ')}</span>
                   </span>
-                  {stage === 'approved' ? <Tag tone="good" icon={BadgeCheck}>Approved by the client</Tag>
+                  {stage === 'approved' ? <Tag tone="good" icon={BadgeCheck}>Signed off by the client</Tag>
                     : stage === 'changes' ? <Tag tone="bad">Client asked for changes</Tag>
                     : stage === 'overdue' ? <Tag tone="bad">No answer yet</Tag>
                     : stage ? <Tag tone="you">Waiting for the client</Tag>
@@ -374,7 +374,7 @@ export default function MeetingsPage({ orgId, projectId, projectName, drawings, 
                         <span className="block text-slate-500">
                           {isConfirmed(m)
                             ? (m.confirmation!.via === 'studio' ? `Taken on the studio's screen by ${firstName(m.confirmation!.recordedBy?.name)}.` : 'Confirmed in their portal.')
-                            : 'If the client is with you, they can sign the record here. Their signature counts as their written approval of the agreed rooms.'}
+                            : 'If the client is with you, they can sign the record here. Their signature counts as their written sign-off of the agreed rooms.'}
                         </span>
                       </span>
                       {m.confirmation?.signature && <img src={m.confirmation.signature} alt={`Signature of ${m.confirmation.name}`} className="h-12 max-w-[180px] rounded-lg border border-slate-200 bg-white object-contain" />}
@@ -430,7 +430,7 @@ const RecordOutside: React.FC<{ orgId: string; projectId: string; onClose: () =>
     setBusy(true); setErr(null);
     try {
       await recordPresentedOutside({ orgId, projectId }, picked, `Shown ${how.replace(/^./, (x) => x.toLowerCase())}`, new Date(`${on}T12:00:00+05:30`).getTime());
-      toast({ ok: true, title: `Recorded: ${plural(picked.length, 'drawing')} shown ${how.replace(/^./, (x) => x.toLowerCase())}`, sub: 'Send the approval email from "Waiting for the client\'s answer". The client then has 5 working days.' });
+      toast({ ok: true, title: `Recorded: ${plural(picked.length, 'drawing')} shown ${how.replace(/^./, (x) => x.toLowerCase())}`, sub: 'Send the sign-off email from "Waiting for the client\'s answer". The client then has 5 working days.' });
       onClose();
     } catch (e: any) {
       setErr(e?.message || 'Not recorded.');
@@ -443,13 +443,13 @@ const RecordOutside: React.FC<{ orgId: string; projectId: string; onClose: () =>
         <div className="flex items-start gap-3 px-6 pb-3 pt-5">
           <div className="min-w-0 flex-1">
             <h2 className="text-xl font-bold text-slate-800">Record drawings shown outside the desk</h2>
-            <p className="mt-1 text-sm text-slate-600">Use this when you showed drawings in person, on WhatsApp or by email. They then wait for the client's approval in writing, as after a meeting here.</p>
+            <p className="mt-1 text-sm text-slate-600">Use this when you showed drawings in person, on WhatsApp or by email. They then wait for the client's sign-off in writing, as after a meeting here.</p>
           </div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100"><X size={18} /></button>
         </div>
         <div className="max-h-[46vh] overflow-auto px-6">
           {list === null ? <div className="grid place-items-center py-8 text-slate-400"><Loader2 className="animate-spin" aria-label="Loading" /></div>
-            : !list.length ? <p className="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">{err || 'No drawing is waiting to be shown: none is approved by the Design Head for the client, or the client has already approved them.'}</p>
+            : !list.length ? <p className="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600">{err || 'No drawing is waiting to be shown: none is approved by the Design Head for the client, or the client has already signed them off.'}</p>
             : byRoom.map(([room, ds]) => (
               <fieldset key={room} className="mb-3">
                 <legend className="mb-1 text-sm font-bold text-slate-800">{roomLabel(room)}</legend>
