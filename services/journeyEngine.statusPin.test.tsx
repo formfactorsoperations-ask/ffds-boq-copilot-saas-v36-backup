@@ -106,6 +106,58 @@ describe('journey auto-sync and a hand-set status', () => {
     expect(latest.statusPin).toBeNull();
   });
 
+  /*
+    Won is often marked on the design sign-up fee, before any design work,
+    and a design-only project is won with no execution at all. Stage 4 used
+    to clear every Design and Contracting step.
+  */
+  const DESIGN_AND_CONTRACTING = [
+    'brief_frozen', 'space_planning_presented', 'visuals_3d_shared', 'revisions_incorporated',
+    'design_approved', 'boq_shared', 'payment_schedule_sent', 'agreement_signed', 'design_fee_received',
+  ];
+
+  it('ticks no design or contracting step for a Won chosen by hand', async () => {
+    await mount(
+      base({
+        status: 'won',
+        lifecycle: { stage: 4, subState: 'active', gates: {}, enteredStageAt: 0, updatedAt: 0 } as any,
+        statusPin: { status: 'won', stage: 4, at: 1, journeyStage: null },
+      }),
+      [],
+    );
+    expect(latest.status).toBe('won');
+    expect(latest.lifecycle?.stage).toBe(4);
+    const done = latest.journeySummary?.doneSteps || [];
+    expect(done).toEqual(['discovery_scheduled', 'discovery_completed']);
+    for (const id of DESIGN_AND_CONTRACTING) expect(done).not.toContain(id);
+  });
+
+  it('ticks no design step for a design-only project won by hand', async () => {
+    await mount(
+      base({
+        status: 'won',
+        engagementType: 'design_only',
+        lifecycle: { stage: 4, subState: 'active', gates: {}, enteredStageAt: 0, updatedAt: 0 } as any,
+        statusPin: { status: 'won', stage: 4, at: 1, journeyStage: null },
+      } as any),
+      [],
+    );
+    expect(latest.status).toBe('won');
+    const done = latest.journeySummary?.doneSteps || [];
+    for (const id of ['brief_frozen', 'design_approved', 'terms_docket_acknowledged', 'design_fee_received']) {
+      expect(done).not.toContain(id);
+    }
+  });
+
+  it('still reads design as behind a project the journey itself took to Won', async () => {
+    await mount(
+      base({ status: 'won', lifecycle: { stage: 4, subState: 'active', gates: {}, enteredStageAt: 0, updatedAt: 0 } as any }),
+      CONTRACTING_DONE,
+    );
+    expect(latest.status).toBe('won');
+    expect(latest.journeySummary?.doneSteps).toEqual(expect.arrayContaining(['design_approved', 'agreement_signed']));
+  });
+
   it('ignores a pin for a status the project no longer has', async () => {
     // The pin names Drafting but the project has since been promoted: the pin is spent.
     await mount(

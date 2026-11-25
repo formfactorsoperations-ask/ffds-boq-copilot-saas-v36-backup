@@ -1568,6 +1568,8 @@ export default function App() {
     // Only consider auto-promoting if the project is currently 'won' (Stage 4)
     // Never auto-promote projects that are draft, lead, proposal_sent, negotiation, work_paused, completed, or lost
     if (projectContext.status !== 'won') return;
+    /* A design-only project is won with no execution to move into. */
+    if (engagementOf(projectContext) === 'design_only') return;
 
     const currentStage = projectContext.lifecycle?.stage || 1;
     if (currentStage >= 5) return;
@@ -2356,7 +2358,10 @@ export default function App() {
             {
               id: `upd_${Date.now()}`,
               timestamp: Date.now(),
-              text: `Project transitioned to ${sanitizedStatus === 'won' ? 'Won' : sanitizedStatus === 'work_paused' ? 'Work Paused' : 'Execution'}. Site mobilization and procurement tracking active.`,
+              /* Won is the client signing up, often for design alone: nothing is on site yet. */
+              text: sanitizedStatus === 'won'
+                ? 'Project marked Won: the client has signed up.'
+                : `Project transitioned to ${sanitizedStatus === 'work_paused' ? 'Work Paused' : 'Execution'}. Site mobilization and procurement tracking active.`,
               author: orgData?.role || 'Ops Director',
               type: 'progress',
             },

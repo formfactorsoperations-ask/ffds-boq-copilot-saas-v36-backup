@@ -20,6 +20,27 @@ const hasIssued = (ctx: ProjectContext, kind: string): boolean =>
 /* Steps that Client Comms alone used to complete; they are ticked by hand now (constants/journeyConstants). */
 const RETIRED_COMMS_STEPS = new Set(['exec_start_notified']);
 
+/**
+ * The stage the matrix may read as work already behind the project.
+ *
+ * Normally the lifecycle stage: a project the journey itself moved to
+ * Execution has its design and contracting behind it. Won chosen by hand in
+ * the Lifecycle & Status Studio is different. It puts the project at stage 4
+ * ("Agreement & Design"), and stage 4 used to clear every Design and
+ * Contracting step -- Brief Frozen, 3D, Design Approved, Agreement Signed,
+ * Design Fee Received -- the moment a client paid the design sign-up fee,
+ * with the design not yet begun. A design-only project is won with no
+ * execution at all. So a hand-set Won says only that the client was won:
+ * Acquisition is behind it, and every later step is ticked on its own
+ * evidence or by hand.
+ */
+export function inferenceStage(ctx: Pick<ProjectContext, 'status' | 'statusPin' | 'lifecycle' | 'currentStage'> | null | undefined): number {
+  const stage = ctx?.lifecycle?.stage || ctx?.currentStage || 1;
+  const pin = ctx?.statusPin;
+  if (ctx?.status === 'won' && pin && pin.status === 'won') return Math.min(stage, 2);
+  return stage;
+}
+
 export interface StepWithStatus extends JourneyStepDef {
   status: 'done' | 'active' | 'pending' | 'locked';
   completedAt: Date | null;
@@ -148,7 +169,7 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
   // Evaluate automatic rules
   const evaluateAutoStep = useCallback((step: JourneyStepDef): boolean => {
     if (!projectContext) return false;
-    const currentStage = projectContext.lifecycle?.stage || projectContext.currentStage || 1;
+    const currentStage = inferenceStage(projectContext);
     const isPastStage = currentStage > (step.phase + 1);
     
     switch (step.id) {
@@ -315,7 +336,7 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
       isAutoDerived: s.statusSource === 'auto',
     }));
 
-    const currentStage = projectContext?.lifecycle?.stage || projectContext?.currentStage || 1;
+    const currentStage = inferenceStage(projectContext);
     const isProjectComplete = currentStage >= 7 || projectContext?.status === 'completed';
     let activeSetInPhase: boolean[] = [false, false, false, false, false, false];
 
