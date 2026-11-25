@@ -99,9 +99,19 @@ describe('the shared logic', () => {
     expect(needsCounts(BOOK as any, 'dummy', intel)).toMatchObject({ blocker: 0, due: 0 });
   });
 
-  it('uses the latest render that is a picture as the photo', () => {
-    expect(rowsOf()[3].photo).toBe('https://x/new.jpg');
-    expect(rowsOf()[0].photo).toBeNull();
+  it('uses the latest render that is a picture as the photo; with none, a default picture marked as one', () => {
+    const withRender = rowsOf()[3];
+    expect(withRender.photo).toBe('https://x/new.jpg');
+    expect(withRender.defaultPhotos).not.toContain('https://x/new.jpg');
+    /* Nothing of its own: the default photo by type ("2-BHK" is an apartment), marked as a default. */
+    const bare = rowsOf()[0];
+    expect(bare.photo).toMatch(/^https:\/\/images\.unsplash\.com\/photo-/);
+    expect(bare.defaultPhotos).toEqual([bare.photo]);
+    /* The studio's own default photo comes before the one by type. */
+    const intel = projectIntel([BOOK[0]] as any, 'Admin');
+    const studio = buildRow(BOOK[0] as any, 'P1', intel, {}, 'https://studio.test/default.jpg');
+    expect(studio.photos[0]).toBe('https://studio.test/default.jpg');
+    expect(studio.defaultPhotos).toEqual([studio.photos[0], studio.photos[1]]);
   });
 
   it('groups by stage in journey order, or by designer with each one\'s live count', () => {

@@ -48,11 +48,14 @@ export default function ProjectPeek({ row, nameOf, now = Date.now(), onClose, on
           <X className="w-4 h-4" />
         </button>
         <div className="relative">
-          <ProjectPhoto row={row} className="h-[240px] rounded-t-3xl" eager />
+          <ProjectPhoto row={row} className="h-[240px] rounded-t-3xl" eager mark="none" />
           <div className="absolute inset-0 rounded-t-3xl bg-gradient-to-b from-transparent via-transparent to-slate-900/70 pointer-events-none" />
           <div className="absolute left-6 right-6 bottom-5 text-white">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <StageChip stage={row.stage} />
+              {row.photo && row.defaultPhotos?.includes(row.photo) && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/90 text-slate-600 text-[10px] font-bold uppercase tracking-wider">No render yet</span>
+              )}
               <Stickers kind={row.kind} boq={row.boq} onTag={(d) => onTag(row, d)} />
             </div>
             <h2 className="text-2xl font-bold tracking-tight">{row.name}</h2>

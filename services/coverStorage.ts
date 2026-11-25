@@ -36,6 +36,23 @@ export async function uploadCover(projectId: string, file: File, replaces?: stri
   return { url, storagePath };
 }
 
+/**
+ * The studio's default project photo (Studio settings; lib/defaultPhotos):
+ * kept at studios/{tenantId}/projectPhoto/, under the studio's own Storage
+ * rule. The settings draft decides when it is used, so an earlier photo is
+ * left where it is until the studio saves.
+ */
+export async function uploadStudioPhoto(tenantId: string, file: File): Promise<{ url: string; storagePath: string }> {
+  const problem = coverFileProblem(file);
+  if (problem) throw new Error(problem);
+  if (!storage) throw new Error('Storage is not connected, so the photo could not be uploaded.');
+  if (!tenantId) throw new Error('Which studio? Sign in again and retry.');
+  const storagePath = `studios/${tenantId}/projectPhoto/${Date.now()}.${EXT[file.type]}`;
+  const fileRef = ref(storage, storagePath);
+  await uploadBytes(fileRef, file, { contentType: file.type, cacheControl: 'public, max-age=31536000' });
+  return { url: await getDownloadURL(fileRef), storagePath };
+}
+
 /** Take an uploaded cover out of Storage. A cover already gone is not an error. */
 export async function removeCover(storagePath: string): Promise<void> {
   if (!storage || !storagePath.startsWith('projects/')) return;

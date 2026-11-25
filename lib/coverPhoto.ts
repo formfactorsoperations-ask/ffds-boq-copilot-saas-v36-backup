@@ -9,12 +9,16 @@
        decision the client confirmed;
     3. else the latest render, by its thumbnail link or its own link, with
        Google Drive links turned into images;
-    4. else nothing, and the screen draws the stage-tinted "No render yet" tile.
+    4. else a default picture (lib/defaultPhotos; owner, 25 Nov 2026): the
+       studio's own default photo, else an interior photo by project type,
+       marked "No render yet" on the screen;
+    5. else, when no picture loads at all, the stage-tinted "No render yet" tile.
 
   Everything here is pure: the Projects screen, the Details drawer and the
   renders list all ask the same question and get the same answer.
 */
 import type { CoverPhoto, DesignDocument, ProjectContext } from '../types';
+import { typePhotoOf } from './defaultPhotos';
 
 /* ── Google Drive links as images ───────────────────────────────────────── */
 
@@ -76,7 +80,17 @@ export const canBeCover = (d: Doc) => isRender(d) && !!imageOfDoc(d);
 
 /* ── The cover ──────────────────────────────────────────────────────────── */
 
-export type CoverSource = 'cover' | 'approved' | 'render' | 'none';
+export type CoverSource = 'cover' | 'approved' | 'render' | 'studio' | 'type' | 'none';
+
+/** A default picture: the studio's own default photo, or the one by project type. Marked "No render yet". */
+export const isDefaultSource = (s: CoverSource) => s === 'studio' || s === 'type';
+
+/** What a project's default picture is made from: the studio's default photo, and the project for its type photo. */
+export interface CoverDefaults {
+  /** organizations/{tenant}.defaultProjectPhoto.url */
+  studioPhoto?: string | null;
+  project?: { id?: string; context?: any } | null;
+}
 
 export interface Cover {
   url: string | null;
@@ -92,7 +106,7 @@ type Ctx = Pick<ProjectContext, 'designDocuments' | 'projectDecisions'> & { cove
  * order and moves on when one fails to load (a Drive file that is not
  * shared, a link that has gone).
  */
-export function coverCandidates(ctx: Ctx | null | undefined, width = 1600): Cover[] {
+export function coverCandidates(ctx: Ctx | null | undefined, width = 1600, defaults?: CoverDefaults): Cover[] {
   const c = ctx || {};
   const docs = ((c.designDocuments || []) as Doc[]);
   const out: Cover[] = [];
@@ -117,14 +131,20 @@ export function coverCandidates(ctx: Ctx | null | undefined, width = 1600): Cove
     .sort((a, b) => addedAtOf(b.d) - addedAtOf(a.d) || b.i - a.i);
   for (const { d } of renders) out.push({ url: imageOfDoc(d, width), source: 'render', docId: d.id });
 
+  /* 4. A default picture: the studio's own, else one by the project's type. */
+  if (defaults) {
+    if (defaults.studioPhoto) out.push({ url: driveImageUrl(defaults.studioPhoto, width), source: 'studio' });
+    if (defaults.project) out.push({ url: typePhotoOf(defaults.project, Math.min(width, 1600)), source: 'type' });
+  }
+
   /* The same picture twice is tried once. */
   const seen = new Set<string>();
   return out.filter((x) => !!x.url && !seen.has(x.url) && !!seen.add(x.url));
 }
 
 /** The project's cover: the best of its candidates, or none. */
-export function coverOf(ctx: Ctx | null | undefined, width = 1600): Cover {
-  return coverCandidates(ctx, width)[0] || { url: null, source: 'none' };
+export function coverOf(ctx: Ctx | null | undefined, width = 1600, defaults?: CoverDefaults): Cover {
+  return coverCandidates(ctx, width, defaults)[0] || { url: null, source: 'none' };
 }
 
 /** "Set as cover" on a render. */
@@ -139,5 +159,7 @@ export const COVER_SOURCE_WORDS: Record<CoverSource, string> = {
   cover: 'The cover set for this project.',
   approved: 'The latest render the client approved, until a cover is set.',
   render: 'The latest render, until a cover is set.',
+  studio: "The studio's default photo, until a render or a cover is added.",
+  type: 'A default photo for this kind of project, until a render or a cover is added.',
   none: 'No render yet.',
 };

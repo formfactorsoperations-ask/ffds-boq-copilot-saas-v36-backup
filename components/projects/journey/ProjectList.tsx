@@ -80,7 +80,7 @@ export default function ProjectList({ groups, by, selected, nameOf, drawings, no
                 style={{ animationDelay: `${Math.min(i, 20) * 25}ms` }}
               >
                 <div className="flex items-center gap-4 min-w-0">
-                  <ProjectPhoto row={r} className="w-[76px] h-[56px] rounded-[14px]" label={false} />
+                  <ProjectPhoto row={r} className="w-[76px] h-[56px] rounded-[14px]" label={false} mark="icon" />
                   <div className="min-w-0">
                     <p className="text-base font-bold text-slate-900 tracking-tight truncate transition-colors group-hover:text-[#3D52A0]">{r.name}</p>
                     <p className="text-xs text-slate-500 truncate">{[r.client, r.meta].filter(Boolean).join(' · ')}</p>

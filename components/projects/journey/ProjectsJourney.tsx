@@ -112,8 +112,8 @@ export default function ProjectsJourney({
   const paymentDueDays = opsSettingsOf(orgData).paymentDueDays;
   const intel = useMemo(() => projectIntel(projects, currentRole, { paymentDueDays }), [projects, currentRole, paymentDueDays]);
   const rows = useMemo(
-    () => projects.map((p) => buildRow(p, displayNames.get(p.id) || p.context?.name || 'Unnamed project', intel, orgData?.projectDesigners)),
-    [projects, displayNames, intel, orgData?.projectDesigners],
+    () => projects.map((p) => buildRow(p, displayNames.get(p.id) || p.context?.name || 'Unnamed project', intel, orgData?.projectDesigners, orgData?.defaultProjectPhoto?.url)),
+    [projects, displayNames, intel, orgData?.projectDesigners, orgData?.defaultProjectPhoto?.url],
   );
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
   const nameOf = useCallback((email: string) => {

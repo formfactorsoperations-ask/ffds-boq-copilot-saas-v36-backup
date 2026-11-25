@@ -33,6 +33,7 @@ import PeopleSettings from './PeopleSettings';
 import EngagementSettings from './EngagementSettings';
 import DesignDeskSetting, { deskChoiceOf } from './DesignDeskSetting';
 import ProjectsScreenSetting, { projectsScreenOf } from './ProjectsScreenSetting';
+import DefaultProjectPhotoSetting from './DefaultProjectPhotoSetting';
 import ConsoleHeader from '../ui/ConsoleHeader';
 import {
   SETTINGS_SECTIONS, SETTINGS_FIELDS, SectionId, SettingsField,
@@ -635,6 +636,20 @@ export default function StudioSettingsConsole(props: {
                   saved={projectsScreenOf(orgData)}
                   onChange={(v) => setField('projectsScreen', v)}
                   highlight={jumpKey === 'projectsScreen'}
+                />
+              </div>
+
+              {/* The photo a project shows when it has no cover and no render (lib/defaultPhotos). Saved with the rest of the draft. */}
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">
+                  Default project photo
+                </h3>
+                <DefaultProjectPhotoSetting
+                  tenantId={tenantId}
+                  value={(draft as any).defaultProjectPhoto || null}
+                  saved={(orgData as any)?.defaultProjectPhoto || null}
+                  onChange={(v) => setField('defaultProjectPhoto', v)}
+                  highlight={jumpKey === 'defaultProjectPhoto'}
                 />
               </div>
 
