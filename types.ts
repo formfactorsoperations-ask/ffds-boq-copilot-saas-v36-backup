@@ -1112,6 +1112,8 @@ export interface ProjectContext {
      * recorded by the journey engine the first time it sees the pin).
      */
     statusPin?: { status: ProjectStatus; stage: number; at: number; journeyStage: number | null } | null;
+    /** When the sign-up payment moved the project to Won by itself (lib/signupWon). It does so once only. */
+    signupWonAt?: number | null;
     /** Set when the project was dropped before it finished: the reason and the money settlement (lib/termination). Status is `lost` while it stands. */
     termination?: import('./lib/termination').ProjectTermination | null;
     /** Payment disputes on this project, oldest first; at most one open (lib/disputes). */

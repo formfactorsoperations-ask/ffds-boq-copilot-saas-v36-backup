@@ -1,11 +1,12 @@
 import React, { useRef, createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { doc, collection, onSnapshot, setDoc, updateDoc, writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from './firebaseClient';
-import { JOURNEY_STEPS, PHASES, STAGE_LABELS, JourneyStepDef } from '../constants/journeyConstants';
+import { JOURNEY_STEPS, PHASES, PHASE, STAGE_LABELS, JourneyStepDef } from '../constants/journeyConstants';
 import { ProjectContext, CommunicationLogItem, TermsDocket, RevisionAction, ManualJourneyStep } from '../types';
 import { useOrg } from '../contexts/OrgContext';
 import { engagementOf, journeyStepsFor, phasesFor, gateStepIds, PhaseDef } from '../lib/engagement';
 import { isSigned } from './clientApprovalEngine';
+import { signupPaid } from '../lib/signupWon';
 
 /*
   A document the studio has actually issued: an issue of that kind that was
@@ -19,6 +20,32 @@ const hasIssued = (ctx: ProjectContext, kind: string): boolean =>
 
 /* Steps that Client Comms alone used to complete; they are ticked by hand now (constants/journeyConstants). */
 const RETIRED_COMMS_STEPS = new Set(['exec_start_notified']);
+
+/**
+ * The last matrix phase a lifecycle stage puts behind the project, or -1.
+ *
+ * The phases run Acquisition, Sign-up, Design, Pre-Execution, Execution,
+ * Handover; the stages are 1 Initial Consultation, 2 Scope & Strategy,
+ * 3 Proposal & Revisions, 4 Agreement & Design, 5 Execution & Site,
+ * 6 Handover & Closeout, 7 completed.
+ *
+ * A project in its proposal (3) has only Acquisition behind it. A project
+ * won (4) has signed up, and its design is under way, not done: it used to
+ * be read as "stage minus two", which with Design before Contracting ticked
+ * every design step the moment a client paid the sign-up fee. From
+ * Execution (5) the design and the pre-execution are behind it.
+ */
+export function lastPhaseBehind(stage: number): number {
+  if (stage >= 7) return PHASE.handover;
+  if (stage >= 6) return PHASE.execution;
+  if (stage >= 5) return PHASE.preExecution;
+  if (stage >= 4) return PHASE.signup;
+  if (stage >= 2) return PHASE.acquisition;
+  return -1;
+}
+
+const stageOf = (ctx: Pick<ProjectContext, 'lifecycle' | 'currentStage'> | null | undefined): number =>
+  ctx?.lifecycle?.stage || ctx?.currentStage || 1;
 
 export interface StepWithStatus extends JourneyStepDef {
   status: 'done' | 'active' | 'pending' | 'locked';
@@ -148,8 +175,8 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
   // Evaluate automatic rules
   const evaluateAutoStep = useCallback((step: JourneyStepDef): boolean => {
     if (!projectContext) return false;
-    const currentStage = projectContext.lifecycle?.stage || projectContext.currentStage || 1;
-    const isPastStage = currentStage > (step.phase + 1);
+    const currentStage = stageOf(projectContext);
+    const isPastStage = step.phase <= lastPhaseBehind(currentStage);
     
     switch (step.id) {
       case 'terms_docket_acknowledged':
@@ -159,7 +186,7 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
           (projectContext as any).termsSignoff?.status === 'signed' ||
           !!projectContext.designAgreementSignoff ||
           /*
-            Only real evidence, or the project already past Contracting.
+            Only real evidence, or the project already past Sign-up.
 
             This used to also accept the proposalAccepted gate, any stage
             from 2, and any status but 'lead'. All three are written by the
@@ -180,40 +207,34 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
       */
       case 'brief_frozen':
         return !!projectContext.briefFrozenAt || 
-          isPastStage || 
-          currentStage >= 3;
+          isPastStage;
         
       case 'space_planning_presented':
         return commsLog['space_planning_review']?.status === 'sent' || 
           isPastStage || 
-          currentStage >= 3 || 
           (projectContext.designDocuments?.length || 0) > 0;
         
       case 'visuals_3d_shared':
         return commsLog['3d_visuals_review']?.status === 'sent' || 
           isPastStage || 
-          currentStage >= 3 || 
           !!projectContext.designApprovedAt;
         
       case 'revisions_incorporated':
         return revisions.length > 0 || 
           (projectContext.boqRevisions?.length || 0) > 0 || 
           commsLog['revision_acknowledged']?.status === 'sent' || 
-          isPastStage || 
-          currentStage >= 4;
+          isPastStage;
         
       case 'design_approved':
         return !!projectContext.designApprovedAt || 
           !!projectContext.lifecycle?.gates?.designGateActive?.done || 
-          isPastStage || 
-          currentStage >= 4;
+          isPastStage;
         
       case 'boq_shared':
         return commsLog['design_approval_boq']?.status === 'sent' || 
           !!projectContext.boqFrozen || 
           !!projectContext.operativeBoqVersion || 
-          isPastStage || 
-          currentStage >= 4;
+          isPastStage;
         
       /*
         Sent means issued or already billed against. Milestones merely
@@ -223,8 +244,7 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
         return commsLog['payment_schedule_sent']?.status === 'sent' || 
           hasIssued(projectContext, 'payment_schedule') ||
           (projectContext.paymentMilestones || []).some((m) => m.status === 'invoiced' || m.status === 'paid') ||
-          isPastStage || 
-          currentStage >= 4;
+          isPastStage;
         
       /*
         Signed means signed. A "contract sent" mark from Client Comms used to
@@ -235,20 +255,19 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
       case 'agreement_signed':
         return isSigned(projectContext, 'contract') ||
           (projectContext as any).contractSignoff?.status === 'signed' || 
-          isPastStage || 
-          currentStage >= 5;
+          isPastStage;
         
-      /* A design fee, not any payment: a paid execution advance is not one. */
+      /*
+        The sign-up payment (lib/signupWon): the first design milestone, D1.
+        A paid execution advance is not one, and nor is a later design stage.
+      */
       case 'design_fee_received':
-        return (projectContext.paymentMilestones || []).some((m) => m.type === 'design' && m.status === 'paid') || 
-          isPastStage || 
-          currentStage >= 5;
+        return signupPaid(projectContext) || isPastStage;
         
       case 'onboarding_kit_sent':
         return commsLog['onboarding_kit_sent']?.status === 'sent' || 
           !!(projectContext as any).onboardingSentAt || 
-          isPastStage || 
-          currentStage >= 5;
+          isPastStage;
         
       case 'exec_advance_1_received': {
         const execMilestones = (projectContext.paymentMilestones || []).filter((m) => m.type === 'execution');
@@ -315,13 +334,14 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
       isAutoDerived: s.statusSource === 'auto',
     }));
 
-    const currentStage = projectContext?.lifecycle?.stage || projectContext?.currentStage || 1;
+    const currentStage = stageOf(projectContext);
+    const behind = lastPhaseBehind(currentStage);
     const isProjectComplete = currentStage >= 7 || projectContext?.status === 'completed';
     let activeSetInPhase: boolean[] = [false, false, false, false, false, false];
 
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i];
-      const isPastPhase = currentStage > (step.phase + 1);
+      const isPastPhase = step.phase <= behind;
       
       if (isProjectComplete) {
         step.status = 'done';
@@ -526,23 +546,29 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
     };
     const sameSteps = (prev: ProjectContext) => (prev.journeySummary?.doneSteps || []).join(',') === doneKey;
 
-    // Determine the suggested Stage based on step completions
+    /*
+      The stage the steps put the project at. Acquisition done is Scope &
+      Strategy (2); a sign-up step done is the proposal (3); the sign-up
+      payment, or any design or pre-execution step, is Won (4), so design
+      runs inside stage 4; site work is 5, handover 6, everything done 7.
+    */
+    const doneIn = (phase: number) => computedSteps.some((s) => s.phase === phase && s.status === 'done');
+    const phDone = (phase: number) => phaseProgress[phase]?.pct === 100;
+    const signupPaymentDone = computedSteps.some((s) => s.id === 'design_fee_received' && s.status === 'done');
     let suggestedStage = 1;
-    
-    // Check Phase completions to auto-advance
-    const ph0Done = phaseProgress[0]?.pct === 100; // Acquisition -> Proposal & Pitch (Stage 2)
-    const ph1Done = phaseProgress[1]?.pct === 100; // Design -> Design & Approvals (Stage 3)
-    const ph2Done = phaseProgress[2]?.pct === 100; // Contracting -> Pre-Execution (Stage 4)
-    const ph3Done = phaseProgress[3]?.pct === 100; // Pre-Execution -> Execution (Stage 5)
-    const ph4Done = phaseProgress[4]?.pct === 100; // Execution -> Handover & Closeout (Stage 6)
-    const ph5Done = phaseProgress[5]?.pct === 100; // Handover -> Completed (Stage 7)
-
-    if (ph5Done) suggestedStage = 7;
-    else if (ph4Done || computedSteps.some(s => s.phase === 5 && s.status === 'done')) suggestedStage = 6;
-    else if (ph3Done || computedSteps.some(s => s.phase === 4 && s.status === 'done')) suggestedStage = 5;
-    else if (ph2Done || computedSteps.some(s => s.phase === 3 && s.status === 'done')) suggestedStage = 4;
-    else if (ph1Done || computedSteps.some(s => s.phase === 2 && s.status === 'done')) suggestedStage = 3;
-    else if (ph0Done || computedSteps.some(s => s.phase === 1 && s.status === 'done')) suggestedStage = 2;
+    if (phDone(PHASE.handover)) suggestedStage = 7;
+    else if (phDone(PHASE.execution) || doneIn(PHASE.handover)) suggestedStage = 6;
+    else if (phDone(PHASE.preExecution) || doneIn(PHASE.execution)) suggestedStage = 5;
+    else if (phDone(PHASE.signup) || signupPaymentDone || doneIn(PHASE.design) || doneIn(PHASE.preExecution)) suggestedStage = 4;
+    else if (doneIn(PHASE.signup)) suggestedStage = 3;
+    else if (phDone(PHASE.acquisition)) suggestedStage = 2;
+    /*
+      The proposal itself is not a step on the matrix, so the matrix cannot
+      tell a project in its proposal that it is not: at stage 3 it never
+      suggests going back to 2.
+    */
+    const stageNow = projectContext.lifecycle?.stage || 1;
+    if (stageNow === 3 && suggestedStage === 2) suggestedStage = 3;
 
     // Gate evaluations
     const proposalAcceptedDone = computedSteps.some(s => s.id === 'discovery_completed' && s.status === 'done');
@@ -590,7 +616,7 @@ export function JourneyProvider({ projectId, projectContext, setProjectContext, 
       const now = Date.now();
       
        // The same stages the Lifecycle & Status Studio gives each status (App handleProjectStatusChange):
-       // a project is won once Contracting is through, not as soon as Discovery is.
+       // a project is won on its sign-up payment, not as soon as Discovery is.
        const getLegacyStatusFromStage = (stage: number): string => {
         switch (stage) {
           case 1: return 'lead';

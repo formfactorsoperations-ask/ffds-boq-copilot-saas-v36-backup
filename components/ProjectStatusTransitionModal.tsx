@@ -24,11 +24,12 @@ import {
   Pin
 } from '@/lib/lucide-shim';
 import { db } from '../services/dbService';
+import { engagementOf } from '../lib/engagement';
 
 export interface StatusDetail {
   id: ProjectStatus;
   label: string;
-  phase: 'Pipeline' | 'Proposals' | 'Execution' | 'Completed' | 'Archived';
+  phase: 'Pipeline' | 'Proposals' | 'Signed up' | 'Execution' | 'Completed' | 'Archived';
   stageNumber: number;
   color: string;
   bg: string;
@@ -156,31 +157,41 @@ export const ALL_PROJECT_STATUSES: StatusDetail[] = [
       }
     ]
   },
+  /*
+    Won is the client's sign-up payment coming in, on every project, turnkey
+    or design only; on a design-only project there is no execution at all. It used to read "Contract Signed" under the Execution
+    phase, and marking it ticked every design step in the Ops Matrix.
+  */
   {
     id: 'won',
-    label: 'Won (Contract Signed)',
-    phase: 'Execution',
+    label: 'Won (Client signed up)',
+    phase: 'Signed up',
     stageNumber: 4,
     color: 'text-emerald-600',
     bg: 'bg-emerald-50/80',
     border: 'border-emerald-200',
     icon: Trophy,
-    summary: 'Client has signed the contract and approved the baseline proposal package.',
+    summary: 'The client\'s sign-up payment is in, on a turnkey or a design-only project. Design work starts from here.',
     downstreamImpacts: [
       {
-        title: 'Execution Phase Categorization',
-        description: 'Moves project into "Execution" board and updates booked studio pipeline value.',
+        title: 'Set by the sign-up payment',
+        description: 'Recording the sign-up payment (D1) as paid on Money moves a project to Won by itself. Mark it here when the payment came in some other way.',
         type: 'financial'
       },
       {
-        title: 'Invoice Generation Trigger',
-        description: 'Unlocks E1 (Material Order Advance) and D1 (Sign-up) milestone invoicing.',
+        title: 'Booked on the Projects board',
+        description: 'Moves the card to Won and counts its value as booked.',
         type: 'financial'
       },
       {
-        title: 'Client Portal Confirmation',
-        description: 'Client sees confirmed contract sign-off and upcoming site kickoff date.',
-        type: 'portal'
+        title: 'Ops Matrix: signed up, design ahead',
+        description: 'Acquisition and Sign-up count as done. Design comes after sign-up, so its steps stay open until the work is done or you tick them.',
+        type: 'info'
+      },
+      {
+        title: 'Execution is a separate step',
+        description: 'Move the project to In Execution when site work begins.',
+        type: 'info'
       }
     ]
   },
@@ -363,6 +374,13 @@ export const ProjectStatusTransitionModal: React.FC<ProjectStatusTransitionModal
 
   const currentDetail = ALL_PROJECT_STATUSES.find(s => s.id === currentStatus) || ALL_PROJECT_STATUSES[1];
   const targetDetail = ALL_PROJECT_STATUSES.find(s => s.id === selectedStatus) || currentDetail;
+  /* A design-only project is won with no execution to follow. */
+  const isDesignOnly = engagementOf(project.context) === 'design_only';
+  const targetImpacts = targetDetail.id === 'won' && isDesignOnly
+    ? targetDetail.downstreamImpacts.map((impact) => impact.title === 'Execution is a separate step'
+      ? { title: 'No execution on this project', description: 'It is design only: it stays Won through design and moves to Completed at design closeout.', type: 'info' as const }
+      : impact)
+    : targetDetail.downstreamImpacts;
   const isStatusChanged = selectedStatus !== currentStatus;
   const isDummyChanged = isDummy !== initialIsDummy;
   const isChanged = isStatusChanged || isDummyChanged;
@@ -602,7 +620,7 @@ export const ProjectStatusTransitionModal: React.FC<ProjectStatusTransitionModal
 
               {/* Impact Items */}
               <div className="space-y-2.5">
-                {targetDetail.downstreamImpacts.map((impact, idx) => {
+                {targetImpacts.map((impact, idx) => {
                   let badgeColor = 'bg-sky-100 text-sky-800';
                   if (impact.type === 'financial') badgeColor = 'bg-emerald-100 text-emerald-800';
                   if (impact.type === 'portal') badgeColor = 'bg-purple-100 text-purple-800';

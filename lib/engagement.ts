@@ -223,13 +223,12 @@ const DESIGN_ONLY_EDITS: Record<string, Partial<JourneyStepDef>> = {
   revisions_incorporated: { linkedFeature: 'Drawings', linkedTab: 'drawing-tracker' },
   design_approved: { linkedFeature: 'GFC Release' },
   terms_docket_acknowledged: { description: 'The design agreement and fee terms acknowledged by the client.' },
-  // Turnkey sends the schedule after the BOQ; a design-only fee schedule follows the design agreement.
-  payment_schedule_sent: { prerequisiteIds: ['terms_docket_acknowledged'] },
   working_drawings_done: {
     phase: 3, linkedFeature: 'Drawings', linkedTab: 'drawing-tracker',
     description: 'Joinery, electrical, civil and ceiling working drawings complete.',
   },
-  selections_locked: { description: 'Finishes and fittings chosen with the client and locked in the Schedule of Finishes.' },
+  // After the drawings, as before: the turnkey chain to it runs through site work this project has none of.
+  selections_locked: { description: 'Finishes and fittings chosen with the client and locked in the Schedule of Finishes.', prerequisiteIds: ['working_drawings_done'] },
 };
 
 export const DESIGN_ONLY_EXTRA_STEPS: JourneyStepDef[] = [

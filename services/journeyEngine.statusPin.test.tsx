@@ -106,6 +106,67 @@ describe('journey auto-sync and a hand-set status', () => {
     expect(latest.statusPin).toBeNull();
   });
 
+  /*
+    Won is the sign-up payment, and the design follows it: on the Ops Matrix
+    Sign-up comes before Design. Stage 4 used to clear every Design step.
+  */
+  const DESIGN = [
+    'brief_frozen', 'space_planning_presented', 'visuals_3d_shared', 'revisions_incorporated',
+    'design_approved', 'boq_shared', 'working_drawings_done',
+  ];
+  const SIGNUP = ['terms_docket_acknowledged', 'payment_schedule_sent', 'design_fee_received', 'onboarding_kit_sent'];
+  const won = (over: Partial<ProjectContext> = {}) => base({
+    status: 'won',
+    lifecycle: { stage: 4, subState: 'active', gates: {}, enteredStageAt: 0, updatedAt: 0 } as any,
+    statusPin: { status: 'won', stage: 4, at: 1, journeyStage: null },
+    ...over,
+  });
+
+  it('reads a Won chosen by hand as signed up, with the design still to do', async () => {
+    await mount(won(), []);
+    expect(latest.status).toBe('won');
+    expect(latest.lifecycle?.stage).toBe(4);
+    expect(latest.journeySummary?.doneSteps).toEqual(['discovery_scheduled', 'discovery_completed', ...SIGNUP]);
+    for (const id of [...DESIGN, 'agreement_signed']) expect(latest.journeySummary?.doneSteps).not.toContain(id);
+  });
+
+  it('does the same for a Won the journey reached by itself', async () => {
+    await mount(base({ status: 'won', lifecycle: { stage: 4, subState: 'active', gates: {}, enteredStageAt: 0, updatedAt: 0 } as any }), []);
+    expect(latest.status).toBe('won');
+    for (const id of DESIGN) expect(latest.journeySummary?.doneSteps).not.toContain(id);
+  });
+
+  it('leaves the design open on a design-only project won by hand', async () => {
+    await mount(won({ engagementType: 'design_only' } as any), []);
+    expect(latest.status).toBe('won');
+    for (const id of ['brief_frozen', 'design_approved', 'working_drawings_done']) {
+      expect(latest.journeySummary?.doneSteps).not.toContain(id);
+    }
+  });
+
+  it('wins the project on the sign-up payment, with nothing of the design done', async () => {
+    await mount(
+      base({ status: 'negotiation', lifecycle: { stage: 3, subState: 'active', gates: {}, enteredStageAt: 0, updatedAt: 0 } as any,
+        paymentMilestones: [{ id: 'd1', type: 'design', name: 'Sign-up', status: 'paid' }] as any }),
+      ['discovery_scheduled', 'discovery_completed'],
+    );
+    expect(latest.status).toBe('won');
+    expect(latest.lifecycle?.stage).toBe(4);
+    for (const id of DESIGN) expect(latest.journeySummary?.doneSteps).not.toContain(id);
+  });
+
+  it('keeps a project in its proposal there: the matrix has no proposal step', async () => {
+    await mount(base({ status: 'proposal_sent', lifecycle: { stage: 3, subState: 'active', gates: {}, enteredStageAt: 0, updatedAt: 0 } as any }), []);
+    expect(latest.status).toBe('proposal_sent');
+    expect(latest.lifecycle?.stage).toBe(3);
+  });
+
+  it('reads the design as behind a project in execution', async () => {
+    await mount(base({ status: 'won' }), EXECUTION_DONE);
+    expect(latest.status).toBe('execution');
+    expect(latest.journeySummary?.doneSteps).toEqual(expect.arrayContaining(DESIGN));
+  });
+
   it('ignores a pin for a status the project no longer has', async () => {
     // The pin names Drafting but the project has since been promoted: the pin is spent.
     await mount(

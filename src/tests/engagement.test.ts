@@ -135,10 +135,13 @@ describe('the journey for a design-only project', () => {
     for (const s of steps) for (const p of s.prerequisiteIds) expect(ids.has(p)).toBe(true);
   });
 
-  it('keeps onboarding where the dropped execution agreement stood: after the payment schedule', () => {
-    // agreement_signed waited on payment_schedule_sent, which waits on the terms docket.
-    expect(steps.find((s) => s.id === 'onboarding_kit_sent')?.prerequisiteIds).toEqual(['payment_schedule_sent']);
-    expect(steps.find((s) => s.id === 'payment_schedule_sent')?.prerequisiteIds).toEqual(['terms_docket_acknowledged']);
+  it('signs the client up before the design starts, as turnkey does', () => {
+    const order = steps.map((s) => s.id);
+    expect(steps.find((s) => s.id === 'design_fee_received')?.phase).toBe(1);
+    expect(steps.find((s) => s.id === 'onboarding_kit_sent')?.prerequisiteIds).toEqual(['design_fee_received']);
+    expect(steps.find((s) => s.id === 'brief_frozen')?.prerequisiteIds).toEqual(['design_fee_received']);
+    expect(order.indexOf('design_fee_received')).toBeLessThan(order.indexOf('brief_frozen'));
+    expect(steps.find((s) => s.id === 'selections_locked')?.prerequisiteIds).toEqual(['working_drawings_done']);
   });
 
   it('has something in every phase, so every stage can complete', () => {

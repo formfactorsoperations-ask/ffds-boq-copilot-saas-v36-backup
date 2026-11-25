@@ -93,7 +93,8 @@ describe('a new project on the Ops Matrix', () => {
       name: 'Sea Breeze', rooms: [], status: 'lead',
       termsDockets: [{ status: 'acknowledged' }],
     } as unknown as ProjectContext);
-    expect(doneIn(2)).toEqual(['terms_docket_acknowledged']);
+    // Sign-up is phase 1 now: the client signs up before the design.
+    expect(doneIn(1)).toEqual(['terms_docket_acknowledged']);
   });
 
   it('does not tick steps from data every project has', async () => {
@@ -114,7 +115,8 @@ describe('a new project on the Ops Matrix', () => {
     expect(status('space_planning_presented')).not.toBe('done');
     // A paid execution advance is not a design fee.
     expect(status('design_fee_received')).not.toBe('done');
-    expect(latest.journeySummary?.doneSteps).toEqual(['discovery_scheduled', 'discovery_completed']);
+    // The paid advance is evidence the schedule went out; nothing else is ticked.
+    expect(latest.journeySummary?.doneSteps).toEqual(['discovery_scheduled', 'discovery_completed', 'payment_schedule_sent']);
   });
 
   it.each([
@@ -125,16 +127,17 @@ describe('a new project on the Ops Matrix', () => {
       name: 'Sea Breeze', rooms: [], status: 'lead',
       paymentMilestones: [{ id: 'd1', type: 'design', name: 'Booking', status: 'pending' }],
       ...over,
-    } as unknown as ProjectContext, ['boq_shared']);
+    } as unknown as ProjectContext);
     expect(steps.find((s) => s.id === 'payment_schedule_sent')?.status === 'done').toBe(expected);
   });
 
-  it('still fills in the earlier steps of a project set past Contracting', async () => {
+  it('fills in Sign-up, and leaves Design open, on a project set to Won', async () => {
     await mount({
       name: 'Sea Breeze', rooms: [], status: 'won',
       lifecycle: { stage: 4, subState: 'active', gates: {}, enteredStageAt: 0, updatedAt: 0 },
     } as unknown as ProjectContext);
     expect(steps.find((s) => s.id === 'terms_docket_acknowledged')?.status).toBe('done');
     expect(steps.filter((s) => s.phase === 1).every((s) => s.status === 'done')).toBe(true);
+    expect(doneIn(2)).toEqual([]);
   });
 });
