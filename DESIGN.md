@@ -919,7 +919,10 @@ The drag range is 200 to 400px, narrower than 150px snaps to icons, and a double
 The list has no scrollbar (on Windows a grey bar with arrows broke the pane); it fades at the top or
 bottom when there is more to scroll.
 
-### Projects as glass folders (approved 16 Nov 2026)
+### Projects as glass folders (approved 16 Nov 2026; replaced 25 Nov 2026)
+
+Being replaced by "Projects: journey, needs you, one list" below. Keep these rules only until that screen ships.
+
 
 The owner chose this for the Projects screen (plan item 10): every project is a glass folder on one
 desk, and every action is one click. Built from `components/ui/glass-folder-cards.tsx` (the owner's
@@ -946,13 +949,62 @@ the logic is `lib/projectFolders.ts`.
   - How the latest BOQ was made is a round seal (62px, turned 7°) with its
     bottom-right edge lifting: Playground / Classic / No BOQ runs round its top, BOQ (or "yet") sits in the
     middle. Playground is brand glass with white type.
-  Static: no motion of their own; they lean with the glass.
+  Motion (owner, 25 Nov 2026, replaces "static"): a sticker presses on when it appears (drops in at an
+  angle, squashes and settles on a spring, the BOQ seal a beat after the tag). On hover it lifts, straightens
+  a little, its folded corner peels further to show the silver back, and a dark label beside it says what it
+  means ("Real client project", "Latest BOQ made in the Playground"). A click slaps it back down and never
+  opens the project; on an Untagged sticker the click offers Tag as Actual / Dummy, and the sticker gives a
+  small wiggle every few seconds until it is tagged. Everything stops under reduced motion.
 - **One click for everything.** The glass opens the project; hovering fans out the files (each opens its
   screen); the next-step button does the step; ··· holds Open, the files again (for touch screens),
   Change stage, Clone as template, Select and Delete.
 - **Sizes.** Three across from 1240px of desk, two from 640px, one below; each folder up to 460px wide.
 - **Motion.** The folder's own lean, fan and assembly; the flag's wave and ripple; folders rise in,
   staggered 55ms. All of it stops under reduced motion.
+
+### Projects: journey, needs you, one list (approved 25 Nov 2026)
+
+The owner dropped the glass folders and approved this screen on 25 Nov 2026, after comparing 20
+layouts as clickable mockups. The approved mockup is `public/mockups/projects-journey-final-mockup.html`
+(turn off its dark "Why notes" bar to see the screen alone). It replaces the folder desk on the Projects
+tab. The title row, Needs-you strip (blockers, due this week) and Actual / Dummy switch stay as they are.
+No amounts on this screen. The stage colours above stay approved here.
+
+- **Journey strip** replaces the stage tabs: the five stages (New lead → Handed over) on one line, each
+  with its count, its blocked count in rose and a stack of its projects' photos, then a dashed
+  "Closed · n" for lost and terminated. A click filters everything below; a second click shows all.
+  It is always in motion (owner, 25 Nov 2026): an arc of the stage colour circles each stage's ring
+  (each stage at its own speed); a stage with a blocker sends out a soft rose pulse; the connectors'
+  dashes flow towards handover in the two stages' colours, with a small glowing dot travelling along
+  each; the photos bob gently and the stack cycles through every project at that stage every 2.6 s;
+  the selected stage carries a slow sheen.
+- **Needs you** is a horizontal carousel of cards (no scrollbar, arrows on the right), blockers first,
+  then due, then the rest. A card: the project's photo, a coloured left edge (rose blocking, gold due,
+  brand next), the chip and when (Overdue / Today / a day), the **project name** (16px bold, slate-900)
+  with the client, the next step, and one button that does it ("Fix it" rose, "Do it" gold or brand).
+  **Go through them** opens the triage deck as a modal on the `AssignProjectsModal` pattern: one card
+  at a time, drag or ← → (right does it, left snoozes to tomorrow), "n of N", an "All clear" tick at
+  the end.
+- **One list, three views** under it, from a `Segmented` with a gliding pill: **List**, **Board**,
+  **This week**. Same filters, same data.
+  - **List**: `Panel` rows grouped by stage, or by designer (Group by: Stage / Designer, which shows each
+    designer's live count). A row: photo (76×56, 14px corners), the **project name at 16px bold
+    slate-900** turning brand on hover, client · type · area · place, the two stickers; the journey bar
+    and step; health rings (journey, drawings issued, snags closed) with "n/n dwg" and open snags; the
+    next-step button with its day; and ···. Hovering a row slides out its files (the screens that
+    matter at its stage), one click each.
+  - **Board**: one lane per stage plus Closed, glass lanes tinted with the stage colour; a card has the
+    photo, stickers, name, client and the next-step button. Drag a card to change its stage.
+  - **This week**: Mon to Sat columns of next steps (today ringed in brand, past days hatched with an
+    Overdue chip); drag a card to another day to move its due date.
+- **Ctrl K** (or a click in the search box) opens the command bar: Do next and Recent projects when empty;
+  as you type, Projects, Do next and Jump to (a project's screens). ↑ ↓ and ↵.
+- **Stickers** keep their look and the motion recorded under "Stickers" above.
+- **Cover photos.** A project's photo is, in order: the photo set as its cover, else its latest render
+  the client approved, else its latest render link (its thumbnail link too, with Drive links turned into
+  images), else the stage-tinted "No render yet" tile. (Owner to confirm where "Set as cover" lives.)
+- Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel
+  sizes.
 
 ### Summary-first sections (approved 16 Nov 2026)
 

@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TheStudioDesk · Projects — 10 layout options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f6f7; --surface:#fff; --line:#e7e7ea; --line2:#f0f0f2;
+  --ink:#17181b; --ink2:#3d4047; --mute:#70747c; --faint:#a3a6ad;
+  --accent:#3f4cc4; --accentSoft:#eef0fc;
+  --lead:#2f6fe4; --proposal:#6a5ae0; --won:#b8871f; --onsite:#d9632a; --handover:#2b8a57; --lost:#9a9ea6; --terminated:#c03a46;
+  --red:#c03a46; --redSoft:#fdf0f1; --amber:#a86a00; --amberSoft:#fff6e5; --green:#2b8a57; --greenSoft:#eaf6ef;
+  --r:10px; --shadow:0 1px 2px rgba(20,20,30,.04),0 4px 16px rgba(20,20,30,.05);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+*{scrollbar-width:none}
+*::-webkit-scrollbar{display:none}
+html,body{background:var(--bg);color:var(--ink);font-family:'Open Sans',system-ui,sans-serif;font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+.muted{color:var(--mute)} .faint{color:var(--faint)}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* ---------- App chrome ---------- */
+.nav{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;padding:10px 24px;overflow-x:auto}
+.logo{font-weight:700;font-size:12px;letter-spacing:.02em;border:1.5px solid var(--ink);padding:3px 7px;border-radius:4px;margin-right:14px;white-space:nowrap}
+.nav a{padding:7px 12px;border-radius:8px;color:var(--ink2);text-decoration:none;font-weight:500;white-space:nowrap;font-size:13.5px}
+.nav a.on{background:var(--accentSoft);color:var(--accent);font-weight:600}
+.nav .sp{flex:1}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600;flex:none}
+.wrap{max-width:1360px;margin:0 auto;padding:22px 24px 80px}
+
+.pagehead{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.pagehead h1{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.pagehead .count{color:var(--mute);font-weight:500}
+.search{flex:1;min-width:200px;max-width:340px;margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:7px 11px}
+.search input{border:0;outline:0;width:100%;background:none}
+.kbd{font-size:11px;color:var(--faint);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:9px;font-weight:600;font-size:13px;white-space:nowrap;transition:background .15s,border-color .15s}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.primary:hover{background:#3440ad}
+.btn.ghost{border:1px solid var(--line);background:var(--surface)}
+.btn.ghost:hover{border-color:#d4d4d9}
+.btn.sm{padding:5px 10px;font-size:12.5px;border-radius:8px}
+
+/* ---------- Option picker (horizontal carousel) ---------- */
+.picker{position:relative;margin-bottom:10px}
+.opts{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:2px 36px 2px 0}
+.opt{scroll-snap-align:start;flex:none;display:flex;align-items:center;gap:9px;padding:9px 14px 9px 10px;border-radius:11px;border:1px solid var(--line);background:var(--surface);transition:border-color .15s,box-shadow .15s}
+.opt:hover{border-color:#d0d0d6}
+.opt .n{width:22px;height:22px;border-radius:6px;background:var(--line2);display:grid;place-items:center;font-size:11.5px;font-weight:700;color:var(--mute)}
+.opt b{font-weight:600;font-size:13px;white-space:nowrap}
+.opt .pick{font-size:10.5px;font-weight:700;color:var(--green);background:var(--greenSoft);padding:1px 6px;border-radius:5px}
+.opt.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accentSoft)}
+.opt.on .n{background:var(--accent);color:#fff}
+.arrow{position:absolute;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:50%;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);display:grid;place-items:center;z-index:2}
+.arrow.r{right:0} .arrow.l{left:-6px;display:none}
+
+.info{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:16px}
+.info div{background:var(--surface);padding:10px 14px;font-size:12.8px;color:var(--ink2)}
+.info span{display:block;font-size:11px;font-weight:600;color:var(--mute);margin-bottom:2px}
+
+/* ---------- Filter bar ---------- */
+.filters{display:flex;align-items:center;gap:6px;overflow-x:auto;margin-bottom:14px;padding-bottom:2px}
+.chip{flex:none;display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:12.8px;font-weight:500;color:var(--ink2);white-space:nowrap;transition:all .15s}
+.chip:hover{border-color:#d0d0d6}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip .c{color:var(--faint);font-weight:600}
+.chip.on .c{color:#c8c9ce}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+.sep{width:1px;height:20px;background:var(--line);flex:none;margin:0 4px}
+.chip.alert{border-color:#f1c9cd;color:var(--red);background:var(--redSoft)}
+.chip.alert.on{background:var(--red);color:#fff;border-color:var(--red)}
+
+/* ---------- Shared bits ---------- */
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 9px 2px 7px;border-radius:999px;white-space:nowrap}
+.next{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:7px;white-space:nowrap}
+.next.blocker{background:var(--redSoft);color:var(--red)}
+.next.payment{background:var(--amberSoft);color:var(--amber)}
+.next.contract{background:#f3f0ff;color:#5b49c9}
+.next.action{background:var(--accentSoft);color:var(--accent)}
+.own{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;font-size:10.5px;font-weight:700;color:#fff;flex:none}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.empty{padding:50px;text-align:center;color:var(--mute)}
+.bar{height:5px;background:var(--line2);border-radius:9px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:9px}
+.fade{animation:fade .22s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* ---------- 1. Grouped list ---------- */
+.grp{margin-bottom:10px}
+.grph{display:flex;align-items:center;gap:9px;padding:9px 14px;background:#fafafb;border-bottom:1px solid var(--line);font-weight:600;font-size:13px;cursor:pointer;user-select:none;border-radius:var(--r) var(--r) 0 0}
+.grph .chev{transition:transform .15s;color:var(--faint)}
+.grp.closed .grph .chev{transform:rotate(-90deg)}
+.grp.closed .grph{border-bottom:0;border-radius:var(--r)}
+.grp.closed .rows{display:none}
+.grph .sum{margin-left:auto;color:var(--mute);font-weight:500;font-size:12.5px}
+.row{display:grid;grid-template-columns:minmax(220px,2.2fr) 1.3fr 1.6fr 90px 70px 28px;gap:14px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line2);cursor:pointer;transition:background .12s}
+.row:last-child{border-bottom:0}
+.row:hover,.row.kb{background:#f8f8fb}
+.row.kb{box-shadow:inset 2px 0 0 var(--accent)}
+.row .t{font-weight:600}
+.row .s{font-size:12.3px;color:var(--mute)}
+.hint{font-size:12px;color:var(--faint);margin-top:8px}
+
+/* ---------- 2. Board ---------- */
+.board{display:flex;gap:12px;overflow-x:auto;align-items:flex-start;scroll-snap-type:x mandatory;padding-bottom:6px}
+.col{flex:0 0 272px;scroll-snap-align:start;background:#efeff2;border-radius:12px;padding:8px;min-height:300px;transition:background .15s}
+.col.over{background:#e4e6f7}
+.colh{display:flex;align-items:center;gap:8px;padding:6px 6px 10px;font-weight:600;font-size:13px}
+.colh .v{margin-left:auto;font-weight:500;color:var(--mute);font-size:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:8px;cursor:grab;transition:box-shadow .15s,transform .15s}
+.card:hover{box-shadow:var(--shadow)}
+.card.drag{opacity:.4}
+.card .t{font-weight:600;font-size:13.5px;margin-bottom:2px}
+.card .m{font-size:12px;color:var(--mute);margin-bottom:9px}
+.card .f{display:flex;align-items:center;gap:8px}
+.card .f .val{margin-left:auto;font-weight:600;font-size:12.5px}
+.col.closed{flex-basis:220px;opacity:.85}
+
+/* ---------- 3. Table ---------- */
+.tblwrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--mute);font-size:12px;padding:10px 12px;border-bottom:1px solid var(--line);background:#fafafb;white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:0}
+th:hover{color:var(--ink)}
+th .ar{opacity:.5;margin-left:3px}
+td{padding:10px 12px;border-bottom:1px solid var(--line2);white-space:nowrap}
+tbody tr{cursor:pointer;transition:background .12s}
+tbody tr:hover{background:#f8f8fb}
+tbody tr.sel{background:var(--accentSoft)}
+tfoot td{font-weight:600;background:#fafafb;border-bottom:0;color:var(--ink2)}
+.tbar{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.colmenu{position:absolute;right:0;top:36px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.1);padding:6px;z-index:20;min-width:180px}
+.colmenu label{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:6px;font-size:13px;cursor:pointer}
+.colmenu label:hover{background:var(--line2)}
+.bulk{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:12px;padding:9px 10px 9px 16px;display:flex;gap:10px;align-items:center;box-shadow:0 12px 30px rgba(0,0,0,.25);z-index:40;font-size:13px}
+.bulk button{background:rgba(255,255,255,.12);padding:6px 11px;border-radius:8px;font-weight:600}
+input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
+
+/* ---------- 4. Inbox ---------- */
+.inbox{display:grid;grid-template-columns:380px 1fr;min-height:520px;overflow:hidden}
+.inl{border-right:1px solid var(--line);overflow-y:auto;max-height:640px}
+.ing{font-size:11.5px;font-weight:700;color:var(--mute);padding:14px 16px 6px;letter-spacing:.01em}
+.ini{display:flex;gap:11px;padding:11px 16px;cursor:pointer;border-left:2px solid transparent;transition:background .12s}
+.ini:hover{background:#f8f8fb}
+.ini.on{background:var(--accentSoft);border-left-color:var(--accent)}
+.ini .ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none;font-size:14px}
+.ini .t{font-weight:600;font-size:13.3px}
+.ini .s{font-size:12.3px;color:var(--mute)}
+.inr{padding:28px 32px}
+.inr h2{font-size:20px;margin:6px 0 4px}
+.facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:18px 0}
+.fact{border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+.fact span{display:block;font-size:11.5px;color:var(--mute);font-weight:600}
+.fact b{font-size:14px}
+.callout{border-radius:10px;padding:14px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+
+/* ---------- 5. Split ---------- */
+.split{display:grid;grid-template-columns:320px 1fr;min-height:560px;overflow:hidden}
+.spl{border-right:1px solid var(--line);max-height:680px;overflow-y:auto}
+.spi{padding:11px 14px;border-bottom:1px solid var(--line2);cursor:pointer;display:flex;gap:10px;align-items:flex-start;transition:background .12s}
+.spi:hover{background:#f8f8fb}
+.spi.on{background:var(--accentSoft)}
+.spi .t{font-weight:600;font-size:13.3px}
+.spi .s{font-size:12px;color:var(--mute)}
+.spr{padding:24px 30px}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:18px 0 18px}
+.tab{padding:9px 14px;font-weight:600;font-size:13px;color:var(--mute);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.on{color:var(--ink);border-color:var(--ink)}
+.ms{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line2)}
+.ms .ck{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-size:11px;flex:none}
+.ms .ck.done{background:var(--green);border-color:var(--green);color:#fff}
+.act{display:flex;gap:12px;padding:10px 0;font-size:13px}
+.act .tm{color:var(--faint);width:70px;flex:none;font-size:12px}
+
+/* ---------- Stepper ---------- */
+.steps{display:flex;align-items:center;gap:0}
+.st{display:flex;align-items:center;flex:1;min-width:0}
+.st:last-child{flex:none}
+.st .d{width:12px;height:12px;border-radius:50%;border:2px solid var(--line);background:var(--surface);flex:none}
+.st .ln{height:2px;background:var(--line);flex:1;margin:0 3px}
+.st.done .d{background:var(--c);border-color:var(--c)}
+.st.done .ln{background:var(--c)}
+.st.cur .d{border-color:var(--c);box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 18%,transparent);background:var(--surface)}
+.steplbl{display:flex;justify-content:space-between;font-size:11px;color:var(--faint);margin-top:6px}
+.steplbl b{color:var(--ink2);font-weight:600}
+
+/* ---------- 6. Funnel ---------- */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.kpi{padding:14px 16px}
+.kpi span{font-size:12px;color:var(--mute);font-weight:600}
+.kpi b{display:block;font-size:24px;font-weight:700;letter-spacing:-.02em;margin-top:2px}
+.kpi small{font-size:12px;color:var(--mute)}
+.funnel{padding:18px 18px 10px;margin-bottom:14px}
+.fr{display:grid;grid-template-columns:120px 1fr 90px;gap:12px;align-items:center;margin-bottom:9px;cursor:pointer;border-radius:8px;padding:3px 4px;transition:background .12s}
+.fr:hover{background:#f6f6f9}
+.fr.on{background:var(--accentSoft)}
+.fr .bw{height:26px;background:var(--line2);border-radius:6px;overflow:hidden}
+.fr .bw i{display:flex;align-items:center;height:100%;border-radius:6px;padding-left:9px;color:#fff;font-size:12px;font-weight:700;transition:width .4s ease}
+.fr .lb{font-size:13px;font-weight:600}
+.fr .vv{font-size:12.5px;text-align:right;color:var(--ink2);font-weight:600}
+
+/* ---------- 7. Timeline ---------- */
+.tl{overflow-x:auto;position:relative}
+.tlg{display:grid;position:relative}
+.tlh{display:contents}
+.tlh div{font-size:11.5px;font-weight:600;color:var(--mute);padding:9px 8px;border-bottom:1px solid var(--line);border-left:1px solid var(--line2);background:#fafafb;position:sticky;top:0}
+.tln{position:sticky;left:0;background:var(--surface);z-index:2;padding:0 14px;display:flex;flex-direction:column;justify-content:center;border-bottom:1px solid var(--line2);border-right:1px solid var(--line);height:52px;cursor:pointer}
+.tln .t{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tln .s{font-size:11.5px;color:var(--mute)}
+.tlc{border-bottom:1px solid var(--line2);border-left:1px solid var(--line2);height:52px}
+.tlb{position:absolute;height:26px;border-radius:7px;display:flex;align-items:center;padding:0 9px;color:#fff;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;cursor:pointer;transition:filter .15s}
+.tlb:hover{filter:brightness(1.08)}
+.today{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:1}
+.today span{position:absolute;top:4px;left:4px;font-size:10.5px;font-weight:700;color:var(--red);background:var(--surface);padding:0 4px;border-radius:4px}
+
+/* ---------- 8. Cards ---------- */
+.carou{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;margin-bottom:18px}
+.acard{scroll-snap-align:start;flex:0 0 290px;padding:14px 16px;cursor:pointer;transition:box-shadow .15s,border-color .15s}
+.acard:hover{box-shadow:var(--shadow);border-color:#d6d6dc}
+.sect{font-size:12.5px;font-weight:700;color:var(--mute);margin:4px 0 10px}
+.cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
+.pcard{padding:16px;cursor:pointer;transition:box-shadow .15s,border-color .15s,transform .15s}
+.pcard:hover{box-shadow:var(--shadow);border-color:#d6d6dc;transform:translateY(-1px)}
+.pcard .top{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.pcard .t{font-weight:700;font-size:15px;letter-spacing:-.005em}
+.pcard .s{font-size:12.5px;color:var(--mute);margin-bottom:14px}
+.pcard .bot{display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line2);font-size:12.5px}
+
+/* ---------- 9. Tracker ---------- */
+.trow{padding:14px 18px;border-bottom:1px solid var(--line2);cursor:pointer;transition:background .12s}
+.trow:hover{background:#fbfbfc}
+.trow:last-child{border-bottom:0}
+.trg{display:grid;grid-template-columns:minmax(200px,1.2fr) 2fr 170px;gap:24px;align-items:center}
+.trx{display:none;margin-top:14px;padding:14px;background:#fafafb;border-radius:9px;grid-template-columns:repeat(5,1fr);gap:10px}
+.trow.open .trx{display:grid}
+.pm{font-size:12px}
+.pm b{display:block;font-size:12.5px}
+.ended{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px}
+
+/* ---------- 10. Hill ---------- */
+.hill{padding:18px 18px 8px}
+.hill svg{width:100%;height:auto;display:block;user-select:none}
+.hdot{cursor:grab}
+.hdot:active{cursor:grabbing}
+.htip{position:fixed;pointer-events:none;background:var(--ink);color:#fff;font-size:12px;padding:6px 9px;border-radius:7px;z-index:60;display:none;white-space:nowrap}
+.hlegend{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+
+/* ---------- Drawer ---------- */
+.scrim{position:fixed;inset:0;background:rgba(20,20,30,.18);opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:440px;max-width:100%;background:var(--surface);box-shadow:-10px 0 40px rgba(0,0,0,.08);transform:translateX(100%);transition:transform .25s cubic-bezier(.2,.8,.2,1);z-index:51;overflow-y:auto;padding:22px 24px}
+.drawer.on{transform:none}
+.drawer h2{font-size:20px;margin:10px 0 2px;letter-spacing:-.01em}
+.x{position:absolute;right:16px;top:16px;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--mute)}
+.x:hover{background:var(--line2)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;background:var(--ink);color:#fff;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:500;transition:all .25s;z-index:70;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- Responsive ---------- */
+@media (max-width:900px){
+  .wrap{padding:16px 14px 80px}
+  .nav{padding:8px 14px}
+  .info{grid-template-columns:1fr}
+  .row{grid-template-columns:1fr auto;gap:6px 10px}
+  .row .c-client,.row .c-val,.row .c-own,.row .c-upd{display:none}
+  .inbox,.split{grid-template-columns:1fr}
+  .inl,.spl{max-height:300px;border-right:0;border-bottom:1px solid var(--line)}
+  .inr,.spr{padding:18px}
+  .kpis{grid-template-columns:1fr 1fr}
+  .fr{grid-template-columns:90px 1fr 64px}
+  .trg{grid-template-columns:1fr;gap:12px}
+  .trx{grid-template-columns:1fr 1fr}
+  .search{max-width:none;order:3;flex-basis:100%}
+  .hlegend{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="logo">FORM FACTORS</div>
+  <a>Home</a><a class="on">Projects</a><a>Design Desk</a><a>Ops Desk</a><a>People</a><a>Clients</a><a>Reports</a>
+  <div class="sp"></div>
+  <span class="muted" style="font-size:13px;white-space:nowrap;margin-right:6px">Anish K</span>
+  <div class="avatar">AK</div>
+</nav>
+
+<div class="wrap">
+  <div class="pagehead">
+    <h1>Projects <span class="count" id="count"></span></h1>
+    <label class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="faint"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" placeholder="Search project, client, location">
+      <span class="kbd">/</span>
+    </label>
+    <button class="btn primary" onclick="toast('New project flow opens here')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>New project
+    </button>
+  </div>
+
+  <div class="picker">
+    <button class="arrow l" id="al" aria-label="Scroll left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m15 18-6-6 6-6"/></svg></button>
+    <div class="opts" id="opts"></div>
+    <button class="arrow r" id="ar" aria-label="Scroll right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m9 18 6-6-6-6"/></svg></button>
+  </div>
+  <div class="info" id="info"></div>
+
+  <div class="filters" id="filters"></div>
+  <div id="view"></div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer"></aside>
+<div class="toast" id="toast"></div>
+<div class="htip" id="htip"></div>
+
+<script>
+/* ================= DATA (sample) ================= */
+const STAGES = {
+  lead:{label:'New lead',c:'var(--lead)',hex:'#2f6fe4',i:0},
+  proposal:{label:'Proposal sent',c:'var(--proposal)',hex:'#6a5ae0',i:1},
+  won:{label:'Won',c:'var(--won)',hex:'#b8871f',i:2},
+  onsite:{label:'On site',c:'var(--onsite)',hex:'#d9632a',i:3},
+  handover:{label:'Handed over',c:'var(--handover)',hex:'#2b8a57',i:4},
+  lost:{label:'Lost',c:'var(--lost)',hex:'#9a9ea6',i:5},
+  terminated:{label:'Terminated',c:'var(--terminated)',hex:'#c03a46',i:6}
+};
+const FLOW = ['lead','proposal','won','onsite','handover'];
+const OWN = {MK:'#6a5ae0',AK:'#3f4cc4',TV:'#2b8a57',SG:'#d9632a'};
+const KIND = {blocker:{l:'Blocker',ic:'!'},payment:{l:'Collect',ic:'₹'},contract:{l:'Contract',ic:'✎'},action:{l:'Next step',ic:'→'}};
+const DUE = {overdue:'Overdue',today:'Today',week:'This week'};
+
+let P = [
+ {id:1,name:'Harmony 704',client:'Mr. Amogh Kango',kind:'2-BHK',sft:650,loc:'Thane',stage:'handover',boq:'Classic',dummy:false,value:14.2,paid:100,start:[2026,2],end:[2026,8],upd:3,own:'MK'},
+ {id:2,name:'Lodha Amara · 1BHK Renovation',client:'Ms. Neha',kind:'1-BHK',sft:472,loc:'Thane',stage:'lost',boq:'Classic',dummy:false,value:6.8,paid:0,start:[2026,5],end:[2026,6],upd:21,own:'AK'},
+ {id:3,name:'Green World',client:'Ms. Prachi',kind:'2-BHK',sft:695,loc:'Airoli',stage:'lead',boq:'Playground',dummy:true,value:11.5,paid:0,start:[2026,10],end:[2027,3],upd:0,own:'AK',next:{t:'Prepare terms',k:'action',due:'today'}},
+ {id:4,name:'Nivedita Home',client:'Mr. Girish Jamnis',kind:'3-BHK',sft:1180,loc:'Thane',stage:'proposal',boq:'Classic',dummy:false,value:24.5,paid:0,start:[2026,10],end:[2027,4],upd:1,own:'AK',next:{t:'Revise reductions in proposal',k:'blocker',due:'overdue'}},
+ {id:5,name:'Kalpataru Elitus',client:'Mr. Rohan Desai',kind:'3-BHK',sft:1240,loc:'Thane',stage:'proposal',boq:'Classic',dummy:false,value:27.0,paid:0,start:[2026,10],end:[2027,5],upd:4,own:'MK',next:{t:'Follow up on proposal',k:'action',due:'week'}},
+ {id:6,name:'Pali Bungalow',client:'Mr. Kalpesh',kind:'Bungalow',sft:3400,loc:'Pali Hills',stage:'onsite',boq:'Classic',dummy:false,value:62.0,paid:45,start:[2026,4],end:[2027,6],upd:0,own:'MK',next:{t:'Slab inspection sign-off',k:'blocker',due:'today'}},
+ {id:7,name:'Unique Vistas',client:'Mr. Prasad Naik',kind:'1+1 BHK',sft:540,loc:'Thane',stage:'won',boq:'Classic',dummy:false,value:9.6,paid:10,start:[2026,10],end:[2027,2],upd:2,own:'TV',next:{t:'Collect execution advance',k:'payment',due:'overdue'}},
+ {id:8,name:'Splendora Wardrobes',client:'Ms. Garima Lodha',kind:'Wardrobes',sft:180,loc:'Thane',stage:'onsite',boq:'Classic',dummy:false,value:4.1,paid:60,start:[2026,9],end:[2026,11],upd:1,own:'SG',next:{t:'Shutter colour approval',k:'blocker',due:'week'}},
+ {id:9,name:'El Dorado Shop',client:'Mr. Anand Singh',kind:'Retail',sft:420,loc:'Thane',stage:'won',boq:'Classic',dummy:false,value:12.8,paid:0,start:[2026,10],end:[2027,1],upd:5,own:'AK',next:{t:'Execution agreement unsigned',k:'contract',due:'overdue'}},
+ {id:10,name:'Malad Bank Branch',client:'Malad Co-op Bank',kind:'Commercial',sft:2000,loc:'Malad',stage:'lead',boq:'Playground',dummy:true,value:38.0,paid:0,start:[2026,11],end:[2027,5],upd:2,own:'MK',next:{t:'Site visit and measurements',k:'action',due:'week'}},
+ {id:11,name:'Hiranandani Estate',client:'Mr. Varun Mehta',kind:'2-BHK',sft:820,loc:'Thane',stage:'onsite',boq:'Classic',dummy:false,value:16.4,paid:70,start:[2026,6],end:[2026,12],upd:0,own:'TV',next:{t:'Tile selection pending',k:'blocker',due:'overdue'}},
+ {id:12,name:'Rustomjee Urbania',client:'Ms. Shreya Kulkarni',kind:'3-BHK',sft:1100,loc:'Thane',stage:'won',boq:'Classic',dummy:false,value:22.3,paid:0,start:[2026,11],end:[2027,5],upd:1,own:'MK',next:{t:'Design agreement unsigned',k:'contract',due:'today'}},
+ {id:13,name:'Godrej Emerald',client:'Mr. Sameer Joshi',kind:'2-BHK',sft:710,loc:'Thane',stage:'terminated',boq:'Classic',dummy:false,value:13.0,paid:30,start:[2026,3],end:[2026,7],upd:40,own:'TV'},
+ {id:14,name:'Runwal Garden',client:'Ms. Aditi Rao',kind:'1-BHK',sft:480,loc:'Dombivli',stage:'handover',boq:'Classic',dummy:false,value:7.9,paid:95,start:[2026,1],end:[2026,6],upd:12,own:'SG',next:{t:'Final 5% pending',k:'payment',due:'week'}},
+ {id:15,name:'Dosti Imperia',client:'Mr. Nikhil Shah',kind:'2-BHK',sft:760,loc:'Thane',stage:'lost',boq:'Playground',dummy:true,value:15.0,paid:0,start:[2026,8],end:[2026,9],upd:30,own:'AK'},
+ {id:16,name:'Hiranandani Meadows',client:'Mr. Akash Pillai',kind:'3-BHK',sft:1350,loc:'Thane',stage:'onsite',boq:'Classic',dummy:false,value:31.5,paid:35,start:[2026,8],end:[2027,2],upd:2,own:'SG',next:{t:'Collect mid-site payment',k:'payment',due:'today'}}
+];
+
+/* ================= OPTIONS ================= */
+const OPTS = [
+ {n:'Grouped list',pick:true,by:'Linear project list',best:'Daily scanning. Dense, fast, keyboard-first (J/K to move, Enter to open).',watch:'Least visual; feels plain to clients if shown in demos.'},
+ {n:'Pipeline board',pick:true,by:'Attio / Pipedrive kanban',best:'Moving deals and jobs through stages. Drag a card to change stage.',watch:'Gets tall when a stage has 15+ projects; needs a collapsed "Closed" column.'},
+ {n:'Data table',by:'Attio / Airtable table view',best:'Owner reviews: sort by value, collected, last update; bulk actions.',watch:'Overkill for site staff on mobile.'},
+ {n:'Action inbox',pick:true,by:'Linear Inbox / Superhuman',best:'Replacing "16 blockers" with a triage queue: overdue, today, this week.',watch:'Only shows projects with a next step; not a full register.'},
+ {n:'Split view',by:'Height / Front master-detail',best:'Working one project at a time without losing the list.',watch:'Needs a wide screen; stacks on mobile.'},
+ {n:'Funnel + KPIs',by:'Stripe / Mixpanel dashboards',best:'Sales health at a glance; click a stage to filter the list.',watch:'Overlaps with Reports; keep it light.'},
+ {n:'Timeline',by:'Linear Timeline / Monday Gantt',best:'Capacity: what is running on site in which month.',watch:'Only as good as the start and end dates you enter.'},
+ {n:'Clean cards',by:'Vercel projects dashboard',best:'Closest to today\'s visual feel, minus the folders. Needs-you carousel on top.',watch:'Lower density than a list; more scrolling.'},
+ {n:'Stage tracker',by:'Shopify / courier order tracking',best:'Every project shows where it is on the 5-step journey plus payments.',watch:'Rows get long; best with under 30 active projects.'},
+ {n:'Hill chart',by:'Basecamp Hill Charts',best:'Uphill = winning the job, downhill = delivering it. Drag a dot to move stage.',watch:'Novel; needs a one-line explainer for new users.'}
+];
+
+/* ================= STATE ================= */
+const state = {view:+(localStorage.getItem('sd_view')||0),q:'',stage:'all',needs:false,closed:{lost:true,terminated:true},sort:{k:'upd',d:1},sel:new Set(),inboxSel:null,splitSel:null,splitTab:'Overview',done:new Set(),cols:{client:1,stage:1,kind:1,sft:0,loc:1,value:1,paid:1,next:1,own:1,upd:1},tlZoom:'month',kb:-1};
+try{ if(state.view>9) state.view=0 }catch(e){}
+
+/* ================= HELPERS ================= */
+const $ = s=>document.querySelector(s);
+const L = v=>'₹'+v.toFixed(1)+'L';
+const ago = d=>d===0?'Today':d===1?'Yesterday':d+'d ago';
+const st = p=>STAGES[p.stage];
+const pill = p=>`<span class="pill" style="background:color-mix(in srgb,${st(p).hex} 12%,#fff);color:${st(p).hex}"><span class="dot" style="background:${st(p).hex}"></span>${st(p).label}</span>`;
+const own = o=>`<span class="own" style="background:${OWN[o]}" title="${o}">${o}</span>`;
+const hasNext = p=>p.next && !state.done.has(p.id);
+const nxt = p=>hasNext(p)?`<span class="next ${p.next.k}">${KIND[p.next.k].ic} ${p.next.t}</span>`:`<span class="faint" style="font-size:12px">No pending action</span>`;
+const isOpen = p=>FLOW.includes(p.stage);
+const boqTag = p=>`<span class="faint" style="font-size:11.5px">${p.boq} BOQ · ${p.dummy?'Dummy':'Actual'}</span>`;
+
+function list(){
+  const q=state.q.toLowerCase();
+  return P.filter(p=>(state.stage==='all'||p.stage===state.stage)
+    &&(!state.needs||hasNext(p))
+    &&(!q||(p.name+p.client+p.loc+p.kind).toLowerCase().includes(q)));
+}
+function steps(p,compact){
+  const ended = !isOpen(p);
+  const ci = ended?-1:FLOW.indexOf(p.stage);
+  const c = ended?STAGES[p.stage].hex:st(p).hex;
+  return `<div class="steps" style="--c:${c}">${FLOW.map((s,i)=>`<div class="st ${i<ci?'done':''} ${i===ci?'cur':''}"><span class="d"></span>${i<FLOW.length-1?'<span class="ln"></span>':''}</div>`).join('')}</div>
+  ${compact?'':`<div class="steplbl">${FLOW.map((s,i)=>i===ci?`<b>${STAGES[s].label}</b>`:`<span>${STAGES[s].label}</span>`).join('')}</div>`}`;
+}
+function milestones(p){
+  const ms=[['Design advance',10],['Execution advance',40],['Mid-site',25],['Pre-handover',20],['Handover',5]];
+  let acc=0;
+  return ms.map(([n,pct])=>{acc+=pct;return {n,pct,amt:p.value*pct/100,done:p.paid>=acc}});
+}
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),1800)}
+
+/* ================= CHROME RENDER ================= */
+function renderOpts(){
+  $('#opts').innerHTML = OPTS.map((o,i)=>`<button class="opt ${i===state.view?'on':''}" onclick="setView(${i})"><span class="n">${(i+1)%10===0?10:i+1}</span><b>${o.n}</b>${o.pick?'<span class="pick">Pick</span>':''}</button>`).join('');
+  const o=OPTS[state.view];
+  $('#info').innerHTML = `<div><span>Inspired by</span>${o.by}</div><div><span>Best for</span>${o.best}</div><div><span>Watch out</span>${o.watch}</div>`;
+  const on=$('#opts .opt.on'); if(on) on.scrollIntoView({behavior:'smooth',inline:'nearest',block:'nearest'});
+}
+function renderFilters(){
+  const counts={}; P.forEach(p=>counts[p.stage]=(counts[p.stage]||0)+1);
+  const blockers=P.filter(p=>hasNext(p)&&p.next.k==='blocker').length;
+  const needs=P.filter(hasNext).length;
+  $('#filters').innerHTML =
+    `<button class="chip ${state.stage==='all'?'on':''}" onclick="setStage('all')">All <span class="c">${P.length}</span></button>`+
+    Object.entries(STAGES).map(([k,s])=>`<button class="chip ${state.stage===k?'on':''}" onclick="setStage('${k}')"><span class="dot" style="background:${s.hex}"></span>${s.label} <span class="c">${counts[k]||0}</span></button>`).join('')+
+    `<span class="sep"></span><button class="chip alert ${state.needs?'on':''}" onclick="state.needs=!state.needs;render()">Needs you <span class="c">${needs}</span></button>`+
+    `<span class="faint" style="font-size:12px;white-space:nowrap;margin-left:6px">${blockers} blockers</span>`;
+  $('#count').textContent = list().length+' of '+P.length;
+}
+function setView(i){state.view=i;state.kb=-1;try{localStorage.setItem('sd_view',i)}catch(e){};render()}
+function setStage(s){state.stage=s;render()}
+
+/* ================= VIEWS ================= */
+const V = [];
+
+/* 1. Grouped list */
+V[0]=el=>{
+  const ls=list(); if(!ls.length) return el.innerHTML=`<div class="panel empty">No projects match.</div>`;
+  const order=['lead','proposal','won','onsite','handover','lost','terminated'];
+  el.innerHTML = order.map(k=>{
+    const items=ls.filter(p=>p.stage===k); if(!items.length) return '';
+    const s=STAGES[k], sum=items.reduce((a,p)=>a+p.value,0);
+    return `<div class="panel grp ${state.closed[k]?'closed':''}">
+      <div class="grph" onclick="state.closed['${k}']=!state.closed['${k}'];render()">
+        <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m6 9 6 6 6-6"/></svg>
+        <span class="dot" style="background:${s.hex}"></span>${s.label}<span class="faint" style="font-weight:500">${items.length}</span>
+        <span class="sum tnum">${L(sum)}</span></div>
+      <div class="rows">${items.map(p=>`<div class="row" data-id="${p.id}" onclick="openDrawer(${p.id})">
+          <div><div class="t">${p.name}</div><div class="s">${p.kind} · ${p.sft.toLocaleString('en-IN')} sft · ${p.loc}</div></div>
+          <div class="c-client"><div style="font-size:13px">${p.client}</div>${boqTag(p)}</div>
+          <div>${nxt(p)}</div>
+          <div class="c-val tnum" style="font-weight:600;text-align:right">${L(p.value)}</div>
+          <div class="s c-upd" style="text-align:right">${ago(p.upd)}</div>
+          <div class="c-own">${own(p.own)}</div></div>`).join('')}</div></div>`;
+  }).join('')+`<div class="hint">Tip: press J / K to move, Enter to open. Lost and Terminated start collapsed.</div>`;
+  highlightKb();
+};
+function highlightKb(){document.querySelectorAll('.row').forEach((r,i)=>r.classList.toggle('kb',i===state.kb))}
+
+/* 2. Board */
+V[1]=el=>{
+  const ls=list();
+  const col=(k,closed)=>{
+    const items=ls.filter(p=>closed?['lost','terminated'].includes(p.stage):p.stage===k);
+    const s=STAGES[k]; const sum=items.reduce((a,p)=>a+p.value,0);
+    return `<div class="col ${closed?'closed':''}" data-stage="${k}" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="dropCard(event,'${k}')">
+      <div class="colh"><span class="dot" style="background:${closed?'#9a9ea6':s.hex}"></span>${closed?'Closed':s.label}<span class="faint" style="font-weight:500">${items.length}</span><span class="v tnum">${L(sum)}</span></div>
+      ${items.map(p=>`<div class="card" draggable="true" ondragstart="event.dataTransfer.setData('id',${p.id});this.classList.add('drag')" ondragend="this.classList.remove('drag')" onclick="openDrawer(${p.id})">
+        <div class="t">${p.name}</div><div class="m">${p.client} · ${p.kind} · ${p.loc}</div>
+        ${hasNext(p)?`<div style="margin-bottom:9px">${nxt(p)}</div>`:''}
+        ${closed?`<div style="margin-bottom:8px">${pill(p)}</div>`:''}
+        <div class="f">${own(p.own)}<span class="faint" style="font-size:11.5px">${ago(p.upd)}</span><span class="val tnum">${L(p.value)}</span></div></div>`).join('')||'<div class="faint" style="font-size:12px;padding:8px">Drop here</div>'}
+    </div>`;
+  };
+  el.innerHTML=`<div class="board">${FLOW.map(k=>col(k)).join('')}${col('lost',true)}</div><div class="hint">Drag a card to another column to change its stage. Dropping on Closed marks it Lost.</div>`;
+};
+function dropCard(e,k){
+  e.preventDefault(); const id=+e.dataTransfer.getData('id'); const p=P.find(x=>x.id===id);
+  if(p && p.stage!==k){p.stage=k;toast(`${p.name} moved to ${STAGES[k].label}`);render()}
+}
+
+/* 3. Table */
+const COLS=[['name','Project'],['client','Client'],['stage','Stage'],['kind','Type'],['sft','Area'],['loc','Location'],['value','Value'],['paid','Collected'],['next','Next action'],['own','Owner'],['upd','Updated']];
+V[2]=el=>{
+  let ls=[...list()]; const {k,d}=state.sort;
+  ls.sort((a,b)=>{let x=a[k],y=b[k]; if(k==='stage'){x=STAGES[a.stage].i;y=STAGES[b.stage].i} if(k==='next'){x=hasNext(a)?a.next.t:'zzz';y=hasNext(b)?b.next.t:'zzz'} return (x>y?1:x<y?-1:0)*d});
+  const vis=COLS.filter(([c])=>c==='name'||state.cols[c]);
+  const cell=(p,c)=>({name:`<b>${p.name}</b>`,client:p.client,stage:pill(p),kind:p.kind,sft:p.sft.toLocaleString('en-IN')+' sft',loc:p.loc,value:`<span class="tnum">${L(p.value)}</span>`,
+    paid:`<div style="display:flex;align-items:center;gap:8px"><div class="bar" style="width:60px"><i style="width:${p.paid}%;background:var(--green)"></i></div><span class="tnum muted" style="font-size:12px">${p.paid}%</span></div>`,
+    next:nxt(p),own:own(p.own),upd:`<span class="muted">${ago(p.upd)}</span>`})[c];
+  const tot=ls.reduce((a,p)=>a+p.value,0), col=ls.reduce((a,p)=>a+p.value*p.paid/100,0);
+  el.innerHTML=`<div class="panel" style="position:relative">
+    <div class="tbar"><span class="muted" style="font-size:12.5px">${ls.length} projects · sorted by ${COLS.find(c=>c[0]===k)[1]}</span><span style="flex:1"></span>
+      <button class="btn ghost sm" onclick="toast('Exported to CSV (mock)')">Export</button>
+      <div style="position:relative"><button class="btn ghost sm" onclick="event.stopPropagation();document.getElementById('cm').hidden=!document.getElementById('cm').hidden">Columns</button>
+      <div class="colmenu" id="cm" hidden onclick="event.stopPropagation()">${COLS.slice(1).map(([c,l])=>`<label><input type="checkbox" ${state.cols[c]?'checked':''} onchange="state.cols['${c}']=this.checked?1:0;render();document.getElementById('cm').hidden=false">${l}</label>`).join('')}</div></div></div>
+    <div class="tblwrap"><table><thead><tr><th style="width:36px" onclick="event.stopPropagation()"><input type="checkbox" onchange="toggleAll(this.checked)" ${state.sel.size&&state.sel.size===ls.length?'checked':''}></th>
+      ${vis.map(([c,l])=>`<th onclick="sortBy('${c}')">${l}${k===c?`<span class="ar">${d>0?'↑':'↓'}</span>`:''}</th>`).join('')}</tr></thead>
+    <tbody>${ls.map(p=>`<tr class="${state.sel.has(p.id)?'sel':''}" onclick="openDrawer(${p.id})"><td onclick="event.stopPropagation()"><input type="checkbox" ${state.sel.has(p.id)?'checked':''} onchange="toggleSel(${p.id})"></td>${vis.map(([c])=>`<td>${cell(p,c)}</td>`).join('')}</tr>`).join('')}</tbody>
+    <tfoot><tr><td></td>${vis.map(([c])=>`<td>${c==='name'?'Total':c==='value'?`<span class="tnum">${L(tot)}</span>`:c==='paid'?`<span class="tnum">${L(col)} in</span>`:''}</td>`).join('')}</tr></tfoot></table></div></div>
+    ${state.sel.size?`<div class="bulk">${state.sel.size} selected<button onclick="toast('Stage change (mock)')">Change stage</button><button onclick="toast('Owner reassigned (mock)')">Assign</button><button onclick="state.sel.clear();render()">Clear</button></div>`:''}`;
+};
+function sortBy(c){state.sort={k:c,d:state.sort.k===c?-state.sort.d:1};render()}
+function toggleSel(id){state.sel.has(id)?state.sel.delete(id):state.sel.add(id);render()}
+function toggleAll(on){state.sel.clear();if(on)list().forEach(p=>state.sel.add(p.id));render()}
+
+/* 4. Inbox */
+V[3]=el=>{
+  const items=list().filter(hasNext);
+  if(!items.length) return el.innerHTML=`<div class="panel empty"><b style="color:var(--ink);font-size:15px">Inbox zero.</b><br>Nothing needs you right now.</div>`;
+  if(!items.find(p=>p.id===state.inboxSel)) state.inboxSel=items[0].id;
+  const groups=['overdue','today','week'];
+  const p=P.find(x=>x.id===state.inboxSel);
+  const tone={blocker:['var(--redSoft)','var(--red)'],payment:['var(--amberSoft)','var(--amber)'],contract:['#f3f0ff','#5b49c9'],action:['var(--accentSoft)','var(--accent)']};
+  const cta={blocker:'Resolve blocker',payment:'Send payment reminder',contract:'Send for signature',action:p.next.t};
+  el.innerHTML=`<div class="panel inbox">
+    <div class="inl">${groups.map(g=>{const gi=items.filter(x=>x.next.due===g);if(!gi.length)return'';
+      return `<div class="ing" style="color:${g==='overdue'?'var(--red)':''}">${DUE[g]} · ${gi.length}</div>`+gi.map(x=>`<div class="ini ${x.id===state.inboxSel?'on':''}" onclick="state.inboxSel=${x.id};render()">
+        <div class="ic" style="background:${tone[x.next.k][0]};color:${tone[x.next.k][1]};font-weight:700">${KIND[x.next.k].ic}</div>
+        <div style="min-width:0"><div class="t">${x.next.t}</div><div class="s">${x.name} · ${x.client}</div></div></div>`).join('')}).join('')}</div>
+    <div class="inr fade">
+      <span class="next ${p.next.k}">${KIND[p.next.k].l} · ${DUE[p.next.due]}</span>
+      <h2>${p.next.t}</h2>
+      <div class="muted">${p.name} · ${p.client} · ${p.kind}, ${p.sft} sft, ${p.loc}</div>
+      <div class="facts">
+        <div class="fact"><span>Stage</span><b>${st(p).label}</b></div>
+        <div class="fact"><span>Project value</span><b class="tnum">${L(p.value)}</b></div>
+        <div class="fact"><span>Collected</span><b class="tnum">${p.paid}%</b></div>
+        <div class="fact"><span>Owner</span><b>${p.own}</b></div>
+      </div>
+      <div style="margin-bottom:22px">${steps(p)}</div>
+      <div class="callout" style="background:${tone[p.next.k][0]}">
+        <div style="flex:1;min-width:200px"><b style="color:${tone[p.next.k][1]}">Suggested next step</b><div class="muted" style="font-size:13px">${p.next.k==='payment'?'Send the stage invoice with a WhatsApp nudge to the client.':p.next.k==='contract'?'Re-share the agreement link and set a 48-hour follow-up.':p.next.k==='blocker'?'Assign an owner and a due date so the site team is not waiting.':'Open the project and complete this step.'}</div></div>
+        <button class="btn primary" onclick="toast('${cta[p.next.k]} (mock)')">${cta[p.next.k]}</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn ghost" onclick="state.done.add(${p.id});toast('Marked done');render()">✓ Mark done</button>
+        <button class="btn ghost" onclick="P.find(x=>x.id===${p.id}).next.due='week';toast('Snoozed to this week');render()">Snooze</button>
+        <button class="btn ghost" onclick="openDrawer(${p.id})">Open project</button>
+      </div>
+    </div></div>`;
+};
+
+/* 5. Split */
+V[4]=el=>{
+  const ls=list(); if(!ls.length) return el.innerHTML=`<div class="panel empty">No projects match.</div>`;
+  if(!ls.find(p=>p.id===state.splitSel)) state.splitSel=ls[0].id;
+  const p=P.find(x=>x.id===state.splitSel);
+  const ms=milestones(p);
+  const body={
+    Overview:`<div class="facts">${[['Client',p.client],['Type',p.kind],['Area',p.sft.toLocaleString('en-IN')+' sft'],['Location',p.loc],['BOQ',p.boq+(p.dummy?' · Dummy':' · Actual')],['Value',L(p.value)],['Collected',p.paid+'%'],['Last update',ago(p.upd)]].map(([a,b])=>`<div class="fact"><span>${a}</span><b>${b}</b></div>`).join('')}</div>
+      <div style="margin:6px 0 10px;font-weight:600">Next action</div>${nxt(p)}`,
+    Payments:ms.map(m=>`<div class="ms"><span class="ck ${m.done?'done':''}">${m.done?'✓':''}</span><div style="flex:1"><b style="font-size:13px">${m.n}</b><div class="muted" style="font-size:12px">${m.pct}% of project</div></div><b class="tnum">${L(m.amt)}</b></div>`).join(''),
+    Activity:[['Today','Stage set to '+st(p).label],['2d ago','BOQ revision R2 shared with client'],['5d ago','Site measurements uploaded'],['1w ago','Project created by '+p.own]].map(([a,b])=>`<div class="act"><span class="tm">${a}</span><span>${b}</span></div>`).join('')
+  };
+  el.innerHTML=`<div class="panel split">
+    <div class="spl">${ls.map(x=>`<div class="spi ${x.id===p.id?'on':''}" onclick="state.splitSel=${x.id};render()"><span class="dot" style="background:${st(x).hex};margin-top:6px"></span><div style="min-width:0;flex:1"><div class="t">${x.name}</div><div class="s">${x.client} · ${st(x).label}</div></div>${hasNext(x)&&x.next.k==='blocker'?'<span class="dot" style="background:var(--red);margin-top:6px"></span>':''}</div>`).join('')}</div>
+    <div class="spr fade">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${pill(p)}${boqTag(p)}<span style="flex:1"></span><button class="btn ghost sm" onclick="toast('Opens BOQ')">Open BOQ</button><button class="btn primary sm" onclick="toast('Opens full project')">Open project</button></div>
+      <h2 style="font-size:22px;margin:12px 0 2px">${p.name}</h2><div class="muted">${p.client} · ${p.loc}</div>
+      <div style="margin-top:18px">${steps(p)}</div>
+      <div class="tabs">${['Overview','Payments','Activity'].map(t=>`<button class="tab ${state.splitTab===t?'on':''}" onclick="state.splitTab='${t}';render()">${t}</button>`).join('')}</div>
+      <div class="fade">${body[state.splitTab]}</div>
+    </div></div>`;
+};
+
+/* 6. Funnel + KPIs */
+V[5]=el=>{
+  const open=P.filter(p=>['lead','proposal'].includes(p.stage));
+  const wonish=P.filter(p=>['won','onsite','handover'].includes(p.stage));
+  const lost=P.filter(p=>['lost','terminated'].includes(p.stage));
+  const toCollect=wonish.reduce((a,p)=>a+p.value*(100-p.paid)/100,0);
+  const max=Math.max(...FLOW.map(k=>P.filter(p=>p.stage===k).length),1);
+  const ls=list();
+  el.innerHTML=`<div class="kpis">
+    <div class="panel kpi"><span>Open pipeline</span><b class="tnum">${L(open.reduce((a,p)=>a+p.value,0))}</b><small>${open.length} leads and proposals</small></div>
+    <div class="panel kpi"><span>Win rate</span><b class="tnum">${Math.round(wonish.length/(wonish.length+lost.length)*100)}%</b><small>${wonish.length} won · ${lost.length} lost/terminated</small></div>
+    <div class="panel kpi"><span>On site now</span><b class="tnum">${P.filter(p=>p.stage==='onsite').length}</b><small>${P.filter(p=>p.stage==='onsite'&&hasNext(p)&&p.next.k==='blocker').length} with blockers</small></div>
+    <div class="panel kpi"><span>Still to collect</span><b class="tnum">${L(toCollect)}</b><small>across won and live jobs</small></div></div>
+  <div class="panel funnel"><div style="display:flex;align-items:center;margin-bottom:12px"><b>Stage funnel</b><span class="muted" style="font-size:12px;margin-left:8px">Click a stage to filter the list below</span></div>
+    ${FLOW.map(k=>{const it=P.filter(p=>p.stage===k);const s=STAGES[k];return `<div class="fr ${state.stage===k?'on':''}" onclick="setStage(state.stage==='${k}'?'all':'${k}')"><span class="lb">${s.label}</span><div class="bw"><i style="width:${Math.max(it.length/max*100,8)}%;background:${s.hex}">${it.length}</i></div><span class="vv tnum">${L(it.reduce((a,p)=>a+p.value,0))}</span></div>`}).join('')}
+  </div>
+  <div class="panel">${ls.map(p=>`<div class="row" onclick="openDrawer(${p.id})" style="grid-template-columns:minmax(200px,2fr) 1.2fr 1.6fr 90px 70px 28px"><div><div class="t">${p.name}</div><div class="s">${p.client}</div></div><div>${pill(p)}</div><div>${nxt(p)}</div><div class="c-val tnum" style="font-weight:600;text-align:right">${L(p.value)}</div><div class="s c-upd" style="text-align:right">${ago(p.upd)}</div><div class="c-own">${own(p.own)}</div></div>`).join('')||'<div class="empty">No projects match.</div>'}</div>`;
+};
+
+/* 7. Timeline */
+V[6]=el=>{
+  const ls=list().filter(p=>!['lost'].includes(p.stage)).sort((a,b)=>(a.start[0]*12+a.start[1])-(b.start[0]*12+b.start[1]));
+  const months=[];for(let y=2026,m=0;months.length<16;){months.push([y,m]);m++;if(m>11){m=0;y++}}
+  const MW=state.tlZoom==='month'?84:40, NW=230;
+  const mi=([y,m])=>(y-2026)*12+m;
+  const todayX=NW+(10+24/30)*MW;
+  const names=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  el.innerHTML=`<div style="display:flex;gap:6px;margin-bottom:10px"><button class="chip ${state.tlZoom==='month'?'on':''}" onclick="state.tlZoom='month';render()">Months</button><button class="chip ${state.tlZoom==='quarter'?'on':''}" onclick="state.tlZoom='quarter';render()">Compact</button><span class="muted" style="font-size:12px;align-self:center;margin-left:6px">Bars run from booking to planned handover. Lost leads hidden.</span></div>
+  <div class="panel tl" id="tlbox"><div class="tlg" style="grid-template-columns:${NW}px repeat(${months.length},${MW}px)">
+    <div class="tlh"><div style="position:sticky;left:0;z-index:3;background:#fafafb;border-left:0">Project</div>${months.map(([y,m])=>`<div>${names[m]}${m===0?' '+String(y).slice(2):''}</div>`).join('')}</div>
+    ${ls.map(p=>`<div class="tln" onclick="openDrawer(${p.id})"><div class="t">${p.name}</div><div class="s">${p.client}</div></div>${months.map(()=>`<div class="tlc"></div>`).join('')}`).join('')}
+    ${ls.map((p,i)=>{const x=NW+mi(p.start)*MW+4, w=Math.max((mi(p.end)-mi(p.start)+1)*MW-8,30);return `<div class="tlb" onclick="openDrawer(${p.id})" style="top:${38+i*52+13}px;left:${x}px;width:${w}px;background:${st(p).hex}">${st(p).label}${hasNext(p)&&p.next.k==='blocker'?' · blocker':''}</div>`}).join('')}
+    <div class="today" style="left:${todayX}px"><span>Today</span></div>
+  </div></div>`;
+  const box=$('#tlbox'); if(box) box.scrollLeft=Math.max(todayX-NW-MW*4,0);
+};
+
+/* 8. Clean cards */
+V[7]=el=>{
+  const ls=list(); const act=ls.filter(hasNext).sort((a,b)=>['overdue','today','week'].indexOf(a.next.due)-['overdue','today','week'].indexOf(b.next.due));
+  el.innerHTML=(act.length?`<div class="sect">Needs you · ${act.length}</div><div class="carou">${act.map(p=>`<div class="panel acard" onclick="openDrawer(${p.id})"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span class="next ${p.next.k}">${KIND[p.next.k].l}</span><span style="font-size:11.5px;font-weight:600;color:${p.next.due==='overdue'?'var(--red)':'var(--mute)'}">${DUE[p.next.due]}</span></div><div style="font-weight:700">${p.next.t}</div><div class="muted" style="font-size:12.5px">${p.name} · ${p.client}</div></div>`).join('')}</div>`:'')+
+  `<div class="sect">All projects · ${ls.length}</div><div class="cgrid">${ls.map(p=>`<div class="panel pcard" onclick="openDrawer(${p.id})">
+    <div class="top">${pill(p)}<span style="flex:1"></span>${boqTag(p)}</div>
+    <div class="t">${p.name}</div><div class="s">${p.client} · ${p.kind} · ${p.sft} sft · ${p.loc}</div>
+    ${steps(p,true)}
+    <div class="bot">${own(p.own)}<span class="muted">${ago(p.upd)}</span><span style="flex:1"></span><b class="tnum">${L(p.value)}</b></div></div>`).join('')}</div>`;
+};
+
+/* 9. Stage tracker */
+V[8]=el=>{
+  const ls=list();
+  el.innerHTML=`<div class="panel">${ls.map(p=>{const ms=milestones(p);return `<div class="trow" onclick="this.classList.toggle('open')">
+    <div class="trg"><div><div style="font-weight:600">${p.name}</div><div class="muted" style="font-size:12.3px">${p.client} · ${p.loc}</div></div>
+      <div>${isOpen(p)?steps(p):`<div class="ended"><span class="dot" style="background:${st(p).hex}"></span>${st(p).label} <span class="faint" style="font-weight:400">· closed ${ago(p.upd)}</span></div>`}</div>
+      <div style="text-align:right">${hasNext(p)?nxt(p):`<b class="tnum">${L(p.value)}</b>`}</div></div>
+    <div class="trx">${ms.map(m=>`<div class="pm"><span class="muted">${m.pct}%</span><b>${m.n}</b><span style="color:${m.done?'var(--green)':'var(--faint)'};font-weight:600">${m.done?'✓ Received':'Pending'} · ${L(m.amt)}</span></div>`).join('')}</div>
+  </div>`}).join('')||'<div class="empty">No projects match.</div>'}</div><div class="hint">Click a row to see payment milestones (sample split).</div>`;
+};
+
+/* 10. Hill chart */
+const HX={lead:.1,proposal:.27,won:.44,onsite:.68,handover:.9};
+V[9]=el=>{
+  const ls=list().filter(isOpen);
+  const W=1000,H=330,pad=40,base=270,amp=200;
+  const y=x=>base-Math.sin(Math.PI*x)*amp;
+  let path=`M${pad},${base}`;for(let i=0;i<=100;i++){const x=i/100;path+=` L${pad+x*(W-2*pad)},${y(x)}`}
+  const byStage={};ls.forEach(p=>(byStage[p.stage]=byStage[p.stage]||[]).push(p));
+  const dots=ls.map(p=>{const arr=byStage[p.stage];const j=arr.indexOf(p);const x=(p._hx??(HX[p.stage]+(j-(arr.length-1)/2)*0.035));return {p,x}});
+  el.innerHTML=`<div class="panel hill"><svg viewBox="0 0 ${W} ${H}" id="hsvg">
+    <line x1="${W/2}" y1="40" x2="${W/2}" y2="${base}" stroke="#e7e7ea" stroke-dasharray="4 5"/>
+    <path d="${path}" fill="none" stroke="#d4d5db" stroke-width="2.5"/>
+    <line x1="${pad}" y1="${base}" x2="${W-pad}" y2="${base}" stroke="#ececef"/>
+    <text x="${W*.25}" y="${base+30}" text-anchor="middle" font-size="13" font-weight="700" fill="#70747c">Uphill: winning the job</text>
+    <text x="${W*.75}" y="${base+30}" text-anchor="middle" font-size="13" font-weight="700" fill="#70747c">Downhill: delivering it</text>
+    ${FLOW.map(k=>`<text x="${pad+HX[k]*(W-2*pad)}" y="${base+52}" text-anchor="middle" font-size="11.5" fill="#a3a6ad">${STAGES[k].label}</text>`).join('')}
+    ${dots.map(({p,x})=>`<g class="hdot" data-id="${p.id}" transform="translate(${pad+x*(W-2*pad)},${y(x)})"><circle r="11" fill="${st(p).hex}" stroke="#fff" stroke-width="3"/>${hasNext(p)&&p.next.k==='blocker'?'<circle r="4" cx="9" cy="-9" fill="#c03a46" stroke="#fff" stroke-width="1.5"/>':''}</g>`).join('')}
+  </svg></div>
+  <div class="hlegend">
+    <div class="panel" style="padding:14px 16px"><b>How to read it</b><div class="muted" style="font-size:13px;margin-top:4px">Each dot is a live project. Left half is sales and design (uncertain), right half is execution (known work). Red badge means a blocker. Drag a dot to move its stage; click to open.</div></div>
+    <div class="panel" style="padding:14px 16px"><b>Stuck at the top?</b><div class="muted" style="font-size:13px;margin-top:4px">${(byStage.won||[]).length} project(s) sit at "Won" with no execution start. That is usually an unsigned agreement or an uncollected advance.</div></div>
+  </div>`;
+  bindHill(W,pad,y);
+};
+function bindHill(W,pad,y){
+  const svg=$('#hsvg'),tip=$('#htip'); if(!svg) return;
+  let drag=null,moved=false;
+  const toX=e=>{const r=svg.getBoundingClientRect();const sx=(e.clientX-r.left)/r.width*W;return Math.min(Math.max((sx-pad)/(W-2*pad),0.03),0.97)};
+  svg.querySelectorAll('.hdot').forEach(g=>{
+    const p=P.find(x=>x.id==g.dataset.id);
+    g.addEventListener('pointerenter',e=>{tip.style.display='block';tip.innerHTML=`<b>${p.name}</b> · ${st(p).label}${hasNext(p)?'<br>'+p.next.t:''}`});
+    g.addEventListener('pointermove',e=>{tip.style.left=e.clientX+12+'px';tip.style.top=e.clientY+12+'px'});
+    g.addEventListener('pointerleave',()=>{if(!drag)tip.style.display='none'});
+    g.addEventListener('pointerdown',e=>{drag={g,p};moved=false;g.setPointerCapture(e.pointerId)});
+    g.addEventListener('pointermove',e=>{if(!drag||drag.g!==g)return;moved=true;const x=toX(e);g.setAttribute('transform',`translate(${pad+x*(W-2*pad)},${y(x)})`);drag.x=x;
+      const near=FLOW.reduce((a,k)=>Math.abs(HX[k]-x)<Math.abs(HX[a]-x)?k:a,'lead');tip.innerHTML=`<b>${p.name}</b> → ${STAGES[near].label}`});
+    g.addEventListener('pointerup',e=>{tip.style.display='none';if(!drag)return;const d=drag;drag=null;
+      if(!moved){openDrawer(p.id);return}
+      const near=FLOW.reduce((a,k)=>Math.abs(HX[k]-d.x)<Math.abs(HX[a]-d.x)?k:a,'lead');
+      p._hx=d.x; if(near!==p.stage){p.stage=near;toast(`${p.name} moved to ${STAGES[near].label}`)} render()});
+  });
+}
+
+/* ================= DRAWER ================= */
+function openDrawer(id){
+  const p=P.find(x=>x.id===id); const ms=milestones(p);
+  $('#drawer').innerHTML=`<button class="x" onclick="closeDrawer()" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <div style="display:flex;gap:8px;align-items:center">${pill(p)}${boqTag(p)}</div>
+    <h2>${p.name}</h2><div class="muted">${p.client} · ${p.kind} · ${p.sft.toLocaleString('en-IN')} sft · ${p.loc}</div>
+    <div style="margin:22px 0">${isOpen(p)?steps(p):`<div class="ended"><span class="dot" style="background:${st(p).hex}"></span>Closed as ${st(p).label}</div>`}</div>
+    ${hasNext(p)?`<div class="callout" style="background:#fafafb;border:1px solid var(--line);margin-bottom:18px"><div style="flex:1">${nxt(p)}<div class="muted" style="font-size:12px;margin-top:6px">Due: ${DUE[p.next.due]} · Owner ${p.own}</div></div><button class="btn primary sm" onclick="state.done.add(${p.id});toast('Marked done');closeDrawer();render()">Done</button></div>`:''}
+    <div class="facts" style="margin-top:0"><div class="fact"><span>Value</span><b class="tnum">${L(p.value)}</b></div><div class="fact"><span>Collected</span><b class="tnum">${p.paid}%</b></div><div class="fact"><span>Owner</span><b>${p.own}</b></div><div class="fact"><span>Updated</span><b>${ago(p.upd)}</b></div></div>
+    <div style="font-weight:600;margin:6px 0 4px">Payment milestones <span class="faint" style="font-weight:400;font-size:12px">sample split</span></div>
+    ${ms.map(m=>`<div class="ms"><span class="ck ${m.done?'done':''}">${m.done?'✓':''}</span><div style="flex:1;font-size:13px">${m.n} <span class="faint">${m.pct}%</span></div><b class="tnum" style="font-size:13px">${L(m.amt)}</b></div>`).join('')}
+    <div style="display:flex;gap:8px;margin-top:20px"><button class="btn primary" onclick="toast('Opens full project')">Open project</button><button class="btn ghost" onclick="toast('Opens BOQ')">Open BOQ</button></div>`;
+  $('#drawer').classList.add('on');$('#scrim').classList.add('on');
+}
+function closeDrawer(){$('#drawer').classList.remove('on');$('#scrim').classList.remove('on')}
+
+/* ================= RENDER + EVENTS ================= */
+function render(){
+  renderOpts();renderFilters();
+  const el=$('#view'); el.className='fade'; void el.offsetWidth;
+  V[state.view](el);
+}
+$('#q').addEventListener('input',e=>{state.q=e.target.value;render()});
+$('#ar').onclick=()=>$('#opts').scrollBy({left:300,behavior:'smooth'});
+$('#al').onclick=()=>$('#opts').scrollBy({left:-300,behavior:'smooth'});
+$('#opts').addEventListener('scroll',e=>{const o=e.target;$('#al').style.display=o.scrollLeft>4?'grid':'none';$('#ar').style.display=o.scrollLeft+o.clientWidth<o.scrollWidth-4?'grid':'none'});
+document.addEventListener('click',()=>{const m=document.getElementById('cm');if(m)m.hidden=true});
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'){if(e.key==='Escape')e.target.blur();return}
+  if(e.key==='/'){e.preventDefault();$('#q').focus();return}
+  if(e.key==='Escape'){closeDrawer();return}
+  if(e.key==='ArrowRight'){setView((state.view+1)%10);return}
+  if(e.key==='ArrowLeft'){setView((state.view+9)%10);return}
+  if(/^[0-9]$/.test(e.key)){setView(e.key==='0'?9:+e.key-1);return}
+  if(state.view===0){const rows=[...document.querySelectorAll('.row')];if(!rows.length)return;
+    if(e.key==='j'){state.kb=Math.min(state.kb+1,rows.length-1);highlightKb();rows[state.kb].scrollIntoView({block:'nearest'})}
+    if(e.key==='k'){state.kb=Math.max(state.kb-1,0);highlightKb();rows[state.kb].scrollIntoView({block:'nearest'})}
+    if(e.key==='Enter'&&state.kb>=0)openDrawer(+rows[state.kb].dataset.id)}
+});
+render();
+</script>
+</body>
+</html>
