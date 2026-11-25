@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { STAGE } from '../../../lib/projectFolders';
-import { rankOf, todayKey, weekDays, type JourneyRow } from '../../../lib/projectsJourney';
+import { rankOf, todayKey, weekColumnOf, weekDays, type JourneyRow } from '../../../lib/projectsJourney';
 import { Chip, LABEL } from '../../ui/kit';
 import { NextStepButton, ProjectPhoto } from './parts';
 
@@ -10,9 +10,10 @@ import { NextStepButton, ProjectPhoto } from './parts';
   a past day is hatched, with an Overdue chip when something is still on it.
   Drag a card to another day to move its due date (kept on the project).
 
-  Steps that are on no day of this week wait in one strip above the columns,
-  so none is left out: overdue from before Monday, not given a day yet, and
-  due after Saturday. A card dragged from there to a day takes that day.
+  Every step of the week is on a day, as in the mockup (owner, 25 Nov 2026):
+  a step nobody has given a day sits on today, and one overdue from before
+  Monday on Monday (lib/projectsJourney weekColumnOf). A step due after
+  Saturday is not this week's.
 */
 
 const EDGE = { red: '#e11d48', gold: '#B8923A', brand: '#3D52A0' } as const;
@@ -25,8 +26,7 @@ const Card: React.FC<{
   nameOf: (email: string) => string;
   onOpen: (r: JourneyRow) => void;
   onDo: (r: JourneyRow) => void;
-  small?: boolean;
-}> = ({ r, nameOf, onOpen, onDo, small = false }) => {
+}> = ({ r, nameOf, onOpen, onDo }) => {
   const who = r.designers[0];
   return (
     <article
@@ -34,7 +34,7 @@ const Card: React.FC<{
       data-testid={`week-card-${r.id}`}
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', r.id); e.dataTransfer.effectAllowed = 'move'; }}
       onClick={() => onOpen(r)}
-      className={cx('pj-wk-card bg-white border border-slate-200 rounded-xl hud-row-in', small ? 'p-2 w-[220px] shrink-0' : 'p-2.5 mb-2')}
+      className="pj-wk-card bg-white border border-slate-200 rounded-xl p-2.5 mb-2 hud-row-in"
       style={{ borderLeft: `4px solid ${EDGE[r.next!.tone]}` }}
     >
       <div className="flex items-center gap-2 mb-2 min-w-0">
@@ -44,8 +44,8 @@ const Card: React.FC<{
           <p className="text-[11px] text-slate-500 truncate">{[STAGE[r.stage].label, who ? nameOf(who).split(' ')[0] : null].filter(Boolean).join(' · ')}</p>
         </div>
       </div>
-      <p className={cx('font-bold text-slate-800 leading-snug', small ? 'text-xs mb-1.5 truncate' : 'text-sm mb-2')}>{r.action?.title || r.next!.label}</p>
-      {!small && <NextStepButton row={r} label="Do it" onDo={onDo} />}
+      <p className="text-sm font-bold text-slate-800 leading-snug mb-2">{r.action?.title || r.next!.label}</p>
+      <NextStepButton row={r} label="Do it" onDo={onDo} />
     </article>
   );
 };
@@ -65,9 +65,6 @@ export default function ProjectWeek({ rows, nameOf, onOpen, onDo, onMove, now = 
   const today = todayKey(now);
   const withStep = rows.filter((r) => r.next);
   const order = (a: JourneyRow, b: JourneyRow) => rankOf(a) - rankOf(b);
-  const before = withStep.filter((r) => r.due && r.due.day < days[0]).sort(order);
-  const undated = withStep.filter((r) => !r.due).sort(order);
-  const later = withStep.filter((r) => r.due && r.due.day > days[5]).sort(order);
 
   const drop = (day: string) => (e: React.DragEvent) => {
     e.preventDefault();
@@ -76,30 +73,11 @@ export default function ProjectWeek({ rows, nameOf, onOpen, onDo, onMove, now = 
     if (r && r.due?.day !== day) onMove(r, day);
   };
 
-  const off = [
-    { key: 'before', label: 'Overdue from before Monday', rows: before },
-    { key: 'none', label: 'No day yet', rows: undated },
-    { key: 'later', label: 'After Saturday', rows: later },
-  ].filter((g) => g.rows.length);
-
   return (
     <div className="space-y-3">
-      {off.length > 0 && (
-        <section aria-label="Not on a day this week" className="bg-white rounded-2xl border border-slate-200 shadow-sm px-4 py-3 hud-panel-in space-y-2.5">
-          {off.map((g) => (
-            <div key={g.key}>
-              <p className={cx(LABEL, 'mb-1.5')}>{g.label} <span className="tabular-nums text-slate-400">{g.rows.length}</span></p>
-              <div className="flex gap-2 overflow-x-auto pj-noscroll pb-0.5">
-                {g.rows.map((r) => <Card key={r.id} r={r} nameOf={nameOf} onOpen={onOpen} onDo={onDo} small />)}
-              </div>
-            </div>
-          ))}
-        </section>
-      )}
-
       <div className="pj-wk pj-noscroll">
         {days.map((day, i) => {
-          const items = withStep.filter((r) => r.due?.day === day).sort(order);
+          const items = withStep.filter((r) => weekColumnOf(r, now) === day).sort(order);
           const past = day < today;
           const isToday = day === today;
           return (

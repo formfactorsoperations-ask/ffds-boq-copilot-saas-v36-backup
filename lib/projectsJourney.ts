@@ -305,6 +305,21 @@ export function dueLabel(day: string, now: number = Date.now()): string {
   return `${d} ${MONTH[m - 1]}`;
 }
 
+/**
+ * The column a step sits in on This week, or null when it is due after
+ * Saturday. A step with no day sits on today (on Saturday when today is
+ * Sunday), and one overdue from before Monday on Monday, so every step of the
+ * week is on a day, as in the mockup.
+ */
+export function weekColumnOf(r: Pick<JourneyRow, 'due'>, now: number = Date.now()): string | null {
+  const days = weekDays(now);
+  const today = todayKey(now);
+  if (!r.due) return today > days[5] ? days[5] : today;
+  if (r.due.day < days[0]) return days[0];
+  if (r.due.day > days[5]) return null;
+  return r.due.day;
+}
+
 export const isOverdue = (r: Pick<JourneyRow, 'due'>, now: number = Date.now()) => !!r.due && r.due.day < todayKey(now);
 
 /** Put off from the triage deck and not yet at its day: kept out of Needs you. */

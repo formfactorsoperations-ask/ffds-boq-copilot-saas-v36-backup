@@ -28,7 +28,7 @@ vi.mock('../../services/projectHealthService', () => ({ useProjectHealth: () => 
 
 import {
   buildRow, projectIntel, stripStages, needsYouOrder, groupRows, commandResults, statusForStage, routeTab, toggleStage,
-  needsCounts, matchesStage, dueOfStep, withDue, weekDays, dueLabel, isDueThisWeek, journeyCounts, todayKey,
+  needsCounts, matchesStage, dueOfStep, withDue, weekDays, dueLabel, isDueThisWeek, journeyCounts, todayKey, weekColumnOf,
 } from '../../lib/projectsJourney';
 
 afterEach(cleanup);
@@ -152,6 +152,16 @@ describe('the shared logic', () => {
     expect(weekDays(Date.parse('2026-11-29T17:00:00Z'))[0]).toBe('2026-11-23');
     expect(weekDays(Date.parse('2026-11-29T19:00:00Z'))[0]).toBe('2026-11-30');
     expect(['2026-11-24', '2026-11-25', '2026-11-27', '2026-12-02'].map((d) => dueLabel(d, NOW))).toEqual(['Overdue', 'Today', 'Fri', '2 Dec']);
+  });
+
+  it('This week puts a step with no day on today, an older overdue one on Monday, and leaves out next week', () => {
+    const at = (day?: string) => ({ due: day ? { day, source: 'set' as const } : null });
+    expect(weekColumnOf(at(), NOW)).toBe('2026-11-25');
+    expect(weekColumnOf(at('2026-11-18'), NOW)).toBe('2026-11-23');
+    expect(weekColumnOf(at('2026-11-24'), NOW)).toBe('2026-11-24');
+    expect(weekColumnOf(at('2026-12-01'), NOW)).toBeNull();
+    /* Sunday: the week shown is the one just ended, so a step with no day sits on its Saturday. */
+    expect(weekColumnOf(at(), Date.parse('2026-11-29T10:00:00Z'))).toBe('2026-11-28');
   });
 
   it('due this week: a Due step on or before Saturday, overdue, or with no day; the chips count them', () => {
@@ -293,11 +303,14 @@ describe('the Projects screen', () => {
     const { onQuickUpdate } = await mount(DATED());
     fireEvent.click(screen.getByRole('radio', { name: 'This week' }));
     expect(within(screen.getByTestId('day-2026-11-27')).getByTestId('week-card-p2')).toBeTruthy();
-    const off = screen.getByRole('region', { name: 'Not on a day this week' });
-    expect(within(off).getByText(/Overdue from before Monday/)).toBeTruthy();
-    expect(within(off).getByTestId('week-card-p3')).toBeTruthy();
-    expect(within(off).getByTestId('week-card-p1')).toBeTruthy();
-    expect(within(screen.getByTestId('day-2026-11-25')).getByText('Today')).toBeTruthy();
+    /* No strip above the week: a step with no day sits on today, one overdue from before Monday on Monday. */
+    expect(screen.queryByRole('region', { name: 'Not on a day this week' })).toBeNull();
+    const today = within(screen.getByTestId('day-2026-11-25'));
+    expect(today.getByText('Today')).toBeTruthy();
+    expect(today.getByTestId('week-card-p1')).toBeTruthy();
+    const monday = within(screen.getByTestId('day-2026-11-23'));
+    expect(monday.getByTestId('week-card-p3')).toBeTruthy();
+    expect(monday.getByText('Overdue')).toBeTruthy();
     const store: Record<string, string> = {};
     const dataTransfer = { setData: (k: string, v: string) => { store[k] = v; }, getData: (k: string) => store[k], effectAllowed: '' };
     fireEvent.dragStart(screen.getByTestId('week-card-p1'), { dataTransfer });

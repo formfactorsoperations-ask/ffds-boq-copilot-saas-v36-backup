@@ -1050,9 +1050,10 @@ and Needs-you counts from it) and its motion in `projectsJourney.css`.
 - **The Needs-you chip** reads "n due this week": the Due (gold) steps on or before Saturday, overdue
   included, or with no day yet. Needs you puts the earlier day first within blockers, due and the rest.
 - **Triage:** left puts the step off to tomorrow on the project; it leaves Needs you until then.
-- **This week:** Monday to Saturday as in the mockup. Steps on no day of this week (overdue from before
-  Monday, no day yet, after Saturday) wait in one strip above the columns, so none is left out; a card
-  dragged from it to a day takes that day.
+- **This week:** Monday to Saturday as in the mockup, with every step of the week on a day (owner,
+  25 Nov 2026): a step nobody has given a day sits on today (Saturday when today is Sunday), and one
+  overdue from before Monday sits on Monday under its Overdue chip. A step due after Saturday is not on
+  this week. Dragging a card to a day, today included, gives it that day.
 - **Health rings** (a Health column between Journey and Next step): the journey in the stage colour,
   drawings issued in brand, snags closed in emerald, with "n/n dwg" and the open snags. Drawings are
   counted by a Cloud Function into `organizations/{orgId}/projectHealth/{projectId}` (only the function
