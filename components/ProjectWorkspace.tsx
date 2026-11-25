@@ -275,7 +275,7 @@ export function ProjectWorkspace({
           next: isLimited ? undefined : isTerminated(projectContext) ? 'Project terminated' : (journey.nextStep?.title || 'Up next'),
           onClick: isLimited ? undefined : () => setActiveTab('project-journey'),
         }}
-        projectTools={<><ProjectContextTier projectContext={projectContext} /><ProjectTeamButton project={{ id: projectId, context: projectContext }} size="sm" align="left" /></>}
+        projectTools={<><ProjectContextTier projectContext={projectContext} projectId={projectId} setProjectContext={setProjectContext} /><ProjectTeamButton project={{ id: projectId, context: projectContext }} size="sm" align="left" /></>}
         studioHome={{ label: 'Studio home', onClick: () => onLeaveProject?.(isLimited ? 'projects' : 'home') }}
         bellProject={!isLimited ? {
           name: [projectContext?.name || 'This project', projectContext?.clientName].filter(Boolean).join(' · '),

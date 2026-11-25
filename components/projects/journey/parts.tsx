@@ -16,20 +16,27 @@ import { buttonClass } from '../../ui/kit';
 
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
 
-/** The project's photo, or the stage-tinted "No render yet" tile when it has none (or it fails to load). */
+/**
+ * The project's photo (lib/coverPhoto: its cover, else the latest render the
+ * client approved, else its latest render), trying the next when one fails to
+ * load; the stage-tinted "No render yet" tile when none does.
+ */
 export function ProjectPhoto({ row, className, label = true, eager = false }: {
-  row: Pick<JourneyRow, 'photo' | 'stage'>;
+  row: Pick<JourneyRow, 'photo' | 'stage'> & { photos?: string[] };
   className?: string;
   /** "No render yet" under the ruler; off on the small round photos. */
   label?: boolean;
   eager?: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [row.photo]);
+  const list = row.photos?.length ? row.photos : row.photo ? [row.photo] : [];
+  const key = list.join('|');
+  const [at, setAt] = useState(0);
+  useEffect(() => setAt(0), [key]);
+  const src = list[at];
   return (
     <div className={cx('pj-ph', className)} style={{ ['--c' as any]: STAGE[row.stage].color }}>
-      {row.photo && !failed ? (
-        <img src={row.photo} alt="" loading={eager ? undefined : 'lazy'} onError={() => setFailed(true)} />
+      {src ? (
+        <img key={src} src={src} alt="" loading={eager ? undefined : 'lazy'} referrerPolicy="no-referrer" onError={() => setAt((i) => i + 1)} />
       ) : (
         <div className="pj-ph-none"><Ruler className="w-5 h-5" aria-hidden />{label && <span>No render yet</span>}</div>
       )}

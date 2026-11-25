@@ -627,6 +627,27 @@ export interface DesignDocument {
     title: string;
     url: string;
     addedAt: string;
+    /** What the file is (Drawings → Renders). Absent on files added before types existed: those are renders. */
+    docType?: '3d_render' | 'gfc_drawing' | 'layout' | 'moodboard';
+    /** A picture of the file, when its own link is not one (a Google Drive link is drawn through lib/coverPhoto). */
+    thumbnailUrl?: string;
+}
+
+/**
+ * The photo a project shows on the Projects screen (lib/coverPhoto): uploaded
+ * in the project's Details (kept in Firebase Storage under
+ * projects/{projectId}/cover/), or a render picked with "Set as cover".
+ */
+export interface CoverPhoto {
+    url: string;
+    source: 'upload' | 'render';
+    /** The render it was picked from. When that render is removed, the cover goes with it. */
+    docId?: string;
+    /** Where an uploaded cover is kept in Storage, so a new upload can replace it. */
+    storagePath?: string;
+    setAt: number;
+    /** Who set it (email). */
+    setBy?: string;
 }
 
 /**
@@ -1027,6 +1048,8 @@ export interface ProjectContext {
     clientMessages?: ClientMessage[];
     paintPalettes?: PaintPalette[];
     designDocuments?: DesignDocument[]; // URLs for approved design PDFs
+    /** The photo the Projects screen shows for this project (lib/coverPhoto). */
+    coverPhoto?: CoverPhoto | null;
     /**
      * The site progress photo album, held in the studio's Google Drive.
      *
