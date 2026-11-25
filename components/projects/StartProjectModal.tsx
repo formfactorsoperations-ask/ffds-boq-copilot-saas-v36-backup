@@ -26,7 +26,12 @@ import '../projectHeader/projectHeader.css';
   Dummy, so it stays out of the desk and the numbers.
 */
 
+/** A new client's details from the Clients screen: the quick-add form opens with them. */
+export interface NewClientPrefill { name: string; phone: string; email: string; where: string }
+
 interface Props {
+  /** Clients → New client: open on the quick-add form, filled in. */
+  prefill?: NewClientPrefill | null;
   /** Owner, Admin, Ops Director or Super Admin: may see the leads and open a project. */
   canStart: boolean;
   /** Creates and saves the project from the lead's details; resolves to its id. */
@@ -41,7 +46,7 @@ interface Props {
 const field = 'w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]';
 const label = 'block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5';
 
-export default function StartProjectModal({ canStart, createProject, onOpened, onPractice, onClose }: Props) {
+export default function StartProjectModal({ prefill, canStart, createProject, onOpened, onPractice, onClose }: Props) {
   const { orgData, currentUserAuth } = useOrg();
   const tenantId = orgData?.tenantId || '';
   const me = {
@@ -54,8 +59,10 @@ export default function StartProjectModal({ canStart, createProject, onOpened, o
   const [loadError, setLoadError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [quick, setQuick] = useState({ name: '', phone: '', email: '', where: '', source: 'walkin' as LeadSource });
+  const [adding, setAdding] = useState(!!prefill);
+  const [quick, setQuick] = useState({
+    name: prefill?.name || '', phone: prefill?.phone || '', email: prefill?.email || '', where: prefill?.where || '', source: 'walkin' as LeadSource,
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { Phone, Mail, MapPin, KeyRound, Copy, RefreshCw, Check, NotebookPen, ArrowRight } from '@/lib/lucide-shim';
+import { Phone, Mail, MapPin, KeyRound, Copy, RefreshCw, Check, NotebookPen, ArrowRight, Pencil } from '@/lib/lucide-shim';
 import { Button, Chip, LABEL, type Tone } from '../ui/kit';
 import { StageChip } from '../projects/journey/parts';
 import { stageOfProject } from '../../lib/projectFolders';
@@ -72,7 +72,7 @@ const NEXT_TONE: Record<'warn' | 'go' | 'plain', string> = {
   plain: 'bg-slate-50 text-slate-700 border-slate-200',
 };
 
-export default function ClientCard({ row, tenantId, canPortal, onOpenProject, onOpenDossier, portalLines = [] }: {
+export default function ClientCard({ row, tenantId, canPortal, onOpenProject, onOpenDossier, portalLines = [], onEdit }: {
   row: ClientRow;
   tenantId: string;
   /** Owner, Admin, Ops Director, Super Admin: may give, reset and copy portal access. */
@@ -81,6 +81,8 @@ export default function ClientCard({ row, tenantId, canPortal, onOpenProject, on
   onOpenDossier: () => void;
   /** Each project's portal status line (lib/portalVisits); Viewer's carry no visits. */
   portalLines?: Array<{ projectId: string; name: string; line: PortalLine }>;
+  /** Owner, Admin, Ops Director, Super Admin: Edit client. */
+  onEdit?: () => void;
 }) {
   const c = row.client;
   const p = row.primary;
@@ -144,7 +146,10 @@ export default function ClientCard({ row, tenantId, canPortal, onOpenProject, on
     <div className="flex flex-col">
       <ClientPhoto project={p} className="w-full h-40" />
       <div className="px-5 pt-4 pb-4">
-        <h2 className="text-base font-bold text-slate-900">{c.clientName}</h2>
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="text-base font-bold text-slate-900">{c.clientName}</h2>
+          {onEdit && <Button size="sm" icon={Pencil} onClick={onEdit}>Edit</Button>}
+        </div>
         <p className="text-xs text-slate-500 mt-0.5">
           {[ctx.name, ctx.config, ctx.location].filter(Boolean).join(' · ') || 'No details yet'}
         </p>
@@ -157,13 +162,13 @@ export default function ClientCard({ row, tenantId, canPortal, onOpenProject, on
             <Phone className="w-4 h-4 text-slate-400 shrink-0" aria-hidden />
             {c.clientPhone
               ? <a href={`tel:${c.clientPhone.replace(/\s+/g, '')}`} className="truncate hover:text-[#3D52A0]">{c.clientPhone}</a>
-              : <button type="button" onClick={() => onOpenProject(p)} className="text-xs font-bold text-[#3D52A0] hover:underline">Add phone</button>}
+              : <button type="button" onClick={() => (onEdit ? onEdit() : onOpenProject(p))} className="text-xs font-bold text-[#3D52A0] hover:underline">Add phone</button>}
           </li>
           <li className="flex items-center gap-2.5 min-w-0">
             <Mail className="w-4 h-4 text-slate-400 shrink-0" aria-hidden />
             {c.clientEmail
               ? <a href={`mailto:${c.clientEmail}`} className="truncate hover:text-[#3D52A0]">{c.clientEmail}</a>
-              : <button type="button" onClick={() => onOpenProject(p)} className="text-xs font-bold text-[#3D52A0] hover:underline">Add email</button>}
+              : <button type="button" onClick={() => (onEdit ? onEdit() : onOpenProject(p))} className="text-xs font-bold text-[#3D52A0] hover:underline">Add email</button>}
           </li>
           <li className="flex items-center gap-2.5 min-w-0">
             <MapPin className="w-4 h-4 text-slate-400 shrink-0" aria-hidden />

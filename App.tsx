@@ -107,6 +107,8 @@ const PeoplePage = lazyWithRetry(() => import("./components/people/PeoplePage"))
 /* Whole tabs, loaded when first opened rather than with the app (each renders inside the tab's Suspense). */
 const DesignDeskTab = lazyWithRetry(() => import("./components/designDesk2/DesignDeskSwitch"));
 const StartProjectModal = lazyWithRetry(() => import("./components/projects/StartProjectModal"));
+import type { NewClientPrefill } from "./components/projects/StartProjectModal";
+import { savedAt } from "./services/clientEditService";
 const BoqSlideOver = lazyWithRetry(() => import("./components/pricing/BoqSlideOver"));
 const DataPrivacyPage = lazyWithRetry(() => import("./components/studio/DataPrivacyPage"));
 const SupportDeskPage = lazyWithRetry(() => import("./components/studio/SupportDeskPage"));
@@ -228,6 +230,8 @@ export default function App() {
   const [showWizardOverride, setShowWizardOverride] = useState(false);
   /* The New Project window (components/projects/StartProjectModal). */
   const [startingProject, setStartingProject] = useState(false);
+  /* Clients → New client: the details the start window's quick-add opens with. */
+  const [startPrefill, setStartPrefill] = useState<NewClientPrefill | null>(null);
   /* The project being terminated from the status window (lib/termination). */
   const [terminateTarget, setTerminateTarget] = useState<string | null>(null);
   /* Pricing & Tiers' "Edit BOQ": the option's BOQ over the comparison (components/pricing/BoqSlideOver). */
@@ -1959,14 +1963,52 @@ export default function App() {
   const handleCreateNewProject = () => {
     // Designers and the other limited roles are given projects; they do not start them (lib/roleAccess).
     if (isLimitedRole(currentRole)) return;
+    setStartPrefill(null);
     setStartingProject(true);
+  };
+
+  /*
+    Clients → New client (owner's decision D1): a lead with the client's
+    details filled in, through the same start window; a Dummy client is a
+    practice project with their details on it.
+  */
+  const handleCreateNewClient = (client: NewClientPrefill & { dummy?: boolean }) => {
+    if (isLimitedRole(currentRole)) return;
+    if (client.dummy) { startBlankProject({ practice: true, client }); return; }
+    setStartPrefill({ name: client.name, phone: client.phone, email: client.email, where: client.where });
+    setStartingProject(true);
+  };
+
+  /*
+    Clients → Edit client (lib/clientEdit): the same details written to each
+    of the client's projects. A project is loaded whole before it is saved,
+    as on opening it, so options kept aside are not written over; the project
+    open in the workspace takes the change in its own state, and its save
+    carries it. Resolves "open" for that one, "saved" once the save reached
+    the database, and throws when it did not.
+  */
+  const handleClientProjectUpdate = async (projectId: string, patch: Record<string, any>): Promise<'saved' | 'open'> => {
+    const listed = projectLibraryRef.current.find((p) => p.id === projectId);
+    if (!listed) throw new Error("That project is not loaded.");
+    const at = Date.now();
+    setProjectLibrary((prev) => prev.map((p) => (p.id === projectId ? { ...p, context: { ...p.context, ...patch }, lastModified: at } : p)));
+    if (activeInternalId === projectId) {
+      setProjectContext((prev) => ({ ...prev, ...patch }));
+      return 'open';
+    }
+    const whole = (listed as any)._failedHydration ? listed : await hydrateProjectDetail(listed);
+    if ((whole as any)._failedHydration) throw new Error(`${listed.context?.name || 'A project'} did not load, so it was not saved.`);
+    await db.saveProject({ ...whole, context: { ...whole.context, ...patch }, lastModified: at });
+    const stored = await savedAt(projectId).catch(() => null);
+    if (stored !== at) throw new Error(`${listed.context?.name || 'A project'} was not saved.`);
+    return 'saved';
   };
 
   /**
    * A blank project, without a lead: the practice or demo project the start
    * window offers (tagged Dummy), and Studio settings' "start over".
    */
-  const startBlankProject = (opts: { practice?: boolean } = {}) => {
+  const startBlankProject = (opts: { practice?: boolean; client?: NewClientPrefill } = {}) => {
     if (isLimitedRole(currentRole)) return;
     const newId = generateId();
     setActiveInternalId(newId);
@@ -1987,6 +2029,13 @@ export default function App() {
       scopeFlow: { enabled: true, enabledAt: Date.now(), enabledBy: currentUserAuth?.displayName || currentUserAuth?.email || "Studio" },
       // Practice and demo projects are kept out of the desk and the numbers.
       ...(opts.practice ? { isDummy: true, projectCategory: 'dummy' as const } : {}),
+      /* A dummy client from Clients → New client: their details on the practice project. */
+      ...(opts.client ? {
+        clientName: opts.client.name,
+        clientPhone: opts.client.phone,
+        clientEmail: opts.client.email,
+        ...(opts.client.where ? { location: opts.client.where } : {}),
+      } : {}),
     });
     setTiers([]);
     setActiveTierId(null);
@@ -3455,6 +3504,8 @@ export default function App() {
                       projects={visibleProjects}
                       onOpenProject={handleOpenProject}
                       onCreateNew={handleCreateNewProject}
+                      onCreateClient={handleCreateNewClient}
+                      onUpdateClientProject={handleClientProjectUpdate}
                       // ACTIVE_CLIENTS
                     />
                   )}
@@ -4121,6 +4172,8 @@ export default function App() {
                       projects={visibleProjects}
                       onOpenProject={handleOpenProject}
                       onCreateNew={handleCreateNewProject}
+                      onCreateClient={handleCreateNewClient}
+                      onUpdateClientProject={handleClientProjectUpdate}
                     />
                   )}
                   {activeTab === "admin-templates-bank" && (
@@ -4693,6 +4746,7 @@ export default function App() {
       {startingProject && (
         <Suspense fallback={null}>
         <StartProjectModal
+          prefill={startPrefill}
           canStart={holdsFinanceRole(currentRoles?.length ? currentRoles : currentRole)}
           createProject={handleCreateFromLead}
           onOpened={(id) => {
