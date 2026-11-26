@@ -261,6 +261,8 @@ export function complimentaryKeys(discounts: OfferDiscount[]): Set<string> {
  */
 export function staleOffer(d: OfferDiscount, tierId: string, split: ScopeSplit, sameOption?: (a: string, b: string) => boolean, special?: SpecialContext): number | null {
   if (!d.basis) return null;
+  /* Held at what the client signed (lib/revisionOffer): a later version does not re-price it. */
+  if (d.heldAt) return null;
   /* A special price is checked against the rest of the deal; without it, it is taken as it stands. */
   if (d.basis.kind === 'special' && !special) return null;
   const ctx = special && { ...special, others: special.others.filter((x) => x.id !== d.id) };

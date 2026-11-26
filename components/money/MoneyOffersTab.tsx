@@ -4,12 +4,15 @@ import { Gift, Percent, Wallet, Trash2, AlertTriangle, Layers } from '@/lib/luci
 import { Item, ProjectContext, ProposalTier } from '../../types';
 import { buildBankMap } from '../../lib/boqPricing';
 import { withDiscounts } from '../../lib/playground/deal';
+import { pendingRevision } from '../../lib/revisionMoneyPreview';
+import { withRevisionOffer } from '../../lib/revisionOffer';
+import RevisionOfferFields from '../scope/RevisionOfferFields';
 import { formatINR as formatCurrency, id as newId } from '../../lib/utils';
 import { computeSchedule, contractInForce, gstTermsOf } from '../../lib/paymentSchedule';
 import { otherBenchmarks, medianGm } from '../../lib/tierBenchmarks';
 import { optionChains, latestOf, chainOf, sameOption, versionNo } from '../../lib/optionChains';
 import {
-  SCOPE_PARTS, partLabel, scopeSplit, splitPricingOf, offerScope, offerDiscount, offerValue, offerName, staleOffer, refreshedOffer, marginWith, dealFor,
+  SCOPE_PARTS, partLabel, scopeSplit, discountTotal, splitPricingOf, offerScope, offerDiscount, offerValue, offerName, staleOffer, refreshedOffer, marginWith, dealFor,
   type ScopePart, type OfferBasis, type OfferDiscount,
 } from '../../lib/offers';
 
@@ -77,6 +80,9 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
   /* A Playground option's lines at their rounded amounts, as its summary has them (lib/offers splitPricingOf). */
   const split = useMemo(() => scopeSplit(tier, bankMap, splitPricingOf(tier, ctx.rooms, bankMap)), [tier, bankMap, ctx.rooms]);
   const discounts: OfferDiscount[] = (ctx.financials?.discounts || []) as OfferDiscount[];
+  /* A scope revision still open: its own discount is written here or in Revision Studio (lib/revisionOffer). */
+  const openRev = useMemo(() => pendingRevision(ctx, tiers, bank || []), [ctx, tiers, bank]);
+  const openRec = openRev ? (ctx.scopeRevisions || []).find((r: any) => r.id === openRev.id) || null : null;
 
   const benchmarks = useMemo(() => otherBenchmarks(projects, { id: projectId, name: projectId ? undefined : ctx.name }), [projects, projectId, ctx.name]);
   const median = useMemo(() => medianGm(benchmarks), [benchmarks]);
@@ -219,6 +225,8 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
                         <p className="text-[11px] text-slate-500">
                           {d.basis ? `${offerScope(d.basis)} · ` : ''}{d.target === 'design' ? 'Off the design fee' : 'Off execution'}
                           {elsewhere ? ` · priced on ${elsewhere}` : ''}
+                          {d.revision ? ` · given in Scope Revision ${d.revision}` : d.heldAt ? ' · from the proposal, held as signed' : ''}
+                          {d.heldFromPercent ? ` (${+d.heldFromPercent.toFixed(2)}%)` : ''}
                         </p>
                         {stale !== null && (
                           <p className="mt-1 text-[11px] text-amber-700 flex items-center gap-1">
@@ -241,6 +249,31 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
                   );
                 })}
               </ul>
+            )}
+
+            {openRev && openRec && (
+              <div className="mt-5 rounded-xl border border-slate-200 p-4 space-y-3" aria-label={`Discount on Scope Revision ${openRev.number}`}>
+                <div>
+                  <p className="text-sm font-bold text-slate-800">Discount on Scope Revision {openRev.number}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {openRev.state === 'draft'
+                      ? 'Its own, apart from the offers above. It goes out with the revision, and comes off the milestones once the revision is applied. Revision Studio shows the same one.'
+                      : 'As the revision was issued. To change it, take the revision back to a draft in Versions & Revision Studio.'}
+                  </p>
+                </div>
+                <RevisionOfferFields
+                  number={openRev.number}
+                  offer={openRev.state === 'draft' ? openRec.offer : openRev.offer}
+                  bases={openRev.state === 'draft'
+                    ? { added: openRev.added || 0, inWholeRooms: openRev.addedInWholeRooms || 0, whole: openRev.v2Total, given: openRev.given || 0 }
+                    : { added: openRev.offer?.base || 0, whole: openRev.offer?.base || 0,
+                        given: openRev.offer?.on === 'topup' ? Math.max(0, openRev.offer.base * (openRev.offer.value / 100) - openRev.offer.amount) : 0 }}
+                  editable={openRev.state === 'draft' && !readOnly}
+                  onChange={(offer) => setProjectContext((prev: any) => withRevisionOffer(openRec.id, offer)(prev))}
+                  idPrefix="mo-rev"
+                  proposalOff={discountTotal(openRev.v1Total, discounts.filter((d) => !d.revision), 'execution')}
+                />
+              </div>
             )}
 
             {adding && (

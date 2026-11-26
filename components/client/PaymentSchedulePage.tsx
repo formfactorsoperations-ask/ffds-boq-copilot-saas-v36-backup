@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { ProjectContext, PaymentSchedule, ProjectEngagement } from '../../types';
 import { FileText, Send, Download, AlertTriangle, Eye, RefreshCw, PencilLine, Info } from '@/lib/lucide-shim';
 import { formatCurrency, id as generateId } from '../../lib/utils';
-import { resolveFinancials, billingSummary } from '../../lib/paymentSchedule';
+import { resolveFinancials, billingSummary, billingBase } from '../../lib/paymentSchedule';
+import { rebaseAdvances, taxableBases } from '../../lib/paymentScheduleRevision';
 import { engagementOf, isFeeOnly } from '../../lib/engagement';
 import { useOrg } from '../../contexts/OrgContext';
 import { resolveDocumentState, getCurrentIssue } from '../../services/documentIssueEngine';
@@ -180,13 +181,21 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
             }
 
             const engagement = projectContext.engagement;
-            const originalNetDesign = (activeTier?.summary?.designFee !== undefined && activeTier?.summary?.designFee > 0)
-                ? activeTier.summary.designFee 
+            /* Once a contract is in force the schedule bills the approved values (a revision applied
+               moves them), not whichever option is selected; before that, the option, as Money does. */
+            const billed = billingBase(projectContext, activeTier?.summary, resolveFinancials(projectContext.financials));
+            const originalNetDesign = billed.design > 0
+                ? billed.design
                 : (engagement?.designFee || projectContext.financials?.approvedDesignValue || 0);
-            const originalNetExecution = feeOnly ? 0 : (activeTier?.summary?.totalSell !== undefined && activeTier?.summary?.totalSell > 0)
-                ? activeTier.summary.totalSell 
+            const originalNetExecution = feeOnly ? 0 : billed.execution > 0
+                ? billed.execution
                 : (engagement?.executionValue || projectContext.financials?.approvedExecutionValue || 0);
-            const contractValue = originalNetExecution + originalNetDesign;
+            /* Every discount comes off before the stages are worked out, the revision's included (lib/revisionOffer). */
+            const taxable = taxableBases(projectContext, originalNetExecution, originalNetDesign);
+            const milestonesInUse = (projectContext.paymentMilestones || []).filter((m) => !(feeOnly && m.type === 'execution'));
+            const contractValue = milestonesInUse.length
+                ? taxable.taxableExecution + taxable.taxableDesign
+                : originalNetExecution + originalNetDesign;
 
             const engagementSnapshot = {
                 docketRef: null,
@@ -205,31 +214,14 @@ export default function PaymentSchedulePage({ projectContext, setProjectContext,
 
             let newAdvances = [];
             
-            if (projectContext.paymentMilestones && projectContext.paymentMilestones.length > 0) {
-                // Use custom milestones from Payment Calculator
-                let dIndex = 0;
-                let eIndex = 0;
-                newAdvances = projectContext.paymentMilestones.filter((m) => !(feeOnly && m.type === 'execution')).map((m) => {
-                    const originalBaseAmount = m.type === 'execution' ? originalNetExecution : originalNetDesign;
-                    let amount = m.isFixedAmount && m.fixedAmount !== undefined ? m.fixedAmount : (originalBaseAmount * (m.percentage / 100));
-                    amount = Math.round(amount);
-                    const autoCode = m.type === 'design' ? `D${++dIndex}` : `E${++eIndex}`;
-                    return {
-                        milestoneId: m.id,
-                        advanceCode: autoCode,
-                        label: (m.name || '').replace(' (Gross)', ''),
-                        phase: m.type as 'design' | 'execution' | 'handover',
-                        percentage: m.percentage,
-                        isFixedAmount: m.isFixedAmount,
-                        fixedAmount: m.fixedAmount,
-                        amount: amount,
-                        dueCondition: m.trigger || (m.type === 'execution' ? 'Advance before ' + (m.name || '').replace(' (Gross)', '').toLowerCase() : 'On completion of ' + (m.name || '').replace(' (Gross)', '')),
-                        unlocks: m.unlocks || '',
-                        status: 'pending',
-                        invoiceRef: null,
-                        receivedAt: null,
-                        isHandoverAdvance: m.isHandoverAdvance || (m.name || '').toLowerCase().includes('handover') || false
-                    };
+            if (milestonesInUse.length > 0) {
+                /* The milestones from Money, by its own rules (lib/paymentScheduleRevision): a stage
+                   invoiced or paid keeps the amount it was billed at and stays received, and the
+                   stages to come share the rest after every discount. This used to price every
+                   stage again on the full value, before discounts, and mark a paid D1 as pending. */
+                newAdvances = rebaseAdvances(milestonesInUse, taxable).map((a: any, i: number) => {
+                    const m = milestonesInUse[i];
+                    return m ? { ...a, milestoneId: m.id, isHandoverAdvance: m.isHandoverAdvance || a.isHandoverAdvance } : a;
                 });
             } else {
                 let i = 0;

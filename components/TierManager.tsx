@@ -29,6 +29,7 @@ import { SparklesIcon } from './Icons';
 import { withDiscounts } from '../lib/playground/deal';
 import { bestFit, budgetGap, extrasOf, fitWithout, suggestedOut } from '../lib/budgetFit';
 import NumberField from './NumberField';
+import { revisedTierPreview } from '../lib/revisionMoneyPreview';
 
 interface TierManagerProps {
     tiers: ProposalTier[];
@@ -54,6 +55,11 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
        Scope Revision, so it cannot be synced, re-approved or deleted here. */
     const scopeFlowOn = isScopeFlowOn(projectContext);
     const signedTierId = lockedTierId(projectContext);
+    /* A scope revision still open on the signed version: shown beside it, and continued rather than started again. */
+    const openRevision = React.useMemo(
+        () => (signedTierId ? revisedTierPreview(projectContext, tiers, bank || []) : null),
+        [signedTierId, projectContext, tiers, bank],
+    );
     const { currentUserAuth, currentRole } = useOrg() as any;
     const approverName = currentUserAuth?.displayName || currentUserAuth?.email || currentRole || 'Studio';
     const [editingTierId, setEditingTierId] = useState<string | null>(null);
@@ -796,6 +802,7 @@ const TierManager: React.FC<TierManagerProps> = ({ tiers, setTiers, activeTierId
         <div className="w-full max-w-[1400px] mx-auto flex flex-col gap-4 font-sans pb-12">
             <PricingGrid
                 columns={visibleColumns}
+                openRevision={openRevision}
                 summary={`${chains.length} ${chains.length === 1 ? 'option' : 'options'}${versionCount > chains.length ? ` · ${versionCount} versions` : ''}`}
                 budget={budget || null}
                 bestFitId={bestFit(visibleColumns.map(c => ({ id: c.tier.id, total: optionPrice(c.tier).total })), budget)}

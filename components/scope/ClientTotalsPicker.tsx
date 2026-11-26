@@ -31,7 +31,11 @@ export default function ClientTotalsPicker({ value, onChange, before, after }: P
       <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-400">What the client's total shows</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {box(value.execGst, execGstLabel(value), (v) => set({ execGst: v }))}
-        {box(value.designFee, <>Design fee {value.designFeeValue > 0 ? `(${inr(value.designFeeValue)})` : '(none recorded)'}</>, (v) => set({ designFee: v, designGst: v ? value.designGst : false }), value.designFeeValue <= 0)}
+        {box(value.designFee, <>Design fee {value.designFeeValue > 0
+          ? (revision && typeof value.designFeeAfter === 'number' && Math.abs(value.designFeeAfter - value.designFeeValue) >= 0.5
+            ? `(${inr(value.designFeeValue)} → ${inr(value.designFeeAfter)}, on the revised BOQ)`
+            : `(${inr(value.designFeeValue)})`)
+          : '(none recorded)'}</>, (v) => set({ designFee: v, designGst: v ? value.designGst : false }), value.designFeeValue <= 0)}
         {box(value.designGst, `GST on the design fee (${value.gstRate}%)`, (v) => set({ designGst: v }), !value.designFee)}
         <label className="flex items-center gap-2 text-[12.5px] text-slate-700">
           GST rate

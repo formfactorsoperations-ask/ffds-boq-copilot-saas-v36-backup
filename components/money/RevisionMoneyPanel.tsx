@@ -97,6 +97,16 @@ export default function RevisionMoneyPanel({ rev, preview: p, compact, onOpen }:
           <p className="text-xs text-[#5A628A] mt-0.5 max-w-3xl">
             A preview of how the milestones change on the revised BOQ ({inr(rev.v1Total)} → {inr(rev.v2Total)} before discount), with this project’s discount, GST and billing split. {st.line}
           </p>
+          {rev.offer && rev.offer.amount > 0 && (
+            <p className="text-xs text-[#5A628A] mt-1">
+              Includes the revision’s own discount, <b className="text-emerald-700 tabular-nums">−{inr(rev.offer.amount)}</b> ({rev.offer.name}). The proposal’s discount stays as agreed.
+            </p>
+          )}
+          {typeof rev.designFeeAfter === 'number' && (
+            <p className="text-xs text-[#5A628A] mt-1">
+              The design fee follows the revised BOQ, before discounts: <b className="text-[#12182F] tabular-nums">{inr(rev.designFeeAfter)}</b>.
+            </p>
+          )}
         </div>
         <ChevronDown className={`w-4 h-4 text-[#8E96B8] shrink-0 mt-2 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>

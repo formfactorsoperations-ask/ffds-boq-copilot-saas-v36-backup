@@ -502,6 +502,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         })
     );
 
+    const executionMilestonesExist = (ms: PaymentMilestone[]) => ms.some(m => m.type === 'execution');
+
     const handleGenerateSchedule = () => {
         // Contract value is sum of execution and design value
         const contractValue = taxableExecution + taxableDesign;
@@ -1156,6 +1158,22 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const taxableExecution = Math.max(0, rawExecutionTotal - executionDiscountVal);
     const taxableDesign = Math.max(0, rawDesignFee - designDiscountVal);
 
+    /*
+      The latest schedule's execution stages no longer add up to the execution
+      after discounts: a discount was given (a scope revision's own, say) or the
+      value moved, with the milestones left as they were. Generating a revised
+      schedule is then the way to bring it up to date, not only after a
+      milestone edit. A schedule with no execution stages is not judged here.
+    */
+    const scheduleAmountsStale = (() => {
+        if (!latestSchedule || selectedHistoricalEntry) return false;
+        const exec = (latestSchedule.advances || []).filter((a: any) => a.phase === 'execution');
+        if (!exec.length || !executionMilestonesExist(milestones)) return false;
+        const sum = exec.reduce((t: number, a: any) => t + (Number(a.amount) || 0), 0);
+        return Math.abs(sum - taxableExecution) > Math.max(10, exec.length);
+    })();
+    const scheduleOutOfDate = !!hasUnsavedScheduleChanges || scheduleAmountsStale;
+
     // 2. Filter Milestones
     const executionMilestones = milestones.filter(m => m.type === 'execution');
     const designMilestones = milestones.filter(m => m.type === 'design');
@@ -1223,7 +1241,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         [selectedHistoricalEntry, projectContext, tiers, bank],
     );
     const revisionPreview = useMemo(
-        () => (openRevision ? previewRevisionMoney(scheduleArgs, openRevision.v2Total) : null),
+        () => (openRevision ? previewRevisionMoney(scheduleArgs, openRevision.v2Total, openRevision.discounts, openRevision.designFeeAfter) : null),
         [openRevision, scheduleArgs],
     );
 
@@ -1947,7 +1965,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const scheduleAccepted = projectContext.engagement?.status === 'acknowledged';
     const scheduleAction = !latestSchedule
         ? { label: 'Generate payment schedule', onClick: handleGenerateSchedule }
-        : hasUnsavedScheduleChanges
+        : scheduleOutOfDate
             ? { label: `Generate revised schedule (v${latestSchedule.version + 1})`, onClick: handleGenerateSchedule }
             : { label: `Payment schedule v${latestSchedule.version}`, onClick: () => setMoneyTab('history') };
 
@@ -1973,10 +1991,10 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         },
         {
             key: 'schedule', label: 'Payment schedule', icon: BOARD_ICONS.FileSignature,
-            tone: !latestSchedule || hasUnsavedScheduleChanges ? 'warn' : scheduleAccepted ? 'ok' : 'slate',
-            value: !latestSchedule ? 'Not generated' : hasUnsavedScheduleChanges ? 'Out of date' : scheduleAccepted ? 'Accepted' : `v${latestSchedule.version} issued`,
-            sub: !latestSchedule ? 'Tap to generate it from these milestones' : hasUnsavedScheduleChanges ? 'Milestones changed since it was issued' : scheduleAccepted ? 'The client accepted the schedule and terms' : 'Waiting for the client to accept it',
-            onClick: (!latestSchedule || hasUnsavedScheduleChanges) && !lockedMode ? handleGenerateSchedule : undefined,
+            tone: !latestSchedule || scheduleOutOfDate ? 'warn' : scheduleAccepted ? 'ok' : 'slate',
+            value: !latestSchedule ? 'Not generated' : scheduleOutOfDate ? 'Out of date' : scheduleAccepted ? 'Accepted' : `v${latestSchedule.version} issued`,
+            sub: !latestSchedule ? 'Tap to generate it from these milestones' : hasUnsavedScheduleChanges ? 'Milestones changed since it was issued' : scheduleAmountsStale ? 'The value or the discounts changed since it was issued' : scheduleAccepted ? 'The client accepted the schedule and terms' : 'Waiting for the client to accept it',
+            onClick: (!latestSchedule || scheduleOutOfDate) && !lockedMode ? handleGenerateSchedule : undefined,
         },
         {
             key: 'studio', label: 'Studio cash this FY', icon: BOARD_ICONS.Gauge,

@@ -22,6 +22,7 @@ import { detailedBoqVersion } from '../scopeFlow';
 import { issueDocument } from '../../services/documentIssueEngine';
 import { publish, isVisibleToClient } from '../clientVisibility';
 import { defaultTotalsOptions } from '../scopeTotals';
+import { revisionTotals, withFeeNote } from '../revisionOffer';
 import { docPricingOf, docLine } from './pricing';
 import { unitCostOf } from './excel';
 
@@ -166,7 +167,9 @@ export function issuePlanRevision(args: {
     signed,
     reasons,
   });
-  const withTotals = { ...snapshot, clientTotals: defaultTotalsOptions(ctx) } as ScopeRevisionSnapshot;
+  /* The proposal's discounts held as signed, and the revision's own off the revised side (lib/revisionOffer). */
+  const clientTotals = revisionTotals(ctx, defaultTotalsOptions(ctx), { result, signed, offer: rec.offer, rules: base.pricingRules || null });
+  const withTotals = { ...withFeeNote(snapshot, clientTotals), clientTotals } as ScopeRevisionSnapshot;
   const update = (prev: ProjectContext): ProjectContext => {
     const withIssue = issueDocument('scope_revision', withTotals, { issuedBy: by, reference, materialSections: [] })(prev);
     const issues = withIssue.documents!.issues;

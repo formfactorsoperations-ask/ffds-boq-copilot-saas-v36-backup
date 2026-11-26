@@ -37,7 +37,10 @@ import { useMomScopeQueue, MomScopeItem } from '../../hooks/useMomScopeQueue';
 import MeetingScopeInbox from './MeetingScopeInbox';
 import ClientTotalsPicker from './ClientTotalsPicker';
 import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
-import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, netExecution, totalsNote } from '../../lib/scopeTotals';
+import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, discountOn, discountsOf, netExecution, totalsNote } from '../../lib/scopeTotals';
+import { RevisionDiscount, frozenRevisionDiscount, givenOffWork, offerBasesFor, revisionTotals, withFeeNote } from '../../lib/revisionOffer';
+import RevisionOfferFields from './RevisionOfferFields';
+import { tradeChoices, tradeFinder } from '../../lib/revisionTrades';
 import { workbookForIssue, downloadWorkbook, toBase64, buildRevisionWorkbook, revisionWorkbookName } from '../../lib/scopeWorkbook';
 import { sendScopeEmail } from '../../services/emailService';
 import { publicAppOrigin } from '../../lib/publicUrl';
@@ -800,6 +803,13 @@ function RevisionEditor({
   const draft: ScopeDraft = useMemo(() => draftOfRecord(rec, signed, base.boq, bankMap), [rec, signed, base.boq, bankMap]);
   const result = useMemo(() => revisionFromDraft(signed, draft), [signed, draft]);
   const margin = useMemo(() => draftMargin(signed, draft, result), [signed, draft, result]);
+  /* The revision's own discount (lib/revisionOffer): worked out on the new items, or the whole revised BOQ. */
+  const offerBases = useMemo(() => offerBasesFor(result, signed, givenOffWork(ctx, result.v1Total, result.v2Total)), [result, signed, ctx]);
+  const issuedTotals: any = issue?.snapshot?.clientTotals || null;
+  const offerDiscount: RevisionDiscount | null = rec.status === 'draft' ? frozenRevisionDiscount(rec.offer, offerBases) : issuedTotals?.revisionDiscount || null;
+  const proposalOff = discountOn(result.v1Total, rec.status === 'draft' ? discountsOf(ctx) : issuedTotals?.discounts, 'execution');
+  /* The totals the client sees: the project's discounts as they are now, held at the signed figure, and this revision's own. */
+  const totalsFor = (o: ClientTotalsOptions): ClientTotalsOptions => revisionTotals(ctx, o, { result, signed, offer: rec.offer, rules: base.pricingRules || null });
   // The "Studio only" margin panel is studio finance (lib/roleAccess), and goes while figures are hidden.
   const finance = useSeesMargins(useOrg().currentRole);
   /* A revision made on the BOQ Playground's plan is changed there: its draft follows the plan, so it is not edited here. */
@@ -831,6 +841,12 @@ function RevisionEditor({
     if (!editable) return;
     saveRecord({ ...rec, draft: next, settings: draftSettings(next) });
   };
+
+  /* Each line's trade (lib/revisionTrades), for "Where the money goes": found, or set here by the studio. */
+  const tradeOf = useMemo(() => tradeFinder({ signed, signedBoq: base.boq, bankMap }), [signed, base.boq, bankMap]);
+  const trades = useMemo(() => tradeChoices(bankMap), [bankMap]);
+  const setTrade = (id: string, cat: string) => save({ ...draft, lines: draft.lines.map(x => (x.id === id ? { ...x, cat: cat || null } : x)) });
+  const tradePick = (d: DraftLine | undefined) => (d ? <TradePick line={d} found={tradeOf(d)} choices={trades} editable={editable} onPick={cat => setTrade(d.id, cat)} /> : null);
 
   const byId = useMemo(() => new Map(draft.lines.map(l => [l.id, l])), [draft.lines]);
   const excelLabel = draft.excel ? `${shortDay(draft.excel.importedAt)} Excel` : 'Excel';
@@ -935,7 +951,8 @@ function RevisionEditor({
     if ((send || (recorded && agreement.email)) && bad) { setIssueError(`"${bad}" is not an email address.`); return; }
     if (recorded && !agreementValid(agreement)) { setIssueError('Give the date the client agreed (today or earlier).'); return; }
     /* The totals the client will see are part of the issued document, so they share its fingerprint. */
-    const snapshot = { ...built.snapshot, clientTotals: totalsOpts };
+    const outTotals = totalsFor(totalsOpts);
+    const snapshot = { ...withFeeNote(built.snapshot, outTotals), clientTotals: outTotals };
     const materialSections = buildMaterialSections('scope_revision', snapshot);
     const issueUpd = issueDocument('scope_revision', snapshot, { issuedBy: currentUser, reference: built.reference, materialSections });
     const full = (prev: ProjectContext): ProjectContext => {
@@ -1222,7 +1239,13 @@ function RevisionEditor({
                     </div>
                     <div className="p-4">
                       <div className="flex justify-between text-[10.5px] font-bold uppercase tracking-wider text-slate-400 mb-2"><span>Revised{draft.excel ? ` · ${excelLabel}` : ''}</span><span>{inr(room.after)}</span></div>
-                      {room.lines.map(l => <div key={l.id} className="flex justify-between gap-3 py-1 border-b border-slate-50 last:border-0 text-slate-700"><span>{displayName(l.imported?.name)}</span><span className="tabular-nums">{inr(l.amount2)}</span></div>)}
+                      {room.lines.map(l => (
+                        <div key={l.id} className="flex items-center justify-between gap-3 py-1 border-b border-slate-50 last:border-0 text-slate-700">
+                          <span className="min-w-0 flex-1">{displayName(l.imported?.name)}</span>
+                          {tradePick(byId.get(l.id))}
+                          <span className="tabular-nums">{inr(l.amount2)}</span>
+                        </div>
+                      ))}
                     </div>
                     <div className="md:col-span-2 px-4 py-2 text-[11.5px] text-slate-500 border-t border-slate-100 bg-slate-50/50">Itemised differently in the revision, so the client sees the section totals side by side rather than every line as new. Untick “Whole section” to edit it line by line.</div>
                   </div>
@@ -1252,6 +1275,7 @@ function RevisionEditor({
                             onRemove={d => save(removeLine(draft, d.id))}
                             onRestore={d => save(restoreLine(draft, d.id, signed))}
                             onReplace={d => setPicker({ room: room.name, replace: d.id })}
+                            trade={l.kind !== 'same' ? tradePick(byId.get(l.id)) : undefined}
                           />
                         ))}
                         {!rows.length && !hiddenSame.length && <tr><td colSpan={6} className="px-4 py-3 text-[12px] text-slate-400">No items yet. Add one from the bank or as a custom item.</td></tr>}
@@ -1338,6 +1362,26 @@ function RevisionEditor({
               })}
             </div>
             <p className="text-[11px] text-slate-400 mt-2.5">Six parts, always adding up to the change. The client sees the same breakdown.</p>
+            {offerDiscount && (
+              <div className="mt-3 pt-3 border-t border-slate-100 space-y-1 text-[12px]">
+                <div className="flex justify-between text-slate-600"><span>{offerDiscount.name}</span><span className="tabular-nums font-bold text-emerald-700">−{inr(offerDiscount.amount)}</span></div>
+                <div className="flex justify-between text-slate-800 font-bold"><span>Revised, less this discount</span><span className="tabular-nums">{inr2(result.v2Total - offerDiscount.amount)}</span></div>
+              </div>
+            )}
+          </div>
+
+          {/* The revision's own discount, apart from the proposal's (lib/revisionOffer). Money & Offers writes the same one. */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-4">
+            <div className="flex items-center gap-2.5 mb-3"><Ic3 icon={Percent} tint="green" size="sm" /><span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Discount on this revision</span></div>
+            <RevisionOfferFields
+              number={rec.number}
+              offer={rec.status === 'draft' ? rec.offer : offerDiscount}
+              bases={rec.status === 'draft' ? offerBases : { added: offerDiscount?.on === 'added' ? offerDiscount.base : offerBases.added, whole: offerDiscount && offerDiscount.on !== 'added' ? offerDiscount.base : offerBases.whole, given: offerDiscount?.on === 'topup' ? Math.max(0, offerDiscount.base * (offerDiscount.value / 100) - offerDiscount.amount) : offerBases.given }}
+              editable={rec.status === 'draft'}
+              onChange={offer => saveRecord({ ...rec, offer })}
+              proposalOff={proposalOff}
+              idPrefix={`rof-${rec.id}`}
+            />
           </div>
 
           {finance && (
@@ -1462,7 +1506,7 @@ function RevisionEditor({
                     {built.drift > 0.01
                       ? <Note tone="block">The revised BOQ prices to {inr2(built.snapshot.v2.total)} but the draft says {inr2(result.v2Total)}. Issuing is blocked until they agree.</Note>
                       : <Note tone="ok">The revised BOQ prices to this total exactly, and the six parts add up to the change.</Note>}
-                    <ClientTotalsPicker value={totalsOpts} onChange={setTotalsOpts} before={result.v1Total} after={built.snapshot.v2.total} />
+                    <ClientTotalsPicker value={totalsFor(totalsOpts)} onChange={setTotalsOpts} before={result.v1Total} after={built.snapshot.v2.total} />
                     <div>
                       <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-1.5">What the client gets</div>
                       <ul className="list-disc pl-5 text-[12.5px] text-slate-700 space-y-1">
@@ -1476,7 +1520,8 @@ function RevisionEditor({
                         onClick={async () => {
                           setPreviewXl(true);
                           try {
-                            const snap: any = { ...built.snapshot, clientTotals: totalsOpts };
+                            const t = totalsFor(totalsOpts);
+                            const snap: any = { ...withFeeNote(built.snapshot, t), clientTotals: t };
                             const buf = await buildRevisionWorkbook(snap, { studioName: orgName || 'Studio', fingerprint: 'added when issued', issuedOn: Date.now() });
                             downloadWorkbook(buf, `PREVIEW ${revisionWorkbookName(snap)}`);
                           } finally { setPreviewXl(false); }
@@ -1769,7 +1814,9 @@ const LineRow: React.FC<{
   onRemove: (d: DraftLine) => void;
   onRestore: (d: DraftLine) => void;
   onReplace: (d: DraftLine) => void;
-}> = ({ l, d, editable, excelLabel, onQty, onRate, onRemove, onRestore, onReplace }) => {
+  /** The line's trade, and the picker to change it. */
+  trade?: React.ReactNode;
+}> = ({ l, d, editable, excelLabel, onQty, onRate, onRemove, onRestore, onReplace, trade }) => {
   const s = l.signed;
   const removed = l.kind === 'removed';
   const name = displayName(d?.name || l.imported?.name || s?.name);
@@ -1802,6 +1849,7 @@ const LineRow: React.FC<{
           )}
         </div>
         {l.kind === 'redesign' && s && <div className="text-[11px] text-slate-500 mt-0.5">Replaces: {displayName(s.name)}</div>}
+        {trade && !removed && <div className="mt-1">{trade}</div>}
         {d?.description && !removed && <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{d.description}</div>}
       </td>
       <td className="px-2 py-2 text-right">
@@ -1833,6 +1881,34 @@ const LineRow: React.FC<{
         ))}
       </td>
     </tr>
+  );
+};
+
+// ── A line's trade ──────────────────────────────────────────────────────────
+
+const TRADE_FROM: Record<string, string> = { signed: 'as signed', 'same name': 'as signed', bank: 'from the bank', guess: 'guessed', set: '' };
+
+/**
+ * Which trade a revision line counts under in "Where the money goes" (lib/revisionTrades):
+ * found from the signed BOQ, the bank or the name, or set here. A guess, or none, is
+ * marked so the studio checks it.
+ */
+const TradePick: React.FC<{ line: DraftLine; found: { cat: string; from: string }; choices: string[]; editable: boolean; onPick: (cat: string) => void }> = ({ line, found, choices, editable, onPick }) => {
+  const own = (line.cat || '').trim();
+  const check = !own && (found.from === 'guess' || found.from === 'none');
+  const label = found.cat ? `${found.cat}${TRADE_FROM[found.from] ? ` · ${TRADE_FROM[found.from]}` : ''}` : 'Trade not known';
+  if (!editable) return <span className="text-[11px] text-slate-500 whitespace-nowrap">{own || label}</span>;
+  return (
+    <select
+      aria-label={`Trade of ${displayName(line.name)}`}
+      title="The trade this line counts under in Where the money goes"
+      value={own}
+      onChange={e => onPick(e.target.value)}
+      className={`max-w-[190px] text-[11px] font-semibold rounded-md border px-1.5 py-0.5 bg-white outline-none cursor-pointer focus:ring-2 focus:ring-[#3D52A0]/25 ${check ? 'border-amber-300 text-amber-800' : 'border-slate-200 text-slate-600'}`}
+    >
+      <option value="">{label}</option>
+      {(own && !choices.includes(own) ? [...choices, own] : choices).map(c => <option key={c} value={c}>{c}</option>)}
+    </select>
   );
 };
 

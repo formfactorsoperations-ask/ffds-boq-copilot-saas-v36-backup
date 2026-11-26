@@ -434,6 +434,12 @@ export interface ProjectDiscount {
     type: 'percentage' | 'fixed';
     value: number;
     target: 'execution' | 'design'; // Target component
+    /** Held at the amount in this signed document (its reference): nothing re-prices it against a later version (lib/revisionOffer). */
+    heldAt?: string;
+    /** Given in this scope revision, not at the proposal. */
+    revision?: number;
+    /** The percent it was before it was held as a fixed amount, for the record. */
+    heldFromPercent?: number;
 }
 
 export interface PaymentRevision {

@@ -109,7 +109,21 @@ interface Props {
   bestFitId?: string | null;
   /** Opens Fit to budget on an option that is over it. */
   onFit?: (tierId: string) => void;
+  /**
+   * A scope revision still open on the signed version (lib/revisionMoneyPreview revisedTierPreview):
+   * "Where the money goes" shows it beside the signed version, and the signed card
+   * points to it instead of offering to start another.
+   */
+  openRevision?: { tier: ProposalTier; number: number; state: 'draft' | 'with_client' | 'sent_back' | 'approved'; baseTierId: string } | null;
 }
+
+/* Where an open revision stands, in a few words. */
+const REVISION_STATE: Record<string, string> = {
+  draft: 'in draft',
+  with_client: 'with the client',
+  sent_back: 'sent back for changes',
+  approved: 'approved, ready to apply',
+};
 
 type Lens = 'money' | 'diff' | 'pay' | 'margin' | 'history';
 
@@ -161,7 +175,7 @@ function Row({ label, sub, cells, strong, icon, onLabel, open, title }: {
           : head}
       </div>
       {cols.map((c) => (
-        <div key={c.chain.root.id} className={`px-4 py-2.5 text-xs tabular-nums text-slate-800 transition-colors duration-300 ${tint(c.tier.id)}`}>
+        <div key={c.colKey || c.chain.root.id} className={`px-4 py-2.5 text-xs tabular-nums text-slate-800 transition-colors duration-300 ${tint(c.tier.id)}`}>
           <motion.div key={c.tier.id} initial={still ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE }}>
             {cells(c)}
           </motion.div>
@@ -212,7 +226,7 @@ export default function PricingGrid(props: Props) {
   const area = Number(ctx.area) || 0;
   const revisionIndex = useMemo(() => buildRevisionIndex(ctx.boqRevisions || []), [ctx.boqRevisions]);
 
-  const cols = useMemo(() => columns.map((c) => {
+  const build = (c: GridColumn) => {
     const t = c.tier;
     const price = optionPrice(t);
     const split = scopeSplit(t, bankMap, splitPricingOf(t, ctx.rooms, bankMap));
@@ -222,7 +236,23 @@ export default function PricingGrid(props: Props) {
     const diff = c.prev ? diffTiers(c.prev, t, bankMap, revisionIndex) : null;
     const moved = diff ? diff.rooms.flatMap((r) => r.lines).filter((l) => l.kind !== 'unchanged').sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)) : [];
     return { ...c, price, split, deal, offers, milestones, diff, moved, thin: lowMarginLines(t, bankMap) };
-  }), [columns, bankMap, discounts, terms, signed, ctx, chains, revisionIndex]);
+  };
+  const cols = useMemo(() => columns.map(build), [columns, bankMap, discounts, terms, signed, ctx, chains, revisionIndex]);
+
+  /* The open revision, as a column of its own beside the version it revises ("Where the money goes" only). */
+  const rev = props.openRevision || null;
+  const revCol = useMemo(() => {
+    if (!rev) return null;
+    const baseCol = columns.find((c) => c.chain.versions.some((v) => v.id === rev.baseTierId));
+    if (!baseCol) return null;
+    return { ...build({ chain: baseCol.chain, tier: rev.tier, latest: false }), isRevision: true, colKey: `${baseCol.chain.root.id}-rev` };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rev, columns, bankMap, discounts, terms, ctx]);
+  const moneyCols = useMemo(() => {
+    if (!revCol) return cols;
+    const i = cols.findIndex((c) => c.chain.root.id === revCol.chain.root.id);
+    return i < 0 ? cols : [...cols.slice(0, i + 1), revCol, ...cols.slice(i + 1)];
+  }, [cols, revCol]);
 
   const cheapest = Math.min(...cols.map((c) => c.price.total).filter((v) => v > 0));
   /* The cheapest option is a sprout, the dearest a crown, the ones between a gem. */
@@ -230,7 +260,7 @@ export default function PricingGrid(props: Props) {
   const medal = (id: string) => (cols.length === 1 ? Sparkles : byPrice[0] === id ? Sprout : byPrice[byPrice.length - 1] === id ? Crown : Gem);
 
   const grid = { gridTemplateColumns: `184px repeat(${Math.max(1, cols.length)}, minmax(250px, 1fr))` };
-  const minWidth = 184 + Math.max(1, cols.length) * 250;
+  const moneyGrid = { gridTemplateColumns: `184px repeat(${Math.max(1, moneyCols.length)}, minmax(250px, 1fr))` };
   const anyChange = cols.some((c) => c.prev);
   const milestoneNames = cols.find((c) => c.milestones.length)?.milestones.map((m) => m.name) || [];
   const diffCount = comparison.only.length + comparison.extent.length + comparison.spec.length;
@@ -277,11 +307,26 @@ export default function PricingGrid(props: Props) {
   const approval = (c: typeof cols[number]) => {
     const t = c.tier;
     if (t.id === props.signedTierId) {
+      /* A revision already open: carry on with it, never a second one beside it. */
+      const open = rev && rev.baseTierId === t.id ? rev : null;
       return (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 space-y-2">
           <p className="text-xs font-bold text-emerald-800 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> In force · signed · read-only</p>
-          <p className="text-[11px] text-emerald-800/80">A change goes through a Scope Revision the client signs, and the payment schedule follows.</p>
-          <button type="button" onClick={actions.startRevision} className={PRIMARY}>Start a revision</button>
+          {open ? (
+            <>
+              <p className="text-[11px] text-emerald-800/80">
+                Scope Revision {open.number} is {REVISION_STATE[open.state] || 'open'}: {money(optionPrice(open.tier).work)} of work against {money(c.price.work)} signed. Its figures are under “Where the money goes”.
+              </p>
+              <button type="button" onClick={actions.startRevision} className={PRIMARY}>
+                {open.state === 'draft' || open.state === 'sent_back' ? `Continue Scope Revision ${open.number}` : `Open Scope Revision ${open.number}`}
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-[11px] text-emerald-800/80">A change goes through a Scope Revision the client signs, and the payment schedule follows.</p>
+              <button type="button" onClick={actions.startRevision} className={PRIMARY}>Start a revision</button>
+            </>
+          )}
         </div>
       );
     }
@@ -321,11 +366,19 @@ export default function PricingGrid(props: Props) {
   /* ---- the views under the options ---- */
 
   const moneyView = (
-    <>
+    <GridCtx.Provider value={{ grid: moneyGrid, cols: moneyCols, tint: (id: string) => (rev && id === rev.tier.id ? 'bg-amber-50/60' : tint(id)), still }}>
+      {revCol && (
+        <Row label="Version" sub="The open revision beside what was signed" strong cells={(c) => (c.isRevision
+          ? <span className="flex flex-wrap items-center gap-1.5">
+              <span className="font-bold text-slate-800">Scope Revision {rev!.number}</span>
+              <span className={`${CHIP} bg-amber-100 text-amber-800`}>{REVISION_STATE[rev!.state] || 'open'}</span>
+            </span>
+          : <span className="font-bold text-slate-800">{c.tier.name}{c.chain.versions.some((v: ProposalTier) => v.id === rev!.baseTierId) ? <span className="font-medium text-slate-500"> · signed</span> : null}</span>)} />
+      )}
       {SCOPE_PARTS.map((p, pi) => {
         const open = openParts.has(p.id);
-        const trades: string[] = Array.from(new Set<string>(cols.flatMap((c) => c.split.parts[p.id].trades.map((t: any) => t.trade as string))))
-          .sort((a, b) => cols.reduce((s, c) => s + (c.split.parts[p.id].trades.find((t: any) => t.trade === b)?.value || 0), 0) - cols.reduce((s, c) => s + (c.split.parts[p.id].trades.find((t: any) => t.trade === a)?.value || 0), 0));
+        const trades: string[] = Array.from(new Set<string>(moneyCols.flatMap((c) => c.split.parts[p.id].trades.map((t: any) => t.trade as string))))
+          .sort((a, b) => moneyCols.reduce((s, c) => s + (c.split.parts[p.id].trades.find((t: any) => t.trade === b)?.value || 0), 0) - moneyCols.reduce((s, c) => s + (c.split.parts[p.id].trades.find((t: any) => t.trade === a)?.value || 0), 0));
         return (
           <React.Fragment key={p.id}>
             <Row
@@ -353,8 +406,8 @@ export default function PricingGrid(props: Props) {
               const linesOf = (c: any): SplitLine[] => c.split.parts[p.id].lines.filter((l: SplitLine) => l.trade === trade);
               const sumOf = (c: any, k: string) => linesOf(c).filter((l) => lineKey(l) === k);
               const keys = tradeOpen
-                ? Array.from(new Set<string>(cols.flatMap((c) => linesOf(c).map(lineKey))))
-                  .sort((a, b) => cols.reduce((s, c) => s + sumOf(c, b).reduce((x, l) => x + l.total, 0), 0) - cols.reduce((s, c) => s + sumOf(c, a).reduce((x, l) => x + l.total, 0), 0))
+                ? Array.from(new Set<string>(moneyCols.flatMap((c) => linesOf(c).map(lineKey))))
+                  .sort((a, b) => moneyCols.reduce((s, c) => s + sumOf(c, b).reduce((x, l) => x + l.total, 0), 0) - moneyCols.reduce((s, c) => s + sumOf(c, a).reduce((x, l) => x + l.total, 0), 0))
                 : [];
               return (
                 <React.Fragment key={tk}>
@@ -383,7 +436,7 @@ export default function PricingGrid(props: Props) {
                             </>
                           );
                           /* A line opens in the BOQ Editor, at that line, for this option. */
-                          return actions.openLines ? (
+                          return actions.openLines && !c.isRevision ? (
                             <button type="button" onClick={() => actions.openLines!(c.tier.id, ls.map((l) => l.key))}
                               aria-label={`Open ${name}, ${room}, in the BOQ Editor for ${c.tier.name}`} title="Open in the BOQ Editor"
                               className="w-full flex justify-between gap-2 text-left rounded-md hover:text-[#3D52A0] hover:underline underline-offset-2">
@@ -410,12 +463,17 @@ export default function PricingGrid(props: Props) {
           </span>
         );
       }} />
-      {cols.some((c) => c.split.asActuals > 0) && (
+      {moneyCols.some((c) => c.split.asActuals > 0) && (
         <Row label="As actuals" sub="Paid to vendors directly; not in the price" cells={(c) => <span className="text-slate-500">{c.split.asActuals > 0 ? money(c.split.asActuals) : '—'}</span>} />
       )}
-      {cols.some((c) => c.price.designFee > 0) && <Row label="Design fee" cells={(c) => <span className="font-semibold">{money(c.price.designFee)}</span>} />}
+      {moneyCols.some((c) => c.price.designFee > 0) && <Row label="Design fee" cells={(c) => <span className="font-semibold">{money(c.price.designFee)}</span>} />}
       <Row label="Total" strong cells={(c) => <span className="text-sm font-black" data-testid={`coverage-total-${c.tier.id}`}>{money(c.price.total)}</span>} />
-    </>
+      {revCol && (
+        <div className="border-t border-slate-100 px-5 py-3 text-[11px] text-slate-500">
+          Scope Revision {rev!.number} is a preview: nothing is billed on it until the client approves it and it is applied. Before discounts; the design fee follows the revised work.
+        </div>
+      )}
+    </GridCtx.Provider>
   );
 
   const diffRows = [
@@ -537,6 +595,8 @@ export default function PricingGrid(props: Props) {
   );
 
   const views: Record<Lens, React.ReactNode> = { money: moneyView, diff: diffView, pay: payView, margin: marginView, history: historyView };
+  /* The open revision widens "Where the money goes" by one column. */
+  const minWidth = 184 + Math.max(1, (shownLens === 'money' ? moneyCols : cols).length) * 250;
 
   return (
     <GridCtx.Provider value={{ grid, cols, tint, still }}>

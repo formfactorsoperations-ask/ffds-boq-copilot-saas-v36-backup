@@ -20,6 +20,9 @@ import BoqSlideOver from '../../components/pricing/BoqSlideOver';
 import { buildBankMap } from '../../lib/boqPricing';
 import { dealFor, lowMarginLines, scopeSplit, staleOffer, refreshedOffer, type OfferDiscount } from '../../lib/offers';
 import { optionChains, latestOf, versionNo, sameOption, chainOf } from '../../lib/optionChains';
+import { signedLinesFrom } from '../../lib/scopeRevision';
+import { startDraft, addCustom } from '../../lib/scopeDraft';
+import { revisedTierPreview } from '../../lib/revisionMoneyPreview';
 
 afterEach(cleanup);
 
@@ -276,6 +279,43 @@ describe('Pricing & Tiers grid', () => {
     expect(within(column('Comfort')).queryByRole('button', { name: /New version/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show them' }));
     expect(screen.getAllByRole('article')).toHaveLength(2);
+  });
+});
+
+describe('A scope revision open on the signed version', () => {
+  /* Palacia: Scope Revision 1 sat in draft, and Pricing & Tiers still offered to start one, with no sign of its figures. */
+  const map = buildBankMap(BANK);
+  const signedLines = signedLinesFrom(COM.boq, map, null);
+  const draft = addCustom(startDraft(signedLines, COM.boq, map), 'Study', { name: 'Study table', unit: 'nos', qty: 1, rate: 5000 });
+  const withRevision = (status = 'draft') => ({
+    ...CTX, approvedTierId: 'com', scopeFlow: { enabled: true },
+    documents: { issues: [{ id: 'd1', kind: 'detailed_boq', version: 1, snapshot: { tierId: 'com' }, clientSignature: { name: 'Client' } }] },
+    scopeRevisions: [{ id: 'r1', number: 1, status, baseTierId: 'com', createdAt: 1, createdBy: 'P', updatedAt: 2, imported: [], settings: {}, draft }],
+  });
+
+  it('is priced as a version beside the signed one, with the new item in it', () => {
+    const p = revisedTierPreview(withRevision() as any, [ESS, COM], BANK)!;
+    expect(p).toMatchObject({ number: 1, state: 'draft', baseTierId: 'com' });
+    expect(p.tier.summary.totalSell).toBe(signedLines.reduce((t, l) => t + l.amount, 0) + 5000);
+    expect(p.tier.boq.some((b: any) => /Study table/.test(b.name || b.item || ''))).toBe(true);
+  });
+
+  it('offers to continue it instead of starting another, and shows its figures beside the signed version', () => {
+    render(<Harness ctx={withRevision()} />);
+    expect(screen.queryByRole('button', { name: 'Start a revision' })).toBeNull();
+    expect(within(column('Comfort')).getByRole('button', { name: 'Continue Scope Revision 1' })).toBeTruthy();
+    const money = screen.getByRole('region', { name: 'Where the money goes' });
+    expect(within(money).getByText('Scope Revision 1')).toBeTruthy();
+    expect(within(money).getByText('in draft')).toBeTruthy();
+  });
+
+  it('once approved, opens it to apply', () => {
+    const c: any = withRevision('signed');
+    c.scopeRevisions[0].issueId = 'sr1';
+    c.documents.issues.push({ id: 'sr1', kind: 'scope_revision', version: 1, reference: 'REV-01', clientSignature: { name: 'Client' },
+      snapshot: { v1: { total: 14800 }, v2: { total: 19800 } } });
+    render(<Harness ctx={c} />);
+    expect(within(column('Comfort')).getByRole('button', { name: 'Open Scope Revision 1' })).toBeTruthy();
   });
 });
 
