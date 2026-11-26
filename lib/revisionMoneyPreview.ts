@@ -1,7 +1,7 @@
 import type { DocumentIssue, Item, ProjectContext, ProposalTier } from '../types';
 import { buildBankMap } from './boqPricing';
 import { signedLinesFrom } from './scopeRevision';
-import { draftOfRecord, revisionFromDraft } from './scopeDraft';
+import { buildBoqFromDraft, draftOfRecord, revisionFromDraft } from './scopeDraft';
 import { isSentBack } from './scopeChangeRequest';
 import { computeSchedule, ScheduleResult } from './paymentSchedule';
 import { docPricingOf } from './playground/pricing';
@@ -181,4 +181,53 @@ export function previewRevisionMoney(args: ScheduleArgs, v2Total: number, discou
     grossRevised: revised.totals.grossProjectValue,
     unscheduled: Math.abs(gap) > 10 ? gap : 0,
   };
+}
+
+/*
+  THE OPEN REVISION AS AN OPTION, FOR PRICING & TIERS.
+
+  "Where the money goes" showed the signed version only, so a revision's
+  figures were nowhere on that screen until the client approved it and the
+  studio applied it. This builds the open revision (draft, with the client,
+  sent back or approved) as a version of the signed option that is never
+  saved: the revised BOQ, priced as its documents price it, with the design
+  fee it will carry. Pricing & Tiers draws it beside the signed version.
+*/
+export interface RevisionTierPreview {
+  tier: ProposalTier;
+  number: number;
+  state: PendingRevisionState;
+  baseTierId: string;
+}
+
+export function revisedTierPreview(ctx: ProjectContext, tiers: ProposalTier[], bank: Item[]): RevisionTierPreview | null {
+  const pending = pendingRevision(ctx, tiers, bank);
+  if (!pending) return null;
+  const rec = (ctx.scopeRevisions || []).find(r => r.id === pending.id);
+  const base = rec ? tiers.find(t => t.id === rec.baseTierId) : null;
+  if (!rec || !base) return null;
+  const bankMap = buildBankMap(bank, ctx.adHocItems);
+  const signed = signedLinesFrom(base.boq, bankMap, docPricingOf(base, ctx.rooms, bankMap));
+  const draft = draftOfRecord(rec, signed, base.boq, bankMap);
+  const result = revisionFromDraft(signed, draft);
+  /* Drawn on the plan: its lines as drawn. Otherwise the draft built into BOQ lines, as applying will. */
+  const boq = rec.playground?.boq
+    ? JSON.parse(JSON.stringify(rec.playground.boq))
+    : buildBoqFromDraft(base.boq, signed, draft, bankMap, rec.number, rec.updatedAt || 0);
+  const issue = rec.issueId ? (ctx.documents?.issues || []).find(i => i.id === rec.issueId) : null;
+  const work = pending.v2Total;
+  const feeBefore = Number((base.summary as any)?.designFee) || defaultTotalsOptions(ctx).designFeeValue;
+  const issuedFee = (issue?.snapshot as any)?.clientTotals?.designFeeAfter;
+  const fee = typeof issuedFee === 'number'
+    ? issuedFee
+    : revisedDesignFee(ctx, { before: feeBefore, v1Work: result.v1Total, v2Work: work, asActuals: result.asActuals, rules: base.pricingRules || null });
+  const tier = {
+    ...base,
+    id: `${base.id}__rev${rec.number}`,
+    name: `Scope Revision ${rec.number}`,
+    parentTierId: base.id,
+    boq,
+    summary: { ...(base.summary || {}), totalSell: work, designFee: fee, totalRevenue: work + fee, itemCount: boq.filter((b: any) => (Number(b.qty) || 0) > 0).length },
+  } as ProposalTier;
+  return { tier, number: rec.number, state: pending.state, baseTierId: base.id };
 }
