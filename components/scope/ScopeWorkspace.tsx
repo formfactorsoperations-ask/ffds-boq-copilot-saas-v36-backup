@@ -40,6 +40,7 @@ import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
 import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, discountOn, discountsOf, netExecution, totalsNote } from '../../lib/scopeTotals';
 import { RevisionDiscount, frozenRevisionDiscount, givenOffWork, offerBasesFor, revisionTotals, withFeeNote } from '../../lib/revisionOffer';
 import RevisionOfferFields from './RevisionOfferFields';
+import { tradeChoices, tradeFinder } from '../../lib/revisionTrades';
 import { workbookForIssue, downloadWorkbook, toBase64, buildRevisionWorkbook, revisionWorkbookName } from '../../lib/scopeWorkbook';
 import { sendScopeEmail } from '../../services/emailService';
 import { publicAppOrigin } from '../../lib/publicUrl';
@@ -841,6 +842,12 @@ function RevisionEditor({
     saveRecord({ ...rec, draft: next, settings: draftSettings(next) });
   };
 
+  /* Each line's trade (lib/revisionTrades), for "Where the money goes": found, or set here by the studio. */
+  const tradeOf = useMemo(() => tradeFinder({ signed, signedBoq: base.boq, bankMap }), [signed, base.boq, bankMap]);
+  const trades = useMemo(() => tradeChoices(bankMap), [bankMap]);
+  const setTrade = (id: string, cat: string) => save({ ...draft, lines: draft.lines.map(x => (x.id === id ? { ...x, cat: cat || null } : x)) });
+  const tradePick = (d: DraftLine | undefined) => (d ? <TradePick line={d} found={tradeOf(d)} choices={trades} editable={editable} onPick={cat => setTrade(d.id, cat)} /> : null);
+
   const byId = useMemo(() => new Map(draft.lines.map(l => [l.id, l])), [draft.lines]);
   const excelLabel = draft.excel ? `${shortDay(draft.excel.importedAt)} Excel` : 'Excel';
 
@@ -1232,7 +1239,13 @@ function RevisionEditor({
                     </div>
                     <div className="p-4">
                       <div className="flex justify-between text-[10.5px] font-bold uppercase tracking-wider text-slate-400 mb-2"><span>Revised{draft.excel ? ` · ${excelLabel}` : ''}</span><span>{inr(room.after)}</span></div>
-                      {room.lines.map(l => <div key={l.id} className="flex justify-between gap-3 py-1 border-b border-slate-50 last:border-0 text-slate-700"><span>{displayName(l.imported?.name)}</span><span className="tabular-nums">{inr(l.amount2)}</span></div>)}
+                      {room.lines.map(l => (
+                        <div key={l.id} className="flex items-center justify-between gap-3 py-1 border-b border-slate-50 last:border-0 text-slate-700">
+                          <span className="min-w-0 flex-1">{displayName(l.imported?.name)}</span>
+                          {tradePick(byId.get(l.id))}
+                          <span className="tabular-nums">{inr(l.amount2)}</span>
+                        </div>
+                      ))}
                     </div>
                     <div className="md:col-span-2 px-4 py-2 text-[11.5px] text-slate-500 border-t border-slate-100 bg-slate-50/50">Itemised differently in the revision, so the client sees the section totals side by side rather than every line as new. Untick “Whole section” to edit it line by line.</div>
                   </div>
@@ -1262,6 +1275,7 @@ function RevisionEditor({
                             onRemove={d => save(removeLine(draft, d.id))}
                             onRestore={d => save(restoreLine(draft, d.id, signed))}
                             onReplace={d => setPicker({ room: room.name, replace: d.id })}
+                            trade={l.kind !== 'same' ? tradePick(byId.get(l.id)) : undefined}
                           />
                         ))}
                         {!rows.length && !hiddenSame.length && <tr><td colSpan={6} className="px-4 py-3 text-[12px] text-slate-400">No items yet. Add one from the bank or as a custom item.</td></tr>}
@@ -1800,7 +1814,9 @@ const LineRow: React.FC<{
   onRemove: (d: DraftLine) => void;
   onRestore: (d: DraftLine) => void;
   onReplace: (d: DraftLine) => void;
-}> = ({ l, d, editable, excelLabel, onQty, onRate, onRemove, onRestore, onReplace }) => {
+  /** The line's trade, and the picker to change it. */
+  trade?: React.ReactNode;
+}> = ({ l, d, editable, excelLabel, onQty, onRate, onRemove, onRestore, onReplace, trade }) => {
   const s = l.signed;
   const removed = l.kind === 'removed';
   const name = displayName(d?.name || l.imported?.name || s?.name);
@@ -1833,6 +1849,7 @@ const LineRow: React.FC<{
           )}
         </div>
         {l.kind === 'redesign' && s && <div className="text-[11px] text-slate-500 mt-0.5">Replaces: {displayName(s.name)}</div>}
+        {trade && !removed && <div className="mt-1">{trade}</div>}
         {d?.description && !removed && <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{d.description}</div>}
       </td>
       <td className="px-2 py-2 text-right">
@@ -1864,6 +1881,34 @@ const LineRow: React.FC<{
         ))}
       </td>
     </tr>
+  );
+};
+
+// ── A line's trade ──────────────────────────────────────────────────────────
+
+const TRADE_FROM: Record<string, string> = { signed: 'as signed', 'same name': 'as signed', bank: 'from the bank', guess: 'guessed', set: '' };
+
+/**
+ * Which trade a revision line counts under in "Where the money goes" (lib/revisionTrades):
+ * found from the signed BOQ, the bank or the name, or set here. A guess, or none, is
+ * marked so the studio checks it.
+ */
+const TradePick: React.FC<{ line: DraftLine; found: { cat: string; from: string }; choices: string[]; editable: boolean; onPick: (cat: string) => void }> = ({ line, found, choices, editable, onPick }) => {
+  const own = (line.cat || '').trim();
+  const check = !own && (found.from === 'guess' || found.from === 'none');
+  const label = found.cat ? `${found.cat}${TRADE_FROM[found.from] ? ` · ${TRADE_FROM[found.from]}` : ''}` : 'Trade not known';
+  if (!editable) return <span className="text-[11px] text-slate-500 whitespace-nowrap">{own || label}</span>;
+  return (
+    <select
+      aria-label={`Trade of ${displayName(line.name)}`}
+      title="The trade this line counts under in Where the money goes"
+      value={own}
+      onChange={e => onPick(e.target.value)}
+      className={`max-w-[190px] text-[11px] font-semibold rounded-md border px-1.5 py-0.5 bg-white outline-none cursor-pointer focus:ring-2 focus:ring-[#3D52A0]/25 ${check ? 'border-amber-300 text-amber-800' : 'border-slate-200 text-slate-600'}`}
+    >
+      <option value="">{label}</option>
+      {(own && !choices.includes(own) ? [...choices, own] : choices).map(c => <option key={c} value={c}>{c}</option>)}
+    </select>
   );
 };
 

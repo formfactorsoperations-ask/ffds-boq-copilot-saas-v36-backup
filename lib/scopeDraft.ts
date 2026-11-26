@@ -3,6 +3,7 @@ import { resolveBoqLine, isBillable, isAsActuals } from './boqPricing';
 import { calculateSellPrice } from './utils';
 import { displayName, normaliseUnit } from './detailedBoq';
 import type { ScopeRevisionRecord } from './scopeRevision';
+import { tradeFinder } from './revisionTrades';
 import {
   SignedLine, ImportedLine, ParsedSheet, RevisionSettings, RevisionResult, RevisionRoom, RevisionLine, LineKind, Bridge,
   computeRevision, nameSimilarity, roomDisplayName, HELD_REASON, isPricedLine,
@@ -58,6 +59,12 @@ export interface DraftLine {
   note?: string | null;
   /** What the studio did, in a few words: "Re-measured on site", "Added from the bank". */
   editNote?: string | null;
+  /**
+   * The trade the studio set on the line (Carpentry, Civil...), for "Where the money
+   * goes". Without it the trade is found (lib/revisionTrades): the signed line's, a
+   * signed line of the same name, a bank item of the same name, or a guess from the name.
+   */
+  cat?: string | null;
 }
 
 export interface ScopeDraft {
@@ -511,6 +518,8 @@ export function buildBoqFromDraft(signedBoq: any[], signed: SignedLine[], draft:
   const out: any[] = [];
   let n = 0;
   const section = new Set(draft.sectionCompare);
+  /* Every line carries its trade, so the revised BOQ splits into parts as the signed one does. */
+  const tradeOf = tradeFinder({ signed, signedBoq, bankMap });
 
   draft.lines.forEach(l => {
     const s = l.signedLineId ? signedById.get(l.signedLineId) : undefined;
@@ -529,6 +538,7 @@ export function buildBoqFromDraft(signedBoq: any[], signed: SignedLine[], draft:
         const k = s.rate > 0 ? l.rate / s.rate : 1;
         const item = bankMap.get(original.bankId);
         const line: any = { ...original, ...base };
+        if ((l.cat || '').trim()) line.cat = l.cat!.trim();
         if (isAsActuals({ asActuals: l.asActuals }, l.name)) line.boqStatus = 'as_actuals';
         if (item) {
           line.baseRate = (original.baseRate !== undefined ? original.baseRate : item.materials) * k;
@@ -560,6 +570,7 @@ export function buildBoqFromDraft(signedBoq: any[], signed: SignedLine[], draft:
         baseRate: (Number(item.materials) || 0) * k,
         labor: (Number(item.labor) || 0) * k,
         marginOverride: item.margin,
+        ...((l.cat || '').trim() ? { cat: l.cat!.trim() } : {}),
         ...(s ? { revisedFrom: s.lineId } : {}),
         ...(isAsActuals({ asActuals: l.asActuals || s?.asActuals }, l.name) ? { boqStatus: 'as_actuals' } : {}),
       });
@@ -578,6 +589,7 @@ export function buildBoqFromDraft(signedBoq: any[], signed: SignedLine[], draft:
       labor: 0,
       marginOverride: hasCost ? (l.rate / (l.cost as number) - 1) * 100 : 0,
       selectedRate: l.rate,
+      ...(tradeOf(l).cat ? { cat: tradeOf(l).cat } : {}),
       ...(s ? { revisedFrom: s.lineId } : {}),
       ...(isAsActuals({ asActuals: l.asActuals || s?.asActuals }, l.name) ? { boqStatus: 'as_actuals' } : {}),
     });
