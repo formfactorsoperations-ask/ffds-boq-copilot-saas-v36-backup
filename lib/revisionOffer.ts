@@ -1,0 +1,151 @@
+import type { ProjectContext, ProjectDiscount } from '../types';
+
+/*
+  A DISCOUNT GIVEN IN A SCOPE REVISION, KEPT APART FROM THE PROPOSAL'S.
+
+  The owner's rule (Palacia, Nov 2026): a discount given at the proposal stays
+  what the client agreed to; a revision can carry a discount of its own; the
+  payment schedule takes all of them off.
+
+  Before this, every offer was one project-wide list. A revision document took
+  that list off both its "Signed" and "Revised" columns, so a discount added
+  for the revision lowered the figure the client had already agreed, never
+  showed in "Change", and a percentage proposal discount grew with every item
+  the revision added (5% of ₹14.0L became 5% of ₹14.1L).
+
+  Now:
+  - The revision record holds its own offer (`ScopeRevisionRecord.offer`): a
+    percentage or an amount, on the new items it adds (the default) or on the
+    whole revised BOQ. Revision Studio and Money & Offers both edit it while
+    the revision is a draft.
+  - On issue the rupee amount is frozen into the document's client totals
+    (`revisionDiscount`), and the proposal's discounts are held at what they
+    were on the signed BOQ (`proposalHeld`), on both sides.
+  - On apply the proposal's percentage discounts become the fixed amounts the
+    client signed, and the revision's offer joins the project's discounts as a
+    fixed amount: Money, the deal and the payment schedule take them all off,
+    and nothing re-prices them against a later version.
+*/
+
+export interface RevisionOffer {
+  /** What the client reads, e.g. "Revision discount". */
+  name: string;
+  /** What it is worked out on: the new items the revision adds, or the whole revised BOQ. */
+  on: 'added' | 'whole';
+  type: 'percentage' | 'fixed';
+  value: number;
+}
+
+/** What a revision's offer can be worked out on, in rupees. */
+export interface RevisionOfferBases {
+  /** The new items the revision adds (the bridge's "New items"). */
+  added: number;
+  /** The whole revised BOQ. */
+  whole: number;
+}
+
+/** The offer as frozen into an issued Scope Revision's client totals. */
+export interface RevisionDiscount {
+  name: string;
+  /** Rupees off execution, as issued. */
+  amount: number;
+  on: 'added' | 'whole';
+  type: 'percentage' | 'fixed';
+  value: number;
+  /** What it was worked out on, as issued. */
+  base: number;
+}
+
+export const DEFAULT_REVISION_OFFER_NAME = 'Revision discount';
+
+export function revisionOfferBase(o: Pick<RevisionOffer, 'on'>, b: RevisionOfferBases): number {
+  return Math.max(0, Number(o.on === 'whole' ? b.whole : b.added) || 0);
+}
+
+/** The offer in rupees, to the rupee, never more than what it is worked out on. */
+export function revisionOfferAmount(o: RevisionOffer | null | undefined, b: RevisionOfferBases): number {
+  if (!o) return 0;
+  const value = Math.max(0, Number(o.value) || 0);
+  if (!value) return 0;
+  const base = revisionOfferBase(o, b);
+  const raw = o.type === 'percentage' ? base * (Math.min(100, value) / 100) : value;
+  return Math.round(Math.min(base, raw));
+}
+
+/** "5% on the new items" / "₹50,000 off the whole revised BOQ". */
+export function describeRevisionOffer(o: Pick<RevisionOffer, 'on' | 'type' | 'value'>): string {
+  const what = o.on === 'whole' ? 'the whole revised BOQ' : 'the new items';
+  return o.type === 'percentage'
+    ? `${+(+o.value).toFixed(2)}% on ${what}`
+    : `₹${Math.round(Number(o.value) || 0).toLocaleString('en-IN')} off ${what}`;
+}
+
+/** The offer frozen for an issued document; null when there is nothing to take off. */
+export function frozenRevisionDiscount(o: RevisionOffer | null | undefined, b: RevisionOfferBases): RevisionDiscount | null {
+  const amount = revisionOfferAmount(o, b);
+  if (!o || amount <= 0) return null;
+  return {
+    name: (o.name || '').trim() || DEFAULT_REVISION_OFFER_NAME,
+    amount,
+    on: o.on,
+    type: o.type,
+    value: Math.max(0, Number(o.value) || 0),
+    base: Math.round(revisionOfferBase(o, b) * 100) / 100,
+  };
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * The project's discounts held at what they were on the signed BOQ: a
+ * percentage off execution becomes the fixed amount it came to, and every
+ * offer is marked as held, so Money and the Playground stop re-pricing it.
+ * Discounts off the design fee are left as they are: a revision does not
+ * change the fee.
+ */
+export function heldDiscounts<T extends ProjectDiscount>(discounts: T[] | undefined, signedExecution: number, reference: string): T[] {
+  return (discounts || []).map(d => {
+    if (d.heldAt) return d;
+    if (d.target === 'execution' && d.type === 'percentage') {
+      return { ...d, type: 'fixed', value: r2(Math.max(0, signedExecution) * ((Number(d.value) || 0) / 100)), heldFromPercent: Number(d.value) || 0, heldAt: reference };
+    }
+    return { ...d, heldAt: reference };
+  });
+}
+
+/**
+ * The project's discounts once a revision is applied: the proposal's held as
+ * signed, and the revision's own offer added as a fixed amount.
+ */
+export function discountsAfterRevision<T extends ProjectDiscount>(
+  discounts: T[] | undefined,
+  a: { signedExecution: number; reference: string; number: number; discount?: RevisionDiscount | null; proposalHeld?: boolean; id: string },
+): ProjectDiscount[] {
+  const kept: ProjectDiscount[] = a.proposalHeld ? heldDiscounts(discounts, a.signedExecution, a.reference) : [...(discounts || [])];
+  if (!a.discount || !(a.discount.amount > 0)) return kept;
+  return [...kept, {
+    id: a.id,
+    name: a.discount.name,
+    type: 'fixed',
+    value: a.discount.amount,
+    target: 'execution',
+    revision: a.number,
+    heldAt: a.reference,
+    ...(a.discount.type === 'percentage' ? { heldFromPercent: a.discount.value } : {}),
+  }];
+}
+
+/** The open revision a studio can still write an offer on: a draft. */
+export function draftRevision(ctx: ProjectContext | null | undefined) {
+  return (ctx?.scopeRevisions || [])
+    .filter(r => r.status === 'draft')
+    .sort((a, b) => b.number - a.number)[0] || null;
+}
+
+/** The project with this revision's offer set (null takes it off). Only a draft takes one. */
+export const withRevisionOffer = (revisionId: string, offer: RevisionOffer | null) => (prev: ProjectContext): ProjectContext => ({
+  ...prev,
+  scopeRevisions: (prev.scopeRevisions || []).map(r => (r.id === revisionId && r.status === 'draft'
+    ? { ...r, offer, updatedAt: Date.now() }
+    : r)),
+});

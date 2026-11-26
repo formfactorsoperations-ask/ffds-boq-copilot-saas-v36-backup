@@ -37,7 +37,9 @@ import { useMomScopeQueue, MomScopeItem } from '../../hooks/useMomScopeQueue';
 import MeetingScopeInbox from './MeetingScopeInbox';
 import ClientTotalsPicker from './ClientTotalsPicker';
 import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
-import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, netExecution, totalsNote } from '../../lib/scopeTotals';
+import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, discountOn, discountsOf, netExecution, totalsNote } from '../../lib/scopeTotals';
+import { RevisionDiscount, frozenRevisionDiscount } from '../../lib/revisionOffer';
+import RevisionOfferFields from './RevisionOfferFields';
 import { workbookForIssue, downloadWorkbook, toBase64, buildRevisionWorkbook, revisionWorkbookName } from '../../lib/scopeWorkbook';
 import { sendScopeEmail } from '../../services/emailService';
 import { publicAppOrigin } from '../../lib/publicUrl';
@@ -800,6 +802,13 @@ function RevisionEditor({
   const draft: ScopeDraft = useMemo(() => draftOfRecord(rec, signed, base.boq, bankMap), [rec, signed, base.boq, bankMap]);
   const result = useMemo(() => revisionFromDraft(signed, draft), [signed, draft]);
   const margin = useMemo(() => draftMargin(signed, draft, result), [signed, draft, result]);
+  /* The revision's own discount (lib/revisionOffer): worked out on the new items, or the whole revised BOQ. */
+  const offerBases = { added: result.bridge.new, whole: result.v2Total };
+  const issuedTotals: any = issue?.snapshot?.clientTotals || null;
+  const offerDiscount: RevisionDiscount | null = rec.status === 'draft' ? frozenRevisionDiscount(rec.offer, offerBases) : issuedTotals?.revisionDiscount || null;
+  const proposalOff = discountOn(result.v1Total, rec.status === 'draft' ? discountsOf(ctx) : issuedTotals?.discounts, 'execution');
+  /* The totals the client sees: the project's discounts as they are now, held at the signed figure, and this revision's own. */
+  const totalsFor = (o: ClientTotalsOptions): ClientTotalsOptions => ({ ...o, discounts: discountsOf(ctx), proposalHeld: true, revisionDiscount: offerDiscount });
   // The "Studio only" margin panel is studio finance (lib/roleAccess), and goes while figures are hidden.
   const finance = useSeesMargins(useOrg().currentRole);
   /* A revision made on the BOQ Playground's plan is changed there: its draft follows the plan, so it is not edited here. */
@@ -935,7 +944,7 @@ function RevisionEditor({
     if ((send || (recorded && agreement.email)) && bad) { setIssueError(`"${bad}" is not an email address.`); return; }
     if (recorded && !agreementValid(agreement)) { setIssueError('Give the date the client agreed (today or earlier).'); return; }
     /* The totals the client will see are part of the issued document, so they share its fingerprint. */
-    const snapshot = { ...built.snapshot, clientTotals: totalsOpts };
+    const snapshot = { ...built.snapshot, clientTotals: totalsFor(totalsOpts) };
     const materialSections = buildMaterialSections('scope_revision', snapshot);
     const issueUpd = issueDocument('scope_revision', snapshot, { issuedBy: currentUser, reference: built.reference, materialSections });
     const full = (prev: ProjectContext): ProjectContext => {
@@ -1338,6 +1347,26 @@ function RevisionEditor({
               })}
             </div>
             <p className="text-[11px] text-slate-400 mt-2.5">Six parts, always adding up to the change. The client sees the same breakdown.</p>
+            {offerDiscount && (
+              <div className="mt-3 pt-3 border-t border-slate-100 space-y-1 text-[12px]">
+                <div className="flex justify-between text-slate-600"><span>{offerDiscount.name}</span><span className="tabular-nums font-bold text-emerald-700">−{inr(offerDiscount.amount)}</span></div>
+                <div className="flex justify-between text-slate-800 font-bold"><span>Revised, after it</span><span className="tabular-nums">{inr2(result.v2Total - offerDiscount.amount)}</span></div>
+              </div>
+            )}
+          </div>
+
+          {/* The revision's own discount, apart from the proposal's (lib/revisionOffer). Money & Offers writes the same one. */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-4">
+            <div className="flex items-center gap-2.5 mb-3"><Ic3 icon={Percent} tint="green" size="sm" /><span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Discount on this revision</span></div>
+            <RevisionOfferFields
+              number={rec.number}
+              offer={rec.status === 'draft' ? rec.offer : offerDiscount}
+              bases={rec.status === 'draft' ? offerBases : { added: offerDiscount?.on === 'added' ? offerDiscount.base : offerBases.added, whole: offerDiscount?.on === 'whole' ? offerDiscount.base : offerBases.whole }}
+              editable={rec.status === 'draft'}
+              onChange={offer => saveRecord({ ...rec, offer })}
+              proposalOff={proposalOff}
+              idPrefix={`rof-${rec.id}`}
+            />
           </div>
 
           {finance && (
@@ -1462,7 +1491,7 @@ function RevisionEditor({
                     {built.drift > 0.01
                       ? <Note tone="block">The revised BOQ prices to {inr2(built.snapshot.v2.total)} but the draft says {inr2(result.v2Total)}. Issuing is blocked until they agree.</Note>
                       : <Note tone="ok">The revised BOQ prices to this total exactly, and the six parts add up to the change.</Note>}
-                    <ClientTotalsPicker value={totalsOpts} onChange={setTotalsOpts} before={result.v1Total} after={built.snapshot.v2.total} />
+                    <ClientTotalsPicker value={totalsFor(totalsOpts)} onChange={setTotalsOpts} before={result.v1Total} after={built.snapshot.v2.total} />
                     <div>
                       <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-1.5">What the client gets</div>
                       <ul className="list-disc pl-5 text-[12.5px] text-slate-700 space-y-1">
@@ -1476,7 +1505,7 @@ function RevisionEditor({
                         onClick={async () => {
                           setPreviewXl(true);
                           try {
-                            const snap: any = { ...built.snapshot, clientTotals: totalsOpts };
+                            const snap: any = { ...built.snapshot, clientTotals: totalsFor(totalsOpts) };
                             const buf = await buildRevisionWorkbook(snap, { studioName: orgName || 'Studio', fingerprint: 'added when issued', issuedOn: Date.now() });
                             downloadWorkbook(buf, `PREVIEW ${revisionWorkbookName(snap)}`);
                           } finally { setPreviewXl(false); }

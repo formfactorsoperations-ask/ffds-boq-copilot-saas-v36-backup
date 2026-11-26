@@ -204,6 +204,11 @@ export interface ScopeRevisionRecord {
    * step from it, so Revision Studio, Money and the documents read it as before.
    */
   playground?: { boq: any[]; reasons: Record<string, string> };
+  /**
+   * A discount given in this revision, apart from the proposal's (lib/revisionOffer).
+   * Written in Revision Studio or Money & Offers while a draft; frozen in rupees on issue.
+   */
+  offer?: import('./revisionOffer').RevisionOffer | null;
   /** Filled on issue. */
   issueId?: string | null;
   reference?: string | null;

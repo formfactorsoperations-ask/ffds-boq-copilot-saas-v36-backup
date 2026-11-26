@@ -3,6 +3,7 @@ import type { ScopeRevisionRecord } from './scopeRevision';
 import { issueDocument } from '../services/documentIssueEngine';
 import { publish } from './clientVisibility';
 import { scheduleForRevision, withRevisedSchedule } from './paymentScheduleRevision';
+import { discountsAfterRevision } from './revisionOffer';
 
 /**
  * A signed Scope Revision, applied: the revised BOQ becomes a new version of
@@ -55,12 +56,25 @@ export const appliedContext = (a: ApplyRevisionInput) => (prev: ProjectContext):
   const issues = withBoq.documents!.issues;
   const created = issues[issues.length - 1];
   const stamped = issues.map(i => (i.id === created.id ? { ...i, signedVia: issue.id, clientVisibility: publish(by) } : i));
-  const fin: FinancialConfig = (prev.financials || {}) as FinancialConfig;
+  const fin0: FinancialConfig = (prev.financials || {}) as FinancialConfig;
+  /* The discounts as the client signed them (lib/revisionOffer): the proposal's
+     held at what they were on the signed BOQ, and the revision's own added. */
+  const totals: any = issue.snapshot?.clientTotals || {};
+  const discounts = discountsAfterRevision(fin0.discounts, {
+    signedExecution: Number(issue.snapshot?.v1?.total) || a.v1Total,
+    reference: issue.reference,
+    number: rec.number,
+    discount: totals.revisionDiscount || null,
+    proposalHeld: !!totals.proposalHeld,
+    id: `rev${rec.number}-offer-${at.toString(36)}`,
+  });
+  const fin: FinancialConfig = { ...fin0, discounts } as FinancialConfig;
   const snapshots = fin.paymentSnapshots || [];
   /* The client's schedule was issued on the old value: stage the next
-     version on the new one, for the studio to release as usual. */
+     version on the new one, for the studio to release as usual. Every
+     discount comes off it, the revision's too. */
   const designValue = fin.approvedDesignValue ?? (prev as any).engagement?.designFee ?? 0;
-  const nextSchedule = scheduleForRevision(prev, {
+  const nextSchedule = scheduleForRevision({ ...prev, financials: fin }, {
     executionValue: priced,
     designValue,
     note: `Re-issued for Scope Revision ${rec.number} (${issue.reference}): execution scope ₹${Math.round(fin.approvedExecutionValue ?? a.v1Total).toLocaleString('en-IN')} → ₹${Math.round(priced).toLocaleString('en-IN')}.`,

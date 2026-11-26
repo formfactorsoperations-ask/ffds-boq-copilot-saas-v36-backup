@@ -5,6 +5,7 @@ import { draftOfRecord, revisionFromDraft } from './scopeDraft';
 import { isSentBack } from './scopeChangeRequest';
 import { computeSchedule, ScheduleResult } from './paymentSchedule';
 import { docPricingOf } from './playground/pricing';
+import { discountsAfterRevision, frozenRevisionDiscount, RevisionDiscount } from './revisionOffer';
 
 /*
   WHAT A SCOPE REVISION WOULD DO TO THE MONEY, BEFORE IT DOES IT.
@@ -34,6 +35,12 @@ export interface PendingRevision {
   v1Total: number;
   /** The revised execution scope, before discount. */
   v2Total: number;
+  /** What the new items the revision adds come to: what its discount is worked out on by default. */
+  added?: number;
+  /** The discount given in the revision (lib/revisionOffer), in rupees; null when none. */
+  offer?: RevisionDiscount | null;
+  /** The project's discounts as they will be once it is applied: the proposal's held, the revision's added. */
+  discounts?: any[];
 }
 
 const OPEN = new Set(['draft', 'issued', 'signed']);
@@ -50,10 +57,17 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
 
   let v1Total: number;
   let v2Total: number;
+  let offer: RevisionDiscount | null = null;
+  let added: number | undefined;
+  /* A draft is issued with the proposal's discounts held; an issued one says how it was issued. */
+  let proposalHeld = true;
   if (rec.status !== 'draft' && issue?.snapshot?.v2) {
     /* Issued: the frozen figures the client is looking at. */
     v1Total = Number(issue.snapshot.v1?.total) || 0;
     v2Total = Number(issue.snapshot.v2.total) || 0;
+    const t: any = issue.snapshot.clientTotals || {};
+    offer = t.revisionDiscount || null;
+    proposalHeld = !!t.proposalHeld;
   } else {
     /* Still a draft: what it prices to now, as the Revisions screen shows it. */
     const base = tiers.find(t => t.id === rec.baseTierId);
@@ -64,14 +78,19 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
     const result = revisionFromDraft(signed, draftOfRecord(rec, signed, base.boq, bankMap));
     v1Total = result.v1Total;
     v2Total = result.v2Total;
+    added = result.bridge.new;
+    offer = frozenRevisionDiscount(rec.offer, { added, whole: result.v2Total });
   }
   if (!(v2Total > 0)) return null;
+  const discounts = discountsAfterRevision((ctx.financials as any)?.discounts, {
+    signedExecution: v1Total, reference: rec.reference || `Scope Revision ${rec.number}`, number: rec.number, discount: offer, proposalHeld, id: `rev${rec.number}-offer`,
+  });
 
   const approved = !!(issue?.clientSignature || issue?.recordedApproval);
   const state: PendingRevisionState = rec.status === 'draft' || !issue
     ? 'draft'
     : approved ? 'approved' : isSentBack(issue) ? 'sent_back' : 'with_client';
-  return { id: rec.id, number: rec.number, state, reference: issue?.reference || rec.reference || null, v1Total, v2Total };
+  return { id: rec.id, number: rec.number, state, reference: issue?.reference || rec.reference || null, v1Total, v2Total, added, offer, discounts };
 }
 
 export interface MilestoneShift {
@@ -112,13 +131,14 @@ type ScheduleArgs = Parameters<typeof computeSchedule>[0];
  * the very arguments the Money tab computes its schedule with, so the two can
  * only differ by the revision.
  */
-export function previewRevisionMoney(args: ScheduleArgs, v2Total: number): RevisionMoneyPreview {
+export function previewRevisionMoney(args: ScheduleArgs, v2Total: number, discounts?: any[]): RevisionMoneyPreview {
   const now = computeSchedule(args);
-  /* Applying makes the revised BOQ the tier in force and its total the approved value. */
+  /* Applying makes the revised BOQ the tier in force and its total the approved value,
+     with the discounts as they will be then (the revision's own included). */
   const revised = computeSchedule({
     ...args,
     tierSummary: { ...(args.tierSummary || {}), totalSell: v2Total },
-    overrides: { ...(args.overrides || {}), approvedExecutionValue: v2Total },
+    overrides: { ...(args.overrides || {}), approvedExecutionValue: v2Total, ...(discounts ? { discounts } : {}) },
   });
   const rows: MilestoneShift[] = now.amounts.map(a => {
     const b = revised.byId[a.id];

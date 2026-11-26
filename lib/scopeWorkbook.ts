@@ -294,7 +294,9 @@ function totalsBlock(ws: Sheet, before: number | null, after: number, revisedRef
       if (revision && signedValue !== null) row.getCell(2).value = r2(signedValue);
     } else if (r.key === 'execGst') {
       /* On the execution after its discount, when there is one. */
-      const on = (c: string) => (at.execDiscount ? `(${c}${at.execution}+${c}${at.execDiscount})` : `${c}${at.execution}`);
+      /* And after the revision's own discount, which is a row of its own (lib/revisionOffer). */
+      const offs = [at.execDiscount, at.revisionDiscount].filter(Boolean);
+      const on = (c: string) => (offs.length ? `(${[at.execution, ...offs].map(n => `${c}${n}`).join('+')})` : `${c}${at.execution}`);
       if (revision) row.getCell(2).value = { formula: `${on('B')}*${+share.toFixed(6)}`, result: r.before };
       row.getCell(revision ? 3 : 2).value = { formula: `${on(colAfter)}*${+share.toFixed(6)}`, result: r.after };
     } else if (r.key === 'designGst') {
