@@ -354,7 +354,19 @@ export default function PricingGrid(props: Props) {
       );
     }
     if (props.scopeFlowOn && props.signedTierId) return null;
-    if (!c.latest) return <p className="text-[11px] text-slate-500">An earlier version, kept as it was. The newest is v{c.chain.versions.length}.</p>;
+    if (!c.latest) {
+      /* The client may have agreed to an earlier version (a legacy proposal, D1 paid on v1):
+         it can be approved as it is; the later versions stay as they are. */
+      const n = versionNo(c.chain, t.id);
+      return (
+        <div className="space-y-2">
+          <p className="text-[11px] text-slate-500">An earlier version, kept as it was. The newest is v{c.chain.versions.length}.</p>
+          <button type="button" onClick={() => { actions.approve(t.id); setCheer(t.id); }} className={`${SECONDARY} w-full`}>
+            <CheckCircle2 className="w-4 h-4" /> Approve v{n}, the version the client agreed
+          </button>
+        </div>
+      );
+    }
     if (!isSel(t.id)) return null;
     return (
       <button type="button" onClick={() => { actions.approve(t.id); setCheer(t.id); }} className={`${PRIMARY} w-full`}>

@@ -662,7 +662,8 @@ export default function RevisionStudio({
   );
 
   usePageHeader({
-    actions: currentSelectedTier ? (
+    /* With signed scope on, the baseline is the approved option only: nothing approved, nothing to show. */
+    actions: currentSelectedTier && !(scopeFlowOn && !approvedTierId) ? (
       <button
         onClick={() => setShowBaselineModal(true)}
         className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -674,7 +675,7 @@ export default function RevisionStudio({
         <span className="tabular-nums">{formatINR(originalTotal)}</span>
       </button>
     ) : null
-  }, [currentSelectedTier?.name, originalTotal]);
+  }, [currentSelectedTier?.name, originalTotal, scopeFlowOn, approvedTierId]);
   const rawRevisedExecutionTotal = useMemo(
     () =>
       currentRevisionBoq.reduce((sum: number, item: any) => {
