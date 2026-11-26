@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  revisionOfferAmount, frozenRevisionDiscount, describeRevisionOffer, heldDiscounts, discountsAfterRevision,
+  addedByRevision, offerBasesFor, revisionOfferAmount, frozenRevisionDiscount, describeRevisionOffer, heldDiscounts, discountsAfterRevision,
   draftRevision, withRevisionOffer,
 } from '../../lib/revisionOffer';
 import { clientTotals, defaultTotalsOptions, netExecution, totalsNote } from '../../lib/scopeTotals';
@@ -185,5 +185,49 @@ describe('the payment schedule', () => {
     const p = previewRevisionMoney({ context: c, tierSummary: { totalSell: V1, designFee: FEE }, overrides: { approvedExecutionValue: V1, approvedDesignValue: FEE } }, rev.v2Total, rev.discounts);
     expect(p.taxableNow).toBeCloseTo(V1 - 70000, 2);
     expect(p.taxableRevised).toBeCloseTo(V2 - 77500, 2);
+  });
+});
+
+describe('what a revision adds, with rooms compared as a whole', () => {
+  /* Palacia: Master Bathroom gains three items; electrical and ceiling painting
+     move from Others into Functional, which is not an addition. */
+  const sig = (room: string, name: string, amount: number) => ({ lineId: `${room}:${name}`, room, name, unit: 'nos', qty: 1, rate: amount, amount });
+  const line = (name: string, amount: number) => ({ id: `n:${name}`, kind: 'new', imported: { id: `n:${name}`, name }, amount2: amount });
+  const signed: any[] = [
+    sig('Master Bathroom', 'Bathroom vanity', 11250),
+    sig('Master Bathroom', 'Door frame', 7395),
+    sig('Functional', 'False ceiling', 73204),
+    sig('Others', 'Interior ceiling painting - all rooms', 54363),
+    sig('Others', 'Electrical (labor cost / point)', 114240),
+    sig('Others', 'Debris removal', 13800),
+    sig('Living', 'Sofa', 50000),
+  ];
+  const result: any = {
+    v2Total: 1622600,
+    bridge: { new: 62200, qty: 0, redesign: 0, section: 145903, removed: 0, rate: 56 },
+    rooms: [
+      { name: 'Master Bathroom', signedRoom: 'Master Bathroom', compareAsSection: true, lines: [
+        line('Bathroom vanity', 11300), line('Door Frame', 7400), line('Bathroom dry balcony door', 9800), line('Glass partition (half)', 12500), line('Wall niches', 6300),
+      ] },
+      { name: 'Functional', signedRoom: 'Functional', compareAsSection: true, lines: [
+        line('False ceiling', 73300), line('Interior ceiling painting - all rooms', 54400), line('Electrical (labor cost / point)', 114300),
+      ] },
+      { name: 'Others', signedRoom: 'Others', compareAsSection: true, lines: [line('Debris removal', 13800), line('Floor protection', 11500)] },
+      { name: 'Living', signedRoom: 'Living', compareAsSection: false, lines: [line('Sofa', 50000)] },
+    ],
+  };
+
+  it('counts the items new inside them, not rate tweaks or items moved between them', () => {
+    expect(addedByRevision(result, signed)).toEqual({ newLines: 62200, inWholeRooms: 9800 + 12500 + 6300 + 11500, total: 62200 + 40100 });
+  });
+
+  it('is what the default discount is worked out on', () => {
+    const b = offerBasesFor(result, signed);
+    expect(b).toEqual({ added: 102300, inWholeRooms: 40100, whole: 1622600 });
+    expect(revisionOfferAmount({ name: 'R', on: 'added', type: 'percentage', value: 5 }, b)).toBe(5115);
+  });
+
+  it('with no room compared as a whole, is the new lines alone', () => {
+    expect(addedByRevision({ ...result, rooms: [result.rooms[3]] }, signed)).toEqual({ newLines: 62200, inWholeRooms: 0, total: 62200 });
   });
 });

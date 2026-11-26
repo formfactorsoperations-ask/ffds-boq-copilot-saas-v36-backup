@@ -38,7 +38,7 @@ import MeetingScopeInbox from './MeetingScopeInbox';
 import ClientTotalsPicker from './ClientTotalsPicker';
 import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
 import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, discountOn, discountsOf, netExecution, totalsNote } from '../../lib/scopeTotals';
-import { RevisionDiscount, frozenRevisionDiscount } from '../../lib/revisionOffer';
+import { RevisionDiscount, frozenRevisionDiscount, offerBasesFor } from '../../lib/revisionOffer';
 import RevisionOfferFields from './RevisionOfferFields';
 import { workbookForIssue, downloadWorkbook, toBase64, buildRevisionWorkbook, revisionWorkbookName } from '../../lib/scopeWorkbook';
 import { sendScopeEmail } from '../../services/emailService';
@@ -803,7 +803,7 @@ function RevisionEditor({
   const result = useMemo(() => revisionFromDraft(signed, draft), [signed, draft]);
   const margin = useMemo(() => draftMargin(signed, draft, result), [signed, draft, result]);
   /* The revision's own discount (lib/revisionOffer): worked out on the new items, or the whole revised BOQ. */
-  const offerBases = { added: result.bridge.new, whole: result.v2Total };
+  const offerBases = useMemo(() => offerBasesFor(result, signed), [result, signed]);
   const issuedTotals: any = issue?.snapshot?.clientTotals || null;
   const offerDiscount: RevisionDiscount | null = rec.status === 'draft' ? frozenRevisionDiscount(rec.offer, offerBases) : issuedTotals?.revisionDiscount || null;
   const proposalOff = discountOn(result.v1Total, rec.status === 'draft' ? discountsOf(ctx) : issuedTotals?.discounts, 'execution');
@@ -1350,7 +1350,7 @@ function RevisionEditor({
             {offerDiscount && (
               <div className="mt-3 pt-3 border-t border-slate-100 space-y-1 text-[12px]">
                 <div className="flex justify-between text-slate-600"><span>{offerDiscount.name}</span><span className="tabular-nums font-bold text-emerald-700">−{inr(offerDiscount.amount)}</span></div>
-                <div className="flex justify-between text-slate-800 font-bold"><span>Revised, after it</span><span className="tabular-nums">{inr2(result.v2Total - offerDiscount.amount)}</span></div>
+                <div className="flex justify-between text-slate-800 font-bold"><span>Revised, less this discount</span><span className="tabular-nums">{inr2(result.v2Total - offerDiscount.amount)}</span></div>
               </div>
             )}
           </div>

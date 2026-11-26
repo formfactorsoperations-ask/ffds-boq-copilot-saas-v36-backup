@@ -12,7 +12,7 @@ import { computeSchedule, contractInForce, gstTermsOf } from '../../lib/paymentS
 import { otherBenchmarks, medianGm } from '../../lib/tierBenchmarks';
 import { optionChains, latestOf, chainOf, sameOption, versionNo } from '../../lib/optionChains';
 import {
-  SCOPE_PARTS, partLabel, scopeSplit, splitPricingOf, offerScope, offerDiscount, offerValue, offerName, staleOffer, refreshedOffer, marginWith, dealFor,
+  SCOPE_PARTS, partLabel, scopeSplit, discountTotal, splitPricingOf, offerScope, offerDiscount, offerValue, offerName, staleOffer, refreshedOffer, marginWith, dealFor,
   type ScopePart, type OfferBasis, type OfferDiscount,
 } from '../../lib/offers';
 
@@ -265,11 +265,12 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
                   number={openRev.number}
                   offer={openRev.state === 'draft' ? openRec.offer : openRev.offer}
                   bases={openRev.state === 'draft'
-                    ? { added: openRev.added || 0, whole: openRev.v2Total }
+                    ? { added: openRev.added || 0, inWholeRooms: openRev.addedInWholeRooms || 0, whole: openRev.v2Total }
                     : { added: openRev.offer?.base || 0, whole: openRev.offer?.base || 0 }}
                   editable={openRev.state === 'draft' && !readOnly}
                   onChange={(offer) => setProjectContext((prev: any) => withRevisionOffer(openRec.id, offer)(prev))}
                   idPrefix="mo-rev"
+                  proposalOff={discountTotal(openRev.v1Total, discounts.filter((d) => !d.revision), 'execution')}
                 />
               </div>
             )}

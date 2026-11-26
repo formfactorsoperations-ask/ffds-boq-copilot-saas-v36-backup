@@ -5,7 +5,7 @@ import { draftOfRecord, revisionFromDraft } from './scopeDraft';
 import { isSentBack } from './scopeChangeRequest';
 import { computeSchedule, ScheduleResult } from './paymentSchedule';
 import { docPricingOf } from './playground/pricing';
-import { discountsAfterRevision, frozenRevisionDiscount, RevisionDiscount } from './revisionOffer';
+import { discountsAfterRevision, frozenRevisionDiscount, offerBasesFor, RevisionDiscount } from './revisionOffer';
 
 /*
   WHAT A SCOPE REVISION WOULD DO TO THE MONEY, BEFORE IT DOES IT.
@@ -37,6 +37,8 @@ export interface PendingRevision {
   v2Total: number;
   /** What the new items the revision adds come to: what its discount is worked out on by default. */
   added?: number;
+  /** Of `added`, what is new inside rooms compared as a whole. */
+  addedInWholeRooms?: number;
   /** The discount given in the revision (lib/revisionOffer), in rupees; null when none. */
   offer?: RevisionDiscount | null;
   /** The project's discounts as they will be once it is applied: the proposal's held, the revision's added. */
@@ -59,6 +61,7 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
   let v2Total: number;
   let offer: RevisionDiscount | null = null;
   let added: number | undefined;
+  let addedInWholeRooms: number | undefined;
   /* A draft is issued with the proposal's discounts held; an issued one says how it was issued. */
   let proposalHeld = true;
   if (rec.status !== 'draft' && issue?.snapshot?.v2) {
@@ -78,8 +81,10 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
     const result = revisionFromDraft(signed, draftOfRecord(rec, signed, base.boq, bankMap));
     v1Total = result.v1Total;
     v2Total = result.v2Total;
-    added = result.bridge.new;
-    offer = frozenRevisionDiscount(rec.offer, { added, whole: result.v2Total });
+    const bases = offerBasesFor(result, signed);
+    added = bases.added;
+    addedInWholeRooms = bases.inWholeRooms;
+    offer = frozenRevisionDiscount(rec.offer, bases);
   }
   if (!(v2Total > 0)) return null;
   const discounts = discountsAfterRevision((ctx.financials as any)?.discounts, {
@@ -90,7 +95,7 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
   const state: PendingRevisionState = rec.status === 'draft' || !issue
     ? 'draft'
     : approved ? 'approved' : isSentBack(issue) ? 'sent_back' : 'with_client';
-  return { id: rec.id, number: rec.number, state, reference: issue?.reference || rec.reference || null, v1Total, v2Total, added, offer, discounts };
+  return { id: rec.id, number: rec.number, state, reference: issue?.reference || rec.reference || null, v1Total, v2Total, added, addedInWholeRooms, offer, discounts };
 }
 
 export interface MilestoneShift {

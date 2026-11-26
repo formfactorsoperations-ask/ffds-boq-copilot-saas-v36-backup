@@ -107,12 +107,14 @@ export default function RevisionOfferFields({ number, offer, bases, editable, on
         <legend className={label}>Comes off</legend>
         <div className="space-y-1.5">
           {([
-            ['added', 'The new items it adds', bases.added],
-            ['whole', 'The whole revised BOQ', bases.whole],
-          ] as const).map(([k, t, v]) => (
+            ['added', 'The new items it adds', bases.added,
+              (bases.inWholeRooms || 0) > 0 ? `${inr(bases.added - (bases.inWholeRooms || 0))} new lines + ${inr(bases.inWholeRooms || 0)} new in rooms compared as a whole` : ''],
+            ['whole', 'The whole revised BOQ', bases.whole,
+              proposalOff > 0 ? 'Includes the scope already agreed, which has its own discount' : ''],
+          ] as const).map(([k, t, v, sub]) => (
             <label key={k} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer ${offer.on === k ? 'border-[#3D52A0] bg-[#3D52A0]/5' : 'border-slate-200 hover:bg-slate-50'}`}>
               <input type="radio" name={`${idPrefix}-on`} className="accent-[#3D52A0]" checked={offer.on === k} onChange={() => set({ on: k })} />
-              <span className="flex-1 min-w-0 text-slate-700">{t}</span>
+              <span className="flex-1 min-w-0 text-slate-700">{t}{sub && <span className="block text-[11px] text-slate-500">{sub}</span>}</span>
               <span className="tabular-nums text-xs text-slate-500">{inr(v)}</span>
             </label>
           ))}
@@ -121,6 +123,9 @@ export default function RevisionOfferFields({ number, offer, bases, editable, on
       <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs text-slate-600 space-y-1">
         <p>Worth <b className="text-emerald-700 tabular-nums">−{inr(amount)}</b>{amount > 0 ? ` · ${describeRevisionOffer(offer)}` : ''}</p>
         {offer.on === 'added' && bases.added <= 0 && <p className="text-amber-700">This revision adds no new items yet, so there is nothing for it to come off.</p>}
+        {offer.on === 'whole' && proposalOff > 0 && amount > 0 && (
+          <p className="text-amber-700">This also takes {offer.type === 'percentage' ? `${+(+offer.value).toFixed(2)}%` : 'it'} off the scope the client already agreed, on top of the proposal’s {inr(proposalOff)}. For a discount on what was added only, choose the new items.</p>
+        )}
         <p>Off the revised side only, on its own line, so the client sees it as part of the change.</p>
       </div>
       {proposalLine}

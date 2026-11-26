@@ -22,7 +22,7 @@ import { detailedBoqVersion } from '../scopeFlow';
 import { issueDocument } from '../../services/documentIssueEngine';
 import { publish, isVisibleToClient } from '../clientVisibility';
 import { defaultTotalsOptions } from '../scopeTotals';
-import { frozenRevisionDiscount } from '../revisionOffer';
+import { frozenRevisionDiscount, offerBasesFor } from '../revisionOffer';
 import { docPricingOf, docLine } from './pricing';
 import { unitCostOf } from './excel';
 
@@ -171,7 +171,7 @@ export function issuePlanRevision(args: {
   const clientTotals = {
     ...defaultTotalsOptions(ctx),
     proposalHeld: true,
-    revisionDiscount: frozenRevisionDiscount(rec.offer, { added: result.bridge.new, whole: result.v2Total }),
+    revisionDiscount: frozenRevisionDiscount(rec.offer, offerBasesFor(result, signed)),
   };
   const withTotals = { ...snapshot, clientTotals } as ScopeRevisionSnapshot;
   const update = (prev: ProjectContext): ProjectContext => {

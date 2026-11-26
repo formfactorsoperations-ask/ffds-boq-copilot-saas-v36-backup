@@ -1,4 +1,5 @@
 import type { ProjectContext, ProjectDiscount } from '../types';
+import { nameSimilarity, norm, type RevisionResult, type SignedLine } from './scopeRevision';
 
 /*
   A DISCOUNT GIVEN IN A SCOPE REVISION, KEPT APART FROM THE PROPOSAL'S.
@@ -38,8 +39,10 @@ export interface RevisionOffer {
 
 /** What a revision's offer can be worked out on, in rupees. */
 export interface RevisionOfferBases {
-  /** The new items the revision adds (the bridge's "New items"). */
+  /** The new items the revision adds: new lines, and new items inside rooms compared as a whole (addedByRevision). */
   added: number;
+  /** Of `added`, what is new inside rooms compared as a whole: shown so the figure can be checked. */
+  inWholeRooms?: number;
   /** The whole revised BOQ. */
   whole: number;
 }
@@ -95,6 +98,44 @@ export function frozenRevisionDiscount(o: RevisionOffer | null | undefined, b: R
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * What a revision adds: the items that were not in the signed BOQ.
+ *
+ * Rooms compared line by line say so themselves (the bridge's "New items").
+ * A room compared as a whole does not: its whole difference is one "Sections"
+ * figure, which also carries rate tweaks and items moved between rooms (on
+ * Palacia, electrical and ceiling painting moved from Others into Functional:
+ * +₹1.69L in one, −₹1.69L in the other). So inside those rooms each revised
+ * line is matched by name against the signed lines of all of them together,
+ * the same name first and then a close one, each signed line used once; a
+ * line with no match is new, at its revised amount.
+ */
+export function addedByRevision(result: Pick<RevisionResult, 'rooms' | 'bridge'>, signed: SignedLine[]): { newLines: number; inWholeRooms: number; total: number } {
+  const newLines = Math.max(0, Number(result.bridge?.new) || 0);
+  const whole = (result.rooms || []).filter(r => r.compareAsSection && r.signedRoom);
+  if (!whole.length) return { newLines: r2(newLines), inWholeRooms: 0, total: r2(newLines) };
+  const rooms = new Set(whole.map(r => r.signedRoom));
+  const pool = (signed || []).filter(s => rooms.has(s.room));
+  const used = new Set<string>();
+  const revised = whole.flatMap(r => r.lines).filter(l => l.imported && (l.amount2 || 0) > 0);
+  const matched = new Set<string>();
+  const pass = (fits: (a: string, b: string) => boolean) => revised.forEach(l => {
+    if (matched.has(l.id)) return;
+    const s = pool.find(x => !used.has(x.lineId) && fits(x.name, l.imported!.name));
+    if (s) { used.add(s.lineId); matched.add(l.id); }
+  });
+  pass((a, b) => norm(a) === norm(b));
+  pass((a, b) => nameSimilarity(a, b) >= 0.8);
+  const inWholeRooms = revised.filter(l => !matched.has(l.id)).reduce((t, l) => t + (l.amount2 || 0), 0);
+  return { newLines: r2(newLines), inWholeRooms: r2(inWholeRooms), total: r2(newLines + inWholeRooms) };
+}
+
+/** The bases a revision's offer is worked out on. */
+export function offerBasesFor(result: Pick<RevisionResult, 'rooms' | 'bridge' | 'v2Total'>, signed: SignedLine[]): RevisionOfferBases {
+  const a = addedByRevision(result, signed);
+  return { added: a.total, inWholeRooms: a.inWholeRooms, whole: result.v2Total };
+}
 
 /**
  * The project's discounts held at what they were on the signed BOQ: a
