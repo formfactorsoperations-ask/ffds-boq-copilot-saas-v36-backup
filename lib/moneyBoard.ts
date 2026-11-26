@@ -188,6 +188,15 @@ export function restoreSchedule(past: PaymentMilestone[], current: PaymentMilest
   const billedNow = (current || []).filter(cleared);
   const billedIds = new Set(billedNow.map(m => m.id));
   const billedKeys = new Set(billedNow.map(key));
+  /* An issued schedule keeps no milestone ids: match its rows to today's unbilled ones by track and name, so links and dates hold. */
+  const freeByKey = new Map((current || []).filter(m => !cleared(m)).map(m => [key(m), m]));
+  const pastIds = new Set((past || []).map(m => m.id));
+  past = (past || []).map(m => {
+    if (now.has(m.id)) return m;
+    const match = freeByKey.get(key(m));
+    if (match && !pastIds.has(match.id)) { freeByKey.delete(key(m)); return { ...match, ...m, id: match.id }; }
+    return m;
+  });
   const out: PaymentMilestone[] = [];
   (['design', 'execution'] as Track[]).forEach(t => {
     const keep = billedNow.filter(m => (m.type || 'design') === t);
