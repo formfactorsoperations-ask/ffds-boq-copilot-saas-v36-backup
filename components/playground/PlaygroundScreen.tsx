@@ -354,7 +354,14 @@ export default function PlaygroundScreen(props: Props) {
       text: `v${vplace.n} is kept as it was, so its deal is shown, not changed. Offers are made on v${vplace.versions.length}, the newest version of ${tier.name || 'this option'}: it is the one the proposal and Money price.`,
       action: onSelectTier ? { label: `Open v${vplace.versions.length}`, onClick: () => { keepLens.current = 'deal'; onSelectTier(vplace.latest.id); } } : undefined,
     }
-    : signed || contractInForce(ctx) ? { text: 'This option is signed: its offers stay as the client signed them. A change to the scope goes through a revision.' }
+    : signed || contractInForce(ctx) ? {
+      /* Say what actually holds it: a signed scope, an approved option, or only the client's acceptance. */
+      text: signed || lockedTierId(ctx)
+        ? 'This option is signed: its offers stay as the client signed them. A change to the scope goes through a revision.'
+        : ctx.approvedTierId
+          ? 'This is the agreed scope: its offers stay as agreed. A change to the scope goes through a revision.'
+          : 'The client has accepted the proposal, so its offers stay as agreed. To change the scope, choose the agreed version in Versions & Revision Studio, then start a revision.',
+    }
     : readOnlyProp ? { text: 'The BOQ is frozen, so the deal is shown, not changed.' }
     : sentHere ? {
       text: `This version went to the client on ${when(ctx.proposal?.issuedAt)}${validity.expired ? `, and expired on ${when(validity.until.getTime())}` : `, valid until ${when(validity.until.getTime())}`}. It stays as it went: make a new version to change the deal, then send it.`,

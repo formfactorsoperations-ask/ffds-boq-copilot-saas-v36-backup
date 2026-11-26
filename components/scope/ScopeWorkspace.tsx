@@ -41,6 +41,9 @@ import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, discountOn, di
 import { RevisionDiscount, frozenRevisionDiscount, givenOffWork, offerBasesFor, revisionTotals, withFeeNote } from '../../lib/revisionOffer';
 import RevisionOfferFields from './RevisionOfferFields';
 import { tradeChoices, tradeFinder } from '../../lib/revisionTrades';
+import { agreedScopeCandidate, contextWithApproved, tiersWithApproved } from '../../lib/tierApproval';
+import { optionChains, versionNo } from '../../lib/optionChains';
+import { sentProposalTier } from '../../lib/playground/proposal';
 import { workbookForIssue, downloadWorkbook, toBase64, buildRevisionWorkbook, revisionWorkbookName } from '../../lib/scopeWorkbook';
 import { sendScopeEmail } from '../../services/emailService';
 import { publicAppOrigin } from '../../lib/publicUrl';
@@ -353,6 +356,25 @@ export default function ScopeWorkspace({
     return sendToClient(issueId, to, cc, agreement(base || ctx));
   };
 
+  // ── Choose the scope the client agreed, when no option is approved yet ──
+  /* A legacy project: the client accepted (or paid D1) on a version, but no option
+     was approved, so there was nothing here to record. Any version can be picked,
+     an earlier one included (lib/tierApproval agreedScopeCandidate). */
+  const chains = useMemo(() => optionChains(tiers), [tiers]);
+  const candidate = useMemo(() => agreedScopeCandidate(ctx as any, tiers, sentProposalTier(ctx as any)), [ctx, tiers]);
+  const [agreeId, setAgreeId] = useState<string>('');
+  const agreeTier = tiers.find(t => t.id === (agreeId || candidate?.tierId)) || null;
+  const agreeChain = agreeTier ? chains.find(c => c.versions.some(v => v.id === agreeTier.id)) : null;
+  const acceptance = ctx.proposalAcceptance?.accepted ? ctx.proposalAcceptance : null;
+  const makeAgreed = () => {
+    if (!agreeTier || !setTiers) return;
+    const now = Date.now();
+    const previous = ctx.approvedTierId;
+    setProjectContext(prev => contextWithApproved(prev, agreeTier, tiers, now));
+    setTiers(prev => tiersWithApproved(prev, agreeTier.id, previous, { at: now, by: currentUser }));
+    flash('ok', `${agreeTier.name}${agreeChain && agreeChain.versions.length > 1 ? ` v${versionNo(agreeChain, agreeTier.id)}` : ''} is the agreed scope. Record it below as Detailed BOQ v1, then start a revision for the changes since.`);
+  };
+
   // ── Record the scope in force ─────────────────────────────────────────
   const [recordMode,setRecordMode] = useState<'recorded' | 'for_signature'>('recorded');
   const [v1Totals, setV1Totals] = useState<ClientTotalsOptions>(() => defaultTotalsOptions(ctx));
@@ -586,9 +608,49 @@ export default function ScopeWorkspace({
             {!baseTier && (
               <div className="flex items-start gap-3">
                 <Ic3 icon={ShieldCheck} tint="slate" />
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-bold text-slate-800">No signed scope yet</h2>
-                  <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">Approve a version of the BOQ first. It is then recorded here as the Detailed BOQ, the scope the client agreed, and from then on it changes only through a signed scope revision.</p>
+                <div className="flex-1 min-w-0 space-y-3">
+                  <div>
+                    <h2 className="font-bold text-slate-800">No agreed scope yet</h2>
+                    <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">
+                      {acceptance
+                        ? `The client accepted the proposal${acceptance.at ? ` on ${day(acceptance.at)}` : ''}${acceptance.tierName ? `, on ${acceptance.tierName}` : ''}${acceptance.amount ? ` at ${inr(acceptance.amount)}` : ''}. `
+                        : ''}
+                      Choose the version the client agreed to. It is recorded here as the Detailed BOQ, and from then on changes only through a signed scope revision.
+                    </p>
+                  </div>
+                  {tiers.length > 0 && setTiers ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          aria-label="The version the client agreed to"
+                          value={agreeTier?.id || ''}
+                          onChange={e => setAgreeId(e.target.value)}
+                          className="min-w-[260px] border border-slate-200 rounded-xl px-3 py-2 text-[13px] bg-white outline-none focus:ring-2 focus:ring-[#3D52A0]/20"
+                        >
+                          {chains.map(c => (
+                            <optgroup key={c.root.id} label={c.root.name}>
+                              {c.versions.map(v => (
+                                <option key={v.id} value={v.id}>
+                                  {c.versions.length > 1 ? `v${versionNo(c, v.id)} · ` : ''}{v.name} · {inr(v.summary?.totalSell || 0)}
+                                  {v.id === acceptance?.tierId ? ' · accepted' : v.id === sentProposalTier(ctx as any) ? ' · sent to the client' : ''}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                        <button onClick={makeAgreed} disabled={!agreeTier} className="px-4 py-2 rounded-xl bg-[#3D52A0] hover:bg-[#334486] disabled:bg-slate-300 text-white text-[13px] font-bold cursor-pointer flex items-center gap-1.5 shadow-sm">
+                          <Check className="w-4 h-4" /> Make it the agreed scope
+                        </button>
+                      </div>
+                      {agreeTier && agreeChain && agreeChain.versions[agreeChain.versions.length - 1].id !== agreeTier.id && (
+                        <Note tone="info">
+                          v{versionNo(agreeChain, agreeTier.id)} is an earlier version. The later {agreeChain.versions.length - versionNo(agreeChain, agreeTier.id) === 1 ? 'one stays' : 'ones stay'} as {agreeChain.versions.length - versionNo(agreeChain, agreeTier.id) === 1 ? 'it is' : 'they are'}; what the client added since goes into a scope revision of v{versionNo(agreeChain, agreeTier.id)}.
+                        </Note>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-slate-500">Add an option in Pricing &amp; Tiers first.</p>
+                  )}
                 </div>
               </div>
             )}

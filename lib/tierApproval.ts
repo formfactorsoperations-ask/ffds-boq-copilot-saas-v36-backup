@@ -150,3 +150,26 @@ export function tiersWithoutApproved(tiers: ProposalTier[], revertedId: string, 
     return t;
   });
 }
+
+/**
+ * The version the client most likely agreed to, to offer first when the studio
+ * records the agreed scope: the one their acceptance names (D1 paid on it), else
+ * the one the proposal went out on, else the newest version.
+ *
+ * A legacy project (Palacia) had the acceptance recorded and D1 paid, but no
+ * option approved, so Versions & Revision Studio said "No signed scope yet" and
+ * offered no way forward. The studio now picks the version there, earlier
+ * versions included.
+ */
+export function agreedScopeCandidate(
+  ctx: Pick<ProjectContext, 'proposalAcceptance'> & { proposal?: any },
+  tiers: ProposalTier[],
+  sentTierId?: string | null,
+): { tierId: string; why: 'accepted' | 'sent' | 'newest' } | null {
+  const has = (id?: string | null) => !!id && tiers.some(t => t.id === id);
+  const accepted = ctx.proposalAcceptance?.accepted ? ctx.proposalAcceptance.tierId : null;
+  if (has(accepted)) return { tierId: accepted!, why: 'accepted' };
+  if (has(sentTierId)) return { tierId: sentTierId!, why: 'sent' };
+  const newest = [...tiers].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+  return newest ? { tierId: newest.id, why: 'newest' } : null;
+}
