@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Person } from '../../lib/peopleDesk';
 import { guideView, seenAfter, SEEN_KEEP, type GuideStore, type OfficeDetails } from '../../lib/peopleGuide';
-import { autoOpenOf, storiesOf, storySeen, storyWhen, storyWords, stripWords, unseenCount } from '../../lib/studioStories';
+import { autoOpenOf, KUDOS_PER_PERSON, storiesOf, storySeen, storyWhen, storyWords, stripWords, unseenCount } from '../../lib/studioStories';
 
 /* Studio stories on Home (the owner, 26 Nov 2026; DESIGN.md → "Studio stories"). */
 
@@ -16,15 +16,34 @@ const view = (over: Partial<GuideStore> = {}, me = 'me') =>
 const nameOf = (id: string) => people.find((p) => p.id === id)?.name || 'Someone';
 
 describe('what becomes a story', () => {
-  it('is a thank-you from the last 24 hours, and a birthday or anniversary today, not tomorrow', () => {
+  it('is every thank-you on the wall, and a birthday or anniversary today, not tomorrow', () => {
     const v = view({
       offices: { pn: office({ birthday: '11-26' }), rv: office({ joinedOn: '2023-11-26' }), ar: office({ birthday: '11-27' }) },
       kudos: [k('k1', 'ar', 'mi', '2026-11-26T08:00:00.000Z'), k('old', 'ar', 'mi', '2026-11-25T09:00:00.000Z')],
     });
     const g = storiesOf(v, 'me', new Set(), NOW);
-    expect(g.map((x) => [x.personId, x.stories.map((s) => s.kind)])).toEqual([
-      ['pn', ['birthday']], ['rv', ['anniversary']], ['mi', ['kudos']],
+    expect(g.map((x) => [x.personId, x.stories.map((s) => s.id)])).toEqual([
+      ['pn', ['birthday_pn_2026-11-26']], ['rv', ['anniversary_rv_2026-11-26']], ['mi', ['old', 'k1']],
     ]);
+  });
+
+  it('shows thank-yous older than 24 hours as already watched: they never ask to be seen or open by themselves', () => {
+    const v = view({ kudos: [k('mine', 'ar', 'me', '2026-11-20T09:00:00.000Z'), k('them', 'ar', 'mi', '2026-10-30T09:00:00.000Z')] });
+    const g = storiesOf(v, 'me', new Set(), NOW);
+    expect(g.map((x) => [x.personId, x.seen])).toEqual([['me', true], ['mi', true]]);
+    expect(unseenCount(g)).toBe(0);
+    expect(autoOpenOf(g)).toBe(-1);
+    expect(storyWhen(g[0].stories[0], NOW)).toBe('Kudos · 6d ago');
+    expect(storyWhen(g[1].stories[0], NOW)).toBe('Kudos · 30 Oct');
+  });
+
+  it('starts a person at their new thank-you, after the older ones, and keeps only their newest few', () => {
+    const many = Array.from({ length: KUDOS_PER_PERSON + 2 }, (_, i) => k(`o${i}`, 'ar', 'mi', `2026-11-${String(10 + i).padStart(2, '0')}T09:00:00.000Z`));
+    const [g] = storiesOf(view({ kudos: [...many, k('new', 'pn', 'mi', '2026-11-26T09:00:00.000Z')] }), 'me', new Set(), NOW);
+    expect(g.stories).toHaveLength(KUDOS_PER_PERSON);
+    expect(g.stories[g.stories.length - 1].id).toBe('new');
+    expect(g.start).toBe(KUDOS_PER_PERSON - 1);
+    expect(g.seen).toBe(false);
   });
 
   it('groups by the person it is about: their day first, then the thank-yous as they came', () => {

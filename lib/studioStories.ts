@@ -8,8 +8,11 @@
   tall cards right under the greeting, each a collectible card, that open full
   screen. DESIGN.md → "Studio stories".
 
-  A story is a thank-you pinned up in the last 24 hours, or a birthday or work
-  anniversary today. Stories are grouped by the person they are about (two
+  A story is a thank-you on the kudos wall (the last 62 days the wall holds),
+  or a birthday or work anniversary today. A thank-you is new for 24 hours;
+  older ones stay in the row as already watched (the owner, 26 Nov 2026:
+  "put existing kudos in the stories"), so they can be watched again without
+  asking to be. Stories are grouped by the person they are about (two
   thank-yous for Meera are one story with two bars). A story counts as seen
   only once it has been on screen, and what was seen is kept against the
   person's login (peopleGuideCommand "seen"), so it is not shown again on
@@ -31,6 +34,8 @@ export interface Story {
   at: string;
   kudos?: Kudos;
   card?: CardView;
+  /** A thank-you older than KUDOS_HOURS: shown, but already counted as watched. */
+  old?: boolean;
 }
 
 export interface StoryGroup {
@@ -46,14 +51,16 @@ export interface StoryGroup {
   start: number;
 }
 
-/** How long a thank-you stays a story. A birthday or anniversary stays for its day. */
+/** How long a thank-you is new. A birthday or anniversary is new for its day. */
 export const KUDOS_HOURS = 24;
+/** The most thank-yous one person's story holds: the newest. */
+export const KUDOS_PER_PERSON = 10;
 
 export const firstName = (name: string) => String(name || '').split(/\s+/)[0] || name;
 
-/** The person viewing has seen it: it has been on their screen, or they wrote it. */
+/** The person viewing has seen it: it has been on their screen, they wrote it, or it is no longer new. */
 export const storySeen = (s: Story, meId: string, seen: Set<string>) =>
-  seen.has(s.id) || (s.kind === 'kudos' && !!meId && s.kudos?.from === meId);
+  seen.has(s.id) || !!s.old || (s.kind === 'kudos' && !!meId && s.kudos?.from === meId);
 
 /**
  * Today's stories, grouped by person: yours first, then the ones not yet
@@ -67,8 +74,8 @@ export function storiesOf(v: GuideView, meId: string, seen: Set<string>, now = n
     .filter((c) => c.days === 0)
     .map((c) => ({ id: c.id, kind: c.kind, personId: c.personId, at: c.date, card: c }));
   const thanks: Story[] = v.kudos
-    .filter((k) => { const t = Date.parse(k.at); return t >= since && t <= now.getTime() + 300000; })
-    .map((k) => ({ id: k.id, kind: 'kudos' as const, personId: k.to, at: k.at, kudos: k }));
+    .filter((k) => Date.parse(k.at) <= now.getTime() + 300000)
+    .map((k) => ({ id: k.id, kind: 'kudos' as const, personId: k.to, at: k.at, kudos: k, ...(Date.parse(k.at) < since ? { old: true } : {}) }));
 
   const by = new Map<string, Story[]>();
   for (const s of [...days, ...thanks]) by.set(s.personId, [...(by.get(s.personId) || []), s]);
@@ -76,7 +83,7 @@ export function storiesOf(v: GuideView, meId: string, seen: Set<string>, now = n
   const groups: StoryGroup[] = [...by.entries()].map(([personId, list]) => {
     const stories = [
       ...list.filter((s) => s.kind !== 'kudos'),
-      ...list.filter((s) => s.kind === 'kudos').sort((a, b) => a.at.localeCompare(b.at)),
+      ...list.filter((s) => s.kind === 'kudos').sort((a, b) => b.at.localeCompare(a.at)).slice(0, KUDOS_PER_PERSON).reverse(),
     ];
     const first = stories.findIndex((s) => !storySeen(s, meId, seen));
     return {
@@ -147,6 +154,8 @@ export function stripWords(g: StoryGroup, nameOf: (id: string) => string): { nam
 export function storyWhen(s: Story, now = new Date()): string {
   if (s.kind !== 'kudos') return s.kind === 'birthday' ? 'Birthday · today' : 'Work anniversary · today';
   const mins = Math.max(0, Math.round((now.getTime() - Date.parse(s.at)) / 60000));
-  const ago = mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : `${Math.floor(mins / 60)}h ago`;
+  const days = Math.floor(mins / 1440);
+  const ago = mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago`
+    : days < 7 ? `${days}d ago` : new Date(s.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   return `Kudos · ${ago}`;
 }
