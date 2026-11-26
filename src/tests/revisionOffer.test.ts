@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   addedByRevision, offerBasesFor, revisionOfferAmount, frozenRevisionDiscount, describeRevisionOffer, heldDiscounts, discountsAfterRevision,
-  draftRevision, withRevisionOffer,
+  draftRevision, withRevisionOffer, revisedDesignFee, revisionTotals,
 } from '../../lib/revisionOffer';
 import { clientTotals, defaultTotalsOptions, netExecution, totalsNote } from '../../lib/scopeTotals';
 import { staleOffer } from '../../lib/offers';
@@ -229,5 +229,57 @@ describe('what a revision adds, with rooms compared as a whole', () => {
 
   it('with no room compared as a whole, is the new lines alone', () => {
     expect(addedByRevision({ ...result, rooms: [result.rooms[3]] }, signed)).toEqual({ newLines: 62200, inWholeRooms: 0, total: 62200 });
+  });
+});
+
+describe('the design fee on a revision', () => {
+  /* Palacia's sheet: 12% of the work before discounts. ₹14,14,441 → ₹1,69,733; ₹16,22,600 → ₹1,94,712. */
+  const pc = (over: any = {}) => ctx({ designFee: 12, designFeeType: 'percentage', engagement: { designFee: 169733 }, ...over });
+
+  it('follows the revised BOQ, before discounts', () => {
+    expect(revisedDesignFee(pc(), { before: 169733, v1Work: 1414441, v2Work: 1622600 })).toBe(194712);
+  });
+
+  it('keeps the ratio of a fee the studio agreed apart from the percentage', () => {
+    expect(revisedDesignFee(pc(), { before: 150000, v1Work: 1500000, v2Work: 1800000 })).toBe(180000);
+  });
+
+  it('does not move a fixed fee, a rate per square foot, or a design-only fee', () => {
+    expect(revisedDesignFee(pc({ designFeeType: 'fixed_lumpsum', designFee: 200000 }), { before: 200000, v1Work: 1e6, v2Work: 2e6 })).toBe(200000);
+    expect(revisedDesignFee(pc({ designFeeType: 'fixed_sqft', designFee: 150, area: 1000 }), { before: 150000, v1Work: 1e6, v2Work: 2e6 })).toBe(150000);
+    expect(revisedDesignFee(pc({ engagementType: 'design_only' }), { before: 150000, v1Work: 1e6, v2Work: 2e6 })).toBe(150000);
+  });
+
+  it('rounds up to the step a Playground version prices to', () => {
+    expect(revisedDesignFee(pc(), { before: 169800, v1Work: 1414441, v2Work: 1622600, rules: { roundUpTo: 100, feeOnActuals: true } })).toBe(194800);
+  });
+
+  it('shows the revised fee and its GST in the totals, with discounts after it', () => {
+    const c = pc();
+    const result: any = { v1Total: 1414441, v2Total: 1622600, bridge: { new: 206900 }, rooms: [] };
+    const o = revisionTotals(c, { ...defaultTotalsOptions(c), execGst: true, designFee: true, designGst: true, billablePercent: 50 },
+      { result, signed: [], offer: { name: 'Revision discount', on: 'added', type: 'percentage', value: 5 } });
+    const rows = clientTotals(1414441, 1622600, o);
+    const by = Object.fromEntries(rows.map(r => [r.key, r]));
+    expect(by.revisionDiscount.after).toBe(-10345);
+    expect(by.execGst.after).toBeCloseTo((1622600 - 70000 - 10345) * 0.09, 2);
+    expect(by.designFee).toMatchObject({ before: 169733, after: 194712, change: 24979 });
+    expect(by.designGst.after).toBeCloseTo(194712 * 0.18, 2);
+    expect(totalsNote(o)).toContain('follows the revised BOQ');
+  });
+
+  it('applied, makes the revised fee the one Money bills and the schedule shares', () => {
+    const c = pc({ scopeRevisions: [{ id: 'r1', number: 1, status: 'signed', baseTierId: 'tier-v1', issueId: 'iss' }] });
+    c.financials.approvedDesignValue = 169733;
+    const issue: any = { id: 'iss', kind: 'scope_revision', reference: 'PAL-REV-01', clientSignature: { signedAt: 5 },
+      snapshot: { v1: { total: 1414441 }, v2: { total: 1622600, reference: 'PAL-BQ-v2', version: 2 }, clientTotals: { ...defaultTotalsOptions(c), proposalHeld: true, designFeeAfter: 194712 } } };
+    const out: any = appliedContext({ rec: c.scopeRevisions[0], issue, base: { id: 'tier-v1', name: 'Comfort', boq: [], summary: {} } as any,
+      revisedBoq: [], priced: 1622600, v1Total: 1414441, ctx: c, by: 'Anish', at: 100, tierId: 'tier-v2' })(c);
+    expect(out.financials.approvedDesignValue).toBe(194712);
+    expect(out.engagement.designFee).toBe(194712);
+    const draft = out.paymentSchedules.find((s: any) => s.status === 'draft');
+    const design = draft.advances.filter((a: any) => a.phase === 'design');
+    expect(design.find((a: any) => a.advanceCode === 'D1').amount).toBe(Math.round(FEE * 0.3));
+    expect(design.reduce((t: number, a: any) => t + a.amount, 0)).toBeCloseTo(194712, -1);
   });
 });

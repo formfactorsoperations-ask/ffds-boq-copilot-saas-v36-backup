@@ -1241,7 +1241,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         [selectedHistoricalEntry, projectContext, tiers, bank],
     );
     const revisionPreview = useMemo(
-        () => (openRevision ? previewRevisionMoney(scheduleArgs, openRevision.v2Total, openRevision.discounts) : null),
+        () => (openRevision ? previewRevisionMoney(scheduleArgs, openRevision.v2Total, openRevision.discounts, openRevision.designFeeAfter) : null),
         [openRevision, scheduleArgs],
     );
 

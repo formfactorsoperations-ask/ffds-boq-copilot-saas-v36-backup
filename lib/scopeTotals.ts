@@ -51,6 +51,12 @@ export interface ClientTotalsOptions {
   proposalHeld?: boolean;
   /** A revision: the discount given in it, off the revised side only. */
   revisionDiscount?: RevisionDiscount | null;
+  /**
+   * A revision: the design fee on the revised BOQ (lib/revisionOffer revisedDesignFee).
+   * A percentage fee is charged on the work before discounts, so it follows the
+   * revised BOQ. Missing on documents issued before this: the fee did not move.
+   */
+  designFeeAfter?: number | null;
 }
 
 export interface ClientTotalsRow {
@@ -144,12 +150,16 @@ export function clientTotals(before: number, after: number, o?: ClientTotalsOpti
     rows.push({ key: 'execGst', label: execGstLabel(o), before: b, after: a, change: a - b });
   }
   if (o.designFee && o.designFeeValue > 0) {
-    rows.push({ key: 'designFee', label: 'Design fee', before: o.designFeeValue, after: o.designFeeValue, change: 0 });
-    const dd = discountOn(o.designFeeValue, o.discounts, 'design');
-    if (dd > 0) rows.push({ key: 'designDiscount', label: discountLabel(o.discounts, 'design'), before: -dd, after: -dd, change: 0 });
+    const fb = o.designFeeValue;
+    const fa = typeof o.designFeeAfter === 'number' && o.designFeeAfter >= 0 ? r2(o.designFeeAfter) : fb;
+    rows.push({ key: 'designFee', label: 'Design fee', before: fb, after: fa, change: r2(fa - fb) });
+    const db = discountOn(fb, o.discounts, 'design');
+    const da = o.proposalHeld ? r2(Math.min(fa, db)) : discountOn(fa, o.discounts, 'design');
+    if (db > 0 || da > 0) rows.push({ key: 'designDiscount', label: discountLabel(o.discounts, 'design'), before: -db, after: -da, change: r2(db - da) });
     if (o.designGst) {
-      const f = r2((o.designFeeValue - dd) * g);
-      rows.push({ key: 'designGst', label: `GST on design fee (${o.gstRate}%)`, before: f, after: f, change: 0 });
+      const b = r2((fb - db) * g);
+      const a = r2((fa - da) * g);
+      rows.push({ key: 'designGst', label: `GST on design fee (${o.gstRate}%)`, before: b, after: a, change: r2(a - b) });
     }
   }
   if (rows.length > 1) {
@@ -180,7 +190,10 @@ export function totalsNote(o?: ClientTotalsOptions | null, revision = true): str
   if (!o.execGst) parts.push('GST on execution');
   if (!o.designFee) parts.push('the design fee');
   else if (!o.designGst) parts.push('GST on the design fee');
-  const fee = o.designFee && revision ? ' The design fee is not revised by a scope revision.' : '';
+  const feeMoves = typeof o.designFeeAfter === 'number' && Math.abs(o.designFeeAfter - o.designFeeValue) >= 0.5;
+  const fee = o.designFee && revision
+    ? feeMoves ? ' The design fee is a percentage of the work before discounts, so it follows the revised BOQ.' : ' The design fee is not revised by a scope revision.'
+    : '';
   const any = (o.discounts || []).length || (o.revisionDiscount?.amount || 0) > 0;
   const off = any ? ' Your discount comes off before GST.' : '';
   const held = o.proposalHeld && (o.discounts || []).length ? ' The discount you agreed stays as agreed.' : '';

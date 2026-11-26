@@ -5,7 +5,8 @@ import { draftOfRecord, revisionFromDraft } from './scopeDraft';
 import { isSentBack } from './scopeChangeRequest';
 import { computeSchedule, ScheduleResult } from './paymentSchedule';
 import { docPricingOf } from './playground/pricing';
-import { discountsAfterRevision, frozenRevisionDiscount, offerBasesFor, RevisionDiscount } from './revisionOffer';
+import { discountsAfterRevision, frozenRevisionDiscount, offerBasesFor, revisedDesignFee, RevisionDiscount } from './revisionOffer';
+import { defaultTotalsOptions } from './scopeTotals';
 
 /*
   WHAT A SCOPE REVISION WOULD DO TO THE MONEY, BEFORE IT DOES IT.
@@ -41,6 +42,8 @@ export interface PendingRevision {
   addedInWholeRooms?: number;
   /** The discount given in the revision (lib/revisionOffer), in rupees; null when none. */
   offer?: RevisionDiscount | null;
+  /** The design fee once it is applied: a percentage fee follows the revised BOQ. Missing when it does not move. */
+  designFeeAfter?: number;
   /** The project's discounts as they will be once it is applied: the proposal's held, the revision's added. */
   discounts?: any[];
 }
@@ -62,6 +65,8 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
   let offer: RevisionDiscount | null = null;
   let added: number | undefined;
   let addedInWholeRooms: number | undefined;
+  let designFeeAfter: number | undefined;
+  const feeBefore = defaultTotalsOptions(ctx).designFeeValue;
   /* A draft is issued with the proposal's discounts held; an issued one says how it was issued. */
   let proposalHeld = true;
   if (rec.status !== 'draft' && issue?.snapshot?.v2) {
@@ -71,6 +76,7 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
     const t: any = issue.snapshot.clientTotals || {};
     offer = t.revisionDiscount || null;
     proposalHeld = !!t.proposalHeld;
+    if (typeof t.designFeeAfter === 'number') designFeeAfter = t.designFeeAfter;
   } else {
     /* Still a draft: what it prices to now, as the Revisions screen shows it. */
     const base = tiers.find(t => t.id === rec.baseTierId);
@@ -85,17 +91,20 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
     added = bases.added;
     addedInWholeRooms = bases.inWholeRooms;
     offer = frozenRevisionDiscount(rec.offer, bases);
+    designFeeAfter = revisedDesignFee(ctx, { before: feeBefore, v1Work: result.v1Total, v2Work: result.v2Total, asActuals: result.asActuals, rules: base.pricingRules || null });
   }
   if (!(v2Total > 0)) return null;
   const discounts = discountsAfterRevision((ctx.financials as any)?.discounts, {
     signedExecution: v1Total, reference: rec.reference || `Scope Revision ${rec.number}`, number: rec.number, discount: offer, proposalHeld, id: `rev${rec.number}-offer`,
+    ...(typeof designFeeAfter === 'number' ? { signedDesign: feeBefore } : {}),
   });
 
   const approved = !!(issue?.clientSignature || issue?.recordedApproval);
   const state: PendingRevisionState = rec.status === 'draft' || !issue
     ? 'draft'
     : approved ? 'approved' : isSentBack(issue) ? 'sent_back' : 'with_client';
-  return { id: rec.id, number: rec.number, state, reference: issue?.reference || rec.reference || null, v1Total, v2Total, added, addedInWholeRooms, offer, discounts };
+  return { id: rec.id, number: rec.number, state, reference: issue?.reference || rec.reference || null, v1Total, v2Total, added, addedInWholeRooms, offer, discounts,
+    ...(typeof designFeeAfter === 'number' && Math.abs(designFeeAfter - feeBefore) >= 0.5 ? { designFeeAfter } : {}) };
 }
 
 export interface MilestoneShift {
@@ -136,14 +145,19 @@ type ScheduleArgs = Parameters<typeof computeSchedule>[0];
  * the very arguments the Money tab computes its schedule with, so the two can
  * only differ by the revision.
  */
-export function previewRevisionMoney(args: ScheduleArgs, v2Total: number, discounts?: any[]): RevisionMoneyPreview {
+export function previewRevisionMoney(args: ScheduleArgs, v2Total: number, discounts?: any[], designFeeAfter?: number): RevisionMoneyPreview {
   const now = computeSchedule(args);
   /* Applying makes the revised BOQ the tier in force and its total the approved value,
      with the discounts as they will be then (the revision's own included). */
   const revised = computeSchedule({
     ...args,
-    tierSummary: { ...(args.tierSummary || {}), totalSell: v2Total },
-    overrides: { ...(args.overrides || {}), approvedExecutionValue: v2Total, ...(discounts ? { discounts } : {}) },
+    tierSummary: { ...(args.tierSummary || {}), totalSell: v2Total, ...(typeof designFeeAfter === 'number' ? { designFee: designFeeAfter } : {}) },
+    overrides: {
+      ...(args.overrides || {}),
+      approvedExecutionValue: v2Total,
+      ...(discounts ? { discounts } : {}),
+      ...(typeof designFeeAfter === 'number' ? { approvedDesignValue: designFeeAfter } : {}),
+    },
   });
   const rows: MilestoneShift[] = now.amounts.map(a => {
     const b = revised.byId[a.id];

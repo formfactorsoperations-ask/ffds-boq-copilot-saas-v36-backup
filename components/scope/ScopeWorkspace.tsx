@@ -38,7 +38,7 @@ import MeetingScopeInbox from './MeetingScopeInbox';
 import ClientTotalsPicker from './ClientTotalsPicker';
 import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
 import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, discountOn, discountsOf, netExecution, totalsNote } from '../../lib/scopeTotals';
-import { RevisionDiscount, frozenRevisionDiscount, offerBasesFor } from '../../lib/revisionOffer';
+import { RevisionDiscount, frozenRevisionDiscount, offerBasesFor, revisionTotals, withFeeNote } from '../../lib/revisionOffer';
 import RevisionOfferFields from './RevisionOfferFields';
 import { workbookForIssue, downloadWorkbook, toBase64, buildRevisionWorkbook, revisionWorkbookName } from '../../lib/scopeWorkbook';
 import { sendScopeEmail } from '../../services/emailService';
@@ -808,7 +808,7 @@ function RevisionEditor({
   const offerDiscount: RevisionDiscount | null = rec.status === 'draft' ? frozenRevisionDiscount(rec.offer, offerBases) : issuedTotals?.revisionDiscount || null;
   const proposalOff = discountOn(result.v1Total, rec.status === 'draft' ? discountsOf(ctx) : issuedTotals?.discounts, 'execution');
   /* The totals the client sees: the project's discounts as they are now, held at the signed figure, and this revision's own. */
-  const totalsFor = (o: ClientTotalsOptions): ClientTotalsOptions => ({ ...o, discounts: discountsOf(ctx), proposalHeld: true, revisionDiscount: offerDiscount });
+  const totalsFor = (o: ClientTotalsOptions): ClientTotalsOptions => revisionTotals(ctx, o, { result, signed, offer: rec.offer, rules: base.pricingRules || null });
   // The "Studio only" margin panel is studio finance (lib/roleAccess), and goes while figures are hidden.
   const finance = useSeesMargins(useOrg().currentRole);
   /* A revision made on the BOQ Playground's plan is changed there: its draft follows the plan, so it is not edited here. */
@@ -944,7 +944,8 @@ function RevisionEditor({
     if ((send || (recorded && agreement.email)) && bad) { setIssueError(`"${bad}" is not an email address.`); return; }
     if (recorded && !agreementValid(agreement)) { setIssueError('Give the date the client agreed (today or earlier).'); return; }
     /* The totals the client will see are part of the issued document, so they share its fingerprint. */
-    const snapshot = { ...built.snapshot, clientTotals: totalsFor(totalsOpts) };
+    const outTotals = totalsFor(totalsOpts);
+    const snapshot = { ...withFeeNote(built.snapshot, outTotals), clientTotals: outTotals };
     const materialSections = buildMaterialSections('scope_revision', snapshot);
     const issueUpd = issueDocument('scope_revision', snapshot, { issuedBy: currentUser, reference: built.reference, materialSections });
     const full = (prev: ProjectContext): ProjectContext => {
@@ -1505,7 +1506,8 @@ function RevisionEditor({
                         onClick={async () => {
                           setPreviewXl(true);
                           try {
-                            const snap: any = { ...built.snapshot, clientTotals: totalsFor(totalsOpts) };
+                            const t = totalsFor(totalsOpts);
+                            const snap: any = { ...withFeeNote(built.snapshot, t), clientTotals: t };
                             const buf = await buildRevisionWorkbook(snap, { studioName: orgName || 'Studio', fingerprint: 'added when issued', issuedOn: Date.now() });
                             downloadWorkbook(buf, `PREVIEW ${revisionWorkbookName(snap)}`);
                           } finally { setPreviewXl(false); }

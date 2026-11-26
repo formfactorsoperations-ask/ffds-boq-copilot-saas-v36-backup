@@ -1,5 +1,8 @@
 import type { ProjectContext, ProjectDiscount } from '../types';
 import { nameSimilarity, norm, type RevisionResult, type SignedLine } from './scopeRevision';
+import { designFeeFor } from './boqPricing';
+import { engagementOf, isFeeOnly } from './engagement';
+import { discountsOf, type ClientTotalsOptions } from './scopeTotals';
 
 /*
   A DISCOUNT GIVEN IN A SCOPE REVISION, KEPT APART FROM THE PROPOSAL'S.
@@ -141,14 +144,18 @@ export function offerBasesFor(result: Pick<RevisionResult, 'rooms' | 'bridge' | 
  * The project's discounts held at what they were on the signed BOQ: a
  * percentage off execution becomes the fixed amount it came to, and every
  * offer is marked as held, so Money and the Playground stop re-pricing it.
- * Discounts off the design fee are left as they are: a revision does not
- * change the fee.
+ * A percentage off the design fee is held the same way when the signed fee
+ * is given (the fee can follow the revised BOQ); otherwise it is left as it is.
  */
-export function heldDiscounts<T extends ProjectDiscount>(discounts: T[] | undefined, signedExecution: number, reference: string): T[] {
+export function heldDiscounts<T extends ProjectDiscount>(discounts: T[] | undefined, signedExecution: number, reference: string, signedDesign?: number): T[] {
   return (discounts || []).map(d => {
     if (d.heldAt) return d;
     if (d.target === 'execution' && d.type === 'percentage') {
       return { ...d, type: 'fixed', value: r2(Math.max(0, signedExecution) * ((Number(d.value) || 0) / 100)), heldFromPercent: Number(d.value) || 0, heldAt: reference };
+    }
+    /* The fee can follow the revised BOQ now, so a percentage off it is held too, when the signed fee is known. */
+    if (d.target === 'design' && d.type === 'percentage' && typeof signedDesign === 'number') {
+      return { ...d, type: 'fixed', value: r2(Math.max(0, signedDesign) * ((Number(d.value) || 0) / 100)), heldFromPercent: Number(d.value) || 0, heldAt: reference };
     }
     return { ...d, heldAt: reference };
   });
@@ -160,9 +167,9 @@ export function heldDiscounts<T extends ProjectDiscount>(discounts: T[] | undefi
  */
 export function discountsAfterRevision<T extends ProjectDiscount>(
   discounts: T[] | undefined,
-  a: { signedExecution: number; reference: string; number: number; discount?: RevisionDiscount | null; proposalHeld?: boolean; id: string },
+  a: { signedExecution: number; signedDesign?: number; reference: string; number: number; discount?: RevisionDiscount | null; proposalHeld?: boolean; id: string },
 ): ProjectDiscount[] {
-  const kept: ProjectDiscount[] = a.proposalHeld ? heldDiscounts(discounts, a.signedExecution, a.reference) : [...(discounts || [])];
+  const kept: ProjectDiscount[] = a.proposalHeld ? heldDiscounts(discounts, a.signedExecution, a.reference, a.signedDesign) : [...(discounts || [])];
   if (!a.discount || !(a.discount.amount > 0)) return kept;
   return [...kept, {
     id: a.id,
@@ -190,3 +197,76 @@ export const withRevisionOffer = (revisionId: string, offer: RevisionOffer | nul
     ? { ...r, offer, updatedAt: Date.now() }
     : r)),
 });
+
+/**
+ * The design fee once the scope is revised.
+ *
+ * A percentage fee is charged on the work before offers, so when the work
+ * grows the fee grows with it, and the discounts come off afterwards (Palacia:
+ * 12% of ₹14,14,441 = ₹1,69,733 signed; 12% of ₹16,22,600 = ₹1,94,712
+ * revised). A fixed sum or a rate per square foot does not move, nor does the
+ * fee on a design-only project.
+ *
+ * When the agreed fee is the project's percentage of the signed work (to the
+ * rupee, or to the rounding step), the revised fee is that percentage of the
+ * revised work. When the studio agreed a different figure, the same ratio is
+ * kept: the agreed fee times revised over signed work.
+ */
+export function revisedDesignFee(
+  ctx: any,
+  a: {
+    before: number;
+    v1Work: number;
+    v2Work: number;
+    asActuals?: { before: number; after: number } | null;
+    rules?: { roundUpTo?: number; feeOnActuals?: boolean } | null;
+  },
+): number {
+  const c: any = ctx || {};
+  const before = Math.max(0, Number(a.before) || 0);
+  if (c.designFeeType === 'fixed_lumpsum' || c.designFeeType === 'fixed_sqft') return before;
+  if (isFeeOnly(engagementOf(c))) return before;
+  const step = Number(a.rules?.roundUpTo) > 0 ? Number(a.rules!.roundUpTo) : 0;
+  const onActuals = !a.rules || a.rules.feeOnActuals !== false;
+  const actualsBefore = onActuals ? Number(a.asActuals?.before) || 0 : 0;
+  const actualsAfter = onActuals ? Number(a.asActuals?.after) || 0 : 0;
+  const baseBefore = (Number(a.v1Work) || 0) + actualsBefore;
+  const baseAfter = (Number(a.v2Work) || 0) + actualsAfter;
+  if (!(before > 0) || !(baseBefore > 0) || baseAfter < 0) return before;
+  const up = (n: number) => (step ? Math.ceil(n / step - 1e-9) * step : n);
+  const formulaBefore = up(designFeeFor(c, a.v1Work, actualsBefore));
+  if (Math.abs(formulaBefore - before) <= Math.max(1, step)) return r2(up(designFeeFor(c, a.v2Work, actualsAfter)));
+  return r2(up(before * (baseAfter / baseBefore)));
+}
+
+/**
+ * A revision's client totals, as issued: the project's discounts as they are
+ * now, held at the signed figure; the revision's own discount; and the design
+ * fee on the revised BOQ. Revision Studio and the Playground issue through here.
+ */
+export function revisionTotals(
+  ctx: any,
+  o: ClientTotalsOptions,
+  a: {
+    result: Pick<RevisionResult, 'rooms' | 'bridge' | 'v1Total' | 'v2Total' | 'asActuals'>;
+    signed: SignedLine[];
+    offer?: RevisionOffer | null;
+    rules?: { roundUpTo?: number; feeOnActuals?: boolean } | null;
+  },
+): ClientTotalsOptions {
+  return {
+    ...o,
+    discounts: discountsOf(ctx),
+    proposalHeld: true,
+    revisionDiscount: frozenRevisionDiscount(a.offer, offerBasesFor(a.result, a.signed)),
+    designFeeAfter: revisedDesignFee(ctx, { before: o.designFeeValue, v1Work: a.result.v1Total, v2Work: a.result.v2Total, asActuals: a.result.asActuals, rules: a.rules }),
+  };
+}
+
+/** The issued revision's note on the design fee, when the fee follows the revised BOQ. */
+export function withFeeNote<T extends { designFeeNote?: string }>(snapshot: T, o: ClientTotalsOptions): T {
+  const after = o.designFeeAfter;
+  if (typeof after !== 'number' || Math.abs(after - o.designFeeValue) < 0.5) return snapshot;
+  const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+  return { ...snapshot, designFeeNote: `The design fee is a percentage of the work before discounts, so it follows the revised BOQ: ${inr(o.designFeeValue)} to ${inr(after)}.` };
+}
