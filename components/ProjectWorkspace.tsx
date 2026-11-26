@@ -7,7 +7,7 @@ import { STAGE_LABELS, PHASES } from '../constants/journeyConstants';
 import { Lock, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, X, Compass, Activity, Check, Info, Settings, Edit3, AlertTriangle, LayoutGrid, Handshake, Palette, Layers, FileText, Truck, Hammer, Key, Sparkles, SlidersHorizontal, Eye, Pencil } from '@/lib/lucide-shim';
 import { NAV_CONFIG, ALWAYS_ON_BAND } from './navConfig';
 import { getPageMeta } from './pageMeta';
-import { engagementOf, navItemsFor, stageLabel, routeLabel, isRouteHidden, engagementDef } from '../lib/engagement';
+import { engagementOf, navItemsFor, stageLabel, isRouteHidden, engagementDef } from '../lib/engagement';
 import { useProjectJourney } from '../hooks/useProjectJourney';
 import { useOrg } from '../contexts/OrgContext';
 import { seesStudioFinance, holdsFinanceRole, isDesignerRole, isLimitedRole, DESIGNER_EDITABLE_TABS, limitedMayOpen, limitedHomeTab } from '../lib/roleAccess';
@@ -149,23 +149,14 @@ export function ProjectWorkspace({
   const BAND = useMemo(() => navItemsFor(engagement, ALWAYS_ON_BAND), [engagement]);
 
   /*
-    Scoping, pricing and the proposal are how the work is won, so they open the
-    moment a project exists.
+    No stage is locked. Every stage opens whatever the project's stage is: the
+    studio moves through the journey at its own pace, and starting site work or
+    handover paperwork early is its call. The sidebar still marks where the
+    project is (NOW) and what is done.
 
-    They used to wait on currentStage >= 2, which is only reached when a design
-    or proposal document is signed off. The one screen that could produce that
-    signature sat inside the locked stage 3, so the only way in was the manual
-    advance — which marks the proposalAccepted gate done in order to unlock the
-    screens where the proposal is written. Unlocking honestly beats recording
-    an acceptance that has not happened.
-
-    Stage 4 onward still waits for the client's yes.
+    Scoping, pricing and the proposal used to wait on currentStage >= 2, and
+    Execution & Site and Handover & Closeout on the project reaching them.
   */
-  const isStageLocked = (stageNum: number) => {
-    if (stageNum <= 3) return false;
-    if (stageNum === 4) return currentStage < 2;
-    return currentStage < stageNum;
-  };
   
   const journey = useProjectJourney(projectId, projectContext);
 
@@ -178,16 +169,6 @@ export function ProjectWorkspace({
       setSelectedStage(found.stage);
     }
   }, [activeTab]);
-
-  // Helper to get lock text
-  const getLockNote = (stage: number) => {
-    if (stage === 6 && !(lifecycle.gates as any)?.designGateActive?.done) {
-      const gate = routeLabel(engagement, 'design-gate', 'Design Gate');
-      return { text: `Unlocks when the ${gate} is activated.`, linkText: `Go to ${gate} →`, linkRoute: "design-gate" };
-    }
-    // generic fallback for other stages if they somehow lock
-    return { text: "Unlocks when prerequisite gates are met.", linkText: "Go to Overview →", linkRoute: "dashboard" };
-  };
 
   /* Money screens for anyone outside studio finance; for a Designer,
      everything outside their allow-list (lib/roleAccess). */
@@ -217,10 +198,8 @@ export function ProjectWorkspace({
   const workspaceStatus = isTerminated(projectContext) ? { ...workspaceStatusBase, label: 'Terminated' } : workspaceStatusBase;
   const sidebarStages: SidebarStage[] = NAV.map(s => {
     const screens = s.items.filter(i => !hiddenForRole(i)).map(i => ({ route: i.route, label: i.label, readOnly: !!accessBadge(i.route) }));
-    const locked = isStageLocked(s.stage);
     return {
-      stage: s.stage, label: s.label, screens, locked,
-      lockNote: locked ? getLockNote(s.stage).text : undefined,
+      stage: s.stage, label: s.label, screens, locked: false,
       state: (s.stage < currentStage ? 'done' : s.stage === currentStage ? 'now' : 'todo') as SidebarStage['state'],
     };
   }).filter(s => !(isLimited && s.screens.length === 0));
