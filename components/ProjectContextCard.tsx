@@ -12,7 +12,7 @@ import EngagementPicker from './projects/EngagementPicker';
 import { engagementOf, isFeeOnly } from '../lib/engagement';
 import ClientPeoplePanel from './clients/ClientPeoplePanel';
 import MinutesInbox from './minutes/MinutesInbox';
-import { Panel, Chip, EmptyState, LABEL, buttonClass } from './ui/kit';
+import { Panel, Chip, EmptyState, LABEL, buttonClass, Segmented } from './ui/kit';
 import { 
   Sparkles, 
   Trash2, 
@@ -473,6 +473,22 @@ const ProjectContextCard: React.FC<ProjectContextCardProps> = ({
                   ))}
                 </div>
               </div>
+              {/* A renovation is timed as one (lib/renovation): lived in, the work goes room by room and takes longer. */}
+              {projectContext.propertyStatus === 'finished' && (
+                <div className="mt-4 space-y-2" data-lived-in>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">During the work</label>
+                  <Segmented<'vacant' | 'lived'> size="sm" label="During the work"
+                    value={projectContext.livedInDuringWork ? 'lived' : 'vacant'}
+                    onChange={v => handleContextChange('livedInDuringWork', v === 'lived')}
+                    options={[{ id: 'vacant', label: 'Vacant' }, { id: 'lived', label: 'Lived in' }]} />
+                  <p className="text-[11px] text-slate-500">
+                    {projectContext.livedInDuringWork
+                      ? 'The family lives in the home during the work: it goes room by room around them, so the site work takes longer.'
+                      : 'The home is empty while the work is done.'}{' '}
+                    A renovation starts with taking out what is there today. Both are timed in Studio settings → Terms &amp; Payment.
+                  </p>
+                </div>
+              )}
     </>
   );
 

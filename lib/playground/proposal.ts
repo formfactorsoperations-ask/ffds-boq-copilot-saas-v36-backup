@@ -282,7 +282,7 @@ export interface AnnexInput {
   validDays: number;
   issued: Date;
   /** The programme the proposal's timeline states (lib/playground/brief proposalTimeline): clause 8 states the same days. */
-  programme?: { siteDays: number; designDays: number; civilDays: number };
+  programme?: { siteDays: number; designDays: number; civilDays: number; stripOutDays?: number };
   /**
    * How the client books (lib/playground/deal bookingOf): with the Project
    * Initiation Fee, or D1 directly. Booked with D1 and no fee paid, the
@@ -341,7 +341,7 @@ export function annexOf(a: AnnexInput): PdfAnnexSection[] {
     ] },
     { n: 7, title: 'Exclusions', items: exclusionsOf(a.boq, a.bankMap) },
     { n: 8, title: 'Programme and start conditions', text: a.programme
-      ? `The site programme is ${a.programme.siteDays} working days${a.programme.civilDays ? `, including ${a.programme.civilDays} for civil work` : ''}. Design runs for about ${a.programme.designDays} working days before it and is not counted in it. The site programme starts once all of the following are in place:`
+      ? `The site programme is ${a.programme.siteDays} working days${[a.programme.stripOutDays ? `${a.programme.stripOutDays} to take out what is there today and clear the debris` : '', a.programme.civilDays ? `${a.programme.civilDays} for civil work` : ''].filter(Boolean).reduce((t, x, i, all) => `${t}${i === 0 ? ', including ' : i === all.length - 1 ? ' and ' : ', '}${x}`, '')}. Design runs for about ${a.programme.designDays} working days before it and is not counted in it. The site programme starts once all of the following are in place:`
       : 'The site programme starts once all of the following are in place:', items: fill(x.startConditions) },
     { n: 9, title: 'Assumptions and your responsibilities', pair: { a: ['Assumptions', fill(assumptionsFor(x, civil))], b: ['Your responsibilities', fill(x.clientResponsibilities)] } },
     { n: 10, title: 'Materials, samples and workmanship', ordered: true, items: fill(x.materials) },

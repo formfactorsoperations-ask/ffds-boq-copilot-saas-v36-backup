@@ -14,6 +14,7 @@ import { resolveCivilScope } from '../civilScope';
 import { kindOf } from './rooms';
 import { basisOfUnit } from '../boqSize';
 import { engagementOf } from '../engagement';
+import { livedInDays, type RenovationPlan } from '../renovation';
 
 /** The studio's working days for civil work, when the Timeline does not give them. */
 export const DEFAULT_CIVIL_DAYS = 12;
@@ -60,6 +61,10 @@ export interface ProposalTimeline {
   fromTimeline: boolean;
   designDays: number;
   siteDays: number;
+  /** A renovation's strip-out, in the site's days: its own row. 0 when there is none (or the Timeline has none). */
+  stripOutDays: number;
+  /** How much longer the site work takes lived in, in % (0: vacant, or not a renovation). */
+  livedInPercent: number;
 }
 
 /**
@@ -69,21 +74,34 @@ export interface ProposalTimeline {
  */
 export function proposalTimeline(a: {
   start: Date;
-  programme?: { designWorkDays?: number; siteWorkDays?: number } | null;
+  programme?: { designWorkDays?: number; siteWorkDays?: number; sitePhases?: { id: string; durationDays: number }[] } | null;
   config?: string;
   civil: boolean;
   civilDays: number;
   target?: string | null;
+  /** A renovation (lib/renovation): its strip-out first, and longer lived in. */
+  renovation?: RenovationPlan | null;
 }): ProposalTimeline {
   const fromTimeline = !!(a.programme && Number(a.programme.siteWorkDays) > 0);
   const designDays = Number(a.programme?.designWorkDays) > 0 ? Math.round(Number(a.programme!.designWorkDays)) : 14;
-  /* The Timeline's site programme is built from the BOQ, civil work in it; the defaults add it. */
-  const siteDays = fromTimeline ? Math.round(Number(a.programme!.siteWorkDays)) : siteDaysByConfig(a.config) + (a.civil ? a.civilDays : 0);
+  const reno = a.renovation?.renovation ? a.renovation : null;
+  /*
+    The Timeline's site programme is built from the BOQ, civil work and a
+    renovation's strip-out in it; the defaults add them. A Timeline saved before
+    renovations were timed has no strip-out: the proposal says what the chart says.
+  */
+  const stripOutDays = !reno ? 0 : fromTimeline
+    ? Math.round(Number(a.programme!.sitePhases?.find(p => p.id === 'exec-strip-out')?.durationDays) || 0)
+    : reno.stripOutDays;
+  const siteDays = fromTimeline
+    ? Math.round(Number(a.programme!.siteWorkDays))
+    : livedInDays(siteDaysByConfig(a.config) + (a.civil ? a.civilDays : 0), reno || { livedInPercent: 0 }) + stripOutDays;
   const steps: [string, number][] = [
     ['Site measurement', 6],
     ['Layout and design', designDays],
     ['Detailed BOQ and agreement', 6],
-    [a.civil ? 'Civil first, then interiors' : 'Work on site', siteDays],
+    ...(stripOutDays > 0 ? [['Strip-out and debris removal', stripOutDays] as [string, number]] : []),
+    [a.civil ? (stripOutDays > 0 ? 'Civil, then interiors' : 'Civil first, then interiors') : 'Work on site', Math.max(1, siteDays - stripOutDays)],
   ];
   let d = a.start;
   let offset = 0;
@@ -99,6 +117,7 @@ export function proposalTimeline(a: {
     rows, total: offset, handover: d, target,
     weeksLate: target ? Math.round((d.getTime() - target.getTime()) / (7 * 864e5)) : null,
     civil: a.civil, civilDays: a.civil ? a.civilDays : 0, fromTimeline, designDays, siteDays,
+    stripOutDays, livedInPercent: reno && stripOutDays > 0 ? reno.livedInPercent : 0,
   };
 }
 
@@ -219,13 +238,19 @@ export interface ProposalNotes {
 export const TIMELINE_NOTE = 'These dates are a plan, not a promise. They hold when design approvals and payments are made on time, the site is handed over ready for work, and the materials you choose are available. A change to the design or scope after approval, society permissions and work hours, holidays, and delays outside our control move them; we tell you as soon as they do.';
 export const RENOVATION_NOTE = 'Your home is a renovation, and this timeline is the one for a vacant flat. A renovation also needs time to take out what is there today, and the work goes more slowly if you live in the home while it is done. We confirm the timeline for your home after the site measurement.';
 
-export function proposalNotes(ctx: ProjectContext): ProposalNotes {
+/** A renovation the Timeline times as one (lib/renovation): what its timeline allows for. */
+export function renovationNote(stripOutDays: number, livedInPercent: number): string {
+  return `Your home is a renovation. The timeline starts with ${stripOutDays} working day${stripOutDays === 1 ? '' : 's'} to take out what is there today and clear the debris${livedInPercent > 0 ? `, and allows for you living in the home during the work: it goes room by room around you, so the work on site takes about ${livedInPercent}% longer than in a vacant flat` : ''}. We confirm it after the site measurement.`;
+}
+
+export function proposalNotes(ctx: ProjectContext, timeline?: Pick<ProposalTimeline, 'stripOutDays' | 'livedInPercent'> | null): ProposalNotes {
   const ds: any = ctx.designScope || {};
   const visits = Number(ds.visitCount) || 0;
   const renovation = ctx.propertyStatus === 'finished';
   const turnkey = engagementOf(ctx) === 'turnkey';
   return {
-    timeline: [TIMELINE_NOTE, ...(renovation ? [RENOVATION_NOTE] : [])],
+    /* A renovation timed as one says what its timeline allows for; one on a Timeline made before, that it is a vacant flat's. */
+    timeline: [TIMELINE_NOTE, ...(renovation ? [timeline?.stripOutDays ? renovationNote(timeline.stripOutDays, timeline.livedInPercent) : RENOVATION_NOTE] : [])],
     visits: ctx.designScope && ds.hasSiteVisits
       ? [
         `${visits ? `The ${visits} site visit${visits > 1 ? 's are' : ' is'}` : 'Site visits are'} by your designer, planned with you in advance, at the stages the work needs them.`,

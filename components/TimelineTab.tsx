@@ -53,6 +53,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useTimelinePhases } from "../hooks/useTimelinePhases";
 import { useOrg } from "../contexts/OrgContext";
+import { useStudioTerms } from "./playground/useStudioTerms";
+import { renovationRulesOf } from "../lib/renovation";
 import { isLimitedRole } from "../lib/roleAccess";
 import { useStudioSettings } from "../hooks/useStudioSettings";
 import { usePaymentRequests } from "../hooks/usePaymentRequests";
@@ -108,6 +110,9 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   } = useTimelinePhases(safeProjectId, studioId);
   
   const { settings } = useStudioSettings(studioId);
+  /* Terms & Payment: how a renovation is timed (lib/renovation), for every way the programme is made here. */
+  const { termsSettings } = useStudioTerms(studioId);
+  const renovation = React.useMemo(() => renovationRulesOf(termsSettings), [termsSettings]);
   const { activeRequest } = usePaymentRequests(limited ? "" : safeProjectId, studioId);
   const { updateDeliverable, updateClientSignoff, markStepComplete, recordStepsCompleted, setStepCompletedOn, reopenStep } =
     useStepProgress(safeProjectId, studioId);
@@ -274,8 +279,8 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
   const roomNames = React.useMemo(() => projectRoomNames(projectContext, boq as any), [projectContext?.rooms, boq]);
 
   const derivedSchedule = React.useMemo(
-    () => buildScheduleFromProject(projectContext, boq, { designSteps: phases as any }),
-    [projectContext, boq, phases],
+    () => buildScheduleFromProject(projectContext, boq, { designSteps: phases as any, renovation }),
+    [projectContext, boq, phases, renovation],
   );
 
   /*
@@ -287,12 +292,12 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
     const steps = settings?.designProcess?.steps || [];
     if (phases.length > 0 || !steps.length || !kickoffDate) return null;
     try {
-      return previewTemplateProgramme(projectContext, boq, kickoffDate, steps);
+      return previewTemplateProgramme(projectContext, boq, kickoffDate, steps, undefined, renovation);
     } catch (e) {
       console.warn("Could not preview the programme", e);
       return null;
     }
-  }, [phases.length, settings?.designProcess?.steps, kickoffDate, projectContext, boq]);
+  }, [phases.length, settings?.designProcess?.steps, kickoffDate, projectContext, boq, renovation]);
   const projectSchedule = React.useMemo(() => {
     // A design-only project has no site programme, even in a schedule saved before it became one.
     const base = scheduleForEngagement(scheduleOverride, projectContext) || derivedSchedule;
@@ -688,6 +693,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
         onBack={() => setManualMode(false)}
         projectContext={projectContext}
         bank={bank}
+        renovation={renovation}
       />
     );
   }
@@ -741,7 +747,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({
           badge={<Chip tone="brand">Recommended</Chip>}
           blurb={<>Your {templateSteps.length}-step design process, then a site programme sized to
             this home{templatePreview ? ` (${Math.round(templatePreview.sizing.areaSqFt)} sq ft, ${templatePreview.sizing.rooms} rooms)` : ''} and
-            the trades in its BOQ. Every bar can be edited afterwards.</>}
+            the trades in its BOQ.{templatePreview?.sizing.renovation.renovation ? ` A renovation: it starts with ${templatePreview.sizing.renovation.stripOutDays} working days of strip-out${templatePreview.sizing.renovation.livedIn ? `, and takes ${templatePreview.sizing.renovation.livedInPercent}% longer lived in` : ''}.` : ''} Every bar can be edited afterwards.</>}
           className="max-w-2xl"
         >
           {templatePreview && (
@@ -1623,6 +1629,7 @@ const OldTimelineBuilder: React.FC<any> = ({
   onBack,
   projectContext,
   bank,
+  renovation,
 }) => {
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [isCalculating, setIsCalculating] = React.useState(false);
@@ -1687,7 +1694,7 @@ const OldTimelineBuilder: React.FC<any> = ({
         if (area > 2500) designDays = 28;
 
         // One sizing rule for every way a timeline is made (lib/scheduleBuilder).
-        const executionDays = estimateSiteWorkDays(projectContext, boq).workDays;
+        const executionDays = estimateSiteWorkDays(projectContext, boq, renovation).workDays;
 
         // Distribute across standard phases:
         const p1 = designDays;

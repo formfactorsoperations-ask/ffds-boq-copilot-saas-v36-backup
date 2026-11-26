@@ -387,6 +387,7 @@ export default function BriefReadView({ projectContext: ctx, setProjectContext, 
                 <Fact label="Configuration" value={ctx.config} missing={missing('config')} />
                 <Fact label="Area" value={ctx.area ? `${nf.format(ctx.area)} sq ft` : ''} missing={missing('area')} />
                 <Fact label="Site state" value={SITE_STATE[ctx.propertyStatus || ''] || ctx.propertyStatus} missing={missing('propertyStatus')} />
+                {ctx.propertyStatus === 'finished' && <Fact label="During the work" value={ctx.livedInDuringWork ? 'Lived in' : 'Vacant'} />}
                 <Fact label="Style" value={<span className="capitalize">{ctx.theme}</span>} missing={missing('theme')} />
                 <div className="col-span-2"><Fact label="Site" value={ctx.location} missing={missing('location')} /></div>
               </dl>

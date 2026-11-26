@@ -1,4 +1,5 @@
 import { civilDaysOf } from '../../lib/playground/brief';
+import { renovationRulesOf, renovationPlan, type RenovationRules } from '../../lib/renovation';
 import React, { useState } from 'react';
 import { FileText, Plus, Trash2, RotateCcw } from 'lucide-react';
 import { Panel, Button, Chip, LABEL, INPUT } from '../ui/kit';
@@ -81,6 +82,32 @@ export default function AnnexureEditor({ terms, onChange }: { terms: TermsSettin
           {meta.note && <p className="text-[11px] text-slate-500 mt-1.5">{meta.note}</p>}
         </div>
       </div>
+
+      {/* How a renovation (a finished flat) is timed (lib/renovation): the Timeline and every proposal read it. */}
+      {(() => {
+        const r = renovationRulesOf(terms);
+        const set = (k: keyof RenovationRules, v: string) => onChange({ ...terms, renovation: { ...r, [k]: Math.max(0, Number(v) || 0) } });
+        const eg = renovationPlan({ propertyStatus: 'finished', area: 900 } as any, r).stripOutDays;
+        const field = (id: string, k: keyof RenovationRules, label: string, step = 1) => (
+          <div>
+            <label htmlFor={id} className={`${LABEL} block mb-1.5`}>{label}</label>
+            <input id={id} type="number" min={0} step={step} value={r[k]} onChange={e => set(k, e.target.value)} className={`${INPUT} tabular-nums`} />
+          </div>
+        );
+        return (
+          <div className="mt-4 rounded-xl border border-slate-200 p-4" data-renovation-rules>
+            <div className="text-sm font-bold text-slate-800">A renovation&rsquo;s timeline</div>
+            <p className="text-[11px] text-slate-500 mt-0.5">For a finished flat being redone: the site work starts with a strip-out, taking out what is there today and clearing the debris, and takes longer when the family lives in the home. The Timeline builds it, and every proposal quotes it.</p>
+            <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-4">
+              {field('reno-per100', 'stripOutPer100', 'Strip-out: days per 100 sq ft', 0.5)}
+              {field('reno-min', 'stripOutMin', 'Strip-out: at least (days)')}
+              {field('reno-max', 'stripOutMax', 'Strip-out: at most (days)')}
+              {field('reno-lived', 'livedInPercent', 'Lived in: longer by (%)')}
+            </div>
+            <p className="text-[11px] text-slate-500 mt-2">A 900 sq ft flat: {eg} working day{eg === 1 ? '' : 's'} of strip-out{r.livedInPercent ? `; lived in, its site work takes ${r.livedInPercent}% longer` : ''}. All in working days, Sundays off.</p>
+          </div>
+        );
+      })()}
 
       <div key={section} className="mt-4 rounded-xl border border-slate-200 divide-y divide-slate-100 hud-swap">
         {list.length === 0 && (

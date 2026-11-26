@@ -868,6 +868,8 @@ export interface ProjectContext {
     designFeeType?: DesignFeeType;
     designScope?: DesignScope;
     propertyStatus?: PropertyStatus;
+    /** A renovation (finished flat): the family lives in the home during the work, so it goes room by room (lib/renovation.ts). */
+    livedInDuringWork?: boolean;
     /**
      * Set once the studio has touched the Civil & Site Scope block. Absent
      * means "never reviewed", which reads the defaults off propertyStatus —
@@ -2409,6 +2411,8 @@ export interface TermsSettings {
   proposalValidityDays?: number;
   /** Working days civil work adds on site, for a proposal's timeline when the project has no Timeline (lib/playground/brief.ts). Missing: 12. */
   civilWorkingDays?: number;
+  /** How a renovation (a finished flat) is timed: its strip-out, and how much longer it takes lived in (lib/renovation.ts). Missing: the defaults. */
+  renovation?: Partial<import('./lib/renovation').RenovationRules>;
   /** Annexure A's wording, list by list. A list not saved prints today's wording (lib/annexure.ts ANNEXURE_DEFAULTS). */
   annexure?: Partial<import('./lib/annexure').AnnexureClauses>;
 }

@@ -5,6 +5,8 @@ import { db } from "../services/dbService";
 import { useTimelinePhases } from "./useTimelinePhases";
 import { useStudioSettings } from "./useStudioSettings";
 import { ProgrammeSummary, resolveProjectProgramme } from "../lib/scheduleBuilder";
+import { useStudioTerms } from "../components/playground/useStudioTerms";
+import { renovationRulesOf } from "../lib/renovation";
 
 /**
  * The project's programme as the Timeline states it, for the screens that
@@ -28,6 +30,9 @@ export function useProjectProgramme(
   const id = projectId || "";
   const { phases } = useTimelinePhases(id, studioId);
   const { settings } = useStudioSettings(studioId);
+  /* Terms & Payment: how a renovation is timed (lib/renovation). */
+  const { termsSettings } = useStudioTerms(studioId);
+  const renovation = useMemo(() => renovationRulesOf(termsSettings), [termsSettings]);
   const [saved, setSaved] = useState<ProjectSchedule | null>(null);
 
   useEffect(() => {
@@ -52,10 +57,11 @@ export function useProjectProgramme(
         phases: phases as any,
         steps: settings?.designProcess?.steps || [],
         kickoffISO: (projectContext as any)?.kickoffDate,
+        renovation,
       });
     } catch (e) {
       console.warn("Could not work out the programme", e);
       return null;
     }
-  }, [id, studioId, projectContext, boq, saved, phases, settings?.designProcess?.steps]);
+  }, [id, studioId, projectContext, boq, saved, phases, settings?.designProcess?.steps, renovation]);
 }
