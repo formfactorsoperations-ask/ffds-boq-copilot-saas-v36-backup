@@ -574,9 +574,12 @@ Rules in `lib/studioStories.ts`; the screens in `components/home/stories/`.
 
 - **Where:** a row right under the greeting in the welcome card, above "Continue where you left
   off" and the project rings. Left out when there is nothing in it.
-- **What is a story:** a thank-you for 24 hours from when it was given; a birthday or work
-  anniversary for its day. Grouped by the person it is about, so two thank-yous for one person
-  are one story with two bars.
+- **What is a story:** every thank-you on the kudos wall (the last 62 days), and a birthday or
+  work anniversary for its day. A thank-you is new for 24 hours from when it was given; older
+  ones stay in the row already counted as watched (grey ring, never opening by themselves), so
+  they can be watched again (owner, 26 Nov 2026: "put existing kudos in the stories"). Grouped
+  by the person it is about, their newest ten thank-yous, so two thank-yous for one person are
+  one story with two bars.
 - **The row:** "Give kudos" first, then tall tiles in the day pins' paper tints (indigo
   `#ECEFFB`/`#3D52A0` for a thank-you, sage `#E7F5EF`/`#0E7C5A` for a birthday, brass
   `#FBF5EA`/`#8C6A33` for an anniversary) on white. Each holds a small collectible card, turned a
