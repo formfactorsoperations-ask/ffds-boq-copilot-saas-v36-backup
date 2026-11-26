@@ -1375,6 +1375,14 @@ colours (brand, slate, rose/amber/emerald). Only the Money screen (`components/m
 - Cards lift on hover (`mb-card`), the More chevron turns, details open by height.
 - Edit milestones is a modal on the `AssignProjectsModal` pattern; rows rise and leave, and the
   % / ₹ choice on each row glides (`layoutId`).
+- Quick schedule (asked for 26 Nov 2026; the owner chose the radial design the same day) is a modal
+  built like Edit milestones. Each track is a ring of its milestones, so it always adds up to 100%
+  (`lib/quickSchedule.ts`). Drag a handle between two stages: it snaps to 5s (one pulse, `mb-snap`),
+  and pulling the pointer out past the ring makes it four times finer, with a bubble showing both
+  shares. Tap a stage and the middle of the ring shows − / +; arrow keys move a focused handle. A
+  stage under 9% is drawn at 9%, hatched, so it can still be grabbed; its number stays exact. Paid
+  and invoiced stages are grey and locked. Start from the studio default, front-loaded or even; add
+  a stage by splitting one. Shares ease to new values; slices lift when selected or dragged.
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel sizes.
 
 ### Item bank motion (asked for 21 Nov 2026)

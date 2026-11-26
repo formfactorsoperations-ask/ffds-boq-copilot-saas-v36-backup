@@ -28,6 +28,10 @@ const MONEY_BOARD_CSS = `
 }
 @keyframes mb-sheen { to { transform: translateX(100%); } }
 
+/* Quick schedule: a ring handle that just snapped to a multiple of 5 sends out one ring. */
+.mb-snap { animation: mb-snap 420ms ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes mb-snap { from { transform: scale(1); opacity: 0.8; } to { transform: scale(2.2); opacity: 0; } }
+
 /* Earned: a soft brand halo breathes round the icon until it is invoiced. */
 .mb-halo { position: relative; }
 .mb-halo::after {
@@ -74,7 +78,7 @@ const MONEY_BOARD_CSS = `
 .mb-turn { transition: transform 300ms cubic-bezier(0.3, 1.5, 0.5, 1); }
 
 @media (prefers-reduced-motion: reduce) {
-  .mb-gst, .mb-sheen::after, .mb-halo::after, .mb-stamp, .mb-plane, .mb-live { animation: none !important; }
+  .mb-gst, .mb-sheen::after, .mb-halo::after, .mb-snap, .mb-stamp, .mb-plane, .mb-live { animation: none !important; }
   .mb-stamp, .mb-plane { display: none; }
   .mb-ring circle, .mb-card, .mb-turn { transition: none !important; }
   .mb-card:hover { transform: none; }

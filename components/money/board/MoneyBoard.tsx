@@ -91,6 +91,8 @@ export const MoneyBoard: React.FC<{
   onSchedule: () => void;
   scheduleLabel: string;
   onEdit: () => void;
+  /** Quick schedule: type the milestones, approve the stages it works out. */
+  onQuick?: () => void;
   readOnly?: boolean;
   /** The project was terminated (lib/termination): nothing here is live, and no schedule is to be sent. */
   terminated?: boolean;
@@ -154,6 +156,7 @@ export const MoneyBoard: React.FC<{
             options={[{ id: 'board', label: `Milestones · ${p.milestoneCount}` }, { id: 'history', label: p.historyCount ? `History · ${p.historyCount}` : 'History', icon: History }]} />
           <span className="ml-auto flex flex-wrap gap-2">
             {!p.terminated && <Button size="sm" variant="secondary" icon={FileSignature} onClick={p.onSchedule}>{p.scheduleLabel}</Button>}
+            {!p.readOnly && !p.terminated && p.onQuick && <Button size="sm" variant="secondary" icon={Sparkles} onClick={p.onQuick}>Quick schedule</Button>}
             {!p.readOnly && <Button size="sm" variant="primary" icon={Pencil} className="pp-press" onClick={p.onEdit}>Edit milestones</Button>}
           </span>
         </div>

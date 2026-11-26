@@ -106,3 +106,69 @@ describe('the milestone editor', () => {
     expect(screen.queryByRole('dialog', { name: 'Edit milestones' })).toBeNull();
   });
 });
+
+describe('quick schedule', () => {
+  it('reshapes the unbilled stages around the paid one and saves them when approved', () => {
+    render(<Host />);
+    fireEvent.click(screen.getByRole('button', { name: 'Quick schedule' }));
+    const dialog = screen.getByRole('dialog', { name: 'Quick schedule' });
+    // Sign-up & Concept is paid: it is locked, and the reason is asked for.
+    expect(within(dialog).getByText(/Paid and invoiced stages are locked/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: /Even/ }));
+    expect(within(dialog).getByTestId('share-Design Development').textContent).toBe('38%');
+    expect(within(dialog).getByTestId('share-Final Drawings').textContent).toBe('37%');
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'More for Material Order Advance' })[0]);
+    expect(within(dialog).getByTestId('share-Material Order Advance').textContent).toBe('26%');
+    const approve = within(dialog).getByRole('button', { name: /Approve as payment schedule/ });
+    expect((approve as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(dialog).getByPlaceholderText(/For example/), { target: { value: 'Even split agreed' } });
+    fireEvent.click(approve);
+    const byId = Object.fromEntries(latest.paymentMilestones.map((m: any) => [m.id, m]));
+    expect(byId.d1.percentage).toBe(25);
+    expect([byId.d2.percentage, byId.d3.percentage]).toEqual([38, 37]);
+    expect([byId.e1.percentage, byId.e2.percentage, byId.e3.percentage, byId.e4.percentage]).toEqual([26, 24, 25, 25]);
+    expect(latest.financials.scheduleChanges.at(-1).reason).toBe('Even split agreed');
+    expect(screen.queryByRole('dialog', { name: 'Quick schedule' })).toBeNull();
+  });
+
+  it('adds a stage by splitting one, with its steps, and hands the draft to Edit milestones', () => {
+    render(<Host />);
+    fireEvent.click(screen.getByRole('button', { name: 'Quick schedule' }));
+    const dialog = screen.getByRole('dialog', { name: 'Quick schedule' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add False ceiling' }));
+    // The biggest execution stage (Material Order Advance, 37%) gives half.
+    expect(within(dialog).getByTestId('share-Material Order Advance').textContent).toBe('19%');
+    expect(within(dialog).getByTestId('share-False ceiling').textContent).toBe('18%');
+    fireEvent.click(within(dialog).getByRole('button', { name: /Fine-tune first/ }));
+    const editor = screen.getByRole('dialog', { name: 'Edit milestones' });
+    expect(within(editor).getByDisplayValue('False ceiling')).toBeTruthy();
+  });
+});
+
+describe('going back to an earlier schedule', () => {
+  it('restores the schedule from before a change, shows it first, and keeps the paid stage billed', () => {
+    render(<Host />);
+    fireEvent.click(screen.getByRole('button', { name: 'Quick schedule' }));
+    let dialog = screen.getByRole('dialog', { name: 'Quick schedule' });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Even/ }));
+    fireEvent.change(within(dialog).getByPlaceholderText(/For example/), { target: { value: 'Even split' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Approve as payment schedule/ }));
+    expect(latest.paymentMilestones.find((m: any) => m.id === 'e1').percentage).toBe(25);
+    expect(latest.financials.scheduleChanges.at(-1).snapshot.find((m: any) => m.id === 'e1').percentage).toBe(37);
+
+    fireEvent.click(screen.getByRole('radio', { name: /History/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Restore the schedule from before this change/ })[0]);
+    dialog = screen.getByRole('dialog', { name: 'Edit milestones' });
+    expect(within(dialog).getByText(/Restoring the schedule from before the change/)).toBeTruthy();
+    fireEvent.change(within(dialog).getByPlaceholderText(/For example/), { target: { value: 'Client preferred the old split' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Save changes/ }));
+    const byId = Object.fromEntries(latest.paymentMilestones.map((m: any) => [m.id, m]));
+    expect([byId.e1.percentage, byId.e2.percentage, byId.e3.percentage, byId.e4.percentage]).toEqual([37, 30, 25, 8]);
+    expect(byId.d1.status).toBe('paid');
+    const last = latest.financials.scheduleChanges.at(-1);
+    expect(last.changes[0]).toMatch(/^Restored the schedule from before the change/);
+    expect(last.reason).toBe('Client preferred the old split');
+    // The restore itself can be undone.
+    expect(last.snapshot.find((m: any) => m.id === 'e1').percentage).toBe(25);
+  });
+});

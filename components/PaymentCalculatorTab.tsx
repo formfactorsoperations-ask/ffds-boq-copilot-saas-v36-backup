@@ -42,8 +42,10 @@ import { MoneyBoard, BOARD_ICONS, type BoardTile, type BoardTotals, type BoardPr
 import { TrackColumn, TaxPlate, type TrackFigures, type CardActions } from './money/board/TrackColumn';
 import { EditMilestonesModal, type StudioStages } from './money/board/EditMilestonesModal';
 import { MilestoneSummary } from './money/board/MilestoneSummary';
-import { cardStates, trackTotal, shareOf, sameTerms, termsChanges, studioCashPct, type TaxTerms, type ScheduleChange, type Track as BoardTrack } from '../lib/moneyBoard';
+import { QuickScheduleModal } from './money/board/QuickScheduleModal';
+import { cardStates, trackTotal, shareOf, sameTerms, termsChanges, studioCashPct, snapshotOf, restoreSchedule, milestonesFromIssued, type TaxTerms, type ScheduleChange, type Track as BoardTrack } from '../lib/moneyBoard';
 import { Button } from './ui/kit';
+import { scheduleDiffers, acceptedLatest, clientCopiesBehind, nextInvoiceSeq } from '../lib/scheduleImpact';
 import { isTerminated } from '../lib/termination';
 import { holdsFinanceRole } from '../lib/roleAccess';
 import TerminationPanel from './termination/TerminationPanel';
@@ -491,16 +493,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     // Payment Schedule Logic
     const paymentSchedules = projectContext.paymentSchedules || [];
     const latestSchedule = paymentSchedules.length > 0 ? paymentSchedules.reduce((a, b) => a.version > b.version ? a : b) : null;
-    const hasUnsavedScheduleChanges = latestSchedule && (
-        milestones.length !== latestSchedule.advances.length ||
-        milestones.some((m, i) => {
-            const adv = latestSchedule.advances[i];
-            if (!adv) return true;
-            return m.percentage !== adv.percentage || 
-                   (m.unlocks || '') !== adv.unlocks || 
-                   m.name !== adv.label; 
-        })
-    );
+    /* Every field the schedule document prints: stage, track, share or fixed amount, when it is due, what it unlocks (lib/scheduleImpact). */
+    const hasUnsavedScheduleChanges = scheduleDiffers(milestones, latestSchedule);
 
     const executionMilestonesExist = (ms: PaymentMilestone[]) => ms.some(m => m.type === 'execution');
 
@@ -564,6 +558,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             const advCode = m.type === 'design' ? `D${++designIndex}` : `E${++execIndex}`;
 
             return {
+                milestoneId: m.id,
                 advanceCode: advCode,
                 label: (m.name || '').replace(' (Gross)', ''),
                 phase: m.type as 'design' | 'execution' | 'handover',
@@ -966,7 +961,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const executeInvoiceAction = (index: number, action: InvoiceAction, lockedTaxableBase?: number) => {
         if (terminated) return;
         const projectCode = (projectContext?.name || 'PRJ').substring(0, 3).toUpperCase();
-        const seq = String(index + 1).padStart(2, '0');
+        /* One past the highest number used, so adding, removing or moving a stage never repeats an invoice number. */
+        const seq = nextInvoiceSeq(projectContext.paymentMilestones || milestones, index);
         
         let invNumber = '';
         if (billablePercent > 0) {
@@ -1317,6 +1313,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const [termsDraft, setTermsDraft] = useState<TaxTerms | null>(null);
     const [termsReason, setTermsReason] = useState('');
     const [editFocus, setEditFocus] = useState<BoardTrack | 'both' | null>(null);
+    /* Quick schedule (lib/quickSchedule): open, and the draft it hands to Edit milestones to fine-tune. */
+    const [quickOpen, setQuickOpen] = useState(false);
+    const [editDraft, setEditDraft] = useState<PaymentMilestone[] | null>(null);
+    /* Putting back an earlier schedule from History: what it came from, and what had to give way to billing since. */
+    const [restoreFrom, setRestoreFrom] = useState<{ label: string; notes: string[] } | null>(null);
     /* Which cards this screen just changed, so a change from the portal or the site can be told apart. */
     const localTouch = useRef<Map<string, number>>(new Map());
     /* Retainer editor on the overview. Closed unless the user opens it. */
@@ -1962,7 +1963,10 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 ? { label: `${formatCurrency(boardTotals.withClient)} with client`, tone: 'warn' }
                 : { label: 'Nothing overdue', tone: 'good' };
 
-    const scheduleAccepted = projectContext.engagement?.status === 'acknowledged';
+    /* Accepted means the client accepted after the latest version was generated, not that the terms were once acknowledged. */
+    const scheduleAccepted = acceptedLatest(projectContext.engagement, latestSchedule);
+    /* What the client holds that is now older than the schedule, in order (lib/scheduleImpact). */
+    const copiesBehind = lockedMode ? [] : clientCopiesBehind(projectContext, milestones);
     const scheduleAction = !latestSchedule
         ? { label: 'Generate payment schedule', onClick: handleGenerateSchedule }
         : scheduleOutOfDate
@@ -2051,6 +2055,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         setHandover: (id, on) => { const i = indexOf(id); if (i < 0) return; touch(id); handleUpdateMilestone(i, { isHandoverAdvance: on }); },
         edit: (t) => openEditor(t),
     };
+    /* Opens an earlier schedule in Edit milestones, made safe against what has been billed since; nothing changes until it is saved. */
+    function openRestore(past: PaymentMilestone[], label: string) {
+        if (previewing) { alert('Apply or discard the tax preview first.'); return; }
+        const { draft, notes } = restoreSchedule(past.filter(m => !(feeOnly && m.type === 'execution')), milestones, { design: taxableDesign, execution: taxableExecution });
+        setRestoreFrom({ label, notes });
+        setEditDraft(draft);
+        setEditFocus('both');
+    }
     function openEditor(t: BoardTrack | 'both') {
         if (previewing) { alert('Apply or discard the tax preview first.'); return; }
         setEditFocus(t);
@@ -2124,6 +2136,26 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
     const boardNotices = (
         <>
+            {copiesBehind.length > 0 && (
+                <section className="rounded-2xl border border-[#3D52A0]/30 bg-white px-5 py-4 hud-panel-in" aria-label="Bring the client's copies up to date">
+                    <div className="flex flex-wrap items-start gap-3">
+                        <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><FileText className="w-4 h-4" /></span>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-800">Bring the client's copies up to date</p>
+                            <p className="text-xs text-slate-500">The schedule changed. Everything on this screen, the proposal and the reports already show it; what the client holds does not until you do these, in order.</p>
+                        </div>
+                    </div>
+                    <ol className="mt-3 space-y-2">
+                        {copiesBehind.map((st, i) => (
+                            <li key={st.key} className="flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 px-3 py-2 hud-row-in" style={{ animationDelay: `${i * 40}ms` }}>
+                                <span className="w-6 h-6 rounded-full bg-[#3D52A0] text-white text-xs font-bold grid place-items-center shrink-0">{i + 1}</span>
+                                <span className="flex-1 min-w-[200px]"><b className="block text-xs text-slate-800">{st.title}</b><span className="text-[11px] text-slate-500">{st.why}</span></span>
+                                <Button size="sm" variant={i === 0 ? 'primary' : 'secondary'} onClick={() => ('action' in st.go ? handleGenerateSchedule() : window.dispatchEvent(new CustomEvent('change-tab', { detail: (st.go as { tab: string }).tab })))}>{st.label}</Button>
+                            </li>
+                        ))}
+                    </ol>
+                </section>
+            )}
             {(schedule.overBilled || []).map(ob => (
                 <div key={ob.track} className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-xs text-amber-900">
                     <p className="text-sm font-bold">{ob.track === 'design' ? 'Design' : 'Execution'} is billed {formatCurrency(ob.overBy)} over its contract</p>
@@ -2252,6 +2284,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         </div>
                         {c.reason && <p className="text-xs text-slate-700 mt-1">{c.reason}</p>}
                         <ul className="mt-1 text-[11px] text-slate-500 list-disc pl-4">{c.changes.map((x, k) => <li key={k}>{x}</li>)}</ul>
+                        {c.kind === 'schedule' && !lockedMode && (c.snapshot?.length ? (
+                            <Button size="sm" variant="quiet" icon={RotateCcw} className="mt-1 -ml-3" onClick={() => openRestore(c.snapshot!, `before the change on ${new Date(c.date).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`)}>
+                                Restore the schedule from before this change
+                            </Button>
+                        ) : <p className="mt-1 text-[11px] text-slate-400">Saved before restore was added, so it cannot be put back.</p>)}
                     </div>
                 ))}
             </div>
@@ -2267,7 +2304,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
     const saveScheduleDraft = (draft: PaymentMilestone[], reason: string, changes: string[]) => {
         const before = contractOf(schedule), after = contractOf(priceDraft(draft));
-        const entry: ScheduleChange = { id: generateId(), date: new Date().toISOString(), kind: 'schedule', changes, reason: reason || undefined, before, after };
+        const said = restoreFrom ? [`Restored the schedule from ${restoreFrom.label}`, ...changes] : changes;
+        /* The schedule as it was, kept with the change so History can put it back. */
+        const entry: ScheduleChange = { id: generateId(), date: new Date().toISOString(), kind: 'schedule', changes: said, reason: reason || undefined, before, after, snapshot: snapshotOf(milestones) };
         draft.forEach(m => touch(m.id));
         setProjectContext(prev => ({
             ...prev,
@@ -2275,7 +2314,10 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             financials: { ...(prev.financials as any || {}), scheduleChanges: [...((prev.financials as any)?.scheduleChanges || []), entry] } as any,
         }));
         setEditFocus(null);
-        showSuccessWithNext('Milestones saved');
+        setEditDraft(null);
+        setQuickOpen(false);
+        setRestoreFrom(null);
+        showSuccessWithNext(restoreFrom ? 'Earlier schedule restored' : 'Milestones saved');
     };
 
     const saveDraftAsStudioDefaults = async (draft: PaymentMilestone[]) => {
@@ -2423,6 +2465,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         onSchedule={scheduleAction.onClick}
                         scheduleLabel={scheduleAction.label}
                         onEdit={() => openEditor('both')}
+                        onQuick={() => { if (previewing) { alert('Apply or discard the tax preview first.'); return; } setQuickOpen(true); }}
                         readOnly={lockedMode}
                         tiles={boardTiles}
                         preview={boardPreview}
@@ -3065,6 +3108,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 >
                                                     Audit Snapshot
                                                 </button>
+                                                {!lockedMode && (sched.advances || []).length > 0 && (
+                                                    <Button size="sm" variant="quiet" icon={RotateCcw} className="ml-1" onClick={() => openRestore(milestonesFromIssued(sched.advances), `issued schedule ${sched.versionLabel || `v${sched.version}.0`}`)}>Restore</Button>
+                                                )}
                                             </td>
                                         </tr>
                                     );
@@ -3230,6 +3276,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             {editFocus && !lockedMode && (
                 <EditMilestonesModal
                     milestones={milestones}
+                    initialDraft={editDraft}
+                    notice={restoreFrom ? (
+                        <div className="space-y-1">
+                            <p className="font-bold text-slate-800">Restoring the schedule from {restoreFrom.label}</p>
+                            <p>Check it, change anything you like, then save. Nothing changes until you save, and History keeps this as a new change you can undo.</p>
+                            {restoreFrom.notes.map(n => <p key={n} className="text-amber-800">{n}</p>)}
+                        </div>
+                    ) : undefined}
                     focus={editFocus}
                     feeOnly={feeOnly}
                     taxable={{ design: taxableDesign, execution: taxableExecution }}
@@ -3237,8 +3291,21 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     saved={schedule}
                     studio={studioStages}
                     onSaveAsDefaults={saveDraftAsStudioDefaults}
-                    onClose={() => setEditFocus(null)}
+                    onClose={() => { setEditFocus(null); setEditDraft(null); setRestoreFrom(null); }}
                     onSave={saveScheduleDraft}
+                />
+            )}
+
+            {quickOpen && !lockedMode && !editFocus && (
+                <QuickScheduleModal
+                    milestones={milestones}
+                    feeOnly={feeOnly}
+                    taxable={{ design: taxableDesign, execution: taxableExecution }}
+                    price={priceDraft}
+                    studio={studioStages}
+                    onClose={() => setQuickOpen(false)}
+                    onApprove={saveScheduleDraft}
+                    onFineTune={draft => { setQuickOpen(false); setEditDraft(draft); setEditFocus('both'); }}
                 />
             )}
 
