@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Minus, Lock, Zap, SlidersHorizontal, ChevronDown, ArrowUp, ArrowDown, Scissors, Trash2, Sparkles, Check, PenTool, HardHat, ListChecks } from '@/lib/lucide-shim';
+import { X, Plus, Minus, Lock, Zap, SlidersHorizontal, ChevronDown, ArrowUp, ArrowDown, Scissors, Trash2, Sparkles, Check, PenTool, HardHat, ListChecks, History } from '@/lib/lucide-shim';
 import { Button, Chip, Segmented, LABEL, INPUT } from '../../ui/kit';
 import { IconTile } from '../../people/PeopleBits';
 import DateField from '../../ui/DateField';
@@ -31,6 +31,8 @@ export const EditMilestonesModal: React.FC<{
   milestones: PaymentMilestone[];
   /** Where the draft starts, when it is not the saved schedule (Quick schedule's Fine-tune). */
   initialDraft?: PaymentMilestone[] | null;
+  /** Shown above the tracks, e.g. when an earlier schedule is being restored from History. */
+  notice?: React.ReactNode;
   focus: Track | 'both';
   feeOnly: boolean;
   taxable: { design: number; execution: number };
@@ -42,7 +44,7 @@ export const EditMilestonesModal: React.FC<{
   onStudioRules?: () => void;
   onClose: () => void;
   onSave: (draft: PaymentMilestone[], reason: string, changes: string[]) => void;
-}> = ({ milestones, initialDraft, focus, feeOnly, taxable, price, saved, studio, onSaveAsDefaults, onStudioRules, onClose, onSave }) => {
+}> = ({ milestones, initialDraft, notice, focus, feeOnly, taxable, price, saved, studio, onSaveAsDefaults, onStudioRules, onClose, onSave }) => {
   const [draft, setDraft] = useState<PaymentMilestone[]>(() => (initialDraft || milestones).map(m => ({ ...m, subSteps: (m.subSteps || []).map(s => ({ ...s })) })));
   const [mode, setMode] = useState<'simple' | 'advanced'>('simple');
   const [reason, setReason] = useState('');
@@ -250,6 +252,7 @@ export const EditMilestonesModal: React.FC<{
         </div>
 
         <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
+          {notice && <div className="flex items-start gap-2.5 rounded-xl border border-[#3D52A0]/30 bg-[#3D52A0]/5 px-3 py-2.5 text-xs text-slate-700"><History className="w-4 h-4 text-[#3D52A0] shrink-0 mt-0.5" /><div className="min-w-0">{notice}</div></div>}
           {studio && (
             <p className="flex flex-wrap items-center gap-2 rounded-xl bg-[#3D52A0]/5 px-3 py-2 text-xs text-slate-700">
               <Sparkles className="w-4 h-4 text-[#3D52A0]" />

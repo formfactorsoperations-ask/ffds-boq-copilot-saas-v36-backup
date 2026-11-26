@@ -82,3 +82,48 @@ describe('studio cash moves with this project', () => {
     expect(studioCashPct(1, 1, 0)).toBe(0);
   });
 });
+
+import { restoreSchedule, milestonesFromIssued, snapshotOf } from '../../lib/moneyBoard';
+
+describe('putting back an earlier schedule', () => {
+  const taxable = { design: 100000, execution: 1000000 };
+  const past: any[] = [
+    { id: 'd1', type: 'design', name: 'Sign-up', percentage: 25, status: 'pending' },
+    { id: 'd2', type: 'design', name: 'Layouts', percentage: 75, status: 'pending', date: '2026-12-01' },
+    { id: 'e1', type: 'execution', name: 'Material', percentage: 40, status: 'pending' },
+    { id: 'e2', type: 'execution', name: 'Handover', percentage: 60, status: 'pending' },
+  ];
+  it('brings the shares back, keeping ids and dates', () => {
+    const now: any[] = [
+      { id: 'd1', type: 'design', name: 'Sign-up', percentage: 50, status: 'pending' },
+      { id: 'd2', type: 'design', name: 'Layouts', percentage: 50, status: 'pending' },
+      { id: 'e1', type: 'execution', name: 'Material', percentage: 100, status: 'pending' },
+    ];
+    const { draft, notes } = restoreSchedule(past, now, taxable);
+    expect(draft.map(m => [m.id, m.percentage])).toEqual([['d1', 25], ['d2', 75], ['e1', 40], ['e2', 60]]);
+    expect(draft[1].date).toBe('2026-12-01');
+    expect(notes).toEqual([]);
+  });
+  it('never un-bills: what was invoiced or paid since keeps how it was billed', () => {
+    const now: any[] = [
+      { id: 'd1', type: 'design', name: 'Sign-up', percentage: 30, status: 'paid', invoiceNumber: 'INV-1', paidDate: '2026-11-20' },
+      { id: 'd2', type: 'design', name: 'Layouts', percentage: 70, status: 'pending' },
+      { id: 'eX', type: 'execution', name: 'Material', percentage: 100, status: 'invoiced', invoiceNumber: 'INV-2' },
+    ];
+    const { draft, notes } = restoreSchedule(past, now, taxable);
+    const d1 = draft.find(m => m.id === 'd1')!;
+    expect(d1).toMatchObject({ status: 'paid', invoiceNumber: 'INV-1', percentage: 30 });
+    // Layouts takes the difference so design still adds up.
+    expect(draft.find(m => m.id === 'd2')!.percentage).toBe(70);
+    // Material was billed under another id: it is not asked for twice.
+    expect(draft.filter(m => m.type === 'execution').map(m => m.id)).toEqual(['eX', 'e2']);
+    expect(notes.join(' ')).toMatch(/Sign-up was billed after this version/);
+  });
+  it('reads an issued schedule back as milestones', () => {
+    const ms = milestonesFromIssued([{ advanceCode: 'E1', label: 'Handover', phase: 'handover', percentage: 10, dueCondition: 'On completion', isHandoverAdvance: true }]);
+    expect(ms[0]).toMatchObject({ type: 'execution', name: 'Handover', percentage: 10, trigger: 'On completion', isHandoverAdvance: true, status: 'pending' });
+  });
+  it('keeps a snapshot Firestore will take', () => {
+    expect(snapshotOf([{ id: 'a', date: undefined } as any])).toEqual([{ id: 'a' }]);
+  });
+});

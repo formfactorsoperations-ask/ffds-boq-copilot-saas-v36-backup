@@ -43,7 +43,7 @@ import { TrackColumn, TaxPlate, type TrackFigures, type CardActions } from './mo
 import { EditMilestonesModal, type StudioStages } from './money/board/EditMilestonesModal';
 import { MilestoneSummary } from './money/board/MilestoneSummary';
 import { QuickScheduleModal } from './money/board/QuickScheduleModal';
-import { cardStates, trackTotal, shareOf, sameTerms, termsChanges, studioCashPct, type TaxTerms, type ScheduleChange, type Track as BoardTrack } from '../lib/moneyBoard';
+import { cardStates, trackTotal, shareOf, sameTerms, termsChanges, studioCashPct, snapshotOf, restoreSchedule, milestonesFromIssued, type TaxTerms, type ScheduleChange, type Track as BoardTrack } from '../lib/moneyBoard';
 import { Button } from './ui/kit';
 import { isTerminated } from '../lib/termination';
 import { holdsFinanceRole } from '../lib/roleAccess';
@@ -1321,6 +1321,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     /* Quick schedule (lib/quickSchedule): open, and the draft it hands to Edit milestones to fine-tune. */
     const [quickOpen, setQuickOpen] = useState(false);
     const [editDraft, setEditDraft] = useState<PaymentMilestone[] | null>(null);
+    /* Putting back an earlier schedule from History: what it came from, and what had to give way to billing since. */
+    const [restoreFrom, setRestoreFrom] = useState<{ label: string; notes: string[] } | null>(null);
     /* Which cards this screen just changed, so a change from the portal or the site can be told apart. */
     const localTouch = useRef<Map<string, number>>(new Map());
     /* Retainer editor on the overview. Closed unless the user opens it. */
@@ -2055,6 +2057,14 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         setHandover: (id, on) => { const i = indexOf(id); if (i < 0) return; touch(id); handleUpdateMilestone(i, { isHandoverAdvance: on }); },
         edit: (t) => openEditor(t),
     };
+    /* Opens an earlier schedule in Edit milestones, made safe against what has been billed since; nothing changes until it is saved. */
+    function openRestore(past: PaymentMilestone[], label: string) {
+        if (previewing) { alert('Apply or discard the tax preview first.'); return; }
+        const { draft, notes } = restoreSchedule(past.filter(m => !(feeOnly && m.type === 'execution')), milestones, { design: taxableDesign, execution: taxableExecution });
+        setRestoreFrom({ label, notes });
+        setEditDraft(draft);
+        setEditFocus('both');
+    }
     function openEditor(t: BoardTrack | 'both') {
         if (previewing) { alert('Apply or discard the tax preview first.'); return; }
         setEditFocus(t);
@@ -2256,6 +2266,11 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         </div>
                         {c.reason && <p className="text-xs text-slate-700 mt-1">{c.reason}</p>}
                         <ul className="mt-1 text-[11px] text-slate-500 list-disc pl-4">{c.changes.map((x, k) => <li key={k}>{x}</li>)}</ul>
+                        {c.kind === 'schedule' && !lockedMode && (c.snapshot?.length ? (
+                            <Button size="sm" variant="quiet" icon={RotateCcw} className="mt-1 -ml-3" onClick={() => openRestore(c.snapshot!, `before the change on ${new Date(c.date).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`)}>
+                                Restore the schedule from before this change
+                            </Button>
+                        ) : <p className="mt-1 text-[11px] text-slate-400">Saved before restore was added, so it cannot be put back.</p>)}
                     </div>
                 ))}
             </div>
@@ -2271,7 +2286,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
 
     const saveScheduleDraft = (draft: PaymentMilestone[], reason: string, changes: string[]) => {
         const before = contractOf(schedule), after = contractOf(priceDraft(draft));
-        const entry: ScheduleChange = { id: generateId(), date: new Date().toISOString(), kind: 'schedule', changes, reason: reason || undefined, before, after };
+        const said = restoreFrom ? [`Restored the schedule from ${restoreFrom.label}`, ...changes] : changes;
+        /* The schedule as it was, kept with the change so History can put it back. */
+        const entry: ScheduleChange = { id: generateId(), date: new Date().toISOString(), kind: 'schedule', changes: said, reason: reason || undefined, before, after, snapshot: snapshotOf(milestones) };
         draft.forEach(m => touch(m.id));
         setProjectContext(prev => ({
             ...prev,
@@ -2281,7 +2298,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
         setEditFocus(null);
         setEditDraft(null);
         setQuickOpen(false);
-        showSuccessWithNext('Milestones saved');
+        setRestoreFrom(null);
+        showSuccessWithNext(restoreFrom ? 'Earlier schedule restored' : 'Milestones saved');
     };
 
     const saveDraftAsStudioDefaults = async (draft: PaymentMilestone[]) => {
@@ -3072,6 +3090,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                                                 >
                                                     Audit Snapshot
                                                 </button>
+                                                {!lockedMode && (sched.advances || []).length > 0 && (
+                                                    <Button size="sm" variant="quiet" icon={RotateCcw} className="ml-1" onClick={() => openRestore(milestonesFromIssued(sched.advances), `issued schedule ${sched.versionLabel || `v${sched.version}.0`}`)}>Restore</Button>
+                                                )}
                                             </td>
                                         </tr>
                                     );
@@ -3238,6 +3259,13 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                 <EditMilestonesModal
                     milestones={milestones}
                     initialDraft={editDraft}
+                    notice={restoreFrom ? (
+                        <div className="space-y-1">
+                            <p className="font-bold text-slate-800">Restoring the schedule from {restoreFrom.label}</p>
+                            <p>Check it, change anything you like, then save. Nothing changes until you save, and History keeps this as a new change you can undo.</p>
+                            {restoreFrom.notes.map(n => <p key={n} className="text-amber-800">{n}</p>)}
+                        </div>
+                    ) : undefined}
                     focus={editFocus}
                     feeOnly={feeOnly}
                     taxable={{ design: taxableDesign, execution: taxableExecution }}
@@ -3245,7 +3273,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     saved={schedule}
                     studio={studioStages}
                     onSaveAsDefaults={saveDraftAsStudioDefaults}
-                    onClose={() => { setEditFocus(null); setEditDraft(null); }}
+                    onClose={() => { setEditFocus(null); setEditDraft(null); setRestoreFrom(null); }}
                     onSave={saveScheduleDraft}
                 />
             )}

@@ -136,6 +136,83 @@ export interface ScheduleChange {
   /** What the client pays, before and after. */
   before?: number;
   after?: number;
+  /**
+   * The milestones as they were just before this change, so History can put
+   * the schedule back. Older entries have none and cannot be restored.
+   */
+  snapshot?: PaymentMilestone[];
+}
+
+/** Fields that record billing. A restore never takes these from the past: what was invoiced or paid stays so. */
+const BILLING_KEYS = ['status', 'invoiceNumber', 'invoiceDate', 'paidDate', 'lockedTaxableBase', 'lockedBillablePercent', 'lockedGstRate',
+  'zohoInvoiceId', 'discountAmount', 'discountReason'] as const;
+
+/** A copy of the milestones fit to keep in History (no undefined fields, which Firestore refuses). */
+export function snapshotOf(milestones: PaymentMilestone[]): PaymentMilestone[] {
+  return JSON.parse(JSON.stringify(milestones || []));
+}
+
+/** An issued schedule version's advances, read back as milestones (the issued document keeps no milestone ids). */
+export function milestonesFromIssued(advances: any[]): PaymentMilestone[] {
+  return (advances || []).map((a, i) => ({
+    id: `issued_${i}`,
+    type: a.phase === 'design' ? 'design' : 'execution',
+    name: a.label || a.advanceCode || `Stage ${i + 1}`,
+    percentage: Number(a.percentage) || 0,
+    ...(a.isFixedAmount ? { isFixedAmount: true, fixedAmount: Number(a.fixedAmount) || 0 } : {}),
+    description: a.advanceCode || '',
+    trigger: a.dueCondition || '',
+    unlocks: a.unlocks || '',
+    ...(a.isHandoverAdvance ? { isHandoverAdvance: true } : {}),
+    status: 'pending',
+  } as PaymentMilestone));
+}
+
+/**
+ * The schedule as it was in `past`, made safe to save now.
+ *
+ * - A milestone invoiced or paid since then keeps how it was billed: its
+ *   share and its invoice stay as they are now, first on its track.
+ * - A past milestone that still exists keeps its id, so its dates and steps
+ *   and any invoice on it stay linked; billing fields always come from now.
+ * - A past milestone that has since been billed under another id is not
+ *   asked for twice: one with the same name and track is matched to it.
+ * - A track that no longer adds up to 100% (because something billed since
+ *   carries a different share) gets the difference on its last milestone
+ *   still billed by percent.
+ */
+export function restoreSchedule(past: PaymentMilestone[], current: PaymentMilestone[], taxable: Record<Track, number>): { draft: PaymentMilestone[]; notes: string[] } {
+  const notes: string[] = [];
+  const now = new Map((current || []).map(m => [m.id, m]));
+  const key = (m: PaymentMilestone) => `${m.type || 'design'}|${(m.name || '').trim().toLowerCase()}`;
+  const billedNow = (current || []).filter(cleared);
+  const billedIds = new Set(billedNow.map(m => m.id));
+  const billedKeys = new Set(billedNow.map(key));
+  const out: PaymentMilestone[] = [];
+  (['design', 'execution'] as Track[]).forEach(t => {
+    const keep = billedNow.filter(m => (m.type || 'design') === t);
+    const rest = (past || []).filter(m => (m.type || 'design') === t && !billedIds.has(m.id) && !billedKeys.has(key(m)))
+      .map(m => {
+        const live = now.get(m.id);
+        const copy: any = { ...m, isCustom: true };
+        BILLING_KEYS.forEach(k => { delete copy[k]; if (live && (live as any)[k] !== undefined) copy[k] = (live as any)[k]; });
+        if (!copy.status) copy.status = 'pending';
+        return copy as PaymentMilestone;
+      });
+    keep.forEach(m => {
+      const was = (past || []).find(p => p.id === m.id || key(p) === key(m));
+      if (!was) notes.push(`${m.name} was billed after this version, so it stays in the schedule as billed.`);
+      else if (Math.abs(shareOf(was, taxable[t]) - shareOf(m, taxable[t])) >= 0.5) notes.push(`${m.name} was billed after this version, so it keeps the share it was billed at.`);
+    });
+    let list = [...keep, ...rest];
+    if (list.length && !trackTotal(list, taxable[t]).whole) {
+      list = balanceTrack(list, taxable[t]);
+      const last = [...list].reverse().find(m => !cleared(m) && !m.isFixedAmount);
+      if (last) notes.push(`${t === 'design' ? 'Design' : 'Execution'} did not add up to 100% with what is billed now, so ${last.name} takes the difference.`);
+    }
+    out.push(...list);
+  });
+  return { draft: out, notes };
 }
 
 /** Studio cash this financial year as a share of the limit, with this project's cash part swapped in. */

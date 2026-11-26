@@ -144,3 +144,31 @@ describe('quick schedule', () => {
     expect(within(editor).getByDisplayValue('False ceiling')).toBeTruthy();
   });
 });
+
+describe('going back to an earlier schedule', () => {
+  it('restores the schedule from before a change, shows it first, and keeps the paid stage billed', () => {
+    render(<Host />);
+    fireEvent.click(screen.getByRole('button', { name: 'Quick schedule' }));
+    let dialog = screen.getByRole('dialog', { name: 'Quick schedule' });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Even/ }));
+    fireEvent.change(within(dialog).getByPlaceholderText(/For example/), { target: { value: 'Even split' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Approve as payment schedule/ }));
+    expect(latest.paymentMilestones.find((m: any) => m.id === 'e1').percentage).toBe(25);
+    expect(latest.financials.scheduleChanges.at(-1).snapshot.find((m: any) => m.id === 'e1').percentage).toBe(37);
+
+    fireEvent.click(screen.getByRole('radio', { name: /History/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Restore the schedule from before this change/ })[0]);
+    dialog = screen.getByRole('dialog', { name: 'Edit milestones' });
+    expect(within(dialog).getByText(/Restoring the schedule from before the change/)).toBeTruthy();
+    fireEvent.change(within(dialog).getByPlaceholderText(/For example/), { target: { value: 'Client preferred the old split' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Save changes/ }));
+    const byId = Object.fromEntries(latest.paymentMilestones.map((m: any) => [m.id, m]));
+    expect([byId.e1.percentage, byId.e2.percentage, byId.e3.percentage, byId.e4.percentage]).toEqual([37, 30, 25, 8]);
+    expect(byId.d1.status).toBe('paid');
+    const last = latest.financials.scheduleChanges.at(-1);
+    expect(last.changes[0]).toMatch(/^Restored the schedule from before the change/);
+    expect(last.reason).toBe('Client preferred the old split');
+    // The restore itself can be undone.
+    expect(last.snapshot.find((m: any) => m.id === 'e1').percentage).toBe(25);
+  });
+});
