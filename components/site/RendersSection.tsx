@@ -2,7 +2,7 @@
   3D renders and reference files, under Project Hub > Drawings.
 
   This was the "3D Renders & Drawings" tab inside Execution & Ops, a stage that
-  stays locked until the agreement is signed, while the drawings themselves sat
+  then stayed locked until the agreement was signed, while the drawings themselves sat
   in the hub from the first sketch. It now sits under the drawing tracker as one
   summary-first section, closed until someone opens it (plan item 9).
 */

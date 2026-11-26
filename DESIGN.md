@@ -887,7 +887,8 @@ prototypes and chose the quiet sidebar, with animated Lucide icons and collapse 
   change it); Details and the team; the next step ("Next · 35% · Agreement Signed").
 - **Jump to…** (Ctrl/Cmd K): every screen of the project by name.
 - **Hub**, then **Journey**: the six stages on a line that fills to where the project is; the stage
-  it is at has a pulsing ring and NOW; locked stages show a lock and shake when clicked; the
+  it is at has a pulsing ring and NOW; no stage is locked, so every stage opens whatever stage the
+  project is at (a stage passed in as locked would show a lock and shake when clicked); the
   selected stage opens to show its screens. Then the **Project Hub**, with its counts.
 - **The person** at the bottom: one row; its menu holds the studio's screens.
 
