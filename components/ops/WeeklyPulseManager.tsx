@@ -39,13 +39,15 @@ interface WeeklyPulseManagerProps {
   projectContext: ProjectContext;
   setProjectContext: React.Dispatch<React.SetStateAction<ProjectContext>>;
   activeProject?: any;
+  /** The active version's summary, for the dashboard's payment amounts. */
+  tierSummary?: { totalSell?: number; designFee?: number };
   /** Fix the view (Meetings & reports shows the two as separate sections) and hide the switch. */
   mode?: 'reports' | 'dashboard';
   /** Inside a section that already names it: drop the title. */
   embedded?: boolean;
 }
 
-export default function WeeklyPulseManager({ projectContext, setProjectContext, activeProject, mode, embedded = false }: WeeklyPulseManagerProps) {
+export default function WeeklyPulseManager({ projectContext, setProjectContext, activeProject, tierSummary, mode, embedded = false }: WeeklyPulseManagerProps) {
   const [reports, setReports] = useState<WeeklyReport[]>([]);
   const [selectedReport, setSelectedReport] = useState<WeeklyReport | null>(null);
   const [chosenView, setSubView] = useState<'reports' | 'dashboard'>(mode || 'reports');
@@ -452,6 +454,7 @@ export default function WeeklyPulseManager({ projectContext, setProjectContext, 
           projectContext={projectContext}
           setProjectContext={setProjectContext}
           activeProject={activeProject}
+          tierSummary={tierSummary}
         />
       )}
 

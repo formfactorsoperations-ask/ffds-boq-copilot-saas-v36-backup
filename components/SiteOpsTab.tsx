@@ -42,6 +42,8 @@ interface SiteOpsTabProps {
   /** Decision ledger, subscribed to once in App and forwarded to the tracker. */
   decisionLedger?: any[];
   activeProject?: any;
+  /** The active version's summary, so the weekly pulse prices payments as Money does. */
+  tierSummary?: { totalSell?: number; designFee?: number };
   onProjectUpdate?: (updatedProject: any) => void;
   onAddCalculatedItem?: (name: string, category: string, qty: number, unit: string, roomId: string) => void;
   /** Which screen: the route decides (site-ops, site-quality, site-meetings, record-decision). */
@@ -85,6 +87,7 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
   projectId,
   decisionLedger,
   activeProject,
+  tierSummary,
   onProjectUpdate,
   view = "control",
   focus = null,
@@ -140,13 +143,13 @@ const SiteOpsTab: React.FC<SiteOpsTabProps> = ({
           line: { summary: "Every week's progress in one place, to share at handover", tone: "none" },
           render: () => (
             <WeeklyPulseManager projectContext={projectContext} setProjectContext={setProjectContext}
-              activeProject={activeProject} mode="dashboard" embedded />
+              activeProject={activeProject} tierSummary={tierSummary} mode="dashboard" embedded />
           ),
         },
       ];
     }
     return [];
-  }, [view, projectContext, setProjectContext, boq, onNavigateToTab, minutes, projectId, studioId, projectName, activeProject]);
+  }, [view, projectContext, setProjectContext, boq, onNavigateToTab, minutes, projectId, studioId, projectName, activeProject, tierSummary]);
 
   /*
     The section to open: the one asked for, else the first that needs someone.

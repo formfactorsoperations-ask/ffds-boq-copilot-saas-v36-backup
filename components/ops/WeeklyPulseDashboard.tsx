@@ -25,14 +25,17 @@ import {
   MapPin
 } from '@/lib/lucide-shim';
 import { formatINR } from '../../lib/utils';
+import { paymentsReceivedIn } from '../../lib/paymentsReceived';
 
 interface WeeklyPulseDashboardProps {
   projectContext: ProjectContext;
   setProjectContext?: React.Dispatch<React.SetStateAction<ProjectContext>>;
   activeProject?: any;
+  /** The active version's summary, so payments are priced as Money prices them. */
+  tierSummary?: { totalSell?: number; designFee?: number };
 }
 
-export default function WeeklyPulseDashboard({ projectContext, setProjectContext, activeProject }: WeeklyPulseDashboardProps) {
+export default function WeeklyPulseDashboard({ projectContext, setProjectContext, activeProject, tierSummary }: WeeklyPulseDashboardProps) {
   // Navigation Tabs: 'analytics' (Week-by-Week Tracker) vs 'journey' (Project Journey Book)
   const [activeTab, setActiveTab] = useState<'analytics' | 'journey'>('analytics');
 
@@ -197,29 +200,28 @@ export default function WeeklyPulseDashboard({ projectContext, setProjectContext
       }
     }));
 
-    const schedules = projectContext?.paymentSchedules || [];
-    const milestoneItems: any[] = [];
-    schedules.forEach(sched => {
-      (sched.advances || []).forEach(m => {
-        if (m.receivedAt && isDateInSelectedWeek(m.receivedAt)) {
-          milestoneItems.push({
-            id: m.advanceCode || `milestone-${m.label}`,
-            date: new Date(m.receivedAt),
-            title: `Payment Cleared: ${m.label}`,
-            description: `Payment advance received successfully. Amount: ${formatINR(m.amount)} (${m.percentage}%).`,
-            type: 'payment' as const,
-            data: {
-              name: m.label,
-              amount: m.amount,
-              percentage: m.percentage
-            }
-          });
+    /*
+      Payments that landed this week, from the milestones (lib/paymentsReceived).
+      This read `paymentSchedules[].advances[].receivedAt`, which every
+      generator writes as null and nothing sets, so no payment ever showed.
+    */
+    const milestoneItems = paymentsReceivedIn(projectContext, weekBoundaries.start, weekBoundaries.end, tierSummary)
+      .map((p) => ({
+        id: `payment-${p.id}`,
+        date: new Date(p.at),
+        title: `Payment Cleared: ${p.name}`,
+        description: p.fromInvoiceDate
+          ? `Received ${formatINR(p.amount)}. No received date was recorded, so this is the invoice date.`
+          : `Received ${formatINR(p.amount)}.`,
+        type: 'payment' as const,
+        data: {
+          name: p.name,
+          amount: p.amount,
         }
-      });
-    });
+      }));
 
     return [...formattedUpdates, ...milestoneItems].sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [projectContext?.siteUpdates, projectContext?.paymentSchedules, weekBoundaries]);
+  }, [projectContext, tierSummary, weekBoundaries]);
 
   // Chronological Journey Reports (from Week 1 upwards)
   const journeyReports = useMemo(() => {
