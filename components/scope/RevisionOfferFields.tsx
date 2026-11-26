@@ -36,6 +36,10 @@ export default function RevisionOfferFields({ number, offer, bases, editable, on
   useEffect(() => { setName(offer?.name || DEFAULT_REVISION_OFFER_NAME); setValue(offer ? String(offer.value || '') : ''); }, [offer?.name, offer?.value]);
 
   const amount = revisionOfferAmount(offer, bases);
+  /* The top-up choice: the percentage typed, the total it comes to, and what is already given. */
+  const given = Math.max(0, Number(bases.given) || 0);
+  const topupPct = offer && offer.type === 'percentage' && offer.value > 0 ? +(+offer.value).toFixed(2) : 'X';
+  const topupTarget = typeof topupPct === 'number' ? Math.round(bases.whole * (topupPct / 100)) : 0;
   const set = (patch: Partial<RevisionOffer>) => onChange({ name: DEFAULT_REVISION_OFFER_NAME, on: 'added', type: 'percentage', value: 0, ...(offer || {}), ...patch });
   const commitValue = () => {
     const n = Number(value);
@@ -99,7 +103,8 @@ export default function RevisionOfferFields({ number, offer, bases, editable, on
           <select aria-label="Percent or rupees" className={`${field} w-20`} value={offer.type}
             onChange={e => set({ type: e.target.value as RevisionOffer['type'], value: e.target.value === 'percentage' ? Math.min(100, offer.value || 0) : offer.value || 0 })}>
             <option value="percentage">%</option>
-            <option value="fixed">₹</option>
+            {/* A top-up is a percentage of the revised BOQ: it has no rupee form. */}
+            <option value="fixed" disabled={offer.on === 'topup'}>₹</option>
           </select>
         </div>
       </div>
@@ -111,9 +116,12 @@ export default function RevisionOfferFields({ number, offer, bases, editable, on
               (bases.inWholeRooms || 0) > 0 ? `${inr(bases.added - (bases.inWholeRooms || 0))} new lines + ${inr(bases.inWholeRooms || 0)} new in rooms compared as a whole` : ''],
             ['whole', 'The whole revised BOQ', bases.whole,
               proposalOff > 0 ? 'Includes the scope already agreed, which has its own discount' : ''],
+            ['topup', `Bring the total discount to ${topupPct}% of the revised BOQ`, topupTarget,
+              `${inr(topupTarget)} in all, less ${inr(given)} already given`],
           ] as const).map(([k, t, v, sub]) => (
             <label key={k} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer ${offer.on === k ? 'border-[#3D52A0] bg-[#3D52A0]/5' : 'border-slate-200 hover:bg-slate-50'}`}>
-              <input type="radio" name={`${idPrefix}-on`} className="accent-[#3D52A0]" checked={offer.on === k} onChange={() => set({ on: k })} />
+              <input type="radio" name={`${idPrefix}-on`} className="accent-[#3D52A0]" checked={offer.on === k}
+                onChange={() => set(k === 'topup' ? { on: k, type: 'percentage', value: Math.min(100, offer.type === 'percentage' ? offer.value || 0 : 0) } : { on: k })} />
               <span className="flex-1 min-w-0 text-slate-700">{t}{sub && <span className="block text-[11px] text-slate-500">{sub}</span>}</span>
               <span className="tabular-nums text-xs text-slate-500">{inr(v)}</span>
             </label>
@@ -123,6 +131,9 @@ export default function RevisionOfferFields({ number, offer, bases, editable, on
       <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs text-slate-600 space-y-1">
         <p>Worth <b className="text-emerald-700 tabular-nums">−{inr(amount)}</b>{amount > 0 ? ` · ${describeRevisionOffer(offer)}` : ''}</p>
         {offer.on === 'added' && bases.added <= 0 && <p className="text-amber-700">This revision adds no new items yet, so there is nothing for it to come off.</p>}
+        {offer.on === 'topup' && (offer.value || 0) > 0 && amount <= 0 && (
+          <p className="text-amber-700">The discount already given, {inr(given)}, is already {topupPct}% of the revised BOQ or more, so there is nothing to add.</p>
+        )}
         {offer.on === 'whole' && proposalOff > 0 && amount > 0 && (
           <p className="text-amber-700">This also takes {offer.type === 'percentage' ? `${+(+offer.value).toFixed(2)}%` : 'it'} off the scope the client already agreed, on top of the proposal’s {inr(proposalOff)}. For a discount on what was added only, choose the new items.</p>
         )}

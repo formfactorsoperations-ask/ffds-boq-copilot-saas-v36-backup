@@ -113,6 +113,8 @@ function discountLabel(discounts: ClientTotalsDiscount[] | undefined, target: 'e
 }
 
 function revisionDiscountLabel(d: RevisionDiscount): string {
+  /* A top-up: what brings the total off the work to this percentage of the revised BOQ. */
+  if (d.on === 'topup') return `Less: ${d.name || 'revision discount'} (total discount ${+(+d.value).toFixed(2)}% of the revised BOQ)`;
   const how = d.type === 'percentage'
     ? `${+(+d.value).toFixed(2)}% on ${d.on === 'whole' ? 'the revised BOQ' : 'the new items'}`
     : d.on === 'whole' ? 'on the revised BOQ' : 'on the new items';

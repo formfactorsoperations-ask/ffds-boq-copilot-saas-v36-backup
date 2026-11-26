@@ -2,7 +2,7 @@ import type { ProjectContext, ProjectDiscount } from '../types';
 import { nameSimilarity, norm, type RevisionResult, type SignedLine } from './scopeRevision';
 import { designFeeFor } from './boqPricing';
 import { engagementOf, isFeeOnly } from './engagement';
-import { discountsOf, type ClientTotalsOptions } from './scopeTotals';
+import { discountOn, discountsOf, type ClientTotalsOptions } from './scopeTotals';
 
 /*
   A DISCOUNT GIVEN IN A SCOPE REVISION, KEPT APART FROM THE PROPOSAL'S.
@@ -31,11 +31,22 @@ import { discountsOf, type ClientTotalsOptions } from './scopeTotals';
     and nothing re-prices them against a later version.
 */
 
+/**
+ * What a revision's offer is worked out on:
+ * - 'added': the new items the revision adds (the default);
+ * - 'whole': the whole revised BOQ;
+ * - 'topup': brings the total discount to a percentage of the revised BOQ. It
+ *   takes off what is still needed on top of the discounts already given
+ *   (Palacia: 5% of ₹16,22,600 is ₹81,130; less the ₹70,000 agreed, ₹11,130).
+ *   Always a percentage.
+ */
+export type RevisionOfferOn = 'added' | 'whole' | 'topup';
+
 export interface RevisionOffer {
   /** What the client reads, e.g. "Revision discount". */
   name: string;
   /** What it is worked out on: the new items the revision adds, or the whole revised BOQ. */
-  on: 'added' | 'whole';
+  on: RevisionOfferOn;
   type: 'percentage' | 'fixed';
   value: number;
 }
@@ -46,6 +57,8 @@ export interface RevisionOfferBases {
   added: number;
   /** Of `added`, what is new inside rooms compared as a whole: shown so the figure can be checked. */
   inWholeRooms?: number;
+  /** The discounts already given off the work, as they stand on the revised side: what a top-up is on top of. */
+  given?: number;
   /** The whole revised BOQ. */
   whole: number;
 }
@@ -55,7 +68,7 @@ export interface RevisionDiscount {
   name: string;
   /** Rupees off execution, as issued. */
   amount: number;
-  on: 'added' | 'whole';
+  on: RevisionOfferOn;
   type: 'percentage' | 'fixed';
   value: number;
   /** What it was worked out on, as issued. */
@@ -65,7 +78,7 @@ export interface RevisionDiscount {
 export const DEFAULT_REVISION_OFFER_NAME = 'Revision discount';
 
 export function revisionOfferBase(o: Pick<RevisionOffer, 'on'>, b: RevisionOfferBases): number {
-  return Math.max(0, Number(o.on === 'whole' ? b.whole : b.added) || 0);
+  return Math.max(0, Number(o.on === 'added' ? b.added : b.whole) || 0);
 }
 
 /** The offer in rupees, to the rupee, never more than what it is worked out on. */
@@ -74,12 +87,19 @@ export function revisionOfferAmount(o: RevisionOffer | null | undefined, b: Revi
   const value = Math.max(0, Number(o.value) || 0);
   if (!value) return 0;
   const base = revisionOfferBase(o, b);
+  if (o.on === 'topup') {
+    /* The total off the work, at this percentage of the revised BOQ, less what is already given. */
+    const target = base * (Math.min(100, value) / 100);
+    const given = Math.max(0, Number(b.given) || 0);
+    return Math.round(Math.max(0, Math.min(base - given, target - given)));
+  }
   const raw = o.type === 'percentage' ? base * (Math.min(100, value) / 100) : value;
   return Math.round(Math.min(base, raw));
 }
 
 /** "5% on the new items" / "₹50,000 off the whole revised BOQ". */
 export function describeRevisionOffer(o: Pick<RevisionOffer, 'on' | 'type' | 'value'>): string {
+  if (o.on === 'topup') return `brings the total discount to ${+(+o.value).toFixed(2)}% of the revised BOQ`;
   const what = o.on === 'whole' ? 'the whole revised BOQ' : 'the new items';
   return o.type === 'percentage'
     ? `${+(+o.value).toFixed(2)}% on ${what}`
@@ -135,9 +155,18 @@ export function addedByRevision(result: Pick<RevisionResult, 'rooms' | 'bridge'>
 }
 
 /** The bases a revision's offer is worked out on. */
-export function offerBasesFor(result: Pick<RevisionResult, 'rooms' | 'bridge' | 'v2Total'>, signed: SignedLine[]): RevisionOfferBases {
+export function offerBasesFor(result: Pick<RevisionResult, 'rooms' | 'bridge' | 'v2Total'>, signed: SignedLine[], given = 0): RevisionOfferBases {
   const a = addedByRevision(result, signed);
-  return { added: a.total, inWholeRooms: a.inWholeRooms, whole: result.v2Total };
+  return { added: a.total, inWholeRooms: a.inWholeRooms, whole: result.v2Total, given: Math.max(0, given) };
+}
+
+/**
+ * The discounts already given off the work, held as signed: what a top-up is
+ * on top of. Worked out on the signed BOQ, as the revision document holds them
+ * (lib/scopeTotals, proposalHeld), never more than the revised BOQ.
+ */
+export function givenOffWork(ctx: any, v1Work: number, v2Work: number): number {
+  return Math.min(Math.max(0, v2Work), discountOn(v1Work, discountsOf(ctx), 'execution'));
 }
 
 /**
@@ -258,7 +287,7 @@ export function revisionTotals(
     ...o,
     discounts: discountsOf(ctx),
     proposalHeld: true,
-    revisionDiscount: frozenRevisionDiscount(a.offer, offerBasesFor(a.result, a.signed)),
+    revisionDiscount: frozenRevisionDiscount(a.offer, offerBasesFor(a.result, a.signed, givenOffWork(ctx, a.result.v1Total, a.result.v2Total))),
     designFeeAfter: revisedDesignFee(ctx, { before: o.designFeeValue, v1Work: a.result.v1Total, v2Work: a.result.v2Total, asActuals: a.result.asActuals, rules: a.rules }),
   };
 }

@@ -38,7 +38,7 @@ import MeetingScopeInbox from './MeetingScopeInbox';
 import ClientTotalsPicker from './ClientTotalsPicker';
 import { ApprovalRecordButton } from '../documents/ApprovalRecordSheet';
 import { ClientTotalsOptions, clientTotals, defaultTotalsOptions, discountOn, discountsOf, netExecution, totalsNote } from '../../lib/scopeTotals';
-import { RevisionDiscount, frozenRevisionDiscount, offerBasesFor, revisionTotals, withFeeNote } from '../../lib/revisionOffer';
+import { RevisionDiscount, frozenRevisionDiscount, givenOffWork, offerBasesFor, revisionTotals, withFeeNote } from '../../lib/revisionOffer';
 import RevisionOfferFields from './RevisionOfferFields';
 import { workbookForIssue, downloadWorkbook, toBase64, buildRevisionWorkbook, revisionWorkbookName } from '../../lib/scopeWorkbook';
 import { sendScopeEmail } from '../../services/emailService';
@@ -803,7 +803,7 @@ function RevisionEditor({
   const result = useMemo(() => revisionFromDraft(signed, draft), [signed, draft]);
   const margin = useMemo(() => draftMargin(signed, draft, result), [signed, draft, result]);
   /* The revision's own discount (lib/revisionOffer): worked out on the new items, or the whole revised BOQ. */
-  const offerBases = useMemo(() => offerBasesFor(result, signed), [result, signed]);
+  const offerBases = useMemo(() => offerBasesFor(result, signed, givenOffWork(ctx, result.v1Total, result.v2Total)), [result, signed, ctx]);
   const issuedTotals: any = issue?.snapshot?.clientTotals || null;
   const offerDiscount: RevisionDiscount | null = rec.status === 'draft' ? frozenRevisionDiscount(rec.offer, offerBases) : issuedTotals?.revisionDiscount || null;
   const proposalOff = discountOn(result.v1Total, rec.status === 'draft' ? discountsOf(ctx) : issuedTotals?.discounts, 'execution');
@@ -1362,7 +1362,7 @@ function RevisionEditor({
             <RevisionOfferFields
               number={rec.number}
               offer={rec.status === 'draft' ? rec.offer : offerDiscount}
-              bases={rec.status === 'draft' ? offerBases : { added: offerDiscount?.on === 'added' ? offerDiscount.base : offerBases.added, whole: offerDiscount?.on === 'whole' ? offerDiscount.base : offerBases.whole }}
+              bases={rec.status === 'draft' ? offerBases : { added: offerDiscount?.on === 'added' ? offerDiscount.base : offerBases.added, whole: offerDiscount && offerDiscount.on !== 'added' ? offerDiscount.base : offerBases.whole, given: offerDiscount?.on === 'topup' ? Math.max(0, offerDiscount.base * (offerDiscount.value / 100) - offerDiscount.amount) : offerBases.given }}
               editable={rec.status === 'draft'}
               onChange={offer => saveRecord({ ...rec, offer })}
               proposalOff={proposalOff}

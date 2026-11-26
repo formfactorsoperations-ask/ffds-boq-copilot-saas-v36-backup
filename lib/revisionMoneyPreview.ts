@@ -5,7 +5,7 @@ import { draftOfRecord, revisionFromDraft } from './scopeDraft';
 import { isSentBack } from './scopeChangeRequest';
 import { computeSchedule, ScheduleResult } from './paymentSchedule';
 import { docPricingOf } from './playground/pricing';
-import { discountsAfterRevision, frozenRevisionDiscount, offerBasesFor, revisedDesignFee, RevisionDiscount } from './revisionOffer';
+import { discountsAfterRevision, frozenRevisionDiscount, givenOffWork, offerBasesFor, revisedDesignFee, RevisionDiscount } from './revisionOffer';
 import { defaultTotalsOptions } from './scopeTotals';
 
 /*
@@ -40,6 +40,8 @@ export interface PendingRevision {
   added?: number;
   /** Of `added`, what is new inside rooms compared as a whole. */
   addedInWholeRooms?: number;
+  /** The discounts already given off the work, held as signed: what a top-up is on top of. */
+  given?: number;
   /** The discount given in the revision (lib/revisionOffer), in rupees; null when none. */
   offer?: RevisionDiscount | null;
   /** The design fee once it is applied: a percentage fee follows the revised BOQ. Missing when it does not move. */
@@ -65,6 +67,7 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
   let offer: RevisionDiscount | null = null;
   let added: number | undefined;
   let addedInWholeRooms: number | undefined;
+  let given: number | undefined;
   let designFeeAfter: number | undefined;
   const feeBefore = defaultTotalsOptions(ctx).designFeeValue;
   /* A draft is issued with the proposal's discounts held; an issued one says how it was issued. */
@@ -87,9 +90,10 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
     const result = revisionFromDraft(signed, draftOfRecord(rec, signed, base.boq, bankMap));
     v1Total = result.v1Total;
     v2Total = result.v2Total;
-    const bases = offerBasesFor(result, signed);
+    const bases = offerBasesFor(result, signed, givenOffWork(ctx, result.v1Total, result.v2Total));
     added = bases.added;
     addedInWholeRooms = bases.inWholeRooms;
+    given = bases.given;
     offer = frozenRevisionDiscount(rec.offer, bases);
     designFeeAfter = revisedDesignFee(ctx, { before: feeBefore, v1Work: result.v1Total, v2Work: result.v2Total, asActuals: result.asActuals, rules: base.pricingRules || null });
   }
@@ -103,7 +107,7 @@ export function pendingRevision(ctx: ProjectContext, tiers: ProposalTier[], bank
   const state: PendingRevisionState = rec.status === 'draft' || !issue
     ? 'draft'
     : approved ? 'approved' : isSentBack(issue) ? 'sent_back' : 'with_client';
-  return { id: rec.id, number: rec.number, state, reference: issue?.reference || rec.reference || null, v1Total, v2Total, added, addedInWholeRooms, offer, discounts,
+  return { id: rec.id, number: rec.number, state, reference: issue?.reference || rec.reference || null, v1Total, v2Total, added, addedInWholeRooms, given, offer, discounts,
     ...(typeof designFeeAfter === 'number' && Math.abs(designFeeAfter - feeBefore) >= 0.5 ? { designFeeAfter } : {}) };
 }
 

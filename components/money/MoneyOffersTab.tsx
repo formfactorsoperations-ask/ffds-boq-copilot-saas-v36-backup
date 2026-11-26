@@ -265,8 +265,9 @@ export default function MoneyOffersTab({ tiers, bank, projectContext, setProject
                   number={openRev.number}
                   offer={openRev.state === 'draft' ? openRec.offer : openRev.offer}
                   bases={openRev.state === 'draft'
-                    ? { added: openRev.added || 0, inWholeRooms: openRev.addedInWholeRooms || 0, whole: openRev.v2Total }
-                    : { added: openRev.offer?.base || 0, whole: openRev.offer?.base || 0 }}
+                    ? { added: openRev.added || 0, inWholeRooms: openRev.addedInWholeRooms || 0, whole: openRev.v2Total, given: openRev.given || 0 }
+                    : { added: openRev.offer?.base || 0, whole: openRev.offer?.base || 0,
+                        given: openRev.offer?.on === 'topup' ? Math.max(0, openRev.offer.base * (openRev.offer.value / 100) - openRev.offer.amount) : 0 }}
                   editable={openRev.state === 'draft' && !readOnly}
                   onChange={(offer) => setProjectContext((prev: any) => withRevisionOffer(openRec.id, offer)(prev))}
                   idPrefix="mo-rev"

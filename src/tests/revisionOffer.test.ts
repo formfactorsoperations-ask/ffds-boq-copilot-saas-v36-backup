@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   addedByRevision, offerBasesFor, revisionOfferAmount, frozenRevisionDiscount, describeRevisionOffer, heldDiscounts, discountsAfterRevision,
-  draftRevision, withRevisionOffer, revisedDesignFee, revisionTotals,
+  draftRevision, withRevisionOffer, revisedDesignFee, revisionTotals, givenOffWork,
 } from '../../lib/revisionOffer';
 import { clientTotals, defaultTotalsOptions, netExecution, totalsNote } from '../../lib/scopeTotals';
 import { staleOffer } from '../../lib/offers';
@@ -223,7 +223,7 @@ describe('what a revision adds, with rooms compared as a whole', () => {
 
   it('is what the default discount is worked out on', () => {
     const b = offerBasesFor(result, signed);
-    expect(b).toEqual({ added: 102300, inWholeRooms: 40100, whole: 1622600 });
+    expect(b).toEqual({ added: 102300, inWholeRooms: 40100, whole: 1622600, given: 0 });
     expect(revisionOfferAmount({ name: 'R', on: 'added', type: 'percentage', value: 5 }, b)).toBe(5115);
   });
 
@@ -281,5 +281,34 @@ describe('the design fee on a revision', () => {
     const design = draft.advances.filter((a: any) => a.phase === 'design');
     expect(design.find((a: any) => a.advanceCode === 'D1').amount).toBe(Math.round(FEE * 0.3));
     expect(design.reduce((t: number, a: any) => t + a.amount, 0)).toBeCloseTo(194712, -1);
+  });
+});
+
+describe('bringing the total discount to a percentage of the revised BOQ', () => {
+  /* Palacia's sheet: 5% of ₹16,22,600 = ₹81,130 off in all. The ₹70,000 agreed stays; the revision adds ₹11,130. */
+  const topup = { name: 'Revision discount', on: 'topup' as const, type: 'percentage' as const, value: 5 };
+
+  it('takes off what is still needed on top of the discount already given', () => {
+    expect(givenOffWork(ctx(), 1414441, 1622600)).toBe(70000);
+    expect(revisionOfferAmount(topup, { added: 206900, whole: 1622600, given: 70000 })).toBe(11130);
+    expect(describeRevisionOffer(topup)).toBe('brings the total discount to 5% of the revised BOQ');
+  });
+
+  it('adds nothing when the discount given already reaches it', () => {
+    expect(revisionOfferAmount({ ...topup, value: 4 }, { added: 206900, whole: 1622600, given: 70000 })).toBe(0);
+  });
+
+  it('matches the studio sheet to the rupee, design fee included', () => {
+    const c = ctx({ designFee: 12, engagement: { designFee: 169733 } });
+    const result: any = { v1Total: 1414441, v2Total: 1622600, bridge: { new: 206900 }, rooms: [] };
+    const o = revisionTotals(c, { ...defaultTotalsOptions(c), execGst: true, billablePercent: 50, designFee: true, designGst: true }, { result, signed: [], offer: topup });
+    const rows = clientTotals(1414441, 1622600, o);
+    const by = Object.fromEntries(rows.map(r => [r.key, r]));
+    expect(by.execDiscount.after).toBe(-70000);
+    expect(by.revisionDiscount).toMatchObject({ label: 'Less: Revision discount (total discount 5% of the revised BOQ)', after: -11130 });
+    expect(Math.round(by.execGst.after)).toBe(138732);
+    expect(by.designFee.after).toBe(194712);
+    expect(Math.round(by.designGst.after)).toBe(35048);
+    expect(Math.round(by.total.after)).toBe(1909962);
   });
 });
