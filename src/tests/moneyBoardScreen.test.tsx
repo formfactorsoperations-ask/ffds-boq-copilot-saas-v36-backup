@@ -108,35 +108,39 @@ describe('the milestone editor', () => {
 });
 
 describe('quick schedule', () => {
-  it('works out the stages from typed milestones and saves them when approved', () => {
+  it('reshapes the unbilled stages around the paid one and saves them when approved', () => {
     render(<Host />);
     fireEvent.click(screen.getByRole('button', { name: 'Quick schedule' }));
     const dialog = screen.getByRole('dialog', { name: 'Quick schedule' });
-    fireEvent.change(within(dialog).getByLabelText('Your milestones'), { target: { value: 'Design: 3D & layouts, GFC drawings\nExecution: Material advance 40%, Civil & carcass, Finishing, Handover' } });
-    expect(within(dialog).getByText('GFC drawings')).toBeTruthy();
-    // Sign-up & Concept is paid: it stays, and the reason is asked for.
-    expect(within(dialog).getByText('Paid, kept')).toBeTruthy();
+    // Sign-up & Concept is paid: it is locked, and the reason is asked for.
+    expect(within(dialog).getByText(/Paid and invoiced stages are locked/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: /Even/ }));
+    expect(within(dialog).getByTestId('share-Design Development').textContent).toBe('38%');
+    expect(within(dialog).getByTestId('share-Final Drawings').textContent).toBe('37%');
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'More for Material Order Advance' })[0]);
+    expect(within(dialog).getByTestId('share-Material Order Advance').textContent).toBe('26%');
     const approve = within(dialog).getByRole('button', { name: /Approve as payment schedule/ });
     expect((approve as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(within(dialog).getByPlaceholderText(/For example/), { target: { value: 'New stages agreed' } });
+    fireEvent.change(within(dialog).getByPlaceholderText(/For example/), { target: { value: 'Even split agreed' } });
     fireEvent.click(approve);
-    const names = latest.paymentMilestones.map((m: any) => m.name);
-    expect(names).toEqual(['Sign-up & Concept', '3D & layouts', 'GFC drawings', 'Material advance', 'Civil & carcass', 'Finishing', 'Handover']);
-    const design = latest.paymentMilestones.filter((m: any) => m.type === 'design');
-    expect(design.reduce((s: number, m: any) => s + m.percentage, 0)).toBe(100);
-    expect(latest.paymentMilestones.find((m: any) => m.name === 'Handover').subSteps.length).toBeGreaterThan(0);
-    expect(latest.financials.scheduleChanges.at(-1).reason).toBe('New stages agreed');
+    const byId = Object.fromEntries(latest.paymentMilestones.map((m: any) => [m.id, m]));
+    expect(byId.d1.percentage).toBe(25);
+    expect([byId.d2.percentage, byId.d3.percentage]).toEqual([38, 37]);
+    expect([byId.e1.percentage, byId.e2.percentage, byId.e3.percentage, byId.e4.percentage]).toEqual([26, 24, 25, 25]);
+    expect(latest.financials.scheduleChanges.at(-1).reason).toBe('Even split agreed');
     expect(screen.queryByRole('dialog', { name: 'Quick schedule' })).toBeNull();
   });
 
-  it('hands the draft to Edit milestones to fine-tune first', () => {
+  it('adds a stage by splitting one, with its steps, and hands the draft to Edit milestones', () => {
     render(<Host />);
     fireEvent.click(screen.getByRole('button', { name: 'Quick schedule' }));
     const dialog = screen.getByRole('dialog', { name: 'Quick schedule' });
-    fireEvent.change(within(dialog).getByLabelText('Your milestones'), { target: { value: 'Execution: Material, Woodwork, Handover' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add False ceiling' }));
+    // The biggest execution stage (Material Order Advance, 37%) gives half.
+    expect(within(dialog).getByTestId('share-Material Order Advance').textContent).toBe('19%');
+    expect(within(dialog).getByTestId('share-False ceiling').textContent).toBe('18%');
     fireEvent.click(within(dialog).getByRole('button', { name: /Fine-tune first/ }));
     const editor = screen.getByRole('dialog', { name: 'Edit milestones' });
-    expect(within(editor).getByDisplayValue('Woodwork')).toBeTruthy();
-    expect(within(editor).getByDisplayValue('Design Development')).toBeTruthy();
+    expect(within(editor).getByDisplayValue('False ceiling')).toBeTruthy();
   });
 });

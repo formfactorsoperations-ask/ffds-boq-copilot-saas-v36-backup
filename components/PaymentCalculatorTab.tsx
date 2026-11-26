@@ -3256,6 +3256,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     feeOnly={feeOnly}
                     taxable={{ design: taxableDesign, execution: taxableExecution }}
                     price={priceDraft}
+                    studio={studioStages}
                     onClose={() => setQuickOpen(false)}
                     onApprove={saveScheduleDraft}
                     onFineTune={draft => { setQuickOpen(false); setEditDraft(draft); setEditFocus('both'); }}
