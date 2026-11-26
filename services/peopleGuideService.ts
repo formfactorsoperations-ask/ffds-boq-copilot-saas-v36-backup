@@ -117,3 +117,44 @@ export function markPlayed(who: string, place: MomentPlace, ids: string[]): void
     localStorage.setItem(playedKey(who, place), JSON.stringify([...new Set(all)].slice(-300)));
   } catch { /* nothing to remember it in: it may play again */ }
 }
+
+/* ── Stories watched on Home (lib/studioStories.ts) ──────────────────────── */
+
+/*
+  A story counts as watched once it has been on screen. It is kept in this
+  browser at once, and against the person's login (peopleGuideCommand "seen"),
+  so their phone does not show it again. The browser's copy covers the moment
+  before the server has answered, or a server that has not learnt "seen" yet.
+*/
+const storiesKey = (who: string) => `ffds.stories.seen.${who}`;
+const pendingSeen = new Set<string>();
+let seenTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Everything this person has watched: on the server for their login, and in this browser. */
+export function seenStories(who: string, fromServer: string[] | undefined): Set<string> {
+  const out = new Set<string>(fromServer || []);
+  try { (JSON.parse(localStorage.getItem(storiesKey(who)) || '[]') as string[]).forEach((id) => out.add(id)); } catch { /* nothing kept here */ }
+  pendingSeen.forEach((id) => out.add(id));
+  return out;
+}
+
+/** Sends what is waiting to be told to the server, in one go. */
+export function flushSeenStories(): void {
+  if (seenTimer) { clearTimeout(seenTimer); seenTimer = null; }
+  if (!pendingSeen.size) return;
+  const ids = [...pendingSeen].slice(-50);
+  runGuide('seen', { ids }).then((r) => { if (r.ok) ids.forEach((id) => pendingSeen.delete(id)); });
+}
+
+/** These stories have been on screen. Told to the server a moment later, several at once. */
+export function markStoriesSeen(who: string, ids: string[]): void {
+  if (!ids.length) return;
+  try {
+    const kept = new Set<string>(JSON.parse(localStorage.getItem(storiesKey(who)) || '[]'));
+    ids.forEach((id) => kept.add(id));
+    localStorage.setItem(storiesKey(who), JSON.stringify([...kept].slice(-300)));
+  } catch { /* the server keeps it */ }
+  ids.forEach((id) => pendingSeen.add(id));
+  if (seenTimer) clearTimeout(seenTimer);
+  seenTimer = setTimeout(flushSeenStories, 4000);
+}

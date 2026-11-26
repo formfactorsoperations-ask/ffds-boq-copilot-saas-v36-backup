@@ -151,6 +151,8 @@ export interface GuideView {
   emergencyRoll?: { personId: string; checkedAt: string }[];
   /** Admins edit the guide and the essentials, and open emergency contacts. */
   canEdit: boolean;
+  /** The stories on Home this person has watched (lib/studioStories.ts), newest last. */
+  seen: string[];
 }
 
 /* ── Rules ───────────────────────────────────────────────────────────────── */
@@ -357,6 +359,8 @@ export interface GuideStore {
   emergency: Partial<Emergency> | null;
   /** Admins: when each person last checked their contacts, by person ID. */
   emergencyChecked?: Record<string, string>;
+  /** The stories on Home the viewer has watched (peopleDesk/{studio}/seen/{personId}). */
+  seen?: string[];
 }
 
 /** People listed in the guide: the studio's active team, never the platform owner looking in. */
@@ -416,7 +420,23 @@ export function guideView(store: GuideStore, me: Person, today: string): GuideVi
       ? { emergencyRoll: people.filter((p) => p.id !== me.id).map((p) => ({ personId: p.id, checkedAt: store.emergencyChecked?.[p.id] || "" })) }
       : {}),
     canEdit: admin,
+    seen: (store.seen || []).slice(-SEEN_KEEP),
   };
+}
+
+/* ── Stories watched on Home (lib/studioStories.ts) ──────────────────────── */
+
+/** How many watched stories are remembered: far more than a month holds. */
+export const SEEN_KEEP = 300;
+const STORY_ID = /^[A-Za-z0-9_-]{1,250}$/;
+
+/** What is remembered after these stories have been on screen: the newest last, each once. */
+export function seenAfter(before: unknown, ids: unknown): string[] {
+  need(Array.isArray(ids) && ids.length > 0 && ids.length <= 50, "Invalid request.");
+  const clean = (ids as unknown[]).map((id) => String(id));
+  need(clean.every((id) => STORY_ID.test(id)), "Invalid request.");
+  const kept = (Array.isArray(before) ? before.map(String) : []).filter((id) => !clean.includes(id));
+  return [...kept, ...new Set(clean)].slice(-SEEN_KEEP);
 }
 
 /** Contacts not checked for half a year, or never added. */

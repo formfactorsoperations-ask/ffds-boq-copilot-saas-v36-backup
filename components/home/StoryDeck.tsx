@@ -16,11 +16,13 @@ import { greetingWord } from './useStudioHomeData';
 import { EDGE } from './homeStyles';
 import '../people/peopleStyles';
 import { Tilt } from '../people/PeopleBits';
+import StudioStories from './stories/StudioStories';
 
 /*
-  THE TOP OF HOME (lib/homeStories.ts): a greeting, the projects you were last
-  in (one tap back to the tab you left), the story rings, a fanned deck of
-  cards and a strip of five swatches.
+  THE TOP OF HOME (lib/homeStories.ts): a greeting, the studio's stories
+  (kudos, birthdays and anniversaries, components/home/stories), the projects
+  you were last in (one tap back to the tab you left), the story rings, a
+  fanned deck of cards and a strip of five swatches.
 
   Each card is one thing worth knowing with the button that acts on it; the
   deck opens on the most pressing. The fan is the mockup's: seven slots round
@@ -98,6 +100,8 @@ export default function StoryDeck({ feeds, counts, projects, role, roles, userNa
             ? 'Only your projects. Fan through your cards; each one has the button that acts on it.'
             : 'Tap a story or fan through the cards: each is one thing worth knowing, with the button that acts on it.'}
         </p>
+        {/* The studio's stories: a thank-you, a birthday or an anniversary, right under the greeting (DESIGN.md → "Studio stories"). */}
+        <StudioStories feeds={feeds} onNavigate={onNavigate} />
         {/* New project, then back into what you were last in. */}
         {(!isLimitedRole(who) || recent.length > 0) && (
           <div className="mt-4 w-full flex flex-col items-center gap-2">

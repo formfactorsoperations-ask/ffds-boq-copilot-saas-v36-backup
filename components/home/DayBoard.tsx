@@ -12,7 +12,6 @@ import { useGuide } from '../../services/peopleGuideService';
 import { openPeopleSection } from '../../lib/peopleSection';
 import { useNoteArrivals } from '../notify/NotifyContext';
 import MyDayCard from '../people/MyDayCard';
-import StudioMoments from './StudioMoments';
 import { AttentionWidget, ComingUpWidget, ForYouWidget, Pinned, ReviewWidget, StudioLifeWidget, TeamWidget } from './HomeWidgets';
 import type { AttentionRow } from './useAttention';
 import { useCalendarData } from './calendarData';
@@ -83,10 +82,9 @@ export default function DayBoard({ feeds, projects, attention, onNavigate }: {
   const [settled, setSettled] = useState(false);
   useEffect(() => { if (day.ready) setSettled(true); }, [day.ready]);
   useEffect(() => { const t = window.setTimeout(() => setSettled(true), SETTLE_MS); return () => window.clearTimeout(t); }, []);
-  /* A new thank-you, or a birthday today, drops in at the top under confetti (lib/peopleMoments.ts). */
+  /* A new thank-you, a birthday or an anniversary is a story under the greeting (components/home/stories), not here. */
   const openPeople = (section: 'kudos' | 'celebrations') => { openPeopleSection(section); onNavigate('people'); };
-  const moments = onPeople ? <StudioMoments view={guide.view} meId={snapshot?.me.id || ''} onOpen={openPeople} /> : null;
-  if (!day.pins.length) return moments;
+  if (!day.pins.length) return null;
   /* Until it settles only My day shows: it is always first, so it never moves. */
   const pins = settled ? day.pins : day.pins.filter((p) => p.kind === 'checkin');
 
@@ -102,8 +100,6 @@ export default function DayBoard({ feeds, projects, attention, onNavigate }: {
       : <div className="pp-shimmer h-40 rounded-2xl" />;
 
   return (
-    <>
-    {moments}
     <section aria-label="Your day, in order" className="hs-paper rounded-[28px] border border-[#E3E8F4] overflow-hidden px-3 sm:px-6 pt-9 pb-12">
       <header className="relative z-10 text-center mb-6">
         <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Your day, in order</p>
@@ -114,7 +110,6 @@ export default function DayBoard({ feeds, projects, attention, onNavigate }: {
       {pins.length ? <Board pins={pins} wide={wide} render={widget} />
         : <div className="max-w-[480px] mx-auto pp-shimmer h-64 rounded-[26px]" aria-hidden="true" />}
     </section>
-    </>
   );
 }
 

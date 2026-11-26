@@ -566,6 +566,39 @@ the orbit dial.
   of the card in front is lit. Fan with arrows, a swipe, the arrow keys or a
   tap on a side card. Motion stops under `prefers-reduced-motion`.
 
+### Studio stories (approved 26 Nov 2026)
+
+The owner said kudos and birthdays on Home were "not visible at all", and chose stories like
+Facebook's, each one a collectible card, in the softer of two mockups ("colours are too bold").
+Rules in `lib/studioStories.ts`; the screens in `components/home/stories/`.
+
+- **Where:** a row right under the greeting in the welcome card, above "Continue where you left
+  off" and the project rings. Left out when there is nothing in it.
+- **What is a story:** a thank-you for 24 hours from when it was given; a birthday or work
+  anniversary for its day. Grouped by the person it is about, so two thank-yous for one person
+  are one story with two bars.
+- **The row:** "Give kudos" first, then tall tiles in the day pins' paper tints (indigo
+  `#ECEFFB`/`#3D52A0` for a thank-you, sage `#E7F5EF`/`#0E7C5A` for a birthday, brass
+  `#FBF5EA`/`#8C6A33` for an anniversary) on white. Each holds a small collectible card, turned a
+  little, and the person's face in a ring that turns (brand to periwinkle) until watched, then
+  grey. Yours first, then the ones not yet watched, then the rest. "N new" in a brand chip.
+- **The viewer:** full screen over a frosted pale scrim (`#F4F6FB` at 85%, blurred), a 9:16
+  frame in the story's tint (the whole screen on a phone). Bars fill as each story plays (6.5 s)
+  and move on; tap the right or left third for the next or previous, hold to pause, the pause
+  button, arrows and arrow keys; the next and previous person wait dimmed at either side from
+  1024px. The card deals in under `Confetti`, tilts towards the pointer (sways a little when it is
+  away), its foil and glare follow the light, and a tap turns it over to the note or the wishes.
+  An anniversary counts its years up. Hearts float up from the heart button.
+- **What you can do:** heart a thank-you (`heart`), sign a birthday or anniversary card (`wish`),
+  or open the kudos wall or the card in People. Your own card says "Open your card".
+- **Seen:** a story counts as watched only once it has been on screen, kept against the
+  person's login (`peopleGuideCommand` `seen`, `peopleDesk/{studio}/seen/{personId}`) and in the
+  browser, so no device shows it again. One about you opens full screen by itself the first time
+  you come to Home.
+- Motion lives in `components/home/stories/storyStyles.ts` (`ss-*`), Home's only, and stops
+  under `prefers-reduced-motion` (the card stays still, nothing floats, the stories still play).
+  Same fonts; colours are the day pins' tints, the brand, slate and the state colours.
+
 ### Home widgets (approved 12 Oct 2026)
 
 The Home widgets (`components/home/HomeWidgets.tsx`, rules in
@@ -613,9 +646,10 @@ fonts, colours and People motion kit (rules in `lib/peopleGuide.ts`).
   when there is nothing in it.
 - **Moments** (owner, 3 Nov 2026, `lib/peopleMoments.ts`): a new thank-you, or a birthday or
   anniversary today, plays once for each person in each place, under a `ConfettiShower` (five
-  bursts across the card, brand and state colours only): a glass card that drops in at the top
-  of Home (`StudioMoments`), new notes on the kudos wall with a glowing "New" ring, and the
-  day's card in Celebrations. Nothing moves under reduced motion; the card still shows.
+  bursts across the card, brand and state colours only): new notes on the kudos wall with a
+  glowing "New" ring, and the day's card in Celebrations. Nothing moves under reduced motion;
+  the card still shows. On Home they are stories now (26 Nov 2026): see "Studio stories". The
+  glass card that dropped in at the top of Home for eight seconds (`StudioMoments`) is gone.
 - **Party on hover** (owner, 3 Nov 2026, `useHoverParty` and `Cracker` in `PeopleBits.tsx`):
   pointing at a kudos note or a birthday or anniversary card sets off confetti and crackers (a
   spark rises and bursts into a ring of streaks) one after another, at random spots on it, until

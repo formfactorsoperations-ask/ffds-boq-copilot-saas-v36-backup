@@ -7,7 +7,7 @@ import { notify, settle } from "./notify";
 import { celebrationDrafts, emergencyOpenedDraft, kudosDraft, kudosStudioDraft, refs } from "../../lib/notify";
 import { DomainError, businessDate, peopleOf, type Person } from "../../lib/peopleDesk";
 import {
-  cleanEmergency, cleanEssentials, cleanKudos, cleanOffice, cleanReason, guideView, isGuideAdmin, occasions, openCards, parseCardId, signCard,
+  cleanEmergency, cleanEssentials, cleanKudos, cleanOffice, cleanReason, guideView, isGuideAdmin, occasions, openCards, parseCardId, seenAfter, signCard,
   type Emergency, type GuideView, type Kudos, type OfficeDetails, type Opening, type Wish,
 } from "../../lib/peopleGuide";
 
@@ -22,6 +22,7 @@ import {
     cards/{cardId}        the wishes on a birthday or anniversary card
     kudos/{id}            thank-yous on the kudos wall
     emergency/{personId}  a person's emergency contacts, and every opening
+    seen/{personId}       the stories on Home a person has watched (lib/studioStories.ts)
 
     peopleGuide         what the signed-in person may see of all that
     peopleGuideCommand  change it: admins edit the guide and essentials and
@@ -49,11 +50,12 @@ async function viewFor(ctx: Ctx, now: string): Promise<GuideView> {
   const today = businessDate(now, ctx.policy.timezone);
   const admin = isGuideAdmin(ctx.me);
   const kudosFrom = new Date(Date.parse(now) - KUDOS_DAYS * 86400000).toISOString();
-  const [offices, essentials, kudos, mine, roll] = await Promise.all([
+  const [offices, essentials, kudos, mine, seen, roll] = await Promise.all([
     db().collection(`${root}/office`).get(),
     db().doc(`${root}/guide/essentials`).get(),
     db().collection(`${root}/kudos`).where("at", ">=", kudosFrom).get(),
     db().doc(`${root}/emergency/${ctx.me.id}`).get(),
+    db().doc(`${root}/seen/${ctx.me.id}`).get(),
     /* Only when each person last checked theirs: the contacts stay where they are. */
     admin ? db().collection(`${root}/emergency`).select("checkedAt").get() : null,
   ]);
@@ -73,6 +75,7 @@ async function viewFor(ctx: Ctx, now: string): Promise<GuideView> {
     kudos: kudos.docs.map((d) => d.data() as Kudos),
     emergency: mine.exists ? (mine.data() as Emergency) : null,
     emergencyChecked: checked,
+    seen: (seen.data()?.ids || []) as string[],
   }, ctx.me, today);
 }
 
@@ -182,6 +185,15 @@ export const peopleGuideCommand = onCall({ cors: true, region: PEOPLE_REGION }, 
           if (k.from !== ctx.me.id && !isGuideAdmin(ctx.me)) throw new DomainError("FORBIDDEN", "Only the person who wrote it, or an admin, can take it down.", 403);
           await ref.delete();
         }
+        break;
+      }
+      case "seen": {
+        /* Stories that have been on this person's screen (lib/studioStories.ts): kept for their login, so no device shows them again. */
+        const ref = db().doc(`${root}/seen/${ctx.me.id}`);
+        await db().runTransaction(async (tx) => {
+          const doc = await tx.get(ref);
+          tx.set(ref, { ids: seenAfter(doc.data()?.ids, data.ids), at: now });
+        });
         break;
       }
       case "emergency": {

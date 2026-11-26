@@ -150,6 +150,18 @@ describe('kudos', () => {
   }, 60000);
 });
 
+describe('stories watched on Home', () => {
+  it('are kept for the person who watched them, on every device, and for nobody else', async () => {
+    const a = await u.tanvi.run('seen', { ids: ['kudos_one', 'birthday_tm-riya_2026-11-26'] });
+    expect(a.view.seen).toEqual(['kudos_one', 'birthday_tm-riya_2026-11-26']);
+    await u.tanvi.run('seen', { ids: ['kudos_one', 'kudos_two'] });
+    expect((await u.tanvi.view()).seen).toEqual(['birthday_tm-riya_2026-11-26', 'kudos_one', 'kudos_two']);
+    expect((await u.riya.view()).seen).toEqual([]);
+    expect(await code(u.tanvi.run('seen', { ids: ['../other'] }))).toMatch(/invalid-argument/);
+    expect(await code(u.tanvi.run('seen', { ids: [] }))).toMatch(/invalid-argument/);
+  }, 60000);
+});
+
 describe('emergency contacts', () => {
   it('are kept by each person, and admins see only who has added theirs', async () => {
     expect(await code(u.tanvi.run('emergency', { contacts: [] }))).toMatch(/invalid-argument/);
