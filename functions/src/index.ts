@@ -63,7 +63,7 @@ import { requestChangesPatchForServer } from "./requestIssueChanges";
 import { isSentBack } from "../../lib/scopeChangeRequest";
 import { downloadPatch } from "./scopeTrail";
 import { raiseQuery } from "../../services/documentQueryEngine";
-import { buildPortalView } from "../../lib/portalProjection";
+import { rebuildAfterClientAction } from "../../lib/portalProjection";
 import { applySiteAction, SiteActionError } from "./siteActionPatch";
 import { isTeamViewMember } from "./teamView";
 import { primaryRole, rolesOf } from "../../lib/roles";
@@ -1009,44 +1009,19 @@ export const submitClientAction = onCall({ cors: true }, async (request) => {
           that decision belongs to the studio, and buildPortalView filters by
           what is published rather than deciding it.
 
-          Three things are carried across rather than rebuilt: the scope, the
-          baseline its change markers are measured against, and the studio's
-          contact and bank details. None of them can be derived from the project
-          context — they are assembled by the studio's session and sent with the
-          projection — so recomputing here would quietly empty them.
+          What the studio's session assembles is carried across from the copy
+          the client holds rather than rebuilt: the scope and its baseline, the
+          studio's details, scope additions, the money, the saved programme and
+          the design meetings. This function has none of the tier or billing
+          rules behind them, so recomputing here would quietly empty them.
+
+          The payment schedule is carried too, so a schedule the studio changed
+          on Money and has not sent stays unsent: the milestones and the money
+          that prices them are always the pair the studio last sent.
+          See rebuildAfterClientAction in lib/portalProjection.ts.
         */
         if (viewSnap.exists) {
-            const previous = (viewSnap.data() as any)?.context || {};
-            const rebuilt = buildPortalView(
-                projectId,
-                nextContext,
-                previous.portalStudio,
-                previous.clientBoq,
-                previous.clientBoqBaseline,
-                /*
-                  Scope additions and the money are carried, not recomputed, for
-                  the same reason as the three above: both are assembled by the
-                  studio's session from a tier and billing rules this function
-                  does not have. Rebuilding without them would empty the client's
-                  payments tab the moment they confirmed anything.
-                */
-                (viewSnap.data() as any)?.scopeAdditions,
-                previous.portalMoney,
-                /*
-                  The published programme, carried like the rest. Passing nothing
-                  here dropped it, so the first thing a client confirmed swapped
-                  the studio's dates for an estimate derived from the BOQ.
-                */
-                /*
-                  Only a programme the studio saved. A copy sent before the
-                  flag existed may carry one derived from the BOQ, which the
-                  client read as committed dates.
-                */
-                previous.clientScheduleSaved ? previous.clientSchedule : undefined,
-                /* The design meetings, kept current by the designMeeting function. */
-                (viewSnap.data() as any)?.designRecord,
-            );
-            tx.set(viewRef, rebuilt as any);
+            tx.set(viewRef, rebuildAfterClientAction(projectId, nextContext, viewSnap.data() as any) as any);
         }
     });
 

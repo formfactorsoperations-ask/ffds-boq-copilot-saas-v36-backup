@@ -555,6 +555,53 @@ export function buildPortalView(
   });
 }
 
+/**
+ * The client's copy, rebuilt after one of their own actions (submitClientAction).
+ *
+ * Their action -- a signature, a confirmation, a question -- has to show at
+ * once, so the view is rebuilt from the project as it now stands. But sending
+ * is the studio's decision (Client Portal -> "Send the latest"), and a client
+ * action must not be the thing that sends whatever the studio has changed
+ * since. Everything the studio's session assembles is carried from the copy
+ * the client already holds: the scope and its baseline, the studio's details,
+ * the scope additions, the money, the saved programme and the design meetings.
+ *
+ * The payment schedule is carried too. `portalMoney.milestoneAmounts` prices
+ * each milestone by id, and it is carried; the milestones used to come from
+ * the live project. So a schedule changed on Money and not yet sent reached the
+ * client on their next signature, with new milestones at 0 and changed ones at
+ * their old figures. The milestones, and the engagement type that decides
+ * which of them the portal draws, now stay as last sent, alongside the figures
+ * that price them. No client action changes either.
+ */
+export function rebuildAfterClientAction(
+  projectId: string,
+  nextContext: ProjectContext,
+  previousView: Partial<PortalView> | null | undefined,
+): PortalView {
+  const previous: Record<string, any> = previousView?.context || {};
+  const view = buildPortalView(
+    projectId,
+    nextContext,
+    previous.portalStudio,
+    previous.clientBoq,
+    previous.clientBoqBaseline,
+    previousView?.scopeAdditions,
+    previous.portalMoney,
+    /* Only a programme the studio saved: an older copy may carry one derived from the BOQ. */
+    previous.clientScheduleSaved ? previous.clientSchedule : undefined,
+    /* The design meetings, kept current by the designMeeting function. */
+    previousView?.designRecord,
+  );
+
+  /* Copied as sent, not re-projected: they were reduced to client-safe fields when they were sent. */
+  view.context.paymentMilestones = Array.isArray(previous.paymentMilestones) ? previous.paymentMilestones : [];
+  if (previous.engagementType === undefined) delete view.context.engagementType;
+  else view.context.engagementType = previous.engagementType;
+
+  return view;
+}
+
 /** What ops sees before releasing: how much of the project reaches the client. */
 export function portalViewSummary(view: PortalView): { section: string; count: number }[] {
   const c = view.context;
