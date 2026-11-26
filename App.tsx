@@ -3995,6 +3995,7 @@ export default function App() {
                           projectId={activeInternalId!}
                           decisionLedger={decisionLedger}
                           activeProject={activeProject}
+                          tierSummary={(activeCalculatedTier as any)?.summary}
                           onProjectUpdate={setActiveProject}
                           onNavigateToTab={setActiveTab}
                           view={
@@ -4664,6 +4665,7 @@ export default function App() {
                           projectId={activeInternalId!}
                           decisionLedger={decisionLedger}
                           activeProject={activeProject}
+                          tierSummary={(activeCalculatedTier as any)?.summary}
                           onProjectUpdate={setActiveProject}
                           onNavigateToTab={setActiveTab}
                           view={
