@@ -1375,6 +1375,10 @@ colours (brand, slate, rose/amber/emerald). Only the Money screen (`components/m
 - Cards lift on hover (`mb-card`), the More chevron turns, details open by height.
 - Edit milestones is a modal on the `AssignProjectsModal` pattern; rows rise and leave, and the
   % / ₹ choice on each row glides (`layoutId`).
+- Quick schedule (asked for 26 Nov 2026) is the same modal: the studio types its milestones on the
+  left and the stages rise on the right as it types (`lib/quickSchedule.ts`), each with its icon,
+  share, trigger and steps. Approve saves them as the schedule; Fine-tune first opens them in Edit
+  milestones.
 - Everything stops under `prefers-reduced-motion`. No new fonts, no new accent colours, no half-pixel sizes.
 
 ### Item bank motion (asked for 21 Nov 2026)

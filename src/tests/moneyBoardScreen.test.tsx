@@ -106,3 +106,37 @@ describe('the milestone editor', () => {
     expect(screen.queryByRole('dialog', { name: 'Edit milestones' })).toBeNull();
   });
 });
+
+describe('quick schedule', () => {
+  it('works out the stages from typed milestones and saves them when approved', () => {
+    render(<Host />);
+    fireEvent.click(screen.getByRole('button', { name: 'Quick schedule' }));
+    const dialog = screen.getByRole('dialog', { name: 'Quick schedule' });
+    fireEvent.change(within(dialog).getByLabelText('Your milestones'), { target: { value: 'Design: 3D & layouts, GFC drawings\nExecution: Material advance 40%, Civil & carcass, Finishing, Handover' } });
+    expect(within(dialog).getByText('GFC drawings')).toBeTruthy();
+    // Sign-up & Concept is paid: it stays, and the reason is asked for.
+    expect(within(dialog).getByText('Paid, kept')).toBeTruthy();
+    const approve = within(dialog).getByRole('button', { name: /Approve as payment schedule/ });
+    expect((approve as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(dialog).getByPlaceholderText(/For example/), { target: { value: 'New stages agreed' } });
+    fireEvent.click(approve);
+    const names = latest.paymentMilestones.map((m: any) => m.name);
+    expect(names).toEqual(['Sign-up & Concept', '3D & layouts', 'GFC drawings', 'Material advance', 'Civil & carcass', 'Finishing', 'Handover']);
+    const design = latest.paymentMilestones.filter((m: any) => m.type === 'design');
+    expect(design.reduce((s: number, m: any) => s + m.percentage, 0)).toBe(100);
+    expect(latest.paymentMilestones.find((m: any) => m.name === 'Handover').subSteps.length).toBeGreaterThan(0);
+    expect(latest.financials.scheduleChanges.at(-1).reason).toBe('New stages agreed');
+    expect(screen.queryByRole('dialog', { name: 'Quick schedule' })).toBeNull();
+  });
+
+  it('hands the draft to Edit milestones to fine-tune first', () => {
+    render(<Host />);
+    fireEvent.click(screen.getByRole('button', { name: 'Quick schedule' }));
+    const dialog = screen.getByRole('dialog', { name: 'Quick schedule' });
+    fireEvent.change(within(dialog).getByLabelText('Your milestones'), { target: { value: 'Execution: Material, Woodwork, Handover' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Fine-tune first/ }));
+    const editor = screen.getByRole('dialog', { name: 'Edit milestones' });
+    expect(within(editor).getByDisplayValue('Woodwork')).toBeTruthy();
+    expect(within(editor).getByDisplayValue('Design Development')).toBeTruthy();
+  });
+});

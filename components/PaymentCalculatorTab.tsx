@@ -42,6 +42,7 @@ import { MoneyBoard, BOARD_ICONS, type BoardTile, type BoardTotals, type BoardPr
 import { TrackColumn, TaxPlate, type TrackFigures, type CardActions } from './money/board/TrackColumn';
 import { EditMilestonesModal, type StudioStages } from './money/board/EditMilestonesModal';
 import { MilestoneSummary } from './money/board/MilestoneSummary';
+import { QuickScheduleModal } from './money/board/QuickScheduleModal';
 import { cardStates, trackTotal, shareOf, sameTerms, termsChanges, studioCashPct, type TaxTerms, type ScheduleChange, type Track as BoardTrack } from '../lib/moneyBoard';
 import { Button } from './ui/kit';
 import { isTerminated } from '../lib/termination';
@@ -1317,6 +1318,9 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
     const [termsDraft, setTermsDraft] = useState<TaxTerms | null>(null);
     const [termsReason, setTermsReason] = useState('');
     const [editFocus, setEditFocus] = useState<BoardTrack | 'both' | null>(null);
+    /* Quick schedule (lib/quickSchedule): open, and the draft it hands to Edit milestones to fine-tune. */
+    const [quickOpen, setQuickOpen] = useState(false);
+    const [editDraft, setEditDraft] = useState<PaymentMilestone[] | null>(null);
     /* Which cards this screen just changed, so a change from the portal or the site can be told apart. */
     const localTouch = useRef<Map<string, number>>(new Map());
     /* Retainer editor on the overview. Closed unless the user opens it. */
@@ -2275,6 +2279,8 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             financials: { ...(prev.financials as any || {}), scheduleChanges: [...((prev.financials as any)?.scheduleChanges || []), entry] } as any,
         }));
         setEditFocus(null);
+        setEditDraft(null);
+        setQuickOpen(false);
         showSuccessWithNext('Milestones saved');
     };
 
@@ -2423,6 +2429,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                         onSchedule={scheduleAction.onClick}
                         scheduleLabel={scheduleAction.label}
                         onEdit={() => openEditor('both')}
+                        onQuick={() => { if (previewing) { alert('Apply or discard the tax preview first.'); return; } setQuickOpen(true); }}
                         readOnly={lockedMode}
                         tiles={boardTiles}
                         preview={boardPreview}
@@ -3230,6 +3237,7 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
             {editFocus && !lockedMode && (
                 <EditMilestonesModal
                     milestones={milestones}
+                    initialDraft={editDraft}
                     focus={editFocus}
                     feeOnly={feeOnly}
                     taxable={{ design: taxableDesign, execution: taxableExecution }}
@@ -3237,8 +3245,20 @@ const PaymentCalculatorTab: React.FC<PaymentCalculatorTabProps> = ({ projectCont
                     saved={schedule}
                     studio={studioStages}
                     onSaveAsDefaults={saveDraftAsStudioDefaults}
-                    onClose={() => setEditFocus(null)}
+                    onClose={() => { setEditFocus(null); setEditDraft(null); }}
                     onSave={saveScheduleDraft}
+                />
+            )}
+
+            {quickOpen && !lockedMode && !editFocus && (
+                <QuickScheduleModal
+                    milestones={milestones}
+                    feeOnly={feeOnly}
+                    taxable={{ design: taxableDesign, execution: taxableExecution }}
+                    price={priceDraft}
+                    onClose={() => setQuickOpen(false)}
+                    onApprove={saveScheduleDraft}
+                    onFineTune={draft => { setQuickOpen(false); setEditDraft(draft); setEditFocus('both'); }}
                 />
             )}
 

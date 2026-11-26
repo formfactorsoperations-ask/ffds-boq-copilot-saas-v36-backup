@@ -29,6 +29,8 @@ export interface StudioStages { design: { name: string; pct: number; trigger?: s
 
 export const EditMilestonesModal: React.FC<{
   milestones: PaymentMilestone[];
+  /** Where the draft starts, when it is not the saved schedule (Quick schedule's Fine-tune). */
+  initialDraft?: PaymentMilestone[] | null;
   focus: Track | 'both';
   feeOnly: boolean;
   taxable: { design: number; execution: number };
@@ -40,8 +42,8 @@ export const EditMilestonesModal: React.FC<{
   onStudioRules?: () => void;
   onClose: () => void;
   onSave: (draft: PaymentMilestone[], reason: string, changes: string[]) => void;
-}> = ({ milestones, focus, feeOnly, taxable, price, saved, studio, onSaveAsDefaults, onStudioRules, onClose, onSave }) => {
-  const [draft, setDraft] = useState<PaymentMilestone[]>(() => milestones.map(m => ({ ...m, subSteps: (m.subSteps || []).map(s => ({ ...s })) })));
+}> = ({ milestones, initialDraft, focus, feeOnly, taxable, price, saved, studio, onSaveAsDefaults, onStudioRules, onClose, onSave }) => {
+  const [draft, setDraft] = useState<PaymentMilestone[]>(() => (initialDraft || milestones).map(m => ({ ...m, subSteps: (m.subSteps || []).map(s => ({ ...s })) })));
   const [mode, setMode] = useState<'simple' | 'advanced'>('simple');
   const [reason, setReason] = useState('');
   const [menu, setMenu] = useState(false);
