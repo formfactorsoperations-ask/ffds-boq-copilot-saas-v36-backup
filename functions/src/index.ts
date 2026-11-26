@@ -67,6 +67,7 @@ import { buildPortalView } from "../../lib/portalProjection";
 import { applySiteAction, SiteActionError } from "./siteActionPatch";
 import { isTeamViewMember } from "./teamView";
 import { primaryRole, rolesOf } from "../../lib/roles";
+import { overdueAfterDays, weeklyHealthLabel, weeklyReportPaymentStages } from "./weeklyReport";
 
 const withDiagnostics = (functionName: string, handler: (request: any) => Promise<any>) => {
     return async (request: any) => {
@@ -364,6 +365,11 @@ export const compileWeeklyReports = onSchedule({
     for (const orgDoc of orgsSnap.docs) {
         const orgId = orgDoc.id;
         const projectsSnap = await orgDoc.ref.collection("projects").get();
+
+        /* The reminder threshold the studio set in Money; an invoice past it is overdue there and here. */
+        const studioId = orgDoc.data()?.tenantId || orgId;
+        const settingsSnap = await admin.firestore().doc(`studios/${studioId}/settings/main`).get().catch(() => null);
+        const overdueDays = overdueAfterDays(settingsSnap?.exists ? settingsSnap.data() : null);
         
         for (const projDoc of projectsSnap.docs) {
             const projectId = projDoc.id;
@@ -393,8 +399,8 @@ export const compileWeeklyReports = onSchedule({
             const designGateSnap = await projDoc.ref.collection("designGate").doc("main").get();
             const designGate = designGateSnap.exists ? designGateSnap.data() : null;
 
-            const paymentStagesSnap = await projDoc.ref.collection("paymentMilestones").get();
-            const paymentStages = paymentStagesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            /* Money keeps the milestones on the project's context, not in a subcollection. */
+            const paymentStages = weeklyReportPaymentStages(projectData);
 
             const scopeAdditionsSnap = await projDoc.ref.collection("projectUpdates").get();
             const scopeAdditions = scopeAdditionsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -436,39 +442,7 @@ export const compileWeeklyReports = onSchedule({
             });
 
             // HEALTH LABEL
-            let healthLabel = 'on_track';
-            const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-            const FOURTEEN_DAYS = 14 * 24 * 60 * 60 * 1000;
-            let hasInvoiceOverdue = false;
-            let hasGateBlocked = false;
-            let hasClientOverdue = false;
-            let hasCompanionGap = false;
-
-            paymentStages.forEach((p: any) => {
-                if (p.status === 'overdue' || (p.invoiceDate && (now - new Date(p.invoiceDate).getTime() > SEVEN_DAYS) && p.status !== 'paid')) {
-                    hasInvoiceOverdue = true;
-                }
-            });
-
-            if (designGate && !designGate.gateActivated && designGate.lastAssessedAt && (now - designGate.lastAssessedAt.toMillis() > FOURTEEN_DAYS)) {
-                hasGateBlocked = true;
-            }
-
-            drawings.forEach((d: any) => {
-                if (d.isGapFlagged) hasCompanionGap = true;
-                if (d.rounds?.length > 0) {
-                    const cur = d.rounds[d.currentRound - 1];
-                    if (cur && cur.status === 'issued') {
-                        if (cur.issuedAt && (now - cur.issuedAt > SEVEN_DAYS)) hasClientOverdue = true;
-                    }
-                }
-            });
-
-            if (hasInvoiceOverdue || hasGateBlocked) {
-                healthLabel = 'at_risk';
-            } else if (hasClientOverdue || hasCompanionGap) {
-                healthLabel = 'attention';
-            }
+            const healthLabel = weeklyHealthLabel({ projectData, designGate, drawings, overdueDays, now });
 
             // PROJECTION
             const contract = projectData.context?.contractSignoff || {};
