@@ -37,6 +37,7 @@ import { clientMoneyOf, withoutAmounts } from '../lib/clientMoney';
 import { studioJumpItems } from './projectNav/StudioJump';
 import ConversationsWorkspace from './projectConversations/ConversationsWorkspace';
 import { MessagesSquare } from '@/lib/lucide-shim';
+import { getNextActions } from '../services/nextActionEngine';
 
 const WORKSPACE_STATUS_MAP: Record<
   string,
@@ -283,12 +284,41 @@ export function ProjectWorkspace({
     sidebarStages.forEach(s => s.screens.forEach(x => { labels[x.route] = ENGAGEMENT_PAGE_TITLES[engagement]?.[x.route]?.title || x.label; }));
     sidebarHub.forEach(h => { labels[h.route] = h.label; });
     const labelOf = (route: string) => labels[route] || getPageMeta(route)?.title || route;
-    const steps: any[] = (journey as any).steps || [];
-    const upNext = steps
-      .filter((s: any) => s.status === 'active' || s.status === 'pending')
-      .sort((a: any, b: any) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1) || a.n - b.n)
-      .slice(0, 3)
-      .map((s: any) => ({ id: s.id, title: s.title, text: s.description, route: s.linkedTab && s.linkedTab !== 'dashboard' && visible.has(s.linkedTab) ? s.linkedTab : null }));
+    /*
+      Up next, ranked as the Hub ranks it (components/projectHome/ProjectHome
+      buildRows): the engine's blocker, the Ops Matrix's next step (with Mark
+      done when it is the studio's own sign-off), then the rest of the engine's
+      list (services/nextActionEngine). Three show; the rest are on the Hub.
+    */
+    const engine = getNextActions({
+      project: projectContext, designPaymentStages: projectContext.paymentMilestones, designGate: projectContext.designGate,
+      drawingTrackerSummary: null,
+      scopeAdditionsSummary: { pending: (((projectContext as any).scopeAdditions || []) as any[]).filter((s: any) => s.status === 'pending_approval' || s.status === 'pending').length },
+      timeline: null,
+    } as any, String(currentRole || 'Admin'));
+    const openRoute = (route: string) => (route && route !== 'dashboard' && visible.has(route) ? () => setActiveTab(route) : null);
+    const rows: any[] = [];
+    const leadIdx = engine.findIndex(x => x.priority === 'blocker');
+    if (leadIdx >= 0) {
+      const x = engine[leadIdx];
+      const run = openRoute(x.route);
+      rows.push({ id: `eng-${x.id}`, title: x.title, text: x.why, badge: 'Blocker', actions: run ? [{ label: x.ctaLabel, run, primary: true }] : [] });
+    }
+    const ns: any = journey.nextStep;
+    if (ns) {
+      const acts: any[] = [];
+      if (ns.statusSource === 'manual') acts.push({ label: 'Mark done', run: () => { journey.markStepDone(ns.id); } });
+      const link = ns.id === 'working_drawings_done' ? 'drawing-tracker' : ns.linkedTab;
+      const run = link ? openRoute(link) : null;
+      if (run) acts.push({ label: `Open ${labels[link] || 'screen'}`, run });
+      rows.push({ id: `step-${ns.id}`, title: ns.title, text: ns.description, badge: ns.statusSource === 'manual' ? 'Your sign-off' : 'Milestone', actions: acts });
+    }
+    engine.forEach((x, i) => {
+      if (i === leadIdx) return;
+      const run = openRoute(x.route);
+      rows.push({ id: `eng-${x.id}`, title: x.title, text: x.why, badge: x.priority === 'blocker' ? 'Also blocking' : x.priority === 'due' ? 'Due' : undefined, actions: run ? [{ label: x.ctaLabel, run }] : [] });
+    });
+    const upNext = rows.slice(0, 3);
     const rawMoney = clientMoneyOf({ context: projectContext, tiers: tierSummary ? [{ id: '_', summary: tierSummary }] : [], activeTierId: '_' });
     const money = holdsFinanceRole(currentRole) ? rawMoney : withoutAmounts(rawMoney);
     return (
@@ -312,6 +342,7 @@ export function ProjectWorkspace({
             pct: Math.round(projectContext.journeySummary?.pct ?? journey.overall.pct ?? 0),
             next: isLimited ? null : isTerminated(projectContext) ? 'Project terminated' : (journey.nextStep?.title || null),
             upNext: isLimited || isTerminated(projectContext) ? [] : upNext,
+            more: isLimited || isTerminated(projectContext) ? 0 : Math.max(0, rows.length - 3),
           }}
           money={money}
           seesMoney={seesStudioFinance(currentRole)}

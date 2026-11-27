@@ -6,6 +6,7 @@ import {
 import { Button, Chip, EmptyState, INPUT, Segmented, type Tone } from '../ui/kit';
 import { Masked, HideFiguresButton } from '../ui/HideFigures';
 import { CountUp } from '../ui/HudBits';
+import { useProjectGlance, type Glance } from './useProjectGlance';
 import { motion } from 'framer-motion';
 import PageTitleBlock from '../PageTitleBlock';
 import ViewOnlyGuard from '../ViewOnlyGuard';
@@ -73,7 +74,9 @@ const SOURCE_ICON: Record<ThreadSource, { icon: React.ElementType; tone: Tone }>
 };
 
 export interface StageRow { stage: number; label: string; state: 'done' | 'now' | 'todo'; first?: string | null }
-export interface UpNextRow { id: string; title: string; text?: string; route: string | null }
+export interface UpNextAction { label: string; run: () => void; primary?: boolean }
+/** A row of Up next, as the Hub ranks them: its badge ("Blocker", "Your sign-off", "Due") and its own actions. */
+export interface UpNextRow { id: string; title: string; text?: string; badge?: string; actions?: UpNextAction[]; route?: string | null }
 
 export interface ConversationsWorkspaceProps {
   projectId: string;
@@ -92,7 +95,7 @@ export interface ConversationsWorkspaceProps {
   needsOf: (route: string) => number;
   stages: StageRow[];
   currentStage: number;
-  journey: { done: number; total: number; pct: number; next: string | null; upNext: UpNextRow[] };
+  journey: { done: number; total: number; pct: number; next: string | null; upNext: UpNextRow[]; /** Rows beyond the three shown: they are on the Hub. */ more?: number };
   /** The client's side of the money, already without amounts where they are hidden; null when there is no schedule. */
   money: ClientMoney | null;
   seesMoney: boolean;
@@ -167,6 +170,7 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
     return buildStory(entries, ctx.history, p.projectId, noteHomes(records.followUps as any));
   }, [records, visits, p.money, ctx, p.projectId, now]);
 
+  const glance = useProjectGlance(p.projectId, p.tenantId, ctx);
   const portalLine = useMemo(
     () => (p.seesVisits ? portalStatus({ context: ctx }, visits, now) : portalStatusForViewer({ context: ctx })),
     [ctx, visits, now, p.seesVisits],
@@ -233,7 +237,7 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
           <Composer conv={shown.id} convName={shown.name} canLog={p.canLog} onWrite={writeLine}
             onRecord={shown.id === 'whole' ? open : undefined} />
         </section>
-        <ProjectCard ctx={ctx} money={p.money} seesMoney={p.seesMoney} journey={p.journey} stages={p.stages}
+        <ProjectCard ctx={ctx} money={p.money} seesMoney={p.seesMoney} journey={p.journey} stages={p.stages} glance={glance}
           portalLine={portalLine} onOpen={open} has={(r) => p.conversations.some((c) => c.routes.includes(r))} />
       </div>
 
@@ -528,10 +532,21 @@ function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, lab
       {!rows.length && <p className="px-4 pb-3 text-xs text-slate-500">Nothing needs you on this project right now.</p>}
       {rows.map((r, i) => (
         <div key={r.id} className="hud-row-in flex items-center gap-3 px-4 py-2 border-t border-slate-100 first:border-t-0" style={{ animationDelay: `${120 + i * 40}ms` }}>
-          <p className="min-w-0 flex-1 text-sm font-semibold text-slate-800 truncate" title={r.text || undefined}>{r.title}</p>
-          {r.route && <Button size="sm" variant="secondary" onClick={() => onOpen(r.route!)}>Open {labelOf(r.route)}</Button>}
+          <p className="min-w-0 flex-1 flex items-center gap-2" title={r.text || undefined}>
+            <span className="text-sm font-semibold text-slate-800 truncate">{r.title}</span>
+            {r.badge && <Chip tone={r.badge === 'Blocker' ? 'bad' : 'brand'}>{r.badge}</Chip>}
+          </p>
+          {(r.actions || []).map((a) => (
+            <Button key={a.label} size="sm" variant={a.primary ? 'primary' : 'secondary'} className="phd-lift" onClick={a.run}>{a.label}</Button>
+          ))}
+          {!r.actions?.length && r.route && <Button size="sm" variant="secondary" className="phd-lift" onClick={() => onOpen(r.route!)}>Open {labelOf(r.route)}</Button>}
         </div>
       ))}
+      {!!journey.more && (
+        <button type="button" onClick={onHub} className="w-full text-left px-4 py-2 border-t border-slate-100 text-xs font-bold text-[#3D52A0] hover:bg-[#3D52A0]/5">
+          {journey.more} more on the Hub →
+        </button>
+      )}
     </div>
   );
 }
@@ -599,8 +614,16 @@ function Composer({ conv, convName, canLog, onWrite, onRecord }: {
 
 /* ───────────── the project card ───────────── */
 
-function ProjectCard({ ctx, money, seesMoney, journey, stages, portalLine, onOpen, has }: {
-  ctx: any; money: ClientMoney | null; seesMoney: boolean; journey: ConversationsWorkspaceProps['journey'];
+/** "5 Dec", or "14 Mar ’27" with the year. */
+const dayShort = (iso: string, year = false) => {
+  const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const s = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', ...(year ? { year: '2-digit' } : {}) });
+  return year ? s.replace(/ (\d{2})$/, ' ’$1') : s;
+};
+
+function ProjectCard({ ctx, money, seesMoney, journey, stages, glance, portalLine, onOpen, has }: {
+  ctx: any; money: ClientMoney | null; seesMoney: boolean; journey: ConversationsWorkspaceProps['journey']; glance: Glance;
   stages: StageRow[]; portalLine: ReturnType<typeof portalStatus>; onOpen: (r: string) => void; has: (r: string) => boolean;
 }) {
   const inr = (n: number | null | undefined) => (n == null ? '—' : '₹' + Math.round(n).toLocaleString('en-IN'));
@@ -622,7 +645,7 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, portalLine, onOpe
   );
   return (
     <aside className="hidden xl:flex flex-col min-h-0 overflow-y-auto border-l border-slate-100" aria-label="Project card">
-      {seesMoney && <Sec title="At a glance">
+      <Sec title="At a glance">
         <div className="grid grid-cols-2 gap-2">
           {seesMoney && (
             <Tile label="Collected" route="payment-calc"
@@ -634,8 +657,18 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, portalLine, onOpe
               value={next ? (next.owed != null ? <Masked><CountUp value={next.owed} format={(v) => inr(v)} /></Masked> : next.name) : '—'}
               sub={next ? `${next.name}${next.date ? ` · ${new Date(next.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}` : 'Nothing due'} />
           )}
+          {has('drawing-tracker') && (
+            <Tile label="Drawings" route="drawing-tracker"
+              value={glance.drawings ? (glance.drawings.total ? <><CountUp value={glance.drawings.issued} /> of {glance.drawings.total}</> : 'None yet') : '…'}
+              sub={glance.drawings && glance.drawings.total ? `issued · ${glance.drawings.approved} approved` : 'Drawing Tracker'} />
+          )}
+          {has('timeline') && (
+            <Tile label="Handover" route="timeline"
+              value={glance.handoverISO ? dayShort(glance.handoverISO, true) : (glance.hasProgramme === undefined ? '…' : '—')}
+              sub={glance.handoverISO ? (glance.targetISO ? `forecast · target ${dayShort(glance.targetISO)}` : 'forecast · no target set') : 'No programme yet'} />
+          )}
         </div>
-      </Sec>}
+      </Sec>
       {has('client-portal') && (
         <Sec title="Client portal" action={<Button size="sm" variant="quiet" onClick={() => onOpen('client-portal')}>Open</Button>}>
           <PortalLineText line={portalLine} />
@@ -653,7 +686,16 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, portalLine, onOpe
       )}
       {has('timeline') && (
         <Sec title="Timeline" action={<Button size="sm" variant="quiet" onClick={() => onOpen('timeline')}>Open</Button>}>
-          <p className="text-xs text-slate-500">The plan from here to handover, and the dates the client sees.</p>
+          {glance.milestones.length ? glance.milestones.map((m, i) => (
+            <div key={m.id} className="hud-row-in flex items-center gap-2.5 py-1 text-xs" style={{ animationDelay: `${i * 40}ms` }}>
+              <span className={cx('w-2 h-2 rounded-full shrink-0', i === 0 ? 'bg-[#3D52A0]' : 'bg-slate-300')} aria-hidden />
+              <span className="w-14 shrink-0 font-bold text-slate-800 tabular-nums">{dayShort(m.startISO)}</span>
+              <span className="min-w-0 flex-1 truncate text-slate-600">{m.title}</span>
+            </div>
+          )) : (
+            <p className="text-xs text-slate-500">{glance.hasProgramme === false ? 'No programme yet. Open the Timeline to plan from here to handover.' : glance.hasProgramme === undefined ? 'Reading the programme…' : 'Nothing left on the programme.'}</p>
+          )}
+          {glance.handoverISO && <p className="mt-1.5 text-xs text-slate-500">Handover forecast <b className="text-slate-700">{dayShort(glance.handoverISO, true)}</b></p>}
         </Sec>
       )}
       <Sec title="Details">

@@ -1325,8 +1325,11 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   - **The conversation**: its screens as buttons ("Open: …", the first primary), then the story
     (`lib/projectThread.ts`, from the Clients thread and the project's history) grouped by day, each item
     with "Open {screen}"; only payments carry a source chip. Whole project opens on **one card**: the
-    stage and steps on one line (with Ops Matrix and "Open the Hub"), then **Up next**, three steps, one
-    button each (owner, 27 Nov 2026: one card, not a Next card and a list saying the same step twice).
+    stage and steps on one line (with Ops Matrix and "Open the Hub"), then **Up next**, ranked as the Hub
+    ranks it: the engine's blocker (rose "Blocker" chip), the Ops Matrix's next step ("Your sign-off" with
+    Mark done, or "Milestone"), then the engine's list with its own action words (Prepare Terms, Log
+    Discovery). Three show; "n more on the Hub" opens the rest (owner, 27 Nov 2026: one card, not a Next
+    card and a list saying the same step twice).
     Its foot is **Record** (Site visit · Meeting · Decision, keys S · M · D). Every conversation has "Add
     a note for the team", which opens a note box only when clicked and says what a note is: a line only the
     studio sees, in the follow-up log (so on the Ops Desk too), staying in the conversation it was written
@@ -1334,9 +1337,11 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     the Messages screen's and Clients' job.
   - **An empty conversation says where to click:** "Start here", its screens as big buttons (icon chip,
     name, the page's one-line purpose from `pageMeta`, an arrow), the first in brand.
-  - **The project card** (~320px, from `xl`): At a glance (Collected and Next due, for finance roles only,
-    behind the hide-figures eye), Client portal (the portal status line; Review & send only once the client
-    has access, Give access when they have none), Timeline, Details and Journey.
+  - **The project card** (~320px, from `xl`): At a glance (Collected and Next due for finance roles, behind
+    the hide-figures eye; Drawings issued of total and approved, from the Drawing Tracker; Handover, the
+    programme's forecast and target, as the Hub reads them), Client portal (the portal status line; Review & send only once the client
+    has access, Give access when they have none), Timeline (the programme's next four dates and the
+    handover forecast), Details and Journey.
 - **Every screen opens in a full-screen window** (the modal pattern: `phd-scrim`, `phd-pop`, `rounded-3xl`):
   a brand eyebrow "Project · Conversation", the screen's name (`text-2xl font-bold`), its sister screens as a
   `Segmented`, and ✕. The screen is the same component Classic draws. The footer: "What you change here

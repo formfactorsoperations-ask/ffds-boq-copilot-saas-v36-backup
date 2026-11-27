@@ -19,13 +19,19 @@ vi.mock('../../services/clientThreadService', () => ({
 vi.mock('../../services/portalVisitsService', () => ({ watchClientVisits: () => () => {} }));
 vi.mock('../../services/opsDeskService', () => ({ logFollowUp: vi.fn(async (f: any) => ({ id: 'n1', ...f, at: Date.now(), by: f.me.email, byName: f.me.name })) }));
 vi.mock('../../components/PageTitleBlock', () => ({ default: () => null }));
+vi.mock('../../components/projectConversations/useProjectGlance', () => ({
+  useProjectGlance: () => ({
+    drawings: { total: 7, issued: 4, approved: 3 }, handoverISO: '2027-03-14', targetISO: null, hasProgramme: true,
+    milestones: [{ id: 't1', title: 'Design sign-off', startISO: '2026-12-05' }, { id: 't2', title: 'Site work starts', startISO: '2026-12-08' }],
+  }),
+}));
 
 import ConversationsWorkspace, { type ConversationsWorkspaceProps } from '../../components/projectConversations/ConversationsWorkspace';
 import { conversationsFor } from '../../lib/projectConversations';
 
 afterEach(cleanup);
 
-const LABELS: Record<string, string> = { 'payment-calc': 'Money', analytics: 'Money & Offers', 'boq-editor': 'BOQ Editor', 'client-portal': 'Client Portal', 'comms-tracker': 'Messages', timeline: 'Timeline', leadiq: 'Brief & Site' };
+const LABELS: Record<string, string> = { 'payment-calc': 'Money', analytics: 'Money & Offers', 'boq-editor': 'BOQ Editor', 'client-portal': 'Client Portal', 'comms-tracker': 'Messages', timeline: 'Timeline', leadiq: 'Brief & Site', 'drawing-tracker': 'Drawings' };
 
 function setup(over: Partial<ConversationsWorkspaceProps> = {}) {
   const setActiveTab = vi.fn();
@@ -147,5 +153,31 @@ describe('the Conversations workspace', () => {
     await waitFor(() => expect(screen.getByRole('region', { name: 'Money' }).textContent).toContain('Client will pay by cheque'));
     fireEvent.click(within(list).getByRole('button', { name: /^Plan & timeline/ }));
     expect(screen.getByRole('region', { name: 'Plan & timeline' }).textContent).not.toContain('Client will pay by cheque');
+  });
+
+  it("ranks Up next as the Hub does: a sign-off with Mark done, the engine's own action, and the rest on the Hub", () => {
+    const markDone = vi.fn();
+    const prepare = vi.fn();
+    setup({ journey: { done: 0, total: 34, pct: 0, next: 'Discovery Scheduled', more: 2, upNext: [
+      { id: 's', title: 'Discovery Scheduled', badge: 'Your sign-off', actions: [{ label: 'Mark done', run: markDone }] },
+      { id: 'e', title: 'Send Terms Docket', actions: [{ label: 'Prepare Terms', run: prepare }] },
+    ] } });
+    expect(screen.getByText('Your sign-off')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare Terms' }));
+    expect(markDone).toHaveBeenCalled();
+    expect(prepare).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /2 more on the Hub/ }));
+    expect(screen.getByRole('dialog', { name: 'Hub' })).toBeTruthy();
+  });
+
+  it('shows drawings, the handover forecast and the next dates on the card, as the Hub reads them', () => {
+    setup();
+    const card = screen.getByRole('complementary', { name: 'Project card' });
+    expect(card.textContent).toContain('of 7');
+    expect(card.textContent).toContain('3 approved');
+    expect(card.textContent).toMatch(/14 Mar ’27/);
+    expect(card.textContent).toContain('Design sign-off');
+    expect(card.textContent).toContain('Site work starts');
   });
 });
