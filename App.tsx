@@ -3439,6 +3439,8 @@ export default function App() {
                   onStatusChange={(status, note) => handleProjectStatusChange(activeInternalId!, status, note)}
                   onLeaveProject={leaveProject}
                   onViewChange={setWorkspaceView}
+                  bank={bank}
+                  fullBoq={fullBoqForActiveTier}
                 >
                 {/* No scroll box or padding of its own: ProjectWorkspace gives every project screen one scroll area and one gutter. */}
                 <div className="min-w-0">

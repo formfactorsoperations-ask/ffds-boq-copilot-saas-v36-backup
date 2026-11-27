@@ -1425,6 +1425,21 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   which in this browser (`studiodesk.smartBriefs`). This week's update is one line of its own. **Up next**
   shows its first step; the rest fold under "Show n more", beside "n more on the Hub". So the story keeps
   most of the pane: about 55% on Whole project and 70–80% elsewhere at 1500×940.
+- **Smart workspace, PR 3: Smart Record** (owner, 27 Nov 2026: "AI on project notes: yes"; nothing outside
+  the app). **From notes** joins Site visit · Meeting · Decision on Whole project's Record bar (Sparkles icon),
+  for those who may log, not look-only, while the studio's AI is reachable. It opens a window in the
+  workspace's window pattern (`phd-scrim`, `phd-pop`, `rounded-3xl`, 760px wide): what the notes are from
+  (Site visit · Meeting · Call) and how (Type or paste · Speak, which records up to five minutes or takes a
+  recording), then **Read it** (`lib/smartRecord.ts`, `services/opsAssistService` readNotes, the same
+  proxy). The notes come back as the Ops Desk's capture kinds plus decisions and snags, grouped, each group
+  saying where it goes, every item ticked to start; a kind this person cannot file (snags without the right
+  to change the project, decisions without Record Decision) is greyed with the reason. **File n items**
+  writes: decisions as drafts on Record Decision, snags on the snag list, promises, dates and questions in
+  the follow-up log with their next steps. **Possible extra work** (amber) is the scope-creep catcher: "Not
+  in the BOQ by name" or the BOQ line it reads as, and the nearest Item bank item with its rate per unit
+  (finance roles, behind the eye); after filing, **Draft scope addition** opens Scope Additions with the
+  request written in (`askScopeAddition`). For a role that cannot open Scope Additions, extra work goes to
+  the leads as an escalation, as the Ops Desk does. Nothing is sent to the client.
 - **Smart workspace, PR 2** (owner, 27 Nov 2026, same mockups). From the records the Design Desk and the
   Ops Desk already keep (`lib/projectCare.ts`, `components/projectConversations/useProjectCare.ts`), each
   for the roles that see them there; nothing leaves the app.

@@ -33,6 +33,8 @@ const smart = vi.hoisted(() => ({ items: null as any[] | null, care: { care: nul
 vi.mock('../../components/projectConversations/useProjectCare', () => ({ useProjectCare: () => smart.care }));
 const desk = vi.hoisted(() => ({ openInDesignReview: vi.fn(), nudgeHolder: vi.fn(async () => ({ to: 'x' })) }));
 vi.mock('../../services/drawingReviewService', async (orig) => ({ ...(await orig<any>()), ...desk }));
+const aiOn = vi.hoisted(() => ({ on: false }));
+vi.mock('../../services/opsAssistService', async (orig) => ({ ...(await orig<any>()), assistAvailable: () => aiOn.on }));
 
 import ConversationsWorkspace, { type ConversationsWorkspaceProps } from '../../components/projectConversations/ConversationsWorkspace';
 import { conversationsFor } from '../../lib/projectConversations';
@@ -447,5 +449,29 @@ describe('the smart workspace, PR 2', () => {
     const card = screen.getByRole('complementary', { name: 'Project card' });
     expect(card.textContent).not.toContain('Client pulse');
     expect(card.textContent).not.toContain('Handover checklist');
+  });
+});
+
+/* Smart Record (smart workspace, PR 3): "From notes" on Whole project's Record bar. */
+describe('Smart Record in the workspace', () => {
+  afterEach(() => { aiOn.on = false; });
+
+  it('offers From notes on Whole project when the AI is reachable, and opens the window', () => {
+    aiOn.on = true;
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'From notes' }));
+    expect(screen.getByRole('dialog', { name: 'Record from notes' })).toBeTruthy();
+  });
+
+  it('does not offer it without the AI, to a look-only role, or to someone who cannot log', () => {
+    setup();
+    expect(screen.queryByRole('button', { name: 'From notes' })).toBeNull();
+    cleanup();
+    aiOn.on = true;
+    setup({ viewOnly: true });
+    expect(screen.queryByRole('button', { name: 'From notes' })).toBeNull();
+    cleanup();
+    setup({ canLog: false });
+    expect(screen.queryByRole('button', { name: 'From notes' })).toBeNull();
   });
 });
