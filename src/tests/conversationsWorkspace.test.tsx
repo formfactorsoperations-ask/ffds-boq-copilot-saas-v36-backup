@@ -93,7 +93,7 @@ describe('the Conversations workspace', () => {
   it('lists the conversations the person can open, and Whole project first with its next step', () => {
     setup();
     const list = screen.getByRole('complementary', { name: "This project's conversations" });
-    for (const n of ['Whole project', 'Client & portal', 'Money', 'BOQ', 'Plan & timeline', 'Brief & Site']) expect(list.textContent).toContain(n);
+    for (const n of ['Overview', 'Client', 'Money', 'BOQ & Scope', 'Progress', 'Brief & Survey']) expect(list.textContent).toContain(n);
     expect(list.textContent).not.toContain('Site work, snags');
     expect(screen.getAllByText(/Send the terms docket/).length).toBeGreaterThan(0);
     expect(screen.queryByText('THE SCREEN')).toBeNull();
@@ -160,7 +160,7 @@ describe('the Conversations workspace', () => {
   it('has no WhatsApp box anywhere: messages are written on the Messages screen and on Clients (owner, 27 Nov 2026)', () => {
     setup();
     const list = screen.getByRole('complementary', { name: "This project's conversations" });
-    fireEvent.click(within(list).getByRole('button', { name: /^Client & portal/ }));
+    fireEvent.click(within(list).getByRole('button', { name: /^Client/ }));
     expect(screen.queryByRole('button', { name: /WhatsApp/ })).toBeNull();
     expect(screen.getByRole('button', { name: /Add a note for the team/ })).toBeTruthy();
   });
@@ -169,7 +169,7 @@ describe('the Conversations workspace', () => {
     const { setActiveTab } = setup();
     await waitFor(() => expect(screen.getAllByText(/Payment done, please check/).length).toBeGreaterThan(0));
     const list = screen.getByRole('complementary', { name: "This project's conversations" });
-    fireEvent.click(within(list).getByRole('button', { name: /^Brief & Site/ }));
+    fireEvent.click(within(list).getByRole('button', { name: /^Brief & Survey/ }));
     expect(screen.getByText(/Start here/)).toBeTruthy();
     const big = screen.getAllByRole('button', { name: /^Brief & Site/ }).find((b) => !list.contains(b))!;
     fireEvent.click(big);
@@ -186,8 +186,8 @@ describe('the Conversations workspace', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Note' }), { target: { value: 'Client will pay by cheque' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save note' }));
     await waitFor(() => expect(screen.getByRole('region', { name: 'Money' }).textContent).toContain('Client will pay by cheque'));
-    fireEvent.click(within(list).getByRole('button', { name: /^Plan & timeline/ }));
-    expect(screen.getByRole('region', { name: 'Plan & timeline' }).textContent).not.toContain('Client will pay by cheque');
+    fireEvent.click(within(list).getByRole('button', { name: /^Progress/ }));
+    expect(screen.getByRole('region', { name: 'Progress' }).textContent).not.toContain('Client will pay by cheque');
   });
 
   it("ranks Up next as the Hub does: a sign-off with Mark done, the engine's own action, and the rest on the Hub", () => {
@@ -224,7 +224,7 @@ describe('the Conversations workspace', () => {
     fireEvent.change(within(list).getByRole('textbox'), { target: { value: 'client messages' } });
     const found = within(list).getByRole('group', { name: 'Screens' });
     expect(found.textContent).toContain('Messages');
-    expect(found.textContent).toContain('In Client & portal');
+    expect(found.textContent).toContain('In Client');
     expect(found.textContent).toContain('was “Client Messages” in Project Hub');
     fireEvent.change(within(list).getByRole('textbox'), { target: { value: 'scope & strategy' } });
     const byStage = within(list).getByRole('group', { name: 'Screens' });
@@ -254,14 +254,14 @@ describe('the Conversations workspace', () => {
     expect(screen.getByRole('dialog', { name: 'Your project, as conversations' }).textContent).toContain('1 of 3');
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByRole('dialog', { name: 'Open a screen' })).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Client & portal' })).toBeTruthy(); // a conversation with Open buttons
+    expect(screen.getByRole('region', { name: 'Brief & Survey' })).toBeTruthy(); // the first conversation, in project order, with Open buttons
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     const last = screen.getByRole('dialog', { name: 'The studio is always on top' });
     expect(last.textContent).toContain('Use Classic view puts the old view back');
     expect(last.textContent).toContain('Projects');
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(screen.getByRole('region', { name: 'Whole project' })).toBeTruthy(); // back where it began
+    expect(screen.getByRole('region', { name: 'Overview' })).toBeTruthy(); // back where it began
     expect(window.localStorage.getItem('studiodesk.projectView.welcomed')).toBe('1');
     fireEvent.click(screen.getByRole('button', { name: /Show me around/ }));
     expect(screen.getByRole('dialog', { name: 'Your project, as conversations' })).toBeTruthy();
@@ -275,7 +275,7 @@ describe('the Conversations workspace', () => {
     const money = within(list).getByRole('button', { name: /^Money/ });
     expect(money.className).toContain('cvw-hot');
     expect(money.querySelector('.cvw-ic')?.getAttribute('data-m')).toBe('flip');
-    expect(within(list).getByRole('button', { name: /^Brief & Site/ }).querySelector('.cvw-ic')?.getAttribute('data-m')).toBe('drop');
+    expect(within(list).getByRole('button', { name: /^Brief & Survey/ }).querySelector('.cvw-ic')?.getAttribute('data-m')).toBe('drop');
     fireEvent.pointerDown(money, { clientX: 10, clientY: 10 });
     expect(money.querySelector('.cvw-ripple')).toBeTruthy();
     fireEvent.click(money);
@@ -291,7 +291,7 @@ describe('the Conversations workspace', () => {
     const plateOf = (name: RegExp) => within(list).getByRole('button', { name }).querySelector('.cvw-disc') as HTMLElement;
     expect(plateOf(/^Money/).style.background).toBe('rgb(251, 245, 234)'); // Home's gold tint
     expect(plateOf(/^Money/).style.color).toBe('rgb(140, 106, 51)');
-    expect(plateOf(/^Whole project/).style.background).toBe('rgb(61, 82, 160)'); // picked: brand, filled
+    expect(plateOf(/^Overview/).style.background).toBe('rgb(61, 82, 160)'); // picked: brand, filled
     fireEvent.click(within(list).getByRole('button', { name: /^Money/ }));
     expect(plateOf(/^Money/).style.background).toBe('rgb(140, 106, 51)'); // picked: Home's gold, filled
   });
@@ -399,7 +399,7 @@ describe('the smart workspace, PR 2', () => {
     smart.items = [{ id: 'w', name: 'Master bed wardrobe', siteDate: day(-1), review: { state: 'IN_REVIEW', submittedAt: Date.now() - 3 * DAY } }];
     smart.care = { care: null, digest: undefined, meetings: [{ id: 'm', state: 'CLOSED', closedAt: Date.now(), includedRounds: 2, rooms: [{ room: 'Kitchen', round: 3, changes: [], charge: { status: 'to_bill' } }] }] };
     const { onLeaveProject } = setup({ conversations: CONVS, canBillRounds: true });
-    pick(/^Design/);
+    pick(/^Drawings & Design/);
     const card = expand('What will hold up site');
     expect(card.textContent).toContain('Late for site');
     expect(card.textContent).toContain('With the Design Head 3 days');
@@ -413,14 +413,14 @@ describe('the smart workspace, PR 2', () => {
   it('lets someone else nudge whoever holds the drawing, but never themselves', async () => {
     smart.items = [{ id: 'w', name: 'Master bed wardrobe', siteDate: day(-1), review: { state: 'IN_REVIEW', submittedAt: Date.now() - 3 * DAY } }];
     setup({ conversations: CONVS });
-    pick(/^Design/);
+    pick(/^Drawings & Design/);
     expand('What will hold up site');
     fireEvent.click(screen.getByRole('button', { name: 'Nudge' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Reminded' })).toBeTruthy());
     expect(desk.nudgeHolder).toHaveBeenCalled();
     cleanup();
     setup({ conversations: CONVS, isReviewer: true });
-    pick(/^Design/);
+    pick(/^Drawings & Design/);
     /* Still open from a moment ago: the workspace remembers the card opened in each conversation. */
     expect(within(screen.getByRole('region', { name: 'What will hold up site' })).getByRole('button', { expanded: true })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Nudge' })).toBeNull();
@@ -429,7 +429,7 @@ describe('the smart workspace, PR 2', () => {
   it("says where this week's update stands in Client & portal, and opens the Ops Desk to act on it", () => {
     smart.care = { care: null, digest: { status: 'pending_review', preparedByName: 'Mayuri' }, meetings: null };
     const { onLeaveProject } = setup({ conversations: CONVS, seesClientCare: true, projectContext: { name: 'Palacia 3BHK', status: 'won' } });
-    pick(/^Client & portal/);
+    pick(/^Client/);
     const card = screen.getByRole('region', { name: 'This week’s update' });
     expect(card.textContent).toContain('waiting for approval');
     expect(card.textContent).toContain('Written by Mayuri');
@@ -544,7 +544,7 @@ describe('the handover forecast and the margin', () => {
     const schedule: any = { ...buildScheduleFromProject({ targetHandoverDate: '2026-11-15' } as any, [{ cat: 'Carpentry', qty: 1, materials: 900, labor: 100 }] as any, { designSteps: [{ stepNumber: 1, title: 'Concept', startDate: '2026-08-01', durationDays: 10 }] } as any), projectStartISO: '2026-08-01' };
     smart.programme = { schedule, result: computeSchedule(schedule, '2026-10-18') };
     setup({ conversations: CONVS });
-    pick(/^Plan & timeline/);
+    pick(/^Progress/);
     const line = within(screen.getByRole('region', { name: 'Handover forecast' })).getByRole('button', { expanded: false });
     expect(line.textContent).toMatch(/Likely .* working days? past target/);
     const card = expand('Handover forecast');

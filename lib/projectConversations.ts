@@ -27,16 +27,22 @@ export interface ConversationDef {
   routes: string[];
 }
 
+/*
+  Named as the studio talks about the work, and listed in the order a project
+  runs (owner, 27 Nov 2026, "A" from three naming options: "getting a little
+  confused here"): one "Site" only (Execution), the survey with the brief, and
+  Project Health (the money view, finance roles only) with Money.
+*/
 export const CONVERSATIONS: ConversationDef[] = [
-  { id: 'whole', name: 'Whole project', about: 'Everything on this project, in order', routes: [] },
-  { id: 'chat', name: 'Client & portal', about: 'Messages with the client and their portal', routes: ['comms-tracker', 'client-portal'] },
-  { id: 'money', name: 'Money', about: 'Payments, offers and pricing', routes: ['payment-calc', 'analytics', 'ops'] },
-  { id: 'boq', name: 'BOQ', about: 'The BOQ, its versions and additions', routes: ['boq-editor', 'revision-studio', 'scope-additions'] },
-  { id: 'docs', name: 'Documents', about: 'Everything issued to the client', routes: ['docs', 'execution-agreement', 'client', 'terms-docket', 'onboarding', 'handover-docket'] },
-  { id: 'design', name: 'Design', about: 'Drawings, the Design Gate and selections', routes: ['drawing-tracker', 'design-gate', 'materials'] },
-  { id: 'site', name: 'Site', about: 'Site work, snags and meetings', routes: ['site-ops', 'site-quality', 'site-meetings'] },
-  { id: 'plan', name: 'Plan & timeline', about: 'Timeline, Ops Matrix, decisions and history', routes: ['timeline', 'project-journey', 'record-decision', 'project-reports', 'history'] },
-  { id: 'brief', name: 'Brief & Site', about: "The client's brief and the site", routes: ['leadiq'] },
+  { id: 'whole', name: 'Overview', about: 'Up next, and everything on this project in order', routes: [] },
+  { id: 'brief', name: 'Brief & Survey', about: "The client's brief, the site and its measurements", routes: ['leadiq'] },
+  { id: 'boq', name: 'BOQ & Scope', about: 'The BOQ, its versions and scope additions', routes: ['boq-editor', 'revision-studio', 'scope-additions'] },
+  { id: 'money', name: 'Money', about: 'Payments, offers, pricing and project health', routes: ['payment-calc', 'analytics', 'ops', 'project-reports'] },
+  { id: 'docs', name: 'Agreements & Docs', about: 'The proposal, terms, agreements and handover papers', routes: ['docs', 'execution-agreement', 'client', 'terms-docket', 'onboarding', 'handover-docket'] },
+  { id: 'design', name: 'Drawings & Design', about: 'Drawings, the Design Gate, selections and design reviews', routes: ['drawing-tracker', 'design-gate', 'materials'] },
+  { id: 'site', name: 'Execution', about: 'Site work, snags and site meetings', routes: ['site-ops', 'site-quality', 'site-meetings'] },
+  { id: 'plan', name: 'Progress', about: 'The Ops Matrix, timeline, decisions and history', routes: ['timeline', 'project-journey', 'record-decision', 'history'] },
+  { id: 'chat', name: 'Client', about: 'Messages with the client and their portal', routes: ['comms-tracker', 'client-portal'] },
 ];
 
 const BY_ROUTE: Record<string, ConversationId> = Object.fromEntries(
@@ -87,6 +93,9 @@ export interface ScreenMatch {
  * screens). Only screens this person may open: those in `conversations`, and
  * the home route.
  */
+/** Names a screen had before, so search still finds it ("Reports" became Project Health, 27 Nov 2026). */
+const FORMER_NAMES: Record<string, string[]> = { 'project-reports': ['Reports'] };
+
 export function findScreens(
   term: string,
   conversations: ConversationDef[],
@@ -104,7 +113,7 @@ export function findScreens(
   for (const route of routes) {
     const label = labelOf(route);
     const place = placeOf.get(route) || null;
-    const hay = [label, place?.label, place?.where].filter(Boolean).join(' ').toLowerCase();
+    const hay = [label, place?.label, place?.where, ...(FORMER_NAMES[route] || [])].filter(Boolean).join(' ').toLowerCase();
     if (!hay.includes(t)) continue;
     const conv = route === homeRoute ? whole : conversations.find((c) => c.routes.includes(route)) || whole;
     out.push({ route, label, conv, classic: place });
