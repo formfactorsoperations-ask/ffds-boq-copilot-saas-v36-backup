@@ -38,7 +38,7 @@ import { computeSchedule as computePayments } from '../../lib/paymentSchedule';
 import { computeSchedule as computeProgramme } from '../../lib/schedule';
 import { buildScheduleFromProject, scheduleForEngagement } from '../../lib/scheduleBuilder';
 import { useTimelinePhases } from '../../hooks/useTimelinePhases';
-import { buildProjectPnl, marginAssumption, CONFIDENCE_LABEL, MARGIN_SOURCE_LABEL } from '../../lib/projectPnl';
+import { buildProjectPnl, marginAssumption } from '../../lib/projectPnl';
 import { resolveDocumentState } from '../../services/documentIssueEngine';
 import { issuePortalAccess, portalTokenOf } from '../../services/portalAccessService';
 import { readPortalView } from '../../services/portalViewService';
@@ -52,7 +52,7 @@ import {
   inr, shortDate, anyMs, GanttRow, isoOf, dayNum,
 } from '../../lib/projectHome';
 import { Icon, Ring, UiProvider, useUi, useCountUp, useArmed, tipProps, Glyph, GlyphName } from './bits';
-import InsightsCard, { InsightTab } from './InsightsCard';
+import InsightsCard, { InsightTab, marginLineFor } from './InsightsCard';
 import { seesStudioFinance } from '../../lib/roleAccess';
 import { useSeesMargins, Masked } from '../ui/HideFigures';
 import { publicAppOrigin } from '../../lib/publicUrl';
@@ -488,11 +488,7 @@ function Home(p: ProjectHomeProps) {
             payments={payments}
             programme={{ rows: programme.rows, pins, finishISO: programme.finishISO, stale: programmeStale }}
             cost={cost}
-            marginLine={pnl && pnl.contractedTotal
-              ? (actualMargin
-                ? <><b>{inr(pnl.currentMargin)} actual margin ({pnl.currentMarginPct.toFixed(1)}%)</b> on {inr(pnl.contractedTotal)} contracted, against a potential {inr(pnl.quotedMargin)} ({pnl.quotedMarginPct.toFixed(1)}%). {CONFIDENCE_LABEL[pnl.confidence]}.</>
-                : <><b>{inr(pnl.quotedMargin)} potential margin ({pnl.quotedMarginPct.toFixed(1)}%)</b> on {inr(pnl.contractedTotal)} contracted{pnl.marginBasis === 'assumed' && pnl.assumedMargin ? `, assuming ${pnl.assumedMargin.pct.toFixed(1)}% on execution (${MARGIN_SOURCE_LABEL[pnl.assumedMargin.source]}), as the BOQ carries no costs` : pnl.boqMarginPct != null ? `, from the BOQ’s ${pnl.boqMarginPct.toFixed(1)}% margin` : ''}. The actual margin starts once purchase orders and vendor bills are entered.</>)
-              : <>No contract value yet, so there is no margin to show.</>}
+            marginLine={marginLineFor(pnl)}
             pnlCard={<ProjectPnlCard projectContext={p.projectContext} boq={p.fullBoq} projectId={p.projectId} activeTier={p.activeTier}
               assumption={assumption} onSetMarginPct={setMarginPct}
               currentUserRole={p.currentUserRole} onOpenProcurement={() => go('materials')} />}

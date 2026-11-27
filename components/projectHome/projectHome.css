@@ -550,3 +550,12 @@ button.ph-kpi.ph-tilt:hover{border-color:rgba(255,255,255,.92)}
   .ph-gly .d{opacity:.15}
   .ph-tilt{transform:none}
 }
+
+/*
+  Embedded in Project Reports (components/ops/ProjectReportsTab): the Hub's Cost & margin
+  and Activity panels, drawn inside the report's own kit Panel. No backdrop wash and no
+  padding of their own, since the Panel already has both.
+*/
+.ph.ph-embed{padding:0}
+.ph.ph-embed::before{content:none}
+.ph-embed .ph-panel{padding:0}

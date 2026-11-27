@@ -11,6 +11,7 @@ import {
   DrawingModel, DrawingCell, PaymentModel, PaymentRung, GanttRow, GatePin, CostModel, ActivityItem,
   inr, inrShort, shortDate, dayNum, isoOf, DAY, anyMs, timelineModel,
 } from '../../lib/projectHome';
+import { CONFIDENCE_LABEL, MARGIN_SOURCE_LABEL, type ProjectPnl } from '../../lib/projectPnl';
 
 export type InsightTab = 'draw' | 'money' | 'prog' | 'cost' | 'act';
 const TAB_KEY = 'ffds-home-tab';
@@ -469,7 +470,20 @@ function ProgrammePanel({ programme, go }: Props) {
 
 /* ─────────────────────────── Cost & margin ────────────────────────── */
 
-function CostPanel({ cost, marginLine, pnlCard }: Props) {
+/**
+ * The sentence over the cost charts: the margin, and what it rests on. Project
+ * Reports opens its own cost breakdown with the same line, so the two agree.
+ */
+export function marginLineFor(pnl: ProjectPnl | null): React.ReactNode {
+  if (!pnl || !pnl.contractedTotal) return <>No contract value yet, so there is no margin to show.</>;
+  if (pnl.hasProcurement) {
+    return <><b>{inr(pnl.currentMargin)} actual margin ({pnl.currentMarginPct.toFixed(1)}%)</b> on {inr(pnl.contractedTotal)} contracted, against a potential {inr(pnl.quotedMargin)} ({pnl.quotedMarginPct.toFixed(1)}%). {CONFIDENCE_LABEL[pnl.confidence]}.</>;
+  }
+  return <><b>{inr(pnl.quotedMargin)} potential margin ({pnl.quotedMarginPct.toFixed(1)}%)</b> on {inr(pnl.contractedTotal)} contracted{pnl.marginBasis === 'assumed' && pnl.assumedMargin ? `, assuming ${pnl.assumedMargin.pct.toFixed(1)}% on execution (${MARGIN_SOURCE_LABEL[pnl.assumedMargin.source]}), as the BOQ carries no costs` : pnl.boqMarginPct != null ? `, from the BOQ’s ${pnl.boqMarginPct.toFixed(1)}% margin` : ''}. The actual margin starts once purchase orders and vendor bills are entered.</>;
+}
+
+/** Also drawn by Project Reports (components/ops/ProjectReportsTab), inside a `.ph.ph-embed` wrapper and a UiProvider. */
+export function CostPanel({ cost, marginLine, pnlCard }: Pick<Props, 'cost' | 'marginLine' | 'pnlCard'>) {
   const armed = useArmed(120);
   const ui = useUi();
   const [hl, setHl] = useState(-1);
@@ -528,7 +542,8 @@ const kindGlyph = (kind: ActivityItem['kind'], online = false): GlyphName =>
 // Stem length for each lane above the line; payments hang below it.
 const LANE_STEM = [40, 82, 124];
 
-function ActivityPanel({ activity, activitySummary, activityStats: st, openHistory, onPlanCheckIn }: Props) {
+/** Also drawn by Project Reports, as CostPanel is. */
+export function ActivityPanel({ activity, activitySummary, activityStats: st, openHistory, onPlanCheckIn }: Pick<Props, 'activity' | 'activitySummary' | 'activityStats' | 'openHistory' | 'onPlanCheckIn'>) {
   const ui = useUi();
   const [hl, setHl] = useState<string | null>(null);
   const tl = useMemo(() => timelineModel(activity), [activity]);
