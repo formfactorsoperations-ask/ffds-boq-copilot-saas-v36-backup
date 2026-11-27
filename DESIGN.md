@@ -1324,13 +1324,16 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     one amber dot when a note is waiting on the person. Nothing else is coloured.
   - **The conversation**: its screens as buttons ("Open: …", the first primary), then the story
     (`lib/projectThread.ts`, from the Clients thread and the project's history) grouped by day, each item
-    with "Open {screen}". Whole project adds the next step (stage, "Next: …", steps done, Ops Matrix and
-    "Open the Hub") and **Up next** (three steps, one button each). The composer: Message the client /
-    Log their reply / Add a note, writing to the follow-up log as Clients does; Whole project adds
-    **Record** (Site visit · Meeting · Decision, keys S · M · D).
-  - **The project card** (~320px, from `xl`): At a glance (Collected and Next due for finance roles, behind
-    the hide-figures eye; Steps; Stage), Client portal (the portal status line and Review & send), Timeline,
-    Details and Journey.
+    with "Open {screen}"; only payments carry a source chip. Whole project opens on **one card**: the
+    stage and steps on one line (with Ops Matrix and "Open the Hub"), then **Up next**, three steps, one
+    button each (owner, 27 Nov 2026: one card, not a Next card and a list saying the same step twice).
+    Its foot is **Record** (Site visit · Meeting · Decision, keys S · M · D) and "Add a note", which opens
+    a note box only when clicked. **Messages to the client live in Client & portal only** (Message the
+    client / Log their reply / Add a note, writing to the follow-up log as Clients does); the other
+    conversations have the quiet note line.
+  - **The project card** (~320px, from `xl`): At a glance (Collected and Next due, for finance roles only,
+    behind the hide-figures eye), Client portal (the portal status line; Review & send only once the client
+    has access, Give access when they have none), Timeline, Details and Journey.
 - **Every screen opens in a full-screen window** (the modal pattern: `phd-scrim`, `phd-pop`, `rounded-3xl`):
   a brand eyebrow "Project · Conversation", the screen's name (`text-2xl font-bold`), its sister screens as a
   `Segmented`, and ✕. The screen is the same component Classic draws. The footer: "What you change here
