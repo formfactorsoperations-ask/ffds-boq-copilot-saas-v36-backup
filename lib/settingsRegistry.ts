@@ -117,6 +117,7 @@ export const SETTINGS_FIELDS: SettingsField[] = [
   // Data & integrations
   { key: 'designDesk', label: 'Design Desk: old or new', section: 'system', criticality: 'optional', consequence: 'Which Design Desk everyone in the studio works on', aliases: ['design desk', 'new desk', 'old desk', 'desk 2.0', 'drawings'] },
   { key: 'projectsScreen', label: 'Projects screen: folders or new', section: 'system', criticality: 'optional', consequence: 'Which Projects screen everyone in the studio sees', aliases: ['projects screen', 'glass folders', 'journey', 'projects list', 'new projects'] },
+  { key: 'projectWorkspace', label: 'Project workspace: Classic or Conversations', section: 'system', criticality: 'optional', consequence: 'Which project workspace everyone in the studio sees, or whether each person chooses', aliases: ['project workspace', 'project view', 'classic', 'conversations', 'new project view', 'old project view', 'sidebar'] },
   { key: 'defaultProjectPhoto', label: 'Default project photo', section: 'system', criticality: 'optional', consequence: 'The photo a project shows on the Projects screen until it has a render or a cover', aliases: ['default photo', 'project photo', 'cover photo', 'placeholder image', 'default image'] },
 
   // Appearance

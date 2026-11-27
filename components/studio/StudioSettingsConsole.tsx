@@ -33,6 +33,7 @@ import PeopleSettings from './PeopleSettings';
 import EngagementSettings from './EngagementSettings';
 import DesignDeskSetting, { deskChoiceOf } from './DesignDeskSetting';
 import ProjectsScreenSetting, { projectsScreenOf } from './ProjectsScreenSetting';
+import ProjectWorkspaceSetting, { studioWorkspaceOf } from './ProjectWorkspaceSetting';
 import DefaultProjectPhotoSetting from './DefaultProjectPhotoSetting';
 import ConsoleHeader from '../ui/ConsoleHeader';
 import {
@@ -636,6 +637,19 @@ export default function StudioSettingsConsole(props: {
                   saved={projectsScreenOf(orgData)}
                   onChange={(v) => setField('projectsScreen', v)}
                   highlight={jumpKey === 'projectsScreen'}
+                />
+              </div>
+
+              {/* Which project workspace the studio sees: Classic, each person's choice, or Conversations (lib/projectView). Saved with the rest of the draft. */}
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3">
+                  Project workspace
+                </h3>
+                <ProjectWorkspaceSetting
+                  value={studioWorkspaceOf(draft as any)}
+                  saved={studioWorkspaceOf(orgData as any)}
+                  onChange={(v) => setField('projectWorkspace', v)}
+                  highlight={jumpKey === 'projectWorkspace'}
                 />
               </div>
 

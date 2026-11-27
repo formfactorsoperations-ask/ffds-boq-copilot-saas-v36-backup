@@ -8,6 +8,8 @@ export interface OrganizationContext {
     designDesk?: 'classic' | 'new';
     /** Which Projects screen this studio uses: the glass folders ('folders', the default) or the journey screen ('journey'). */
     projectsScreen?: 'folders' | 'journey';
+    /** Which project workspace this studio uses (lib/projectView.ts): today's ('classic', the default), each person's own choice ('choose'), or the conversations view for everyone ('conversations'). */
+    projectWorkspace?: 'classic' | 'choose' | 'conversations';
     /** The photo a project shows on the Projects screen when it has no cover and no render (lib/defaultPhotos). */
     defaultProjectPhoto?: { url: string; storagePath?: string; setAt: number; setBy?: string } | null;
     /** The engagements this studio takes on (lib/engagement.ts). Absent: turnkey and design only. */
