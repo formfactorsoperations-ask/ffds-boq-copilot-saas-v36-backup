@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, Sparkles, MessageCircle, Wallet, Table, FolderOpen, PenTool, HardHat, CalendarRange, MapPin,
-  X, Home, Users, Search, FileText, Globe, IndianRupee, NotebookPen, Info, Eye, Scale, ChevronRight, LayoutGrid, Compass, History, Pause, Play,
+  X, Home, Users, Search, FileText, Globe, IndianRupee, NotebookPen, Info, Eye, Scale, ChevronRight, LayoutGrid, Compass, History,
 } from '@/lib/lucide-shim';
 import { Button, Chip, EmptyState, INPUT, Segmented, type Tone } from '../ui/kit';
 import { Masked, HideFiguresButton } from '../ui/HideFigures';
 import { CountUp } from '../ui/HudBits';
 import { useProjectGlance, type Glance } from './useProjectGlance';
-import ConversationsBackdrop from './ConversationsBackdrop';
 import { motion } from 'framer-motion';
 import PageTitleBlock from '../PageTitleBlock';
 import ViewOnlyGuard from '../ViewOnlyGuard';
@@ -45,8 +44,6 @@ import '../projectHeader/projectHeader.css';
   the window, Esc or "Back to …" returns to the conversation.
 */
 
-const STILL_KEY = 'studiodesk.projectView.stillBackground';
-
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
 
 const CONV_ICON: Record<ConversationId, React.ElementType> = {
@@ -54,9 +51,16 @@ const CONV_ICON: Record<ConversationId, React.ElementType> = {
   design: PenTool, site: HardHat, plan: CalendarRange, brief: MapPin,
 };
 
-/* Each conversation's icon moves on hover in its own way, as the project sidebar's do (projectSidebar.css .psb-ic). */
+/*
+  Each icon has a motion of its own that fits what it shows (conversations.css
+  .cvw-ic, owner 27 Nov 2026): it plays on hover, and once when its
+  conversation opens.
+*/
 const CONV_MOVE: Record<ConversationId, string> = {
-  whole: 'spin', chat: 'wiggle', money: 'wiggle', boq: 'nudge', docs: 'nudge', design: 'swing', site: 'bounce', plan: 'nudge', brief: 'bounce',
+  whole: 'twinkle', chat: 'talk', money: 'flip', boq: 'shuffle', docs: 'open', design: 'draw', site: 'tap', plan: 'page', brief: 'drop',
+};
+const SOURCE_MOVE: Record<ThreadSource, string> = {
+  sent: 'talk', proposals: 'open', portal: 'spin', payments: 'flip', design: 'draw', site: 'tap', team: 'draw',
 };
 
 /* The sticker faces (DESIGN.md "Stickers"), as on Clients: gold for a signature, rose for unpaid, amber for no reply. */
@@ -220,15 +224,27 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
     else if (n !== 1) setConv(tourFrom.current);
   };
   const endTour = () => { setTour(false); setConv(tourFrom.current); };
-  /* The 3D backdrop moves unless the person paused it on this device. */
-  const [still, setStill] = useState(() => { try { return window.localStorage.getItem(STILL_KEY) === '1'; } catch { return false; } });
-  const toggleStill = () => setStill((v) => { try { window.localStorage.setItem(STILL_KEY, v ? '0' : '1'); } catch { /* private window */ } return !v; });
   const classic = p.classic || [];
   const classicOf = (route: string) => classic.find((c) => c.route === route) || null;
 
+  /* A ripple spreads from where you click anything marked data-ripple (conversations.css .cvw-ripple). */
+  const ripple = (e: React.PointerEvent) => {
+    const host = (e.target as HTMLElement | null)?.closest?.('[data-ripple]') as HTMLElement | null;
+    if (!host || (host as HTMLButtonElement).disabled) return;
+    try { if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return; } catch { /* old browser */ }
+    const r = host.getBoundingClientRect();
+    const d = Math.max(r.width, r.height) * 2.2;
+    const dot = document.createElement('span');
+    dot.className = 'cvw-ripple';
+    dot.setAttribute('aria-hidden', 'true');
+    Object.assign(dot.style, { width: `${d}px`, height: `${d}px`, left: `${e.clientX - r.left - d / 2}px`, top: `${e.clientY - r.top - d / 2}px` });
+    host.appendChild(dot);
+    window.setTimeout(() => dot.remove(), 700);
+  };
+
   return (
-    <div className="flex flex-col h-full bg-slate-50 min-w-0">
-      <WayOut desks={p.desks} onLeave={p.onLeaveProject} onUseClassic={p.onUseClassic} showHideFigures={p.showHideFigures} onTour={beginTour} still={still} onStill={toggleStill} />
+    <div className="flex flex-col h-full bg-slate-50 min-w-0" onPointerDown={ripple}>
+      <WayOut desks={p.desks} onLeave={p.onLeaveProject} onUseClassic={p.onUseClassic} showHideFigures={p.showHideFigures} onTour={beginTour} />
       <ProjectTitle ctx={ctx} name={name} statusLabel={p.statusLabel} onStatusClick={p.onStatusClick}
         onPortal={p.conversations.some((c) => c.routes.includes('client-portal')) ? () => open('client-portal') : undefined} />
       {p.alertBar}
@@ -249,8 +265,7 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
           money={p.money} journey={p.journey} onPick={setConv}
           findScreen={(q) => findScreens(q, p.conversations, (r) => (r === p.homeRoute ? p.hubLabel : p.labelOf(r)), classic, p.homeRoute)}
           onOpenScreen={(c, r) => { setConv(c); open(r); }} />
-        <section className="relative flex flex-col min-h-0 min-w-0 border-l border-slate-200" aria-label={shown.name}>
-          <ConversationsBackdrop conv={shown.id} still={still || !!windowRoute || tour} />
+        <section className="flex flex-col min-h-0 min-w-0 border-l border-slate-100" aria-label={shown.name}>
           <ThreadHead conv={shown} labelOf={p.labelOf} onOpen={open} onPickMobile={setConv} conversations={p.conversations} />
           <Thread key={shown.id} conv={shown.id} routes={shown.routes} aboutOf={p.aboutOf || (() => '')} story={storyFor(story, shown.id)} now={now} loading={!records} onOpen={open}
             labelOf={p.labelOf} visible={(r) => p.conversations.some((c) => c.routes.includes(r))}
@@ -280,32 +295,27 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
 
 /* ───────────── the way out ───────────── */
 
-function WayOut({ desks, onLeave, onUseClassic, showHideFigures, onTour, still, onStill }: {
+function WayOut({ desks, onLeave, onUseClassic, showHideFigures, onTour }: {
   desks: StudioJumpItem[]; onLeave: (t?: string) => void; onUseClassic?: () => void; showHideFigures: boolean; onTour: () => void;
-  still: boolean; onStill: () => void;
 }) {
-  const item = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap';
+  const item = 'cvw-hot inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap';
   return (
     <nav aria-label="Studio" data-tour="way" className="h-12 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-1 min-w-0 overflow-x-auto">
-      <button type="button" onClick={() => onLeave('projects')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/15 whitespace-nowrap">
-        <ArrowLeft className="w-4 h-4" aria-hidden />All projects
+      <button type="button" data-ripple onClick={() => onLeave('projects')} className="cvw-hot inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/15 whitespace-nowrap">
+        <span className="cvw-ic" data-m="back"><ArrowLeft className="w-4 h-4" aria-hidden /></span>All projects
       </button>
       <span className="w-px h-6 bg-slate-200 mx-1 shrink-0" aria-hidden />
-      <button type="button" onClick={() => onLeave('home')} className={item}><Home className="w-4 h-4 text-slate-400" aria-hidden />Studio home</button>
-      <button type="button" onClick={() => onLeave('clients')} className={cx(item, 'hidden sm:inline-flex')}><Users className="w-4 h-4 text-slate-400" aria-hidden />Clients</button>
+      <button type="button" data-ripple onClick={() => onLeave('home')} className={item}><span className="cvw-ic" data-m="bounce"><Home className="w-4 h-4 text-slate-400" aria-hidden /></span>Studio home</button>
+      <button type="button" data-ripple onClick={() => onLeave('clients')} className={cx(item, 'hidden sm:inline-flex')}><span className="cvw-ic" data-m="talk"><Users className="w-4 h-4 text-slate-400" aria-hidden /></span>Clients</button>
       {desks.map((d) => {
         const Icon = d.icon;
-        return <button key={d.route} type="button" onClick={() => onLeave(d.route)} className={cx(item, 'hidden md:inline-flex')} title={d.sub}><Icon className="w-4 h-4 text-slate-400" aria-hidden />{d.label}</button>;
+        return <button key={d.route} type="button" data-ripple onClick={() => onLeave(d.route)} className={cx(item, 'hidden md:inline-flex')} title={d.sub}><span className="cvw-ic" data-m="go"><Icon className="w-4 h-4 text-slate-400" aria-hidden /></span>{d.label}</button>;
       })}
       <span className="flex-1" />
       {showHideFigures && <HideFiguresButton />}
-      <button type="button" onClick={onStill} aria-pressed={still} aria-label={still ? 'Play the background' : 'Pause the background'}
-        title={still ? 'Let the background move again' : 'Keep the background still'} className="w-9 h-9 grid place-items-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 shrink-0">
-        {still ? <Play className="w-4 h-4" aria-hidden /> : <Pause className="w-4 h-4" aria-hidden />}
-      </button>
-      <button type="button" onClick={onTour} className={cx(item, 'hidden sm:inline-flex')} title="A short tour of this view"><Compass className="w-4 h-4 text-slate-400" aria-hidden />Show me around</button>
+      <button type="button" data-ripple onClick={onTour} className={cx(item, 'hidden sm:inline-flex')} title="A short tour of this view"><span className="cvw-ic" data-m="spin"><Compass className="w-4 h-4 text-slate-400" aria-hidden /></span>Show me around</button>
       {onUseClassic && (
-        <Button size="sm" variant="secondary" onClick={onUseClassic} title="Your own choice: the studio's setting stays as it is">Use Classic view</Button>
+        <Button size="sm" variant="secondary" className="cvw-hot" data-ripple onClick={onUseClassic} title="Your own choice: the studio's setting stays as it is">Use Classic view</Button>
       )}
     </nav>
   );
@@ -366,15 +376,16 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
           const needs = c.routes.reduce((s, r) => s + needsOf(r), 0) > 0;
           const on = c.id === conv;
           return (
-            <button key={c.id} type="button" onClick={() => onPick(c.id)} aria-current={on ? 'true' : undefined}
-              className={cx('psb-btn relative w-full flex items-center gap-3 px-3 py-3 text-left border-b border-slate-100 transition-colors hud-row-in', !on && 'hover:bg-slate-50')}
+            <button key={c.id} type="button" data-ripple onClick={() => onPick(c.id)} aria-current={on ? 'true' : undefined}
+              className={cx('cvw-hot w-full flex items-center gap-3 px-3 py-3 text-left border-b border-slate-100 hud-row-in', !on && 'hover:bg-slate-50')}
               style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
               {/* The highlight slides to the conversation you pick, as the sidebar's does to the screen you are on. */}
               {on && <motion.span layoutId="conv-on" aria-hidden className="absolute inset-0 bg-[#3D52A0]/10 shadow-[inset_3px_0_0_#3D52A0]" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
-              <span className={cx('relative w-10 h-10 rounded-full grid place-items-center shrink-0', c.id === 'whole' ? 'bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
-                <span className="psb-ic" data-a={CONV_MOVE[c.id]}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
+              {/* The conversation you are in fills its disc; it pops and its icon plays as you pick it. */}
+              <span key={on ? 'on' : 'off'} className={cx('cvw-disc relative w-10 h-10 rounded-full grid place-items-center shrink-0', on ? 'is-pop bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
+                <span className={cx('cvw-ic', on && 'is-play')} data-m={CONV_MOVE[c.id]}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
               </span>
-              <span className="relative min-w-0 flex-1">
+              <span className="cvw-text relative min-w-0 flex-1">
                 <span className="flex items-baseline gap-2">
                   <span className="flex-1 min-w-0 truncate text-sm font-bold text-slate-800">{c.name}</span>
                   {pv.at && <span className="text-[11px] text-slate-400 whitespace-nowrap">{whenShort(pv.at, now)}</span>}
@@ -393,11 +404,11 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
             {screens.map((m, i) => {
               const renamed = m.classic && m.classic.label !== m.label;
               return (
-                <button key={m.route} type="button" onClick={() => onOpenScreen(m.conv.id, m.route)}
-                  className="psb-btn w-full flex items-start gap-3 px-3 py-2.5 text-left border-b border-slate-100 hover:bg-slate-50 hud-row-in"
+                <button key={m.route} type="button" data-ripple onClick={() => onOpenScreen(m.conv.id, m.route)}
+                  className="cvw-hot w-full flex items-start gap-3 px-3 py-2.5 text-left border-b border-slate-100 hover:bg-slate-50 hud-row-in"
                   style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
-                  <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><ArrowRight className="w-4 h-4" aria-hidden /></span>
-                  <span className="min-w-0 flex-1">
+                  <span className="cvw-disc w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><span className="cvw-ic" data-m="go"><ArrowRight className="w-4 h-4" aria-hidden /></span></span>
+                  <span className="cvw-text min-w-0 flex-1">
                     <span className="block truncate text-sm font-bold text-slate-800">{m.label}</span>
                     <span className="block text-xs text-slate-500">
                       In {m.conv.name}
@@ -423,9 +434,11 @@ function ThreadHead({ conv, labelOf, onOpen, onPickMobile, conversations }: {
 }) {
   const Icon = CONV_ICON[conv.id];
   return (
-    <div data-tour="open" className="relative z-[1] shrink-0 border-b border-slate-200 bg-white/90">
+    <div data-tour="open" className="shrink-0 border-b border-slate-100">
       <div className="flex items-center gap-3 px-4 py-3">
-        <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
+        <span key={conv.id} className="cvw-disc is-pop w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0">
+          <span className="cvw-ic is-play" data-m={CONV_MOVE[conv.id]}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
+        </span>
         <div className="min-w-0 flex-1">
           <h2 className="font-bold text-slate-800 truncate">{conv.name}</h2>
           <p className="text-xs text-slate-500 truncate">{conv.about}</p>
@@ -439,7 +452,7 @@ function ThreadHead({ conv, labelOf, onOpen, onPickMobile, conversations }: {
         <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
           <span className="text-xs font-semibold text-slate-500 mr-1">Open:</span>
           {conv.routes.map((r, i) => (
-            <Button key={r} size="sm" variant={i === 0 ? 'primary' : 'secondary'} onClick={() => onOpen(r)}>{labelOf(r)}</Button>
+            <Button key={r} size="sm" variant={i === 0 ? 'primary' : 'secondary'} className="cvw-hot cvw-lift" data-ripple onClick={() => onOpen(r)}>{labelOf(r)}</Button>
           ))}
         </div>
       )}
@@ -459,7 +472,7 @@ const Thread: React.FC<{
   const scroller = useRef<HTMLDivElement | null>(null);
   useEffect(() => { const el = scroller.current; if (el) el.scrollTop = el.scrollHeight; }, [story.length, conv]);
   return (
-    <div className="relative z-[1] flex-1 min-h-0 flex flex-col">
+    <div className="flex-1 min-h-0 flex flex-col">
       {pinned}
       <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-2.5">
         {story.length > SHOW && !all && (
@@ -495,17 +508,17 @@ const StartHere: React.FC<{ conv: ConversationId; routes: string[]; labelOf: (r:
       <p className="text-xs text-slate-500 mb-3">Open a screen below. What you do there will appear in this conversation.</p>
       <div className="grid gap-2.5 sm:grid-cols-2">
         {routes.map((r, i) => (
-          <button key={r} type="button" onClick={() => onOpen(r)}
-            className="psb-btn phd-lift hud-row-in text-left flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 hover:border-[#3D52A0] hover:shadow-sm"
+          <button key={r} type="button" data-ripple onClick={() => onOpen(r)}
+            className="cvw-hot cvw-lift hud-row-in text-left flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 hover:border-[#3D52A0]"
             style={{ animationDelay: `${i * 40}ms` }}>
-            <span className={cx('w-11 h-11 rounded-xl grid place-items-center shrink-0', i === 0 ? 'bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
-              <span className="psb-ic" data-a={CONV_MOVE[conv]}><Icon className="w-5 h-5" aria-hidden /></span>
+            <span className={cx('cvw-disc w-11 h-11 rounded-xl grid place-items-center shrink-0', i === 0 ? 'bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
+              <span className="cvw-ic" data-m={CONV_MOVE[conv]}><Icon className="w-5 h-5" aria-hidden /></span>
             </span>
-            <span className="min-w-0 flex-1">
+            <span className="cvw-text min-w-0 flex-1">
               <span className="block text-sm font-bold text-slate-800">{labelOf(r)}</span>
               {aboutOf(r) && <span className="block text-xs text-slate-500 line-clamp-2">{aboutOf(r)}</span>}
             </span>
-            <ArrowRight className="w-4 h-4 text-[#3D52A0] shrink-0" aria-hidden />
+            <ArrowRight className="cvw-arrow w-4 h-4 text-[#3D52A0] shrink-0" aria-hidden />
           </button>
         ))}
       </div>
@@ -517,8 +530,8 @@ const StoryRow: React.FC<{
   it: StoryItem; delay: number; onOpen: (r: string) => void; labelOf: (r: string) => string; visible: (r: string) => boolean;
 }> = ({ it, delay, onOpen, labelOf, visible }) => {
   const openBtn = it.route && visible(it.route) ? (
-    <button type="button" onClick={() => onOpen(it.route!)} className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0] hover:text-white">
-      Open {labelOf(it.route)}<ArrowRight className="w-3 h-3" aria-hidden />
+    <button type="button" data-ripple onClick={() => onOpen(it.route!)} className="cvw-hot mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0] hover:text-white">
+      Open {labelOf(it.route)}<ArrowRight className="cvw-arrow w-3 h-3" aria-hidden />
     </button>
   ) : null;
   const style = { animationDelay: `${delay}ms` };
@@ -551,8 +564,8 @@ const StoryRow: React.FC<{
   const src = SOURCE_ICON[it.source || 'team'];
   const Icon = src.icon;
   return (
-    <div className={cx('psb-btn phd-lift max-w-[82%] flex gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hud-row-in hover:shadow-sm', it.side === 'client' ? 'self-start' : 'self-end')} style={style}>
-      <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><span className="psb-ic" data-a="nudge"><Icon className="w-4 h-4" aria-hidden /></span></span>
+    <div className={cx('cvw-hot cvw-lift max-w-[82%] flex gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hud-row-in', it.side === 'client' ? 'self-start' : 'self-end')} style={style}>
+      <span className="cvw-disc w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><span className="cvw-ic" data-m={SOURCE_MOVE[it.source || 'team']}><Icon className="w-4 h-4" aria-hidden /></span></span>
       <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-800">{it.text}</p>
         {it.detail && <p className="text-xs text-slate-500">{it.detail}</p>}
@@ -584,8 +597,8 @@ function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, lab
         <p className="min-w-0 flex-1 text-xs text-slate-500 truncate">
           <b className="text-slate-700">Stage {stage} of 6{stageName ? ` · ${stageName}` : ''}</b> · {journey.done} of {journey.total} steps done
         </p>
-        {onMatrix && <Button size="sm" variant="quiet" onClick={onMatrix}>Ops Matrix</Button>}
-        <Button size="sm" variant="quiet" icon={LayoutGrid} onClick={onHub}>Open {hubLabel === 'Hub' ? 'the Hub' : hubLabel}</Button>
+        {onMatrix && <Button size="sm" variant="quiet" className="cvw-hot" data-ripple onClick={onMatrix}>Ops Matrix</Button>}
+        <Button size="sm" variant="quiet" icon={LayoutGrid} className="cvw-hot" data-ripple onClick={onHub}>Open {hubLabel === 'Hub' ? 'the Hub' : hubLabel}</Button>
       </div>
       <div className="px-4 pt-2.5 pb-1"><h3 className="font-bold text-slate-800">Up next</h3></div>
       {!rows.length && <p className="px-4 pb-3 text-xs text-slate-500">Nothing needs you on this project right now.</p>}
@@ -596,13 +609,13 @@ function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, lab
             {r.badge && <Chip tone={r.badge === 'Blocker' ? 'bad' : 'brand'}>{r.badge}</Chip>}
           </p>
           {(r.actions || []).map((a) => (
-            <Button key={a.label} size="sm" variant={a.primary ? 'primary' : 'secondary'} className="phd-lift" onClick={a.run}>{a.label}</Button>
+            <Button key={a.label} size="sm" variant={a.primary ? 'primary' : 'secondary'} className="cvw-hot cvw-lift" data-ripple onClick={a.run}>{a.label}</Button>
           ))}
-          {!r.actions?.length && r.route && <Button size="sm" variant="secondary" className="phd-lift" onClick={() => onOpen(r.route!)}>Open {labelOf(r.route)}</Button>}
+          {!r.actions?.length && r.route && <Button size="sm" variant="secondary" className="cvw-hot cvw-lift" data-ripple onClick={() => onOpen(r.route!)}>Open {labelOf(r.route)}</Button>}
         </div>
       ))}
       {!!journey.more && (
-        <button type="button" onClick={onHub} className="w-full text-left px-4 py-2 border-t border-slate-100 text-xs font-bold text-[#3D52A0] hover:bg-[#3D52A0]/5">
+        <button type="button" data-ripple onClick={onHub} className="cvw-hot w-full text-left px-4 py-2 border-t border-slate-100 text-xs font-bold text-[#3D52A0] hover:bg-[#3D52A0]/5">
           {journey.more} more on the Hub →
         </button>
       )}
@@ -636,20 +649,20 @@ function Composer({ conv, convName, canLog, onWrite, onRecord }: {
     } catch { setState('failed'); }
   };
   return (
-    <div className="relative z-[1] shrink-0 border-t border-slate-200 px-4 py-2.5 bg-white/90 flex flex-col gap-2">
+    <div className="shrink-0 border-t border-slate-200 px-4 py-2.5 bg-white flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-1.5">
         {onRecord && (
           <>
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Record</span>
-            <Button size="sm" variant="secondary" icon={HardHat} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="S" className="phd-lift">Site visit</Button>
-            <Button size="sm" variant="secondary" icon={Users} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="M" className="phd-lift">Meeting</Button>
-            <Button size="sm" variant="secondary" icon={Scale} onClick={() => onRecord('record-decision')} aria-keyshortcuts="D" className="phd-lift">Decision</Button>
+            <Button size="sm" variant="secondary" icon={HardHat} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="S" className="cvw-hot cvw-lift" data-ripple>Site visit</Button>
+            <Button size="sm" variant="secondary" icon={Users} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="M" className="cvw-hot cvw-lift" data-ripple>Meeting</Button>
+            <Button size="sm" variant="secondary" icon={Scale} onClick={() => onRecord('record-decision')} aria-keyshortcuts="D" className="cvw-hot cvw-lift" data-ripple>Decision</Button>
           </>
         )}
         <span className="flex-1" />
         {state === 'saved' && !open && <span className="text-[11px] text-emerald-700 hud-row-in">Note saved here and on the Ops Desk</span>}
         {canLog && !open && (
-          <Button size="sm" variant="quiet" icon={NotebookPen} onClick={() => { setOpen(true); setState('idle'); }}
+          <Button size="sm" variant="quiet" icon={NotebookPen} className="cvw-hot" data-ripple onClick={() => { setOpen(true); setState('idle'); }}
             title="A note only the studio sees, kept here and on the Ops Desk">Add a note for the team</Button>
         )}
       </div>
@@ -695,15 +708,15 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, glance, portalLin
     </div>
   );
   const Tile: React.FC<{ label: string; value: React.ReactNode; sub: string; route: string | null }> = ({ label, value, sub, route }) => (
-    <button type="button" disabled={!route || !has(route)} onClick={() => route && onOpen(route)}
-      className="phd-lift text-left rounded-xl border border-slate-200 px-3 py-2.5 hover:border-[#3D52A0] disabled:hover:border-slate-200 disabled:cursor-default">
+    <button type="button" data-ripple disabled={!route || !has(route)} onClick={() => route && onOpen(route)}
+      className="cvw-hot cvw-lift text-left rounded-xl border border-slate-200 px-3 py-2.5 hover:border-[#3D52A0] disabled:hover:border-slate-200 disabled:cursor-default">
       <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
       <span className="block font-black text-slate-800 tabular-nums">{value}</span>
       <span className="block text-[11px] text-slate-500 truncate">{sub}</span>
     </button>
   );
   return (
-    <aside className="hidden xl:flex flex-col min-h-0 overflow-y-auto border-l border-slate-200" aria-label="Project card">
+    <aside className="hidden xl:flex flex-col min-h-0 overflow-y-auto border-l border-slate-100" aria-label="Project card">
       <Sec title="At a glance">
         <div className="grid grid-cols-2 gap-2">
           {seesMoney && (

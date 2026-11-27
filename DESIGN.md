@@ -1369,29 +1369,25 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   tiles lift on hover (`phd-lift`); figures count up (`CountUp`); the window's screen tabs glide
   (`Segmented glide`); panes `hud-panel-in`, the window `phd-scrim` / `phd-pop`. All of it stops under
   reduced motion. Same fonts and colours; no new accent.
-- **The 3D stage** (owner, 27 Nov 2026: "some 3D background … funky motions outside DESIGN.md are
-  okay", then "3D shapes related to the conversation we are on, related to interior and architecture
-  practice"; this workspace only). It fills the conversation pane, under the story's solid cards
-  (`ConversationsBackdrop`, `cvb-*`), and never depends on what surrounds the workspace. Its stylesheet is
-  imported from `src/index.css` (build.js compiles only that file), and the styles that hold its layout
-  are also inline, so it can never cover the screen.
-  - **A maquette per conversation** (`maquette.ts`, three.js, loaded only when this view opens), drawn
-    like a studio model: matte white card with the brand blue along every edge, in an axonometric view,
-    one or two pieces in the conversation's tint:
-    Whole project, a room cut open (sofa, rug, table, pendant lamp, plant); Client & portal, an arched
-    doorway whose door swings, two speech bubbles; Money, coin stacks rising like a payment schedule, a
-    gold coin flipping; BOQ, a material sample fan opening, a tile grid, planks; Documents, a stack of
-    drawings with a blueprint lifting, rolls, a set square; Design, a lounge chair and ottoman on a
-    plinth, an arc lamp, swatches; Site, a tower crane turning over a frame going up, bricks, a cone;
-    Plan & timeline, a staircase of milestones lighting step by step, a ball hopping up to the flag;
-    Brief & Site, a contoured site with a house on its plateau, a tree, a north arrow.
-  - **Motion:** opening a conversation drops its model in piece by piece (the old one sinks away); the
-    model turns gently, floats, leans toward the pointer, and its one part moves. Two soft glows drift in
-    the tint: brand, amber (Money, Site), rose (Design), emerald (Brief & Site).
-  - Palette only (slate card, brand lines, emerald, amber, rose); `src/tests/maquette.test.ts` pins it.
-  - Decoration only: hidden from assistive tech, never takes a click. Still (assembled, not moving) under
-    reduced motion, during the tour, while a window is open, and when the person pauses it (the pause
-    button in the top bar, remembered on that device). Without WebGL only the glows show.
+- **Icons in motion, hover and press** (owner, 27 Nov 2026: "improve on icons with added motions, also
+  can we have a hover effect when hovered and clicked?"; this workspace only, `conversations.css`, `cvw-*`,
+  imported from `src/index.css` because build.js compiles only that file). A 3D background was tried the
+  same day and dropped at the owner's word; do not bring it back.
+  - **Each icon moves in a way that fits it** (`.cvw-ic[data-m]`), on hover or keyboard focus, and once
+    when its conversation opens: Whole project's sparkle twinkles, Client & portal's bubble talks
+    (squash and stretch), Money's wallet flips like a coin, BOQ's table shuffles, Documents' folder
+    opens, Design's pen sketches and draws its own outline, Site's hard hat taps down, Plan & timeline's
+    calendar turns a page, Brief & Site's pin drops in and bounces. Story cards use the same motions by
+    source (payments flip, site taps, the portal spins); the top bar's All projects slides back, Studio
+    home bounces, Clients talks, the desks go forward, Show me around spins.
+  - **Hover** (`.cvw-hot`): the row or card tints, its icon plate (`.cvw-disc`) grows with a soft brand
+    ring, the words ease right (`.cvw-text`), an arrow slides on (`.cvw-arrow`); cards and buttons also
+    lift with a brand shadow (`.cvw-lift`).
+  - **Press and click:** the row or button sinks a little and its plate shrinks; a ripple spreads from
+    the point clicked (`data-ripple`, `.cvw-ripple`, brand at low strength).
+  - **Picked:** the open conversation's plate fills brand blue and pops; the conversation head's icon pops
+    and plays its motion as you arrive.
+  - All of it stops under reduced motion. Palette only.
 
 ### Summary-first sections (approved 16 Nov 2026)
 
