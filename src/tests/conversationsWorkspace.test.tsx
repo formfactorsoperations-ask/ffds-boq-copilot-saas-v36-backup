@@ -19,6 +19,9 @@ vi.mock('../../services/clientThreadService', () => ({
 vi.mock('../../services/portalVisitsService', () => ({ watchClientVisits: () => () => {} }));
 vi.mock('../../services/opsDeskService', () => ({ logFollowUp: vi.fn(async (f: any) => ({ id: 'n1', ...f, at: Date.now(), by: f.me.email, byName: f.me.name })) }));
 vi.mock('../../components/PageTitleBlock', () => ({ default: () => null }));
+const seen = vi.hoisted(() => ({ readSeen: vi.fn(async () => null as number | null), markSeen: vi.fn(async () => {}) }));
+vi.mock('../../services/projectSeenService', () => seen);
+vi.mock('../../components/ops/useHubAlerts', () => ({ useHubAlerts: () => ({ alerts: [], dismiss: () => {} }) }));
 vi.mock('../../components/projectConversations/useProjectGlance', () => ({
   useProjectGlance: () => ({
     drawings: { total: 7, issued: 4, approved: 3 }, handoverISO: '2027-03-14', targetISO: null, hasProgramme: true,
@@ -269,4 +272,76 @@ describe('the Conversations workspace', () => {
     expect(plateOf(/^Money/).style.background).toBe('rgb(140, 106, 51)'); // picked: Home's gold, filled
   });
 
+});
+
+/* Smart workspace, PR 1 (owner, 27 Nov 2026): signals, Watch-outs, Money waiting and Since you were here. */
+describe('the smart workspace', () => {
+  const DAY = 86400000;
+  const day = (ago: number) => new Date(Date.now() - ago * DAY).toISOString().slice(0, 10);
+  const OWING = {
+    name: 'Palacia 3BHK', clientName: 'Mrs. Mehta', status: 'won', currentStage: 3,
+    paymentMilestones: [
+      { id: 'm1', type: 'design', name: 'Sign-up & Concept', percentage: 40, description: '', status: 'invoiced', invoiceDate: day(20) },
+      { id: 'm2', type: 'design', name: 'Design Development', percentage: 60, description: '', status: 'pending' },
+    ],
+  };
+  const MONEY = {
+    projectValue: 888186, totalPaid: 0, balanceDue: 888186,
+    milestones: [
+      { id: 'm1', type: 'design' as const, name: 'Sign-up & Concept', percentage: 40, status: 'invoiced', owed: 10590, invoiceNumber: 'FF-01', invoiceDate: day(20), date: null },
+      { id: 'm2', type: 'design' as const, name: 'Design Development', percentage: 60, status: 'pending', owed: 124000, invoiceNumber: null, invoiceDate: null, date: null },
+    ],
+  };
+
+  it('says what is wrong on the conversation, in words and colour, never with an amount', () => {
+    setup({ projectContext: OWING, money: MONEY });
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    const reason = within(within(list).getByRole('button', { name: /^Money/ })).getByText('Sign-up & Concept unpaid 20 days');
+    expect(reason.className).toContain('text-rose-700');
+    expect(list.textContent).not.toContain('₹');
+  });
+
+  it('gathers the worst on Whole project as Watch-outs, each opening its screen', () => {
+    const { setActiveTab } = setup({ projectContext: OWING, money: MONEY });
+    const box = screen.getByRole('region', { name: 'Watch-outs' });
+    expect(box.textContent).toContain('Late');
+    expect(box.textContent).toContain('Sign-up & Concept unpaid 20 days');
+    fireEvent.click(within(box).getByRole('button', { name: 'Open Money' }));
+    expect(setActiveTab).toHaveBeenCalledWith('payment-calc');
+  });
+
+  it('opens Money on what is unpaid and what is next to bill, for the roles that see money', () => {
+    setup({ projectContext: OWING, money: MONEY });
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    fireEvent.click(within(list).getByRole('button', { name: /^Money/ }));
+    const card = screen.getByRole('region', { name: 'Money waiting' });
+    expect(card.textContent).toContain('₹10,590');
+    expect(card.textContent).toContain('Sign-up & Concept · 20 days');
+    expect(card.textContent).toContain('Next to bill');
+    cleanup();
+    setup({ projectContext: OWING, money: MONEY, seesMoney: false });
+    fireEvent.click(within(screen.getByRole('complementary', { name: "This project's conversations" })).getByRole('button', { name: /^Money/ }));
+    expect(screen.queryByRole('region', { name: 'Money waiting' })).toBeNull();
+  });
+
+  it('shows no signal for a screen the person cannot open', () => {
+    setup({ projectContext: OWING, money: MONEY, conversations: conversationsFor(new Set(['boq-editor', 'timeline'])) });
+    expect(screen.queryByRole('region', { name: 'Watch-outs' })).toBeNull();
+  });
+
+  it('says what moved since the last visit, and marks this one', async () => {
+    seen.readSeen.mockResolvedValueOnce(Date.now() - 2 * DAY);
+    setup();
+    const card = await screen.findByRole('region', { name: 'Since you were here' });
+    expect(card.textContent).toContain('BOQ v1 signed');
+    expect(seen.markSeen).toHaveBeenCalledWith('owner@studio.in', 'p1');
+    fireEvent.click(within(card).getByRole('button', { name: 'Mark as read' }));
+    expect(screen.queryByRole('region', { name: 'Since you were here' })).toBeNull();
+  });
+
+  it('says nothing about a first visit', async () => {
+    setup();
+    await waitFor(() => expect(seen.markSeen).toHaveBeenCalled());
+    expect(screen.queryByRole('region', { name: 'Since you were here' })).toBeNull();
+  });
 });

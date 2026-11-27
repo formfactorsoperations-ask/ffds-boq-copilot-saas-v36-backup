@@ -24,6 +24,8 @@ export interface Glance {
   milestones: Array<{ id: string; title: string; startISO: string }>;
   /** Whether a programme is saved at all (undefined while it loads). */
   hasProgramme: boolean | undefined;
+  /** The Drawing Tracker's rows, for the Design signals (lib/projectSignals); null while they load. */
+  items?: any[] | null;
 }
 
 export function useProjectGlance(projectId: string, studioId: string, ctx: any): Glance {
@@ -70,5 +72,5 @@ export function useProjectGlance(projectId: string, studioId: string, ctx: any):
     } catch { return { handoverISO: null, targetISO: null, milestones: [] as Glance['milestones'] }; }
   }, [saved, ctx]);
 
-  return { drawings, ...programme, hasProgramme: saved === undefined ? undefined : !!saved };
+  return { drawings, ...programme, hasProgramme: saved === undefined ? undefined : !!saved, items: drawItems };
 }

@@ -97,6 +97,17 @@ describe('a person\'s settings and devices', () => {
     await assertFails(setDoc(doc(as('meera', 'meera@ff.in'), 'inbox/riya@ff.in'), { projectView: 'classic' }, { merge: true }));
   });
 
+  it('keep when they last opened each project, for "Since you were here", and nobody else can read it (services/projectSeenService)', async () => {
+    const mine = doc(as('riya', 'riya@ff.in'), 'inbox/riya@ff.in/seen/p1');
+    await assertSucceeds(setDoc(mine, { at: 1764230400000 }));
+    await assertSucceeds(setDoc(mine, { at: 1764316800000 }));
+    await assertSucceeds(getDoc(mine));
+    await assertFails(setDoc(mine, { at: 'yesterday' }));
+    await assertFails(setDoc(mine, { at: 1, role: 'Admin' }));
+    await assertFails(getDoc(doc(as('meera', 'meera@ff.in'), 'inbox/riya@ff.in/seen/p1')));
+    await assertFails(setDoc(doc(as('meera', 'meera@ff.in'), 'inbox/riya@ff.in/seen/p1'), { at: 2 }));
+  });
+
   it('cannot be saved or read for somebody else, or carry anything but settings', async () => {
     await assertFails(setDoc(doc(as('meera', 'meera@ff.in'), 'inbox/riya@ff.in'), { prefs }));
     await assertFails(getDoc(doc(as('meera', 'meera@ff.in'), 'inbox/riya@ff.in')));

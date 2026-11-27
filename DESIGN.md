@@ -1348,7 +1348,9 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     Documents, Design, Site, Plan & timeline, Brief & Site (its own, owner). Every screen of the project
     lives in exactly one, under the studio's own screen names (owner: keep them). A conversation shows
     only when the role may open one of its screens. A row: a round icon, the name, its latest line, and
-    one amber dot when a note is waiting on the person. Nothing else is coloured.
+    one amber dot when a note is waiting on the person. When something is wrong in the conversation, the
+    latest line gives way to **its reason** (see "Smart workspace" below), rose for late and amber for
+    someone's turn (owner, 27 Nov 2026: "yes you can use coloured reason"). Nothing else is coloured.
   - **The conversation**: its screens as buttons ("Open: …", the first primary), then the story
     (`lib/projectThread.ts`, from the Clients thread and the project's history) grouped by day, each item
     with "Open {screen}"; only payments carry a source chip. Whole project opens on **one card**: the
@@ -1388,6 +1390,32 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   - **The Classic signpost:** each window's footer says where the screen is in Classic, "In Classic:
     Scope & Strategy › Pricing & Tiers" (from `md`). The places come from the Classic sidebar itself,
     so the two cannot drift.
+- **Smart workspace, PR 1** (owner, 27 Nov 2026, from the "Smart Project Workspace" mockups; mainly for
+  owners and project leads; nothing leaves the app). What is at risk, said in the conversation that owns
+  the screen to fix it, from rules the app already has and tests (`lib/projectSignals.ts`): `projectRisk`
+  (its critical and warning checks only; a "watch" is noise on a list), `hubAlerts` (the portal behind,
+  figures out of date, a client question unanswered, a dispute), `moneyIntel` (an invoice past the chase
+  ladder, work earned and not invoiced, stages that no longer add up to 100%), `scheduleImpact` (copies the
+  client holds older than the schedule) and `drawingIntel` (drawings past or near their target date). A
+  signal shows only when the person may open its screen. Nothing writes or sends; every signal opens a screen.
+  - **The reason on the list:** one line, the worst in that conversation, `text-xs font-semibold`,
+    `text-rose-700` late or `text-amber-700` your turn, its evidence as the tooltip. Never an amount.
+  - **Whole project, in order:** Since you were here, Up next, Watch-outs. The cards on top keep to about two
+    thirds of the pane so the story still shows. **Since you were here** (`lib/projectCatchUp.ts`): pale
+    brand, at most three lines of what moved since this person last opened the project, the client's own
+    first, each with its conversation's colour dot and name; "Mark as read" puts it away for the visit.
+    Nothing on a first visit, and never a sticker that only says where things stand (unpaid, no reply).
+    The last visit is `inbox/{email}/seen/{projectId}` (`services/projectSeenService.ts`), only theirs.
+    **Watch-outs**: white card, the three worst, each a `Chip` (bad "Late", warn "Your turn"), the line,
+    the conversation and its evidence, and "Open {screen}"; "n more" says they are on their conversations.
+  - **Money opens on Money waiting** (finance roles only, amounts behind the hide-figures eye): tiles for
+    Unpaid (rose past the warn step, amber past the reminder, slate within terms), Earned, not invoiced
+    (gold) or Next to bill (brand), and Stages add up to (amber) only when they do not; how this client
+    pays, from two paid stages or more; "Open {Money screen}". The client's side of the money only
+    (`lib/clientMoney`), as their invoices show it.
+  - **The ripple:** when the client holds copies older than the payment schedule, Money shows them in
+    the order to bring them up to date (amber card, numbered, because the order matters), each step
+    opening its screen; Whole project lists it as a Watch-out.
 - **Motion** (owner, 27 Nov 2026: keep the motion the app already has): the project sidebar's and Clients'
   approved motion, nothing new. Each conversation's icon moves on hover in its own way (`.psb-ic`
   `data-a`); the highlight slides to the conversation picked (`layoutId`, as the sidebar's does); a
