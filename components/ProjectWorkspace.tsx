@@ -30,6 +30,13 @@ import StudioJump from './projectNav/StudioJump';
 import LiveStamp from './notify/LiveStamp';
 import { useInbox } from './notify/NotifyContext';
 import { Count } from './notify/NotifyBits';
+import { useProjectView } from '../services/projectViewService';
+import { resolveProjectView } from '../lib/projectView';
+import { conversationsFor } from '../lib/projectConversations';
+import { clientMoneyOf, withoutAmounts } from '../lib/clientMoney';
+import { studioJumpItems } from './projectNav/StudioJump';
+import ConversationsWorkspace from './projectConversations/ConversationsWorkspace';
+import { MessagesSquare } from '@/lib/lucide-shim';
 
 const WORKSPACE_STATUS_MAP: Record<
   string,
@@ -230,6 +237,100 @@ export function ProjectWorkspace({
   };
   const homeRoute = isLimited ? limitedHome : 'dashboard';
 
+  /*
+    Classic or Conversations (lib/projectView; owner, 27 Nov 2026). The studio's
+    choice is taken as the project opens, so a change in Studio settings never
+    swaps the view under someone mid-work; their own choice applies at once.
+  */
+  const pv = useProjectView();
+  const [studioAtOpen, setStudioAtOpen] = useState(pv.studio);
+  useEffect(() => { setStudioAtOpen(pv.studio); }, [projectId]);
+  const view = resolveProjectView(studioAtOpen, pv.personal);
+  const canChooseView = studioAtOpen !== 'classic';
+  const viewSwitch = canChooseView ? [{
+    label: view === 'classic' ? 'Try the Conversations view' : 'Use the Classic view',
+    icon: MessagesSquare,
+    onClick: () => pv.setView(view === 'classic' ? 'conversations' : 'classic'),
+  }] : [];
+
+  const alertBar = !isWizard ? (
+    <ProjectAlertBar context={projectContext} setProjectContext={setProjectContext as any} tierSummary={tierSummary}
+      role={currentRoles?.length ? currentRoles : currentRole}
+      actor={String((currentUserAuth as any)?.displayName || (currentUserAuth as any)?.email || currentRole || 'Studio')} />
+  ) : null;
+
+  const statusModal = isStatusModalOpen ? (
+    <ProjectStatusTransitionModal
+      project={{ id: projectId, lastModified: Date.now(), context: projectContext }}
+      isOpen={isStatusModalOpen}
+      onClose={() => setIsStatusModalOpen(false)}
+      onStatusChange={async (_projId, newStatus, note) => {
+        if (onStatusChange) await onStatusChange(newStatus, note);
+        else if (setProjectContext) setProjectContext((prev) => ({ ...prev, status: newStatus }));
+        setIsStatusModalOpen(false);
+      }}
+      onClassificationChange={setProjectContext ? (isDummy) => {
+        setProjectContext((prev) => ({ ...prev, isDummy, projectCategory: isDummy ? 'dummy' : 'actual' }));
+      } : undefined}
+    />
+  ) : null;
+
+  if (view === 'conversations' && !isWizard) {
+    const visible = new Set<string>([...sidebarStages.flatMap(s => s.screens.map(x => x.route)), ...sidebarHub.map(h => h.route)]);
+    const labels: Record<string, string> = {};
+    sidebarStages.forEach(s => s.screens.forEach(x => { labels[x.route] = ENGAGEMENT_PAGE_TITLES[engagement]?.[x.route]?.title || x.label; }));
+    sidebarHub.forEach(h => { labels[h.route] = h.label; });
+    const labelOf = (route: string) => labels[route] || getPageMeta(route)?.title || route;
+    const steps: any[] = (journey as any).steps || [];
+    const upNext = steps
+      .filter((s: any) => s.status === 'active' || s.status === 'pending')
+      .sort((a: any, b: any) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1) || a.n - b.n)
+      .slice(0, 3)
+      .map((s: any) => ({ id: s.id, title: s.title, text: s.description, route: s.linkedTab && s.linkedTab !== 'dashboard' && visible.has(s.linkedTab) ? s.linkedTab : null }));
+    const rawMoney = clientMoneyOf({ context: projectContext, tiers: tierSummary ? [{ id: '_', summary: tierSummary }] : [], activeTierId: '_' });
+    const money = holdsFinanceRole(currentRole) ? rawMoney : withoutAmounts(rawMoney);
+    return (
+      <>
+        <ConversationsWorkspace
+          projectId={projectId}
+          projectContext={projectContext}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          homeRoute={homeRoute}
+          hubLabel={homeLabel}
+          conversations={conversationsFor(visible)}
+          labelOf={labelOf}
+          needsOf={(route) => noted[route]?.needs || 0}
+          stages={sidebarStages.map(s => ({ stage: s.stage, label: s.label, state: s.state, first: s.screens[0]?.route || null }))}
+          currentStage={currentStage}
+          journey={{
+            done: journey.overall.done, total: journey.overall.total,
+            pct: Math.round(projectContext.journeySummary?.pct ?? journey.overall.pct ?? 0),
+            next: isLimited ? null : isTerminated(projectContext) ? 'Project terminated' : (journey.nextStep?.title || null),
+            upNext: isLimited || isTerminated(projectContext) ? [] : upNext,
+          }}
+          money={money}
+          seesMoney={seesStudioFinance(currentRole)}
+          canLog={String(currentRole) !== 'Viewer'}
+          seesVisits={holdsFinanceRole(currentRole)}
+          tenantId={String((orgData as any)?.tenantId || '')}
+          me={{ email: String(currentUserAuth?.email || ''), name: currentUserAuth?.displayName || String(currentUserAuth?.email || 'Studio') }}
+          statusLabel={workspaceStatus.label}
+          onStatusClick={isLimited ? undefined : () => setIsStatusModalOpen(true)}
+          desks={studioJumpItems(currentRoles?.length ? currentRoles : (currentRole as any))}
+          onLeaveProject={(t) => onLeaveProject?.(t)}
+          showHideFigures={holdsFinanceRole(currentRole)}
+          viewOnly={isLimited && !(isDesigner && DESIGNER_EDITABLE_TABS.has(activeTab))}
+          alertBar={alertBar}
+          onUseClassic={canChooseView ? () => pv.setView('classic') : undefined}
+        >
+          {children}
+        </ConversationsWorkspace>
+        {statusModal}
+      </>
+    );
+  }
+
   return (
     <div className="flex h-full bg-slate-50">
       {/* The project sidebar (components/projectNav/ProjectSidebar): it replaced the five header rows. */}
@@ -265,6 +366,7 @@ export function ProjectWorkspace({
           { label: 'Projects', icon: Building2, onClick: () => onLeaveProject?.('projects') },
           ...(!isLimited ? [{ label: 'Clients', icon: Users, onClick: () => onLeaveProject?.('clients') }] : []),
           ...(seesStudioFinance(currentRole) ? [{ label: 'Reports', icon: BarChart3, onClick: () => onLeaveProject?.('reports') }] : []),
+          ...viewSwitch,
         ]}
         mobileOpen={mobileNav}
         onMobileClose={() => setMobileNav(false)}
@@ -303,11 +405,7 @@ export function ProjectWorkspace({
         </div>
 
         {/* Terminated, or a payment dispute open: said on every screen of the project (components/projectAlerts/ProjectAlertBar). */}
-        {!isWizard && (
-          <ProjectAlertBar context={projectContext} setProjectContext={setProjectContext as any} tierSummary={tierSummary}
-            role={currentRoles?.length ? currentRoles : currentRole}
-            actor={String((currentUserAuth as any)?.displayName || (currentUserAuth as any)?.email || currentRole || 'Studio')} />
-        )}
+        {alertBar}
 
       {/*
         The one scroll area and the one gutter for every project screen. App.tsx
@@ -359,28 +457,7 @@ export function ProjectWorkspace({
 
 
       {/* In-Workspace Status Transition Modal */}
-      {isStatusModalOpen && (
-        <ProjectStatusTransitionModal
-          project={{
-            id: projectId,
-            lastModified: Date.now(),
-            context: projectContext,
-          }}
-          isOpen={isStatusModalOpen}
-          onClose={() => setIsStatusModalOpen(false)}
-          onStatusChange={async (_projId, newStatus, note) => {
-            if (onStatusChange) {
-              await onStatusChange(newStatus, note);
-            } else if (setProjectContext) {
-              setProjectContext((prev) => ({ ...prev, status: newStatus }));
-            }
-            setIsStatusModalOpen(false);
-          }}
-          onClassificationChange={setProjectContext ? (isDummy) => {
-            setProjectContext((prev) => ({ ...prev, isDummy, projectCategory: isDummy ? 'dummy' : 'actual' }));
-          } : undefined}
-        />
-      )}
+      {statusModal}
 
      
     

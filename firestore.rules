@@ -248,7 +248,8 @@ service cloud.firestore {
       them to the studio (functions/src/access.ts).
 
         inbox/{email}                 their settings (what interrupts them,
-                                      quiet hours) and time zone, theirs to
+                                      quiet hours), time zone and project
+                                      view (lib/projectView), theirs to
                                       write; the server reads them to decide
                                       a phone notification.
         inbox/{email}/notes/{id}      written only by the server
@@ -270,7 +271,8 @@ service cloud.firestore {
         return v == null || v is int;
       }
       function settingsOnly() {
-        return request.resource.data.keys().hasOnly(['prefs', 'tz', 'updatedAt'])
+        return request.resource.data.keys().hasOnly(['prefs', 'tz', 'updatedAt', 'projectView'])
+          && (!('projectView' in request.resource.data) || request.resource.data.projectView in ['classic', 'conversations'])
           && (!('prefs' in request.resource.data) || (request.resource.data.prefs is map && request.resource.data.prefs.size() <= 10))
           && (!('tz' in request.resource.data) || (request.resource.data.tz is string && request.resource.data.tz.size() <= 64));
       }

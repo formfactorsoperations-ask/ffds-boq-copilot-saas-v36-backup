@@ -1,0 +1,720 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ArrowLeft, ArrowRight, Sparkles, MessageCircle, Wallet, Table, FolderOpen, PenTool, HardHat, CalendarRange, MapPin,
+  X, Home, Users, Search, FileText, Globe, IndianRupee, NotebookPen, Info, Eye, Scale, ChevronRight, LayoutGrid,
+} from '@/lib/lucide-shim';
+import { Button, Chip, EmptyState, INPUT, Segmented, type Tone } from '../ui/kit';
+import { Masked, HideFiguresButton } from '../ui/HideFigures';
+import PageTitleBlock from '../PageTitleBlock';
+import ViewOnlyGuard from '../ViewOnlyGuard';
+import { WHATSAPP_TEMPLATES, whatsAppLink, PortalLineText } from '../clients/parts';
+import { conversationDef, conversationOf, type ConversationDef, type ConversationId } from '../../lib/projectConversations';
+import { buildStory, groupStory, latestOf, storyFor, whenShort, type StoryItem } from '../../lib/projectThread';
+import { buildThread, SOURCE_LABEL, EMPTY_RECORDS, type ThreadRecords, type ThreadSource } from '../../lib/clientThread';
+import { noteLine, replyLine, sendSubject, sentLine, REPLY_MOODS, REPLY_FROM, type FollowUpLine, type ReplyMood, type ReplyFrom } from '../../lib/clientCompose';
+import { portalStatus, portalStatusForViewer, type PortalVisit } from '../../lib/portalVisits';
+import type { ClientMoney } from '../../lib/clientMoney';
+import type { TemplateId } from '../../lib/clientNextMove';
+import { loadClientRecords } from '../../services/clientThreadService';
+import { watchClientVisits } from '../../services/portalVisitsService';
+import { logFollowUp } from '../../services/opsDeskService';
+import type { StudioJumpItem } from '../projectNav/StudioJump';
+import '../projectHeader/projectHeader.css';
+
+/*
+  THE CONVERSATIONS WORKSPACE (owner, 27 Nov 2026; DESIGN.md "Project
+  workspace: conversations"). The same project as the Classic workspace, laid
+  out like the Clients screen:
+
+    - the way out on top: All projects and the studio's screens, always there;
+    - left: the project's conversations (lib/projectConversations), each with
+      its latest line, like a chat list;
+    - middle: the chosen conversation's story (lib/projectThread), each item
+      with an Open button for its screen; Whole project adds the next step and
+      Up next, and the composer writes to the follow-up log as Clients does;
+    - right: the project card (At a glance, Client portal, Timeline, Details,
+      Journey).
+
+  Every screen opens in a full-screen window over all of it (the modal
+  pattern: phd-scrim, phd-pop). The window draws the screen exactly as the
+  Classic workspace does (the same children), so a fix lands in both. Closing
+  the window, Esc or "Back to …" returns to the conversation.
+*/
+
+const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
+
+const CONV_ICON: Record<ConversationId, React.ElementType> = {
+  whole: Sparkles, chat: MessageCircle, money: Wallet, boq: Table, docs: FolderOpen,
+  design: PenTool, site: HardHat, plan: CalendarRange, brief: MapPin,
+};
+
+const SOURCE_ICON: Record<ThreadSource, { icon: React.ElementType; tone: Tone }> = {
+  sent: { icon: MessageCircle, tone: 'brand' },
+  proposals: { icon: FileText, tone: 'brand' },
+  portal: { icon: Globe, tone: 'brand' },
+  payments: { icon: IndianRupee, tone: 'good' },
+  design: { icon: PenTool, tone: 'slate' },
+  site: { icon: HardHat, tone: 'warn' },
+  team: { icon: NotebookPen, tone: 'slate' },
+};
+
+export interface StageRow { stage: number; label: string; state: 'done' | 'now' | 'todo'; first?: string | null }
+export interface UpNextRow { id: string; title: string; text?: string; route: string | null }
+
+export interface ConversationsWorkspaceProps {
+  projectId: string;
+  projectContext: any;
+  activeTab: string;
+  setActiveTab: (route: string) => void;
+  /** The home route: Whole project (no window). */
+  homeRoute: string;
+  /** What the home route's screen is called when opened in the window ("Hub"; a Designer's "Drawings"). */
+  hubLabel: string;
+  conversations: ConversationDef[];
+  labelOf: (route: string) => string;
+  /** Notes waiting on this person, by screen (lib/notify). */
+  needsOf: (route: string) => number;
+  stages: StageRow[];
+  currentStage: number;
+  journey: { done: number; total: number; pct: number; next: string | null; upNext: UpNextRow[] };
+  /** The client's side of the money, already without amounts where they are hidden; null when there is no schedule. */
+  money: ClientMoney | null;
+  seesMoney: boolean;
+  /** May write to the follow-up log (every studio role but Viewer). */
+  canLog: boolean;
+  /** Sees portal visits and the lead (Owner, Admin, Ops Director, Super Admin). */
+  seesVisits: boolean;
+  tenantId: string;
+  me: { email: string; name: string };
+  statusLabel: string;
+  onStatusClick?: () => void;
+  desks: StudioJumpItem[];
+  onLeaveProject: (target?: string) => void;
+  /** The Hide figures eye, for those who hold finance. */
+  showHideFigures: boolean;
+  /** The screen's look-only guard (a Designer, Client Relations). */
+  viewOnly: boolean;
+  /** Terminated or a dispute open: the strip Classic shows under its bar. */
+  alertBar?: React.ReactNode;
+  /** The person's own switch back to Classic, when the studio lets them choose. */
+  onUseClassic?: () => void;
+  /** The screen for the active route, drawn as Classic draws it. */
+  children: React.ReactNode;
+}
+
+export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
+  const ctx = p.projectContext || {};
+  const name = ctx.name || 'Untitled project';
+  const clientName = ctx.clientName || 'the client';
+  const now = useMemo(() => Date.now(), [p.activeTab]);
+
+  /* Which conversation is open. A screen opened by a link opens its conversation behind the window. */
+  const [conv, setConv] = useState<ConversationId>(() => conversationOf(p.activeTab) || 'whole');
+  useEffect(() => { setConv(conversationOf(p.activeTab) || 'whole'); }, [p.projectId]);
+  useEffect(() => { const c = conversationOf(p.activeTab); if (c && c !== conv) setConv(c); }, [p.activeTab]);
+  const shown = p.conversations.find((c) => c.id === conv) || p.conversations[0];
+
+  /* The Hub itself stays one click away from Whole project, in the window. */
+  const [hubOpen, setHubOpen] = useState(false);
+  useEffect(() => { if (p.activeTab !== p.homeRoute) setHubOpen(false); }, [p.activeTab, p.homeRoute]);
+  const windowRoute = p.activeTab !== p.homeRoute ? p.activeTab : hubOpen ? p.homeRoute : null;
+  const closeWindow = () => { setHubOpen(false); if (p.activeTab !== p.homeRoute) p.setActiveTab(p.homeRoute); };
+  const open = (route: string | null) => {
+    if (!route) return;
+    if (route === p.homeRoute) { setHubOpen(true); return; }
+    p.setActiveTab(route);
+  };
+
+  /* The project's records, read once per project (the Clients thread's loader, for this one project). */
+  const [records, setRecords] = useState<ThreadRecords | null>(null);
+  useEffect(() => {
+    let live = true;
+    setRecords(null);
+    if (!p.tenantId) { setRecords(EMPTY_RECORDS); return; }
+    loadClientRecords(p.tenantId, [{ id: p.projectId, name, leadId: ctx.leadId || null }], { leads: p.seesVisits })
+      .then((r) => { if (live) setRecords(r); })
+      .catch(() => { if (live) setRecords(EMPTY_RECORDS); });
+    return () => { live = false; };
+  }, [p.projectId, p.tenantId]);
+  const [visits, setVisits] = useState<PortalVisit[]>([]);
+  useEffect(() => {
+    if (!p.seesVisits) { setVisits([]); return; }
+    return watchClientVisits([p.projectId], setVisits);
+  }, [p.projectId, p.seesVisits]);
+
+  const story = useMemo(() => {
+    if (!records) return [] as StoryItem[];
+    const entries = buildThread({
+      clientName, projects: [{ id: p.projectId, name, context: ctx }],
+      money: { [p.projectId]: p.money }, records, portalVisits: visits, now,
+    });
+    return buildStory(entries, ctx.history, p.projectId);
+  }, [records, visits, p.money, ctx, p.projectId, now]);
+
+  const portalLine = useMemo(
+    () => (p.seesVisits ? portalStatus({ context: ctx }, visits, now) : portalStatusForViewer({ context: ctx })),
+    [ctx, visits, now, p.seesVisits],
+  );
+
+  /* A line to the project's follow-up log (lib/clientCompose), in this person's name: it joins the story at once. */
+  const writeLine = async (line: FollowUpLine) => {
+    const f = await logFollowUp({
+      tenantId: p.tenantId, projectId: p.projectId, projectName: name, me: p.me,
+      channel: line.channel, outcome: line.outcome, note: line.note, subject: line.subject, next: null,
+    } as any);
+    setRecords((prev) => ({ ...(prev || EMPTY_RECORDS), followUps: [f as any, ...((prev || EMPTY_RECORDS).followUps)] }));
+  };
+
+  /* S, M and D record from Whole project, as on the Hub; never while typing or with a window open. */
+  useEffect(() => {
+    if (conv !== 'whole' || windowRoute) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const t = e.target as HTMLElement;
+      if (t && (t.closest('input, textarea, select, [contenteditable="true"]') || document.querySelector('[aria-modal="true"]'))) return;
+      const k = e.key.toLowerCase();
+      if (k === 's' || k === 'm') open('site-meetings');
+      else if (k === 'd') open('record-decision');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [conv, windowRoute]);
+
+  /* Said once, the first time someone sees this view. */
+  const [welcome, setWelcome] = useState(() => { try { return !window.localStorage.getItem('studiodesk.projectView.welcomed'); } catch { return false; } });
+  const dismissWelcome = () => { setWelcome(false); try { window.localStorage.setItem('studiodesk.projectView.welcomed', '1'); } catch { /* private window */ } };
+
+  return (
+    <div className="flex flex-col h-full bg-slate-50 min-w-0">
+      <WayOut desks={p.desks} onLeave={p.onLeaveProject} onUseClassic={p.onUseClassic} showHideFigures={p.showHideFigures} />
+      <ProjectTitle ctx={ctx} name={name} statusLabel={p.statusLabel} onStatusClick={p.onStatusClick}
+        onPortal={p.conversations.some((c) => c.routes.includes('client-portal')) ? () => open('client-portal') : undefined} />
+      {p.alertBar}
+      {welcome && (
+        <div className="mx-3 sm:mx-5 mb-2 flex items-center gap-3 rounded-xl border border-[#3D52A0]/20 bg-[#3D52A0]/10 px-4 py-2.5 text-xs text-slate-700 hud-panel-in">
+          <Info className="w-4 h-4 text-[#3D52A0] shrink-0" aria-hidden />
+          <span className="flex-1 min-w-0">
+            <b className="text-slate-800">This is the new project view.</b> Pick a conversation on the left (Money, BOQ, Documents…); every screen opens full size and closes back here.
+            {p.onUseClassic && ' You can go back to Classic from the top bar at any time.'}
+          </span>
+          <Button size="sm" variant="quiet" onClick={dismissWelcome}>Got it</Button>
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 mx-3 sm:mx-5 mb-3 sm:mb-5 grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hud-panel-in">
+        <ConversationList conversations={p.conversations} conv={shown.id} story={story} now={now} needsOf={p.needsOf}
+          money={p.money} journey={p.journey} onPick={setConv} />
+        <section className="flex flex-col min-h-0 min-w-0 border-l border-slate-100" aria-label={shown.name}>
+          <ThreadHead conv={shown} labelOf={p.labelOf} onOpen={open} onPickMobile={setConv} conversations={p.conversations} />
+          <Thread key={shown.id} conv={shown.id} story={storyFor(story, shown.id)} now={now} loading={!records} onOpen={open}
+            labelOf={p.labelOf} visible={(r) => p.conversations.some((c) => c.routes.includes(r))}
+            pinned={shown.id === 'whole' ? (
+              <NextStep stage={p.currentStage} stages={p.stages} journey={p.journey} hubLabel={p.hubLabel} onHub={() => setHubOpen(true)}
+                onMatrix={p.conversations.some((c) => c.routes.includes('project-journey')) ? () => open('project-journey') : undefined} />
+            ) : null}
+            tail={shown.id === 'whole' ? <UpNext rows={p.journey.upNext} onOpen={open} labelOf={p.labelOf} /> : null} />
+          <Composer conv={shown.id} canLog={p.canLog} clientName={clientName} phone={ctx.clientPhone || ''} projectName={name}
+            studio={String(ctx.studioName || '') || 'the studio'} milestones={p.money?.milestones || []} onWrite={writeLine}
+            onRecord={shown.id === 'whole' ? open : undefined} />
+        </section>
+        <ProjectCard ctx={ctx} money={p.money} seesMoney={p.seesMoney} journey={p.journey} stages={p.stages}
+          portalLine={portalLine} onOpen={open} has={(r) => p.conversations.some((c) => c.routes.includes(r))} />
+      </div>
+
+      {windowRoute && (
+        <ScreenWindow route={windowRoute} isHub={windowRoute === p.homeRoute} hubLabel={p.hubLabel} projectName={name} labelOf={p.labelOf}
+          conversations={p.conversations} backTo={shown} viewOnly={p.viewOnly} onOpen={open} onClose={closeWindow}>
+          {p.children}
+        </ScreenWindow>
+      )}
+    </div>
+  );
+}
+
+/* ───────────── the way out ───────────── */
+
+function WayOut({ desks, onLeave, onUseClassic, showHideFigures }: {
+  desks: StudioJumpItem[]; onLeave: (t?: string) => void; onUseClassic?: () => void; showHideFigures: boolean;
+}) {
+  const item = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap';
+  return (
+    <nav aria-label="Studio" className="h-12 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-1 min-w-0 overflow-x-auto">
+      <button type="button" onClick={() => onLeave('projects')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/15 whitespace-nowrap">
+        <ArrowLeft className="w-4 h-4" aria-hidden />All projects
+      </button>
+      <span className="w-px h-6 bg-slate-200 mx-1 shrink-0" aria-hidden />
+      <button type="button" onClick={() => onLeave('home')} className={item}><Home className="w-4 h-4 text-slate-400" aria-hidden />Studio home</button>
+      <button type="button" onClick={() => onLeave('clients')} className={cx(item, 'hidden sm:inline-flex')}><Users className="w-4 h-4 text-slate-400" aria-hidden />Clients</button>
+      {desks.map((d) => {
+        const Icon = d.icon;
+        return <button key={d.route} type="button" onClick={() => onLeave(d.route)} className={cx(item, 'hidden md:inline-flex')} title={d.sub}><Icon className="w-4 h-4 text-slate-400" aria-hidden />{d.label}</button>;
+      })}
+      <span className="flex-1" />
+      {showHideFigures && <HideFiguresButton />}
+      {onUseClassic && (
+        <Button size="sm" variant="secondary" onClick={onUseClassic} title="Your own choice: the studio's setting stays as it is">Use Classic view</Button>
+      )}
+    </nav>
+  );
+}
+
+function ProjectTitle({ ctx, name, statusLabel, onStatusClick, onPortal }: {
+  ctx: any; name: string; statusLabel: string; onStatusClick?: () => void; onPortal?: () => void;
+}) {
+  const sub = [ctx.clientName || 'No client yet', ctx.location, ctx.area ? `${ctx.area} sq ft` : ''].filter(Boolean).join(' · ');
+  const initials = (name.match(/[A-Za-z]+/g) || ['P']).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase();
+  return (
+    <div className="shrink-0 px-3 sm:px-5 py-3 flex items-center gap-3 min-w-0">
+      <span className="w-11 h-11 rounded-xl grid place-items-center text-white text-sm font-bold bg-[#3D52A0] shrink-0">{initials}</span>
+      <div className="min-w-0 flex-1">
+        <h1 className="text-2xl font-bold text-slate-800 tracking-tight truncate">{name}</h1>
+        <p className="text-xs text-slate-500 truncate">{sub}</p>
+      </div>
+      <button type="button" onClick={onStatusClick} disabled={!onStatusClick} className="shrink-0 disabled:cursor-default" title={onStatusClick ? 'Change the project status' : undefined}>
+        <Chip tone="brand">{statusLabel}</Chip>
+      </button>
+      {onPortal && <Button size="sm" variant="secondary" icon={Eye} onClick={onPortal} className="hidden sm:inline-flex">Client portal</Button>}
+    </div>
+  );
+}
+
+/* ───────────── the list ───────────── */
+
+function ConversationList({ conversations, conv, story, now, needsOf, money, journey, onPick }: {
+  conversations: ConversationDef[]; conv: ConversationId; story: StoryItem[]; now: number; needsOf: (r: string) => number;
+  money: ClientMoney | null; journey: ConversationsWorkspaceProps['journey']; onPick: (c: ConversationId) => void;
+}) {
+  const [q, setQ] = useState('');
+  const term = q.trim().toLowerCase();
+  const list = term ? conversations.filter((c) => c.name.toLowerCase().includes(term) || c.about.toLowerCase().includes(term)) : conversations;
+  const owed = money?.milestones.find((m) => m.status === 'invoiced' && !m.disputed);
+  const previewOf = (c: ConversationDef): { text: string; at: number | null } => {
+    if (c.id === 'whole' && journey.next) return { text: `Next: ${journey.next}`, at: null };
+    if (c.id === 'money' && owed) return { text: `${owed.name} invoiced`, at: null };
+    const last = latestOf(story, c.id);
+    return last ? { text: last.text, at: last.at } : { text: c.about, at: null };
+  };
+  return (
+    <aside className="hidden md:flex flex-col min-h-0 bg-white" aria-label="This project's conversations">
+      <div className="p-3 border-b border-slate-100">
+        <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-300 focus-within:ring-2 focus-within:ring-[#3D52A0]/30">
+          <Search className="w-4 h-4 text-slate-400" aria-hidden />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find in this project" aria-label="Find a conversation" className="flex-1 min-w-0 text-sm outline-none bg-transparent" />
+        </label>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {list.map((c, i) => {
+          const Icon = CONV_ICON[c.id];
+          const pv = previewOf(c);
+          const needs = c.routes.reduce((s, r) => s + needsOf(r), 0) > 0;
+          const on = c.id === conv;
+          return (
+            <button key={c.id} type="button" onClick={() => onPick(c.id)} aria-current={on ? 'true' : undefined}
+              className={cx('w-full flex items-center gap-3 px-3 py-3 text-left border-b border-slate-100 transition-colors hud-row-in',
+                on ? 'bg-[#3D52A0]/10 shadow-[inset_3px_0_0_#3D52A0]' : 'hover:bg-slate-50')}
+              style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
+              <span className={cx('w-10 h-10 rounded-full grid place-items-center shrink-0', c.id === 'whole' ? 'bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
+                <Icon className="w-[18px] h-[18px]" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-baseline gap-2">
+                  <span className="flex-1 min-w-0 truncate text-sm font-bold text-slate-800">{c.name}</span>
+                  {pv.at && <span className="text-[11px] text-slate-400 whitespace-nowrap">{whenShort(pv.at, now)}</span>}
+                </span>
+                <span className="flex items-center gap-1.5 mt-0.5">
+                  <span className="flex-1 min-w-0 truncate text-xs text-slate-500">{pv.text}</span>
+                  {needs && <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" title="Needs you" />}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+        {!list.length && <p className="px-4 py-6 text-xs text-slate-500">No conversation matches “{q}”.</p>}
+      </div>
+    </aside>
+  );
+}
+
+/* ───────────── the conversation ───────────── */
+
+function ThreadHead({ conv, labelOf, onOpen, onPickMobile, conversations }: {
+  conv: ConversationDef; labelOf: (r: string) => string; onOpen: (r: string) => void;
+  onPickMobile: (c: ConversationId) => void; conversations: ConversationDef[];
+}) {
+  const Icon = CONV_ICON[conv.id];
+  return (
+    <div className="shrink-0 border-b border-slate-100">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-bold text-slate-800 truncate">{conv.name}</h2>
+          <p className="text-xs text-slate-500 truncate">{conv.about}</p>
+        </div>
+        {/* Below 768px the list is a choice here. */}
+        <select className={cx(INPUT, 'md:hidden !w-auto')} value={conv.id} onChange={(e) => onPickMobile(e.target.value as ConversationId)} aria-label="Conversation">
+          {conversations.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+      {conv.routes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
+          <span className="text-xs font-semibold text-slate-500 mr-1">Open:</span>
+          {conv.routes.map((r, i) => (
+            <Button key={r} size="sm" variant={i === 0 ? 'primary' : 'secondary'} onClick={() => onOpen(r)}>{labelOf(r)}</Button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SHOW = 25;
+
+const Thread: React.FC<{
+  conv: ConversationId; story: StoryItem[]; now: number; loading: boolean; onOpen: (r: string) => void;
+  labelOf: (r: string) => string; visible: (r: string) => boolean; pinned: React.ReactNode; tail: React.ReactNode;
+}> = ({ conv, story, now, loading, onOpen, labelOf, visible, pinned, tail }) => {
+  const [all, setAll] = useState(false);
+  const items = all ? story : story.slice(-SHOW);
+  const groups = groupStory(items, now);
+  const scroller = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { const el = scroller.current; if (el) el.scrollTop = el.scrollHeight; }, [story.length, conv]);
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      {pinned}
+      <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-2.5">
+        {story.length > SHOW && !all && (
+          <button type="button" onClick={() => setAll(true)} className="self-center text-xs font-bold text-[#3D52A0] px-3 py-1.5 rounded-lg hover:bg-[#3D52A0]/10">
+            Show earlier ({story.length - SHOW})
+          </button>
+        )}
+        {loading && <p className="text-xs text-slate-500 self-center py-6">Reading this project’s story…</p>}
+        {!loading && !story.length && (
+          <EmptyState icon={conv === 'whole' ? Sparkles : CONV_ICON[conv]} title="Nothing here yet"
+            text={conv === 'whole' ? 'Everything that happens on this project will appear here.' : 'What happens here will appear as it happens. Use the screens above to start.'} />
+        )}
+        {groups.map((g) => (
+          <React.Fragment key={g.group + g.items[0].id}>
+            <div className="self-center my-1 px-3 py-1 rounded-full bg-white border border-slate-200 text-[11px] font-bold text-slate-500">{g.group}</div>
+            {g.items.map((it, i) => <StoryRow key={it.id} it={it} delay={Math.min(i, 12) * 35} onOpen={onOpen} labelOf={labelOf} visible={visible} />)}
+          </React.Fragment>
+        ))}
+        {tail}
+      </div>
+    </div>
+  );
+}
+
+const StoryRow: React.FC<{
+  it: StoryItem; delay: number; onOpen: (r: string) => void; labelOf: (r: string) => string; visible: (r: string) => boolean;
+}> = ({ it, delay, onOpen, labelOf, visible }) => {
+  const openBtn = it.route && visible(it.route) ? (
+    <button type="button" onClick={() => onOpen(it.route!)} className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0] hover:text-white">
+      Open {labelOf(it.route)}<ArrowRight className="w-3 h-3" aria-hidden />
+    </button>
+  ) : null;
+  const style = { animationDelay: `${delay}ms` };
+  if (it.kind === 'sticker') {
+    return <div className="self-center px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 hud-row-in" style={style}>{it.text}</div>;
+  }
+  if (it.kind === 'sent') {
+    return (
+      <div className="self-end max-w-[78%] rounded-2xl rounded-br-md bg-[#3D52A0] text-white px-3.5 py-2.5 text-sm hud-row-in" style={style}>
+        <p className="whitespace-pre-wrap">{it.text}</p>
+        <p className="mt-1 text-[11px] text-white/75">{[it.meta, it.template].filter(Boolean).join(' · ')}</p>
+      </div>
+    );
+  }
+  if (it.kind === 'said') {
+    return (
+      <div className="self-start max-w-[78%] rounded-2xl rounded-bl-md bg-white border border-dashed border-slate-300 px-3.5 py-2.5 text-sm italic text-slate-700 hud-row-in" style={style}>
+        <p>“{it.text}”</p>
+        {it.meta && <p className="mt-1 text-[11px] not-italic text-slate-400">{it.meta}</p>}
+      </div>
+    );
+  }
+  const src = SOURCE_ICON[it.source || 'team'];
+  const Icon = src.icon;
+  return (
+    <div className={cx('max-w-[82%] flex gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hud-row-in', it.side === 'client' ? 'self-start' : 'self-end')} style={style}>
+      <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><Icon className="w-4 h-4" aria-hidden /></span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-800">{it.text}</p>
+        {it.detail && <p className="text-xs text-slate-500">{it.detail}</p>}
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+          <Chip tone={src.tone}>{SOURCE_LABEL[it.source || 'team']}</Chip>
+          {new Date(it.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+          {it.meta ? ` · ${it.meta}` : ''}
+        </p>
+        {openBtn}
+      </div>
+    </div>
+  );
+}
+
+function NextStep({ stage, stages, journey, hubLabel, onHub, onMatrix }: {
+  stage: number; stages: StageRow[]; journey: ConversationsWorkspaceProps['journey']; hubLabel: string; onHub: () => void; onMatrix?: () => void;
+}) {
+  const stageName = stages.find((s) => s.stage === stage)?.label || '';
+  return (
+    <div className="shrink-0 mx-4 mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm hud-panel-in">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Stage {stage} of 6{stageName ? ` · ${stageName}` : ''}</p>
+          <p className="font-bold text-slate-800 mt-0.5"><span className="text-slate-400">Next:</span> {journey.next || 'nothing is waiting on you'}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{journey.done} of {journey.total} steps · {Math.round(journey.pct)}% through the project</p>
+        </div>
+        <div className="flex gap-1.5 shrink-0">
+          {onMatrix && <Button size="sm" variant="quiet" onClick={onMatrix}>Ops Matrix</Button>}
+          <Button size="sm" variant="secondary" icon={LayoutGrid} onClick={onHub}>Open {hubLabel === 'Hub' ? 'the Hub' : hubLabel}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UpNext({ rows, onOpen, labelOf }: { rows: UpNextRow[]; onOpen: (r: string) => void; labelOf: (r: string) => string }) {
+  return (
+    <div className="mt-2 rounded-2xl border border-[#3D52A0]/20 bg-white overflow-hidden shrink-0">
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-[#3D52A0]/10">
+        <h3 className="font-bold text-slate-800">Up next</h3>
+        <span className="px-2 py-0.5 rounded-full bg-white text-xs font-bold text-slate-600">{rows.length}</span>
+        <span className="flex-1" /><span className="text-xs text-slate-500">Most important first</span>
+      </div>
+      {!rows.length && <p className="px-4 py-3 text-xs text-slate-500"><b className="text-slate-700">You’re clear.</b> Nothing needs you on this project right now.</p>}
+      {rows.map((r) => (
+        <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 border-t border-slate-100">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-slate-800">{r.title}</p>
+            {r.text && <p className="text-xs text-slate-500 line-clamp-1">{r.text}</p>}
+          </div>
+          {r.route && <Button size="sm" variant="secondary" onClick={() => onOpen(r.route!)}>Open {labelOf(r.route)}</Button>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ───────────── the composer ───────────── */
+
+function Composer({ conv, canLog, clientName, phone, projectName, studio, milestones, onWrite, onRecord }: {
+  conv: ConversationId; canLog: boolean; clientName: string; phone: string; projectName: string; studio: string;
+  milestones: ClientMoney['milestones']; onWrite: (l: FollowUpLine) => Promise<void>; onRecord?: (r: string) => void;
+}) {
+  const chatty = conv === 'whole' || conv === 'chat';
+  const [mode, setMode] = useState<'send' | 'reply' | 'note'>(chatty ? 'send' : 'note');
+  useEffect(() => { setMode(chatty ? 'send' : 'note'); }, [conv]);
+  const [template, setTemplate] = useState<TemplateId>(WHATSAPP_TEMPLATES[0].id);
+  const [text, setText] = useState('');
+  const [mood, setMood] = useState<ReplyMood>('positive');
+  const [from, setFrom] = useState<ReplyFrom>('whatsapp');
+  const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  useEffect(() => {
+    if (mode !== 'send') { setText(''); return; }
+    const t = WHATSAPP_TEMPLATES.find((x) => x.id === template) || WHATSAPP_TEMPLATES[0];
+    setText(t.text(clientName, studio, projectName));
+  }, [mode, template, clientName, studio, projectName]);
+
+  const save = async (line: FollowUpLine) => {
+    setState('saving');
+    try { await onWrite(line); setState('saved'); if (mode !== 'send') setText(''); }
+    catch { setState('failed'); }
+  };
+  const link = whatsAppLink(phone, text);
+  const send = () => {
+    if (link) window.open(link, '_blank', 'noopener');
+    const t = WHATSAPP_TEMPLATES.find((x) => x.id === template) || WHATSAPP_TEMPLATES[0];
+    if (canLog) save(sentLine(text, sendSubject(t, milestones)));
+  };
+
+  return (
+    <div className="shrink-0 border-t border-slate-200 px-4 py-3 flex flex-col gap-2 bg-white">
+      <div className="flex flex-wrap items-center gap-2">
+        {chatty && canLog && (
+          <Segmented<'send' | 'reply' | 'note'> label="What to add" size="sm" value={mode} onChange={setMode}
+            options={[{ id: 'send', label: 'Message the client' }, { id: 'reply', label: 'Log their reply' }, { id: 'note', label: 'Add a note' }]} />
+        )}
+        {onRecord && (
+          <span className="flex items-center gap-1.5 ml-auto">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Record</span>
+            <Button size="sm" variant="secondary" icon={HardHat} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="S">Site visit</Button>
+            <Button size="sm" variant="secondary" icon={Users} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="M">Meeting</Button>
+            <Button size="sm" variant="secondary" icon={Scale} onClick={() => onRecord('record-decision')} aria-keyshortcuts="D">Decision</Button>
+          </span>
+        )}
+      </div>
+      {mode === 'send' && chatty && (
+        <div className="flex gap-1.5 overflow-x-auto">
+          {WHATSAPP_TEMPLATES.map((t) => (
+            <button key={t.id} type="button" onClick={() => setTemplate(t.id)}
+              className={cx('shrink-0 px-3 py-1 rounded-full border text-xs font-semibold', t.id === template ? 'border-[#3D52A0] bg-[#3D52A0]/10 text-[#3D52A0]' : 'border-slate-300 text-slate-600 hover:border-[#3D52A0]')}>
+              {t.title}
+            </button>
+          ))}
+        </div>
+      )}
+      {mode === 'reply' && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {REPLY_MOODS.map((m) => (
+            <button key={m.id} type="button" onClick={() => setMood(m.id)}
+              className={cx('px-3 py-1 rounded-full border text-xs font-semibold', m.id === mood ? 'border-[#3D52A0] bg-[#3D52A0]/10 text-[#3D52A0]' : 'border-slate-300 text-slate-600')}>{m.label}</button>
+          ))}
+          <select className={cx(INPUT, '!w-auto !py-1 text-xs')} value={from} onChange={(e) => setFrom(e.target.value as ReplyFrom)} aria-label="Where they replied">
+            {REPLY_FROM.map((f) => <option key={f.id} value={f.id}>From {f.label}</option>)}
+          </select>
+        </div>
+      )}
+      {canLog ? (
+        <div className="flex gap-2 items-stretch">
+          <textarea value={text} onChange={(e) => { setText(e.target.value); setState('idle'); }} rows={2}
+            placeholder={mode === 'reply' ? `What ${clientName} said` : mode === 'note' ? 'A note for the team' : `Write to ${clientName}`}
+            aria-label="Message" className={cx(INPUT, 'resize-none flex-1')} />
+          <div className="flex flex-col gap-1.5 shrink-0 justify-center">
+            {mode === 'send' && (
+              <Button variant="primary" icon={MessageCircle} onClick={send} disabled={!text.trim()} title={link ? undefined : 'No phone number for the client: the message is logged, WhatsApp does not open'}>
+                Open in WhatsApp
+              </Button>
+            )}
+            {mode === 'reply' && <Button variant="primary" onClick={() => save(replyLine(mood, text, from))}>Log their reply</Button>}
+            {mode === 'note' && <Button variant="primary" icon={NotebookPen} onClick={() => save(noteLine(text))} disabled={!text.trim()}>Add note</Button>}
+            {state === 'saving' && <span className="text-[11px] text-slate-500">Saving…</span>}
+            {state === 'saved' && <span className="text-[11px] text-emerald-700">Saved to the follow-up log</span>}
+            {state === 'failed' && <span className="text-[11px] text-rose-700">Not saved. Try again.</span>}
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-slate-500">You can read this conversation. Notes and messages are logged by the studio team.</p>
+      )}
+    </div>
+  );
+}
+
+/* ───────────── the project card ───────────── */
+
+function ProjectCard({ ctx, money, seesMoney, journey, stages, portalLine, onOpen, has }: {
+  ctx: any; money: ClientMoney | null; seesMoney: boolean; journey: ConversationsWorkspaceProps['journey'];
+  stages: StageRow[]; portalLine: ReturnType<typeof portalStatus>; onOpen: (r: string) => void; has: (r: string) => boolean;
+}) {
+  const inr = (n: number | null | undefined) => (n == null ? '—' : '₹' + Math.round(n).toLocaleString('en-IN'));
+  const next = money?.milestones.find((m) => m.status !== 'paid' && m.status !== 'received');
+  const pct = money && money.projectValue ? Math.round(((money.totalPaid || 0) / money.projectValue) * 100) : null;
+  const Sec: React.FC<{ title: string; action?: React.ReactNode; children: React.ReactNode }> = ({ title, action, children }) => (
+    <div className="px-4 py-3 border-b border-slate-100">
+      <div className="flex items-center justify-between mb-2"><h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{title}</h3>{action}</div>
+      {children}
+    </div>
+  );
+  const Tile: React.FC<{ label: string; value: React.ReactNode; sub: string; route: string | null }> = ({ label, value, sub, route }) => (
+    <button type="button" disabled={!route || !has(route)} onClick={() => route && onOpen(route)}
+      className="text-left rounded-xl border border-slate-200 px-3 py-2.5 hover:border-[#3D52A0] disabled:hover:border-slate-200 disabled:cursor-default">
+      <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
+      <span className="block font-black text-slate-800 tabular-nums">{value}</span>
+      <span className="block text-[11px] text-slate-500 truncate">{sub}</span>
+    </button>
+  );
+  return (
+    <aside className="hidden xl:flex flex-col min-h-0 overflow-y-auto border-l border-slate-100" aria-label="Project card">
+      <Sec title="At a glance">
+        <div className="grid grid-cols-2 gap-2">
+          {seesMoney && (
+            <Tile label="Collected" route="payment-calc"
+              value={money && !money.amountsHidden ? <Masked>{inr(money.totalPaid)}</Masked> : '—'}
+              sub={money && money.projectValue != null && !money.amountsHidden ? `${pct}% of ${inr(money.projectValue)}` : 'No payment schedule yet'} />
+          )}
+          {seesMoney && (
+            <Tile label="Next due" route="payment-calc"
+              value={next ? (next.owed != null ? <Masked>{inr(next.owed)}</Masked> : next.name) : '—'}
+              sub={next ? `${next.name}${next.date ? ` · ${new Date(next.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}` : 'Nothing due'} />
+          )}
+          <Tile label="Steps" route="project-journey" value={`${journey.done} of ${journey.total}`} sub={`${Math.round(journey.pct)}% through`} />
+          <Tile label="Stage" route={null} value={String(stages.find((s) => s.state === 'now')?.stage || '—')} sub={stages.find((s) => s.state === 'now')?.label || ''} />
+        </div>
+      </Sec>
+      {has('client-portal') && (
+        <Sec title="Client portal" action={<Button size="sm" variant="quiet" onClick={() => onOpen('client-portal')}>Open</Button>}>
+          <PortalLineText line={portalLine} />
+          <div className="flex gap-1.5 mt-2">
+            <Button size="sm" variant="primary" className="flex-1" onClick={() => onOpen('client-portal')}>Review &amp; send</Button>
+          </div>
+        </Sec>
+      )}
+      {has('timeline') && (
+        <Sec title="Timeline" action={<Button size="sm" variant="quiet" onClick={() => onOpen('timeline')}>Open</Button>}>
+          <p className="text-xs text-slate-500">The plan from here to handover, and the dates the client sees.</p>
+        </Sec>
+      )}
+      <Sec title="Details">
+        {[['Client', ctx.clientName], ['Phone', ctx.clientPhone], ['Email', ctx.clientEmail], ['Place', ctx.location], ['Area', ctx.area ? `${ctx.area} sq ft` : null]]
+          .filter(([, v]) => v).map(([k, v]) => (
+            <div key={k as string} className="flex justify-between gap-3 py-0.5 text-xs"><span className="text-slate-500">{k}</span><span className="font-semibold text-slate-800 truncate">{v}</span></div>
+          ))}
+      </Sec>
+      <Sec title="Journey">
+        {stages.map((s) => (
+          <button key={s.stage} type="button" disabled={!s.first} onClick={() => s.first && onOpen(s.first)}
+            className="w-full flex items-center gap-2.5 py-1 text-left text-xs disabled:cursor-default">
+            <span className={cx('w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold shrink-0',
+              s.state === 'done' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : s.state === 'now' ? 'bg-[#3D52A0] text-white' : 'bg-white text-slate-400 border border-slate-300')}>{s.stage}</span>
+            <span className={cx('flex-1 min-w-0 truncate', s.state === 'now' ? 'font-bold text-slate-800' : 'text-slate-600')}>{s.label}</span>
+            {s.state === 'now' && <Chip tone="brand">Now</Chip>}
+            {s.first && <ChevronRight className="w-3.5 h-3.5 text-slate-300" aria-hidden />}
+          </button>
+        ))}
+      </Sec>
+    </aside>
+  );
+}
+
+/* ───────────── the full-screen window ───────────── */
+
+function ScreenWindow({ route, isHub, hubLabel, projectName, labelOf, conversations, backTo, viewOnly, onOpen, onClose, children }: {
+  route: string; isHub: boolean; hubLabel: string; projectName: string; labelOf: (r: string) => string; conversations: ConversationDef[];
+  backTo: ConversationDef; viewOnly: boolean; onOpen: (r: string) => void; onClose: () => void; children: React.ReactNode;
+}) {
+  const home = conversations.find((c) => c.routes.includes(route));
+  const owner = home || conversationDef('whole');
+  const title = isHub ? hubLabel : labelOf(route);
+  const box = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      /* A dialog the screen opened inside the window closes first. */
+      if (document.querySelectorAll('[aria-modal="true"]').length > 1) return;
+      onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    box.current?.focus();
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-[300]">
+      <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={onClose} aria-hidden />
+      <div ref={box} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}
+        className="phd-pop absolute inset-2 sm:inset-4 lg:inset-6 bg-white rounded-3xl border border-slate-200 shadow-2xl flex flex-col overflow-hidden outline-none">
+        <div className="shrink-0 flex items-center gap-3 px-4 sm:px-6 py-3 border-b border-slate-100 min-w-0">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0] truncate">{projectName} · {owner.name}</p>
+            <h2 className="text-2xl font-bold text-slate-800 tracking-tight truncate">{title}</h2>
+          </div>
+          {home && home.routes.length > 1 && (
+            <div className="hidden lg:block shrink-0">
+              <Segmented<string> label="Screens in this conversation" size="sm" value={route} onChange={onOpen}
+                options={home.routes.map((r) => ({ id: r, label: labelOf(r) }))} />
+            </div>
+          )}
+          <button type="button" onClick={onClose} aria-label="Close" className="w-10 h-10 grid place-items-center rounded-xl border border-slate-300 text-slate-500 hover:text-[#3D52A0] hover:border-[#3D52A0] shrink-0">
+            <X className="w-5 h-5" aria-hidden />
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5">
+          <PageTitleBlock compact route={route} />
+          <ViewOnlyGuard active={viewOnly}>{children}</ViewOnlyGuard>
+        </div>
+        <div className="shrink-0 flex items-center gap-3 px-4 sm:px-6 py-2.5 bg-slate-50 border-t border-slate-100 text-xs text-slate-500">
+          <span className="flex-1 min-w-0 truncate">What you change here shows up in the {owner.name} conversation.</span>
+          <span className="hidden sm:inline px-1.5 py-0.5 rounded border border-slate-300 bg-white text-[11px] font-bold text-slate-600">Esc</span>
+          <Button size="sm" variant="secondary" icon={ArrowLeft} onClick={onClose}>Back to {backTo.name}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}

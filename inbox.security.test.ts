@@ -90,6 +90,13 @@ describe('a person\'s settings and devices', () => {
     await assertSucceeds(getDoc(doc(as('riya', 'riya@ff.in'), 'inbox/riya@ff.in')));
   });
 
+  it('keep their own project view, Classic or Conversations, and nothing else in that field (lib/projectView)', async () => {
+    await assertSucceeds(setDoc(doc(as('riya', 'riya@ff.in'), 'inbox/riya@ff.in'), { projectView: 'conversations', updatedAt: 2 }, { merge: true }));
+    await assertSucceeds(setDoc(doc(as('riya', 'riya@ff.in'), 'inbox/riya@ff.in'), { projectView: 'classic', updatedAt: 3 }, { merge: true }));
+    await assertFails(setDoc(doc(as('riya', 'riya@ff.in'), 'inbox/riya@ff.in'), { projectView: 'admin', updatedAt: 4 }, { merge: true }));
+    await assertFails(setDoc(doc(as('meera', 'meera@ff.in'), 'inbox/riya@ff.in'), { projectView: 'classic' }, { merge: true }));
+  });
+
   it('cannot be saved or read for somebody else, or carry anything but settings', async () => {
     await assertFails(setDoc(doc(as('meera', 'meera@ff.in'), 'inbox/riya@ff.in'), { prefs }));
     await assertFails(getDoc(doc(as('meera', 'meera@ff.in'), 'inbox/riya@ff.in')));

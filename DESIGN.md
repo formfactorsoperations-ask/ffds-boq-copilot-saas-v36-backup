@@ -1302,6 +1302,44 @@ is on the Ops Desk too (`lib/clientCompose.ts`, pure and tested).
   (`withPortalMark`). Every project change, a new link included, goes through the safe save of Edit client.
 - The window says "They'll see the portal tabs you've already approved for clients. Nothing new is added."
 
+### Project workspace: conversations (approved 27 Nov 2026, pilot)
+
+The owner approved a second project workspace after comparing clickable mockups, on two conditions: it
+must feel calm and easy, and nobody is moved to it suddenly. It is laid out like Clients, inside one
+project. Classic (the sidebar above) stays, unchanged, until the pilot (the owner and Mayuri) is done.
+
+- **The switch** (`lib/projectView.ts`): Studio settings → System → Project workspace, `projectWorkspace` on
+  the studio's record: Classic (default) · Each person chooses · Conversations. A person's own choice is
+  `projectView` on their `inbox/{email}` document (`services/projectViewService.ts`), from "Try the
+  Conversations view" in the sidebar's person menu or "Use Classic view" in the new top bar. The studio's
+  choice is read as a project opens, so a settings change never swaps the view under someone mid-work.
+- **The way out, always on top:** "← All projects" (brand tint), Studio home, Clients and the studio desks
+  the role may open (`studioJumpItems`), each with its word. Then the project's title row: initials tile,
+  name (`text-2xl font-bold`), client · place · area, the status chip and Client portal.
+- **One `Panel`, three panes**, as on Clients:
+  - **Conversations** (~280px, `lib/projectConversations.ts`): Whole project, Client & portal, Money, BOQ,
+    Documents, Design, Site, Plan & timeline, Brief & Site (its own, owner). Every screen of the project
+    lives in exactly one, under the studio's own screen names (owner: keep them). A conversation shows
+    only when the role may open one of its screens. A row: a round icon, the name, its latest line, and
+    one amber dot when a note is waiting on the person. Nothing else is coloured.
+  - **The conversation**: its screens as buttons ("Open: …", the first primary), then the story
+    (`lib/projectThread.ts`, from the Clients thread and the project's history) grouped by day, each item
+    with "Open {screen}". Whole project adds the next step (stage, "Next: …", steps done, Ops Matrix and
+    "Open the Hub") and **Up next** (three steps, one button each). The composer: Message the client /
+    Log their reply / Add a note, writing to the follow-up log as Clients does; Whole project adds
+    **Record** (Site visit · Meeting · Decision, keys S · M · D).
+  - **The project card** (~320px, from `xl`): At a glance (Collected and Next due for finance roles, behind
+    the hide-figures eye; Steps; Stage), Client portal (the portal status line and Review & send), Timeline,
+    Details and Journey.
+- **Every screen opens in a full-screen window** (the modal pattern: `phd-scrim`, `phd-pop`, `rounded-3xl`):
+  a brand eyebrow "Project · Conversation", the screen's name (`text-2xl font-bold`), its sister screens as a
+  `Segmented`, and ✕. The screen is the same component Classic draws. The footer: "What you change here
+  shows up in the … conversation", Esc, and "← Back to …". A dialog a screen opens closes before the window
+  on Esc. No window opens on top of a window.
+- A first-time line says what the view is and how to go back; "Got it" hides it on that device.
+- **Motion:** only `hud-panel-in`, `hud-row-in` (staggered, capped at 12), `phd-scrim`, `phd-pop`; all
+  stop under reduced motion. Same fonts and colours; no new accent.
+
 ### Summary-first sections (approved 16 Nov 2026)
 
 Execution & Site used to nest tabs five levels deep. The owner chose option C of plan item 9:
