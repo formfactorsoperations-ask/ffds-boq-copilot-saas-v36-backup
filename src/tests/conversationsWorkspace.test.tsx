@@ -238,4 +238,20 @@ describe('the Conversations workspace', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+
+  it('gives each conversation icon its own motion, fills the open one, and ripples where you press (owner, 27 Nov 2026)', () => {
+    setup();
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    const money = within(list).getByRole('button', { name: /^Money/ });
+    expect(money.className).toContain('cvw-hot');
+    expect(money.querySelector('.cvw-ic')?.getAttribute('data-m')).toBe('flip');
+    expect(within(list).getByRole('button', { name: /^Brief & Site/ }).querySelector('.cvw-ic')?.getAttribute('data-m')).toBe('drop');
+    fireEvent.pointerDown(money, { clientX: 10, clientY: 10 });
+    expect(money.querySelector('.cvw-ripple')).toBeTruthy();
+    fireEvent.click(money);
+    const disc = money.querySelector('.cvw-disc')!;
+    expect(disc.className).toContain('bg-[#3D52A0]');
+    expect(disc.className).toContain('is-pop');
+    expect(money.querySelector('.cvw-ic')?.className).toContain('is-play');
+  });
 });
