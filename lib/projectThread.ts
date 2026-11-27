@@ -38,8 +38,29 @@ export function placeEntry(e: ThreadEntry): { convs: ConversationId[]; route: st
     return { convs: ['docs'], route: 'docs' };
   }
   if (e.kind === 'said') return { convs: ['chat'], route: 'comms-tracker' };
+  if (e.source === 'site') return placeMeeting(e);
   const s = BY_SOURCE[e.source || 'team'];
   return { convs: [s.conv], route: s.route };
+}
+
+/*
+  Visits, meetings and minutes are filed by what they were about (owner,
+  27 Nov 2026: design reviews showed under Site): a site visit goes to
+  Execution, a measurement to Brief & Survey, a meeting or minutes about the
+  design (drawings, layouts, materials, a review) to Drawings & Design, one
+  about the site works to Execution, and any other client meeting stays in
+  the Overview story. Each still opens Meetings & Reports, where it is kept.
+*/
+const DESIGN_TOPIC = /design|drawing|layout|render|elevation|\b3d\b|mood ?board|material|selection|colou?r|finish|space plan|concept/i;
+const SITE_TOPIC = /\bsite\b|snag|handover|execution|civil|carpentry|electrical|plumbing|paint|install|labour|work ?order|progress/i;
+export function placeMeeting(e: ThreadEntry): { convs: ConversationId[]; route: string | null } {
+  const what = `${e.text} ${e.detail || ''}`;
+  const route = 'site-meetings';
+  if (/^site visit/i.test(e.text)) return { convs: ['site'], route };
+  if (/^measurement/i.test(e.text)) return { convs: ['brief'], route };
+  if (DESIGN_TOPIC.test(what)) return { convs: ['design'], route };
+  if (SITE_TOPIC.test(what)) return { convs: ['site'], route };
+  return { convs: [], route };
 }
 
 const HISTORY_PLACE: Partial<Record<HistoryEvent['category'], { conv: ConversationId; route: string; source: ThreadSource }>> = {

@@ -215,7 +215,8 @@ export const ALWAYS_ON_BAND: NavItem[] = [
   {
     /* Sits beside Ops Matrix because both answer "how is this project doing",
        one in steps and one in money. */
-    label: "Reports",
+    /* "Project Health" (owner, 27 Nov 2026: "Reports" did not say what it is). */
+    label: "Project Health",
     route: "project-reports",
     icon: BarChart3,
     money: true,

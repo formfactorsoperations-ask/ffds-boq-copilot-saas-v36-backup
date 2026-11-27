@@ -33,10 +33,10 @@ describe('the conversation map', () => {
     expect(CONVERSATIONS.find((c) => c.id === 'design')!.routes).not.toContain('leadiq');
   });
 
-  it('shows only the conversations a person can open something in, and always Whole project', () => {
+  it('shows only the conversations a person can open something in, and always Overview', () => {
     const designer = new Set(['drawing-tracker', 'design-gate', 'comms-tracker', 'docs', 'site-ops']);
     const ids = conversationsFor(designer).map((c) => c.id);
-    expect(ids).toEqual(['whole', 'chat', 'docs', 'design', 'site']);
+    expect(ids).toEqual(['whole', 'docs', 'design', 'site', 'chat']); // in the order a project runs
     expect(conversationsFor(designer).find((c) => c.id === 'docs')!.routes).toEqual(['docs']);
     expect(conversationsFor(new Set()).map((c) => c.id)).toEqual(['whole']);
   });
@@ -135,5 +135,30 @@ describe('where did it go? (plan PR G)', () => {
     expect(classicLine(classic[1])).toBe('Scope & Strategy › Pricing & Tiers');
     expect(classicLine(classic[0])).toBe('Hub');
     expect(classicLine(null)).toBe('');
+  });
+});
+
+describe('names, order and where meetings go (owner, 27 Nov 2026)', () => {
+  it('names the conversations as the studio talks, in the order a project runs', () => {
+    expect(CONVERSATIONS.map((c) => c.name)).toEqual(['Overview', 'Brief & Survey', 'BOQ & Scope', 'Money', 'Agreements & Docs', 'Drawings & Design', 'Execution', 'Progress', 'Client']);
+    expect(CONVERSATIONS.filter((c) => /site/i.test(c.name))).toHaveLength(0); // one "Site" no more: Execution
+  });
+  it('keeps Project Health with Money, and still finds it as "Reports"', () => {
+    expect(conversationOf('project-reports')).toBe('money');
+    const convs = conversationsFor(new Set(['project-reports', 'payment-calc']));
+    const [m] = findScreens('reports', convs, (r) => (r === 'project-reports' ? 'Project Health' : r), [], 'dashboard');
+    expect(m.route).toBe('project-reports');
+    expect(m.conv.id).toBe('money');
+  });
+  it('files each visit and meeting by what it was about', () => {
+    const at = (text: string, detail?: string) => placeEntry(entry({ source: 'site', text, detail }));
+    expect(at('Site visit done', 'Check the false ceiling').convs).toEqual(['site']);
+    expect(at('Measurement done').convs).toEqual(['brief']);
+    expect(at('Meeting done', 'Design review').convs).toEqual(['design']);
+    expect(at('Minutes shared · Design review: Kids Bedroom 2').convs).toEqual(['design']);
+    expect(at('Meeting done', 'Carpentry progress on site').convs).toEqual(['site']);
+    expect(at('Minutes shared · Site review').convs).toEqual(['site']);
+    expect(at('Meeting done', 'Introduction with the family').convs).toEqual([]); // stays in the Overview story
+    expect(at('Meeting done', 'Design review').route).toBe('site-meetings'); // still opens where it is kept
   });
 });

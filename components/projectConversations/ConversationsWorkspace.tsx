@@ -442,7 +442,7 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
         <div className="mx-3 sm:mx-5 mb-2 flex items-center gap-3 rounded-xl border border-[#3D52A0]/20 bg-[#3D52A0]/10 px-4 py-2.5 text-xs text-slate-700 hud-panel-in">
           <Info className="w-4 h-4 text-[#3D52A0] shrink-0" aria-hidden />
           <span className="flex-1 min-w-0">
-            <b className="text-slate-800">This is the new project view.</b> Pick a conversation on the left (Money, BOQ, Documents…); every screen opens full size and closes back here.
+            <b className="text-slate-800">This is the new project view.</b> Pick a conversation on the left (Money, BOQ & Scope, Execution…); every screen opens full size and closes back here.
             {p.onUseClassic && ' You can go back to Classic from the top bar at any time.'}
           </span>
           <Button size="sm" variant="primary" icon={Compass} onClick={startTour}>Show me around</Button>
@@ -1682,7 +1682,7 @@ type TourStep = { target: 'list' | 'open' | 'way'; side: 'right' | 'below'; titl
 function tourSteps(canClassic: boolean): TourStep[] {
   return [
     { target: 'list', side: 'right', title: 'Your project, as conversations',
-      text: 'Money, BOQ, Documents, Design, Site… each is a conversation. Pick one to see what has happened and what to open next.' },
+      text: 'Money, BOQ & Scope, Drawings & Design, Execution… each is a conversation. Pick one to see what has happened and what to open next.' },
     { target: 'open', side: 'below', title: 'Open a screen',
       text: 'The buttons here open each screen full size, over the project. Close it, press Esc or use Back to come back here.' },
     { target: 'way', side: 'below', title: 'The studio is always on top',

@@ -225,7 +225,8 @@ describe('Health Check & Audit is retired', () => {
     const stage2 = NAV_CONFIG.find((s) => s.stage === 2)!;
     expect(stage2.items.map((i) => i.label)).toEqual(['Pricing & Tiers', 'BOQ Editor', 'Money & Offers']);
     expect(stage2.items[2]).toMatchObject({ route: 'analytics', money: true });
-    expect(ALWAYS_ON_BAND.some((i) => /Health/.test(i.label))).toBe(false);
+    // The retired Health Check & Audit stays gone. ("Project Health", the renamed Reports screen, is another screen: owner, 27 Nov 2026.)
+    expect(ALWAYS_ON_BAND.some((i) => /Health Check|Audit/.test(i.label))).toBe(false);
   });
 
   it('warns when an offer would make the option a loss', () => {

@@ -1337,9 +1337,9 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     chip, client · place · area in `text-[11px]`; on the right Client portal (brand tint), Show me around and
     Use Classic view. There is no "All projects" item and no second row of studio icons (colour line icons
     and glass bubbles were tried and dropped the same day).
-  - **Home's colours on the conversations** (the rings and DayBoard on Home): Whole project and Design brand
+  - **Home's colours on the conversations** (the rings and DayBoard on Home): Overview and Design brand
     `#3D52A0`, BOQ brand light `#5F79D6` (tint `#EEF2FD`), Money gold `#8C6A33` (`#FBF5EA`), Site and Brief &
-    Site green `#0E7C5A` (`#E7F5EF`), Documents and Plan & timeline navy `#1E2A5A` (`#ECEEF6`), Client &
+    Site green `#0E7C5A` (`#E7F5EF`), Documents and Progress navy `#1E2A5A` (`#ECEEF6`), Client &
     portal plum `#B4436A` (`#FBEFF3`). A conversation's plate wears its tint; the picked one fills with its
     colour. The project card's figures take the same tints: Collected gold, Next due brand, Drawings navy,
     Handover green.
@@ -1354,16 +1354,24 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   story lines and buttons `text-[13px]`, conversation and Up next heads `text-[15px]`, the window title
   `text-xl`; meta stays `text-xs` / `text-[11px]`.
 - **One `Panel`, three panes**, as on Clients:
-  - **Conversations** (~280px, `lib/projectConversations.ts`): Whole project, Client & portal, Money, BOQ,
-    Documents, Design, Site, Plan & timeline, Brief & Site (its own, owner). Every screen of the project
-    lives in exactly one, under the studio's own screen names (owner: keep them). A conversation shows
+  - **Conversations** (~280px, `lib/projectConversations.ts`), named as the studio talks and listed in the
+    order a project runs (owner, 27 Nov 2026, option "A" of three: "getting a little confused here"):
+    **Overview**, **Brief & Survey** (the brief and the site survey), **BOQ & Scope**, **Money** (with
+    **Project Health**, the money view once called Reports, finance roles only), **Agreements & Docs**,
+    **Drawings & Design**, **Execution** (site work; the only "site" in the list), **Progress** (Ops Matrix,
+    timeline, decisions, history), **Client** (messages and the portal). Every screen of the project lives
+    in exactly one, under the studio's own screen names (owner: keep them); search still finds a screen by
+    a former name ("Reports"). **Visits, meetings and minutes are filed by what they were about**
+    (`lib/projectThread.ts` `placeMeeting`): a site visit and a site-works meeting go to Execution, a
+    measurement to Brief & Survey, a design meeting or review to Drawings & Design, any other client
+    meeting to the Overview story; each still opens Meetings & Reports, where it is kept. A conversation shows
     only when the role may open one of its screens. A row: a round icon, the name, its latest line, and
     one amber dot when a note is waiting on the person. When something is wrong in the conversation, the
     latest line gives way to **its reason** (see "Smart workspace" below), rose for late and amber for
     someone's turn (owner, 27 Nov 2026: "yes you can use coloured reason"). Nothing else is coloured.
   - **The conversation**: its screens as buttons ("Open: …", the first primary), then the story
     (`lib/projectThread.ts`, from the Clients thread and the project's history) grouped by day, each item
-    with "Open {screen}"; only payments carry a source chip. Whole project opens on **one card**: the
+    with "Open {screen}"; only payments carry a source chip. Overview opens on **one card**: the
     stage and steps on one line (with Ops Matrix and "Open the Hub"), then **Up next**, ranked as the Hub
     ranks it: the engine's blocker (rose "Blocker" chip), the Ops Matrix's next step ("Your sign-off" with
     Mark done, or "Milestone"), then the engine's list with its own action words (Prepare Terms, Log
@@ -1410,7 +1418,7 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   signal shows only when the person may open its screen. Nothing writes or sends; every signal opens a screen.
   - **The reason on the list:** one line, the worst in that conversation, `text-xs font-semibold`,
     `text-rose-700` late or `text-amber-700` your turn, its evidence as the tooltip. Never an amount.
-  - **Whole project, in order:** Since you were here, Up next, Watch-outs. The cards on top keep to about two
+  - **Overview, in order:** Since you were here, Up next, Watch-outs. The cards on top keep to about two
     thirds of the pane so the story still shows. **Since you were here** (`lib/projectCatchUp.ts`): pale
     brand, at most three lines of what moved since this person last opened the project, the client's own
     first, each with its conversation's colour dot and name; "Mark as read" puts it away for the visit.
@@ -1425,7 +1433,7 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     (`lib/clientMoney`), as their invoices show it.
   - **The ripple:** when the client holds copies older than the payment schedule, Money shows them in
     the order to bring them up to date (amber card, numbered, because the order matters), each step
-    opening its screen; Whole project lists it as a Watch-out.
+    opening its screen; Overview lists it as a Watch-out.
 - **Smart cards fold to one line** (owner, 27 Nov 2026: "actual conversation doesnt have much space,
   please check for all tabs"). Every smart card (Since you were here, Watch-outs, Money waiting, the ripple,
   What will hold up site) sits on its conversation as one line on `#F7F9FF`: a dot in its tone (rose late,
@@ -1434,9 +1442,9 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   card under it (`hud-panel-in`); one card is open at a time in a conversation, and the workspace remembers
   which in this browser (`studiodesk.smartBriefs`). This week's update is one line of its own. **Up next**
   shows its first step; the rest fold under "Show n more", beside "n more on the Hub". So the story keeps
-  most of the pane: about 55% on Whole project and 70–80% elsewhere at 1500×940.
+  most of the pane: about 55% on Overview and 70–80% elsewhere at 1500×940.
 - **Smart workspace, PR 5: where the project is heading** (owner, 27 Nov 2026; `lib/projectOutlook.ts`).
-  - **Handover forecast**, folded on Plan & timeline: "Likely 11 Mar ’27 · 34 working days past target" (rose
+  - **Handover forecast**, folded on Progress: "Likely 11 Mar ’27 · 34 working days past target" (rose
     when late). Open: tiles for Likely handover (rose when late) and Target, up to three reasons (rose dots):
     each open hold measured by running the programme again without it ("Payment not received: a hold of 8
     working days moves handover 9 days"), then critical-path work waiting on a gate, overrunning or behind;
@@ -1458,12 +1466,12 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     buttons (only screens this person may open), and "From this project's records only." The record is the
     Ops Desk's project brief (`buildProjectBrief`, from the copy without the studio's costs), the story and
     open snags; "The records here don't say" when they do not. It never writes to the client.
-  - **Promises** on Whole project, folded under Watch-outs: "n open from us · n from the client · n late".
+  - **Promises** on Overview, folded under Watch-outs: "n open from us · n from the client · n late".
     Open: "We promised" and "The client promised", late first, each with a `Chip` (bad "Late · 25 Nov",
     slate "By 29 Nov"), who logged it or the minutes it came from, and **Done** for a follow-up's next step
     (`markNextDone`, as on the Ops Desk) or **Open minutes** for an action item in the minutes.
 - **Smart workspace, PR 3: Smart Record** (owner, 27 Nov 2026: "AI on project notes: yes"; nothing outside
-  the app). **From notes** joins Site visit · Meeting · Decision on Whole project's Record bar (Sparkles icon),
+  the app). **From notes** joins Site visit · Meeting · Decision on Overview's Record bar (Sparkles icon),
   for those who may log, not look-only, while the studio's AI is reachable. It opens a window in the
   workspace's window pattern (`phd-scrim`, `phd-pop`, `rounded-3xl`, 760px wide): what the notes are from
   (Site visit · Meeting · Call) and how (Type or paste · Speak, which records up to five minutes or takes a
@@ -1482,7 +1490,7 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   for the roles that see them there; nothing leaves the app.
   - **Two more signals:** drawings that will hold up site (`deskSmart` site date: late, or will be at this
     pace; rose, on Design) and a **quiet project** (nothing recorded for 10 days or more on a live project,
-    amber, on Client & portal; a sticker that only says where things stand does not count as activity).
+    amber, on Client; a sticker that only says where things stand does not count as activity).
   - **Design opens on What will hold up site:** up to three drawings, each a `Chip` (bad "Late for site" or
     "Site date", brand "Ready"), the site line and who holds it ("With the Design Head 2 days", "With Riya
     3 days", "With the client 9 days"), **Nudge** when someone else in the studio has held it a day or more
@@ -1490,7 +1498,7 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     Design Desk and comes back here. Then the drawing the client has had longest past a week ("Open
     Drawings"), and, for those who bill rounds, an amber block of revision rounds past the included ones
     not billed or waived, with "Bill or waive on the Design Desk".
-  - **Client & portal opens on this week's update** (`lib/fridayDigest`), for those who may open the Ops
+  - **Client opens on this week's update** (`lib/fridayDigest`), for those who may open the Ops
     Desk: still to write (from Thursday), a draft, waiting for approval, sent back, approved and ready to
     send (amber), or sent (emerald), with "Open the Ops Desk". It is written, approved and sent there.
   - **The project card:** **Client pulse** under At a glance (worked out as the Ops Desk works it out): a
@@ -1512,9 +1520,9 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   imported from `src/index.css` because build.js compiles only that file). A 3D background was tried the
   same day and dropped at the owner's word; do not bring it back.
   - **Each icon moves in a way that fits it** (`.cvw-ic[data-m]`), on hover or keyboard focus, and once
-    when its conversation opens: Whole project's sparkle twinkles, Client & portal's bubble talks
+    when its conversation opens: Overview's sparkle twinkles, Client's bubble talks
     (squash and stretch), Money's wallet flips like a coin, BOQ's table shuffles, Documents' folder
-    opens, Design's pen sketches and draws its own outline, Site's hard hat taps down, Plan & timeline's
+    opens, Design's pen sketches and draws its own outline, Site's hard hat taps down, Progress's
     calendar turns a page, Brief & Site's pin drops in and bounces. Story cards use the same motions by
     source (payments flip, site taps, the portal spins); in the top bar Projects slides back, Home
     bounces, Clients and People talk, Design Desk draws, Item Bank shuffles, Show me around spins.
