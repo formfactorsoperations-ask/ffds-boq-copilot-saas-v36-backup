@@ -18,6 +18,7 @@ import {
 import { buildProposalPdf } from '../../lib/proposalPdf';
 import { proposalTimeline, civilDaysOf, briefHome, proposalNotes, answersTo, othersDecide, roomIncludes } from '../../lib/playground/brief';
 import { PMC_AVAILABLE } from '../../lib/engagement';
+import { renovationPlan, renovationRulesOf } from '../../lib/renovation';
 import { inr } from './playgroundUi';
 import { useOrg } from '../../contexts/OrgContext';
 import { studioDetailsOf, logoForPdf, addressLines, hasContact, shortWeb, shortInstagram } from '../../lib/playground/studio';
@@ -167,7 +168,7 @@ export interface ProposalPdfProps {
   /** Who else decides, from the lead profile: anyone but "None" adds the one-page summary (PR B). */
   decisionMakers?: string | null;
   /** The project Timeline's programme (useProjectProgramme): the timeline's design and site days. */
-  programme?: { designWorkDays?: number; siteWorkDays?: number } | null;
+  programme?: { designWorkDays?: number; siteWorkDays?: number; sitePhases?: { id: string; durationDays: number }[] } | null;
   /** How much price the client sees: every line, room totals, or a package (proposal.priceDetail). */
   priceDetail?: PriceDetail;
   /** Records the proposal as sent, on this version, shaped for this concern, at this price detail. */
@@ -227,19 +228,21 @@ export default function ProposalPdf({ ctx, tier, tiers, bankMap, specBank, terms
     const feeBasis = feeBasisWords(ctx, { work: summary?.totalSell || 0, asActuals: (summary as any)?.asActualsTotal || 0, rules: tier.pricingRules, offers: deal.execOff > 0 });
     const civil = hasCivilWork(boq.map(l => ({ ...l, name: bankMap.get(l.bankId)?.name, cat: bankMap.get(l.bankId)?.cat })));
     /* From booking (the day the proposal holds until) to the keys (PR B). */
-    const timeline = proposalTimeline({ start: validity.until, programme, config: ctx.config, civil, civilDays: civilDaysOf(termsSettings), target: (ctx as any).targetHandoverDate });
+    /* A renovation (a finished flat) is timed as one: its strip-out first, longer lived in (lib/renovation). */
+    const renovation = renovationPlan(ctx, renovationRulesOf(termsSettings));
+    const timeline = proposalTimeline({ start: validity.until, programme, config: ctx.config, civil, civilDays: civilDaysOf(termsSettings), target: (ctx as any).targetHandoverDate, renovation });
     return {
       summary, deal, schedule, validity, booking, items, options: optionRows, offers, feeBasis, civil, timeline,
       separate: separatePage(boq, bankMap),
       materials: materialsPage(specBank, options, tier.id),
       home: briefHome(ctx),
-      notes: proposalNotes(ctx),
+      notes: proposalNotes(ctx, timeline),
       answers: answersTo(ctx.clientBrief, boq, bankMap, ctx.rooms || []),
       annex: annexOf({
         terms: termsSettings, studioName, gstRate: terms.rate, after: Math.max(0, deal.sell - deal.execOff), fee: deal.fee - deal.designOff, gst: deal.gst, total: deal.clientPays,
         initiationFee: booking.by === 'initiation' ? booking.fee : schedule.initiationFee, boq, bankMap, validDays: validity.days, issued: validity.from,
         booking: { initiation: booking.initiation, code: booking.code },
-        programme: { siteDays: timeline.siteDays, designDays: timeline.designDays, civilDays: timeline.civilDays },
+        programme: { siteDays: timeline.siteDays, designDays: timeline.designDays, civilDays: timeline.civilDays, stripOutDays: timeline.stripOutDays },
       }),
     };
   }, [tier, tiers, ctx, bankMap, specBank, termsSettings, paymentStructure, studioName, programme]);

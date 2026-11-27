@@ -1,6 +1,7 @@
 import {
   ProjectSchedule, ScheduleTask, ProjectContext, FullBoqItem, WorkCalendar,
 } from '../types';
+import { renovationPlan, livedInDays, DEFAULT_RENOVATION, type RenovationRules, type RenovationPlan } from './renovation';
 import {
   DEFAULT_CALENDAR, toISO, toDayNum, laneOrder, isDesignGateTask, isHandoverTask,
   nextWorkingDay, workSpanEnd, workingDaysBetween, computeSchedule, programmeSpanDays,
@@ -72,10 +73,13 @@ export function splitWorkDays(weights: number[], total: number, min = 2): number
 
 /** What sized the site programme, so the Timeline can say why it is as long as it is. */
 export interface SiteSizing {
+  /** All the site's working days: the strip-out of a renovation included. */
   workDays: number;
   areaSqFt: number;
   rooms: number;
   scopes: { civil: boolean; carpentry: boolean; services: boolean; painting: boolean };
+  /** A renovation: its strip-out, and how much longer it takes lived in (lib/renovation). */
+  renovation: RenovationPlan;
 }
 
 /*
@@ -92,6 +96,7 @@ export interface SiteSizing {
 export function estimateSiteWorkDays(
   projectContext: Partial<ProjectContext> | undefined,
   boq: FullBoqItem[] = [],
+  rules: RenovationRules = DEFAULT_RENOVATION,
 ): SiteSizing {
   const ctx: any = projectContext || {};
   const roomsList: any[] = Array.isArray(ctx.rooms) ? ctx.rooms : [];
@@ -120,7 +125,13 @@ export function estimateSiteWorkDays(
   if (scopes.services) days += 5;
   if (scopes.painting) days += 3;
 
-  return { workDays: Math.min(120, Math.max(25, days)), areaSqFt, rooms, scopes };
+  /*
+    A renovation (a finished flat): lived in, the work goes room by room and
+    takes longer; and it starts with the strip-out, a stage of its own.
+  */
+  const renovation = renovationPlan(projectContext, rules);
+  const work = livedInDays(Math.min(120, Math.max(25, days)), renovation);
+  return { workDays: work + renovation.stripOutDays, areaSqFt, rooms, scopes, renovation };
 }
 
 /*
@@ -142,7 +153,9 @@ interface StageTemplate {
 
 const EXECUTION_TEMPLATES: StageTemplate[] = [
   { id: 'site-prelims', title: 'Site Setup & Preliminaries', trade: 'Site & Preliminaries', share: 1.0, dependsOnStages: [] },
-  { id: 'civil-demolition', title: 'Civil & Demolition Works', trade: 'Civil & Demolition', share: 1.0, dependsOnStages: ['site-prelims'] },
+  /* A renovation only (lib/renovation): what is there today taken out and the debris cleared, before civil work. Its days are its own, not a share. */
+  { id: 'strip-out', title: 'Strip-out & Debris Removal', trade: 'Civil & Demolition', share: 0, dependsOnStages: ['site-prelims'] },
+  { id: 'civil-demolition', title: 'Civil & Demolition Works', trade: 'Civil & Demolition', share: 1.0, dependsOnStages: ['strip-out'] },
   { id: 'plumb-concealed', title: 'Plumbing - Concealed Piping', trade: 'Plumbing', share: 0.6, dependsOnStages: ['civil-demolition'] },
   { id: 'elec-conduit', title: 'Electrical - Conduit & First-Fixing', trade: 'Electrical', share: 0.35, dependsOnStages: ['civil-demolition'] },
   { id: 'flooring-tiling', title: 'Flooring & Tiling Works', trade: 'Flooring & Tiling', share: 1.0, dependsOnStages: ['plumb-concealed', 'elec-conduit'] },
@@ -162,6 +175,8 @@ export interface BuildOptions {
   /** Total execution working days to distribute. Default from studio history. */
   executionWorkDays?: number;
   calendar?: WorkCalendar;
+  /** The studio's renovation rules (Terms & Payment); missing, the defaults. */
+  renovation?: RenovationRules;
   /** Design steps already tracked, newest schema from useTimelinePhases. */
   designSteps?: { stepNumber: number; title: string; startDate?: string; endDate?: string; durationDays?: number }[];
 }
@@ -185,7 +200,10 @@ export function buildScheduleFromProject(
 
   const totalValue = [...byTrade.values()].reduce((a, b) => a + b, 0);
   // Sized from the home and its scope (estimateSiteWorkDays), unless the caller says otherwise.
-  const totalWorkDays = opts.executionWorkDays ?? estimateSiteWorkDays(projectContext, boq).workDays;
+  const sizing = estimateSiteWorkDays(projectContext, boq, opts.renovation);
+  const totalWorkDays = opts.executionWorkDays ?? sizing.workDays;
+  /* A renovation's strip-out is a stage of its own, with its own days; the rest is shared out as before. */
+  const stripOutDays = sizing.renovation.stripOutDays;
 
   const ordered = TRADE_ORDER
     .map(t => t.trade)
@@ -270,9 +288,10 @@ export function buildScheduleFromProject(
   }
 
   // ---- Execution lane, from the templates hoisted above -------------------
-  const activeTemplates = byTrade.size > 0
-    ? EXECUTION_TEMPLATES.filter(t => byTrade.has(t.trade))
-    : EXECUTION_TEMPLATES.filter(t => t.trade !== 'Other works');
+  const activeTemplates = (byTrade.size > 0
+    ? EXECUTION_TEMPLATES.filter(t => byTrade.has(t.trade) || t.id === 'strip-out')
+    : EXECUTION_TEMPLATES.filter(t => t.trade !== 'Other works'))
+    .filter(t => t.id !== 'strip-out' || stripOutDays > 0);
   const activeTemplateIds = new Set(activeTemplates.map(t => `exec-${t.id}`));
 
   const findActivePredecessors = (stageId: string): string[] => {
@@ -298,15 +317,17 @@ export function buildScheduleFromProject(
     stages back to back came to about two years. That is every project without
     a BOQ, including a design-only project moved to turnkey.
   */
-  const tradeCount = new Set(activeTemplates.map(t => t.trade)).size;
-  const stageDays = splitWorkDays(
-    activeTemplates.map(template => {
+  const shared = activeTemplates.filter(t => t.id !== 'strip-out');
+  const tradeCount = new Set(shared.map(t => t.trade)).size;
+  const sharedDays = splitWorkDays(
+    shared.map(template => {
       const tradeValue = byTrade.get(template.trade) || 0;
       const share = totalValue > 0 ? tradeValue / totalValue : 1 / Math.max(1, tradeCount);
       return share * template.share;
     }),
-    totalWorkDays,
+    Math.max(shared.length, totalWorkDays - stripOutDays),
   );
+  const stageDays = activeTemplates.map(t => (t.id === 'strip-out' ? stripOutDays : sharedDays[shared.indexOf(t)]));
   activeTemplates.forEach((template, index) => {
     const stageDuration = stageDays[index];
 
@@ -668,12 +689,13 @@ export function previewTemplateProgramme(
   kickoffISO: string,
   steps: TemplateStep[],
   todayISO?: string,
+  renovation?: RenovationRules,
 ): ProgrammePreview {
   const designSteps = templatePhases(kickoffISO, steps);
-  const schedule = buildScheduleFromProject(projectContext, boq, { designSteps });
+  const schedule = buildScheduleFromProject(projectContext, boq, { designSteps, renovation });
   return {
     ...summariseProgramme(schedule, 'estimate', projectContext, todayISO),
-    sizing: estimateSiteWorkDays(projectContext, boq),
+    sizing: estimateSiteWorkDays(projectContext, boq, renovation),
   };
 }
 
@@ -719,21 +741,23 @@ export function resolveProjectProgramme(input: {
   steps?: TemplateStep[];
   kickoffISO?: string;
   todayISO?: string;
+  /** The studio's renovation rules (Terms & Payment); missing, the defaults. */
+  renovation?: RenovationRules;
 }): ProgrammeSummary {
-  const { projectContext, boq, saved, phases = [], steps = [], todayISO } = input;
+  const { projectContext, boq, saved, phases = [], steps = [], todayISO, renovation } = input;
   const fromSaved = scheduleForEngagement(saved || null, projectContext);
   if (fromSaved && fromSaved.tasks?.length) {
     return summariseProgramme(withDesignPhases(fromSaved, phases), 'saved', projectContext, todayISO);
   }
   if (phases.length) {
     return summariseProgramme(
-      buildScheduleFromProject(projectContext, boq, { designSteps: phases }), 'timeline', projectContext, todayISO,
+      buildScheduleFromProject(projectContext, boq, { designSteps: phases, renovation }), 'timeline', projectContext, todayISO,
     );
   }
   const kickoff = (input.kickoffISO || todayISO || toISO(Math.floor(Date.now() / 86400000))).slice(0, 10);
   const designSteps = steps.length ? templatePhases(kickoff, steps) : undefined;
   return summariseProgramme(
-    buildScheduleFromProject(projectContext, boq, { designSteps }), 'estimate', projectContext, todayISO,
+    buildScheduleFromProject(projectContext, boq, { designSteps, renovation }), 'estimate', projectContext, todayISO,
   );
 }
 
@@ -746,7 +770,7 @@ const PROPOSAL_PHASES: { phaseName: string; description: string; stages: string[
   {
     phaseName: 'Site Setup & Rough-ins',
     description: 'Site mobilization, surface protection laying, demolition/civil alterations, and plumbing/electrical cabling rough-ins.',
-    stages: ['site-prelims', 'civil-demolition', 'plumb-concealed', 'elec-conduit'],
+    stages: ['site-prelims', 'strip-out', 'civil-demolition', 'plumb-concealed', 'elec-conduit'],
   },
   {
     phaseName: 'Structure & Utilities',

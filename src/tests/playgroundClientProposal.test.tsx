@@ -232,10 +232,20 @@ describe('how the client books, on the proposal', () => {
     expect(text).not.toContain('Sizes are allowances from the brief');
   });
 
-  it('a renovation says its timeline is a vacant flat’s for now, confirmed after the site measurement', () => {
-    render(<Harness extra={{ config: '2-BHK', propertyStatus: 'finished' }} />);
+  it('a renovation is timed as one: its strip-out first, and longer lived in (lib/renovation)', () => {
+    // A 2-BHK of 700 sq ft: 7 working days of strip-out.
+    render(<Harness extra={{ config: '2-BHK', area: 700, propertyStatus: 'finished' }} />);
     fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' }));
-    expect(pdf().querySelector('[data-pdf-note="renovation"]')!.textContent).toBe('Your home is a renovation, and this timeline is the one for a vacant flat. A renovation also needs time to take out what is there today, and the work goes more slowly if you live in the home while it is done. We confirm the timeline for your home after the site measurement.');
+    let d = pdf();
+    expect(d.querySelector('[data-pdf-timeline]')!.textContent).toMatch(/Strip-out and debris removal/);
+    expect(d.querySelector('[data-pdf-note="renovation"]')!.textContent).toBe('Your home is a renovation. The timeline starts with 7 working days to take out what is there today and clear the debris. We confirm it after the site measurement.');
+    expect(d.textContent).toMatch(/The site programme is \d+ working days, including 7 to take out what is there today and clear the debris\./);
+    fireEvent.click(within(d).getByRole('button', { name: 'Close' }));
+    cleanup();
+    render(<Harness extra={{ config: '2-BHK', area: 700, propertyStatus: 'finished', livedInDuringWork: true }} />);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'First proposal PDF' }));
+    d = pdf();
+    expect(d.querySelector('[data-pdf-note="renovation"]')!.textContent).toMatch(/allows for you living in the home during the work: it goes room by room around you, so the work on site takes about 25% longer than in a vacant flat\./);
   });
 
   it('what it comes to: the work and the design fee each with their own GST, and how the fee is applied', () => {
