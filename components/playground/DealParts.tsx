@@ -38,8 +38,8 @@ const digits = (s: string) => Number(String(s).replace(/[^0-9.]/g, '')) || 0;
 const SMALL_INPUT = 'px-1.5 py-1 rounded-md border border-slate-300 text-right text-sm font-bold tabular-nums bg-white disabled:bg-slate-50';
 const PICK_INPUT = 'px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold bg-white';
 
-/** What a discount comes off, as Money applies it. */
-const amountOf = (d: OfferDiscount, sell: number, fee: number) =>
+/** What a discount comes off, as Money applies it. The deal dock lists offers with it too. */
+export const offerAmount = (d: OfferDiscount, sell: number, fee: number) =>
   (d.type === 'percentage' ? (d.target === 'design' ? fee : sell) * (d.value / 100) : d.value);
 
 export function DealLens({
@@ -158,7 +158,7 @@ export function DealLens({
                 <span className="block text-sm font-semibold text-slate-800">{d.name}</span>
                 <span className="block text-[11px] text-slate-500">{d.basis ? offerWhy(d.basis, split) : d.target === 'design' ? 'Off the design fee, written in Money & Offers' : 'Off the work, written in Money & Offers'}</span>
               </span>
-              <b className="tabular-nums text-emerald-700">−{inr(amountOf(d, sell, deal.fee))}</b>
+              <b className="tabular-nums text-emerald-700">−{inr(offerAmount(d, sell, deal.fee))}</b>
               {!locked && (
                 <button type="button" onClick={() => onDiscounts(discounts.filter(x => x.id !== d.id), 'Offer taken back.')} aria-label={`Remove ${d.name}`}
                   className="p-1 rounded-md text-slate-400 hover:bg-slate-100"><X className="w-3.5 h-3.5" aria-hidden /></button>

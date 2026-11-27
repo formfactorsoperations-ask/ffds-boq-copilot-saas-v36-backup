@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PenTool, Map as MapIcon, LayoutGrid, Table2, SlidersHorizontal, Target, Plus, Search, Check, Undo2, Upload, Download,
-  ChevronDown, FileText, Expand, Shrink, Receipt as ReceiptIcon, Lock, Sparkles, MapPin, X, PenLine, Zap, ChevronRight, AlertTriangle, Play,
+  ChevronDown, FileText, Expand, Shrink, Receipt as ReceiptIcon, Lock, Sparkles, MapPin, X, PenLine, Zap, ChevronRight, AlertTriangle, Play, PanelRight,
 } from 'lucide-react';
 import { Button, EmptyState, LABEL, Segmented } from '../ui/kit';
 import { useSeesMargins } from '../ui/HideFigures';
@@ -72,6 +72,7 @@ import { playgroundTierSummary } from '../../lib/playground/versions';
 import { proposalValidity, withValidDays, followBoq, discountsOf, withDiscounts, withInitiationFee, withBooking } from '../../lib/playground/deal';
 import { holdsFinanceRole } from '../../lib/roleAccess';
 import { DealLens } from './DealParts';
+import { DealDock } from './DealDock';
 import ProposalPdf from './ProposalPdf';
 import MeetingView from './MeetingView';
 import type { Journey } from '../../lib/playground/meeting';
@@ -94,6 +95,10 @@ import { holdPrice } from '../../lib/boqPricing';
     Tune    markups by room and the client's number (comes with PR 4)
     Deal    offers, fee, GST and what the client pays (comes with PR P)
 
+  The deal dock (option B of the "Deal side by side" mockup, 27 Nov 2026) keeps
+  the Deal lens's figures in a rail beside the other lenses, so a line changed
+  in the Sheet shows at once in what the client pays and the margin.
+
   The inspector is the Live BOQ until a line or a room is picked. Every change,
   wherever it is made, writes the same BOQ, so the lenses always agree, and one
   gesture is one undo.
@@ -108,6 +113,8 @@ const LENSES: [Lens, string, React.ElementType, string][] = [
   ['deal', 'Deal', Target, 'Offers, design fee, GST and what the client pays'],
 ];
 const HINT_KEY = 'ffds.playground.hintDone';
+/** The deal dock is open or shut (per browser; open until it is shut). */
+const DOCK_KEY = 'ffds.playground.dealDock';
 /** The "Edit all 3" tip has been seen (once per browser). */
 const ALL_TIP_KEY = 'ffds.playground.allOptionsTip';
 
@@ -232,6 +239,8 @@ export default function PlaygroundScreen(props: Props) {
   const [selRoom, setSelRoom] = useState<string | null>(null);
   const [libOpen, setLibOpen] = useState(true);
   const [insOpen, setInsOpen] = useState(true);
+  const [dock, setDock] = useState(() => { try { return localStorage.getItem(DOCK_KEY) !== '0'; } catch { return true; } });
+  const toggleDock = () => setDock(d => { try { localStorage.setItem(DOCK_KEY, d ? '0' : '1'); } catch { /* private window */ } return !d; });
   const [q, setQ] = useState('');
   const [hist, setHist] = useState<History<BoqItem[]>>({ past: [], future: [] });
   const [note, setNote] = useState<string | null>(null);
@@ -795,6 +804,12 @@ export default function PlaygroundScreen(props: Props) {
   const selModel = sel ? byId.get(sel) : undefined;
   const selRoomObj = selRoom ? rooms.find(r => r.name === selRoom) : undefined;
   const showIns = !wide || !!selModel || !!selRoomObj || (plan && insOpen);
+  /* The deal dock: beside every lens but Deal, which shows the deal itself. */
+  const dockOn = dock && lens !== 'deal' && !hideFigures;
+  const dealDock = (compact: boolean) => (
+    <DealDock compact={compact} optionName={tier.name || 'this option'} summary={dealSummary} discounts={discounts} terms={gstTerms}
+      split={dealSplit} floor={floor} seesMargins={seesMargins && !hideFigures} locked={dealLocked} onOpenDeal={() => setLens('deal')} />
+  );
   const sheet = sheetOf(ctx);
   const planLabel = `${(ctx.name || 'Project').split(/[–—-]/)[0].trim()} plan · ${sheet?.source === 'upload' ? 'uploaded' : sheet?.source === 'blocks' || (!sheet && planRooms.length) ? 'blocks' : sheet?.source === 'sketch' ? 'sketched' : 'from Brief'}`;
   const verDot = revRec ? 'bg-amber-500' : signed ? 'bg-emerald-500' : readOnly ? 'bg-slate-400' : format === 'playground' ? 'bg-[#3D52A0]' : 'bg-slate-400';
@@ -1030,6 +1045,13 @@ export default function PlaygroundScreen(props: Props) {
           </button>
         )}
 
+        {lens !== 'deal' && !hideFigures && (
+          <button type="button" onClick={toggleDock} aria-pressed={dock} title={dock ? 'Hide the deal beside the BOQ' : 'Show what the client pays and the margin beside the BOQ'}
+            className={`${barBtn} px-3 border ${dock ? 'bg-[#3D52A0]/10 border-[#3D52A0]/30 text-[#3D52A0]' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
+            <PanelRight className="w-3.5 h-3.5" aria-hidden /><span className={editSwitch ? 'min-[1800px]:hidden' : 'min-[1400px]:hidden'}>Dock</span><span className={editSwitch ? 'hidden min-[1800px]:inline' : 'hidden min-[1400px]:inline'}>Deal dock</span>
+          </button>
+        )}
+
         <div className="relative grow basis-[150px] min-w-[150px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search items…" aria-label="Search items"
@@ -1105,7 +1127,9 @@ export default function PlaygroundScreen(props: Props) {
       </div>
 
       {/* The lens and the inspector */}
-      <div className="flex-1 min-h-0 grid gap-3 grid-cols-1" style={wide ? { gridTemplateColumns: showIns ? 'minmax(0,1fr) 320px' : 'minmax(0,1fr)' } : undefined}>
+      <div className="flex-1 min-h-0 grid gap-3 grid-cols-1" style={wide ? { gridTemplateColumns: showIns || dockOn ? 'minmax(0,1fr) 320px' : 'minmax(0,1fr)' } : undefined}>
+        {/* On a narrow screen the deal is one line above the work, where it stays in sight. */}
+        {dockOn && !wide && dealDock(true)}
         <section className="relative rounded-2xl bg-white border border-slate-200 shadow-sm min-h-0 min-w-0 overflow-hidden" style={wide ? undefined : { height: '72vh', minHeight: 440 }}>
           <div className="absolute inset-0 bg-slate-100">
             {plan ? (
@@ -1300,11 +1324,19 @@ export default function PlaygroundScreen(props: Props) {
             )}
           </div>
         </section>
-        {showIns && (
-          <div className="min-h-0 min-w-0">
-            <aside className="rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col min-h-0 h-full overflow-hidden" aria-label={selModel ? 'Line' : selRoomObj ? 'Room' : changes ? 'Changes' : 'Live BOQ'}>
-              <div className="flex-1 overflow-auto">{inspector}</div>
-            </aside>
+        {(showIns || (dockOn && wide)) && (
+          <div className="min-h-0 min-w-0 flex flex-col gap-3">
+            {/* Beside a line's or a room's inspector the deal is one line. */}
+            {dockOn && showIns && wide && dealDock(true)}
+            {showIns ? (
+              <aside className="rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col min-h-0 flex-1 overflow-hidden" aria-label={selModel ? 'Line' : selRoomObj ? 'Room' : changes ? 'Changes' : 'Live BOQ'}>
+                <div className="flex-1 overflow-auto">{inspector}</div>
+              </aside>
+            ) : (
+              <aside className="rounded-2xl bg-slate-50 border border-slate-200 shadow-sm min-h-0 flex-1 overflow-auto" aria-label="Deal dock">
+                {dealDock(false)}
+              </aside>
+            )}
           </div>
         )}
       </div>

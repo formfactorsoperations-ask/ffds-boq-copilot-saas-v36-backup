@@ -410,6 +410,26 @@ linkage, notes, change orders on a frozen BOQ). Do not add a mode or a switch ba
 - **The drawing gate:** no client page, PDF or portal copy draws the plan with pieces until Space
   Planning is approved. The PDF shows the builder's plan as the client gave it.
 
+### Deal dock (approved 27 Nov 2026)
+
+The owner asked to see the BOQ and the money side by side while building a deal, and chose option B of
+the "Deal side by side" mockup: a dock on the BOQ Editor, not a split window
+(`components/playground/DealDock.tsx`).
+- **Deal dock** in the bar (`PanelRight`, "Dock" on a narrower bar) opens and shuts it, with the brand tint when
+  open, like Add items. It is open until someone shuts it, and the choice is kept per browser
+  (`ffds.playground.dealDock`). It shows beside every lens but Deal, which is the deal itself.
+- **Beside the work** (a wide screen, nothing picked): a 320px rail in the inspector's place, `bg-slate-50`,
+  holding white `rounded-2xl` cards: "The deal, live" with Open Deal; Client pays (`CountUp`), the margin bar
+  against the floor as in the Deal lens (studio only), then Work, Offers, Design fee and GST; Where the money
+  goes, part by part with brand bars; and the offers, each with what it takes off, and one secondary button
+  (Give an offer, or See the deal when the deal is locked) that opens the Deal lens.
+- **With a line or a room picked**, the inspector takes the column and the deal is one line above it:
+  Client pays, the margin and Open Deal. On a narrow screen that line sits above the work.
+- It reads the same option the lens edits, with the Deal lens's maths (`dealFor`), so a changed quantity or
+  rate re-prices it at once. It shows the deal; offers are only given in the Deal lens.
+- Motion: `hud-panel-in` as it arrives, `hud-row-in` for the parts and offers, `CountUp` for Client pays,
+  bars easing to their new width. Nothing of its own.
+
 ### BOQ Playground motion (approved with the mockup)
 
 The mockup's motion, in `components/playground/playground.css` (imported by `src/index.css` too, so the

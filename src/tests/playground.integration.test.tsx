@@ -348,6 +348,70 @@ describe('The bar', () => {
 
 });
 
+describe('the deal dock (option B, 27 Nov 2026)', () => {
+  const deal = () => document.querySelector('[data-deal-pays]')!.textContent;
+  const dock = () => screen.getByRole('region', { name: 'The deal, live' });
+  const dockPays = () => within(dock()).getByText(/^Client pays/).nextElementSibling!.textContent;
+  let width = 0;
+  let mm: any;
+  beforeEach(() => {
+    width = window.innerWidth;
+    mm = window.matchMedia;
+    /* Reduced motion: CountUp lands on its figure at once. */
+    (window as any).matchMedia = (q: string) => ({ matches: q.includes('reduce'), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+  });
+  afterEach(() => { (window as any).innerWidth = width; (window as any).matchMedia = mm; });
+
+  it('sits beside the Sheet with what the client pays, as the Deal lens has it, and lists the offers made there', () => {
+    (window as any).innerWidth = 1440;
+    render(<Harness tier={PG} />);
+    lens('Deal');
+    expect(screen.queryByRole('region', { name: 'The deal, live' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Deal dock/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add the offer off a part' }));
+    const pays = deal();
+    lens('Sheet');
+    expect(screen.getByRole('complementary', { name: 'Deal dock' })).toBeTruthy();
+    expect(dockPays()).toBe(pays);
+    expect(within(dock()).getByText('5% off carpentry')).toBeTruthy();
+    expect(within(dock()).getByText('Carpentry')).toBeTruthy();
+    fireEvent.click(within(dock()).getByRole('button', { name: 'Give an offer' }));
+    expect(deal()).toBe(pays);
+  });
+
+  it('re-prices as a line changes, and stays shut once shut', () => {
+    (window as any).innerWidth = 1440;
+    render(<Harness tier={PG} />);
+    lens('Sheet');
+    const was = dockPays();
+    fireEvent.click(screen.getAllByText('Sliding wardrobe')[0]);
+    const size = within(inspector()).getByRole('textbox', { name: 'Size' });
+    fireEvent.change(size, { target: { value: '7 x 9' } });
+    fireEvent.blur(size);
+    /* With a line open, the deal is the one-line strip above its inspector. */
+    expect(dockPays()).not.toBe(was);
+    expect(within(dock()).getByRole('button', { name: 'Open Deal' })).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: /Deal dock/, pressed: true }));
+    expect(screen.queryByRole('region', { name: 'The deal, live' })).toBeNull();
+    expect(localStorage.getItem('ffds.playground.dealDock')).toBe('0');
+    cleanup();
+    render(<Harness tier={PG} />);
+    lens('Sheet');
+    expect(screen.queryByRole('region', { name: 'The deal, live' })).toBeNull();
+    expect(screen.getByRole('button', { name: /Deal dock/, pressed: false })).toBeTruthy();
+  });
+
+  it('on a narrow screen it is one line above the inspector, and Open Deal opens the lens', () => {
+    (window as any).innerWidth = 1024;
+    render(<Harness tier={PG} />);
+    lens('Sheet');
+    expect(screen.queryByRole('complementary', { name: 'Deal dock' })).toBeNull();
+    fireEvent.click(within(dock()).getByRole('button', { name: 'Open Deal' }));
+    expect(screen.getByRole('region', { name: 'Deal' })).toBeTruthy();
+  });
+});
+
 describe('Deal (PR P)', () => {
   const pays = () => document.querySelector('[data-deal-pays]')!.textContent;
   const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
