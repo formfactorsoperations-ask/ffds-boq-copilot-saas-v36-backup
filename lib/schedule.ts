@@ -707,8 +707,11 @@ function runSchedulePass(
       ? { blocked: new Set<number>(), hits: [] as ScheduleHold[] }
       : blockedDaysFor(t, schedule.holds || [], cal, hol);
 
+    /* Where the task would start with no hold in the way: the holds that cost it days are measured from here. */
+    let unheldStart = start;
     if (actualStart == null) {
       start = nextWorkingDay(cal, start, hol);
+      unheldStart = start;
       let guard = 0;
       while (blocked.has(start) && guard++ < 3000) start = nextWorkingDay(cal, start + 1, hol);
 
@@ -717,10 +720,26 @@ function runSchedulePass(
       while (blocked.has(pStart) && pGuard++ < 3000) pStart = nextWorkingDay(cal, pStart + 1, hol);
     }
 
-    const unblockedEnd = workSpanEnd(cal, start, t.workDays, hol);
     const blockedEnd = workSpanEnd(cal, start, t.workDays, hol, blocked);
+    /*
+      A hold cost this task days when it covers a working day between where the
+      task would have started and where it now ends: a day the start was pushed
+      past, or a day inside the work that stretched the end. Judged hold by hold.
+      Before, the test ran after the start had already been moved past the
+      blocked days, so a hold that only delayed the start was never recorded
+      (and when any hold bit, every hold on the task was), which left the
+      variance report and "days lost by reason" short.
+    */
+    const bit = (h: ScheduleHold): boolean => {
+      const from = toDayNum(h.fromISO);
+      const to = workSpanEnd(cal, from, h.workDays, hol);
+      for (let d = Math.max(from, unheldStart); d <= Math.min(to, blockedEnd); d++) {
+        if (isWorkingDay(cal, d, hol)) return true;
+      }
+      return false;
+    };
     const heldBy: ResolvedTask['heldBy'] = hits
-      .filter(() => blockedEnd > unblockedEnd || blocked.has(start))
+      .filter(bit)
       .map(h => ({ holdId: h.id, reason: h.reason, workDays: h.workDays }));
 
     let pinConflict: string | undefined;
