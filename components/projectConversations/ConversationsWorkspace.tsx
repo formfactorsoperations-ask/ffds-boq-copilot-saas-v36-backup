@@ -23,6 +23,7 @@ import { loadClientRecords } from '../../services/clientThreadService';
 import { watchClientVisits } from '../../services/portalVisitsService';
 import { logFollowUp } from '../../services/opsDeskService';
 import type { StudioJumpItem } from '../projectNav/StudioJump';
+import { GLYPHS, TILE_COLOURS, DEFAULT_TILE } from './StudioTiles';
 import '../projectHeader/projectHeader.css';
 
 /*
@@ -316,21 +317,21 @@ function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, on
   const initials = (name.match(/[A-Za-z]+/g) || ['P']).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase();
   const desk = (route: string) => desks.find((d) => d.route === route);
   const asItem = (d: StudioJumpItem | undefined, move: string): WayItem[] =>
-    d ? [{ key: d.route, label: d.label, sub: d.sub, icon: d.icon, move, go: () => onLeave(d.route), show: 'hidden md:inline-flex' }] : [];
+    d ? [{ key: d.route, label: d.label, sub: d.sub, icon: d.icon, move, go: () => onLeave(d.route), show: 'hidden md:grid' }] : [];
   const sections: WayItem[] = [
     { key: 'home', label: 'Home', sub: 'The studio’s day at a glance', icon: Home, move: 'bounce', go: () => onLeave('home') },
     { key: 'projects', label: 'Projects', sub: 'Back to all your projects', icon: Building2, move: 'back', go: () => onLeave('projects') },
     ...asItem(desk('design-review'), 'draw'),
     ...asItem(desk('ops-desk'), 'go'),
     ...asItem(desk('people'), 'talk'),
-    { key: 'clients', label: 'Clients', sub: 'Every client and what they need', icon: Users, move: 'talk', go: () => onLeave('clients'), show: 'hidden sm:inline-flex' },
+    { key: 'clients', label: 'Clients', sub: 'Every client and what they need', icon: Users, move: 'talk', go: () => onLeave('clients'), show: 'hidden sm:grid' },
     ...asItem(desk('admin-templates-bank'), 'shuffle'),
     /* Any other desk the studio adds later still appears. */
     ...desks.filter((d) => !['design-review', 'ops-desk', 'people', 'admin-templates-bank'].includes(d.route)).flatMap((d) => asItem(d, 'go')),
   ];
   const helpers: WayItem[] = [
-    ...(onPortal ? [{ key: 'portal', label: 'Client portal', sub: 'See what the client sees', icon: Globe, move: 'spin', go: onPortal, show: 'hidden sm:inline-flex' }] : []),
-    { key: 'tour', label: 'Show me around', sub: 'A short tour of this view', icon: Compass, move: 'spin', go: onTour, show: 'hidden sm:inline-flex' },
+    ...(onPortal ? [{ key: 'portal', label: 'Client portal', sub: 'See what the client sees', icon: Globe, move: 'spin', go: onPortal, show: 'hidden sm:grid' }] : []),
+    { key: 'tour', label: 'Show me around', sub: 'A short tour of this view', icon: Compass, move: 'spin', go: onTour, show: 'hidden sm:grid' },
   ];
 
   /* The name under a tile, as the Classic bar shows it (StudioJump). */
@@ -343,14 +344,16 @@ function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, on
 
   const tile = (it: WayItem, i: number) => {
     const Icon = it.icon;
+    const Glyph = GLYPHS[it.key];
+    const tone = TILE_COLOURS[it.key] || DEFAULT_TILE;
     const here = it.key === 'projects';
     return (
       <button key={it.key} type="button" data-way={it.key} data-ripple aria-label={it.label} aria-current={here ? 'page' : undefined}
         onClick={() => { hide(); it.go(); }} onMouseEnter={show(it)} onMouseLeave={hide} onFocus={show(it)} onBlur={hide}
-        style={{ animationDelay: `${Math.min(i, 9) * 40}ms` }}
+        style={{ animationDelay: `${Math.min(i, 9) * 40}ms`, backgroundImage: `linear-gradient(145deg, ${tone.from} 0%, ${tone.to} 100%)`, color: tone.to, ['--cvw-tile' as string]: tone.to }}
         className={cx('cvw-hot cvw-tile hud-rise w-9 h-9 shrink-0 grid place-items-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/40',
-          here ? 'is-here text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]', it.show)}>
-        <span className="cvw-ic" data-m={it.move}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
+          here && 'is-here', it.show)}>
+        <span className="cvw-ic" data-m={it.move}>{Glyph ? <Glyph /> : <Icon className="w-[18px] h-[18px] text-white" aria-hidden />}</span>
       </button>
     );
   };

@@ -1318,16 +1318,23 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   - **Left, where you are:** the initials tile, then the breadcrumb **Projects ›** (the way back to the
     list) and the project's name (`text-base font-bold`), the status chip, and client · place · area in
     `text-[11px]`.
-  - **Right, the studio's sections as colour-filled icon tiles** (owner: "can we just have color filled
-    icons instead and when hovered user will understand where to navigate?"), named, iconed and ordered
-    as on the studio bar (components/Header): Home, **Projects**, Design Desk, Ops Desk, People, Clients,
-    Item Bank (`studioJumpItems` decides which desks a role sees); then Client portal (globe) and Show me
-    around; then Hide figures and Use Classic view. Each tile is 36px, brand tint (`bg-[#3D52A0]/10`,
-    brand icon); on hover or focus it fills solid brand, lifts 2px and its icon plays its motion, and
-    the Classic bar's tooltip (`.psb-tip`) gives its name and a line on what is there. **Projects**, where
-    a project lives, stays filled (the studio bar's brand gradient and a soft ring); choosing it goes back
-    to the list. There is no "All projects" item (owner: not right business-wise). Brand only: no tile
-    takes an accent colour of its own.
+  - **Right, the studio's sections as colour tiles** (owner: "can we just have color filled icons
+    instead and when hovered user will understand where to navigate?", then "i asked you to get me
+    brand new icons color filled or color icons"), named and ordered as on the studio bar
+    (components/Header): Home, **Projects**, Design Desk, Ops Desk, People, Clients, Item Bank
+    (`studioJumpItems` decides which desks a role sees); then Client portal and Show me around; then
+    Hide figures and Use Classic view.
+    - **Drawn for this bar** (`StudioTiles.tsx`), not the outline set: a 36px app-style tile, a gradient in
+      the app's own colour families, a solid white glyph whose details take the tile's deeper colour.
+      Home amber (house), Projects brand (building), Design Desk rose (drafting pen), Ops Desk emerald
+      (inbox tray), People light brand (two people), Clients amber into rose (contact card), Item Bank
+      slate (books), Client portal emerald into brand (globe), Show me around rose into amber (compass).
+    - **Owner's exception to "Colour":** these gradients are approved for the Conversations top bar only;
+      every other icon tile in the app stays brand. No colour outside brand, amber, rose, emerald, slate.
+    - On hover or focus a tile rises 2px, grows 6%, glows in its own colour and its glyph plays its
+      motion, and the Classic bar's tooltip (`.psb-tip`) names it with a line on what is there.
+      **Projects**, where a project lives, wears a ring; choosing it goes back to the list. There is no
+      "All projects" item (owner: not right business-wise).
 - **The way back to Conversations from Classic** (owner: "if user selects classic view there is no
   option to return to new view"): when the studio lets each person choose, Classic's page bar shows
   **Try the new view** (brand tint, beside the studio icons), as well as the sidebar menu's item.
@@ -1405,8 +1412,7 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     the point clicked (`data-ripple`, `.cvw-ripple`, brand at low strength).
   - **Picked:** the open conversation's plate fills brand blue and pops; the conversation head's icon pops
     and plays its motion as you arrive.
-  - **The top bar's tiles** fill solid brand on hover and lift; the one you are in (Projects) stays
-    filled. The bar's items rise in turn as the view opens (`hud-rise`). (A gliding reticle was tried
+  - **The top bar's tiles** rise, grow and glow on hover; the one you are in (Projects) wears a ring. The bar's items rise in turn as the view opens (`hud-rise`). (A gliding reticle was tried
     and dropped, owner 27 Nov 2026: "still seems very odd".)
   - All of it stops under reduced motion. Palette only.
 
