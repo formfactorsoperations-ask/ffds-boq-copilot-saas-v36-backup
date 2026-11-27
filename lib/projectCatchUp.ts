@@ -23,13 +23,22 @@ import type { ConversationId } from './projectConversations';
 export interface CatchUpLine { id: string; text: string; conv: ConversationId; at: number; route: string | null }
 export interface CatchUp { since: number; lines: CatchUpLine[]; /** Moved too, and in the story below. */ more: number }
 
+/** A sticker that states where things stand (unpaid, no reply), dated today on every visit: not something that happened. */
+export const isStateSticker = (i: Pick<StoryItem, 'kind' | 'tone'>) => i.kind === 'sticker' && (i.tone === 'bad' || i.tone === 'warn');
+
+/** When something last happened on the project, from its story; null when nothing has. */
+export function lastActivityOf(story: StoryItem[]): number | null {
+  const at = (story || []).filter((i) => !isStateSticker(i)).reduce((m, i) => Math.max(m, i.at || 0), 0);
+  return at || null;
+}
+
 const rank = (i: StoryItem): number =>
   i.side === 'client' ? 0 : i.kind === 'sticker' ? 1 : i.source === 'payments' ? 2 : 3;
 
 /** What moved since `seenAt`; null on a first visit or when nothing moved. */
 export function catchUp(story: StoryItem[], seenAt: number | null | undefined, max = 3): CatchUp | null {
   if (!seenAt) return null;
-  const fresh = (story || []).filter((i) => i.at > seenAt && !(i.kind === 'sticker' && (i.tone === 'bad' || i.tone === 'warn')));
+  const fresh = (story || []).filter((i) => i.at > seenAt && !isStateSticker(i));
   if (!fresh.length) return null;
   const picked = fresh.slice().sort((a, b) => rank(a) - rank(b) || b.at - a.at).slice(0, max);
   return {

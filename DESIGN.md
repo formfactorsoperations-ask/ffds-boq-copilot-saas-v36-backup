@@ -1416,6 +1416,37 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   - **The ripple:** when the client holds copies older than the payment schedule, Money shows them in
     the order to bring them up to date (amber card, numbered, because the order matters), each step
     opening its screen; Whole project lists it as a Watch-out.
+- **Smart cards fold to one line** (owner, 27 Nov 2026: "actual conversation doesnt have much space,
+  please check for all tabs"). Every smart card (Since you were here, Watch-outs, Money waiting, the ripple,
+  What will hold up site) sits on its conversation as one line on `#F7F9FF`: a dot in its tone (rose late,
+  amber your turn, brand otherwise), its name in `text-[13px] font-bold`, the one fact that matters in
+  `text-xs` (amounts behind the hide-figures eye), and "Show" / "Hide" with a chevron. Pressing it opens the
+  card under it (`hud-panel-in`); one card is open at a time in a conversation, and the workspace remembers
+  which in this browser (`studiodesk.smartBriefs`). This week's update is one line of its own. **Up next**
+  shows its first step; the rest fold under "Show n more", beside "n more on the Hub". So the story keeps
+  most of the pane: about 55% on Whole project and 70–80% elsewhere at 1500×940.
+- **Smart workspace, PR 2** (owner, 27 Nov 2026, same mockups). From the records the Design Desk and the
+  Ops Desk already keep (`lib/projectCare.ts`, `components/projectConversations/useProjectCare.ts`), each
+  for the roles that see them there; nothing leaves the app.
+  - **Two more signals:** drawings that will hold up site (`deskSmart` site date: late, or will be at this
+    pace; rose, on Design) and a **quiet project** (nothing recorded for 10 days or more on a live project,
+    amber, on Client & portal; a sticker that only says where things stand does not count as activity).
+  - **Design opens on What will hold up site:** up to three drawings, each a `Chip` (bad "Late for site" or
+    "Site date", brand "Ready"), the site line and who holds it ("With the Design Head 2 days", "With Riya
+    3 days", "With the client 9 days"), **Nudge** when someone else in the studio has held it a day or more
+    (the Design Desk's rule and reminder, in the app only), and **Open**, which opens the drawing on the
+    Design Desk and comes back here. Then the drawing the client has had longest past a week ("Open
+    Drawings"), and, for those who bill rounds, an amber block of revision rounds past the included ones
+    not billed or waived, with "Bill or waive on the Design Desk".
+  - **Client & portal opens on this week's update** (`lib/fridayDigest`), for those who may open the Ops
+    Desk: still to write (from Thursday), a draft, waiting for approval, sent back, approved and ready to
+    send (amber), or sent (emerald), with "Open the Ops Desk". It is written, approved and sent there.
+  - **The project card:** **Client pulse** under At a glance (worked out as the Ops Desk works it out): a
+    ring in the band's colour (emerald good, amber watch, rose at risk) with the score counting up, the
+    band and how sure it is, the three reasons that moved it most (+/− points), and the next move as
+    Clients says it; "Open in Clients" opens this client there (`lib/clientsOpen.ts`). **Handover
+    checklist** from the Execution phase on: done of total, a green bar, and what is still to do, with
+    "Open the Ops Desk".
 - **Motion** (owner, 27 Nov 2026: keep the motion the app already has): the project sidebar's and Clients'
   approved motion, nothing new. Each conversation's icon moves on hover in its own way (`.psb-ic`
   `data-a`); the highlight slides to the conversation picked (`layoutId`, as the sidebar's does); a
