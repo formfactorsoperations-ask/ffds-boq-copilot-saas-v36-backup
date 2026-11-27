@@ -951,10 +951,12 @@ under `prefers-reduced-motion`. Same font and brand colour.
 **Glass** (asked for 18 Nov 2026): the sidebar is one pane of clear, glossy glass set into the
 window's left edge from top to bottom, so it reads as part of the app, not a card stuck on it. Its
 sides are straight: the owner tried a curved right side the same day and chose straight. The pane is
-an SVG drawn for its real size (`glassPath` in `ProjectSidebar.tsx`). Under the glass, soft blurred
-brand and slate light shows through. On it are a bright top highlight, two diagonal reflections, a
-bright rim, a shade along the lower and right inner edge, a slate-400 hairline on the right edge, and
-a shadow that falls to the right of the pane only. Brand and slate only, no other colours. The Next
+an SVG drawn for its real size (`glassPath` in `ProjectSidebar.tsx`). The glass is pure white and
+glossy (owner's call, 27 Nov 2026: the blurred brand and slate light that used to show through read
+as a muddy blue-grey, so it is gone); the page shows through it, frosted. On it are a bright top
+highlight, two diagonal reflections, a bright rim, a faint shade along the lower and right inner edge,
+a slate-400 hairline on the right edge, and a soft shadow that falls to the right of the pane only.
+White, brand and slate only, no other colours. The Next
 and Jump to cards and the highlight under the current screen are glossy white glass. Content keeps
 16px from each side (12px as icons). Open it is 280px wide and 76px as icons.
 
