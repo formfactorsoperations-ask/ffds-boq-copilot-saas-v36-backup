@@ -1425,6 +1425,19 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   which in this browser (`studiodesk.smartBriefs`). This week's update is one line of its own. **Up next**
   shows its first step; the rest fold under "Show n more", beside "n more on the Hub". So the story keeps
   most of the pane: about 55% on Whole project and 70–80% elsewhere at 1500×940.
+- **Smart workspace, PR 4: Ask this project and promises** (owner, 27 Nov 2026; for those who may open the
+  Ops Desk, whose records feed both; nothing outside the app). `lib/projectAsk.ts`.
+  - **Ask:** the list's search says "Find a screen, or ask a question". A search that reads as a question
+    (ends in "?", starts with what, who, when, did…, or runs to five words) shows **Ask this project**
+    (brand tint, Sparkles; Enter asks). The answer sits under the search (`hud-panel-in`, brand tint): two to
+    four plain sentences, the parts of the record it used as brand `Chip`s, up to three "Open {screen}"
+    buttons (only screens this person may open), and "From this project's records only." The record is the
+    Ops Desk's project brief (`buildProjectBrief`, from the copy without the studio's costs), the story and
+    open snags; "The records here don't say" when they do not. It never writes to the client.
+  - **Promises** on Whole project, folded under Watch-outs: "n open from us · n from the client · n late".
+    Open: "We promised" and "The client promised", late first, each with a `Chip` (bad "Late · 25 Nov",
+    slate "By 29 Nov"), who logged it or the minutes it came from, and **Done** for a follow-up's next step
+    (`markNextDone`, as on the Ops Desk) or **Open minutes** for an action item in the minutes.
 - **Smart workspace, PR 3: Smart Record** (owner, 27 Nov 2026: "AI on project notes: yes"; nothing outside
   the app). **From notes** joins Site visit · Meeting · Decision on Whole project's Record bar (Sparkles icon),
   for those who may log, not look-only, while the studio's AI is reachable. It opens a window in the

@@ -9,6 +9,7 @@ import { Type } from './aiSchema';
 import { getAi, aiIsReachable } from './aiClient';
 import { FLASH_MODEL } from '../constants/aiModels';
 import { NOTES_INSTRUCTIONS, normaliseNotes, type NotesRead } from '../lib/smartRecord';
+import { PROJECT_ASK_INSTRUCTIONS, normaliseAnswer, type AskRecord, type ProjectAnswer } from '../lib/projectAsk';
 import { opsViewOf } from '../functions/src/teamViewStrip';
 import { clientMoneyOf } from '../lib/clientMoney';
 import {
@@ -112,6 +113,27 @@ export async function readNotes(input: { text?: string; audio?: { mimeType: stri
     ? { inlineData: { mimeType: input.audio.mimeType, data: input.audio.base64 } }
     : { text: `Notes:\n${String(input.text || '').slice(0, 20000)}` };
   return normaliseNotes(parse(await generate([head, body], NOTES_SCHEMA), null), ctx.rooms);
+}
+
+/**
+ * Ask this project (lib/projectAsk), in the Conversations workspace: a question
+ * answered from one project's record, without the studio's costs, pointing at
+ * the screens this person may open. No reply to the client is drafted.
+ */
+export async function askThisProject(record: AskRecord, question: string): Promise<ProjectAnswer> {
+  const text = await generate(
+    [{ text: PROJECT_ASK_INSTRUCTIONS }, { text: `Record:\n${JSON.stringify(record).slice(0, 60000)}` }, { text: `Question: ${question.slice(0, 500)}` }],
+    {
+      type: Type.OBJECT,
+      properties: {
+        answer: { type: Type.STRING },
+        sources: { type: Type.ARRAY, items: { type: Type.STRING } },
+        routes: { type: Type.ARRAY, items: { type: Type.STRING } },
+      },
+      required: ['answer'],
+    },
+  );
+  return normaliseAnswer(parse<any>(text, {}), record.screens);
 }
 
 export interface Answer { answer: string; sources: string[]; reply: string }

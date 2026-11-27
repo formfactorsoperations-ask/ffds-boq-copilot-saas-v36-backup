@@ -17,7 +17,8 @@ vi.mock('../../services/clientThreadService', () => ({
   }),
 }));
 vi.mock('../../services/portalVisitsService', () => ({ watchClientVisits: () => () => {} }));
-vi.mock('../../services/opsDeskService', () => ({ logFollowUp: vi.fn(async (f: any) => ({ id: 'n1', ...f, at: Date.now(), by: f.me.email, byName: f.me.name })) }));
+const opsDesk = vi.hoisted(() => ({ markNextDone: vi.fn(async () => {}) }));
+vi.mock('../../services/opsDeskService', () => ({ logFollowUp: vi.fn(async (f: any) => ({ id: 'n1', ...f, at: Date.now(), by: f.me.email, byName: f.me.name })), markNextDone: opsDesk.markNextDone }));
 vi.mock('../../components/PageTitleBlock', () => ({ default: () => null }));
 const seen = vi.hoisted(() => ({ readSeen: vi.fn(async () => null as number | null), markSeen: vi.fn(async () => {}) }));
 vi.mock('../../services/projectSeenService', () => seen);
@@ -34,7 +35,8 @@ vi.mock('../../components/projectConversations/useProjectCare', () => ({ useProj
 const desk = vi.hoisted(() => ({ openInDesignReview: vi.fn(), nudgeHolder: vi.fn(async () => ({ to: 'x' })) }));
 vi.mock('../../services/drawingReviewService', async (orig) => ({ ...(await orig<any>()), ...desk }));
 const aiOn = vi.hoisted(() => ({ on: false }));
-vi.mock('../../services/opsAssistService', async (orig) => ({ ...(await orig<any>()), assistAvailable: () => aiOn.on }));
+const asking = vi.hoisted(() => ({ askThisProject: vi.fn(async () => ({ answer: 'On 18 Nov the client chose acrylic shutters, matte white.', sources: ['Decision: Kitchen shutters'], routes: ['payment-calc'] })) }));
+vi.mock('../../services/opsAssistService', async (orig) => ({ ...(await orig<any>()), assistAvailable: () => aiOn.on, askThisProject: asking.askThisProject }));
 
 import ConversationsWorkspace, { type ConversationsWorkspaceProps } from '../../components/projectConversations/ConversationsWorkspace';
 import { conversationsFor } from '../../lib/projectConversations';
@@ -473,5 +475,55 @@ describe('Smart Record in the workspace', () => {
     cleanup();
     setup({ canLog: false });
     expect(screen.queryByRole('button', { name: 'From notes' })).toBeNull();
+  });
+});
+
+/* Ask this project and its promises (smart workspace, PR 4). */
+describe('Ask this project and promises', () => {
+  const DAY = 86400000;
+  const CARE = (followUps: any[] = []) => ({ care: { followUps, escalations: [], decisions: [], moms: [], visits: [], checklists: {} }, digest: null, meetings: null });
+  afterEach(() => { aiOn.on = false; smart.care = { care: null, digest: undefined, meetings: null }; asking.askThisProject.mockClear(); opsDesk.markNextDone.mockClear(); });
+  const search = () => screen.getByRole('textbox', { name: 'Find a conversation or a screen' });
+
+  it('answers a question typed in the search, from this project, with the screens to open', async () => {
+    aiOn.on = true;
+    smart.care = CARE();
+    const { setActiveTab } = setup({ seesClientCare: true });
+    expect(search().getAttribute('placeholder')).toBe('Find a screen, or ask a question');
+    fireEvent.change(search(), { target: { value: 'What did the client decide about kitchen shutters?' } });
+    fireEvent.click(screen.getByRole('button', { name: /Ask this project/ }));
+    const answer = await screen.findByRole('region', { name: 'Answer' });
+    await waitFor(() => expect(answer.textContent).toContain('acrylic shutters'));
+    expect(answer.textContent).toContain('Decision: Kitchen shutters');
+    const [record, question] = (asking.askThisProject.mock.calls[0] as any[]);
+    expect(question).toBe('What did the client decide about kitchen shutters?');
+    expect(record.brief.name).toBe('Palacia 3BHK');
+    expect(record.screens.map((x: any) => x.route)).toContain('payment-calc');
+    fireEvent.click(within(answer).getByRole('button', { name: 'Open Money' }));
+    expect(setActiveTab).toHaveBeenCalledWith('payment-calc');
+  });
+
+  it('still finds screens by name, and offers no Ask to a role without the project brief', () => {
+    aiOn.on = true;
+    setup();
+    expect(search().getAttribute('placeholder')).toBe('Find a screen or old name');
+    fireEvent.change(search(), { target: { value: 'What did the client decide about kitchen shutters?' } });
+    expect(screen.queryByRole('button', { name: /Ask this project/ })).toBeNull();
+  });
+
+  it("lists open promises on Whole project, late first, and marks a follow-up's done", async () => {
+    smart.care = CARE([
+      { id: 'a', projectId: 'p1', at: Date.now() - DAY, by: 'm', byName: 'Mayuri', channel: 'call', outcome: 'info', note: 'We promised: Send the shutter samples', next: { text: 'Send the shutter samples', ownerEmail: 'm', ownerName: 'Mayuri', due: '2020-01-01' } },
+      { id: 'b', projectId: 'p1', at: Date.now() - DAY, by: 'm', byName: 'Mayuri', channel: 'call', outcome: 'promised', note: 'Client promised: Pay by Friday', next: { text: 'Check: Pay by Friday', ownerEmail: 'm', ownerName: 'Mayuri', due: '2099-01-01' } },
+    ]);
+    setup({ seesClientCare: true });
+    const line = within(screen.getByRole('region', { name: 'Promises' })).getByRole('button', { expanded: false });
+    expect(line.textContent).toContain('1 open from us · 1 from the client · 1 late');
+    const card = expand('Promises');
+    expect(card.textContent).toContain('Send the shutter samples');
+    expect(card.textContent).toContain('Pay by Friday');
+    fireEvent.click(within(card).getAllByRole('button', { name: 'Done' })[0]);
+    await waitFor(() => expect(opsDesk.markNextDone).toHaveBeenCalledWith('p1', 'a', 'owner@studio.in'));
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Promises' }).textContent).not.toContain('Send the shutter samples'));
   });
 });

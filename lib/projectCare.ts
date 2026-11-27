@@ -4,7 +4,7 @@ import { siteRisks, heldBy, roundsToBill, type SmartRow, type SiteRisk, type Hel
 import type { DesignMeeting } from './designMeeting';
 import { summariseTurnaround, turnaroundOf } from './drawingIntel';
 import { clientPulse, materialise, progressOf, type Checklist, type ChecklistKind, type Pulse, type VisitRequest } from './clientCare';
-import { decisionWaiting, paymentWaiting, withChases, type Escalation, type FollowUp, type OpsSettings } from './opsDesk';
+import { decisionWaiting, paymentWaiting, withChases, type Escalation, type FollowUp, type OpsSettings, type WaitingItem } from './opsDesk';
 import { phaseOf } from './opsDesk2';
 import { nextMove, type NextMove } from './clientNextMove';
 import { STATUS_TO_BUCKET } from './clientGroups';
@@ -105,14 +105,19 @@ export function projectPulse(i: {
   project: { id: string; name: string; targetHandover: string | null };
   money: ClientMoney | null; care: CareRecords; settings: OpsSettings; now: number;
 }): Pulse {
-  const waiting = withChases([
-    ...paymentWaiting(i.project, i.money, i.settings, i.now),
-    ...decisionWaiting(i.project, i.care.decisions, i.now),
-  ], i.care.followUps);
+  const waiting = projectWaiting(i);
   return clientPulse({
     waiting, followUps: i.care.followUps, escalations: i.care.escalations.filter((e) => e.status !== 'closed'),
     moms: i.care.moms, visits: i.care.visits, money: i.money, targetHandover: i.project.targetHandover, now: i.now,
   });
+}
+
+/** What the client owes and has not decided on this project, chased from the follow-up log, as the Ops Desk lists it. */
+export function projectWaiting(i: { project: { id: string; name: string }; money: ClientMoney | null; care: Pick<CareRecords, 'decisions' | 'followUps'>; settings: OpsSettings; now: number }): WaitingItem[] {
+  return withChases([
+    ...paymentWaiting(i.project, i.money, i.settings, i.now),
+    ...decisionWaiting(i.project, i.care.decisions, i.now),
+  ], i.care.followUps);
 }
 
 /** The next move with this client, as the Clients screen words it. */
