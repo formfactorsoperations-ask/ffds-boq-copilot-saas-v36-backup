@@ -132,7 +132,7 @@ function Glass({ hot }: { hot: boolean }) {
             <filter id={`${id}o`} x="-40%" y="-15%" width="180%" height="135%">
               <feGaussianBlur in="SourceAlpha" stdDeviation="14" result="b" />
               <feOffset in="b" dx="6" result="o" />
-              <feFlood floodColor="#0F172A" floodOpacity=".16" />
+              <feFlood floodColor="#0F172A" floodOpacity=".1" />
               <feComposite in2="o" operator="in" result="s" />
               <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b2" />
               <feOffset in="b2" dx="1" result="o2" />
@@ -141,12 +141,11 @@ function Glass({ hot }: { hot: boolean }) {
               <feMerge result="all"><feMergeNode in="s" /><feMergeNode in="s2" /></feMerge>
               <feComposite in="all" in2="SourceAlpha" operator="out" />
             </filter>
-            <filter id={`${id}z`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="16" /></filter>
             <filter id={`${id}y`} x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2" /></filter>
             <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#FFFFFF" stopOpacity=".4" />
-              <stop offset=".5" stopColor="#FFFFFF" stopOpacity=".16" />
-              <stop offset="1" stopColor="#FFFFFF" stopOpacity=".3" />
+              <stop offset="0" stopColor="#FFFFFF" stopOpacity=".6" />
+              <stop offset=".5" stopColor="#FFFFFF" stopOpacity=".3" />
+              <stop offset="1" stopColor="#FFFFFF" stopOpacity=".45" />
             </linearGradient>
             <linearGradient id={`${id}t`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stopColor="#FFFFFF" stopOpacity=".95" />
@@ -159,25 +158,19 @@ function Glass({ hot }: { hot: boolean }) {
             </linearGradient>
             <linearGradient id={`${id}e`} x1="0" y1="0" x2="1" y2="1">
               <stop offset=".35" stopColor="#64748B" stopOpacity="0" />
-              <stop offset="1" stopColor="#64748B" stopOpacity=".32" />
+              <stop offset="1" stopColor="#64748B" stopOpacity=".14" />
             </linearGradient>
           </defs>
 
           <path d={d} fill="#000" filter={u('o')} />
           <g clipPath={u('c')}>
-            {/* what the glass sits over: soft brand and slate light, blurred */}
-            <rect width={w} height={h} fill="#F1F5F9" fillOpacity=".3" />
-            <g filter={u('z')}>
-              <ellipse cx={w * 0.08} cy={h * 0.1} rx={w * 0.75} ry={h * 0.12} fill="#3D52A0" fillOpacity=".26" />
-              <path d={`M${-w * 0.3} ${h * 0.4}C${w * 0.3} ${h * 0.28} ${w * 0.7} ${h * 0.6} ${w * 1.3} ${h * 0.4}L${w * 1.3} ${h * 0.5}C${w * 0.7} ${h * 0.7} ${w * 0.3} ${h * 0.38} ${-w * 0.3} ${h * 0.52}Z`} fill="#3D52A0" fillOpacity=".17" />
-              <path d={`M${-w * 0.3} ${h * 0.74}C${w * 0.4} ${h * 0.64} ${w * 0.6} ${h * 0.9} ${w * 1.3} ${h * 0.72}L${w * 1.3} ${h * 0.84}C${w * 0.6} ${h * 1.0} ${w * 0.4} ${h * 0.74} ${-w * 0.3} ${h * 0.86}Z`} fill="#94A3B8" fillOpacity=".42" />
-              <ellipse cx={w * 0.95} cy={h * 0.98} rx={w * 0.6} ry={h * 0.1} fill="#3D52A0" fillOpacity=".2" />
-            </g>
+            {/* pure white glass (owner, 27 Nov 2026): no coloured light under it; the page shows through, frosted */}
+            <rect width={w} height={h} fill="#FFFFFF" fillOpacity=".55" />
             {/* the glass itself, then its gloss */}
             <rect width={w} height={h} fill={u('f')} />
             <rect width={w} height={Math.min(220, h * 0.28)} fill={u('t')} />
             <g filter={u('y')} className="psb-sheen">
-              <path d={`M${w * 0.42} 0L${w * 0.62} 0L${w * 0.02} ${h * 0.62}L${-w * 0.18} ${h * 0.62}Z`} fill="#FFFFFF" fillOpacity=".55" />
+              <path d={`M${w * 0.42} 0L${w * 0.62} 0L${w * 0.02} ${h * 0.62}L${-w * 0.18} ${h * 0.62}Z`} fill="#FFFFFF" fillOpacity=".7" />
               <path d={`M${w * 0.7} 0L${w * 0.76} 0L${w * 0.16} ${h * 0.62}L${w * 0.1} ${h * 0.62}Z`} fill="#FFFFFF" fillOpacity=".45" />
             </g>
             {/* thickness: a shade along the lower and right inner edge, a bright rim */}

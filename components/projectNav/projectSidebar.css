@@ -7,7 +7,8 @@
   glass set into the window's left edge, top to bottom, with straight sides
   (the owner tried a curved right side the same day and chose straight).
   The pane is drawn by <Glass> (an SVG sized to the sidebar) behind the
-  content; the sidebar itself is clear. Content keeps --psb-l and --psb-r
+  content; the sidebar itself is clear. Pure white glossy glass since
+  27 Nov 2026 (no coloured light under it). Content keeps --psb-l and --psb-r
   from the sides.
 */
 .psb {
