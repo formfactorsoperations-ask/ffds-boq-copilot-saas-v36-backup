@@ -10,7 +10,9 @@ import { getPageMeta } from './pageMeta';
 import { engagementOf, navItemsFor, stageLabel, isRouteHidden, engagementDef } from '../lib/engagement';
 import { useProjectJourney } from '../hooks/useProjectJourney';
 import { useOrg } from '../contexts/OrgContext';
-import { seesStudioFinance, holdsFinanceRole, isDesignerRole, isLimitedRole, DESIGNER_EDITABLE_TABS, limitedMayOpen, limitedHomeTab } from '../lib/roleAccess';
+import { seesStudioFinance, holdsFinanceRole, isDesignerRole, isLimitedRole, DESIGNER_EDITABLE_TABS, limitedMayOpen, limitedHomeTab, mayOpenStudioTab } from '../lib/roleAccess';
+import { canReview, canSetAudience } from '../lib/drawingReview';
+import { opsSettingsOf } from '../lib/opsDesk';
 import { FFDSLogo } from './FFDSLogo';
 import ViewOnlyGuard from './ViewOnlyGuard';
 import ProjectTeamButton from './projectHeader/ProjectTeamButton';
@@ -360,6 +362,10 @@ export function ProjectWorkspace({
           onLeaveProject={(t) => onLeaveProject?.(t)}
           viewOnly={isLimited && !(isDesigner && DESIGNER_EDITABLE_TABS.has(activeTab))}
           alertBar={alertBar}
+          seesClientCare={mayOpenStudioTab('ops-desk', (currentRoles as any)?.length ? currentRoles : currentRole)}
+          canBillRounds={canSetAudience((currentRoles as any)?.length ? currentRoles : currentRole)}
+          isReviewer={canReview((currentRoles as any)?.length ? currentRoles : currentRole)}
+          opsSettings={opsSettingsOf(orgData)}
           onUseClassic={canChooseView ? () => pv.setView('classic') : undefined}
           classic={[
             { route: homeRoute, label: homeLabel, where: '' },

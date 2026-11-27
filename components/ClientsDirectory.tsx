@@ -26,6 +26,7 @@ import EditClientModal from "./clients/EditClientModal";
 import ClientPortalModal from "./clients/ClientPortalModal";
 import { portalLink, type SaveProject } from "./clients/portalActions";
 import { formOf, keyAfter, mergesWith, patchFor, type ClientForm } from "../lib/clientEdit";
+import { takeClientsOpen } from "../lib/clientsOpen";
 
 /*
   CLIENTS: CONVERSATIONS (DESIGN.md "Clients: conversations", approved by the
@@ -209,6 +210,18 @@ export default function ClientsDirectory({ projects, onOpenProject, onCreateNew,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickedRow, liveVisits, seesVisits, followUps, now, clock]);
+
+  /* Opened from a project ("Open in Clients", lib/clientsOpen): that project's client, once the book is read. */
+  const [openFor, setOpenFor] = useState<string | null>(() => takeClientsOpen());
+  useEffect(() => {
+    if (!openFor || !rows.length) return;
+    const row = rows.find((r) => r.client.projects.some((p) => p.id === openFor));
+    if (!row) return;
+    if (kind !== 'all' && row.client.isDummy !== (kind === 'dummy')) setKind(row.client.isDummy ? 'dummy' : 'actual');
+    select(row.client.clientKey);
+    setOpenFor(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openFor, rows]);
 
   /* On a wide screen a client is always open: the first in the list until one is picked. */
   useEffect(() => {

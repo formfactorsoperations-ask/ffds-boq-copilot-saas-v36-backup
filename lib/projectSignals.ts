@@ -7,6 +7,8 @@ import { billableNow, collections, contractDrift, paymentBehaviour, DEFAULT_ESCA
 import { clientCopiesBehind, type ImpactStep } from './scheduleImpact';
 import { summariseRisk } from './drawingIntel';
 import { conversationOf, type ConversationId } from './projectConversations';
+import { siteRisks, type SmartRow } from './deskSmart';
+import { QUIET_AFTER_DAYS } from './clientNextMove';
 
 /*
   WHAT IS WRONG IN EACH CONVERSATION (smart workspace, PR 1; owner, 27 Nov
@@ -159,6 +161,10 @@ export interface SignalInput {
   alerts: HubAlert[];
   /** The Drawing Tracker's rows; null while they load or when the person cannot read them. */
   drawings: DrawingTrackerItem[] | null;
+  /** The same rows as the Design Desk reads them, for the site date (lib/deskSmart). */
+  siteRows?: SmartRow[] | null;
+  /** When something last happened on the project (lib/projectCatchUp lastActivityOf); null when nothing has. */
+  lastActivityAt?: number | null;
   now?: number;
   thresholds?: EscalationThresholds;
 }
@@ -232,6 +238,31 @@ export function projectSignals(i: SignalInput): Signal[] {
       push({ id: 'drawings-overdue', route: 'drawing-tracker', tone: 'late', line: `${plural(r.overdue, 'drawing')} past the target date`, detail: first ? `${first} is the furthest behind.` : '', weight: 15 });
     } else if (r.dueSoon) {
       push({ id: 'drawings-soon', route: 'drawing-tracker', tone: 'turn', line: `${plural(r.dueSoon, 'drawing')} due within a week`, detail: first ? `${first} is due first.` : '', weight: 6 });
+    }
+  }
+
+  /* Drawings that will hold up site (lib/deskSmart): late for site, or that will be at this pace. */
+  if (i.siteRows && i.siteRows.length) {
+    const risky = siteRisks(i.siteRows, new Date(now)).filter((x) => x.risk.state === 'late' || x.risk.state === 'risk');
+    if (risky.length) {
+      push({
+        id: 'drawings-site', route: 'drawing-tracker', tone: 'late',
+        line: risky.length === 1 ? `${(risky[0].d as any).name || 'A drawing'} will hold up site` : `${plural(risky.length, 'drawing')} will hold up site`,
+        detail: risky[0].risk.line, weight: 18,
+      });
+    }
+  }
+
+  /* A live project where nothing has been recorded for a while: often the first sign it has stalled. */
+  const status = String(ctx.status || '');
+  if (i.lastActivityAt && !['lost', 'archived', 'completed'].includes(status)) {
+    const days = Math.floor((now - i.lastActivityAt) / 86400000);
+    if (days >= QUIET_AFTER_DAYS) {
+      push({
+        id: 'quiet', route: 'comms-tracker', tone: 'turn', line: `Quiet for ${plural(days, 'day')}`,
+        detail: `Nothing recorded on this project since ${new Date(i.lastActivityAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}.`,
+        weight: 9,
+      });
     }
   }
 

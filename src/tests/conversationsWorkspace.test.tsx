@@ -26,8 +26,13 @@ vi.mock('../../components/projectConversations/useProjectGlance', () => ({
   useProjectGlance: () => ({
     drawings: { total: 7, issued: 4, approved: 3 }, handoverISO: '2027-03-14', targetISO: null, hasProgramme: true,
     milestones: [{ id: 't1', title: 'Design sign-off', startISO: '2026-12-05' }, { id: 't2', title: 'Site work starts', startISO: '2026-12-08' }],
+    items: smart.items,
   }),
 }));
+const smart = vi.hoisted(() => ({ items: null as any[] | null, care: { care: null, digest: undefined, meetings: null } as any }));
+vi.mock('../../components/projectConversations/useProjectCare', () => ({ useProjectCare: () => smart.care }));
+const desk = vi.hoisted(() => ({ openInDesignReview: vi.fn(), nudgeHolder: vi.fn(async () => ({ to: 'x' })) }));
+vi.mock('../../services/drawingReviewService', async (orig) => ({ ...(await orig<any>()), ...desk }));
 
 import ConversationsWorkspace, { type ConversationsWorkspaceProps } from '../../components/projectConversations/ConversationsWorkspace';
 import { conversationsFor } from '../../lib/projectConversations';
@@ -343,5 +348,73 @@ describe('the smart workspace', () => {
     setup();
     await waitFor(() => expect(seen.markSeen).toHaveBeenCalled());
     expect(screen.queryByRole('region', { name: 'Since you were here' })).toBeNull();
+  });
+});
+
+/* Smart workspace, PR 2 (owner, 27 Nov 2026): the Design card, this week's update, the client pulse and the handover checklist. */
+describe('the smart workspace, PR 2', () => {
+  const DAY = 86400000;
+  const day = (offset: number) => new Date(Date.now() + offset * DAY).toISOString().slice(0, 10);
+  const CONVS = conversationsFor(new Set(['drawing-tracker', 'comms-tracker', 'client-portal', 'payment-calc', 'timeline']));
+  afterEach(() => { smart.items = null; smart.care = { care: null, digest: undefined, meetings: null }; desk.openInDesignReview.mockClear(); });
+  const pick = (name: RegExp) => fireEvent.click(within(screen.getByRole('complementary', { name: "This project's conversations" })).getByRole('button', { name }));
+
+  it('opens Design on what will hold up site, who holds it, and the rounds to bill', () => {
+    smart.items = [{ id: 'w', name: 'Master bed wardrobe', siteDate: day(-1), review: { state: 'IN_REVIEW', submittedAt: Date.now() - 3 * DAY } }];
+    smart.care = { care: null, digest: undefined, meetings: [{ id: 'm', state: 'CLOSED', closedAt: Date.now(), includedRounds: 2, rooms: [{ room: 'Kitchen', round: 3, changes: [], charge: { status: 'to_bill' } }] }] };
+    const { onLeaveProject } = setup({ conversations: CONVS, canBillRounds: true });
+    pick(/^Design/);
+    const card = screen.getByRole('region', { name: 'What will hold up site' });
+    expect(card.textContent).toContain('Late for site');
+    expect(card.textContent).toContain('With the Design Head 3 days');
+    fireEvent.click(within(card).getByRole('button', { name: 'Open' }));
+    expect(desk.openInDesignReview).toHaveBeenCalledWith('p1', 'w', { tab: 'dashboard', label: 'Palacia 3BHK' });
+    expect(card.textContent).toContain('Kitchen · round 3');
+    fireEvent.click(within(card).getByRole('button', { name: 'Bill or waive on the Design Desk' }));
+    expect(onLeaveProject).toHaveBeenCalledWith('design-review');
+  });
+
+  it('lets someone else nudge whoever holds the drawing, but never themselves', async () => {
+    smart.items = [{ id: 'w', name: 'Master bed wardrobe', siteDate: day(-1), review: { state: 'IN_REVIEW', submittedAt: Date.now() - 3 * DAY } }];
+    setup({ conversations: CONVS });
+    pick(/^Design/);
+    fireEvent.click(screen.getByRole('button', { name: 'Nudge' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reminded' })).toBeTruthy());
+    expect(desk.nudgeHolder).toHaveBeenCalled();
+    cleanup();
+    setup({ conversations: CONVS, isReviewer: true });
+    pick(/^Design/);
+    expect(screen.queryByRole('button', { name: 'Nudge' })).toBeNull();
+  });
+
+  it("says where this week's update stands in Client & portal, and opens the Ops Desk to act on it", () => {
+    smart.care = { care: null, digest: { status: 'pending_review', preparedByName: 'Mayuri' }, meetings: null };
+    const { onLeaveProject } = setup({ conversations: CONVS, seesClientCare: true, projectContext: { name: 'Palacia 3BHK', status: 'won' } });
+    pick(/^Client & portal/);
+    const card = screen.getByRole('region', { name: 'This week’s update' });
+    expect(card.textContent).toContain('waiting for approval');
+    expect(card.textContent).toContain('Written by Mayuri');
+    fireEvent.click(within(card).getByRole('button', { name: 'Open the Ops Desk' }));
+    expect(onLeaveProject).toHaveBeenCalledWith('ops-desk');
+  });
+
+  it('shows the client pulse with its reasons and opens this client in Clients', () => {
+    smart.care = { care: { followUps: [{ id: 'f', projectId: 'p1', at: Date.now() - DAY, channel: 'call', outcome: 'replied', note: 'Mood: Happy.', by: 'x', byName: 'Asha' }], escalations: [], decisions: [], moms: [], visits: [], checklists: {} }, digest: null, meetings: null };
+    const { onLeaveProject } = setup({ conversations: CONVS, seesClientCare: true, projectContext: { name: 'Palacia 3BHK', status: 'execution' } });
+    const card = screen.getByRole('complementary', { name: 'Project card' });
+    expect(card.textContent).toContain('Client pulse');
+    expect(card.textContent).toContain('Heard from them');
+    expect(card.textContent).toContain('Handover checklist');
+    fireEvent.click(within(card).getByRole('button', { name: 'Open in Clients' }));
+    expect(sessionStorage.getItem('ffds_clients_open')).toBe('p1');
+    expect(onLeaveProject).toHaveBeenCalledWith('clients');
+  });
+
+  it('shows no pulse, update or checklist to a role that cannot open the Ops Desk', () => {
+    smart.care = { care: null, digest: undefined, meetings: null };
+    setup({ conversations: CONVS, projectContext: { name: 'Palacia 3BHK', status: 'execution' } });
+    const card = screen.getByRole('complementary', { name: 'Project card' });
+    expect(card.textContent).not.toContain('Client pulse');
+    expect(card.textContent).not.toContain('Handover checklist');
   });
 });

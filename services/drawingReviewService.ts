@@ -36,7 +36,8 @@ export interface ReviewDrawing {
 const trackerPath = (orgId: string, projectId: string) => `organizations/${orgId}/projects/${projectId}/drawingTracker`;
 const drawingPath = (orgId: string, projectId: string, drawingId: string) => `${trackerPath(orgId, projectId)}/${drawingId}`;
 
-const toDrawing = (orgId: string, projectId: string, id: string, data: any): ReviewDrawing => ({
+/** A tracker row as Design Review reads it; the Conversations workspace reads the site date the same way. */
+export const toDrawing = (orgId: string, projectId: string, id: string, data: any): ReviewDrawing => ({
   id, orgId, projectId,
   name: String(data?.name || 'Drawing'),
   roomName: data?.roomName || null,

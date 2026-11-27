@@ -24,7 +24,16 @@ import { watchClientVisits } from '../../services/portalVisitsService';
 import { logFollowUp } from '../../services/opsDeskService';
 import { useHubAlerts } from '../ops/useHubAlerts';
 import { moneyPicture, projectSignals, rippleRoute, rippleSteps, signalOf, type MoneyPicture, type Signal } from '../../lib/projectSignals';
-import { catchUp, sinceLabel, type CatchUp } from '../../lib/projectCatchUp';
+import { catchUp, lastActivityOf, sinceLabel, type CatchUp } from '../../lib/projectCatchUp';
+import { designPicture, digestLine, handoverReadiness, holderLine, inWork, projectNextMove, projectPulse, type DesignPicture, type DigestLine, type Readiness } from '../../lib/projectCare';
+import { canNudge, nudgeTarget } from '../../lib/deskSmart';
+import { BAND_LABEL, type Pulse } from '../../lib/clientCare';
+import type { NextMove } from '../../lib/clientNextMove';
+import { digestWeekOf } from '../../lib/fridayDigest';
+import { opsSettingsOf, type OpsSettings } from '../../lib/opsDesk';
+import { askClientsToOpen } from '../../lib/clientsOpen';
+import { nudgeHolder, openInDesignReview, toDrawing, type ReviewDrawing } from '../../services/drawingReviewService';
+import { useProjectCare } from './useProjectCare';
 import type { ImpactStep } from '../../lib/scheduleImpact';
 import { markSeen, readSeen } from '../../services/projectSeenService';
 import '../projectHeader/projectHeader.css';
@@ -139,6 +148,14 @@ export interface ConversationsWorkspaceProps {
   viewOnly: boolean;
   /** Terminated or a dispute open: the strip Classic shows under its bar. */
   alertBar?: React.ReactNode;
+  /** May open the Ops Desk (lib/roleAccess mayOpenStudioTab): sees the client pulse, this week's update and handover readiness. */
+  seesClientCare?: boolean;
+  /** Bills or waives revision rounds past the included ones (lib/drawingReview canSetAudience). */
+  canBillRounds?: boolean;
+  /** Checks drawings (the Design Head's part): nobody nudges themselves. */
+  isReviewer?: boolean;
+  /** The studio's Ops Desk settings (lib/opsDesk opsSettingsOf): when a payment falls due, for the pulse. */
+  opsSettings?: OpsSettings;
   /** The person's own switch back to Classic, when the studio lets them choose. */
   onUseClassic?: () => void;
   /** Where each screen sits in the Classic sidebar, for "Where did it go?" and the window's signpost. */
@@ -205,12 +222,44 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
   */
   const { alerts } = useHubAlerts(p.projectId, ctx);
   const canOpen = (r: string) => p.conversations.some((c) => c.routes.includes(r));
+  /* The tracker's rows as the Design Desk reads them, for the site date (lib/deskSmart). */
+  const siteRows = useMemo(
+    () => (glance.items || []).map((d: any) => toDrawing(p.tenantId, p.projectId, String(d.id), d)),
+    [glance.items, p.tenantId, p.projectId],
+  );
+  const lastActivityAt = useMemo(() => (records ? lastActivityOf(story) : null), [records, story]);
   const signals = useMemo(
-    () => projectSignals({ context: ctx, money: p.money, alerts, drawings: glance.items ?? null, now }).filter((s) => canOpen(s.route)),
-    [ctx, p.money, alerts, glance.items, now, p.conversations],
+    () => projectSignals({ context: ctx, money: p.money, alerts, drawings: glance.items ?? null, siteRows, lastActivityAt, now }).filter((s) => canOpen(s.route)),
+    [ctx, p.money, alerts, glance.items, siteRows, lastActivityAt, now, p.conversations],
   );
   const moneyCard = useMemo(() => (p.seesMoney ? moneyPicture(ctx, p.money, { now }) : null), [ctx, p.money, p.seesMoney, now]);
   const copiesBehind = useMemo(() => rippleSteps(ctx), [ctx]);
+
+  /*
+    Smart workspace, PR 2 (lib/projectCare): the Design card, the client pulse
+    and next move, this week's update and handover readiness, from the records
+    the Design Desk and the Ops Desk keep, each for the roles that see them.
+  */
+  const careData = useProjectCare({
+    projectId: p.projectId, tenantId: p.tenantId, name, seesCare: !!p.seesClientCare, canBill: !!p.canBillRounds, week: digestWeekOf(now),
+  });
+  const design = useMemo(
+    () => (canOpen('drawing-tracker') && glance.items
+      ? designPicture({ projectId: p.projectId, projectName: name, rows: siteRows, items: glance.items as any, meetings: careData.meetings, now })
+      : null),
+    [glance.items, siteRows, careData.meetings, p.projectId, name, now, p.conversations],
+  );
+  const pulse = useMemo(() => (careData.care ? projectPulse({
+    project: { id: p.projectId, name, targetHandover: ctx.targetHandoverDate || null },
+    money: p.money, care: careData.care, settings: p.opsSettings || opsSettingsOf({}), now,
+  }) : null), [careData.care, p.money, p.opsSettings, ctx.targetHandoverDate, p.projectId, name, now]);
+  const move = useMemo(() => (careData.care ? projectNextMove({ status: String(ctx.status || ''), money: p.money, followUps: careData.care.followUps, now }) : null), [careData.care, ctx.status, p.money, now]);
+  const weekly = useMemo(
+    () => (p.seesClientCare && careData.digest !== undefined ? digestLine(careData.digest, { inWork: inWork(ctx, now), now }) : null),
+    [p.seesClientCare, careData.digest, ctx, now],
+  );
+  const readiness = useMemo(() => (careData.care ? handoverReadiness(ctx, careData.care.checklists, now) : null), [careData.care, ctx, now]);
+  const openClients = () => { askClientsToOpen(p.projectId); p.onLeaveProject('clients'); };
 
   /*
     Since you were here: when this person last opened the project is read once
@@ -336,13 +385,21 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
                 {moneyCard && <MoneyCard data={moneyCard} canOpen={canOpen('payment-calc')} openLabel={p.labelOf('payment-calc')} onOpen={() => open('payment-calc')} />}
                 {copiesBehind.length > 0 && <RippleCard steps={copiesBehind} canOpen={canOpen} onOpen={open} labelOf={p.labelOf} />}
               </>
+            ) : shown.id === 'design' && design ? (
+              <DesignCard data={design} rows={siteRows} me={p.me} isReviewer={!!p.isReviewer}
+                onOpenDrawing={(id) => openInDesignReview(p.projectId, id, { tab: p.homeRoute, label: name })}
+                onOpenTracker={canOpen('drawing-tracker') ? () => open('drawing-tracker') : undefined}
+                onDesk={() => p.onLeaveProject('design-review')} />
+            ) : shown.id === 'chat' && weekly ? (
+              <WeeklyCard line={weekly} onOpsDesk={() => p.onLeaveProject('ops-desk')} />
             ) : null}
             tail={null} />
           <Composer conv={shown.id} convName={shown.name} canLog={p.canLog} onWrite={writeLine}
             onRecord={shown.id === 'whole' ? open : undefined} />
         </section>
         <ProjectCard ctx={ctx} money={p.money} seesMoney={p.seesMoney} journey={p.journey} stages={p.stages} glance={glance}
-          portalLine={portalLine} onOpen={open} has={(r) => p.conversations.some((c) => c.routes.includes(r))} />
+          portalLine={portalLine} onOpen={open} has={(r) => p.conversations.some((c) => c.routes.includes(r))}
+          pulse={pulse} move={move} readiness={readiness} onClients={openClients} onOpsDesk={() => p.onLeaveProject('ops-desk')} />
       </div>
 
       {windowRoute && (
@@ -850,6 +907,160 @@ function RippleCard({ steps, canOpen, onOpen, labelOf }: {
   );
 }
 
+/* ───────────── smart workspace, PR 2 ───────────── */
+
+/*
+  THE DESIGN CARD (lib/projectCare designPicture): the drawings that will hold
+  up site and who in the studio is holding each (lib/deskSmart), the drawing
+  the client has had longest (lib/drawingIntel), and revision rounds past the
+  included ones that nobody has billed or waived. Open takes the drawing to the
+  Design Desk and back here; Nudge reminds whoever holds it, in the app only
+  (owner, 24 Nov 2026: no WhatsApp for this); rounds are billed or waived on
+  the Design Desk.
+*/
+function DesignCard({ data, rows, me, isReviewer, onOpenDrawing, onOpenTracker, onDesk }: {
+  data: DesignPicture; rows: ReviewDrawing[]; me: { email: string }; isReviewer: boolean;
+  onOpenDrawing: (id: string) => void; onOpenTracker?: () => void; onDesk: () => void;
+}) {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const [nudged, setNudged] = useState<Record<string, 'busy' | 'sent' | 'failed'>>({});
+  const nudge = async (d: ReviewDrawing) => {
+    setNudged((n) => ({ ...n, [d.id]: 'busy' }));
+    try { await nudgeHolder({ orgId: d.orgId, projectId: d.projectId, drawingId: d.id }); setNudged((n) => ({ ...n, [d.id]: 'sent' })); }
+    catch { setNudged((n) => ({ ...n, [d.id]: 'failed' })); }
+  };
+  const site = data.site.slice(0, 3);
+  return (
+    <section className="shrink-0 mx-4 mt-1 rounded-2xl bg-gradient-to-b from-[#F7F9FF] to-[#EEF2FD] px-4 py-3 hud-panel-in" aria-label="What will hold up site">
+      <h3 className="text-[15px] font-bold text-slate-800 mb-2">What will hold up site</h3>
+      {site.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {site.map((s, i) => {
+            const d = byId.get(s.id);
+            const holder = holderLine(s, d?.review?.designer?.name);
+            const state = d ? canNudge(d.review) : null;
+            /* As on the Design Desk: held a day or more, by someone else. */
+            const mine = state?.held && (state.held.who === 'head' ? isReviewer : d?.review?.designer?.email === me.email);
+            const mayNudge = !!d && !!state?.held && state.held.days >= 1 && !mine;
+            const n = nudged[s.id];
+            return (
+              <div key={s.id} className="hud-row-in flex items-center gap-3 rounded-xl bg-white px-3 py-2" style={{ animationDelay: `${80 + i * 40}ms` }}>
+                <Chip tone={s.risk.state === 'ready' ? 'brand' : 'bad'}>{s.risk.state === 'late' ? 'Late for site' : s.risk.state === 'ready' ? 'Ready' : 'Site date'}</Chip>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold text-slate-800 truncate">{s.name}</p>
+                  <p className="text-xs text-slate-500">{s.risk.line}{holder ? ` ${holder}.` : ''}</p>
+                  {n === 'failed' && <p className="text-[11px] text-rose-700">No reminder sent. Try again.</p>}
+                </div>
+                {mayNudge && (
+                  <Button size="sm" variant="quiet" className="cvw-hot shrink-0" data-ripple disabled={!state!.ok || n === 'busy' || n === 'sent'}
+                    title={n === 'sent' ? 'A reminder went just now' : state!.ok ? `Remind ${nudgeTarget(d!.review, state!.held!)}` : state!.why}
+                    onClick={() => nudge(d!)}>{n === 'sent' ? 'Reminded' : n === 'busy' ? 'Sending…' : 'Nudge'}</Button>
+                )}
+                <Button size="sm" variant="secondary" className="cvw-hot cvw-lift shrink-0" data-ripple onClick={() => onOpenDrawing(s.id)}>Open</Button>
+              </div>
+            );
+          })}
+          {data.site.length > 3 && <p className="text-xs text-slate-500 px-1">{data.site.length - 3} more on the Design Desk</p>}
+        </div>
+      )}
+      {data.clientHolding.worst && (
+        <div className={cx('flex items-center gap-3', site.length > 0 && 'mt-2')}>
+          <p className="min-w-0 flex-1 text-xs text-slate-600">
+            The client has had <b className="text-slate-800">{data.clientHolding.worst.name}</b> for {data.clientHolding.worst.days} days
+            {data.clientHolding.count > 1 ? `, and ${data.clientHolding.count - 1} more for over a week.` : '.'}
+          </p>
+          {onOpenTracker && <Button size="sm" variant="quiet" className="cvw-hot shrink-0" data-ripple onClick={onOpenTracker}>Open Drawings</Button>}
+        </div>
+      )}
+      {data.rounds.length > 0 && (
+        <div className="mt-2 rounded-xl bg-amber-50 px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-bold text-amber-800">
+              {data.rounds.length === 1 ? '1 revision round' : `${data.rounds.length} revision rounds`} past the included ones, not billed or waived
+            </p>
+            <p className="text-xs text-amber-700 truncate">{data.rounds.slice(0, 3).map((r) => `${r.room} · round ${r.round}`).join(' · ')}</p>
+          </div>
+          <Button size="sm" variant="secondary" className="cvw-hot cvw-lift shrink-0" data-ripple onClick={onDesk}>Bill or waive on the Design Desk</Button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/*
+  THIS WEEK'S UPDATE (lib/projectCare digestLine, from lib/fridayDigest): where
+  the client's weekly update stands. It is written, approved and sent on the Ops
+  Desk; nothing to the client is written here (owner, 27 Nov 2026).
+*/
+function WeeklyCard({ line, onOpsDesk }: { line: DigestLine; onOpsDesk: () => void }) {
+  const tint = line.tone === 'turn' ? 'bg-amber-50' : line.tone === 'done' ? 'bg-emerald-50' : 'bg-[#F7F9FF]';
+  const ink = line.tone === 'turn' ? 'text-amber-800' : line.tone === 'done' ? 'text-emerald-800' : 'text-slate-800';
+  return (
+    <section className={cx('shrink-0 mx-4 mt-1 rounded-2xl px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-2 hud-panel-in', tint)} aria-label="This week’s update">
+      <div className="min-w-0 flex-1">
+        <p className={cx('text-[13px] font-bold', ink)}>{line.text}</p>
+        {line.detail && <p className="text-xs text-slate-500">{line.detail}</p>}
+      </div>
+      <Button size="sm" variant="secondary" className="cvw-hot cvw-lift shrink-0" data-ripple onClick={onOpsDesk}>Open the Ops Desk</Button>
+    </section>
+  );
+}
+
+/* The client pulse's ring in the band's colour: emerald good, amber watch, rose at risk. */
+const BAND_INK: Record<Pulse['band'], { ring: string; text: string }> = {
+  good: { ring: '#059669', text: 'text-emerald-700' }, watch: { ring: '#D97706', text: 'text-amber-700' }, at_risk: { ring: '#E11D48', text: 'text-rose-700' },
+};
+
+/*
+  CLIENT PULSE (lib/clientCare clientPulse, worked out as the Ops Desk works it
+  out): the score, its band, the three reasons that moved it most, and the next
+  move with this client as Clients says it. "Open in Clients" opens this client.
+*/
+function PulseBlock({ pulse, move }: { pulse: Pulse; move: NextMove | null }) {
+  const ink = BAND_INK[pulse.band];
+  const top = pulse.reasons.slice().sort((a, b) => Math.abs(b.points) - Math.abs(a.points)).slice(0, 3);
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center gap-3">
+        <span className="w-14 h-14 rounded-full grid place-items-center shrink-0" aria-hidden
+          style={{ background: `conic-gradient(${ink.ring} ${pulse.score * 3.6}deg, #ECEEF6 0deg)` }}>
+          <span className="w-11 h-11 rounded-full bg-white grid place-items-center text-[15px] font-black tabular-nums text-slate-800"><CountUp value={pulse.score} /></span>
+        </span>
+        <div className="min-w-0">
+          <p className={cx('text-[13px] font-bold', ink.text)}>{BAND_LABEL[pulse.band]} · {pulse.score} of 100</p>
+          <p className="text-[11px] text-slate-500">{pulse.confidence === 'low' ? 'An early read: little is logged yet' : pulse.confidence === 'medium' ? 'From what is logged so far' : 'From a full log'}</p>
+        </div>
+      </div>
+      {top.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {top.map((r) => (
+            <li key={r.label} className="flex items-baseline gap-2 text-xs">
+              <span className={cx('w-7 shrink-0 text-right font-bold tabular-nums', r.points > 0 ? 'text-emerald-700' : 'text-rose-700')}>{r.points > 0 ? `+${r.points}` : r.points}</span>
+              <span className="min-w-0 text-slate-600">{r.label}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {move && (
+        <p className="text-xs text-slate-500">Next move: <b className={move.tone === 'warn' ? 'text-amber-700' : 'text-slate-800'}>{move.label}</b>{move.why ? ` · ${move.why}` : ''}</p>
+      )}
+    </div>
+  );
+}
+
+/* HANDOVER CHECKLIST (lib/clientCare, through lib/projectCare handoverReadiness): one figure from the Execution phase on. */
+function ReadinessBlock({ r }: { r: Readiness }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-xs text-slate-600"><b className="text-slate-800 tabular-nums">{r.done} of {r.total}</b> done{r.settled ? ': ready to hand over' : ''}</p>
+      <span className="block h-2 rounded-full bg-[#E7F5EF] overflow-hidden" aria-hidden>
+        <span className="block h-full rounded-full bg-[#0E7C5A]" style={{ width: `${r.pct}%` }} />
+      </span>
+      {r.outstanding.length > 0 && <p className="text-[11px] text-slate-500 truncate" title={r.outstanding.join(' · ')}>Still to do: {r.outstanding.slice(0, 2).join(' · ')}{r.outstanding.length > 2 ? ` and ${r.outstanding.length - 2} more` : ''}</p>}
+    </div>
+  );
+}
+
 /* ───────────── the composer ───────────── */
 
 /*
@@ -921,9 +1132,10 @@ const dayShort = (iso: string, year = false) => {
   return year ? s.replace(/ (\d{2})$/, ' ’$1') : s;
 };
 
-function ProjectCard({ ctx, money, seesMoney, journey, stages, glance, portalLine, onOpen, has }: {
+function ProjectCard({ ctx, money, seesMoney, journey, stages, glance, portalLine, onOpen, has, pulse, move, readiness, onClients, onOpsDesk }: {
   ctx: any; money: ClientMoney | null; seesMoney: boolean; journey: ConversationsWorkspaceProps['journey']; glance: Glance;
   stages: StageRow[]; portalLine: ReturnType<typeof portalStatus>; onOpen: (r: string) => void; has: (r: string) => boolean;
+  pulse?: Pulse | null; move?: NextMove | null; readiness?: Readiness | null; onClients?: () => void; onOpsDesk?: () => void;
 }) {
   const inr = (n: number | null | undefined) => (n == null ? '—' : '₹' + Math.round(n).toLocaleString('en-IN'));
   const next = money?.milestones.find((m) => m.status !== 'paid' && m.status !== 'received');
@@ -970,6 +1182,16 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, glance, portalLin
           )}
         </div>
       </Sec>
+      {pulse && (
+        <Sec title="Client pulse" action={onClients && <Button size="sm" variant="quiet" onClick={onClients}>Open in Clients</Button>}>
+          <PulseBlock pulse={pulse} move={move || null} />
+        </Sec>
+      )}
+      {readiness && (
+        <Sec title="Handover checklist" action={onOpsDesk && <Button size="sm" variant="quiet" onClick={onOpsDesk}>Open the Ops Desk</Button>}>
+          <ReadinessBlock r={readiness} />
+        </Sec>
+      )}
       {has('client-portal') && (
         <Sec title="Client portal" action={<Button size="sm" variant="quiet" onClick={() => onOpen('client-portal')}>Open</Button>}>
           <PortalLineText line={portalLine} />
