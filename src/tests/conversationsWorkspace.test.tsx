@@ -116,13 +116,36 @@ describe('the Conversations workspace', () => {
     expect(screen.getByRole('textbox', { name: 'Note' })).toBeTruthy();
   });
 
-  it('writes to the client from Client & portal, and greets them as "there" when the project has no client name', () => {
-    setup({ projectContext: { name: 'Palacia 3BHK', history: [] } });
+  it('has no WhatsApp box anywhere: messages are written on the Messages screen and on Clients (owner, 27 Nov 2026)', () => {
+    setup();
     const list = screen.getByRole('complementary', { name: "This project's conversations" });
     fireEvent.click(within(list).getByRole('button', { name: /^Client & portal/ }));
-    expect(screen.getByRole('button', { name: /Open in WhatsApp/ })).toBeTruthy();
-    const box = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement;
-    expect(box.value).toMatch(/^Hi there,/);
-    expect(box.value).not.toMatch(/the client/);
+    expect(screen.queryByRole('button', { name: /WhatsApp/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Add a note for the team/ })).toBeTruthy();
+  });
+
+  it('shows an empty conversation where to click: its screens as big buttons', async () => {
+    const { setActiveTab } = setup();
+    await waitFor(() => expect(screen.getAllByText(/Payment done, please check/).length).toBeGreaterThan(0));
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    fireEvent.click(within(list).getByRole('button', { name: /^Brief & Site/ }));
+    expect(screen.getByText(/Start here/)).toBeTruthy();
+    const big = screen.getAllByRole('button', { name: /^Brief & Site/ }).find((b) => !list.contains(b))!;
+    fireEvent.click(big);
+    expect(setActiveTab).toHaveBeenCalledWith('leadiq');
+  });
+
+  it('keeps a note in the conversation it was written in, and says what a note is', async () => {
+    setup();
+    await waitFor(() => expect(screen.getAllByText(/Payment done, please check/).length).toBeGreaterThan(0));
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    fireEvent.click(within(list).getByRole('button', { name: /^Money/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add a note for the team/ }));
+    expect(screen.getByText(/Only the studio sees notes/)).toBeTruthy();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Note' }), { target: { value: 'Client will pay by cheque' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save note' }));
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Money' }).textContent).toContain('Client will pay by cheque'));
+    fireEvent.click(within(list).getByRole('button', { name: /^Plan & timeline/ }));
+    expect(screen.getByRole('region', { name: 'Plan & timeline' }).textContent).not.toContain('Client will pay by cheque');
   });
 });

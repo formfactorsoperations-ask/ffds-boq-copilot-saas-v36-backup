@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { NAV_CONFIG, ALWAYS_ON_BAND } from '../../components/navConfig';
 import { CONVERSATIONS, conversationOf, conversationsFor } from '../../lib/projectConversations';
 import { resolveProjectView, studioWorkspaceOf, mayChooseView, cleanView } from '../../lib/projectView';
-import { buildStory, storyFor, latestOf, placeEntry } from '../../lib/projectThread';
+import { buildStory, storyFor, latestOf, placeEntry, noteHomes, noteKey } from '../../lib/projectThread';
 import type { ThreadEntry } from '../../lib/clientThread';
 
 const SIDEBAR_ROUTES = [
@@ -92,5 +92,16 @@ describe("the project's story", () => {
     expect(storyFor(story, 'whole')).toHaveLength(3);
     expect(latestOf(story, 'plan')!.text).toBe('Stage → Execution');
     expect(latestOf(story, 'site')).toBe(null);
+  });
+
+  it('keeps a note in the conversation it was written in; one written in Whole project stays there', () => {
+    const homes = noteHomes([
+      { id: 'n1', subject: { key: noteKey('money') } }, { id: 'n2', subject: { key: noteKey('whole') } }, { id: 'n3', subject: { key: 'tpl:update' } },
+    ]);
+    expect(homes).toEqual({ 'f-n1': 'money', 'f-n2': 'whole' });
+    const story = buildStory([entry({ id: 'f-n1', source: 'team' }), entry({ id: 'f-n2', source: 'team' }), entry({ id: 'f-n3', source: 'team' })], [], 'p', homes);
+    expect(storyFor(story, 'money').map((s) => s.id)).toEqual(['f-n1']);
+    expect(storyFor(story, 'plan').map((s) => s.id)).toEqual(['f-n3']);
+    expect(storyFor(story, 'whole')).toHaveLength(3);
   });
 });

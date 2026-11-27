@@ -5,13 +5,15 @@ import {
 } from '@/lib/lucide-shim';
 import { Button, Chip, EmptyState, INPUT, Segmented, type Tone } from '../ui/kit';
 import { Masked, HideFiguresButton } from '../ui/HideFigures';
+import { CountUp } from '../ui/HudBits';
+import { motion } from 'framer-motion';
 import PageTitleBlock from '../PageTitleBlock';
 import ViewOnlyGuard from '../ViewOnlyGuard';
-import { WHATSAPP_TEMPLATES, whatsAppLink, PortalLineText } from '../clients/parts';
+import { PortalLineText } from '../clients/parts';
 import { conversationDef, conversationOf, type ConversationDef, type ConversationId } from '../../lib/projectConversations';
-import { buildStory, groupStory, latestOf, storyFor, whenShort, type StoryItem } from '../../lib/projectThread';
+import { buildStory, groupStory, latestOf, noteHomes, noteKey, storyFor, whenShort, type StoryItem } from '../../lib/projectThread';
 import { buildThread, SOURCE_LABEL, EMPTY_RECORDS, type ThreadRecords, type ThreadSource } from '../../lib/clientThread';
-import { noteLine, replyLine, sendSubject, sentLine, REPLY_MOODS, REPLY_FROM, type FollowUpLine, type ReplyMood, type ReplyFrom } from '../../lib/clientCompose';
+import { noteLine, type FollowUpLine } from '../../lib/clientCompose';
 import { portalStatus, portalStatusForViewer, type PortalVisit } from '../../lib/portalVisits';
 import type { ClientMoney } from '../../lib/clientMoney';
 import type { TemplateId } from '../../lib/clientNextMove';
@@ -48,6 +50,18 @@ const CONV_ICON: Record<ConversationId, React.ElementType> = {
   design: PenTool, site: HardHat, plan: CalendarRange, brief: MapPin,
 };
 
+/* Each conversation's icon moves on hover in its own way, as the project sidebar's do (projectSidebar.css .psb-ic). */
+const CONV_MOVE: Record<ConversationId, string> = {
+  whole: 'spin', chat: 'wiggle', money: 'wiggle', boq: 'nudge', docs: 'nudge', design: 'swing', site: 'bounce', plan: 'nudge', brief: 'bounce',
+};
+
+/* The sticker faces (DESIGN.md "Stickers"), as on Clients: gold for a signature, rose for unpaid, amber for no reply. */
+const STICKER: Record<'gold' | 'bad' | 'warn', React.CSSProperties> = {
+  gold: { color: '#8C6D2A', background: 'linear-gradient(180deg, #fffbeb, #f6ead0)' },
+  bad: { color: '#be123c', background: 'linear-gradient(180deg, #fff1f2, #ffe4e6)' },
+  warn: { color: '#b45309', background: 'linear-gradient(180deg, #fffbeb, #fef3c7)' },
+};
+
 const SOURCE_ICON: Record<ThreadSource, { icon: React.ElementType; tone: Tone }> = {
   sent: { icon: MessageCircle, tone: 'brand' },
   proposals: { icon: FileText, tone: 'brand' },
@@ -72,6 +86,8 @@ export interface ConversationsWorkspaceProps {
   hubLabel: string;
   conversations: ConversationDef[];
   labelOf: (route: string) => string;
+  /** One line on what a screen is for, for the "Start here" buttons. */
+  aboutOf?: (route: string) => string;
   /** Notes waiting on this person, by screen (lib/notify). */
   needsOf: (route: string) => number;
   stages: StageRow[];
@@ -148,7 +164,7 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
       clientName, projects: [{ id: p.projectId, name, context: ctx }],
       money: { [p.projectId]: p.money }, records, portalVisits: visits, now,
     });
-    return buildStory(entries, ctx.history, p.projectId);
+    return buildStory(entries, ctx.history, p.projectId, noteHomes(records.followUps as any));
   }, [records, visits, p.money, ctx, p.projectId, now]);
 
   const portalLine = useMemo(
@@ -206,7 +222,7 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
           money={p.money} journey={p.journey} onPick={setConv} />
         <section className="flex flex-col min-h-0 min-w-0 border-l border-slate-100" aria-label={shown.name}>
           <ThreadHead conv={shown} labelOf={p.labelOf} onOpen={open} onPickMobile={setConv} conversations={p.conversations} />
-          <Thread key={shown.id} conv={shown.id} story={storyFor(story, shown.id)} now={now} loading={!records} onOpen={open}
+          <Thread key={shown.id} conv={shown.id} routes={shown.routes} aboutOf={p.aboutOf || (() => '')} story={storyFor(story, shown.id)} now={now} loading={!records} onOpen={open}
             labelOf={p.labelOf} visible={(r) => p.conversations.some((c) => c.routes.includes(r))}
             pinned={shown.id === 'whole' ? (
               <UpNext stage={p.currentStage} stages={p.stages} journey={p.journey} hubLabel={p.hubLabel} onHub={() => setHubOpen(true)}
@@ -214,8 +230,7 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
                 onOpen={open} labelOf={p.labelOf} />
             ) : null}
             tail={null} />
-          <Composer conv={shown.id} canLog={p.canLog} clientName={clientName} phone={ctx.clientPhone || ''} projectName={name}
-            studio={String(ctx.studioName || '') || 'the studio'} milestones={p.money?.milestones || []} onWrite={writeLine}
+          <Composer conv={shown.id} convName={shown.name} canLog={p.canLog} onWrite={writeLine}
             onRecord={shown.id === 'whole' ? open : undefined} />
         </section>
         <ProjectCard ctx={ctx} money={p.money} seesMoney={p.seesMoney} journey={p.journey} stages={p.stages}
@@ -311,20 +326,21 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
           const on = c.id === conv;
           return (
             <button key={c.id} type="button" onClick={() => onPick(c.id)} aria-current={on ? 'true' : undefined}
-              className={cx('w-full flex items-center gap-3 px-3 py-3 text-left border-b border-slate-100 transition-colors hud-row-in',
-                on ? 'bg-[#3D52A0]/10 shadow-[inset_3px_0_0_#3D52A0]' : 'hover:bg-slate-50')}
+              className={cx('psb-btn relative w-full flex items-center gap-3 px-3 py-3 text-left border-b border-slate-100 transition-colors hud-row-in', !on && 'hover:bg-slate-50')}
               style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
-              <span className={cx('w-10 h-10 rounded-full grid place-items-center shrink-0', c.id === 'whole' ? 'bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
-                <Icon className="w-[18px] h-[18px]" aria-hidden />
+              {/* The highlight slides to the conversation you pick, as the sidebar's does to the screen you are on. */}
+              {on && <motion.span layoutId="conv-on" aria-hidden className="absolute inset-0 bg-[#3D52A0]/10 shadow-[inset_3px_0_0_#3D52A0]" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
+              <span className={cx('relative w-10 h-10 rounded-full grid place-items-center shrink-0', c.id === 'whole' ? 'bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
+                <span className="psb-ic" data-a={CONV_MOVE[c.id]}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
               </span>
-              <span className="min-w-0 flex-1">
+              <span className="relative min-w-0 flex-1">
                 <span className="flex items-baseline gap-2">
                   <span className="flex-1 min-w-0 truncate text-sm font-bold text-slate-800">{c.name}</span>
                   {pv.at && <span className="text-[11px] text-slate-400 whitespace-nowrap">{whenShort(pv.at, now)}</span>}
                 </span>
                 <span className="flex items-center gap-1.5 mt-0.5">
                   <span className="flex-1 min-w-0 truncate text-xs text-slate-500">{pv.text}</span>
-                  {needs && <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" title="Needs you" />}
+                  {needs && <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0 animate-[psb-attn_1.8s_infinite] motion-reduce:animate-none" title="Needs you" />}
                 </span>
               </span>
             </button>
@@ -371,9 +387,9 @@ function ThreadHead({ conv, labelOf, onOpen, onPickMobile, conversations }: {
 const SHOW = 25;
 
 const Thread: React.FC<{
-  conv: ConversationId; story: StoryItem[]; now: number; loading: boolean; onOpen: (r: string) => void;
+  conv: ConversationId; routes: string[]; aboutOf: (r: string) => string; story: StoryItem[]; now: number; loading: boolean; onOpen: (r: string) => void;
   labelOf: (r: string) => string; visible: (r: string) => boolean; pinned: React.ReactNode; tail: React.ReactNode;
-}> = ({ conv, story, now, loading, onOpen, labelOf, visible, pinned, tail }) => {
+}> = ({ conv, routes, aboutOf, story, now, loading, onOpen, labelOf, visible, pinned, tail }) => {
   const [all, setAll] = useState(false);
   const items = all ? story : story.slice(-SHOW);
   const groups = groupStory(items, now);
@@ -389,9 +405,12 @@ const Thread: React.FC<{
           </button>
         )}
         {loading && <p className="text-xs text-slate-500 self-center py-6">Reading this project’s story…</p>}
-        {!loading && !story.length && (
-          <EmptyState icon={conv === 'whole' ? Sparkles : CONV_ICON[conv]} title="Nothing here yet"
-            text={conv === 'whole' ? 'Everything that happens on this project will appear here.' : 'What happens here will appear as it happens. Use the screens above to start.'} />
+        {!loading && !story.length && conv === 'whole' && (
+          <EmptyState icon={Sparkles} title="Nothing has happened on this project yet" text="Start with Up next above. Everything that happens will appear here, newest at the bottom." />
+        )}
+        {/* An empty conversation says where to click: its screens, as big buttons with what each is for. */}
+        {!loading && !story.length && conv !== 'whole' && routes.length > 0 && (
+          <StartHere conv={conv} routes={routes} labelOf={labelOf} aboutOf={aboutOf} onOpen={onOpen} />
         )}
         {groups.map((g) => (
           <React.Fragment key={g.group + g.items[0].id}>
@@ -405,6 +424,32 @@ const Thread: React.FC<{
   );
 }
 
+const StartHere: React.FC<{ conv: ConversationId; routes: string[]; labelOf: (r: string) => string; aboutOf: (r: string) => string; onOpen: (r: string) => void }> = ({ conv, routes, labelOf, aboutOf, onOpen }) => {
+  const Icon = CONV_ICON[conv];
+  return (
+    <div className="py-2">
+      <p className="text-sm font-bold text-slate-800">Nothing has happened here yet. Start here:</p>
+      <p className="text-xs text-slate-500 mb-3">Open a screen below. What you do there will appear in this conversation.</p>
+      <div className="grid gap-2.5 sm:grid-cols-2">
+        {routes.map((r, i) => (
+          <button key={r} type="button" onClick={() => onOpen(r)}
+            className="psb-btn phd-lift hud-row-in text-left flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 hover:border-[#3D52A0] hover:shadow-sm"
+            style={{ animationDelay: `${i * 40}ms` }}>
+            <span className={cx('w-11 h-11 rounded-xl grid place-items-center shrink-0', i === 0 ? 'bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
+              <span className="psb-ic" data-a={CONV_MOVE[conv]}><Icon className="w-5 h-5" aria-hidden /></span>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-slate-800">{labelOf(r)}</span>
+              {aboutOf(r) && <span className="block text-xs text-slate-500 line-clamp-2">{aboutOf(r)}</span>}
+            </span>
+            <ArrowRight className="w-4 h-4 text-[#3D52A0] shrink-0" aria-hidden />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const StoryRow: React.FC<{
   it: StoryItem; delay: number; onOpen: (r: string) => void; labelOf: (r: string) => string; visible: (r: string) => boolean;
 }> = ({ it, delay, onOpen, labelOf, visible }) => {
@@ -415,7 +460,14 @@ const StoryRow: React.FC<{
   ) : null;
   const style = { animationDelay: `${delay}ms` };
   if (it.kind === 'sticker') {
-    return <div className="self-center px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 hud-row-in" style={style}>{it.text}</div>;
+    const slap = (e: React.MouseEvent<HTMLElement>) => { const el = e.currentTarget; el.classList.remove('slap'); void el.offsetWidth; el.classList.add('slap'); };
+    return (
+      <div className="pj self-center py-1">
+        <span role="img" tabIndex={0} className="pj-stk" style={{ ['--r' as any]: '-3deg' }} aria-label={it.text} data-tip={it.text} onClick={slap}>
+          <span className="pj-face !text-[11px] !px-2.5 !py-1" style={STICKER[it.tone || 'gold']}>{it.text}</span><span className="pj-fold" />
+        </span>
+      </div>
+    );
   }
   if (it.kind === 'sent') {
     return (
@@ -436,8 +488,8 @@ const StoryRow: React.FC<{
   const src = SOURCE_ICON[it.source || 'team'];
   const Icon = src.icon;
   return (
-    <div className={cx('max-w-[82%] flex gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hud-row-in', it.side === 'client' ? 'self-start' : 'self-end')} style={style}>
-      <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><Icon className="w-4 h-4" aria-hidden /></span>
+    <div className={cx('psb-btn phd-lift max-w-[82%] flex gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hud-row-in hover:shadow-sm', it.side === 'client' ? 'self-start' : 'self-end')} style={style}>
+      <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><span className="psb-ic" data-a="nudge"><Icon className="w-4 h-4" aria-hidden /></span></span>
       <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-800">{it.text}</p>
         {it.detail && <p className="text-xs text-slate-500">{it.detail}</p>}
@@ -474,8 +526,8 @@ function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, lab
       </div>
       <div className="px-4 pt-2.5 pb-1"><h3 className="font-bold text-slate-800">Up next</h3></div>
       {!rows.length && <p className="px-4 pb-3 text-xs text-slate-500">Nothing needs you on this project right now.</p>}
-      {rows.map((r) => (
-        <div key={r.id} className="flex items-center gap-3 px-4 py-2 border-t border-slate-100 first:border-t-0">
+      {rows.map((r, i) => (
+        <div key={r.id} className="hud-row-in flex items-center gap-3 px-4 py-2 border-t border-slate-100 first:border-t-0" style={{ animationDelay: `${120 + i * 40}ms` }}>
           <p className="min-w-0 flex-1 text-sm font-semibold text-slate-800 truncate" title={r.text || undefined}>{r.title}</p>
           {r.route && <Button size="sm" variant="secondary" onClick={() => onOpen(r.route!)}>Open {labelOf(r.route)}</Button>}
         </div>
@@ -486,124 +538,60 @@ function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, lab
 
 /* ───────────── the composer ───────────── */
 
-function Composer({ conv, canLog, clientName, phone, projectName, studio, milestones, onWrite, onRecord }: {
-  conv: ConversationId; canLog: boolean; clientName: string; phone: string; projectName: string; studio: string;
-  milestones: ClientMoney['milestones']; onWrite: (l: FollowUpLine) => Promise<void>; onRecord?: (r: string) => void;
+/*
+  The foot of a conversation: Record (Whole project) and a note for the team.
+  A note is a line in the project's follow-up log, so it is on the Ops Desk too.
+  It stays in the conversation it was written in (lib/projectThread noteHomes).
+  Messages to the client are written on the Messages screen and on Clients, not
+  here (owner, 27 Nov 2026).
+*/
+function Composer({ conv, convName, canLog, onWrite, onRecord }: {
+  conv: ConversationId; convName: string; canLog: boolean;
+  onWrite: (l: FollowUpLine) => Promise<void>; onRecord?: (r: string) => void;
 }) {
-  /* Messages to the client belong with the client: only Client & portal writes to them (owner, 27 Nov 2026). */
-  const chatty = conv === 'chat';
-  const [mode, setMode] = useState<'send' | 'reply' | 'note'>(chatty ? 'send' : 'note');
-  const [noteOpen, setNoteOpen] = useState(false);
-  useEffect(() => { setMode(chatty ? 'send' : 'note'); setNoteOpen(false); }, [conv]);
-  const [template, setTemplate] = useState<TemplateId>(WHATSAPP_TEMPLATES[0].id);
+  const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
-  const [mood, setMood] = useState<ReplyMood>('positive');
-  const [from, setFrom] = useState<ReplyFrom>('whatsapp');
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
-  const who = clientName || 'the client';
-  useEffect(() => {
-    if (mode !== 'send') { setText(''); return; }
-    const t = WHATSAPP_TEMPLATES.find((x) => x.id === template) || WHATSAPP_TEMPLATES[0];
-    setText(t.text(clientName || 'there', studio, projectName));
-  }, [mode, template, clientName, studio, projectName]);
-
-  const save = async (line: FollowUpLine) => {
+  useEffect(() => { setOpen(false); setText(''); setState('idle'); }, [conv]);
+  if (!canLog && !onRecord) return null;
+  const save = async () => {
     setState('saving');
-    try { await onWrite(line); setState('saved'); if (mode !== 'send') setText(''); if (!chatty) setNoteOpen(false); }
-    catch { setState('failed'); }
+    try {
+      await onWrite({ ...noteLine(text), subject: { kind: 'general', key: noteKey(conv), label: `Note · ${convName}` } });
+      setState('saved'); setText(''); setOpen(false);
+    } catch { setState('failed'); }
   };
-  const link = whatsAppLink(phone, text);
-  const send = () => {
-    if (link) window.open(link, '_blank', 'noopener');
-    const t = WHATSAPP_TEMPLATES.find((x) => x.id === template) || WHATSAPP_TEMPLATES[0];
-    if (canLog) save(sentLine(text, sendSubject(t, milestones)));
-  };
-  const status = (
-    <>
-      {state === 'saving' && <span className="text-[11px] text-slate-500">Saving…</span>}
-      {state === 'saved' && <span className="text-[11px] text-emerald-700">Saved</span>}
-      {state === 'failed' && <span className="text-[11px] text-rose-700">Not saved. Try again.</span>}
-    </>
-  );
-
-  /* Every conversation but Client & portal: Record (Whole project) and a note, one line until it is needed. */
-  if (!chatty) {
-    if (!canLog && !onRecord) return null;
-    return (
-      <div className="shrink-0 border-t border-slate-200 px-4 py-2.5 bg-white flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {onRecord && (
-            <>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Record</span>
-              <Button size="sm" variant="secondary" icon={HardHat} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="S">Site visit</Button>
-              <Button size="sm" variant="secondary" icon={Users} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="M">Meeting</Button>
-              <Button size="sm" variant="secondary" icon={Scale} onClick={() => onRecord('record-decision')} aria-keyshortcuts="D">Decision</Button>
-            </>
-          )}
-          <span className="flex-1" />
-          {canLog && !noteOpen && <Button size="sm" variant="quiet" icon={NotebookPen} onClick={() => { setNoteOpen(true); setState('idle'); }}>Add a note</Button>}
-          {!noteOpen && status}
-        </div>
-        {canLog && noteOpen && (
-          <div className="flex gap-2 items-stretch">
-            <textarea autoFocus value={text} onChange={(e) => { setText(e.target.value); setState('idle'); }} rows={2}
-              placeholder="A note for the team" aria-label="Note" className={cx(INPUT, 'resize-none flex-1')} />
-            <div className="flex flex-col gap-1.5 shrink-0 justify-center">
-              <Button variant="primary" size="sm" onClick={() => save(noteLine(text))} disabled={!text.trim()}>Save note</Button>
-              <Button variant="quiet" size="sm" onClick={() => { setNoteOpen(false); setText(''); }}>Cancel</Button>
-              {status}
-            </div>
-          </div>
+  return (
+    <div className="shrink-0 border-t border-slate-200 px-4 py-2.5 bg-white flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {onRecord && (
+          <>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Record</span>
+            <Button size="sm" variant="secondary" icon={HardHat} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="S" className="phd-lift">Site visit</Button>
+            <Button size="sm" variant="secondary" icon={Users} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="M" className="phd-lift">Meeting</Button>
+            <Button size="sm" variant="secondary" icon={Scale} onClick={() => onRecord('record-decision')} aria-keyshortcuts="D" className="phd-lift">Decision</Button>
+          </>
+        )}
+        <span className="flex-1" />
+        {state === 'saved' && !open && <span className="text-[11px] text-emerald-700 hud-row-in">Note saved here and on the Ops Desk</span>}
+        {canLog && !open && (
+          <Button size="sm" variant="quiet" icon={NotebookPen} onClick={() => { setOpen(true); setState('idle'); }}
+            title="A note only the studio sees, kept here and on the Ops Desk">Add a note for the team</Button>
         )}
       </div>
-    );
-  }
-
-  return (
-    <div className="shrink-0 border-t border-slate-200 px-4 py-3 flex flex-col gap-2 bg-white">
-      {canLog && (
-        <Segmented<'send' | 'reply' | 'note'> label="What to add" size="sm" value={mode} onChange={setMode}
-          options={[{ id: 'send', label: 'Message the client' }, { id: 'reply', label: 'Log their reply' }, { id: 'note', label: 'Add a note' }]} />
-      )}
-      {mode === 'send' && (
-        <div className="flex gap-1.5 overflow-x-auto">
-          {WHATSAPP_TEMPLATES.map((t) => (
-            <button key={t.id} type="button" onClick={() => setTemplate(t.id)}
-              className={cx('shrink-0 px-3 py-1 rounded-full border text-xs font-semibold', t.id === template ? 'border-[#3D52A0] bg-[#3D52A0]/10 text-[#3D52A0]' : 'border-slate-300 text-slate-600 hover:border-[#3D52A0]')}>
-              {t.title}
-            </button>
-          ))}
-        </div>
-      )}
-      {mode === 'reply' && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {REPLY_MOODS.map((m) => (
-            <button key={m.id} type="button" onClick={() => setMood(m.id)}
-              className={cx('px-3 py-1 rounded-full border text-xs font-semibold', m.id === mood ? 'border-[#3D52A0] bg-[#3D52A0]/10 text-[#3D52A0]' : 'border-slate-300 text-slate-600')}>{m.label}</button>
-          ))}
-          <select className={cx(INPUT, '!w-auto !py-1 text-xs')} value={from} onChange={(e) => setFrom(e.target.value as ReplyFrom)} aria-label="Where they replied">
-            {REPLY_FROM.map((f) => <option key={f.id} value={f.id}>From {f.label}</option>)}
-          </select>
-        </div>
-      )}
-      {canLog ? (
-        <div className="flex gap-2 items-stretch">
-          <textarea value={text} onChange={(e) => { setText(e.target.value); setState('idle'); }} rows={2}
-            placeholder={mode === 'reply' ? `What ${who} said` : mode === 'note' ? 'A note for the team' : `Write to ${who}`}
-            aria-label="Message" className={cx(INPUT, 'resize-none flex-1')} />
-          <div className="flex flex-col gap-1.5 shrink-0 justify-center">
-            {mode === 'send' && (
-              <Button variant="primary" icon={MessageCircle} onClick={send} disabled={!text.trim()} title={link ? undefined : 'No phone number for the client: the message is logged, WhatsApp does not open'}>
-                Open in WhatsApp
-              </Button>
-            )}
-            {mode === 'reply' && <Button variant="primary" onClick={() => save(replyLine(mood, text, from))}>Log their reply</Button>}
-            {mode === 'note' && <Button variant="primary" icon={NotebookPen} onClick={() => save(noteLine(text))} disabled={!text.trim()}>Add note</Button>}
-            {status}
+      {canLog && open && (
+        <div className="hud-row-in flex flex-col gap-1.5">
+          <p className="text-xs text-slate-500">Only the studio sees notes. This one stays in {convName} and is also kept on the Ops Desk.</p>
+          <div className="flex gap-2 items-stretch">
+            <textarea autoFocus value={text} onChange={(e) => { setText(e.target.value); setState('idle'); }} rows={2}
+              placeholder="For example: client prefers matte laminate in the kitchen" aria-label="Note" className={cx(INPUT, 'resize-none flex-1')} />
+            <div className="flex flex-col gap-1.5 shrink-0 justify-center">
+              <Button variant="primary" size="sm" onClick={save} disabled={!text.trim() || state === 'saving'}>{state === 'saving' ? 'Saving…' : 'Save note'}</Button>
+              <Button variant="quiet" size="sm" onClick={() => { setOpen(false); setText(''); }}>Cancel</Button>
+              {state === 'failed' && <span className="text-[11px] text-rose-700">Not saved. Try again.</span>}
+            </div>
           </div>
         </div>
-      ) : (
-        <p className="text-xs text-slate-500">You can read this conversation. Notes and messages are logged by the studio team.</p>
       )}
     </div>
   );
@@ -626,7 +614,7 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, portalLine, onOpe
   );
   const Tile: React.FC<{ label: string; value: React.ReactNode; sub: string; route: string | null }> = ({ label, value, sub, route }) => (
     <button type="button" disabled={!route || !has(route)} onClick={() => route && onOpen(route)}
-      className="text-left rounded-xl border border-slate-200 px-3 py-2.5 hover:border-[#3D52A0] disabled:hover:border-slate-200 disabled:cursor-default">
+      className="phd-lift text-left rounded-xl border border-slate-200 px-3 py-2.5 hover:border-[#3D52A0] disabled:hover:border-slate-200 disabled:cursor-default">
       <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
       <span className="block font-black text-slate-800 tabular-nums">{value}</span>
       <span className="block text-[11px] text-slate-500 truncate">{sub}</span>
@@ -638,12 +626,12 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, portalLine, onOpe
         <div className="grid grid-cols-2 gap-2">
           {seesMoney && (
             <Tile label="Collected" route="payment-calc"
-              value={money && !money.amountsHidden ? <Masked>{inr(money.totalPaid)}</Masked> : '—'}
+              value={money && !money.amountsHidden ? <Masked><CountUp value={money.totalPaid || 0} format={(v) => inr(v)} /></Masked> : '—'}
               sub={money && money.projectValue != null && !money.amountsHidden ? `${pct}% of ${inr(money.projectValue)}` : 'No payment schedule yet'} />
           )}
           {seesMoney && (
             <Tile label="Next due" route="payment-calc"
-              value={next ? (next.owed != null ? <Masked>{inr(next.owed)}</Masked> : next.name) : '—'}
+              value={next ? (next.owed != null ? <Masked><CountUp value={next.owed} format={(v) => inr(v)} /></Masked> : next.name) : '—'}
               sub={next ? `${next.name}${next.date ? ` · ${new Date(next.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}` : 'Nothing due'} />
           )}
         </div>
@@ -679,7 +667,7 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, portalLine, onOpe
           <button key={s.stage} type="button" disabled={!s.first} onClick={() => s.first && onOpen(s.first)}
             className="w-full flex items-center gap-2.5 py-1 text-left text-xs disabled:cursor-default">
             <span className={cx('w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold shrink-0',
-              s.state === 'done' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : s.state === 'now' ? 'bg-[#3D52A0] text-white' : 'bg-white text-slate-400 border border-slate-300')}>{s.stage}</span>
+              s.state === 'done' ? 'bg-[#3D52A0]/10 text-[#3D52A0]' : s.state === 'now' ? 'bg-[#3D52A0] text-white animate-[psb-breathe_2.4s_infinite] motion-reduce:animate-none' : 'bg-white text-slate-400 border border-slate-300')}>{s.stage}</span>
             <span className={cx('flex-1 min-w-0 truncate', s.state === 'now' ? 'font-bold text-slate-800' : 'text-slate-600')}>{s.label}</span>
             {s.state === 'now' && <Chip tone="brand">Now</Chip>}
             {s.first && <ChevronRight className="w-3.5 h-3.5 text-slate-300" aria-hidden />}
@@ -723,7 +711,7 @@ function ScreenWindow({ route, isHub, hubLabel, projectName, labelOf, conversati
           </div>
           {home && home.routes.length > 1 && (
             <div className="hidden lg:block shrink-0">
-              <Segmented<string> label="Screens in this conversation" size="sm" value={route} onChange={onOpen}
+              <Segmented<string> label="Screens in this conversation" size="sm" glide value={route} onChange={onOpen}
                 options={home.routes.map((r) => ({ id: r, label: labelOf(r) }))} />
             </div>
           )}

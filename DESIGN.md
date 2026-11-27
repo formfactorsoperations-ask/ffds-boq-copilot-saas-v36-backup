@@ -1327,10 +1327,13 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     with "Open {screen}"; only payments carry a source chip. Whole project opens on **one card**: the
     stage and steps on one line (with Ops Matrix and "Open the Hub"), then **Up next**, three steps, one
     button each (owner, 27 Nov 2026: one card, not a Next card and a list saying the same step twice).
-    Its foot is **Record** (Site visit · Meeting · Decision, keys S · M · D) and "Add a note", which opens
-    a note box only when clicked. **Messages to the client live in Client & portal only** (Message the
-    client / Log their reply / Add a note, writing to the follow-up log as Clients does); the other
-    conversations have the quiet note line.
+    Its foot is **Record** (Site visit · Meeting · Decision, keys S · M · D). Every conversation has "Add
+    a note for the team", which opens a note box only when clicked and says what a note is: a line only the
+    studio sees, in the follow-up log (so on the Ops Desk too), staying in the conversation it was written
+    in (subject `conv:{id}`). **No message to the client is written here** (owner, 27 Nov 2026): that is
+    the Messages screen's and Clients' job.
+  - **An empty conversation says where to click:** "Start here", its screens as big buttons (icon chip,
+    name, the page's one-line purpose from `pageMeta`, an arrow), the first in brand.
   - **The project card** (~320px, from `xl`): At a glance (Collected and Next due, for finance roles only,
     behind the hide-figures eye), Client portal (the portal status line; Review & send only once the client
     has access, Give access when they have none), Timeline, Details and Journey.
@@ -1340,8 +1343,14 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   shows up in the … conversation", Esc, and "← Back to …". A dialog a screen opens closes before the window
   on Esc. No window opens on top of a window.
 - A first-time line says what the view is and how to go back; "Got it" hides it on that device.
-- **Motion:** only `hud-panel-in`, `hud-row-in` (staggered, capped at 12), `phd-scrim`, `phd-pop`; all
-  stop under reduced motion. Same fonts and colours; no new accent.
+- **Motion** (owner, 27 Nov 2026: keep the motion the app already has): the project sidebar's and Clients'
+  approved motion, nothing new. Each conversation's icon moves on hover in its own way (`.psb-ic`
+  `data-a`); the highlight slides to the conversation picked (`layoutId`, as the sidebar's does); a
+  needs-you dot pulses (`psb-attn`) and the stage at NOW breathes (`psb-breathe`); stickers press on and
+  slap back as on Clients (`pj-stk`); rows, Up next and Start here arrive in turn (`hud-row-in`); cards and
+  tiles lift on hover (`phd-lift`); figures count up (`CountUp`); the window's screen tabs glide
+  (`Segmented glide`); panes `hud-panel-in`, the window `phd-scrim` / `phd-pop`. All of it stops under
+  reduced motion. Same fonts and colours; no new accent.
 
 ### Summary-first sections (approved 16 Nov 2026)
 

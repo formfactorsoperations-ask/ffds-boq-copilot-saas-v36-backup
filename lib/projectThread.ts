@@ -48,9 +48,29 @@ const HISTORY_PLACE: Partial<Record<HistoryEvent['category'], { conv: Conversati
   scope: { conv: 'boq', route: 'boq-editor', source: 'proposals' },
 };
 
-/** The whole story, oldest first. */
-export function buildStory(entries: ThreadEntry[], history: HistoryEvent[] | undefined, projectId: string): StoryItem[] {
-  const out: StoryItem[] = entries.map((e) => ({ ...e, ...placeEntry(e) }));
+/** A note's subject key, so it stays in the conversation it was written in ("conv:money"). */
+export const noteKey = (conv: ConversationId) => `conv:${conv}`;
+
+/**
+ * The conversation each note was written in, by its thread entry id
+ * (`f-{follow-up id}`), from the follow-up log's subjects.
+ */
+export function noteHomes(followUps: Array<{ id: string; subject?: { key?: string } | null }>): Record<string, ConversationId> {
+  const out: Record<string, ConversationId> = {};
+  for (const f of followUps || []) {
+    const k = f?.subject?.key || '';
+    if (k.startsWith('conv:')) out[`f-${f.id}`] = k.slice(5) as ConversationId;
+  }
+  return out;
+}
+
+/** The whole story, oldest first. A note stays in the conversation it was written in (`homes`). */
+export function buildStory(entries: ThreadEntry[], history: HistoryEvent[] | undefined, projectId: string, homes: Record<string, ConversationId> = {}): StoryItem[] {
+  const out: StoryItem[] = entries.map((e) => {
+    const home = homes[e.id];
+    if (home) return { ...e, convs: home === 'whole' ? [] : [home], route: null };
+    return { ...e, ...placeEntry(e) };
+  });
   for (const h of history || []) {
     const place = HISTORY_PLACE[h.category];
     if (!place || !Number.isFinite(h.at)) continue;

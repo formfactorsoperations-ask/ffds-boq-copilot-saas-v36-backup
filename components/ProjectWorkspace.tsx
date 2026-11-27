@@ -302,6 +302,7 @@ export function ProjectWorkspace({
           hubLabel={homeLabel}
           conversations={conversationsFor(visible)}
           labelOf={labelOf}
+          aboutOf={(route) => getPageMeta(route)?.subtitle || ''}
           needsOf={(route) => noted[route]?.needs || 0}
           stages={sidebarStages.map(s => ({ stage: s.stage, label: s.label, first: s.screens[0]?.route || null,
             state: (s.stage < stageNow ? 'done' : s.stage === stageNow ? 'now' : 'todo') as 'done' | 'now' | 'todo' }))}
