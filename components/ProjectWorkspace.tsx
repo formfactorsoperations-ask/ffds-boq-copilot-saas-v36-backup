@@ -34,7 +34,6 @@ import { useProjectView } from '../services/projectViewService';
 import { resolveProjectView } from '../lib/projectView';
 import { conversationsFor } from '../lib/projectConversations';
 import { clientMoneyOf, withoutAmounts } from '../lib/clientMoney';
-import { studioJumpItems } from './projectNav/StudioJump';
 import ConversationsWorkspace from './projectConversations/ConversationsWorkspace';
 import { MessagesSquare } from '@/lib/lucide-shim';
 import { getNextActions } from '../services/nextActionEngine';
@@ -123,6 +122,7 @@ export function ProjectWorkspace({
   onLeaveProject,
   onStatusChange,
   tierSummary,
+  onViewChange,
 }: {
   projectId: string;
   projectContext: ProjectContext;
@@ -136,6 +136,8 @@ export function ProjectWorkspace({
   onStatusChange?: (status: ProjectStatus, note?: string) => Promise<void> | void;
   /** The billed option's summary, for the termination and dispute windows (components/projectAlerts). */
   tierSummary?: { totalSell?: number; designFee?: number };
+  /** Which layout the project is drawn in, so App can keep the studio's own bar over the Conversations view (owner, 27 Nov 2026). */
+  onViewChange?: (view: 'classic' | 'conversations') => void;
 }) {
   const { orgData, currentUserAuth, currentRoles } = useOrg();
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -247,6 +249,9 @@ export function ProjectWorkspace({
   const [studioAtOpen, setStudioAtOpen] = useState(pv.studio);
   useEffect(() => { setStudioAtOpen(pv.studio); }, [projectId]);
   const view = resolveProjectView(studioAtOpen, pv.personal);
+  const shownView: 'classic' | 'conversations' = view === 'conversations' && !isWizard ? 'conversations' : 'classic';
+  useEffect(() => { onViewChange?.(shownView); }, [shownView]);
+  useEffect(() => () => onViewChange?.('classic'), []);
   const canChooseView = studioAtOpen !== 'classic';
   const viewSwitch = canChooseView ? [{
     label: view === 'classic' ? 'Try the Conversations view' : 'Use the Classic view',
@@ -352,9 +357,7 @@ export function ProjectWorkspace({
           me={{ email: String(currentUserAuth?.email || ''), name: currentUserAuth?.displayName || String(currentUserAuth?.email || 'Studio') }}
           statusLabel={workspaceStatus.label}
           onStatusClick={isLimited ? undefined : () => setIsStatusModalOpen(true)}
-          desks={studioJumpItems(currentRoles?.length ? currentRoles : (currentRole as any))}
           onLeaveProject={(t) => onLeaveProject?.(t)}
-          showHideFigures={holdsFinanceRole(currentRole)}
           viewOnly={isLimited && !(isDesigner && DESIGNER_EDITABLE_TABS.has(activeTab))}
           alertBar={alertBar}
           onUseClassic={canChooseView ? () => pv.setView('classic') : undefined}

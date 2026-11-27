@@ -444,6 +444,8 @@ export default function App() {
     Opening a project any other way forgets it.
   */
   const [projectReturn, setProjectReturn] = useState<(ProjectReturn & { activeProject: ActiveProject | null }) | null>(null);
+  /* Which layout the open project is in (ProjectWorkspace reports it). The Conversations view keeps the studio's own bar on top. */
+  const [workspaceView, setWorkspaceView] = useState<'classic' | 'conversations'>('classic');
 
   // AI & Auxiliary State
   const [aiStrategy, setAiStrategy] = useState<AIStrategy>("balanced");
@@ -2949,6 +2951,20 @@ export default function App() {
   }, [isProjectTab, activeInternalId, activeTab, currentUserAuth?.uid]);
 
   const hasProjectData = !!activeInternalId;
+  /*
+    Leaving the open project: remember where we were (the way back), close the
+    project and go to the studio screen asked for, or Projects. One place for
+    the workspace's own links and for the studio bar shown over the
+    Conversations view.
+  */
+  const leaveProject = (targetTab?: string) => {
+    if (activeInternalId) setProjectReturn({ id: activeInternalId, tab: activeTab, name: projectContext.name || '', activeProject });
+    setActiveProject(null);
+    localStorage.removeItem("ffds_client_project_id");
+    setActiveTab(targetTab || 'projects');
+  };
+  /* The studio bar stays over a project drawn in the Conversations view, with Projects lit (owner, 27 Nov 2026: "project workspace should look as part of the same application"). */
+  const studioBarInProject = isProjectTab && hasProjectData && workspaceView === 'conversations';
 
   /*
     A note opens the screen that owns it (lib/notify): a studio tab, or a tab
@@ -3363,9 +3379,10 @@ export default function App() {
           />
 
           <Sidebar
-            activeTab={activeTab}
+            activeTab={studioBarInProject ? 'projects' : activeTab}
             setActiveTab={(tab) => {
-              setActiveTab(tab);
+              if (studioBarInProject) leaveProject(tab);
+              else setActiveTab(tab);
               setIsMobileMenuOpen(false);
             }}
             aiStatus={aiStatus}
@@ -3379,7 +3396,7 @@ export default function App() {
               setAppMode("login");
             }}
             autoCollapse={false}
-            isHidden={isProjectTab && hasProjectData}
+            isHidden={isProjectTab && hasProjectData && !studioBarInProject}
             isMobileOpen={isMobileMenuOpen}
             onMobileClose={() => setIsMobileMenuOpen(false)}
           />
@@ -3420,16 +3437,8 @@ export default function App() {
                   // process widget over a wizard that is standing open.
                   isWizard={activeTab === "dashboard" && (tiers.length === 0 || showWizardOverride)}
                   onStatusChange={(status, note) => handleProjectStatusChange(activeInternalId!, status, note)}
-                  onLeaveProject={(targetTab?: string) => {
-                    if (activeInternalId) setProjectReturn({ id: activeInternalId, tab: activeTab, name: projectContext.name || '', activeProject });
-                    setActiveProject(null);
-                    localStorage.removeItem("ffds_client_project_id");
-                    if (targetTab) {
-                      setActiveTab(targetTab);
-                    } else {
-                      setActiveTab('projects');
-                    }
-                  }}
+                  onLeaveProject={leaveProject}
+                  onViewChange={setWorkspaceView}
                 >
                 {/* No scroll box or padding of its own: ProjectWorkspace gives every project screen one scroll area and one gutter. */}
                 <div className="min-w-0">

@@ -55,8 +55,8 @@ function setup(over: Partial<ConversationsWorkspaceProps> = {}) {
     currentStage: 2,
     journey: { done: 14, total: 34, pct: 41, next: 'Send the terms docket', upNext: [{ id: 's1', title: 'Send the terms docket', text: 'Client needs terms', route: 'boq-editor' }] },
     money: null, seesMoney: true, canLog: true, seesVisits: true, tenantId: 't1',
-    me: { email: 'owner@studio.in', name: 'Owner' }, statusLabel: 'Won', desks: [],
-    onLeaveProject, showHideFigures: false, viewOnly: false,
+    me: { email: 'owner@studio.in', name: 'Owner' }, statusLabel: 'Won',
+    onLeaveProject, viewOnly: false,
     children: <div>THE SCREEN</div>,
     classic: CLASSIC,
     ...over,
@@ -107,16 +107,12 @@ describe('the Conversations workspace', () => {
     expect(setActiveTab).toHaveBeenCalledWith('boq-editor');
   });
 
-  it('puts the project inside Projects: the breadcrumb and the Projects section both go back to the list (owner, 27 Nov 2026)', () => {
+  it('puts the project inside Projects: the breadcrumb goes back to the list, and the studio bar (App) holds the studio\'s sections (owner, 27 Nov 2026)', () => {
     const { onLeaveProject } = setup();
     expect(screen.queryByRole('button', { name: /All projects/ })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Studio' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Back to Projects' }));
     expect(onLeaveProject).toHaveBeenCalledWith('projects');
-    const bar = screen.getByRole('navigation', { name: 'Studio' });
-    const names = within(bar).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
-    expect(names.slice(0, 2)).toEqual(['Home', 'Projects']);
-    fireEvent.click(within(bar).getByRole('button', { name: 'Projects' }));
-    expect(onLeaveProject).toHaveBeenCalledTimes(2);
   });
 
   it('offers the way back to Classic only when the person may choose', () => {
@@ -256,22 +252,21 @@ describe('the Conversations workspace', () => {
     fireEvent.pointerDown(money, { clientX: 10, clientY: 10 });
     expect(money.querySelector('.cvw-ripple')).toBeTruthy();
     fireEvent.click(money);
-    const disc = money.querySelector('.cvw-disc')!;
-    expect(disc.className).toContain('bg-[#3D52A0]');
+    const disc = money.querySelector('.cvw-disc') as HTMLElement;
+    expect(disc.style.color).toBe('rgb(255, 255, 255)');
     expect(disc.className).toContain('is-pop');
     expect(money.querySelector('.cvw-ic')?.className).toContain('is-play');
   });
 
-  it('shows the studio as icon tiles that say where they go on hover, with Projects filled (owner, 27 Nov 2026)', () => {
+  it("gives each conversation Home's colour: its tint at rest, filled when picked (owner, 27 Nov 2026)", () => {
     setup();
-    const bar = screen.getByRole('navigation', { name: 'Studio' });
-    const projects = within(bar).getByRole('button', { name: 'Projects' });
-    expect(projects.getAttribute('aria-current')).toBe('page');
-    expect(projects.className).toContain('is-here');
-    expect(projects.textContent).toBe(''); // an icon, its name on hover
-    fireEvent.mouseEnter(within(bar).getByRole('button', { name: 'Home' }));
-    expect(screen.getByRole('tooltip').textContent).toContain('Home');
-    fireEvent.mouseLeave(within(bar).getByRole('button', { name: 'Home' }));
-    expect(screen.queryByRole('tooltip')).toBeNull();
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    const plateOf = (name: RegExp) => within(list).getByRole('button', { name }).querySelector('.cvw-disc') as HTMLElement;
+    expect(plateOf(/^Money/).style.background).toBe('rgb(251, 245, 234)'); // Home's gold tint
+    expect(plateOf(/^Money/).style.color).toBe('rgb(140, 106, 51)');
+    expect(plateOf(/^Whole project/).style.background).toBe('rgb(61, 82, 160)'); // picked: brand, filled
+    fireEvent.click(within(list).getByRole('button', { name: /^Money/ }));
+    expect(plateOf(/^Money/).style.background).toBe('rgb(140, 106, 51)'); // picked: Home's gold, filled
   });
+
 });

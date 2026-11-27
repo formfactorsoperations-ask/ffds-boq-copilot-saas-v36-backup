@@ -1313,31 +1313,28 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   `projectView` on their `inbox/{email}` document (`services/projectViewService.ts`), from "Try the
   Conversations view" in the sidebar's person menu or "Use Classic view" in the new top bar. The studio's
   choice is read as a project opens, so a settings change never swaps the view under someone mid-work.
-- **One bar on top** (owner, 27 Nov 2026: "do we need a big menu bar? top left corner as project name
-  and on right side these options"), 56px.
-  - **Left, where you are:** the initials tile, then the breadcrumb **Projects ›** (the way back to the
-    list) and the project's name (`text-base font-bold`), the status chip, and client · place · area in
-    `text-[11px]`.
-  - **Right, the studio's sections as colour tiles** (owner: "can we just have color filled icons
-    instead and when hovered user will understand where to navigate?", then "i asked you to get me
-    brand new icons color filled or color icons"), named and ordered as on the studio bar
-    (components/Header): Home, **Projects**, Design Desk, Ops Desk, People, Clients, Item Bank
-    (`studioJumpItems` decides which desks a role sees); then Client portal and Show me around; then
-    Hide figures and Use Classic view.
-    - **Colour line icons** (owner chose "D" from five directions, 27 Nov 2026; glass was tried on them
-      and dropped: "background on the entire page doesn't look good … drop glass, but i liked the icons";
-      `StudioTiles.tsx`, `conversations.css` `.cvw-tile`). Each section is a line icon drawn for this bar,
-      in two tones of its own colour (a light fill and a coloured outline), sitting straight on the white
-      bar: no tile, no glass, no colour wash behind. Colours: Home amber (house), Projects brand (building),
-      Design Desk rose (drafting pen), Ops Desk emerald (inbox tray), People light brand (two people),
-      Clients amber into rose (contact card), Item Bank slate (books), Client portal emerald into brand
-      (globe), Show me around rose into amber (compass).
-    - **Owner's exception to "Colour":** these colours are approved for the Conversations top bar only;
-      every other icon tile in the app stays brand. No colour outside brand, amber, rose, emerald, slate.
-    - On hover or focus a soft circle in its colour grows behind the icon, the icon fills with its colour
-      (details turn white) and plays its motion, and the Classic bar's tooltip (`.psb-tip`) names it with a
-      line on what is there. **Projects**, where a project lives, keeps its circle, its filled icon and a
-      ring in its colour; choosing it goes back to the list. There is no "All projects" item (owner: not right business-wise).
+- **One app with Home** (owner, 27 Nov 2026: "if you see homepage and then open project workspace, color
+  combination has vast difference … project workspace should look as part of the same application"; chosen
+  from a before/after mockup).
+  - **The studio's own top bar stays** over the Conversations view (App.tsx shows `components/Header` when
+    ProjectWorkspace reports this view), with **Projects** lit by its reticle, exactly as on Home. Its tabs
+    leave the project through the same `leaveProject` as the workspace's own links. Classic keeps its
+    sidebar layout without the studio bar, as before.
+  - **The project's header** sits under it on the workspace's canvas, with no bar of its own: initials tile,
+    the breadcrumb **Projects ›** (the way back to the list), the name (`text-lg font-bold`), the status
+    chip, client · place · area in `text-[11px]`; on the right Client portal (brand tint), Show me around and
+    Use Classic view. There is no "All projects" item and no second row of studio icons (colour line icons
+    and glass bubbles were tried and dropped the same day).
+  - **Home's colours on the conversations** (the rings and DayBoard on Home): Whole project and Design brand
+    `#3D52A0`, BOQ brand light `#5F79D6` (tint `#EEF2FD`), Money gold `#8C6A33` (`#FBF5EA`), Site and Brief &
+    Site green `#0E7C5A` (`#E7F5EF`), Documents and Plan & timeline navy `#1E2A5A` (`#ECEEF6`), Client &
+    portal plum `#B4436A` (`#FBEFF3`). A conversation's plate wears its tint; the picked one fills with its
+    colour. The project card's figures take the same tints: Collected gold, Next due brand, Drawings navy,
+    Handover green.
+  - **Home's canvas** (`conversations.css` `.cvw-canvas`, `.cvw-float`): the milky `#F4F7FB` ground with
+    faint brand and gold glows; the three panes are separate white cards (22px radius, a soft navy shadow)
+    with 16px between them, and no hard lines inside: rounded list rows, the Up next card and story cards
+    in pale brand, the day pill in brand tint.
 - **The way back to Conversations from Classic** (owner: "if user selects classic view there is no
   option to return to new view"): when the studio lets each person choose, Classic's page bar shows
   **Try the new view** (brand tint, beside the studio icons), as well as the sidebar menu's item.
@@ -1415,8 +1412,6 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     the point clicked (`data-ripple`, `.cvw-ripple`, brand at low strength).
   - **Picked:** the open conversation's plate fills brand blue and pops; the conversation head's icon pops
     and plays its motion as you arrive.
-  - **The top bar's icons** grow a soft circle in their colour on hover and fill; the one you are in
-    (Projects) keeps its circle, filled and ringed.
   - **The click ripple** is drawn in a clipping layer of its own (`.cvw-ripple-clip`); the element clicked
     never clips its own content. (Clipping the story cards let a long story squeeze them to slivers,
     owner, 27 Nov 2026.) The bar's items rise in turn as the view opens (`hud-rise`). (A gliding reticle was tried

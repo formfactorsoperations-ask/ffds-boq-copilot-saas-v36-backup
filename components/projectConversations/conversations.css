@@ -105,30 +105,19 @@
 }
 
 /*
-  The studio's sections in the top bar: colour line icons (owner, 27 Nov 2026: chose "D", tried glass
-  on it, then "background on the entire page doesn't look good … drop glass, but i liked the icons";
-  StudioTiles.tsx draws them). At rest each icon sits on the white bar in two tones of its own colour.
-  On hover or focus a soft circle in its colour (--cvw-soft) grows behind it and the icon fills with its
-  colour (--cvw-tile). The section you are in (Projects) keeps its circle, filled icon and a ring.
+  Home's canvas (owner, 27 Nov 2026: "project workspace should look as part of the same application").
+  The workspace sits on Home's milky ground with its faint brand and gold glows, and its three panes are
+  separate soft cards with air between them, as Home's sections are, instead of one boxed panel split
+  by lines. (Overflow is left to each pane's own classes.)
 */
-.cvw-tile { background: transparent; transition: transform 0.25s var(--cvw-spring, ease); }
-.cvw-tile::before {
-  content: ""; position: absolute; inset: 0; border-radius: 9999px; background: var(--cvw-soft, #E2E8F0);
-  transform: scale(0.4); opacity: 0; transition: transform 0.3s var(--cvw-spring, ease), opacity 0.2s ease;
+.cvw-canvas {
+  background:
+    radial-gradient(60% 40% at 12% 0%, rgba(95, 121, 214, 0.10), transparent 70%),
+    radial-gradient(50% 40% at 92% 20%, rgba(181, 148, 91, 0.10), transparent 70%),
+    #F4F7FB;
 }
-.cvw-tile:hover::before, .cvw-tile:focus-visible::before, .cvw-tile.is-here::before { transform: scale(1); opacity: 1; }
-.cvw-tile .cvw-ic { position: relative; }
-.cvw-tile:hover, .cvw-tile:focus-visible { transform: translateY(-1px); }
-.cvw-tile:active { transform: scale(0.92); }
-.cvw-tile.is-here { box-shadow: inset 0 0 0 2px var(--cvw-tile, #3D52A0); }
-
-/* The line icon fills with its colour on hover and where you are; its details turn white. */
-.cvw-tile .cvw-gp { transition: fill 0.25s ease, fill-opacity 0.25s ease; }
-.cvw-tile:hover .cvw-gp, .cvw-tile:focus-visible .cvw-gp, .cvw-tile.is-here .cvw-gp { fill: var(--cvw-tile, #3D52A0); fill-opacity: 1; }
-.cvw-tile:hover .cvw-gd, .cvw-tile:focus-visible .cvw-gd, .cvw-tile.is-here .cvw-gd { fill: #fff; }
-.cvw-tile:hover .cvw-gs, .cvw-tile:focus-visible .cvw-gs, .cvw-tile.is-here .cvw-gs { stroke: #fff; }
-
-@media (prefers-reduced-motion: reduce) {
-  .cvw-tile, .cvw-tile::before { transition: none !important; }
-  .cvw-tile:hover, .cvw-tile:focus-visible, .cvw-tile:active { transform: none !important; }
+.cvw-float {
+  background: #fff;
+  border-radius: 22px;
+  box-shadow: 0 18px 40px -28px rgba(30, 42, 90, 0.45), 0 1px 0 rgba(30, 42, 90, 0.04);
 }

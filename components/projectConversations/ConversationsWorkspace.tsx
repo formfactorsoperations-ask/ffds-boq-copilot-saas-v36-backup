@@ -5,7 +5,7 @@ import {
   X, Home, Users, Building2, ChevronRight as Crumb, Search, FileText, Globe, IndianRupee, NotebookPen, Info, Eye, Scale, ChevronRight, LayoutGrid, Compass, History,
 } from '@/lib/lucide-shim';
 import { Button, Chip, EmptyState, INPUT, Segmented, type Tone } from '../ui/kit';
-import { Masked, HideFiguresButton } from '../ui/HideFigures';
+import { Masked } from '../ui/HideFigures';
 import { CountUp } from '../ui/HudBits';
 import { useProjectGlance, type Glance } from './useProjectGlance';
 import { motion } from 'framer-motion';
@@ -22,8 +22,6 @@ import type { TemplateId } from '../../lib/clientNextMove';
 import { loadClientRecords } from '../../services/clientThreadService';
 import { watchClientVisits } from '../../services/portalVisitsService';
 import { logFollowUp } from '../../services/opsDeskService';
-import type { StudioJumpItem } from '../projectNav/StudioJump';
-import { StudioGlyph, hasGlyph, TILE_COLOURS, DEFAULT_TILE, toWhite } from './StudioTiles';
 import '../projectHeader/projectHeader.css';
 
 /*
@@ -52,6 +50,21 @@ const CONV_ICON: Record<ConversationId, React.ElementType> = {
   whole: Sparkles, chat: MessageCircle, money: Wallet, boq: Table, docs: FolderOpen,
   design: PenTool, site: HardHat, plan: CalendarRange, brief: MapPin,
 };
+
+/*
+  Each conversation in Home's own colours (owner, 27 Nov 2026: "project
+  workspace should look as part of the same application"): the rings on Home
+  are gold Money, brand Design, green Site and navy Team (components/home),
+  and DayBoard pairs each with its pale tint. The picked conversation's plate
+  fills with its colour; the others wear its tint.
+*/
+const CONV_TONE: Record<ConversationId, { fg: string; tint: string }> = {
+  whole: { fg: '#3D52A0', tint: '#EEF2FD' }, chat: { fg: '#B4436A', tint: '#FBEFF3' }, money: { fg: '#8C6A33', tint: '#FBF5EA' },
+  boq: { fg: '#5F79D6', tint: '#EEF2FD' }, docs: { fg: '#1E2A5A', tint: '#ECEEF6' }, design: { fg: '#3D52A0', tint: '#EEF2FD' },
+  site: { fg: '#0E7C5A', tint: '#E7F5EF' }, plan: { fg: '#1E2A5A', tint: '#ECEEF6' }, brief: { fg: '#0E7C5A', tint: '#E7F5EF' },
+};
+const plate = (id: ConversationId, filled: boolean): React.CSSProperties =>
+  filled ? { background: CONV_TONE[id].fg, color: '#fff' } : { background: CONV_TONE[id].tint, color: CONV_TONE[id].fg };
 
 /*
   Each icon has a motion of its own that fits what it shows (conversations.css
@@ -116,10 +129,7 @@ export interface ConversationsWorkspaceProps {
   me: { email: string; name: string };
   statusLabel: string;
   onStatusClick?: () => void;
-  desks: StudioJumpItem[];
   onLeaveProject: (target?: string) => void;
-  /** The Hide figures eye, for those who hold finance. */
-  showHideFigures: boolean;
   /** The screen's look-only guard (a Designer, Client Relations). */
   viewOnly: boolean;
   /** Terminated or a dispute open: the strip Classic shows under its bar. */
@@ -249,10 +259,10 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 min-w-0" onPointerDown={ripple}>
+    <div className="cvw-canvas flex flex-col h-full min-w-0" onPointerDown={ripple}>
       <ProjectBar ctx={ctx} name={name} statusLabel={p.statusLabel} onStatusClick={p.onStatusClick}
         onPortal={p.conversations.some((c) => c.routes.includes('client-portal')) ? () => open('client-portal') : undefined}
-        desks={p.desks} onLeave={p.onLeaveProject} onUseClassic={p.onUseClassic} showHideFigures={p.showHideFigures} onTour={beginTour} />
+        onLeave={p.onLeaveProject} onUseClassic={p.onUseClassic} onTour={beginTour} />
       {p.alertBar}
       {welcome && (
         <div className="mx-3 sm:mx-5 mb-2 flex items-center gap-3 rounded-xl border border-[#3D52A0]/20 bg-[#3D52A0]/10 px-4 py-2.5 text-xs text-slate-700 hud-panel-in">
@@ -266,12 +276,12 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 mx-3 sm:mx-5 mb-3 sm:mb-5 grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hud-panel-in">
+      <div className="flex-1 min-h-0 mx-3 sm:mx-5 mb-3 sm:mb-5 grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px] gap-4 hud-panel-in">
         <ConversationList conversations={p.conversations} conv={shown.id} story={story} now={now} needsOf={p.needsOf}
           money={p.money} journey={p.journey} onPick={setConv}
           findScreen={(q) => findScreens(q, p.conversations, (r) => (r === p.homeRoute ? p.hubLabel : p.labelOf(r)), classic, p.homeRoute)}
           onOpenScreen={(c, r) => { setConv(c); open(r); }} />
-        <section className="flex flex-col min-h-0 min-w-0 border-l border-slate-100" aria-label={shown.name}>
+        <section className="cvw-float flex flex-col min-h-0 min-w-0 overflow-hidden" aria-label={shown.name}>
           <ThreadHead conv={shown} labelOf={p.labelOf} onOpen={open} onPickMobile={setConv} conversations={p.conversations} />
           <Thread key={shown.id} conv={shown.id} routes={shown.routes} aboutOf={p.aboutOf || (() => '')} story={storyFor(story, shown.id)} now={now} loading={!records} onOpen={open}
             labelOf={p.labelOf} visible={(r) => p.conversations.some((c) => c.routes.includes(r))}
@@ -302,100 +312,42 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
 /* ───────────── the way out ───────────── */
 
 /*
-  ONE BAR ON TOP (owner, 27 Nov 2026). Left, where you are: "Projects ›" (the
-  way back) and the project's name, status and client line. Right, the
-  studio's sections as colour-filled icon tiles (owner: "can we just have
-  color filled icons instead and when hovered user will understand where to
-  navigate?"): named, iconed and ordered as on the studio bar, brand tiles
-  that fill solid on hover with the name and a line on what is there (the
-  Classic bar's tooltip, .psb-tip). Projects, where you are, stays filled.
-  No "All projects" item (owner: not right business-wise).
+  THE PROJECT'S HEADER (owner, 27 Nov 2026: "project workspace should look
+  as part of the same application"). The studio's own top bar stays above it
+  in this view, with Projects lit (App.tsx, components/Header), so the way
+  out and the studio's screens are exactly where they are on Home. This row
+  says where you are, "Projects › the project", with its status and client
+  line, and holds what belongs to this view: Client portal, Show me around
+  and the person's way back to Classic. It sits on the workspace's own
+  canvas, like Home's section heads, with no bar of its own.
 */
-type WayItem = { key: string; label: string; sub: string; icon: React.ElementType; move: string; go: () => void; show?: string };
-
-function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, onLeave, onUseClassic, showHideFigures, onTour }: {
+function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, onLeave, onUseClassic, onTour }: {
   ctx: any; name: string; statusLabel: string; onStatusClick?: () => void; onPortal?: () => void;
-  desks: StudioJumpItem[]; onLeave: (t?: string) => void; onUseClassic?: () => void; showHideFigures: boolean; onTour: () => void;
+  onLeave: (t?: string) => void; onUseClassic?: () => void; onTour: () => void;
 }) {
   const sub = [ctx.clientName || 'No client yet', ctx.location, ctx.area ? `${ctx.area} sq ft` : ''].filter(Boolean).join(' · ');
   const initials = (name.match(/[A-Za-z]+/g) || ['P']).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase();
-  const desk = (route: string) => desks.find((d) => d.route === route);
-  const asItem = (d: StudioJumpItem | undefined, move: string): WayItem[] =>
-    d ? [{ key: d.route, label: d.label, sub: d.sub, icon: d.icon, move, go: () => onLeave(d.route), show: 'hidden md:grid' }] : [];
-  const sections: WayItem[] = [
-    { key: 'home', label: 'Home', sub: 'The studio’s day at a glance', icon: Home, move: 'bounce', go: () => onLeave('home') },
-    { key: 'projects', label: 'Projects', sub: 'Back to all your projects', icon: Building2, move: 'back', go: () => onLeave('projects') },
-    ...asItem(desk('design-review'), 'draw'),
-    ...asItem(desk('ops-desk'), 'go'),
-    ...asItem(desk('people'), 'talk'),
-    { key: 'clients', label: 'Clients', sub: 'Every client and what they need', icon: Users, move: 'talk', go: () => onLeave('clients'), show: 'hidden sm:grid' },
-    ...asItem(desk('admin-templates-bank'), 'shuffle'),
-    /* Any other desk the studio adds later still appears. */
-    ...desks.filter((d) => !['design-review', 'ops-desk', 'people', 'admin-templates-bank'].includes(d.route)).flatMap((d) => asItem(d, 'go')),
-  ];
-  const helpers: WayItem[] = [
-    ...(onPortal ? [{ key: 'portal', label: 'Client portal', sub: 'See what the client sees', icon: Globe, move: 'spin', go: onPortal, show: 'hidden sm:grid' }] : []),
-    { key: 'tour', label: 'Show me around', sub: 'A short tour of this view', icon: Compass, move: 'spin', go: onTour, show: 'hidden sm:grid' },
-  ];
-
-  /* The name under a tile, as the Classic bar shows it (StudioJump). */
-  const [tip, setTip] = useState<null | { x: number; y: number; it: WayItem }>(null);
-  const show = (it: WayItem) => (e: React.SyntheticEvent<HTMLElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    setTip({ x: r.left + r.width / 2, y: r.bottom + 8, it });
-  };
-  const hide = () => setTip(null);
-
-  const tile = (it: WayItem, i: number) => {
-    const Icon = it.icon;
-    const tone = TILE_COLOURS[it.key] || DEFAULT_TILE;
-    const here = it.key === 'projects';
-    return (
-      <button key={it.key} type="button" data-way={it.key} data-ripple aria-label={it.label} aria-current={here ? 'page' : undefined}
-        onClick={() => { hide(); it.go(); }} onMouseEnter={show(it)} onMouseLeave={hide} onFocus={show(it)} onBlur={hide}
-        style={{ animationDelay: `${Math.min(i, 9) * 40}ms`, ['--cvw-tile' as string]: tone.to, ['--cvw-soft' as string]: toWhite(tone.from, 0.78) }}
-        className={cx('cvw-hot cvw-tile hud-rise w-9 h-9 shrink-0 grid place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/40',
-          here && 'is-here', it.show)}>
-        <span className="cvw-ic" data-m={it.move}>{hasGlyph(it.key) ? <StudioGlyph name={it.key} /> : <Icon className="w-[18px] h-[18px]" style={{ color: tone.to }} aria-hidden />}</span>
-      </button>
-    );
-  };
-
   return (
-    <div className="relative h-14 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-3 min-w-0">
-      {/* Left: where you are. */}
-      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-        <span className="w-9 h-9 rounded-xl grid place-items-center text-white text-xs font-bold bg-[#3D52A0] shrink-0">{initials}</span>
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <button type="button" onClick={() => onLeave('projects')} aria-label="Back to Projects" title="Back to all projects"
-              className="cvw-hot shrink-0 inline-flex items-center gap-0.5 rounded-md px-1 -mx-1 text-[13px] font-semibold text-slate-500 hover:text-[#3D52A0] hover:bg-[#3D52A0]/10">
-              Projects<Crumb className="cvw-arrow w-3.5 h-3.5 text-slate-400" aria-hidden />
-            </button>
-            <h1 className="text-base font-bold text-slate-800 tracking-tight truncate">{name}</h1>
-            <button type="button" onClick={onStatusClick} disabled={!onStatusClick} className="shrink-0 disabled:cursor-default" title={onStatusClick ? 'Change the project status' : undefined}>
-              <Chip tone="brand">{statusLabel}</Chip>
-            </button>
-          </div>
-          <p className="text-[11px] text-slate-500 truncate">{sub}</p>
+    <div data-tour="way" className="shrink-0 px-3 sm:px-5 py-3 flex items-center gap-3 min-w-0">
+      <span className="w-10 h-10 rounded-xl grid place-items-center text-white text-sm font-bold bg-[#3D52A0] shrink-0">{initials}</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {/* Where you are: Projects › this project. Projects is the way back. */}
+          <button type="button" onClick={() => onLeave('projects')} aria-label="Back to Projects" title="Back to all projects"
+            className="cvw-hot shrink-0 inline-flex items-center gap-0.5 rounded-md px-1 -mx-1 text-[13px] font-semibold text-slate-500 hover:text-[#3D52A0] hover:bg-[#3D52A0]/10">
+            Projects<Crumb className="cvw-arrow w-3.5 h-3.5 text-slate-400" aria-hidden />
+          </button>
+          <h1 className="text-lg font-bold text-slate-800 tracking-tight truncate">{name}</h1>
+          <button type="button" onClick={onStatusClick} disabled={!onStatusClick} className="shrink-0 disabled:cursor-default" title={onStatusClick ? 'Change the project status' : undefined}>
+            <Chip tone="brand">{statusLabel}</Chip>
+          </button>
         </div>
+        <p className="text-[11px] text-slate-500 truncate">{sub}</p>
       </div>
-
-      {/* Right: the studio's sections, then this view's helpers. */}
-      <nav aria-label="Studio" data-tour="way" className="flex items-center gap-1 shrink-0">
-        {sections.map((it, i) => tile(it, i))}
-        <span className="w-px h-6 bg-slate-200 mx-1 shrink-0 hidden sm:block" aria-hidden />
-        {helpers.map((it, i) => tile(it, sections.length + i))}
-      </nav>
-      {showHideFigures && <HideFiguresButton />}
+      {onPortal && <Button size="sm" variant="quiet" icon={Globe} className="cvw-hot cvw-lift hidden sm:inline-flex bg-[#3D52A0]/10 text-[#3D52A0]" data-ripple onClick={onPortal}>Client portal</Button>}
+      <Button size="sm" variant="secondary" icon={Compass} className="cvw-hot cvw-lift hidden sm:inline-flex" data-ripple onClick={onTour} title="A short tour of this view">Show me around</Button>
       {onUseClassic && (
-        <Button size="sm" variant="secondary" className="cvw-hot shrink-0" data-ripple onClick={onUseClassic} title="Your own choice: the studio's setting stays as it is">Use Classic view</Button>
-      )}
-      {tip && createPortal(
-        <div role="tooltip" className="fixed z-[320] pointer-events-none -translate-x-1/2" style={{ left: tip.x, top: tip.y }}>
-          <div className="psb-tip" style={{ position: 'static' }}>{tip.it.label}<small>{tip.it.sub}</small></div>
-        </div>,
-        document.body,
+        <Button size="sm" variant="secondary" className="cvw-hot cvw-lift shrink-0" data-ripple onClick={onUseClassic} title="Your own choice: the studio's setting stays as it is">Use Classic view</Button>
       )}
     </div>
   );
@@ -421,9 +373,9 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
     return last ? { text: last.text, at: last.at } : { text: c.about, at: null };
   };
   return (
-    <aside data-tour="list" className="hidden md:flex flex-col min-h-0 bg-white" aria-label="This project's conversations">
-      <div className="p-3 border-b border-slate-100">
-        <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-300 focus-within:ring-2 focus-within:ring-[#3D52A0]/30">
+    <aside data-tour="list" className="cvw-float hidden md:flex flex-col min-h-0 overflow-hidden" aria-label="This project's conversations">
+      <div className="p-3">
+        <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E3E8F4] bg-[#F8FAFF] focus-within:ring-2 focus-within:ring-[#3D52A0]/30">
           <Search className="w-4 h-4 text-slate-400" aria-hidden />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a screen or old name" aria-label="Find a conversation or a screen" className="flex-1 min-w-0 text-[13px] outline-none bg-transparent" />
           {q && <button type="button" onClick={() => setQ('')} aria-label="Clear the search" className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" aria-hidden /></button>}
@@ -437,12 +389,12 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
           const on = c.id === conv;
           return (
             <button key={c.id} type="button" data-ripple onClick={() => onPick(c.id)} aria-current={on ? 'true' : undefined}
-              className={cx('cvw-hot w-full flex items-center gap-2.5 px-3 py-2.5 text-left border-b border-slate-100 hud-row-in', !on && 'hover:bg-slate-50')}
+              className={cx('cvw-hot w-[calc(100%-16px)] mx-2 my-0.5 flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-left hud-row-in', !on && 'hover:bg-[#F4F7FB]')}
               style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
               {/* The highlight slides to the conversation you pick, as the sidebar's does to the screen you are on. */}
-              {on && <motion.span layoutId="conv-on" aria-hidden className="absolute inset-0 bg-[#3D52A0]/10 shadow-[inset_3px_0_0_#3D52A0]" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
+              {on && <motion.span layoutId="conv-on" aria-hidden className="absolute inset-0 rounded-2xl bg-[#EEF2FD]" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
               {/* The conversation you are in fills its disc; it pops and its icon plays as you pick it. */}
-              <span key={on ? 'on' : 'off'} className={cx('cvw-disc relative w-9 h-9 rounded-full grid place-items-center shrink-0', on ? 'is-pop bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
+              <span key={on ? 'on' : 'off'} className={cx('cvw-disc relative w-9 h-9 rounded-xl grid place-items-center shrink-0', on && 'is-pop')} style={plate(c.id, on)}>
                 <span className={cx('cvw-ic', on && 'is-play')} data-m={CONV_MOVE[c.id]}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
               </span>
               <span className="cvw-text relative min-w-0 flex-1">
@@ -465,7 +417,7 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
               const renamed = m.classic && m.classic.label !== m.label;
               return (
                 <button key={m.route} type="button" data-ripple onClick={() => onOpenScreen(m.conv.id, m.route)}
-                  className="cvw-hot w-full flex items-start gap-3 px-3 py-2.5 text-left border-b border-slate-100 hover:bg-slate-50 hud-row-in"
+                  className="cvw-hot w-[calc(100%-16px)] mx-2 my-0.5 flex items-start gap-3 px-3 py-2.5 rounded-2xl text-left hover:bg-[#F4F7FB] hud-row-in"
                   style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
                   <span className="cvw-disc w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><span className="cvw-ic" data-m="go"><ArrowRight className="w-4 h-4" aria-hidden /></span></span>
                   <span className="cvw-text min-w-0 flex-1">
@@ -494,9 +446,9 @@ function ThreadHead({ conv, labelOf, onOpen, onPickMobile, conversations }: {
 }) {
   const Icon = CONV_ICON[conv.id];
   return (
-    <div data-tour="open" className="shrink-0 border-b border-slate-100">
+    <div data-tour="open" className="shrink-0">
       <div className="flex items-center gap-3 px-4 py-3">
-        <span key={conv.id} className="cvw-disc is-pop w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0">
+        <span key={conv.id} className="cvw-disc is-pop w-9 h-9 rounded-xl grid place-items-center shrink-0" style={plate(conv.id, false)}>
           <span className="cvw-ic is-play" data-m={CONV_MOVE[conv.id]}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
         </span>
         <div className="min-w-0 flex-1">
@@ -550,7 +502,7 @@ const Thread: React.FC<{
         )}
         {groups.map((g) => (
           <React.Fragment key={g.group + g.items[0].id}>
-            <div className="self-center my-1 px-3 py-1 rounded-full bg-white border border-slate-200 text-[11px] font-bold text-slate-500">{g.group}</div>
+            <div className="self-center my-1 px-3 py-1 rounded-full bg-[#EEF2FD] text-[11px] font-bold text-[#3D52A0]">{g.group}</div>
             {g.items.map((it, i) => <StoryRow key={it.id} it={it} delay={Math.min(i, 12) * 35} onOpen={onOpen} labelOf={labelOf} visible={visible} />)}
           </React.Fragment>
         ))}
@@ -569,9 +521,9 @@ const StartHere: React.FC<{ conv: ConversationId; routes: string[]; labelOf: (r:
       <div className="grid gap-2.5 sm:grid-cols-2">
         {routes.map((r, i) => (
           <button key={r} type="button" data-ripple onClick={() => onOpen(r)}
-            className="cvw-hot cvw-lift hud-row-in text-left flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 hover:border-[#3D52A0]"
+            className="cvw-hot cvw-lift hud-row-in text-left flex items-center gap-3 rounded-2xl bg-[#F7F9FF] px-4 py-3.5 shadow-[0_8px_18px_-16px_rgba(30,42,90,0.5)]"
             style={{ animationDelay: `${i * 40}ms` }}>
-            <span className={cx('cvw-disc w-11 h-11 rounded-xl grid place-items-center shrink-0', i === 0 ? 'bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
+            <span className="cvw-disc w-11 h-11 rounded-xl grid place-items-center shrink-0" style={plate(conv, i === 0)}>
               <span className="cvw-ic" data-m={CONV_MOVE[conv]}><Icon className="w-5 h-5" aria-hidden /></span>
             </span>
             <span className="cvw-text min-w-0 flex-1">
@@ -624,7 +576,7 @@ const StoryRow: React.FC<{
   const src = SOURCE_ICON[it.source || 'team'];
   const Icon = src.icon;
   return (
-    <div className={cx('cvw-hot cvw-lift max-w-[82%] flex gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hud-row-in', it.side === 'client' ? 'self-start' : 'self-end')} style={style}>
+    <div className={cx('cvw-hot cvw-lift max-w-[82%] flex gap-2.5 rounded-2xl bg-[#F7F9FF] px-3 py-2.5 hud-row-in shadow-[0_8px_18px_-16px_rgba(30,42,90,0.5)]', it.side === 'client' ? 'self-start' : 'self-end')} style={style}>
       <span className="cvw-disc w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><span className="cvw-ic" data-m={SOURCE_MOVE[it.source || 'team']}><Icon className="w-4 h-4" aria-hidden /></span></span>
       <div className="min-w-0">
         <p className="text-[13px] font-semibold text-slate-800">{it.text}</p>
@@ -652,7 +604,7 @@ function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, lab
   const stageName = stages.find((s) => s.stage === stage)?.label || '';
   const rows = journey.upNext;
   return (
-    <div className="shrink-0 mx-4 mt-3 rounded-2xl border border-slate-200 bg-white overflow-hidden hud-panel-in">
+    <div className="shrink-0 mx-4 mt-1 rounded-2xl bg-gradient-to-b from-[#F7F9FF] to-[#EEF2FD] overflow-hidden hud-panel-in">
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-100">
         <p className="min-w-0 flex-1 text-xs text-slate-500 truncate">
           <b className="text-slate-700">Stage {stage} of 6{stageName ? ` · ${stageName}` : ''}</b> · {journey.done} of {journey.total} steps done
@@ -709,7 +661,7 @@ function Composer({ conv, convName, canLog, onWrite, onRecord }: {
     } catch { setState('failed'); }
   };
   return (
-    <div className="shrink-0 border-t border-slate-200 px-4 py-2.5 bg-white flex flex-col gap-2">
+    <div className="shrink-0 border-t border-slate-100 px-4 py-2.5 bg-white flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-1.5">
         {onRecord && (
           <>
@@ -767,35 +719,37 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, glance, portalLin
       {children}
     </div>
   );
-  const Tile: React.FC<{ label: string; value: React.ReactNode; sub: string; route: string | null }> = ({ label, value, sub, route }) => (
-    <button type="button" data-ripple disabled={!route || !has(route)} onClick={() => route && onOpen(route)}
-      className="cvw-hot cvw-lift text-left rounded-xl border border-slate-200 px-3 py-2.5 hover:border-[#3D52A0] disabled:hover:border-slate-200 disabled:cursor-default">
+  /* Each figure in one of Home's tints: Collected gold, Next due brand, Drawings navy, Handover green. */
+  const TINTS = { gold: ['#FBF5EA', '#8C6A33'], brand: ['#EEF2FD', '#3D52A0'], navy: ['#ECEEF6', '#1E2A5A'], green: ['#E7F5EF', '#0E7C5A'] } as const;
+  const Tile: React.FC<{ label: string; value: React.ReactNode; sub: string; route: string | null; tint: keyof typeof TINTS }> = ({ label, value, sub, route, tint }) => (
+    <button type="button" data-ripple disabled={!route || !has(route)} onClick={() => route && onOpen(route)} style={{ background: TINTS[tint][0] }}
+      className="cvw-hot cvw-lift text-left rounded-xl px-3 py-2.5 disabled:cursor-default">
       <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
-      <span className="block font-black text-slate-800 tabular-nums">{value}</span>
+      <span className="block font-black tabular-nums" style={{ color: TINTS[tint][1] }}>{value}</span>
       <span className="block text-[11px] text-slate-500 truncate">{sub}</span>
     </button>
   );
   return (
-    <aside className="hidden xl:flex flex-col min-h-0 overflow-y-auto border-l border-slate-100" aria-label="Project card">
+    <aside className="cvw-float hidden xl:flex flex-col min-h-0 overflow-y-auto" aria-label="Project card">
       <Sec title="At a glance">
         <div className="grid grid-cols-2 gap-2">
           {seesMoney && (
-            <Tile label="Collected" route="payment-calc"
+            <Tile label="Collected" tint="gold" route="payment-calc"
               value={money && !money.amountsHidden ? <Masked><CountUp value={money.totalPaid || 0} format={(v) => inr(v)} /></Masked> : '—'}
               sub={money && money.projectValue != null && !money.amountsHidden ? `${pct}% of ${inr(money.projectValue)}` : 'No payment schedule yet'} />
           )}
           {seesMoney && (
-            <Tile label="Next due" route="payment-calc"
+            <Tile label="Next due" tint="brand" route="payment-calc"
               value={next ? (next.owed != null ? <Masked><CountUp value={next.owed} format={(v) => inr(v)} /></Masked> : next.name) : '—'}
               sub={next ? `${next.name}${next.date ? ` · ${new Date(next.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}` : 'Nothing due'} />
           )}
           {has('drawing-tracker') && (
-            <Tile label="Drawings" route="drawing-tracker"
+            <Tile label="Drawings" tint="navy" route="drawing-tracker"
               value={glance.drawings ? (glance.drawings.total ? <><CountUp value={glance.drawings.issued} /> of {glance.drawings.total}</> : 'None yet') : '…'}
               sub={glance.drawings && glance.drawings.total ? `issued · ${glance.drawings.approved} approved` : 'Drawing Tracker'} />
           )}
           {has('timeline') && (
-            <Tile label="Handover" route="timeline"
+            <Tile label="Handover" tint="green" route="timeline"
               value={glance.handoverISO ? dayShort(glance.handoverISO, true) : (glance.hasProgramme === undefined ? '…' : '—')}
               sub={glance.handoverISO ? (glance.targetISO ? `forecast · target ${dayShort(glance.targetISO)}` : 'forecast · no target set') : 'No programme yet'} />
           )}
@@ -924,7 +878,7 @@ function tourSteps(canClassic: boolean): TourStep[] {
     { target: 'open', side: 'below', title: 'Open a screen',
       text: 'The buttons here open each screen full size, over the project. Close it, press Esc or use Back to come back here.' },
     { target: 'way', side: 'below', title: 'The studio is always on top',
-      text: `The studio's sections are up here on every screen; Projects (or Projects › beside the name) takes you back to all your projects.${canClassic ? ' Use Classic view puts the old view back, just for you.' : ''} Show me around plays this tour again.` },
+      text: `The studio’s own bar stays at the very top, as on Home. Projects there, or Projects › beside the name, takes you back to all your projects.${canClassic ? ' Use Classic view puts the old view back, just for you.' : ''} Show me around plays this tour again.` },
   ];
 }
 
