@@ -107,10 +107,16 @@ describe('the Conversations workspace', () => {
     expect(setActiveTab).toHaveBeenCalledWith('boq-editor');
   });
 
-  it('keeps the way out on top: All projects leaves the project', () => {
+  it('puts the project inside Projects: the breadcrumb and the Projects section both go back to the list (owner, 27 Nov 2026)', () => {
     const { onLeaveProject } = setup();
-    fireEvent.click(screen.getByRole('button', { name: /All projects/ }));
+    expect(screen.queryByRole('button', { name: /All projects/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Projects' }));
     expect(onLeaveProject).toHaveBeenCalledWith('projects');
+    const bar = screen.getByRole('navigation', { name: 'Studio' });
+    const names = within(bar).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
+    expect(names.slice(0, 2)).toEqual(['Home', 'Projects']);
+    fireEvent.click(within(bar).getByRole('button', { name: 'Projects' }));
+    expect(onLeaveProject).toHaveBeenCalledTimes(2);
   });
 
   it('offers the way back to Classic only when the person may choose', () => {
@@ -227,8 +233,9 @@ describe('the Conversations workspace', () => {
     expect(screen.getByRole('dialog', { name: 'Open a screen' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Client & portal' })).toBeTruthy(); // a conversation with Open buttons
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    const last = screen.getByRole('dialog', { name: 'The way out is always on top' });
+    const last = screen.getByRole('dialog', { name: 'The studio is always on top' });
     expect(last.textContent).toContain('Use Classic view puts the old view back');
+    expect(last.textContent).toContain('Projects');
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByRole('region', { name: 'Whole project' })).toBeTruthy(); // back where it began

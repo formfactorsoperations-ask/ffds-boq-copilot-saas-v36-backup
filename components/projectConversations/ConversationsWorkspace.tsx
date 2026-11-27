@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, Sparkles, MessageCircle, Wallet, Table, FolderOpen, PenTool, HardHat, CalendarRange, MapPin,
-  X, Home, Users, Search, FileText, Globe, IndianRupee, NotebookPen, Info, Eye, Scale, ChevronRight, LayoutGrid, Compass, History,
+  X, Home, Users, Building2, ChevronRight as Crumb, Search, FileText, Globe, IndianRupee, NotebookPen, Info, Eye, Scale, ChevronRight, LayoutGrid, Compass, History,
 } from '@/lib/lucide-shim';
 import { Button, Chip, EmptyState, INPUT, Segmented, type Tone } from '../ui/kit';
 import { Masked, HideFiguresButton } from '../ui/HideFigures';
@@ -29,7 +29,7 @@ import '../projectHeader/projectHeader.css';
   workspace: conversations"). The same project as the Classic workspace, laid
   out like the Clients screen:
 
-    - the way out on top: All projects and the studio's screens, always there;
+    - one bar on top: Projects › the project on the left, the studio's sections on the right;
     - left: the project's conversations (lib/projectConversations), each with
       its latest line, like a chat list;
     - middle: the chosen conversation's story (lib/projectThread), each item
@@ -317,15 +317,30 @@ function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, on
 }) {
   const sub = [ctx.clientName || 'No client yet', ctx.location, ctx.area ? `${ctx.area} sq ft` : ''].filter(Boolean).join(' · ');
   const initials = (name.match(/[A-Za-z]+/g) || ['P']).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase();
+  /*
+    The studio's own sections, named and ordered as the studio bar has them
+    (components/Header TABS): Home, Projects, the desks, Clients, then the
+    library. A project lives inside Projects, so Projects is the section lit
+    here, and choosing it goes back to the list (owner, 27 Nov 2026: an "All
+    projects" item in the menu was not right business-wise).
+  */
+  const desk = (route: string) => desks.find((d) => d.route === route);
+  const asItem = (d: StudioJumpItem | undefined, move: string, labelAt: string): WayItem[] =>
+    d ? [{ key: d.route, label: d.label, icon: d.icon, move, go: () => onLeave(d.route), title: d.sub, show: 'hidden md:inline-flex', labelAt }] : [];
   const items: WayItem[] = [
-    { key: 'projects', label: 'All projects', icon: ArrowLeft, move: 'back', go: () => onLeave('projects') },
-    { key: 'home', label: 'Studio home', icon: Home, move: 'bounce', go: () => onLeave('home'), labelAt: 'hidden lg:inline' },
+    { key: 'home', label: 'Home', icon: Home, move: 'bounce', go: () => onLeave('home'), title: 'Studio home', labelAt: 'hidden lg:inline' },
+    { key: 'projects', label: 'Projects', icon: Building2, move: 'back', go: () => onLeave('projects'), title: 'Back to all projects' },
+    ...asItem(desk('design-review'), 'draw', 'hidden min-[1800px]:inline'),
+    ...asItem(desk('ops-desk'), 'go', 'hidden min-[1800px]:inline'),
+    ...asItem(desk('people'), 'talk', 'hidden min-[1800px]:inline'),
     { key: 'clients', label: 'Clients', icon: Users, move: 'talk', go: () => onLeave('clients'), show: 'hidden sm:inline-flex', labelAt: 'hidden lg:inline' },
-    ...desks.map((d): WayItem => ({ key: d.route, label: d.label, icon: d.icon, move: 'go', go: () => onLeave(d.route), title: d.sub, show: 'hidden md:inline-flex', labelAt: 'hidden 2xl:inline' })),
+    ...asItem(desk('admin-templates-bank'), 'shuffle', 'hidden min-[1800px]:inline'),
+    /* Any other desk the studio adds later still appears. */
+    ...desks.filter((d) => !['design-review', 'ops-desk', 'people', 'admin-templates-bank'].includes(d.route)).flatMap((d) => asItem(d, 'go', 'hidden min-[1800px]:inline')),
   ];
   const tail: WayItem[] = [
-    ...(onPortal ? [{ key: 'portal', label: 'Client portal', icon: Eye, move: 'spin', go: onPortal, title: "See what the client sees", show: 'hidden sm:inline-flex', labelAt: 'hidden xl:inline' }] : []),
-    { key: 'tour', label: 'Show me around', icon: Compass, move: 'spin', go: onTour, title: 'A short tour of this view', show: 'hidden sm:inline-flex', labelAt: 'hidden xl:inline' },
+    ...(onPortal ? [{ key: 'portal', label: 'Client portal', icon: Globe, move: 'spin', go: onPortal, title: "See what the client sees", show: 'hidden sm:inline-flex', labelAt: 'hidden min-[1440px]:inline' }] : []),
+    { key: 'tour', label: 'Show me around', icon: Compass, move: 'spin', go: onTour, title: 'A short tour of this view', show: 'hidden sm:inline-flex', labelAt: 'hidden min-[1440px]:inline' },
   ];
 
   const track = useRef<HTMLDivElement | null>(null);
@@ -383,7 +398,12 @@ function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, on
       <div className="flex items-center gap-2.5 min-w-0 shrink max-w-[45%]">
         <span className="w-9 h-9 rounded-xl grid place-items-center text-white text-xs font-bold bg-[#3D52A0] shrink-0">{initials}</span>
         <div className="min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {/* Where you are: Projects › this project. Projects is the way back. */}
+            <button type="button" onClick={() => onLeave('projects')} aria-label="Back to Projects" title="Back to all projects"
+              className="cvw-hot shrink-0 inline-flex items-center gap-0.5 rounded-md px-1 -mx-1 text-[13px] font-semibold text-slate-500 hover:text-[#3D52A0] hover:bg-[#3D52A0]/10">
+              Projects<Crumb className="cvw-arrow w-3.5 h-3.5 text-slate-400" aria-hidden />
+            </button>
             <h1 className="text-base font-bold text-slate-800 tracking-tight truncate">{name}</h1>
             <button type="button" onClick={onStatusClick} disabled={!onStatusClick} className="shrink-0 disabled:cursor-default" title={onStatusClick ? 'Change the project status' : undefined}>
               <Chip tone="brand">{statusLabel}</Chip>
@@ -943,8 +963,8 @@ function tourSteps(canClassic: boolean): TourStep[] {
       text: 'Money, BOQ, Documents, Design, Site… each is a conversation. Pick one to see what has happened and what to open next.' },
     { target: 'open', side: 'below', title: 'Open a screen',
       text: 'The buttons here open each screen full size, over the project. Close it, press Esc or use Back to come back here.' },
-    { target: 'way', side: 'below', title: 'The way out is always on top',
-      text: `All projects, Studio home and Clients are here on every screen.${canClassic ? ' Use Classic view puts the old view back, just for you.' : ''} Show me around plays this tour again.` },
+    { target: 'way', side: 'below', title: 'The studio is always on top',
+      text: `The studio's sections are up here on every screen; Projects (or Projects › beside the name) takes you back to all your projects.${canClassic ? ' Use Classic view puts the old view back, just for you.' : ''} Show me around plays this tour again.` },
   ];
 }
 

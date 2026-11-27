@@ -1314,12 +1314,17 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   Conversations view" in the sidebar's person menu or "Use Classic view" in the new top bar. The studio's
   choice is read as a project opens, so a settings change never swaps the view under someone mid-work.
 - **One bar on top** (owner, 27 Nov 2026: "do we need a big menu bar? top left corner as project name
-  and on right side these options"), 56px: on the left the project (initials tile, name `text-base
-  font-bold`, the status chip, client · place · area in `text-[11px]`); on the right the way out, "← All
-  projects", Studio home, Clients and the studio desks the role may open (`studioJumpItems`), then Client
-  portal and Show me around, then Hide figures and Use Classic view. Labels give way to icons with a
-  tooltip as the screen narrows (desks below 2xl; Studio home and Clients below lg; Client portal and Show
-  me around below xl); All projects always keeps its words.
+  and on right side these options"), 56px.
+  - **Left, where you are:** the initials tile, then the breadcrumb **Projects ›** (the way back to the
+    list) and the project's name (`text-base font-bold`), the status chip, and client · place · area in
+    `text-[11px]`.
+  - **Right, the studio's sections**, named, iconed and ordered as on the studio bar (components/Header):
+    Home, **Projects**, Design Desk, Ops Desk, People, Clients, Item Bank (`studioJumpItems` decides which
+    desks a role sees). A project lives inside Projects, so Projects is the section lit, and choosing it
+    goes back to the list. There is no "All projects" item (owner: not right business-wise). Then Client
+    portal (globe) and Show me around, then Hide figures and Use Classic view.
+  - Labels give way to icons with a tooltip as the screen narrows: the desks below 1800px, Client portal
+    and Show me around below 1440px, Home and Clients below `lg`. Projects always keeps its word.
 - **Type, one step down the scale** (owner: "the font size is big in the project workspace"): row titles,
   story lines and buttons `text-[13px]`, conversation and Up next heads `text-[15px]`, the window title
   `text-xl`; meta stays `text-xs` / `text-[11px]`.
@@ -1358,7 +1363,7 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
 - **Finding your way from Classic** (plan PR G, for people who learnt the Classic sidebar):
   - **Show me around:** a three-step tour, offered on the first-time line and kept in the top bar for
     any time after. Each step rings the part it explains (the conversations; a conversation's Open
-    buttons; the way out on top) and dims the rest, with a card beside it: "1 of 3", a `text-lg` title,
+    buttons; the studio's sections on top) and dims the rest, with a card beside it: "1 of 3", a `text-base` title,
     one or two plain sentences, step dots, Skip/Back and Next/Done. Step 2 opens a conversation that has
     Open buttons; the tour ends in the conversation it began in. Esc ends it; the arrow keys step.
   - **Where did it go?:** the list's search ("Find a screen or old name") also finds screens by today's
@@ -1385,8 +1390,8 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     (squash and stretch), Money's wallet flips like a coin, BOQ's table shuffles, Documents' folder
     opens, Design's pen sketches and draws its own outline, Site's hard hat taps down, Plan & timeline's
     calendar turns a page, Brief & Site's pin drops in and bounces. Story cards use the same motions by
-    source (payments flip, site taps, the portal spins); the top bar's All projects slides back, Studio
-    home bounces, Clients talks, the desks go forward, Show me around spins.
+    source (payments flip, site taps, the portal spins); in the top bar Projects slides back, Home
+    bounces, Clients and People talk, Design Desk draws, Item Bank shuffles, Show me around spins.
   - **Hover** (`.cvw-hot`): the row or card tints, its icon plate (`.cvw-disc`) grows with a soft brand
     ring, the words ease right (`.cvw-text`), an arrow slides on (`.cvw-arrow`); cards and buttons also
     lift with a brand shadow (`.cvw-lift`).
@@ -1396,7 +1401,7 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     and plays its motion as you arrive.
   - **The top bar** (the way out; owner: "this part is too boring") speaks the studio bar's language
     (components/Header): the brand reticle with its sweep (`nav-pill hud-reticle`, `hud-sweep`) rests on
-    All projects and glides to whatever you point at or tab to, leaving an echo (`hud-echo`); the items
+    Projects and glides to whatever you point at or tab to, leaving an echo (`hud-echo`); the items
     rise in turn (`hud-rise`); the energy rail runs along the bottom edge (`hud-rail`). Moved by
     measuring and an inline transform, as the studio bar is. Calmer than the studio bar (owner: "the
     glowing blue band is too fast"): it follows only after the pointer rests 140ms, glides over .8s
