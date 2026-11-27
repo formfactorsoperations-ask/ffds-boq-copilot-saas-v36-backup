@@ -1369,6 +1369,19 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   tiles lift on hover (`phd-lift`); figures count up (`CountUp`); the window's screen tabs glide
   (`Segmented glide`); panes `hud-panel-in`, the window `phd-scrim` / `phd-pop`. All of it stops under
   reduced motion. Same fonts and colours; no new accent.
+- **The 3D backdrop** (owner, 27 Nov 2026: "some 3D background … funky motions outside DESIGN.md are
+  okay"; this workspace only, `ConversationsBackdrop` and its `cvb-*` classes). Pure CSS 3D behind the
+  panes: soft glows that drift, a grid floor rolling toward you, glass cubes turning, a gyroscope of three
+  rings, shiny orbs bobbing. The scene leans a few degrees toward the pointer and swings round when a
+  conversation is picked. The glows and the gyroscope's middle ring take the conversation's tint, from the
+  palette only: brand (Whole project, Client & portal, BOQ, Plan), emerald (Money, Brief & Site), amber
+  (Site), rose (Design), slate (Documents).
+  - The middle pane is the stage: nearly clear (`bg-white/20`), so the scene shows behind the story's
+    solid cards. The list, the conversation's head, the composer, the project card and the top bar are
+    `bg-white/85`. No `backdrop-blur` over the scene: it costs too much to draw.
+  - It never takes a click and is hidden from assistive tech. It stands still under reduced motion, while
+    a window is open, and when the person pauses it (the pause button in the top bar, remembered on that
+    device).
 
 ### Summary-first sections (approved 16 Nov 2026)
 
