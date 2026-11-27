@@ -1315,9 +1315,34 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   `projectView` on their `inbox/{email}` document (`services/projectViewService.ts`), from "Try the
   Conversations view" in the sidebar's person menu or "Use Classic view" in the new top bar. The studio's
   choice is read as a project opens, so a settings change never swaps the view under someone mid-work.
-- **The way out, always on top:** "← All projects" (brand tint), Studio home, Clients and the studio desks
-  the role may open (`studioJumpItems`), each with its word. Then the project's title row: initials tile,
-  name (`text-2xl font-bold`), client · place · area, the status chip and Client portal.
+- **One app with Home** (owner, 27 Nov 2026: "if you see homepage and then open project workspace, color
+  combination has vast difference … project workspace should look as part of the same application"; chosen
+  from a before/after mockup).
+  - **The studio's own top bar stays** over the Conversations view (App.tsx shows `components/Header` when
+    ProjectWorkspace reports this view), with **Projects** lit by its reticle, exactly as on Home. Its tabs
+    leave the project through the same `leaveProject` as the workspace's own links. Classic keeps its
+    sidebar layout without the studio bar, as before.
+  - **The project's header** sits under it on the workspace's canvas, with no bar of its own: initials tile,
+    the breadcrumb **Projects ›** (the way back to the list), the name (`text-lg font-bold`), the status
+    chip, client · place · area in `text-[11px]`; on the right Client portal (brand tint), Show me around and
+    Use Classic view. There is no "All projects" item and no second row of studio icons (colour line icons
+    and glass bubbles were tried and dropped the same day).
+  - **Home's colours on the conversations** (the rings and DayBoard on Home): Whole project and Design brand
+    `#3D52A0`, BOQ brand light `#5F79D6` (tint `#EEF2FD`), Money gold `#8C6A33` (`#FBF5EA`), Site and Brief &
+    Site green `#0E7C5A` (`#E7F5EF`), Documents and Plan & timeline navy `#1E2A5A` (`#ECEEF6`), Client &
+    portal plum `#B4436A` (`#FBEFF3`). A conversation's plate wears its tint; the picked one fills with its
+    colour. The project card's figures take the same tints: Collected gold, Next due brand, Drawings navy,
+    Handover green.
+  - **Home's canvas** (`conversations.css` `.cvw-canvas`, `.cvw-float`): the milky `#F4F7FB` ground with
+    faint brand and gold glows; the three panes are separate white cards (22px radius, a soft navy shadow)
+    with 16px between them, and no hard lines inside: rounded list rows, the Up next card and story cards
+    in pale brand, the day pill in brand tint.
+- **The way back to Conversations from Classic** (owner: "if user selects classic view there is no
+  option to return to new view"): when the studio lets each person choose, Classic's page bar shows
+  **Try the new view** (brand tint, beside the studio icons), as well as the sidebar menu's item.
+- **Type, one step down the scale** (owner: "the font size is big in the project workspace"): row titles,
+  story lines and buttons `text-[13px]`, conversation and Up next heads `text-[15px]`, the window title
+  `text-xl`; meta stays `text-xs` / `text-[11px]`.
 - **One `Panel`, three panes**, as on Clients:
   - **Conversations** (~280px, `lib/projectConversations.ts`): Whole project, Client & portal, Money, BOQ,
     Documents, Design, Site, Plan & timeline, Brief & Site (its own, owner). Every screen of the project
@@ -1350,6 +1375,19 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   shows up in the … conversation", Esc, and "← Back to …". A dialog a screen opens closes before the window
   on Esc. No window opens on top of a window.
 - A first-time line says what the view is and how to go back; "Got it" hides it on that device.
+- **Finding your way from Classic** (plan PR G, for people who learnt the Classic sidebar):
+  - **Show me around:** a three-step tour, offered on the first-time line and kept in the top bar for
+    any time after. Each step rings the part it explains (the conversations; a conversation's Open
+    buttons; the studio's sections on top) and dims the rest, with a card beside it: "1 of 3", a `text-base` title,
+    one or two plain sentences, step dots, Skip/Back and Next/Done. Step 2 opens a conversation that has
+    Open buttons; the tour ends in the conversation it began in. Esc ends it; the arrow keys step.
+  - **Where did it go?:** the list's search ("Find a screen or old name") also finds screens by today's
+    name, their Classic name and their Classic stage ("Scope & Strategy" lists that stage's screens), each
+    as "Pricing & Tiers · In Money · was in Scope & Strategy" (with the old name in quotes when it
+    changed). Clicking one opens its conversation and the screen. Only screens the person may open.
+  - **The Classic signpost:** each window's footer says where the screen is in Classic, "In Classic:
+    Scope & Strategy › Pricing & Tiers" (from `md`). The places come from the Classic sidebar itself,
+    so the two cannot drift.
 - **Motion** (owner, 27 Nov 2026: keep the motion the app already has): the project sidebar's and Clients'
   approved motion, nothing new. Each conversation's icon moves on hover in its own way (`.psb-ic`
   `data-a`); the highlight slides to the conversation picked (`layoutId`, as the sidebar's does); a
@@ -1358,6 +1396,29 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   tiles lift on hover (`phd-lift`); figures count up (`CountUp`); the window's screen tabs glide
   (`Segmented glide`); panes `hud-panel-in`, the window `phd-scrim` / `phd-pop`. All of it stops under
   reduced motion. Same fonts and colours; no new accent.
+- **Icons in motion, hover and press** (owner, 27 Nov 2026: "improve on icons with added motions, also
+  can we have a hover effect when hovered and clicked?"; this workspace only, `conversations.css`, `cvw-*`,
+  imported from `src/index.css` because build.js compiles only that file). A 3D background was tried the
+  same day and dropped at the owner's word; do not bring it back.
+  - **Each icon moves in a way that fits it** (`.cvw-ic[data-m]`), on hover or keyboard focus, and once
+    when its conversation opens: Whole project's sparkle twinkles, Client & portal's bubble talks
+    (squash and stretch), Money's wallet flips like a coin, BOQ's table shuffles, Documents' folder
+    opens, Design's pen sketches and draws its own outline, Site's hard hat taps down, Plan & timeline's
+    calendar turns a page, Brief & Site's pin drops in and bounces. Story cards use the same motions by
+    source (payments flip, site taps, the portal spins); in the top bar Projects slides back, Home
+    bounces, Clients and People talk, Design Desk draws, Item Bank shuffles, Show me around spins.
+  - **Hover** (`.cvw-hot`): the row or card tints, its icon plate (`.cvw-disc`) grows with a soft brand
+    ring, the words ease right (`.cvw-text`), an arrow slides on (`.cvw-arrow`); cards and buttons also
+    lift with a brand shadow (`.cvw-lift`).
+  - **Press and click:** the row or button sinks a little and its plate shrinks; a ripple spreads from
+    the point clicked (`data-ripple`, `.cvw-ripple`, brand at low strength).
+  - **Picked:** the open conversation's plate fills brand blue and pops; the conversation head's icon pops
+    and plays its motion as you arrive.
+  - **The click ripple** is drawn in a clipping layer of its own (`.cvw-ripple-clip`); the element clicked
+    never clips its own content. (Clipping the story cards let a long story squeeze them to slivers,
+    owner, 27 Nov 2026.) The bar's items rise in turn as the view opens (`hud-rise`). (A gliding reticle was tried
+    and dropped, owner 27 Nov 2026: "still seems very odd".)
+  - All of it stops under reduced motion. Palette only.
 
 ### Summary-first sections (approved 16 Nov 2026)
 

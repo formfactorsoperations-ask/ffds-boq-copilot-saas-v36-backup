@@ -8,6 +8,8 @@
 @import "../components/projects/projectFolders.css";
 @import "../components/projects/journey/projectsJourney.css";
 @import "../components/playground/playground.css";
+/* Imported here, not from the component: build.js compiles only this file into index.css. */
+@import "../components/projectConversations/conversations.css";
 
 /* Tailwind v4 reads its theme from CSS, not tailwind.config.js -- there is no
    @config directive here, so the fontFamily block in that file was never being

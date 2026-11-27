@@ -31,7 +31,15 @@ import { conversationsFor } from '../../lib/projectConversations';
 
 afterEach(cleanup);
 
-const LABELS: Record<string, string> = { 'payment-calc': 'Money', analytics: 'Money & Offers', 'boq-editor': 'BOQ Editor', 'client-portal': 'Client Portal', 'comms-tracker': 'Messages', timeline: 'Timeline', leadiq: 'Brief & Site', 'drawing-tracker': 'Drawings' };
+const LABELS: Record<string, string> = { 'payment-calc': 'Money', analytics: 'Money & Offers', 'boq-editor': 'BOQ Editor', 'client-portal': 'Client Portal', 'comms-tracker': 'Messages', timeline: 'Timeline', leadiq: 'Brief & Site', 'drawing-tracker': 'Drawings', ops: 'Pricing & Tiers' };
+
+const CLASSIC = [
+  { route: 'dashboard', label: 'Hub', where: '' },
+  { route: 'ops', label: 'Pricing & Tiers', where: 'Scope & Strategy' },
+  { route: 'analytics', label: 'Money & Offers', where: 'Scope & Strategy' },
+  { route: 'boq-editor', label: 'BOQ Editor', where: 'Scope & Strategy' },
+  { route: 'comms-tracker', label: 'Client Messages', where: 'Project Hub' },
+];
 
 function setup(over: Partial<ConversationsWorkspaceProps> = {}) {
   const setActiveTab = vi.fn();
@@ -47,9 +55,10 @@ function setup(over: Partial<ConversationsWorkspaceProps> = {}) {
     currentStage: 2,
     journey: { done: 14, total: 34, pct: 41, next: 'Send the terms docket', upNext: [{ id: 's1', title: 'Send the terms docket', text: 'Client needs terms', route: 'boq-editor' }] },
     money: null, seesMoney: true, canLog: true, seesVisits: true, tenantId: 't1',
-    me: { email: 'owner@studio.in', name: 'Owner' }, statusLabel: 'Won', desks: [],
-    onLeaveProject, showHideFigures: false, viewOnly: false,
+    me: { email: 'owner@studio.in', name: 'Owner' }, statusLabel: 'Won',
+    onLeaveProject, viewOnly: false,
     children: <div>THE SCREEN</div>,
+    classic: CLASSIC,
     ...over,
   };
   const utils = render(<ConversationsWorkspace {...props} />);
@@ -98,9 +107,11 @@ describe('the Conversations workspace', () => {
     expect(setActiveTab).toHaveBeenCalledWith('boq-editor');
   });
 
-  it('keeps the way out on top: All projects leaves the project', () => {
+  it('puts the project inside Projects: the breadcrumb goes back to the list, and the studio bar (App) holds the studio\'s sections (owner, 27 Nov 2026)', () => {
     const { onLeaveProject } = setup();
-    fireEvent.click(screen.getByRole('button', { name: /All projects/ }));
+    expect(screen.queryByRole('button', { name: /All projects/ })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Studio' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Projects' }));
     expect(onLeaveProject).toHaveBeenCalledWith('projects');
   });
 
@@ -180,4 +191,82 @@ describe('the Conversations workspace', () => {
     expect(card.textContent).toContain('Design sign-off');
     expect(card.textContent).toContain('Site work starts');
   });
+  it('finds a screen by its old Classic name or stage, says where it is now, and opens it (plan PR G)', () => {
+    const { setActiveTab } = setup();
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    fireEvent.change(within(list).getByRole('textbox'), { target: { value: 'client messages' } });
+    const found = within(list).getByRole('group', { name: 'Screens' });
+    expect(found.textContent).toContain('Messages');
+    expect(found.textContent).toContain('In Client & portal');
+    expect(found.textContent).toContain('was “Client Messages” in Project Hub');
+    fireEvent.change(within(list).getByRole('textbox'), { target: { value: 'scope & strategy' } });
+    const byStage = within(list).getByRole('group', { name: 'Screens' });
+    for (const n of ['Pricing & Tiers', 'Money & Offers', 'BOQ Editor']) expect(byStage.textContent).toContain(n);
+    fireEvent.click(within(byStage).getByRole('button', { name: /^Pricing & Tiers/ }));
+    expect(setActiveTab).toHaveBeenCalledWith('ops');
+  });
+
+  it('finds the Hub by name and opens it in the window', () => {
+    setup();
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    fireEvent.change(within(list).getByRole('textbox'), { target: { value: 'hub' } });
+    fireEvent.click(within(within(list).getByRole('group', { name: 'Screens' })).getByRole('button', { name: /^Hub/ }));
+    expect(screen.getByRole('dialog', { name: 'Hub' })).toBeTruthy();
+  });
+
+  it("signposts each window with the screen's Classic place", () => {
+    setup({ activeTab: 'ops' });
+    expect(screen.getByRole('dialog', { name: 'Pricing & Tiers' }).textContent).toContain('In Classic: Scope & Strategy › Pricing & Tiers');
+  });
+
+  it('offers a three-step tour on first open, and plays it again from the top bar', () => {
+    window.localStorage.removeItem('studiodesk.projectView.welcomed');
+    setup({ onUseClassic: vi.fn() });
+    const welcome = screen.getByText(/This is the new project view/).closest('div') as HTMLElement;
+    fireEvent.click(within(welcome).getByRole('button', { name: 'Show me around' }));
+    expect(screen.getByRole('dialog', { name: 'Your project, as conversations' }).textContent).toContain('1 of 3');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('dialog', { name: 'Open a screen' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Client & portal' })).toBeTruthy(); // a conversation with Open buttons
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    const last = screen.getByRole('dialog', { name: 'The studio is always on top' });
+    expect(last.textContent).toContain('Use Classic view puts the old view back');
+    expect(last.textContent).toContain('Projects');
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Whole project' })).toBeTruthy(); // back where it began
+    expect(window.localStorage.getItem('studiodesk.projectView.welcomed')).toBe('1');
+    fireEvent.click(screen.getByRole('button', { name: /Show me around/ }));
+    expect(screen.getByRole('dialog', { name: 'Your project, as conversations' })).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('gives each conversation icon its own motion, fills the open one, and ripples where you press (owner, 27 Nov 2026)', () => {
+    setup();
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    const money = within(list).getByRole('button', { name: /^Money/ });
+    expect(money.className).toContain('cvw-hot');
+    expect(money.querySelector('.cvw-ic')?.getAttribute('data-m')).toBe('flip');
+    expect(within(list).getByRole('button', { name: /^Brief & Site/ }).querySelector('.cvw-ic')?.getAttribute('data-m')).toBe('drop');
+    fireEvent.pointerDown(money, { clientX: 10, clientY: 10 });
+    expect(money.querySelector('.cvw-ripple')).toBeTruthy();
+    fireEvent.click(money);
+    const disc = money.querySelector('.cvw-disc') as HTMLElement;
+    expect(disc.style.color).toBe('rgb(255, 255, 255)');
+    expect(disc.className).toContain('is-pop');
+    expect(money.querySelector('.cvw-ic')?.className).toContain('is-play');
+  });
+
+  it("gives each conversation Home's colour: its tint at rest, filled when picked (owner, 27 Nov 2026)", () => {
+    setup();
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    const plateOf = (name: RegExp) => within(list).getByRole('button', { name }).querySelector('.cvw-disc') as HTMLElement;
+    expect(plateOf(/^Money/).style.background).toBe('rgb(251, 245, 234)'); // Home's gold tint
+    expect(plateOf(/^Money/).style.color).toBe('rgb(140, 106, 51)');
+    expect(plateOf(/^Whole project/).style.background).toBe('rgb(61, 82, 160)'); // picked: brand, filled
+    fireEvent.click(within(list).getByRole('button', { name: /^Money/ }));
+    expect(plateOf(/^Money/).style.background).toBe('rgb(140, 106, 51)'); // picked: Home's gold, filled
+  });
+
 });

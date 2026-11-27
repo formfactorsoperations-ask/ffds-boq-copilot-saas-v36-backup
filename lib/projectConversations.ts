@@ -60,3 +60,59 @@ export function conversationsFor(visible: Set<string>): ConversationDef[] {
     .map((c) => ({ ...c, routes: c.routes.filter((r) => visible.has(r)) }))
     .filter((c) => c.id === 'whole' || c.routes.length > 0);
 }
+
+/*
+  WHERE DID IT GO? (owner, 27 Nov 2026, plan PR G). People who learnt the
+  Classic sidebar look for a screen by its Classic name or its stage. Each
+  screen's Classic place, as the Classic sidebar shows it, is a ClassicPlace;
+  findScreens matches a search against today's name, the Classic name and the
+  Classic stage, and says which conversation the screen is in now.
+*/
+
+/** Where a screen sits in the Classic sidebar: its row's name, and the stage or group it is under. */
+export interface ClassicPlace { route: string; label: string; where: string }
+
+export interface ScreenMatch {
+  route: string;
+  /** Today's name. */
+  label: string;
+  /** The conversation it is in now (Whole project for the Hub). */
+  conv: ConversationDef;
+  classic: ClassicPlace | null;
+}
+
+/**
+ * The screens a search finds, at most `max`: by today's name, by the Classic
+ * name, or by the Classic stage ("Scope & Strategy" lists that stage's
+ * screens). Only screens this person may open: those in `conversations`, and
+ * the home route.
+ */
+export function findScreens(
+  term: string,
+  conversations: ConversationDef[],
+  labelOf: (route: string) => string,
+  classic: ClassicPlace[],
+  homeRoute: string,
+  max = 8,
+): ScreenMatch[] {
+  const t = term.trim().toLowerCase();
+  if (t.length < 2) return [];
+  const placeOf = new Map(classic.map((c) => [c.route, c]));
+  const whole = conversations.find((c) => c.id === 'whole') || conversationDef('whole');
+  const routes = [homeRoute, ...conversations.flatMap((c) => c.routes)];
+  const out: ScreenMatch[] = [];
+  for (const route of routes) {
+    const label = labelOf(route);
+    const place = placeOf.get(route) || null;
+    const hay = [label, place?.label, place?.where].filter(Boolean).join(' ').toLowerCase();
+    if (!hay.includes(t)) continue;
+    const conv = route === homeRoute ? whole : conversations.find((c) => c.routes.includes(route)) || whole;
+    out.push({ route, label, conv, classic: place });
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/** "Scope & Strategy › Pricing & Tiers": a screen's Classic place, in one line. */
+export const classicLine = (place: ClassicPlace | null | undefined): string =>
+  !place ? '' : place.where ? `${place.where} › ${place.label}` : place.label;

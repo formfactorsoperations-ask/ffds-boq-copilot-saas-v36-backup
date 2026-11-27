@@ -34,7 +34,6 @@ import { useProjectView } from '../services/projectViewService';
 import { resolveProjectView } from '../lib/projectView';
 import { conversationsFor } from '../lib/projectConversations';
 import { clientMoneyOf, withoutAmounts } from '../lib/clientMoney';
-import { studioJumpItems } from './projectNav/StudioJump';
 import ConversationsWorkspace from './projectConversations/ConversationsWorkspace';
 import { MessagesSquare } from '@/lib/lucide-shim';
 import { getNextActions } from '../services/nextActionEngine';
@@ -123,6 +122,7 @@ export function ProjectWorkspace({
   onLeaveProject,
   onStatusChange,
   tierSummary,
+  onViewChange,
 }: {
   projectId: string;
   projectContext: ProjectContext;
@@ -136,6 +136,8 @@ export function ProjectWorkspace({
   onStatusChange?: (status: ProjectStatus, note?: string) => Promise<void> | void;
   /** The billed option's summary, for the termination and dispute windows (components/projectAlerts). */
   tierSummary?: { totalSell?: number; designFee?: number };
+  /** Which layout the project is drawn in, so App can keep the studio's own bar over the Conversations view (owner, 27 Nov 2026). */
+  onViewChange?: (view: 'classic' | 'conversations') => void;
 }) {
   const { orgData, currentUserAuth, currentRoles } = useOrg();
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -247,6 +249,9 @@ export function ProjectWorkspace({
   const [studioAtOpen, setStudioAtOpen] = useState(pv.studio);
   useEffect(() => { setStudioAtOpen(pv.studio); }, [projectId]);
   const view = resolveProjectView(studioAtOpen, pv.personal);
+  const shownView: 'classic' | 'conversations' = view === 'conversations' && !isWizard ? 'conversations' : 'classic';
+  useEffect(() => { onViewChange?.(shownView); }, [shownView]);
+  useEffect(() => () => onViewChange?.('classic'), []);
   const canChooseView = studioAtOpen !== 'classic';
   const viewSwitch = canChooseView ? [{
     label: view === 'classic' ? 'Try the Conversations view' : 'Use the Classic view',
@@ -352,12 +357,15 @@ export function ProjectWorkspace({
           me={{ email: String(currentUserAuth?.email || ''), name: currentUserAuth?.displayName || String(currentUserAuth?.email || 'Studio') }}
           statusLabel={workspaceStatus.label}
           onStatusClick={isLimited ? undefined : () => setIsStatusModalOpen(true)}
-          desks={studioJumpItems(currentRoles?.length ? currentRoles : (currentRole as any))}
           onLeaveProject={(t) => onLeaveProject?.(t)}
-          showHideFigures={holdsFinanceRole(currentRole)}
           viewOnly={isLimited && !(isDesigner && DESIGNER_EDITABLE_TABS.has(activeTab))}
           alertBar={alertBar}
           onUseClassic={canChooseView ? () => pv.setView('classic') : undefined}
+          classic={[
+            { route: homeRoute, label: homeLabel, where: '' },
+            ...sidebarStages.flatMap(s => s.screens.map(x => ({ route: x.route, label: x.label, where: s.label }))),
+            ...sidebarHub.map(h => ({ route: h.route, label: h.label, where: 'Project Hub' })),
+          ]}
         >
           {children}
         </ConversationsWorkspace>
@@ -422,6 +430,13 @@ export function ProjectWorkspace({
           <HeaderFigures />
           <div className="ml-auto shrink-0 flex items-center gap-2">
             <LiveStamp match={(n) => n.projectId === projectId} className="hidden lg:inline-flex" />
+            {/* The way to the Conversations view, in sight, when the studio lets each person choose (owner, 27 Nov 2026: "there is no option to return to new view"). */}
+            {canChooseView && view === 'classic' && (
+              <button type="button" onClick={() => pv.setView('conversations')} title="Your own choice: the studio's setting stays as it is"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#3D52A0]/30 bg-[#3D52A0]/10 text-[#3D52A0] text-xs font-bold whitespace-nowrap hover:bg-[#3D52A0] hover:text-white transition-colors">
+                <MessagesSquare className="w-4 h-4" aria-hidden />Try the new view
+              </button>
+            )}
             {/* The studio's desks, one click from any project screen (components/projectNav/StudioJump). */}
             <StudioJump role={currentRoles?.length ? currentRoles : currentRole} onGo={(route) => onLeaveProject?.(route)} />
             {holdsFinanceRole(currentRole) && <HideFiguresButton />}

@@ -20,7 +20,8 @@ new work must look like part of the existing app, not a new design.
   library and the drawers it opens), the new Design Desk (`components/designDesk2/`), the Clients screen (`components/clients/`, `components/ClientsDirectory.tsx`) and the Studio stories on Home (`components/home/stories/`) also use the richer motion the owner approved: see "People motion", "Design Desk 2.0 pages in motion",
   "Ops Desk motion", "Ops Desk 2.1", "Pricing & Tiers motion", "Project sidebar", "Projects: journey, needs you, one list",
   "Money motion", "Item bank motion", "Playground library motion", "BOQ Playground", "Clients: conversations" and "Studio stories" in DESIGN.md.
-  The Conversations project workspace (`components/projectConversations/`) follows "Project workspace: conversations".
+  The Conversations project workspace (`components/projectConversations/`) follows "Project workspace: conversations",
+  including its icon, hover and press motion (`cvw-*`), which the owner approved for that workspace only.
   Same fonts and colours.
 - Do not use half-pixel font sizes, new accent colours or new fonts.
 - Before shipping a screen, compare a screenshot of it with Studio settings.

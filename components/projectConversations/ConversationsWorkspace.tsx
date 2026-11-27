@@ -1,17 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowLeft, ArrowRight, Sparkles, MessageCircle, Wallet, Table, FolderOpen, PenTool, HardHat, CalendarRange, MapPin,
-  X, Home, Users, Search, FileText, Globe, IndianRupee, NotebookPen, Info, Eye, Scale, ChevronRight, LayoutGrid,
+  X, Home, Users, Building2, ChevronRight as Crumb, Search, FileText, Globe, IndianRupee, NotebookPen, Info, Eye, Scale, ChevronRight, LayoutGrid, Compass, History,
 } from '@/lib/lucide-shim';
 import { Button, Chip, EmptyState, INPUT, Segmented, type Tone } from '../ui/kit';
-import { Masked, HideFiguresButton } from '../ui/HideFigures';
+import { Masked } from '../ui/HideFigures';
 import { CountUp } from '../ui/HudBits';
 import { useProjectGlance, type Glance } from './useProjectGlance';
 import { motion } from 'framer-motion';
 import PageTitleBlock from '../PageTitleBlock';
 import ViewOnlyGuard from '../ViewOnlyGuard';
 import { PortalLineText } from '../clients/parts';
-import { conversationDef, conversationOf, type ConversationDef, type ConversationId } from '../../lib/projectConversations';
+import { classicLine, conversationDef, conversationOf, findScreens, type ClassicPlace, type ConversationDef, type ConversationId } from '../../lib/projectConversations';
 import { buildStory, groupStory, latestOf, noteHomes, noteKey, storyFor, whenShort, type StoryItem } from '../../lib/projectThread';
 import { buildThread, SOURCE_LABEL, EMPTY_RECORDS, type ThreadRecords, type ThreadSource } from '../../lib/clientThread';
 import { noteLine, type FollowUpLine } from '../../lib/clientCompose';
@@ -21,7 +22,6 @@ import type { TemplateId } from '../../lib/clientNextMove';
 import { loadClientRecords } from '../../services/clientThreadService';
 import { watchClientVisits } from '../../services/portalVisitsService';
 import { logFollowUp } from '../../services/opsDeskService';
-import type { StudioJumpItem } from '../projectNav/StudioJump';
 import '../projectHeader/projectHeader.css';
 
 /*
@@ -29,7 +29,7 @@ import '../projectHeader/projectHeader.css';
   workspace: conversations"). The same project as the Classic workspace, laid
   out like the Clients screen:
 
-    - the way out on top: All projects and the studio's screens, always there;
+    - one bar on top: Projects › the project on the left, the studio's sections on the right;
     - left: the project's conversations (lib/projectConversations), each with
       its latest line, like a chat list;
     - middle: the chosen conversation's story (lib/projectThread), each item
@@ -51,9 +51,31 @@ const CONV_ICON: Record<ConversationId, React.ElementType> = {
   design: PenTool, site: HardHat, plan: CalendarRange, brief: MapPin,
 };
 
-/* Each conversation's icon moves on hover in its own way, as the project sidebar's do (projectSidebar.css .psb-ic). */
+/*
+  Each conversation in Home's own colours (owner, 27 Nov 2026: "project
+  workspace should look as part of the same application"): the rings on Home
+  are gold Money, brand Design, green Site and navy Team (components/home),
+  and DayBoard pairs each with its pale tint. The picked conversation's plate
+  fills with its colour; the others wear its tint.
+*/
+const CONV_TONE: Record<ConversationId, { fg: string; tint: string }> = {
+  whole: { fg: '#3D52A0', tint: '#EEF2FD' }, chat: { fg: '#B4436A', tint: '#FBEFF3' }, money: { fg: '#8C6A33', tint: '#FBF5EA' },
+  boq: { fg: '#5F79D6', tint: '#EEF2FD' }, docs: { fg: '#1E2A5A', tint: '#ECEEF6' }, design: { fg: '#3D52A0', tint: '#EEF2FD' },
+  site: { fg: '#0E7C5A', tint: '#E7F5EF' }, plan: { fg: '#1E2A5A', tint: '#ECEEF6' }, brief: { fg: '#0E7C5A', tint: '#E7F5EF' },
+};
+const plate = (id: ConversationId, filled: boolean): React.CSSProperties =>
+  filled ? { background: CONV_TONE[id].fg, color: '#fff' } : { background: CONV_TONE[id].tint, color: CONV_TONE[id].fg };
+
+/*
+  Each icon has a motion of its own that fits what it shows (conversations.css
+  .cvw-ic, owner 27 Nov 2026): it plays on hover, and once when its
+  conversation opens.
+*/
 const CONV_MOVE: Record<ConversationId, string> = {
-  whole: 'spin', chat: 'wiggle', money: 'wiggle', boq: 'nudge', docs: 'nudge', design: 'swing', site: 'bounce', plan: 'nudge', brief: 'bounce',
+  whole: 'twinkle', chat: 'talk', money: 'flip', boq: 'shuffle', docs: 'open', design: 'draw', site: 'tap', plan: 'page', brief: 'drop',
+};
+const SOURCE_MOVE: Record<ThreadSource, string> = {
+  sent: 'talk', proposals: 'open', portal: 'spin', payments: 'flip', design: 'draw', site: 'tap', team: 'draw',
 };
 
 /* The sticker faces (DESIGN.md "Stickers"), as on Clients: gold for a signature, rose for unpaid, amber for no reply. */
@@ -107,16 +129,15 @@ export interface ConversationsWorkspaceProps {
   me: { email: string; name: string };
   statusLabel: string;
   onStatusClick?: () => void;
-  desks: StudioJumpItem[];
   onLeaveProject: (target?: string) => void;
-  /** The Hide figures eye, for those who hold finance. */
-  showHideFigures: boolean;
   /** The screen's look-only guard (a Designer, Client Relations). */
   viewOnly: boolean;
   /** Terminated or a dispute open: the strip Classic shows under its bar. */
   alertBar?: React.ReactNode;
   /** The person's own switch back to Classic, when the studio lets them choose. */
   onUseClassic?: () => void;
+  /** Where each screen sits in the Classic sidebar, for "Where did it go?" and the window's signpost. */
+  classic?: ClassicPlace[];
   /** The screen for the active route, drawn as Classic draws it. */
   children: React.ReactNode;
 }
@@ -190,8 +211,9 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
     if (conv !== 'whole' || windowRoute) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
-      const t = e.target as HTMLElement;
-      if (t && (t.closest('input, textarea, select, [contenteditable="true"]') || document.querySelector('[aria-modal="true"]'))) return;
+      const t = e.target as HTMLElement | null;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      if (t && typeof t.closest === 'function' && t.closest('input, textarea, select, [contenteditable="true"]')) return;
       const k = e.key.toLowerCase();
       if (k === 's' || k === 'm') open('site-meetings');
       else if (k === 'd') open('record-decision');
@@ -203,12 +225,44 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
   /* Said once, the first time someone sees this view. */
   const [welcome, setWelcome] = useState(() => { try { return !window.localStorage.getItem('studiodesk.projectView.welcomed'); } catch { return false; } });
   const dismissWelcome = () => { setWelcome(false); try { window.localStorage.setItem('studiodesk.projectView.welcomed', '1'); } catch { /* private window */ } };
+  /* The short tour: offered with the welcome, and again from "Show me around" on top. */
+  const [tour, setTour] = useState(false);
+  const tourFrom = useRef<ConversationId>('whole');
+  const beginTour = () => { tourFrom.current = conv; setTour(true); };
+  const startTour = () => { dismissWelcome(); beginTour(); };
+  /* Step 2 shows the Open buttons, so it opens a conversation that has some; the tour ends where it began. */
+  const tourStep = (n: number) => {
+    if (n === 1 && !shown.routes.length) { const c = p.conversations.find((x) => x.routes.length); if (c) setConv(c.id); }
+    else if (n !== 1) setConv(tourFrom.current);
+  };
+  const endTour = () => { setTour(false); setConv(tourFrom.current); };
+  const classic = p.classic || [];
+  const classicOf = (route: string) => classic.find((c) => c.route === route) || null;
+
+  /* A ripple spreads from where you click anything marked data-ripple (conversations.css .cvw-ripple). */
+  const ripple = (e: React.PointerEvent) => {
+    const host = (e.target as HTMLElement | null)?.closest?.('[data-ripple]') as HTMLElement | null;
+    if (!host || (host as HTMLButtonElement).disabled) return;
+    try { if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return; } catch { /* old browser */ }
+    const r = host.getBoundingClientRect();
+    const d = Math.max(r.width, r.height) * 2.2;
+    /* The ring lives in a clipping layer of its own, so the card itself never clips (or, in a long story, gets squeezed). */
+    const clip = document.createElement('span');
+    clip.className = 'cvw-ripple-clip';
+    clip.setAttribute('aria-hidden', 'true');
+    const dot = document.createElement('span');
+    dot.className = 'cvw-ripple';
+    Object.assign(dot.style, { width: `${d}px`, height: `${d}px`, left: `${e.clientX - r.left - d / 2}px`, top: `${e.clientY - r.top - d / 2}px` });
+    clip.appendChild(dot);
+    host.appendChild(clip);
+    window.setTimeout(() => clip.remove(), 700);
+  };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 min-w-0">
-      <WayOut desks={p.desks} onLeave={p.onLeaveProject} onUseClassic={p.onUseClassic} showHideFigures={p.showHideFigures} />
-      <ProjectTitle ctx={ctx} name={name} statusLabel={p.statusLabel} onStatusClick={p.onStatusClick}
-        onPortal={p.conversations.some((c) => c.routes.includes('client-portal')) ? () => open('client-portal') : undefined} />
+    <div className="cvw-canvas flex flex-col h-full min-w-0" onPointerDown={ripple}>
+      <ProjectBar ctx={ctx} name={name} statusLabel={p.statusLabel} onStatusClick={p.onStatusClick}
+        onPortal={p.conversations.some((c) => c.routes.includes('client-portal')) ? () => open('client-portal') : undefined}
+        onLeave={p.onLeaveProject} onUseClassic={p.onUseClassic} onTour={beginTour} />
       {p.alertBar}
       {welcome && (
         <div className="mx-3 sm:mx-5 mb-2 flex items-center gap-3 rounded-xl border border-[#3D52A0]/20 bg-[#3D52A0]/10 px-4 py-2.5 text-xs text-slate-700 hud-panel-in">
@@ -217,14 +271,17 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
             <b className="text-slate-800">This is the new project view.</b> Pick a conversation on the left (Money, BOQ, Documents…); every screen opens full size and closes back here.
             {p.onUseClassic && ' You can go back to Classic from the top bar at any time.'}
           </span>
+          <Button size="sm" variant="primary" icon={Compass} onClick={startTour}>Show me around</Button>
           <Button size="sm" variant="quiet" onClick={dismissWelcome}>Got it</Button>
         </div>
       )}
 
-      <div className="flex-1 min-h-0 mx-3 sm:mx-5 mb-3 sm:mb-5 grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hud-panel-in">
+      <div className="flex-1 min-h-0 mx-3 sm:mx-5 mb-3 sm:mb-5 grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px] gap-4 hud-panel-in">
         <ConversationList conversations={p.conversations} conv={shown.id} story={story} now={now} needsOf={p.needsOf}
-          money={p.money} journey={p.journey} onPick={setConv} />
-        <section className="flex flex-col min-h-0 min-w-0 border-l border-slate-100" aria-label={shown.name}>
+          money={p.money} journey={p.journey} onPick={setConv}
+          findScreen={(q) => findScreens(q, p.conversations, (r) => (r === p.homeRoute ? p.hubLabel : p.labelOf(r)), classic, p.homeRoute)}
+          onOpenScreen={(c, r) => { setConv(c); open(r); }} />
+        <section className="cvw-float flex flex-col min-h-0 min-w-0 overflow-hidden" aria-label={shown.name}>
           <ThreadHead conv={shown} labelOf={p.labelOf} onOpen={open} onPickMobile={setConv} conversations={p.conversations} />
           <Thread key={shown.id} conv={shown.id} routes={shown.routes} aboutOf={p.aboutOf || (() => '')} story={storyFor(story, shown.id)} now={now} loading={!records} onOpen={open}
             labelOf={p.labelOf} visible={(r) => p.conversations.some((c) => c.routes.includes(r))}
@@ -243,70 +300,71 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
 
       {windowRoute && (
         <ScreenWindow route={windowRoute} isHub={windowRoute === p.homeRoute} hubLabel={p.hubLabel} projectName={name} labelOf={p.labelOf}
-          conversations={p.conversations} backTo={shown} viewOnly={p.viewOnly} onOpen={open} onClose={closeWindow}>
+          conversations={p.conversations} backTo={shown} viewOnly={p.viewOnly} onOpen={open} onClose={closeWindow} classic={classicOf(windowRoute)}>
           {p.children}
         </ScreenWindow>
       )}
+      {tour && !windowRoute && <Tour canClassic={!!p.onUseClassic} onStep={tourStep} onDone={endTour} />}
     </div>
   );
 }
 
 /* ───────────── the way out ───────────── */
 
-function WayOut({ desks, onLeave, onUseClassic, showHideFigures }: {
-  desks: StudioJumpItem[]; onLeave: (t?: string) => void; onUseClassic?: () => void; showHideFigures: boolean;
-}) {
-  const item = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap';
-  return (
-    <nav aria-label="Studio" className="h-12 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-1 min-w-0 overflow-x-auto">
-      <button type="button" onClick={() => onLeave('projects')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/15 whitespace-nowrap">
-        <ArrowLeft className="w-4 h-4" aria-hidden />All projects
-      </button>
-      <span className="w-px h-6 bg-slate-200 mx-1 shrink-0" aria-hidden />
-      <button type="button" onClick={() => onLeave('home')} className={item}><Home className="w-4 h-4 text-slate-400" aria-hidden />Studio home</button>
-      <button type="button" onClick={() => onLeave('clients')} className={cx(item, 'hidden sm:inline-flex')}><Users className="w-4 h-4 text-slate-400" aria-hidden />Clients</button>
-      {desks.map((d) => {
-        const Icon = d.icon;
-        return <button key={d.route} type="button" onClick={() => onLeave(d.route)} className={cx(item, 'hidden md:inline-flex')} title={d.sub}><Icon className="w-4 h-4 text-slate-400" aria-hidden />{d.label}</button>;
-      })}
-      <span className="flex-1" />
-      {showHideFigures && <HideFiguresButton />}
-      {onUseClassic && (
-        <Button size="sm" variant="secondary" onClick={onUseClassic} title="Your own choice: the studio's setting stays as it is">Use Classic view</Button>
-      )}
-    </nav>
-  );
-}
-
-function ProjectTitle({ ctx, name, statusLabel, onStatusClick, onPortal }: {
+/*
+  THE PROJECT'S HEADER (owner, 27 Nov 2026: "project workspace should look
+  as part of the same application"). The studio's own top bar stays above it
+  in this view, with Projects lit (App.tsx, components/Header), so the way
+  out and the studio's screens are exactly where they are on Home. This row
+  says where you are, "Projects › the project", with its status and client
+  line, and holds what belongs to this view: Client portal, Show me around
+  and the person's way back to Classic. It sits on the workspace's own
+  canvas, like Home's section heads, with no bar of its own.
+*/
+function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, onLeave, onUseClassic, onTour }: {
   ctx: any; name: string; statusLabel: string; onStatusClick?: () => void; onPortal?: () => void;
+  onLeave: (t?: string) => void; onUseClassic?: () => void; onTour: () => void;
 }) {
   const sub = [ctx.clientName || 'No client yet', ctx.location, ctx.area ? `${ctx.area} sq ft` : ''].filter(Boolean).join(' · ');
   const initials = (name.match(/[A-Za-z]+/g) || ['P']).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase();
   return (
-    <div className="shrink-0 px-3 sm:px-5 py-3 flex items-center gap-3 min-w-0">
-      <span className="w-11 h-11 rounded-xl grid place-items-center text-white text-sm font-bold bg-[#3D52A0] shrink-0">{initials}</span>
+    <div data-tour="way" className="shrink-0 px-3 sm:px-5 py-3 flex items-center gap-3 min-w-0">
+      <span className="w-10 h-10 rounded-xl grid place-items-center text-white text-sm font-bold bg-[#3D52A0] shrink-0">{initials}</span>
       <div className="min-w-0 flex-1">
-        <h1 className="text-2xl font-bold text-slate-800 tracking-tight truncate">{name}</h1>
-        <p className="text-xs text-slate-500 truncate">{sub}</p>
+        <div className="flex items-center gap-1.5 min-w-0">
+          {/* Where you are: Projects › this project. Projects is the way back. */}
+          <button type="button" onClick={() => onLeave('projects')} aria-label="Back to Projects" title="Back to all projects"
+            className="cvw-hot shrink-0 inline-flex items-center gap-0.5 rounded-md px-1 -mx-1 text-[13px] font-semibold text-slate-500 hover:text-[#3D52A0] hover:bg-[#3D52A0]/10">
+            Projects<Crumb className="cvw-arrow w-3.5 h-3.5 text-slate-400" aria-hidden />
+          </button>
+          <h1 className="text-lg font-bold text-slate-800 tracking-tight truncate">{name}</h1>
+          <button type="button" onClick={onStatusClick} disabled={!onStatusClick} className="shrink-0 disabled:cursor-default" title={onStatusClick ? 'Change the project status' : undefined}>
+            <Chip tone="brand">{statusLabel}</Chip>
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-500 truncate">{sub}</p>
       </div>
-      <button type="button" onClick={onStatusClick} disabled={!onStatusClick} className="shrink-0 disabled:cursor-default" title={onStatusClick ? 'Change the project status' : undefined}>
-        <Chip tone="brand">{statusLabel}</Chip>
-      </button>
-      {onPortal && <Button size="sm" variant="secondary" icon={Eye} onClick={onPortal} className="hidden sm:inline-flex">Client portal</Button>}
+      {onPortal && <Button size="sm" variant="quiet" icon={Globe} className="cvw-hot cvw-lift hidden sm:inline-flex bg-[#3D52A0]/10 text-[#3D52A0]" data-ripple onClick={onPortal}>Client portal</Button>}
+      <Button size="sm" variant="secondary" icon={Compass} className="cvw-hot cvw-lift hidden sm:inline-flex" data-ripple onClick={onTour} title="A short tour of this view">Show me around</Button>
+      {onUseClassic && (
+        <Button size="sm" variant="secondary" className="cvw-hot cvw-lift shrink-0" data-ripple onClick={onUseClassic} title="Your own choice: the studio's setting stays as it is">Use Classic view</Button>
+      )}
     </div>
   );
 }
 
 /* ───────────── the list ───────────── */
 
-function ConversationList({ conversations, conv, story, now, needsOf, money, journey, onPick }: {
+function ConversationList({ conversations, conv, story, now, needsOf, money, journey, onPick, findScreen, onOpenScreen }: {
   conversations: ConversationDef[]; conv: ConversationId; story: StoryItem[]; now: number; needsOf: (r: string) => number;
   money: ClientMoney | null; journey: ConversationsWorkspaceProps['journey']; onPick: (c: ConversationId) => void;
+  findScreen: (q: string) => ReturnType<typeof findScreens>; onOpenScreen: (c: ConversationId, route: string) => void;
 }) {
   const [q, setQ] = useState('');
   const term = q.trim().toLowerCase();
   const list = term ? conversations.filter((c) => c.name.toLowerCase().includes(term) || c.about.toLowerCase().includes(term)) : conversations;
+  /* "Where did it go?": a screen found by today's name, its Classic name or its Classic stage. */
+  const screens = term ? findScreen(term) : [];
   const owed = money?.milestones.find((m) => m.status === 'invoiced' && !m.disputed);
   const previewOf = (c: ConversationDef): { text: string; at: number | null } => {
     if (c.id === 'whole' && journey.next) return { text: `Next: ${journey.next}`, at: null };
@@ -315,11 +373,12 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
     return last ? { text: last.text, at: last.at } : { text: c.about, at: null };
   };
   return (
-    <aside className="hidden md:flex flex-col min-h-0 bg-white" aria-label="This project's conversations">
-      <div className="p-3 border-b border-slate-100">
-        <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-300 focus-within:ring-2 focus-within:ring-[#3D52A0]/30">
+    <aside data-tour="list" className="cvw-float hidden md:flex flex-col min-h-0 overflow-hidden" aria-label="This project's conversations">
+      <div className="p-3">
+        <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E3E8F4] bg-[#F8FAFF] focus-within:ring-2 focus-within:ring-[#3D52A0]/30">
           <Search className="w-4 h-4 text-slate-400" aria-hidden />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find in this project" aria-label="Find a conversation" className="flex-1 min-w-0 text-sm outline-none bg-transparent" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a screen or old name" aria-label="Find a conversation or a screen" className="flex-1 min-w-0 text-[13px] outline-none bg-transparent" />
+          {q && <button type="button" onClick={() => setQ('')} aria-label="Clear the search" className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" aria-hidden /></button>}
         </label>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -329,17 +388,18 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
           const needs = c.routes.reduce((s, r) => s + needsOf(r), 0) > 0;
           const on = c.id === conv;
           return (
-            <button key={c.id} type="button" onClick={() => onPick(c.id)} aria-current={on ? 'true' : undefined}
-              className={cx('psb-btn relative w-full flex items-center gap-3 px-3 py-3 text-left border-b border-slate-100 transition-colors hud-row-in', !on && 'hover:bg-slate-50')}
+            <button key={c.id} type="button" data-ripple onClick={() => onPick(c.id)} aria-current={on ? 'true' : undefined}
+              className={cx('cvw-hot w-[calc(100%-16px)] mx-2 my-0.5 flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-left hud-row-in', !on && 'hover:bg-[#F4F7FB]')}
               style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
               {/* The highlight slides to the conversation you pick, as the sidebar's does to the screen you are on. */}
-              {on && <motion.span layoutId="conv-on" aria-hidden className="absolute inset-0 bg-[#3D52A0]/10 shadow-[inset_3px_0_0_#3D52A0]" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
-              <span className={cx('relative w-10 h-10 rounded-full grid place-items-center shrink-0', c.id === 'whole' ? 'bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
-                <span className="psb-ic" data-a={CONV_MOVE[c.id]}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
+              {on && <motion.span layoutId="conv-on" aria-hidden className="absolute inset-0 rounded-2xl bg-[#EEF2FD]" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
+              {/* The conversation you are in fills its disc; it pops and its icon plays as you pick it. */}
+              <span key={on ? 'on' : 'off'} className={cx('cvw-disc relative w-9 h-9 rounded-xl grid place-items-center shrink-0', on && 'is-pop')} style={plate(c.id, on)}>
+                <span className={cx('cvw-ic', on && 'is-play')} data-m={CONV_MOVE[c.id]}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
               </span>
-              <span className="relative min-w-0 flex-1">
+              <span className="cvw-text relative min-w-0 flex-1">
                 <span className="flex items-baseline gap-2">
-                  <span className="flex-1 min-w-0 truncate text-sm font-bold text-slate-800">{c.name}</span>
+                  <span className="flex-1 min-w-0 truncate text-[13px] font-bold text-slate-800">{c.name}</span>
                   {pv.at && <span className="text-[11px] text-slate-400 whitespace-nowrap">{whenShort(pv.at, now)}</span>}
                 </span>
                 <span className="flex items-center gap-1.5 mt-0.5">
@@ -350,7 +410,29 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
             </button>
           );
         })}
-        {!list.length && <p className="px-4 py-6 text-xs text-slate-500">No conversation matches “{q}”.</p>}
+        {screens.length > 0 && (
+          <div className="hud-panel-in" role="group" aria-label="Screens">
+            <p className="px-4 pt-3 pb-1 text-xs font-bold text-slate-500">Screens</p>
+            {screens.map((m, i) => {
+              const renamed = m.classic && m.classic.label !== m.label;
+              return (
+                <button key={m.route} type="button" data-ripple onClick={() => onOpenScreen(m.conv.id, m.route)}
+                  className="cvw-hot w-[calc(100%-16px)] mx-2 my-0.5 flex items-start gap-3 px-3 py-2.5 rounded-2xl text-left hover:bg-[#F4F7FB] hud-row-in"
+                  style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
+                  <span className="cvw-disc w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><span className="cvw-ic" data-m="go"><ArrowRight className="w-4 h-4" aria-hidden /></span></span>
+                  <span className="cvw-text min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-bold text-slate-800">{m.label}</span>
+                    <span className="block text-xs text-slate-500">
+                      In {m.conv.name}
+                      {m.classic && <> · was {renamed ? <>“{m.classic.label}” </> : ''}in {m.classic.where || 'the top of the sidebar'}</>}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {!list.length && !screens.length && <p className="px-4 py-6 text-xs text-slate-500">Nothing matches “{q}”. Try a screen’s name, such as Money or Drawings.</p>}
       </div>
     </aside>
   );
@@ -364,11 +446,13 @@ function ThreadHead({ conv, labelOf, onOpen, onPickMobile, conversations }: {
 }) {
   const Icon = CONV_ICON[conv.id];
   return (
-    <div className="shrink-0 border-b border-slate-100">
+    <div data-tour="open" className="shrink-0">
       <div className="flex items-center gap-3 px-4 py-3">
-        <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
+        <span key={conv.id} className="cvw-disc is-pop w-9 h-9 rounded-xl grid place-items-center shrink-0" style={plate(conv.id, false)}>
+          <span className="cvw-ic is-play" data-m={CONV_MOVE[conv.id]}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
+        </span>
         <div className="min-w-0 flex-1">
-          <h2 className="font-bold text-slate-800 truncate">{conv.name}</h2>
+          <h2 className="text-[15px] font-bold text-slate-800 truncate">{conv.name}</h2>
           <p className="text-xs text-slate-500 truncate">{conv.about}</p>
         </div>
         {/* Below 768px the list is a choice here. */}
@@ -380,7 +464,7 @@ function ThreadHead({ conv, labelOf, onOpen, onPickMobile, conversations }: {
         <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
           <span className="text-xs font-semibold text-slate-500 mr-1">Open:</span>
           {conv.routes.map((r, i) => (
-            <Button key={r} size="sm" variant={i === 0 ? 'primary' : 'secondary'} onClick={() => onOpen(r)}>{labelOf(r)}</Button>
+            <Button key={r} size="sm" variant={i === 0 ? 'primary' : 'secondary'} className="cvw-hot cvw-lift" data-ripple onClick={() => onOpen(r)}>{labelOf(r)}</Button>
           ))}
         </div>
       )}
@@ -418,7 +502,7 @@ const Thread: React.FC<{
         )}
         {groups.map((g) => (
           <React.Fragment key={g.group + g.items[0].id}>
-            <div className="self-center my-1 px-3 py-1 rounded-full bg-white border border-slate-200 text-[11px] font-bold text-slate-500">{g.group}</div>
+            <div className="self-center my-1 px-3 py-1 rounded-full bg-[#EEF2FD] text-[11px] font-bold text-[#3D52A0]">{g.group}</div>
             {g.items.map((it, i) => <StoryRow key={it.id} it={it} delay={Math.min(i, 12) * 35} onOpen={onOpen} labelOf={labelOf} visible={visible} />)}
           </React.Fragment>
         ))}
@@ -432,21 +516,21 @@ const StartHere: React.FC<{ conv: ConversationId; routes: string[]; labelOf: (r:
   const Icon = CONV_ICON[conv];
   return (
     <div className="py-2">
-      <p className="text-sm font-bold text-slate-800">Nothing has happened here yet. Start here:</p>
+      <p className="text-[13px] font-bold text-slate-800">Nothing has happened here yet. Start here:</p>
       <p className="text-xs text-slate-500 mb-3">Open a screen below. What you do there will appear in this conversation.</p>
       <div className="grid gap-2.5 sm:grid-cols-2">
         {routes.map((r, i) => (
-          <button key={r} type="button" onClick={() => onOpen(r)}
-            className="psb-btn phd-lift hud-row-in text-left flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 hover:border-[#3D52A0] hover:shadow-sm"
+          <button key={r} type="button" data-ripple onClick={() => onOpen(r)}
+            className="cvw-hot cvw-lift hud-row-in text-left flex items-center gap-3 rounded-2xl bg-[#F7F9FF] px-4 py-3.5 shadow-[0_8px_18px_-16px_rgba(30,42,90,0.5)]"
             style={{ animationDelay: `${i * 40}ms` }}>
-            <span className={cx('w-11 h-11 rounded-xl grid place-items-center shrink-0', i === 0 ? 'bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
-              <span className="psb-ic" data-a={CONV_MOVE[conv]}><Icon className="w-5 h-5" aria-hidden /></span>
+            <span className="cvw-disc w-11 h-11 rounded-xl grid place-items-center shrink-0" style={plate(conv, i === 0)}>
+              <span className="cvw-ic" data-m={CONV_MOVE[conv]}><Icon className="w-5 h-5" aria-hidden /></span>
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-slate-800">{labelOf(r)}</span>
+            <span className="cvw-text min-w-0 flex-1">
+              <span className="block text-[13px] font-bold text-slate-800">{labelOf(r)}</span>
               {aboutOf(r) && <span className="block text-xs text-slate-500 line-clamp-2">{aboutOf(r)}</span>}
             </span>
-            <ArrowRight className="w-4 h-4 text-[#3D52A0] shrink-0" aria-hidden />
+            <ArrowRight className="cvw-arrow w-4 h-4 text-[#3D52A0] shrink-0" aria-hidden />
           </button>
         ))}
       </div>
@@ -458,8 +542,8 @@ const StoryRow: React.FC<{
   it: StoryItem; delay: number; onOpen: (r: string) => void; labelOf: (r: string) => string; visible: (r: string) => boolean;
 }> = ({ it, delay, onOpen, labelOf, visible }) => {
   const openBtn = it.route && visible(it.route) ? (
-    <button type="button" onClick={() => onOpen(it.route!)} className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0] hover:text-white">
-      Open {labelOf(it.route)}<ArrowRight className="w-3 h-3" aria-hidden />
+    <button type="button" data-ripple onClick={() => onOpen(it.route!)} className="cvw-hot mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0] hover:text-white">
+      Open {labelOf(it.route)}<ArrowRight className="cvw-arrow w-3 h-3" aria-hidden />
     </button>
   ) : null;
   const style = { animationDelay: `${delay}ms` };
@@ -475,7 +559,7 @@ const StoryRow: React.FC<{
   }
   if (it.kind === 'sent') {
     return (
-      <div className="self-end max-w-[78%] rounded-2xl rounded-br-md bg-[#3D52A0] text-white px-3.5 py-2.5 text-sm hud-row-in" style={style}>
+      <div className="self-end max-w-[78%] rounded-2xl rounded-br-md bg-[#3D52A0] text-white px-3.5 py-2.5 text-[13px] hud-row-in" style={style}>
         <p className="whitespace-pre-wrap">{it.text}</p>
         <p className="mt-1 text-[11px] text-white/75">{[it.meta, it.template].filter(Boolean).join(' · ')}</p>
       </div>
@@ -483,7 +567,7 @@ const StoryRow: React.FC<{
   }
   if (it.kind === 'said') {
     return (
-      <div className="self-start max-w-[78%] rounded-2xl rounded-bl-md bg-white border border-dashed border-slate-300 px-3.5 py-2.5 text-sm italic text-slate-700 hud-row-in" style={style}>
+      <div className="self-start max-w-[78%] rounded-2xl rounded-bl-md bg-white border border-dashed border-slate-300 px-3.5 py-2.5 text-[13px] italic text-slate-700 hud-row-in" style={style}>
         <p>“{it.text}”</p>
         {it.meta && <p className="mt-1 text-[11px] not-italic text-slate-400">{it.meta}</p>}
       </div>
@@ -492,10 +576,10 @@ const StoryRow: React.FC<{
   const src = SOURCE_ICON[it.source || 'team'];
   const Icon = src.icon;
   return (
-    <div className={cx('psb-btn phd-lift max-w-[82%] flex gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hud-row-in hover:shadow-sm', it.side === 'client' ? 'self-start' : 'self-end')} style={style}>
-      <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><span className="psb-ic" data-a="nudge"><Icon className="w-4 h-4" aria-hidden /></span></span>
+    <div className={cx('cvw-hot cvw-lift max-w-[82%] flex gap-2.5 rounded-2xl bg-[#F7F9FF] px-3 py-2.5 hud-row-in shadow-[0_8px_18px_-16px_rgba(30,42,90,0.5)]', it.side === 'client' ? 'self-start' : 'self-end')} style={style}>
+      <span className="cvw-disc w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><span className="cvw-ic" data-m={SOURCE_MOVE[it.source || 'team']}><Icon className="w-4 h-4" aria-hidden /></span></span>
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-800">{it.text}</p>
+        <p className="text-[13px] font-semibold text-slate-800">{it.text}</p>
         {it.detail && <p className="text-xs text-slate-500">{it.detail}</p>}
         <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
           {it.source === 'payments' && <Chip tone="good">{SOURCE_LABEL.payments}</Chip>}
@@ -520,30 +604,30 @@ function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, lab
   const stageName = stages.find((s) => s.stage === stage)?.label || '';
   const rows = journey.upNext;
   return (
-    <div className="shrink-0 mx-4 mt-3 rounded-2xl border border-slate-200 bg-white overflow-hidden hud-panel-in">
+    <div className="shrink-0 mx-4 mt-1 rounded-2xl bg-gradient-to-b from-[#F7F9FF] to-[#EEF2FD] overflow-hidden hud-panel-in">
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-100">
         <p className="min-w-0 flex-1 text-xs text-slate-500 truncate">
           <b className="text-slate-700">Stage {stage} of 6{stageName ? ` · ${stageName}` : ''}</b> · {journey.done} of {journey.total} steps done
         </p>
-        {onMatrix && <Button size="sm" variant="quiet" onClick={onMatrix}>Ops Matrix</Button>}
-        <Button size="sm" variant="quiet" icon={LayoutGrid} onClick={onHub}>Open {hubLabel === 'Hub' ? 'the Hub' : hubLabel}</Button>
+        {onMatrix && <Button size="sm" variant="quiet" className="cvw-hot" data-ripple onClick={onMatrix}>Ops Matrix</Button>}
+        <Button size="sm" variant="quiet" icon={LayoutGrid} className="cvw-hot" data-ripple onClick={onHub}>Open {hubLabel === 'Hub' ? 'the Hub' : hubLabel}</Button>
       </div>
-      <div className="px-4 pt-2.5 pb-1"><h3 className="font-bold text-slate-800">Up next</h3></div>
+      <div className="px-4 pt-2.5 pb-1"><h3 className="text-[15px] font-bold text-slate-800">Up next</h3></div>
       {!rows.length && <p className="px-4 pb-3 text-xs text-slate-500">Nothing needs you on this project right now.</p>}
       {rows.map((r, i) => (
         <div key={r.id} className="hud-row-in flex items-center gap-3 px-4 py-2 border-t border-slate-100 first:border-t-0" style={{ animationDelay: `${120 + i * 40}ms` }}>
           <p className="min-w-0 flex-1 flex items-center gap-2" title={r.text || undefined}>
-            <span className="text-sm font-semibold text-slate-800 truncate">{r.title}</span>
+            <span className="text-[13px] font-semibold text-slate-800 truncate">{r.title}</span>
             {r.badge && <Chip tone={r.badge === 'Blocker' ? 'bad' : 'brand'}>{r.badge}</Chip>}
           </p>
           {(r.actions || []).map((a) => (
-            <Button key={a.label} size="sm" variant={a.primary ? 'primary' : 'secondary'} className="phd-lift" onClick={a.run}>{a.label}</Button>
+            <Button key={a.label} size="sm" variant={a.primary ? 'primary' : 'secondary'} className="cvw-hot cvw-lift" data-ripple onClick={a.run}>{a.label}</Button>
           ))}
-          {!r.actions?.length && r.route && <Button size="sm" variant="secondary" className="phd-lift" onClick={() => onOpen(r.route!)}>Open {labelOf(r.route)}</Button>}
+          {!r.actions?.length && r.route && <Button size="sm" variant="secondary" className="cvw-hot cvw-lift" data-ripple onClick={() => onOpen(r.route!)}>Open {labelOf(r.route)}</Button>}
         </div>
       ))}
       {!!journey.more && (
-        <button type="button" onClick={onHub} className="w-full text-left px-4 py-2 border-t border-slate-100 text-xs font-bold text-[#3D52A0] hover:bg-[#3D52A0]/5">
+        <button type="button" data-ripple onClick={onHub} className="cvw-hot w-full text-left px-4 py-2 border-t border-slate-100 text-xs font-bold text-[#3D52A0] hover:bg-[#3D52A0]/5">
           {journey.more} more on the Hub →
         </button>
       )}
@@ -577,20 +661,20 @@ function Composer({ conv, convName, canLog, onWrite, onRecord }: {
     } catch { setState('failed'); }
   };
   return (
-    <div className="shrink-0 border-t border-slate-200 px-4 py-2.5 bg-white flex flex-col gap-2">
+    <div className="shrink-0 border-t border-slate-100 px-4 py-2.5 bg-white flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-1.5">
         {onRecord && (
           <>
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Record</span>
-            <Button size="sm" variant="secondary" icon={HardHat} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="S" className="phd-lift">Site visit</Button>
-            <Button size="sm" variant="secondary" icon={Users} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="M" className="phd-lift">Meeting</Button>
-            <Button size="sm" variant="secondary" icon={Scale} onClick={() => onRecord('record-decision')} aria-keyshortcuts="D" className="phd-lift">Decision</Button>
+            <Button size="sm" variant="secondary" icon={HardHat} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="S" className="cvw-hot cvw-lift" data-ripple>Site visit</Button>
+            <Button size="sm" variant="secondary" icon={Users} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="M" className="cvw-hot cvw-lift" data-ripple>Meeting</Button>
+            <Button size="sm" variant="secondary" icon={Scale} onClick={() => onRecord('record-decision')} aria-keyshortcuts="D" className="cvw-hot cvw-lift" data-ripple>Decision</Button>
           </>
         )}
         <span className="flex-1" />
         {state === 'saved' && !open && <span className="text-[11px] text-emerald-700 hud-row-in">Note saved here and on the Ops Desk</span>}
         {canLog && !open && (
-          <Button size="sm" variant="quiet" icon={NotebookPen} onClick={() => { setOpen(true); setState('idle'); }}
+          <Button size="sm" variant="quiet" icon={NotebookPen} className="cvw-hot" data-ripple onClick={() => { setOpen(true); setState('idle'); }}
             title="A note only the studio sees, kept here and on the Ops Desk">Add a note for the team</Button>
         )}
       </div>
@@ -635,35 +719,37 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, glance, portalLin
       {children}
     </div>
   );
-  const Tile: React.FC<{ label: string; value: React.ReactNode; sub: string; route: string | null }> = ({ label, value, sub, route }) => (
-    <button type="button" disabled={!route || !has(route)} onClick={() => route && onOpen(route)}
-      className="phd-lift text-left rounded-xl border border-slate-200 px-3 py-2.5 hover:border-[#3D52A0] disabled:hover:border-slate-200 disabled:cursor-default">
+  /* Each figure in one of Home's tints: Collected gold, Next due brand, Drawings navy, Handover green. */
+  const TINTS = { gold: ['#FBF5EA', '#8C6A33'], brand: ['#EEF2FD', '#3D52A0'], navy: ['#ECEEF6', '#1E2A5A'], green: ['#E7F5EF', '#0E7C5A'] } as const;
+  const Tile: React.FC<{ label: string; value: React.ReactNode; sub: string; route: string | null; tint: keyof typeof TINTS }> = ({ label, value, sub, route, tint }) => (
+    <button type="button" data-ripple disabled={!route || !has(route)} onClick={() => route && onOpen(route)} style={{ background: TINTS[tint][0] }}
+      className="cvw-hot cvw-lift text-left rounded-xl px-3 py-2.5 disabled:cursor-default">
       <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
-      <span className="block font-black text-slate-800 tabular-nums">{value}</span>
+      <span className="block font-black tabular-nums" style={{ color: TINTS[tint][1] }}>{value}</span>
       <span className="block text-[11px] text-slate-500 truncate">{sub}</span>
     </button>
   );
   return (
-    <aside className="hidden xl:flex flex-col min-h-0 overflow-y-auto border-l border-slate-100" aria-label="Project card">
+    <aside className="cvw-float hidden xl:flex flex-col min-h-0 overflow-y-auto" aria-label="Project card">
       <Sec title="At a glance">
         <div className="grid grid-cols-2 gap-2">
           {seesMoney && (
-            <Tile label="Collected" route="payment-calc"
+            <Tile label="Collected" tint="gold" route="payment-calc"
               value={money && !money.amountsHidden ? <Masked><CountUp value={money.totalPaid || 0} format={(v) => inr(v)} /></Masked> : '—'}
               sub={money && money.projectValue != null && !money.amountsHidden ? `${pct}% of ${inr(money.projectValue)}` : 'No payment schedule yet'} />
           )}
           {seesMoney && (
-            <Tile label="Next due" route="payment-calc"
+            <Tile label="Next due" tint="brand" route="payment-calc"
               value={next ? (next.owed != null ? <Masked><CountUp value={next.owed} format={(v) => inr(v)} /></Masked> : next.name) : '—'}
               sub={next ? `${next.name}${next.date ? ` · ${new Date(next.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}` : 'Nothing due'} />
           )}
           {has('drawing-tracker') && (
-            <Tile label="Drawings" route="drawing-tracker"
+            <Tile label="Drawings" tint="navy" route="drawing-tracker"
               value={glance.drawings ? (glance.drawings.total ? <><CountUp value={glance.drawings.issued} /> of {glance.drawings.total}</> : 'None yet') : '…'}
               sub={glance.drawings && glance.drawings.total ? `issued · ${glance.drawings.approved} approved` : 'Drawing Tracker'} />
           )}
           {has('timeline') && (
-            <Tile label="Handover" route="timeline"
+            <Tile label="Handover" tint="green" route="timeline"
               value={glance.handoverISO ? dayShort(glance.handoverISO, true) : (glance.hasProgramme === undefined ? '…' : '—')}
               sub={glance.handoverISO ? (glance.targetISO ? `forecast · target ${dayShort(glance.targetISO)}` : 'forecast · no target set') : 'No programme yet'} />
           )}
@@ -722,9 +808,9 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, glance, portalLin
 
 /* ───────────── the full-screen window ───────────── */
 
-function ScreenWindow({ route, isHub, hubLabel, projectName, labelOf, conversations, backTo, viewOnly, onOpen, onClose, children }: {
+function ScreenWindow({ route, isHub, hubLabel, projectName, labelOf, conversations, backTo, viewOnly, onOpen, onClose, classic, children }: {
   route: string; isHub: boolean; hubLabel: string; projectName: string; labelOf: (r: string) => string; conversations: ConversationDef[];
-  backTo: ConversationDef; viewOnly: boolean; onOpen: (r: string) => void; onClose: () => void; children: React.ReactNode;
+  backTo: ConversationDef; viewOnly: boolean; onOpen: (r: string) => void; onClose: () => void; classic: ClassicPlace | null; children: React.ReactNode;
 }) {
   const home = conversations.find((c) => c.routes.includes(route));
   const owner = home || conversationDef('whole');
@@ -749,7 +835,7 @@ function ScreenWindow({ route, isHub, hubLabel, projectName, labelOf, conversati
         <div className="shrink-0 flex items-center gap-3 px-4 sm:px-6 py-3 border-b border-slate-100 min-w-0">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0] truncate">{projectName} · {owner.name}</p>
-            <h2 className="text-2xl font-bold text-slate-800 tracking-tight truncate">{title}</h2>
+            <h2 className="text-xl font-bold text-slate-800 tracking-tight truncate">{title}</h2>
           </div>
           {home && home.routes.length > 1 && (
             <div className="hidden lg:block shrink-0">
@@ -767,8 +853,98 @@ function ScreenWindow({ route, isHub, hubLabel, projectName, labelOf, conversati
         </div>
         <div className="shrink-0 flex items-center gap-3 px-4 sm:px-6 py-2.5 bg-slate-50 border-t border-slate-100 text-xs text-slate-500">
           <span className="flex-1 min-w-0 truncate">What you change here shows up in the {owner.name} conversation.</span>
+          {/* The signpost for people who learnt the Classic sidebar (plan PR G). */}
+          {classic && (
+            <span className="hidden md:inline-flex items-center gap-1.5 min-w-0 truncate" title="Where this screen is in the Classic view">
+              <History className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden />In Classic: {classicLine(classic)}
+            </span>
+          )}
           <span className="hidden sm:inline px-1.5 py-0.5 rounded border border-slate-300 bg-white text-[11px] font-bold text-slate-600">Esc</span>
           <Button size="sm" variant="secondary" icon={ArrowLeft} onClick={onClose}>Back to {backTo.name}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────── the short tour (plan PR G) ───────────── */
+
+type TourStep = { target: 'list' | 'open' | 'way'; side: 'right' | 'below'; title: string; text: string };
+
+function tourSteps(canClassic: boolean): TourStep[] {
+  return [
+    { target: 'list', side: 'right', title: 'Your project, as conversations',
+      text: 'Money, BOQ, Documents, Design, Site… each is a conversation. Pick one to see what has happened and what to open next.' },
+    { target: 'open', side: 'below', title: 'Open a screen',
+      text: 'The buttons here open each screen full size, over the project. Close it, press Esc or use Back to come back here.' },
+    { target: 'way', side: 'below', title: 'The studio is always on top',
+      text: `The studio’s own bar stays at the very top, as on Home. Projects there, or Projects › beside the name, takes you back to all your projects.${canClassic ? ' Use Classic view puts the old view back, just for you.' : ''} Show me around plays this tour again.` },
+  ];
+}
+
+/*
+  Three steps, each pointing at the part it explains: a ring around it, the
+  rest dimmed, and a card beside it (phd-pop). Esc or Skip ends it; nothing is
+  stored, so it can be played again from the top bar at any time.
+*/
+function Tour({ canClassic, onStep, onDone }: { canClassic: boolean; onStep: (n: number) => void; onDone: () => void }) {
+  const steps = tourSteps(canClassic);
+  const [i, setI] = useState(0);
+  const go = (n: number) => { const k = Math.max(0, Math.min(n, steps.length - 1)); onStep(k); setI(k); };
+  const step = steps[i];
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    const measure = () => {
+      const el = document.querySelector(`[data-tour="${step.target}"]`) as HTMLElement | null;
+      const r = el?.getBoundingClientRect();
+      setRect(r && r.width > 0 && r.height > 0 ? r : null);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [step.target]);
+  const card = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { card.current?.focus(); }, [i]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onDone();
+      else if (e.key === 'ArrowRight') go(i + 1);
+      else if (e.key === 'ArrowLeft') go(i - 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  const W = 340;
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const pos: React.CSSProperties = !rect
+    ? { left: Math.max(16, (vw - W) / 2), top: Math.max(16, vh / 2 - 110) }
+    : step.side === 'right' && rect.right + 16 + W < vw
+      ? { left: rect.right + 16, top: Math.min(rect.top + 24, vh - 260) }
+      : { left: Math.min(Math.max(16, rect.left), vw - W - 16), top: Math.min(rect.bottom + 12, vh - 260) };
+  const last = i === steps.length - 1;
+  return (
+    <div className="fixed inset-0 z-[310]">
+      {/* The part being explained stays bright inside the ring; the rest is dimmed. */}
+      {rect ? (
+        <div aria-hidden className="phd-scrim absolute rounded-2xl ring-2 ring-[#3D52A0] pointer-events-none transition-all duration-300"
+          style={{ left: rect.left - 4, top: rect.top - 4, width: rect.width + 8, height: rect.height + 8, boxShadow: '0 0 0 9999px rgba(18, 24, 47, 0.4)' }} />
+      ) : (
+        <div aria-hidden className="phd-scrim absolute inset-0 bg-[#12182F]/40" />
+      )}
+      <div className="absolute inset-0" onClick={onDone} aria-hidden />
+      <div key={i} ref={card} tabIndex={-1} role="dialog" aria-modal="true" aria-label={step.title}
+        className="phd-pop absolute bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 outline-none" style={{ ...pos, width: W, maxWidth: 'calc(100vw - 32px)' }}>
+        <p className="text-xs font-bold text-[#3D52A0]">{i + 1} of {steps.length}</p>
+        <h3 className="mt-1 text-base font-bold text-slate-800">{step.title}</h3>
+        <p className="mt-1 text-[13px] text-slate-600">{step.text}</p>
+        <div className="mt-4 flex items-center gap-2">
+          <span className="flex gap-1.5 flex-1" aria-hidden>
+            {steps.map((_, n) => <span key={n} className={cx('h-1.5 rounded-full transition-all duration-300', n === i ? 'w-5 bg-[#3D52A0]' : 'w-1.5 bg-slate-300')} />)}
+          </span>
+          {i > 0 ? <Button size="sm" variant="quiet" onClick={() => go(i - 1)}>Back</Button> : <Button size="sm" variant="quiet" onClick={onDone}>Skip</Button>}
+          <Button size="sm" variant="primary" onClick={() => (last ? onDone() : go(i + 1))}>{last ? 'Done' : 'Next'}</Button>
         </div>
       </div>
     </div>
