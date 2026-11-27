@@ -21,8 +21,9 @@ import { appliedTier, appliedContext } from '../lib/scopeApply';
 import { scopeRevisionReference } from '../lib/scopeDocuments';
 import type { ScopeRevisionRecord } from '../lib/scopeRevision';
 import { contextWithTierCopied } from '../lib/specOverrides';
-import { X, Lock, Plus } from 'lucide-react';
+import { X, Lock, Plus, ArrowRight } from 'lucide-react';
 import { keepLockedTier, lockedTierId, scopeInForce, detailedBoqForTier, detailedBoqVersion, isApprovedIssue } from '../lib/scopeFlow';
+import { pendingRevision } from '../lib/revisionMoneyPreview';
 import { resolveBoqLine, isBillable, isAsActuals, holdPrice, isUnpriced } from '../lib/boqPricing';
 import { removeLines, restoreLines, RemovedLine } from '../lib/boqEdits';
 import { useOrg } from '../contexts/OrgContext';
@@ -541,6 +542,14 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
     ].filter(Boolean)
   }, [activeTier?.name, activeTier?.boq?.length, rooms.length]);
 
+  /* A scope revision already open on this signed version: continue it, never start a second one. */
+  const openRevision = useMemo(() => {
+    const p = isLocked && activeTier ? pendingRevision(projectContext, tiers, bank) : null;
+    const rec = p ? (projectContext.scopeRevisions || []).find(r => r.id === p.id) : null;
+    return p && rec && rec.baseTierId === activeTier?.id ? p : null;
+  }, [isLocked, activeTier, projectContext, tiers, bank]);
+  const REVISION_STATE: Record<string, string> = { draft: 'in draft', with_client: 'with the client', sent_back: 'sent back for changes', approved: 'approved, ready to apply' };
+
   if (!activeTier) return <div>Please select a proposal tier.</div>;
 
   return (
@@ -566,10 +575,19 @@ const StudioDashboard: React.FC<StudioDashboardProps> = ({ projectContext, setPr
           <div className="flex-1 min-w-0">
             <div className="text-[14px] font-bold text-slate-900">{signedIssue ? `Detailed BOQ v${detailedBoqVersion(signedIssue)} is the signed scope, so it is read-only.` : 'This version is the signed scope, so it is read-only.'}</div>
             <p className="text-[12.5px] text-slate-600 mt-0.5">
-              {signedIssue ? `${signedIssue.reference} · ₹${Math.round(signedIssue.snapshot?.total || 0).toLocaleString('en-IN')}. ` : ''}To change it, start a revision: the client signs the change before anything moves, and the payment schedule follows. Other versions stay editable.
+              {signedIssue ? `${signedIssue.reference} · ₹${Math.round(signedIssue.snapshot?.total || 0).toLocaleString('en-IN')}. ` : ''}
+              {openRevision
+                ? `Scope Revision ${openRevision.number} is ${REVISION_STATE[openRevision.state] || 'open'}: ₹${Math.round(openRevision.v2Total).toLocaleString('en-IN')} of work against ₹${Math.round(openRevision.v1Total).toLocaleString('en-IN')} signed. The changes go into it; the signed scope moves only once the client approves it and it is applied.`
+                : 'To change it, start a revision: the client signs the change before anything moves, and the payment schedule follows. Other versions stay editable.'}
             </p>
           </div>
-          {onStartRevision && <button onClick={onStartRevision} className="px-4 py-2.5 rounded-xl bg-[#3D52A0] hover:bg-[#334486] text-white text-[12.5px] font-bold shrink-0 flex items-center gap-1.5"><Plus className="w-4 h-4" /> Start a revision</button>}
+          {onStartRevision && (
+            <button onClick={onStartRevision} className="px-4 py-2.5 rounded-xl bg-[#3D52A0] hover:bg-[#334486] text-white text-[12.5px] font-bold shrink-0 flex items-center gap-1.5">
+              {openRevision
+                ? <><ArrowRight className="w-4 h-4" /> {openRevision.state === 'draft' || openRevision.state === 'sent_back' ? `Continue Scope Revision ${openRevision.number}` : `Open Scope Revision ${openRevision.number}`}</>
+                : <><Plus className="w-4 h-4" /> Start a revision</>}
+            </button>
+          )}
         </div>
       )}
       <div className="space-y-8">
