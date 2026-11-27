@@ -8,6 +8,7 @@
 import { Type } from './aiSchema';
 import { getAi, aiIsReachable } from './aiClient';
 import { FLASH_MODEL } from '../constants/aiModels';
+import { NOTES_INSTRUCTIONS, normaliseNotes, type NotesRead } from '../lib/smartRecord';
 import { opsViewOf } from '../functions/src/teamViewStrip';
 import { clientMoneyOf } from '../lib/clientMoney';
 import {
@@ -74,6 +75,43 @@ export async function captureConversation(input: { text?: string; audio?: { mime
     ? { inlineData: { mimeType: input.audio.mimeType, data: input.audio.base64 } }
     : { text: `Conversation:\n${String(input.text || '').slice(0, 20000)}` };
   return normaliseCapture(parse(await generate([head, body], CAPTURE_SCHEMA), null));
+}
+
+const NOTES_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    summary: { type: Type.STRING },
+    items: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          kind: { type: Type.STRING, enum: ['decision', 'snag', 'extra_work', 'client_promise', 'our_promise', 'date', 'open_question'] },
+          text: { type: Type.STRING },
+          room: { type: Type.STRING },
+          due: { type: Type.STRING },
+          category: { type: Type.STRING },
+          severity: { type: Type.STRING },
+        },
+        required: ['kind', 'text'],
+      },
+    },
+  },
+  required: ['summary', 'items'],
+};
+
+/**
+ * Smart Record (lib/smartRecord): rough notes from a site visit, a meeting or
+ * a call, typed or spoken, sorted into decisions, snags, extra work, promises,
+ * dates and questions. Given the project's room names so a line can name its
+ * room; never its money.
+ */
+export async function readNotes(input: { text?: string; audio?: { mimeType: string; base64: string } }, today: string, ctx: { clientName: string; source: string; rooms: string[] }): Promise<NotesRead> {
+  const head = { text: `${NOTES_INSTRUCTIONS}\nToday is ${today}. These are notes from a ${ctx.source.toLowerCase()}. The client is ${ctx.clientName || 'the client'}. The project's rooms: ${ctx.rooms.slice(0, 40).join(', ') || 'not listed'}.` };
+  const body = input.audio
+    ? { inlineData: { mimeType: input.audio.mimeType, data: input.audio.base64 } }
+    : { text: `Notes:\n${String(input.text || '').slice(0, 20000)}` };
+  return normaliseNotes(parse(await generate([head, body], NOTES_SCHEMA), null), ctx.rooms);
 }
 
 export interface Answer { answer: string; sources: string[]; reply: string }

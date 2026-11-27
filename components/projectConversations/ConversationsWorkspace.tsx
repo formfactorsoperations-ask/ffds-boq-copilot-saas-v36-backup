@@ -34,6 +34,10 @@ import { opsSettingsOf, type OpsSettings } from '../../lib/opsDesk';
 import { askClientsToOpen } from '../../lib/clientsOpen';
 import { nudgeHolder, openInDesignReview, toDrawing, type ReviewDrawing } from '../../services/drawingReviewService';
 import { useProjectCare } from './useProjectCare';
+import SmartRecord from './SmartRecord';
+import { askScopeAddition } from '../../lib/smartRecord';
+import { assistAvailable } from '../../services/opsAssistService';
+import type { Item, SnagItem } from '../../types';
 import type { ImpactStep } from '../../lib/scheduleImpact';
 import { markSeen, readSeen } from '../../services/projectSeenService';
 import '../projectHeader/projectHeader.css';
@@ -156,6 +160,13 @@ export interface ConversationsWorkspaceProps {
   isReviewer?: boolean;
   /** The studio's Ops Desk settings (lib/opsDesk opsSettingsOf): when a payment falls due, for the pulse. */
   opsSettings?: OpsSettings;
+  /** Smart Record (lib/smartRecord): adds snags to the project's snag list; none when this person cannot change the project. */
+  onAddSnags?: (snags: SnagItem[]) => void;
+  /** Who logs a snag from here, for the snag list's "raised by". */
+  snagRaisedBy?: SnagItem['raisedBy'];
+  /** The studio's Item bank and the active option's BOQ, for the scope-creep catcher. */
+  bank?: Item[];
+  boq?: Array<{ id?: string; name?: string; unit?: string }>;
   /** The person's own switch back to Classic, when the studio lets them choose. */
   onUseClassic?: () => void;
   /** Where each screen sits in the Classic sidebar, for "Where did it go?" and the window's signpost. */
@@ -260,6 +271,10 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
   );
   const readiness = useMemo(() => (careData.care ? handoverReadiness(ctx, careData.care.checklists, now) : null), [careData.care, ctx, now]);
   const openClients = () => { askClientsToOpen(p.projectId); p.onLeaveProject('clients'); };
+
+  /* Smart Record (PR 3): "From notes" on the Record bar, for those who may log and while the studio's AI is reachable. */
+  const [smartOpen, setSmartOpen] = useState(false);
+  const canSmart = p.canLog && !p.viewOnly && assistAvailable();
 
   /* Which smart card is open in each conversation: none at first, then the person's last choice (a convenience, this browser only). */
   const [briefs, setBriefs] = useState<Record<string, string | null>>(() => { try { return JSON.parse(window.localStorage.getItem('studiodesk.smartBriefs') || '{}') || {}; } catch { return {}; } });
@@ -428,7 +443,7 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
             ) : null}
             tail={null} />
           <Composer conv={shown.id} convName={shown.name} canLog={p.canLog} onWrite={writeLine}
-            onRecord={shown.id === 'whole' ? open : undefined} />
+            onRecord={shown.id === 'whole' ? open : undefined} onFromNotes={shown.id === 'whole' && canSmart ? () => setSmartOpen(true) : undefined} />
         </section>
         <ProjectCard ctx={ctx} money={p.money} seesMoney={p.seesMoney} journey={p.journey} stages={p.stages} glance={glance}
           portalLine={portalLine} onOpen={open} has={(r) => p.conversations.some((c) => c.routes.includes(r))}
@@ -440,6 +455,16 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
           conversations={p.conversations} backTo={shown} viewOnly={p.viewOnly} onOpen={open} onClose={closeWindow} classic={classicOf(windowRoute)}>
           {p.children}
         </ScreenWindow>
+      )}
+      {smartOpen && (
+        <SmartRecord projectId={p.projectId} projectName={name} clientName={clientName} tenantId={p.tenantId} me={p.me}
+          rooms={(ctx.rooms || []).map((r: any) => String(r?.name || '')).filter(Boolean)}
+          raisedBy={p.snagRaisedBy || 'owner'} onAddSnags={p.onAddSnags}
+          canPrice={canOpen('scope-additions')} seesRates={p.seesMoney} boq={p.boq || []} bank={p.bank || []}
+          canOpen={canOpen} onOpen={open}
+          onDraftScope={(text) => { askScopeAddition(p.projectId, text); open('scope-additions'); }}
+          onLogged={(f) => setRecords((prev) => ({ ...(prev || EMPTY_RECORDS), followUps: [f, ...((prev || EMPTY_RECORDS).followUps)] }))}
+          onClose={() => setSmartOpen(false)} />
       )}
       {tour && !windowRoute && <Tour canClassic={!!p.onUseClassic} onStep={tourStep} onDone={endTour} />}
     </div>
@@ -1160,9 +1185,11 @@ function ReadinessBlock({ r }: { r: Readiness }) {
   Messages to the client are written on the Messages screen and on Clients, not
   here (owner, 27 Nov 2026).
 */
-function Composer({ conv, convName, canLog, onWrite, onRecord }: {
+function Composer({ conv, convName, canLog, onWrite, onRecord, onFromNotes }: {
   conv: ConversationId; convName: string; canLog: boolean;
   onWrite: (l: FollowUpLine) => Promise<void>; onRecord?: (r: string) => void;
+  /** Smart Record: notes from a visit, meeting or call, sorted and filed (PR 3). */
+  onFromNotes?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
@@ -1185,6 +1212,10 @@ function Composer({ conv, convName, canLog, onWrite, onRecord }: {
             <Button size="sm" variant="secondary" icon={HardHat} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="S" className="cvw-hot cvw-lift" data-ripple>Site visit</Button>
             <Button size="sm" variant="secondary" icon={Users} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="M" className="cvw-hot cvw-lift" data-ripple>Meeting</Button>
             <Button size="sm" variant="secondary" icon={Scale} onClick={() => onRecord('record-decision')} aria-keyshortcuts="D" className="cvw-hot cvw-lift" data-ripple>Decision</Button>
+            {onFromNotes && (
+              <Button size="sm" variant="secondary" icon={Sparkles} onClick={onFromNotes} className="cvw-hot cvw-lift" data-ripple
+                title="Type or speak your notes; decisions, snags, extra work and promises are sorted for you to file">From notes</Button>
+            )}
           </>
         )}
         <span className="flex-1" />

@@ -2,7 +2,7 @@ import { isTerminated } from '../lib/termination';
 import ProjectAlertBar from './projectAlerts/ProjectAlertBar';
 import React, { useState, useEffect, useMemo } from 'react';
 import { ProjectContextTier } from './ProjectContextTier';
-import { ProjectContext, ProjectStatus, FullProjectData } from '../types';
+import { ProjectContext, ProjectStatus, FullProjectData, Item } from '../types';
 import { STAGE_LABELS, PHASES } from '../constants/journeyConstants';
 import { Lock, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, X, Compass, Activity, Check, Info, Settings, Edit3, AlertTriangle, LayoutGrid, Handshake, Palette, Layers, FileText, Truck, Hammer, Key, Sparkles, SlidersHorizontal, Eye, Pencil } from '@/lib/lucide-shim';
 import { NAV_CONFIG, ALWAYS_ON_BAND } from './navConfig';
@@ -125,6 +125,8 @@ export function ProjectWorkspace({
   onStatusChange,
   tierSummary,
   onViewChange,
+  bank,
+  fullBoq,
 }: {
   projectId: string;
   projectContext: ProjectContext;
@@ -138,6 +140,9 @@ export function ProjectWorkspace({
   onStatusChange?: (status: ProjectStatus, note?: string) => Promise<void> | void;
   /** The billed option's summary, for the termination and dispute windows (components/projectAlerts). */
   tierSummary?: { totalSell?: number; designFee?: number };
+  /** The studio's Item bank and the active option's BOQ, for Smart Record's scope-creep catcher (Conversations view). */
+  bank?: Item[];
+  fullBoq?: Array<{ id?: string; name?: string; unit?: string }>;
   /** Which layout the project is drawn in, so App can keep the studio's own bar over the Conversations view (owner, 27 Nov 2026). */
   onViewChange?: (view: 'classic' | 'conversations') => void;
 }) {
@@ -366,6 +371,10 @@ export function ProjectWorkspace({
           canBillRounds={canSetAudience((currentRoles as any)?.length ? currentRoles : currentRole)}
           isReviewer={canReview((currentRoles as any)?.length ? currentRoles : currentRole)}
           opsSettings={opsSettingsOf(orgData)}
+          bank={bank}
+          boq={fullBoq}
+          onAddSnags={setProjectContext && !isLimited ? (snags) => setProjectContext((prev) => ({ ...prev, snagList: [...snags, ...(prev.snagList || [])] })) : undefined}
+          snagRaisedBy={/site supervisor/i.test(String(currentRole)) ? 'site_supervisor' : isDesigner ? 'designer' : 'owner'}
           onUseClassic={canChooseView ? () => pv.setView('classic') : undefined}
           classic={[
             { route: homeRoute, label: homeLabel, where: '' },

@@ -36,6 +36,7 @@ import ScopeAdditionInvoiceDoc from '../client/ScopeAdditionInvoiceDoc';
 import { prepareClonedDocForPdf } from '../../lib/pdfUtils';
 import autoTable from 'jspdf-autotable';
 import { pickable } from '../../lib/bankMatch';
+import { takeScopeAddition } from '../../lib/smartRecord';
 
 interface ScopeAdditionProps {
     projectId: string;
@@ -128,6 +129,11 @@ export default function ScopeAdditionsModule({ projectId, projectContext, bank, 
 
     // New additions formulation state
     const [clientRequest, setClientRequest] = useState('');
+    /* Opened from Smart Record's "Draft scope addition" (lib/smartRecord): the client's request, written in. */
+    useEffect(() => {
+        const req = takeScopeAddition(projectId);
+        if (req) { setClientRequest(req); setIsFormOpen(true); }
+    }, [projectId]);
     const [classification, setClassification] = useState<ScopeAdditionClassification | null>(null);
     const [isCreating, setIsCreating] = useState(false);
 
