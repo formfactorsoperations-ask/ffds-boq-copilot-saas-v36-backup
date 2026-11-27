@@ -22,6 +22,11 @@ import type { TemplateId } from '../../lib/clientNextMove';
 import { loadClientRecords } from '../../services/clientThreadService';
 import { watchClientVisits } from '../../services/portalVisitsService';
 import { logFollowUp } from '../../services/opsDeskService';
+import { useHubAlerts } from '../ops/useHubAlerts';
+import { moneyPicture, projectSignals, rippleRoute, rippleSteps, signalOf, type MoneyPicture, type Signal } from '../../lib/projectSignals';
+import { catchUp, sinceLabel, type CatchUp } from '../../lib/projectCatchUp';
+import type { ImpactStep } from '../../lib/scheduleImpact';
+import { markSeen, readSeen } from '../../services/projectSeenService';
 import '../projectHeader/projectHeader.css';
 
 /*
@@ -192,6 +197,39 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
   }, [records, visits, p.money, ctx, p.projectId, now]);
 
   const glance = useProjectGlance(p.projectId, p.tenantId, ctx);
+
+  /*
+    What is wrong in each conversation (lib/projectSignals, smart workspace PR 1):
+    the project's risk checks, the Hub's alerts, the money and the drawings. A
+    signal shows only when this person may open the screen that owns it.
+  */
+  const { alerts } = useHubAlerts(p.projectId, ctx);
+  const canOpen = (r: string) => p.conversations.some((c) => c.routes.includes(r));
+  const signals = useMemo(
+    () => projectSignals({ context: ctx, money: p.money, alerts, drawings: glance.items ?? null, now }).filter((s) => canOpen(s.route)),
+    [ctx, p.money, alerts, glance.items, now, p.conversations],
+  );
+  const moneyCard = useMemo(() => (p.seesMoney ? moneyPicture(ctx, p.money, { now }) : null), [ctx, p.money, p.seesMoney, now]);
+  const copiesBehind = useMemo(() => rippleSteps(ctx), [ctx]);
+
+  /*
+    Since you were here: when this person last opened the project is read once
+    as the project opens and kept as the "since" for this visit; the visit
+    itself is marked at once, so the next visit starts from now.
+  */
+  const [seenAt, setSeenAt] = useState<number | null | undefined>(undefined);
+  const [caughtUp, setCaughtUp] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setSeenAt(undefined); setCaughtUp(false);
+    readSeen(p.me.email, p.projectId).then((at) => {
+      if (!live) return;
+      setSeenAt(at);
+      void markSeen(p.me.email, p.projectId);
+    });
+    return () => { live = false; };
+  }, [p.projectId, p.me.email]);
+  const sinceThen = useMemo(() => (caughtUp || !records ? null : catchUp(story, seenAt)), [story, seenAt, caughtUp, records]);
   const portalLine = useMemo(
     () => (p.seesVisits ? portalStatus({ context: ctx }, visits, now) : portalStatusForViewer({ context: ctx })),
     [ctx, visits, now, p.seesVisits],
@@ -278,7 +316,7 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
 
       <div className="flex-1 min-h-0 mx-3 sm:mx-5 mb-3 sm:mb-5 grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px] gap-4 hud-panel-in">
         <ConversationList conversations={p.conversations} conv={shown.id} story={story} now={now} needsOf={p.needsOf}
-          money={p.money} journey={p.journey} onPick={setConv}
+          money={p.money} journey={p.journey} onPick={setConv} signals={signals}
           findScreen={(q) => findScreens(q, p.conversations, (r) => (r === p.homeRoute ? p.hubLabel : p.labelOf(r)), classic, p.homeRoute)}
           onOpenScreen={(c, r) => { setConv(c); open(r); }} />
         <section className="cvw-float flex flex-col min-h-0 min-w-0 overflow-hidden" aria-label={shown.name}>
@@ -286,9 +324,18 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
           <Thread key={shown.id} conv={shown.id} routes={shown.routes} aboutOf={p.aboutOf || (() => '')} story={storyFor(story, shown.id)} now={now} loading={!records} onOpen={open}
             labelOf={p.labelOf} visible={(r) => p.conversations.some((c) => c.routes.includes(r))}
             pinned={shown.id === 'whole' ? (
-              <UpNext stage={p.currentStage} stages={p.stages} journey={p.journey} hubLabel={p.hubLabel} onHub={() => setHubOpen(true)}
-                onMatrix={p.conversations.some((c) => c.routes.includes('project-journey')) ? () => open('project-journey') : undefined}
-                onOpen={open} labelOf={p.labelOf} />
+              <>
+                {sinceThen && <SinceCard data={sinceThen} now={now} names={p.conversations} canOpen={canOpen} onOpen={open} onPick={setConv} onDone={() => setCaughtUp(true)} />}
+                <UpNext stage={p.currentStage} stages={p.stages} journey={p.journey} hubLabel={p.hubLabel} onHub={() => setHubOpen(true)}
+                  onMatrix={p.conversations.some((c) => c.routes.includes('project-journey')) ? () => open('project-journey') : undefined}
+                  onOpen={open} labelOf={p.labelOf} />
+                {signals.length > 0 && <WatchOuts signals={signals} names={p.conversations} labelOf={p.labelOf} onOpen={open} />}
+              </>
+            ) : shown.id === 'money' && (moneyCard || copiesBehind.length) ? (
+              <>
+                {moneyCard && <MoneyCard data={moneyCard} canOpen={canOpen('payment-calc')} openLabel={p.labelOf('payment-calc')} onOpen={() => open('payment-calc')} />}
+                {copiesBehind.length > 0 && <RippleCard steps={copiesBehind} canOpen={canOpen} onOpen={open} labelOf={p.labelOf} />}
+              </>
             ) : null}
             tail={null} />
           <Composer conv={shown.id} convName={shown.name} canLog={p.canLog} onWrite={writeLine}
@@ -355,9 +402,9 @@ function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, onLeave, 
 
 /* ───────────── the list ───────────── */
 
-function ConversationList({ conversations, conv, story, now, needsOf, money, journey, onPick, findScreen, onOpenScreen }: {
+function ConversationList({ conversations, conv, story, now, needsOf, money, journey, onPick, findScreen, onOpenScreen, signals }: {
   conversations: ConversationDef[]; conv: ConversationId; story: StoryItem[]; now: number; needsOf: (r: string) => number;
-  money: ClientMoney | null; journey: ConversationsWorkspaceProps['journey']; onPick: (c: ConversationId) => void;
+  money: ClientMoney | null; journey: ConversationsWorkspaceProps['journey']; onPick: (c: ConversationId) => void; signals: Signal[];
   findScreen: (q: string) => ReturnType<typeof findScreens>; onOpenScreen: (c: ConversationId, route: string) => void;
 }) {
   const [q, setQ] = useState('');
@@ -385,6 +432,8 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
         {list.map((c, i) => {
           const Icon = CONV_ICON[c.id];
           const pv = previewOf(c);
+          /* The worst thing wrong in it, in words (owner, 27 Nov 2026: "yes you can use coloured reason"): rose late, amber your turn. */
+          const sig = signalOf(signals, c.id);
           const needs = c.routes.reduce((s, r) => s + needsOf(r), 0) > 0;
           const on = c.id === conv;
           return (
@@ -403,7 +452,11 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
                   {pv.at && <span className="text-[11px] text-slate-400 whitespace-nowrap">{whenShort(pv.at, now)}</span>}
                 </span>
                 <span className="flex items-center gap-1.5 mt-0.5">
-                  <span className="flex-1 min-w-0 truncate text-xs text-slate-500">{pv.text}</span>
+                  {sig ? (
+                    <span className={cx('flex-1 min-w-0 truncate text-xs font-semibold', sig.tone === 'late' ? 'text-rose-700' : 'text-amber-700')} title={sig.detail}>{sig.line}</span>
+                  ) : (
+                    <span className="flex-1 min-w-0 truncate text-xs text-slate-500">{pv.text}</span>
+                  )}
                   {needs && <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0 animate-[psb-attn_1.8s_infinite] motion-reduce:animate-none" title="Needs you" />}
                 </span>
               </span>
@@ -485,7 +538,8 @@ const Thread: React.FC<{
   useEffect(() => { const el = scroller.current; if (el) el.scrollTop = el.scrollHeight; }, [story.length, conv]);
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      {pinned}
+      {/* The cards on top keep to about two thirds of the pane, so the story below always shows. */}
+      {pinned && <div className="shrink-0 max-h-[68%] overflow-y-auto flex flex-col gap-2 pb-1">{pinned}</div>}
       <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-2.5">
         {story.length > SHOW && !all && (
           <button type="button" onClick={() => setAll(true)} className="self-center text-xs font-bold text-[#3D52A0] px-3 py-1.5 rounded-lg hover:bg-[#3D52A0]/10">
@@ -632,6 +686,167 @@ function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, lab
         </button>
       )}
     </div>
+  );
+}
+
+/* ───────────── smart workspace, PR 1 ───────────── */
+
+/*
+  SINCE YOU WERE HERE (lib/projectCatchUp): what moved since this person last
+  opened the project, at most three lines, the client's own first. Each line
+  opens its screen (or its conversation); Mark as read puts it away for this
+  visit. Owners and project leads open many projects a day (owner, 27 Nov 2026).
+*/
+function SinceCard({ data, now, names, canOpen, onOpen, onPick, onDone }: {
+  data: CatchUp; now: number; names: ConversationDef[]; canOpen: (r: string) => boolean;
+  onOpen: (r: string) => void; onPick: (c: ConversationId) => void; onDone: () => void;
+}) {
+  const nameOf = (c: ConversationId) => names.find((x) => x.id === c)?.name || conversationDef(c).name;
+  return (
+    <section className="shrink-0 mx-4 mt-1 rounded-2xl bg-[#EEF2FD] px-3 py-2.5 hud-panel-in" aria-label="Since you were here">
+      <div className="flex items-center gap-2 px-1.5 mb-1">
+        <h3 className="flex-1 min-w-0 truncate text-[13px] font-bold text-slate-800">Since you were here {sinceLabel(data.since, now)}</h3>
+        <Button size="sm" variant="quiet" className="cvw-hot" data-ripple onClick={onDone}>Mark as read</Button>
+      </div>
+      <ul className="flex flex-col">
+        {data.lines.map((l, i) => (
+          <li key={l.id}>
+            <button type="button" data-ripple onClick={() => (l.route && canOpen(l.route) ? onOpen(l.route) : onPick(l.conv))}
+              className="cvw-hot hud-row-in w-full flex items-center gap-2.5 rounded-lg px-1.5 py-1 text-left hover:bg-white/70" style={{ animationDelay: `${60 + i * 40}ms` }}>
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CONV_TONE[l.conv].fg }} aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-[13px] text-slate-700">{l.text}</span>
+              <span className="text-[11px] text-slate-400 whitespace-nowrap">{nameOf(l.conv)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {data.more > 0 && <p className="mt-0.5 px-1.5 text-[11px] text-slate-500">and {data.more} more in the story below</p>}
+    </section>
+  );
+}
+
+/*
+  WATCH-OUTS (lib/projectSignals): the three worst things on the project, each
+  in the conversation that owns it and one button to its screen. The rest are
+  on their conversations in the list. Rose is late, amber is someone's turn.
+*/
+function WatchOuts({ signals, names, labelOf, onOpen }: {
+  signals: Signal[]; names: ConversationDef[]; labelOf: (r: string) => string; onOpen: (r: string) => void;
+}) {
+  const nameOf = (c: ConversationId) => names.find((x) => x.id === c)?.name || conversationDef(c).name;
+  const top = signals.slice(0, 3);
+  return (
+    <section className="shrink-0 mx-4 rounded-2xl bg-white border border-slate-100 overflow-hidden hud-panel-in" aria-label="Watch-outs">
+      <div className="flex items-center gap-2 px-4 pt-2.5 pb-1">
+        <h3 className="flex-1 text-[15px] font-bold text-slate-800">Watch-outs</h3>
+        <span className="text-[11px] text-slate-500">{signals.length === 1 ? '1 on this project' : `${signals.length} on this project`}</span>
+      </div>
+      {top.map((s, i) => (
+        <div key={s.id} className="hud-row-in flex items-center gap-3 px-4 py-2 border-t border-slate-100" style={{ animationDelay: `${120 + i * 40}ms` }}>
+          <Chip tone={s.tone === 'late' ? 'bad' : 'warn'}>{s.tone === 'late' ? 'Late' : 'Your turn'}</Chip>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-semibold text-slate-800 truncate">{s.line}</p>
+            <p className="text-xs text-slate-500 truncate" title={s.detail}>{nameOf(s.conv)}{s.detail ? ` · ${s.detail}` : ''}</p>
+          </div>
+          <Button size="sm" variant="secondary" className="cvw-hot cvw-lift shrink-0" data-ripple onClick={() => onOpen(s.route)}>Open {labelOf(s.route)}</Button>
+        </div>
+      ))}
+      {signals.length > 3 && (
+        <p className="px-4 py-2 border-t border-slate-100 text-xs text-slate-500">{signals.length - 3} more, each shown on its conversation in the list</p>
+      )}
+    </section>
+  );
+}
+
+const inrOf = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
+const TILE = {
+  rose: 'bg-rose-50 text-rose-700', amber: 'bg-amber-50 text-amber-700', gold: 'bg-[#FBF5EA] text-[#8C6A33]',
+  brand: 'bg-[#EEF2FD] text-[#3D52A0]', slate: 'bg-[#F4F7FB] text-slate-700',
+} as const;
+const MoneyTile: React.FC<{ label: string; value: React.ReactNode; sub: string; tint: keyof typeof TILE }> = ({ label, value, sub, tint }) => (
+  <div className={cx('rounded-xl px-3 py-2.5 min-w-0', TILE[tint])}>
+    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
+    <span className="block font-black tabular-nums truncate">{value}</span>
+    <span className="block text-[11px] text-slate-500 truncate">{sub}</span>
+  </div>
+);
+
+/*
+  MONEY WAITING (lib/projectSignals moneyPicture): the Money conversation opens
+  on what is unpaid and for how long, what is earned and not invoiced, and
+  whether the stages still add up, for the roles that see money, behind the
+  hide-figures eye. The button opens the Money screen; nothing is raised or
+  sent from here.
+*/
+function MoneyCard({ data, canOpen, openLabel, onOpen }: { data: MoneyPicture; canOpen: boolean; openLabel: string; onOpen: () => void }) {
+  const amt = (n: number | null, fallback: string) => (n == null ? fallback : <Masked>{inrOf(n)}</Masked>);
+  const worst = data.unpaid[0];
+  const pastTerms = data.unpaid.filter((u) => u.level >= 1);
+  const unpaidTint = !worst ? 'slate' : worst.level >= 2 ? 'rose' : worst.level === 1 ? 'amber' : 'slate';
+  return (
+    <section className="shrink-0 mx-4 mt-1 rounded-2xl bg-gradient-to-b from-[#F7F9FF] to-[#EEF2FD] px-4 py-3 hud-panel-in" aria-label="Money waiting">
+      <h3 className="text-[15px] font-bold text-slate-800 mb-2">Money waiting</h3>
+      <div className={cx('grid gap-2', data.drift ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2')}>
+        <MoneyTile label="Unpaid" tint={unpaidTint}
+          value={worst ? amt(data.unpaidTotal, data.unpaid.length === 1 ? '1 invoice' : `${data.unpaid.length} invoices`) : 'Nothing'}
+          sub={worst ? `${worst.name} · ${worst.days === 1 ? '1 day' : `${worst.days} days`}${pastTerms.length ? '' : ' · within terms'}` : 'No invoice waiting'} />
+        {data.earned.length > 0 ? (
+          <MoneyTile label="Earned, not invoiced" tint="gold"
+            value={amt(data.earnedTotal, data.earned.length === 1 ? '1 stage' : `${data.earned.length} stages`)}
+            sub={data.earned.length === 1 ? `${data.earned[0].name} · ${data.earned[0].reason}` : data.earned.map((e) => e.name).join(' · ')} />
+        ) : (
+          <MoneyTile label="Next to bill" tint="brand"
+            value={data.nextToBill ? amt(data.nextToBill.amount, data.nextToBill.name) : 'Nothing'}
+            sub={data.nextToBill ? data.nextToBill.name : 'Every stage is billed'} />
+        )}
+        {data.drift && (
+          <MoneyTile label="Stages add up to" tint="amber"
+            value={`${data.drift.design ?? data.drift.execution}%`}
+            sub={data.drift.design != null && data.drift.execution != null ? `design and execution, not 100%` : `${data.drift.design != null ? 'design' : 'execution'} stages, not 100%`} />
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 mt-2.5">
+        <p className="min-w-0 flex-1 text-xs text-slate-500">
+          {data.pays ? <>This client has paid <b className="text-slate-700">{data.pays.meanDays} days</b> after an invoice, over {data.pays.settled} stages.</> : 'Raise and chase invoices on the Money screen.'}
+        </p>
+        {canOpen && <Button size="sm" variant="primary" className="cvw-hot cvw-lift" data-ripple onClick={onOpen}>Open {openLabel}<ArrowRight className="cvw-arrow w-3.5 h-3.5" aria-hidden /></Button>}
+      </div>
+    </section>
+  );
+}
+
+/*
+  THE RIPPLE (lib/scheduleImpact, through lib/projectSignals rippleSteps): the
+  payment schedule moved and what the client holds did not. The steps are in
+  the order to take them, as Money lists them; each opens its screen.
+*/
+function RippleCard({ steps, canOpen, onOpen, labelOf }: {
+  steps: ImpactStep[]; canOpen: (r: string) => boolean; onOpen: (r: string) => void; labelOf: (r: string) => string;
+}) {
+  return (
+    <section className="shrink-0 mx-4 rounded-2xl bg-amber-50 px-4 py-3 hud-panel-in" aria-label="What the client holds">
+      <h3 className="text-[13px] font-bold text-amber-800">The client holds copies older than the payment schedule</h3>
+      <p className="text-xs text-amber-700 mb-2">Bring them up to date in this order.</p>
+      <ol className="flex flex-col gap-1.5">
+        {steps.map((s, i) => {
+          const r = rippleRoute(s);
+          return (
+            <li key={s.key} className="hud-row-in flex items-center gap-3 rounded-xl bg-white px-3 py-2" style={{ animationDelay: `${80 + i * 40}ms` }}>
+              <span className="w-6 h-6 rounded-full grid place-items-center bg-amber-100 text-amber-800 text-[11px] font-bold shrink-0" aria-hidden>{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold text-slate-800">{s.title}</p>
+                <p className="text-xs text-slate-500">{s.why}</p>
+              </div>
+              {canOpen(r) && (
+                <Button size="sm" variant="secondary" className="cvw-hot cvw-lift shrink-0" data-ripple onClick={() => onOpen(r)}>
+                  {s.key === 'generate' ? `Open ${labelOf(r)}` : s.label}
+                </Button>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 

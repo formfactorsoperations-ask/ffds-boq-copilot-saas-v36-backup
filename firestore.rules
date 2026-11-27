@@ -290,6 +290,14 @@ service cloud.firestore {
         allow create, delete: if false;
       }
 
+      /* When this person last opened a project, for "Since you were here" (services/projectSeenService). */
+      match /seen/{projectId} {
+        allow read, delete: if inboxOwner();
+        allow create, update: if inboxOwner()
+          && request.resource.data.keys().hasOnly(['at'])
+          && request.resource.data.at is int;
+      }
+
       match /devices/{deviceId} {
         allow read, delete: if inboxOwner();
         allow create, update: if inboxOwner()
