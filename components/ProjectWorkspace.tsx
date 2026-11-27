@@ -358,6 +358,11 @@ export function ProjectWorkspace({
           viewOnly={isLimited && !(isDesigner && DESIGNER_EDITABLE_TABS.has(activeTab))}
           alertBar={alertBar}
           onUseClassic={canChooseView ? () => pv.setView('classic') : undefined}
+          classic={[
+            { route: homeRoute, label: homeLabel, where: '' },
+            ...sidebarStages.flatMap(s => s.screens.map(x => ({ route: x.route, label: x.label, where: s.label }))),
+            ...sidebarHub.map(h => ({ route: h.route, label: h.label, where: 'Project Hub' })),
+          ]}
         >
           {children}
         </ConversationsWorkspace>

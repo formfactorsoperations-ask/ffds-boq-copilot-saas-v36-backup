@@ -4,7 +4,7 @@
 */
 import { describe, it, expect } from 'vitest';
 import { NAV_CONFIG, ALWAYS_ON_BAND } from '../../components/navConfig';
-import { CONVERSATIONS, conversationOf, conversationsFor } from '../../lib/projectConversations';
+import { CONVERSATIONS, conversationOf, conversationsFor, findScreens, classicLine } from '../../lib/projectConversations';
 import { resolveProjectView, studioWorkspaceOf, mayChooseView, cleanView } from '../../lib/projectView';
 import { buildStory, storyFor, latestOf, placeEntry, noteHomes, noteKey } from '../../lib/projectThread';
 import type { ThreadEntry } from '../../lib/clientThread';
@@ -103,5 +103,37 @@ describe("the project's story", () => {
     expect(storyFor(story, 'money').map((s) => s.id)).toEqual(['f-n1']);
     expect(storyFor(story, 'plan').map((s) => s.id)).toEqual(['f-n3']);
     expect(storyFor(story, 'whole')).toHaveLength(3);
+  });
+});
+
+describe('where did it go? (plan PR G)', () => {
+  const convs = conversationsFor(new Set(['ops', 'analytics', 'payment-calc', 'comms-tracker', 'boq-editor']));
+  const labelOf = (r: string) => ({ ops: 'Pricing & Tiers', analytics: 'Money & Offers', 'payment-calc': 'Money', 'comms-tracker': 'Messages', 'boq-editor': 'BOQ Editor', dashboard: 'Hub' } as Record<string, string>)[r] || r;
+  const classic = [
+    { route: 'dashboard', label: 'Hub', where: '' },
+    { route: 'ops', label: 'Pricing & Tiers', where: 'Scope & Strategy' },
+    { route: 'comms-tracker', label: 'Client Messages', where: 'Project Hub' },
+    { route: 'site-ops', label: 'Site Control Room', where: 'Execution' },
+  ];
+  it('finds a screen by its Classic name and says which conversation it is in now', () => {
+    const [m] = findScreens('client messages', convs, labelOf, classic, 'dashboard');
+    expect(m.route).toBe('comms-tracker');
+    expect(m.label).toBe('Messages');
+    expect(m.conv.id).toBe('chat');
+  });
+  it('lists a Classic stage by its name, and the Hub in Whole project', () => {
+    expect(findScreens('scope', convs, labelOf, classic, 'dashboard').map((m) => m.route)).toEqual(['ops']);
+    const [hub] = findScreens('hub', convs, labelOf, classic, 'dashboard');
+    expect(hub.route).toBe('dashboard');
+    expect(hub.conv.id).toBe('whole');
+  });
+  it('finds nothing the person may not open, and nothing for one letter', () => {
+    expect(findScreens('site control', convs, labelOf, classic, 'dashboard')).toEqual([]);
+    expect(findScreens('m', convs, labelOf, classic, 'dashboard')).toEqual([]);
+  });
+  it('writes the Classic place in one line', () => {
+    expect(classicLine(classic[1])).toBe('Scope & Strategy › Pricing & Tiers');
+    expect(classicLine(classic[0])).toBe('Hub');
+    expect(classicLine(null)).toBe('');
   });
 });

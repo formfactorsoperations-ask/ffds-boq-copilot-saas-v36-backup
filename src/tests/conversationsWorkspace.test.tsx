@@ -31,7 +31,15 @@ import { conversationsFor } from '../../lib/projectConversations';
 
 afterEach(cleanup);
 
-const LABELS: Record<string, string> = { 'payment-calc': 'Money', analytics: 'Money & Offers', 'boq-editor': 'BOQ Editor', 'client-portal': 'Client Portal', 'comms-tracker': 'Messages', timeline: 'Timeline', leadiq: 'Brief & Site', 'drawing-tracker': 'Drawings' };
+const LABELS: Record<string, string> = { 'payment-calc': 'Money', analytics: 'Money & Offers', 'boq-editor': 'BOQ Editor', 'client-portal': 'Client Portal', 'comms-tracker': 'Messages', timeline: 'Timeline', leadiq: 'Brief & Site', 'drawing-tracker': 'Drawings', ops: 'Pricing & Tiers' };
+
+const CLASSIC = [
+  { route: 'dashboard', label: 'Hub', where: '' },
+  { route: 'ops', label: 'Pricing & Tiers', where: 'Scope & Strategy' },
+  { route: 'analytics', label: 'Money & Offers', where: 'Scope & Strategy' },
+  { route: 'boq-editor', label: 'BOQ Editor', where: 'Scope & Strategy' },
+  { route: 'comms-tracker', label: 'Client Messages', where: 'Project Hub' },
+];
 
 function setup(over: Partial<ConversationsWorkspaceProps> = {}) {
   const setActiveTab = vi.fn();
@@ -50,6 +58,7 @@ function setup(over: Partial<ConversationsWorkspaceProps> = {}) {
     me: { email: 'owner@studio.in', name: 'Owner' }, statusLabel: 'Won', desks: [],
     onLeaveProject, showHideFigures: false, viewOnly: false,
     children: <div>THE SCREEN</div>,
+    classic: CLASSIC,
     ...over,
   };
   const utils = render(<ConversationsWorkspace {...props} />);
@@ -179,5 +188,54 @@ describe('the Conversations workspace', () => {
     expect(card.textContent).toMatch(/14 Mar ’27/);
     expect(card.textContent).toContain('Design sign-off');
     expect(card.textContent).toContain('Site work starts');
+  });
+  it('finds a screen by its old Classic name or stage, says where it is now, and opens it (plan PR G)', () => {
+    const { setActiveTab } = setup();
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    fireEvent.change(within(list).getByRole('textbox'), { target: { value: 'client messages' } });
+    const found = within(list).getByRole('group', { name: 'Screens' });
+    expect(found.textContent).toContain('Messages');
+    expect(found.textContent).toContain('In Client & portal');
+    expect(found.textContent).toContain('was “Client Messages” in Project Hub');
+    fireEvent.change(within(list).getByRole('textbox'), { target: { value: 'scope & strategy' } });
+    const byStage = within(list).getByRole('group', { name: 'Screens' });
+    for (const n of ['Pricing & Tiers', 'Money & Offers', 'BOQ Editor']) expect(byStage.textContent).toContain(n);
+    fireEvent.click(within(byStage).getByRole('button', { name: /^Pricing & Tiers/ }));
+    expect(setActiveTab).toHaveBeenCalledWith('ops');
+  });
+
+  it('finds the Hub by name and opens it in the window', () => {
+    setup();
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    fireEvent.change(within(list).getByRole('textbox'), { target: { value: 'hub' } });
+    fireEvent.click(within(within(list).getByRole('group', { name: 'Screens' })).getByRole('button', { name: /^Hub/ }));
+    expect(screen.getByRole('dialog', { name: 'Hub' })).toBeTruthy();
+  });
+
+  it("signposts each window with the screen's Classic place", () => {
+    setup({ activeTab: 'ops' });
+    expect(screen.getByRole('dialog', { name: 'Pricing & Tiers' }).textContent).toContain('In Classic: Scope & Strategy › Pricing & Tiers');
+  });
+
+  it('offers a three-step tour on first open, and plays it again from the top bar', () => {
+    window.localStorage.removeItem('studiodesk.projectView.welcomed');
+    setup({ onUseClassic: vi.fn() });
+    const welcome = screen.getByText(/This is the new project view/).closest('div') as HTMLElement;
+    fireEvent.click(within(welcome).getByRole('button', { name: 'Show me around' }));
+    expect(screen.getByRole('dialog', { name: 'Your project, as conversations' }).textContent).toContain('1 of 3');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('dialog', { name: 'Open a screen' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Client & portal' })).toBeTruthy(); // a conversation with Open buttons
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    const last = screen.getByRole('dialog', { name: 'The way out is always on top' });
+    expect(last.textContent).toContain('Use Classic view puts the old view back');
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Whole project' })).toBeTruthy(); // back where it began
+    expect(window.localStorage.getItem('studiodesk.projectView.welcomed')).toBe('1');
+    fireEvent.click(screen.getByRole('button', { name: /Show me around/ }));
+    expect(screen.getByRole('dialog', { name: 'Your project, as conversations' })).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

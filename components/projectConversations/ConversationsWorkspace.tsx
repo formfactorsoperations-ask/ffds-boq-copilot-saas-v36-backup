@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, Sparkles, MessageCircle, Wallet, Table, FolderOpen, PenTool, HardHat, CalendarRange, MapPin,
-  X, Home, Users, Search, FileText, Globe, IndianRupee, NotebookPen, Info, Eye, Scale, ChevronRight, LayoutGrid,
+  X, Home, Users, Search, FileText, Globe, IndianRupee, NotebookPen, Info, Eye, Scale, ChevronRight, LayoutGrid, Compass, History,
 } from '@/lib/lucide-shim';
 import { Button, Chip, EmptyState, INPUT, Segmented, type Tone } from '../ui/kit';
 import { Masked, HideFiguresButton } from '../ui/HideFigures';
@@ -11,7 +11,7 @@ import { motion } from 'framer-motion';
 import PageTitleBlock from '../PageTitleBlock';
 import ViewOnlyGuard from '../ViewOnlyGuard';
 import { PortalLineText } from '../clients/parts';
-import { conversationDef, conversationOf, type ConversationDef, type ConversationId } from '../../lib/projectConversations';
+import { classicLine, conversationDef, conversationOf, findScreens, type ClassicPlace, type ConversationDef, type ConversationId } from '../../lib/projectConversations';
 import { buildStory, groupStory, latestOf, noteHomes, noteKey, storyFor, whenShort, type StoryItem } from '../../lib/projectThread';
 import { buildThread, SOURCE_LABEL, EMPTY_RECORDS, type ThreadRecords, type ThreadSource } from '../../lib/clientThread';
 import { noteLine, type FollowUpLine } from '../../lib/clientCompose';
@@ -117,6 +117,8 @@ export interface ConversationsWorkspaceProps {
   alertBar?: React.ReactNode;
   /** The person's own switch back to Classic, when the studio lets them choose. */
   onUseClassic?: () => void;
+  /** Where each screen sits in the Classic sidebar, for "Where did it go?" and the window's signpost. */
+  classic?: ClassicPlace[];
   /** The screen for the active route, drawn as Classic draws it. */
   children: React.ReactNode;
 }
@@ -190,8 +192,9 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
     if (conv !== 'whole' || windowRoute) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
-      const t = e.target as HTMLElement;
-      if (t && (t.closest('input, textarea, select, [contenteditable="true"]') || document.querySelector('[aria-modal="true"]'))) return;
+      const t = e.target as HTMLElement | null;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      if (t && typeof t.closest === 'function' && t.closest('input, textarea, select, [contenteditable="true"]')) return;
       const k = e.key.toLowerCase();
       if (k === 's' || k === 'm') open('site-meetings');
       else if (k === 'd') open('record-decision');
@@ -203,10 +206,23 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
   /* Said once, the first time someone sees this view. */
   const [welcome, setWelcome] = useState(() => { try { return !window.localStorage.getItem('studiodesk.projectView.welcomed'); } catch { return false; } });
   const dismissWelcome = () => { setWelcome(false); try { window.localStorage.setItem('studiodesk.projectView.welcomed', '1'); } catch { /* private window */ } };
+  /* The short tour: offered with the welcome, and again from "Show me around" on top. */
+  const [tour, setTour] = useState(false);
+  const tourFrom = useRef<ConversationId>('whole');
+  const beginTour = () => { tourFrom.current = conv; setTour(true); };
+  const startTour = () => { dismissWelcome(); beginTour(); };
+  /* Step 2 shows the Open buttons, so it opens a conversation that has some; the tour ends where it began. */
+  const tourStep = (n: number) => {
+    if (n === 1 && !shown.routes.length) { const c = p.conversations.find((x) => x.routes.length); if (c) setConv(c.id); }
+    else if (n !== 1) setConv(tourFrom.current);
+  };
+  const endTour = () => { setTour(false); setConv(tourFrom.current); };
+  const classic = p.classic || [];
+  const classicOf = (route: string) => classic.find((c) => c.route === route) || null;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 min-w-0">
-      <WayOut desks={p.desks} onLeave={p.onLeaveProject} onUseClassic={p.onUseClassic} showHideFigures={p.showHideFigures} />
+      <WayOut desks={p.desks} onLeave={p.onLeaveProject} onUseClassic={p.onUseClassic} showHideFigures={p.showHideFigures} onTour={beginTour} />
       <ProjectTitle ctx={ctx} name={name} statusLabel={p.statusLabel} onStatusClick={p.onStatusClick}
         onPortal={p.conversations.some((c) => c.routes.includes('client-portal')) ? () => open('client-portal') : undefined} />
       {p.alertBar}
@@ -217,13 +233,16 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
             <b className="text-slate-800">This is the new project view.</b> Pick a conversation on the left (Money, BOQ, Documents…); every screen opens full size and closes back here.
             {p.onUseClassic && ' You can go back to Classic from the top bar at any time.'}
           </span>
+          <Button size="sm" variant="primary" icon={Compass} onClick={startTour}>Show me around</Button>
           <Button size="sm" variant="quiet" onClick={dismissWelcome}>Got it</Button>
         </div>
       )}
 
       <div className="flex-1 min-h-0 mx-3 sm:mx-5 mb-3 sm:mb-5 grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hud-panel-in">
         <ConversationList conversations={p.conversations} conv={shown.id} story={story} now={now} needsOf={p.needsOf}
-          money={p.money} journey={p.journey} onPick={setConv} />
+          money={p.money} journey={p.journey} onPick={setConv}
+          findScreen={(q) => findScreens(q, p.conversations, (r) => (r === p.homeRoute ? p.hubLabel : p.labelOf(r)), classic, p.homeRoute)}
+          onOpenScreen={(c, r) => { setConv(c); open(r); }} />
         <section className="flex flex-col min-h-0 min-w-0 border-l border-slate-100" aria-label={shown.name}>
           <ThreadHead conv={shown} labelOf={p.labelOf} onOpen={open} onPickMobile={setConv} conversations={p.conversations} />
           <Thread key={shown.id} conv={shown.id} routes={shown.routes} aboutOf={p.aboutOf || (() => '')} story={storyFor(story, shown.id)} now={now} loading={!records} onOpen={open}
@@ -243,22 +262,23 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
 
       {windowRoute && (
         <ScreenWindow route={windowRoute} isHub={windowRoute === p.homeRoute} hubLabel={p.hubLabel} projectName={name} labelOf={p.labelOf}
-          conversations={p.conversations} backTo={shown} viewOnly={p.viewOnly} onOpen={open} onClose={closeWindow}>
+          conversations={p.conversations} backTo={shown} viewOnly={p.viewOnly} onOpen={open} onClose={closeWindow} classic={classicOf(windowRoute)}>
           {p.children}
         </ScreenWindow>
       )}
+      {tour && !windowRoute && <Tour canClassic={!!p.onUseClassic} onStep={tourStep} onDone={endTour} />}
     </div>
   );
 }
 
 /* ───────────── the way out ───────────── */
 
-function WayOut({ desks, onLeave, onUseClassic, showHideFigures }: {
-  desks: StudioJumpItem[]; onLeave: (t?: string) => void; onUseClassic?: () => void; showHideFigures: boolean;
+function WayOut({ desks, onLeave, onUseClassic, showHideFigures, onTour }: {
+  desks: StudioJumpItem[]; onLeave: (t?: string) => void; onUseClassic?: () => void; showHideFigures: boolean; onTour: () => void;
 }) {
   const item = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap';
   return (
-    <nav aria-label="Studio" className="h-12 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-1 min-w-0 overflow-x-auto">
+    <nav aria-label="Studio" data-tour="way" className="h-12 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-1 min-w-0 overflow-x-auto">
       <button type="button" onClick={() => onLeave('projects')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/15 whitespace-nowrap">
         <ArrowLeft className="w-4 h-4" aria-hidden />All projects
       </button>
@@ -271,6 +291,7 @@ function WayOut({ desks, onLeave, onUseClassic, showHideFigures }: {
       })}
       <span className="flex-1" />
       {showHideFigures && <HideFiguresButton />}
+      <button type="button" onClick={onTour} className={cx(item, 'hidden sm:inline-flex')} title="A short tour of this view"><Compass className="w-4 h-4 text-slate-400" aria-hidden />Show me around</button>
       {onUseClassic && (
         <Button size="sm" variant="secondary" onClick={onUseClassic} title="Your own choice: the studio's setting stays as it is">Use Classic view</Button>
       )}
@@ -300,13 +321,16 @@ function ProjectTitle({ ctx, name, statusLabel, onStatusClick, onPortal }: {
 
 /* ───────────── the list ───────────── */
 
-function ConversationList({ conversations, conv, story, now, needsOf, money, journey, onPick }: {
+function ConversationList({ conversations, conv, story, now, needsOf, money, journey, onPick, findScreen, onOpenScreen }: {
   conversations: ConversationDef[]; conv: ConversationId; story: StoryItem[]; now: number; needsOf: (r: string) => number;
   money: ClientMoney | null; journey: ConversationsWorkspaceProps['journey']; onPick: (c: ConversationId) => void;
+  findScreen: (q: string) => ReturnType<typeof findScreens>; onOpenScreen: (c: ConversationId, route: string) => void;
 }) {
   const [q, setQ] = useState('');
   const term = q.trim().toLowerCase();
   const list = term ? conversations.filter((c) => c.name.toLowerCase().includes(term) || c.about.toLowerCase().includes(term)) : conversations;
+  /* "Where did it go?": a screen found by today's name, its Classic name or its Classic stage. */
+  const screens = term ? findScreen(term) : [];
   const owed = money?.milestones.find((m) => m.status === 'invoiced' && !m.disputed);
   const previewOf = (c: ConversationDef): { text: string; at: number | null } => {
     if (c.id === 'whole' && journey.next) return { text: `Next: ${journey.next}`, at: null };
@@ -315,11 +339,12 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
     return last ? { text: last.text, at: last.at } : { text: c.about, at: null };
   };
   return (
-    <aside className="hidden md:flex flex-col min-h-0 bg-white" aria-label="This project's conversations">
+    <aside data-tour="list" className="hidden md:flex flex-col min-h-0 bg-white" aria-label="This project's conversations">
       <div className="p-3 border-b border-slate-100">
         <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-300 focus-within:ring-2 focus-within:ring-[#3D52A0]/30">
           <Search className="w-4 h-4 text-slate-400" aria-hidden />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find in this project" aria-label="Find a conversation" className="flex-1 min-w-0 text-sm outline-none bg-transparent" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a screen or old name" aria-label="Find a conversation or a screen" className="flex-1 min-w-0 text-sm outline-none bg-transparent" />
+          {q && <button type="button" onClick={() => setQ('')} aria-label="Clear the search" className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" aria-hidden /></button>}
         </label>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -350,7 +375,29 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
             </button>
           );
         })}
-        {!list.length && <p className="px-4 py-6 text-xs text-slate-500">No conversation matches “{q}”.</p>}
+        {screens.length > 0 && (
+          <div className="hud-panel-in" role="group" aria-label="Screens">
+            <p className="px-4 pt-3 pb-1 text-xs font-bold text-slate-500">Screens</p>
+            {screens.map((m, i) => {
+              const renamed = m.classic && m.classic.label !== m.label;
+              return (
+                <button key={m.route} type="button" onClick={() => onOpenScreen(m.conv.id, m.route)}
+                  className="psb-btn w-full flex items-start gap-3 px-3 py-2.5 text-left border-b border-slate-100 hover:bg-slate-50 hud-row-in"
+                  style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
+                  <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><ArrowRight className="w-4 h-4" aria-hidden /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold text-slate-800">{m.label}</span>
+                    <span className="block text-xs text-slate-500">
+                      In {m.conv.name}
+                      {m.classic && <> · was {renamed ? <>“{m.classic.label}” </> : ''}in {m.classic.where || 'the top of the sidebar'}</>}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {!list.length && !screens.length && <p className="px-4 py-6 text-xs text-slate-500">Nothing matches “{q}”. Try a screen’s name, such as Money or Drawings.</p>}
       </div>
     </aside>
   );
@@ -364,7 +411,7 @@ function ThreadHead({ conv, labelOf, onOpen, onPickMobile, conversations }: {
 }) {
   const Icon = CONV_ICON[conv.id];
   return (
-    <div className="shrink-0 border-b border-slate-100">
+    <div data-tour="open" className="shrink-0 border-b border-slate-100">
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
         <div className="min-w-0 flex-1">
@@ -722,9 +769,9 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, glance, portalLin
 
 /* ───────────── the full-screen window ───────────── */
 
-function ScreenWindow({ route, isHub, hubLabel, projectName, labelOf, conversations, backTo, viewOnly, onOpen, onClose, children }: {
+function ScreenWindow({ route, isHub, hubLabel, projectName, labelOf, conversations, backTo, viewOnly, onOpen, onClose, classic, children }: {
   route: string; isHub: boolean; hubLabel: string; projectName: string; labelOf: (r: string) => string; conversations: ConversationDef[];
-  backTo: ConversationDef; viewOnly: boolean; onOpen: (r: string) => void; onClose: () => void; children: React.ReactNode;
+  backTo: ConversationDef; viewOnly: boolean; onOpen: (r: string) => void; onClose: () => void; classic: ClassicPlace | null; children: React.ReactNode;
 }) {
   const home = conversations.find((c) => c.routes.includes(route));
   const owner = home || conversationDef('whole');
@@ -767,8 +814,98 @@ function ScreenWindow({ route, isHub, hubLabel, projectName, labelOf, conversati
         </div>
         <div className="shrink-0 flex items-center gap-3 px-4 sm:px-6 py-2.5 bg-slate-50 border-t border-slate-100 text-xs text-slate-500">
           <span className="flex-1 min-w-0 truncate">What you change here shows up in the {owner.name} conversation.</span>
+          {/* The signpost for people who learnt the Classic sidebar (plan PR G). */}
+          {classic && (
+            <span className="hidden md:inline-flex items-center gap-1.5 min-w-0 truncate" title="Where this screen is in the Classic view">
+              <History className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden />In Classic: {classicLine(classic)}
+            </span>
+          )}
           <span className="hidden sm:inline px-1.5 py-0.5 rounded border border-slate-300 bg-white text-[11px] font-bold text-slate-600">Esc</span>
           <Button size="sm" variant="secondary" icon={ArrowLeft} onClick={onClose}>Back to {backTo.name}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────── the short tour (plan PR G) ───────────── */
+
+type TourStep = { target: 'list' | 'open' | 'way'; side: 'right' | 'below'; title: string; text: string };
+
+function tourSteps(canClassic: boolean): TourStep[] {
+  return [
+    { target: 'list', side: 'right', title: 'Your project, as conversations',
+      text: 'Money, BOQ, Documents, Design, Site… each is a conversation. Pick one to see what has happened and what to open next.' },
+    { target: 'open', side: 'below', title: 'Open a screen',
+      text: 'The buttons here open each screen full size, over the project. Close it, press Esc or use Back to come back here.' },
+    { target: 'way', side: 'below', title: 'The way out is always on top',
+      text: `All projects, Studio home and Clients are here on every screen.${canClassic ? ' Use Classic view puts the old view back, just for you.' : ''} Show me around plays this tour again.` },
+  ];
+}
+
+/*
+  Three steps, each pointing at the part it explains: a ring around it, the
+  rest dimmed, and a card beside it (phd-pop). Esc or Skip ends it; nothing is
+  stored, so it can be played again from the top bar at any time.
+*/
+function Tour({ canClassic, onStep, onDone }: { canClassic: boolean; onStep: (n: number) => void; onDone: () => void }) {
+  const steps = tourSteps(canClassic);
+  const [i, setI] = useState(0);
+  const go = (n: number) => { const k = Math.max(0, Math.min(n, steps.length - 1)); onStep(k); setI(k); };
+  const step = steps[i];
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    const measure = () => {
+      const el = document.querySelector(`[data-tour="${step.target}"]`) as HTMLElement | null;
+      const r = el?.getBoundingClientRect();
+      setRect(r && r.width > 0 && r.height > 0 ? r : null);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [step.target]);
+  const card = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { card.current?.focus(); }, [i]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onDone();
+      else if (e.key === 'ArrowRight') go(i + 1);
+      else if (e.key === 'ArrowLeft') go(i - 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  const W = 340;
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const pos: React.CSSProperties = !rect
+    ? { left: Math.max(16, (vw - W) / 2), top: Math.max(16, vh / 2 - 110) }
+    : step.side === 'right' && rect.right + 16 + W < vw
+      ? { left: rect.right + 16, top: Math.min(rect.top + 24, vh - 260) }
+      : { left: Math.min(Math.max(16, rect.left), vw - W - 16), top: Math.min(rect.bottom + 12, vh - 260) };
+  const last = i === steps.length - 1;
+  return (
+    <div className="fixed inset-0 z-[310]">
+      {/* The part being explained stays bright inside the ring; the rest is dimmed. */}
+      {rect ? (
+        <div aria-hidden className="phd-scrim absolute rounded-2xl ring-2 ring-[#3D52A0] pointer-events-none transition-all duration-300"
+          style={{ left: rect.left - 4, top: rect.top - 4, width: rect.width + 8, height: rect.height + 8, boxShadow: '0 0 0 9999px rgba(18, 24, 47, 0.4)' }} />
+      ) : (
+        <div aria-hidden className="phd-scrim absolute inset-0 bg-[#12182F]/40" />
+      )}
+      <div className="absolute inset-0" onClick={onDone} aria-hidden />
+      <div key={i} ref={card} tabIndex={-1} role="dialog" aria-modal="true" aria-label={step.title}
+        className="phd-pop absolute bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 outline-none" style={{ ...pos, width: W, maxWidth: 'calc(100vw - 32px)' }}>
+        <p className="text-xs font-bold text-[#3D52A0]">{i + 1} of {steps.length}</p>
+        <h3 className="mt-1 text-lg font-bold text-slate-800">{step.title}</h3>
+        <p className="mt-1 text-sm text-slate-600">{step.text}</p>
+        <div className="mt-4 flex items-center gap-2">
+          <span className="flex gap-1.5 flex-1" aria-hidden>
+            {steps.map((_, n) => <span key={n} className={cx('h-1.5 rounded-full transition-all duration-300', n === i ? 'w-5 bg-[#3D52A0]' : 'w-1.5 bg-slate-300')} />)}
+          </span>
+          {i > 0 ? <Button size="sm" variant="quiet" onClick={() => go(i - 1)}>Back</Button> : <Button size="sm" variant="quiet" onClick={onDone}>Skip</Button>}
+          <Button size="sm" variant="primary" onClick={() => (last ? onDone() : go(i + 1))}>{last ? 'Done' : 'Next'}</Button>
         </div>
       </div>
     </div>

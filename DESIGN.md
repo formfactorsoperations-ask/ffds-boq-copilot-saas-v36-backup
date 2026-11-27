@@ -1348,6 +1348,19 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   shows up in the … conversation", Esc, and "← Back to …". A dialog a screen opens closes before the window
   on Esc. No window opens on top of a window.
 - A first-time line says what the view is and how to go back; "Got it" hides it on that device.
+- **Finding your way from Classic** (plan PR G, for people who learnt the Classic sidebar):
+  - **Show me around:** a three-step tour, offered on the first-time line and kept in the top bar for
+    any time after. Each step rings the part it explains (the conversations; a conversation's Open
+    buttons; the way out on top) and dims the rest, with a card beside it: "1 of 3", a `text-lg` title,
+    one or two plain sentences, step dots, Skip/Back and Next/Done. Step 2 opens a conversation that has
+    Open buttons; the tour ends in the conversation it began in. Esc ends it; the arrow keys step.
+  - **Where did it go?:** the list's search ("Find a screen or old name") also finds screens by today's
+    name, their Classic name and their Classic stage ("Scope & Strategy" lists that stage's screens), each
+    as "Pricing & Tiers · In Money · was in Scope & Strategy" (with the old name in quotes when it
+    changed). Clicking one opens its conversation and the screen. Only screens the person may open.
+  - **The Classic signpost:** each window's footer says where the screen is in Classic, "In Classic:
+    Scope & Strategy › Pricing & Tiers" (from `md`). The places come from the Classic sidebar itself,
+    so the two cannot drift.
 - **Motion** (owner, 27 Nov 2026: keep the motion the app already has): the project sidebar's and Clients'
   approved motion, nothing new. Each conversation's icon moves on hover in its own way (`.psb-ic`
   `data-a`); the highlight slides to the conversation picked (`layoutId`, as the sidebar's does); a
