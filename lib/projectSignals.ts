@@ -165,6 +165,10 @@ export interface SignalInput {
   siteRows?: SmartRow[] | null;
   /** When something last happened on the project (lib/projectCatchUp lastActivityOf); null when nothing has. */
   lastActivityAt?: number | null;
+  /** The project's P&L (lib/projectPnl), for the roles that see the studio's money: the cash and margin checks run on it. */
+  pnl?: ProjectPnl | null;
+  /** The programme's handover forecast (lib/projectOutlook): it answers the handover check better than the journey does. */
+  handover?: { lateWorkDays: number | null; line: string } | null;
   now?: number;
   thresholds?: EscalationThresholds;
 }
@@ -181,8 +185,10 @@ export function projectSignals(i: SignalInput): Signal[] {
 
   /* The project's own risk checks, as Reports shows them. */
   try {
-    for (const r of buildProjectRisk(ctx, NO_PNL).active) {
+    for (const r of buildProjectRisk(ctx, i.pnl || NO_PNL).active) {
       if (!r.route || (r.level !== 'critical' && r.level !== 'warning')) continue;
+      /* With a programme, its forecast says when handover will be; the journey-based check steps aside. */
+      if (r.id === 'handover-slip' && i.handover && i.handover.lateWorkDays != null) continue;
       push({ id: `risk-${r.id}`, route: r.route, tone: r.level === 'critical' ? 'late' : 'turn', line: r.title, detail: r.detail, weight: r.weight });
     }
   } catch { /* a project too old for a check: the others still run */ }
@@ -251,6 +257,11 @@ export function projectSignals(i: SignalInput): Signal[] {
         detail: risky[0].risk.line, weight: 18,
       });
     }
+  }
+
+  /* The programme forecasts handover past its target. */
+  if (i.handover && i.handover.lateWorkDays != null && i.handover.lateWorkDays > 0) {
+    push({ id: 'handover-forecast', route: 'timeline', tone: 'late', line: 'Handover past its target', detail: `${i.handover.line}.`, weight: 20 });
   }
 
   /* A live project where nothing has been recorded for a while: often the first sign it has stalled. */

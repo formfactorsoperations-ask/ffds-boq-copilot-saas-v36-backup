@@ -26,6 +26,8 @@ export interface Glance {
   hasProgramme: boolean | undefined;
   /** The Drawing Tracker's rows, for the Design signals (lib/projectSignals); null while they load. */
   items?: any[] | null;
+  /** The saved programme and the engine's result of it, for the handover forecast (lib/projectOutlook); null without one. */
+  programme?: { schedule: any; result: any } | null;
 }
 
 export function useProjectGlance(projectId: string, studioId: string, ctx: any): Glance {
@@ -57,7 +59,7 @@ export function useProjectGlance(projectId: string, studioId: string, ctx: any):
   }, [drawItems, roomNames]);
 
   const programme = useMemo(() => {
-    if (!saved) return { handoverISO: null, targetISO: null, milestones: [] as Glance['milestones'] };
+    if (!saved) return { handoverISO: null, targetISO: null, milestones: [] as Glance['milestones'], programme: null };
     try {
       const schedule: any = scheduleForEngagement(saved, ctx) || saved;
       const r: any = computeProgramme(schedule);
@@ -68,8 +70,8 @@ export function useProjectGlance(projectId: string, studioId: string, ctx: any):
         .sort((a: any, b: any) => a.startISO.localeCompare(b.startISO))
         .slice(0, 4)
         .map(({ id, title, startISO }: any) => ({ id, title, startISO }));
-      return { handoverISO: r.finishISO || null, targetISO: schedule.targetHandoverISO || null, milestones };
-    } catch { return { handoverISO: null, targetISO: null, milestones: [] as Glance['milestones'] }; }
+      return { handoverISO: r.finishISO || null, targetISO: schedule.targetHandoverISO || null, milestones, programme: { schedule, result: r } };
+    } catch { return { handoverISO: null, targetISO: null, milestones: [] as Glance['milestones'], programme: null }; }
   }, [saved, ctx]);
 
   return { drawings, ...programme, hasProgramme: saved === undefined ? undefined : !!saved, items: drawItems };

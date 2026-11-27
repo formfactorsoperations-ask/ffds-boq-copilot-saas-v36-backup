@@ -3441,6 +3441,9 @@ export default function App() {
                   onViewChange={setWorkspaceView}
                   bank={bank}
                   fullBoq={fullBoqForActiveTier}
+                  pnlBoq={activeProject ? executionBoq : fullBoqForActiveTier}
+                  activeTier={activeCalculatedTier}
+                  tiers={tiers}
                 >
                 {/* No scroll box or padding of its own: ProjectWorkspace gives every project screen one scroll area and one gutter. */}
                 <div className="min-w-0">

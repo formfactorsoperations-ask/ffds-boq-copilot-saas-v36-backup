@@ -127,6 +127,9 @@ export function ProjectWorkspace({
   onViewChange,
   bank,
   fullBoq,
+  pnlBoq,
+  activeTier,
+  tiers,
 }: {
   projectId: string;
   projectContext: ProjectContext;
@@ -143,6 +146,10 @@ export function ProjectWorkspace({
   /** The studio's Item bank and the active option's BOQ, for Smart Record's scope-creep catcher (Conversations view). */
   bank?: Item[];
   fullBoq?: Array<{ id?: string; name?: string; unit?: string }>;
+  /** For the margin card (lib/projectPnl, as Reports reads it): the BOQ it is measured on, the billed option and all options. */
+  pnlBoq?: any[];
+  activeTier?: any;
+  tiers?: any[];
   /** Which layout the project is drawn in, so App can keep the studio's own bar over the Conversations view (owner, 27 Nov 2026). */
   onViewChange?: (view: 'classic' | 'conversations') => void;
 }) {
@@ -373,6 +380,9 @@ export function ProjectWorkspace({
           opsSettings={opsSettingsOf(orgData)}
           bank={bank}
           boq={fullBoq}
+          pnlBoq={pnlBoq}
+          activeTier={activeTier}
+          tiers={tiers}
           onAddSnags={setProjectContext && !isLimited ? (snags) => setProjectContext((prev) => ({ ...prev, snagList: [...snags, ...(prev.snagList || [])] })) : undefined}
           snagRaisedBy={/site supervisor/i.test(String(currentRole)) ? 'site_supervisor' : isDesigner ? 'designer' : 'owner'}
           onUseClassic={canChooseView ? () => pv.setView('classic') : undefined}

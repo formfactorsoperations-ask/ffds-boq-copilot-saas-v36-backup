@@ -5,7 +5,7 @@ import {
   X, Home, Users, Building2, ChevronRight as Crumb, Search, FileText, Globe, IndianRupee, NotebookPen, Info, Eye, Scale, ChevronRight, LayoutGrid, Compass, History,
 } from '@/lib/lucide-shim';
 import { Button, Chip, EmptyState, INPUT, Segmented, type Tone } from '../ui/kit';
-import { Masked } from '../ui/HideFigures';
+import { Masked, useFiguresHidden } from '../ui/HideFigures';
 import { CountUp } from '../ui/HudBits';
 import { useProjectGlance, type Glance } from './useProjectGlance';
 import { motion } from 'framer-motion';
@@ -34,6 +34,9 @@ import { dayKey, opsSettingsOf, type OpsSettings } from '../../lib/opsDesk';
 import { askClientsToOpen } from '../../lib/clientsOpen';
 import { nudgeHolder, openInDesignReview, toDrawing, type ReviewDrawing } from '../../services/drawingReviewService';
 import { useProjectCare } from './useProjectCare';
+import { useProjectOrders } from './useProjectPnl';
+import { buildProjectPnl, marginAssumption } from '../../lib/projectPnl';
+import { CONFIDENCE_LINE, handoverLine, handoverOutlook, marginOutlook, type HandoverOutlook, type MarginOutlook } from '../../lib/projectOutlook';
 import SmartRecord from './SmartRecord';
 import { askScopeAddition } from '../../lib/smartRecord';
 import { assistAvailable, askThisProject } from '../../services/opsAssistService';
@@ -171,6 +174,10 @@ export interface ConversationsWorkspaceProps {
   /** The studio's Item bank and the active option's BOQ, for the scope-creep catcher. */
   bank?: Item[];
   boq?: Array<{ id?: string; name?: string; unit?: string }>;
+  /** For the margin (lib/projectPnl, as Reports reads it): the BOQ it is measured on, the billed option and all options. */
+  pnlBoq?: any[];
+  activeTier?: any;
+  tiers?: any[];
   /** The person's own switch back to Classic, when the studio lets them choose. */
   onUseClassic?: () => void;
   /** Where each screen sits in the Classic sidebar, for "Where did it go?" and the window's signpost. */
@@ -243,9 +250,32 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
     [glance.items, p.tenantId, p.projectId],
   );
   const lastActivityAt = useMemo(() => (records ? lastActivityOf(story) : null), [records, story]);
+  /*
+    Smart workspace, PR 5 (lib/projectOutlook): the handover forecast from the
+    saved programme, and, for the roles that see the studio's money, the
+    project's P&L as Reports builds it. With the P&L, the cash and margin
+    checks run too; their figures follow the hide-figures eye.
+  */
+  const handover = useMemo<HandoverOutlook | null>(() => {
+    const prog = glance.programme;
+    if (!prog?.schedule || !prog?.result) return null;
+    try { return handoverOutlook(prog.schedule, prog.result); } catch { return null; }
+  }, [glance.programme]);
+  const orders = useProjectOrders(p.projectId, p.seesMoney);
+  const pnl = useMemo(() => {
+    if (!p.seesMoney || !orders) return null;
+    try { return buildProjectPnl(ctx, (p.pnlBoq || p.boq || []) as any, orders, p.activeTier, ctx.procurementModes || {}, marginAssumption(ctx, p.tiers || [], p.bank || [])); } catch { return null; }
+  }, [p.seesMoney, orders, ctx, p.pnlBoq, p.boq, p.activeTier, p.tiers, p.bank]);
+  const margin = useMemo<MarginOutlook | null>(() => marginOutlook(pnl), [pnl]);
+  const figuresHidden = useFiguresHidden();
   const signals = useMemo(
-    () => projectSignals({ context: ctx, money: p.money, alerts, drawings: glance.items ?? null, siteRows, lastActivityAt, now }).filter((s) => canOpen(s.route)),
-    [ctx, p.money, alerts, glance.items, siteRows, lastActivityAt, now, p.conversations],
+    () => projectSignals({
+      context: ctx, money: p.money, alerts, drawings: glance.items ?? null, siteRows, lastActivityAt, now, pnl,
+      handover: handover ? { lateWorkDays: handover.lateWorkDays, line: handoverLine(handover) } : null,
+    })
+      .filter((s) => canOpen(s.route))
+      .map((s) => (figuresHidden && (s.id === 'risk-cash-exposure' || s.id === 'risk-margin-erosion') ? { ...s, detail: 'Hidden while figures are hidden.' } : s)),
+    [ctx, p.money, alerts, glance.items, siteRows, lastActivityAt, now, p.conversations, pnl, handover, figuresHidden],
   );
   const moneyCard = useMemo(() => (p.seesMoney ? moneyPicture(ctx, p.money, { now }) : null), [ctx, p.money, p.seesMoney, now]);
   const copiesBehind = useMemo(() => rippleSteps(ctx), [ctx]);
@@ -457,13 +487,20 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
                   </Brief>
                 )}
               </>
-            ) : shown.id === 'money' && (moneyCard || copiesBehind.length) ? (
+            ) : shown.id === 'money' && (moneyCard || copiesBehind.length || margin) ? (
               <>
                 {moneyCard && (() => { const b = moneyBrief(moneyCard); return (
                   <Brief label="Money waiting" title="Money waiting" tone={b.tone} summary={b.summary} open={isOpen('money')} onToggle={() => toggle('money')}>
                     <MoneyCard data={moneyCard} canOpen={canOpen('payment-calc')} openLabel={p.labelOf('payment-calc')} onOpen={() => open('payment-calc')} />
                   </Brief>
                 ); })()}
+                {margin && (
+                  <Brief label="Margin" title="Margin" tone={margin.tone}
+                    summary={<>Quoted <Masked>{margin.quotedPct}%</Masked> · on track for <Masked>{margin.currentPct}%</Masked>{margin.overspent.length ? ` · ${margin.overspent.length === 1 ? '1 envelope' : `${margin.overspent.length} envelopes`} over budget` : ''}</>}
+                    open={isOpen('margin')} onToggle={() => toggle('margin')}>
+                    <MarginCard data={margin} onReports={canOpen('project-reports') ? () => open('project-reports') : undefined} />
+                  </Brief>
+                )}
                 {copiesBehind.length > 0 && (
                   <Brief label="What the client holds" title="The client holds older copies" tone="turn"
                     summary={`${copiesBehind.length === 1 ? '1 step' : `${copiesBehind.length} steps`} to bring them up to date · ${copiesBehind[0].title}`}
@@ -479,7 +516,12 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
                   onOpenTracker={canOpen('drawing-tracker') ? () => open('drawing-tracker') : undefined}
                   onDesk={() => p.onLeaveProject('design-review')} />
               </Brief>
-            ); })() : shown.id === 'chat' && weekly ? (
+            ); })() : shown.id === 'plan' && handover ? (
+              <Brief label="Handover forecast" title="Handover forecast" tone={handover.lateWorkDays != null && handover.lateWorkDays > 0 ? 'late' : 'plain'}
+                summary={handoverLine(handover)} open={isOpen('handover')} onToggle={() => toggle('handover')}>
+                <HandoverCard data={handover} onTimeline={canOpen('timeline') ? () => open('timeline') : undefined} />
+              </Brief>
+            ) : shown.id === 'chat' && weekly ? (
               <WeeklyCard line={weekly} onOpsDesk={() => p.onLeaveProject('ops-desk')} />
             ) : null}
             tail={null} />
@@ -1070,6 +1112,69 @@ function RippleCard({ steps, canOpen, onOpen, labelOf }: {
           );
         })}
       </ol>
+    </div>
+  );
+}
+
+/* ───────────── smart workspace, PR 5 ───────────── */
+
+const longDay = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+/*
+  THE HANDOVER FORECAST (lib/projectOutlook handoverOutlook): the date the
+  programme now forecasts against the target, the critical-path work and the
+  holds that put it there, and the one change that would pull it back, worked
+  out by running the programme again, never guessed.
+*/
+function HandoverCard({ data, onTimeline }: { data: HandoverOutlook; onTimeline?: () => void }) {
+  const late = data.lateWorkDays != null && data.lateWorkDays > 0;
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-2 gap-2">
+        <MoneyTile label="Likely handover" tint={late ? 'rose' : 'slate'} value={longDay(data.forecastISO)} sub={late ? `${data.lateWorkDays} working days past the target` : data.targetISO ? 'On target' : 'No target set'} />
+        <MoneyTile label="Target" tint="slate" value={data.targetISO ? longDay(data.targetISO) : '—'} sub={data.targetISO ? 'As agreed' : 'Set it on the Timeline'} />
+      </div>
+      {data.reasons.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {data.reasons.map((r) => (
+            <li key={r} className="flex items-start gap-2 text-xs text-slate-600"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" aria-hidden />{r}</li>
+          ))}
+        </ul>
+      )}
+      {data.lever && <p className="rounded-xl bg-[#EEF2FD] px-3 py-2 text-xs text-slate-700"><Sparkles className="inline w-3.5 h-3.5 mr-1 text-[#3D52A0]" aria-hidden />{data.lever.text}</p>}
+      {onTimeline && <div><Button size="sm" variant="secondary" className="cvw-hot cvw-lift" data-ripple onClick={onTimeline}>Open Timeline</Button></div>}
+    </div>
+  );
+}
+
+/*
+  THE MARGIN (lib/projectOutlook marginOutlook, from lib/projectPnl as Reports
+  builds it): quoted against on track for, what moved it, and the cash the
+  studio has committed to vendors beyond what the client has paid. For the
+  roles that see the studio's money; every figure behind the hide-figures eye.
+*/
+function MarginCard({ data, onReports }: { data: MarginOutlook; onReports?: () => void }) {
+  const inr = (n: number) => <Masked>{inrOf(n)}</Masked>;
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <MoneyTile label="Quoted" tint="slate" value={<Masked>{data.quotedPct}%</Masked>} sub="what the job was sold to make" />
+        <MoneyTile label="On track for" tint={data.tone === 'late' ? 'rose' : data.tone === 'turn' ? 'amber' : 'gold'} value={<Masked>{data.currentPct}%</Masked>} sub={data.hasProcurement ? 'orders and bills so far' : 'the plan, nothing ordered'} />
+        <MoneyTile label={data.movedBy >= 0 ? 'Margin lost' : 'Margin gained'} tint={data.movedBy > 0 ? 'amber' : 'slate'} value={inr(Math.abs(data.movedBy))} sub={data.movedBy > 0 ? `${Math.round(data.slipShare * 100)}% of what was quoted` : 'against the quote'} />
+      </div>
+      {(data.overspent.length > 0 || data.uncostedLines > 0 || data.exposure > 0) && (
+        <ul className="flex flex-col gap-1">
+          {data.overspent.map((o) => (
+            <li key={o.where} className="flex items-start gap-2 text-xs text-slate-600"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" aria-hidden /><span><b className="text-slate-800">{o.where}</b>: {inr(o.overBy)} over its budget</span></li>
+          ))}
+          {data.uncostedLines > 0 && <li className="flex items-start gap-2 text-xs text-slate-600"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" aria-hidden />{data.uncostedLines === 1 ? '1 BOQ line has' : `${data.uncostedLines} BOQ lines have`} no cost, so the margin on them is not known</li>}
+          {data.exposure > 0 && <li className="flex items-start gap-2 text-xs text-slate-600"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" aria-hidden /><span>{inr(data.exposure)} committed to vendors beyond what the client has paid</span></li>}
+        </ul>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="min-w-0 flex-1 text-[11px] text-slate-500">{CONFIDENCE_LINE[data.confidence]}</p>
+        {onReports && <Button size="sm" variant="secondary" className="cvw-hot cvw-lift" data-ripple onClick={onReports}>Open Reports</Button>}
+      </div>
     </div>
   );
 }
