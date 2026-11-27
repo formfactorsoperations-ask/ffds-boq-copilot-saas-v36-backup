@@ -25,18 +25,22 @@ import { logFollowUp } from '../../services/opsDeskService';
 import { useHubAlerts } from '../ops/useHubAlerts';
 import { moneyPicture, projectSignals, rippleRoute, rippleSteps, signalOf, type MoneyPicture, type Signal } from '../../lib/projectSignals';
 import { catchUp, lastActivityOf, sinceLabel, type CatchUp } from '../../lib/projectCatchUp';
-import { designPicture, digestLine, handoverReadiness, holderLine, inWork, projectNextMove, projectPulse, type DesignPicture, type DigestLine, type Readiness } from '../../lib/projectCare';
+import { designPicture, digestLine, handoverReadiness, holderLine, inWork, projectNextMove, projectPulse, projectWaiting, type DesignPicture, type DigestLine, type Readiness } from '../../lib/projectCare';
 import { canNudge, nudgeTarget } from '../../lib/deskSmart';
 import { BAND_LABEL, type Pulse } from '../../lib/clientCare';
 import type { NextMove } from '../../lib/clientNextMove';
 import { digestWeekOf } from '../../lib/fridayDigest';
-import { opsSettingsOf, type OpsSettings } from '../../lib/opsDesk';
+import { dayKey, opsSettingsOf, type OpsSettings } from '../../lib/opsDesk';
 import { askClientsToOpen } from '../../lib/clientsOpen';
 import { nudgeHolder, openInDesignReview, toDrawing, type ReviewDrawing } from '../../services/drawingReviewService';
 import { useProjectCare } from './useProjectCare';
 import SmartRecord from './SmartRecord';
 import { askScopeAddition } from '../../lib/smartRecord';
-import { assistAvailable } from '../../services/opsAssistService';
+import { assistAvailable, askThisProject } from '../../services/opsAssistService';
+import { markNextDone } from '../../services/opsDeskService';
+import { askRecord, looksLikeQuestion, promisesOf, type ProjectAnswer, type Promises, type PromiseLine } from '../../lib/projectAsk';
+import { buildProjectBrief } from '../../lib/opsAssist';
+import { opsViewOf } from '../../functions/src/teamViewStrip';
 import type { Item, SnagItem } from '../../types';
 import type { ImpactStep } from '../../lib/scheduleImpact';
 import { markSeen, readSeen } from '../../services/projectSeenService';
@@ -270,6 +274,35 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
     [p.seesClientCare, careData.digest, ctx, now],
   );
   const readiness = useMemo(() => (careData.care ? handoverReadiness(ctx, careData.care.checklists, now) : null), [careData.care, ctx, now]);
+
+  /*
+    Smart workspace, PR 4 (lib/projectAsk): the project's brief as the Ops Desk
+    builds it, from the copy without the studio's costs (functions/src
+    teamViewStrip opsViewOf), with the client's side of the money as this
+    person sees it. It feeds Ask this project and the promises.
+  */
+  const brief = useMemo(() => {
+    if (!careData.care) return null;
+    const project = { id: p.projectId, name };
+    const view = { ...opsViewOf({ id: p.projectId, context: ctx }), id: p.projectId, clientMoney: p.money };
+    const waiting = projectWaiting({ project, money: p.money, care: careData.care, settings: p.opsSettings || opsSettingsOf({}), now });
+    try { return buildProjectBrief(view, careData.care as any, waiting, now); } catch { return null; }
+  }, [careData.care, ctx, p.money, p.projectId, p.opsSettings, name, now]);
+  const [doneIds, setDoneIds] = useState<string[]>([]);
+  const promises = useMemo(() => {
+    if (!careData.care || !brief) return null;
+    const pr = promisesOf({ followUps: careData.care.followUps.filter((f) => !doneIds.includes(f.id)), actions: brief.actions, today: dayKey(now) });
+    return pr.ours.length + pr.theirs.length ? pr : null;
+  }, [careData.care, brief, doneIds, now]);
+  const markDone = async (followUpId: string) => {
+    await markNextDone(p.projectId, followUpId, p.me.email);
+    setDoneIds((d) => [...d, followUpId]);
+  };
+  const canAsk = !!brief && assistAvailable();
+  const ask = (question: string) => {
+    const screens = p.conversations.flatMap((c) => c.routes).map((route) => ({ route, name: p.labelOf(route) }));
+    return askThisProject(askRecord({ brief: brief!, story, snags: ctx.snagList || [], screens }), question);
+  };
   const openClients = () => { askClientsToOpen(p.projectId); p.onLeaveProject('clients'); };
 
   /* Smart Record (PR 3): "From notes" on the Record bar, for those who may log and while the studio's AI is reachable. */
@@ -391,7 +424,8 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
         <ConversationList conversations={p.conversations} conv={shown.id} story={story} now={now} needsOf={p.needsOf}
           money={p.money} journey={p.journey} onPick={setConv} signals={signals}
           findScreen={(q) => findScreens(q, p.conversations, (r) => (r === p.homeRoute ? p.hubLabel : p.labelOf(r)), classic, p.homeRoute)}
-          onOpenScreen={(c, r) => { setConv(c); open(r); }} />
+          onOpenScreen={(c, r) => { setConv(c); open(r); }}
+          onAsk={canAsk ? ask : undefined} labelOf={p.labelOf} onOpenRoute={(r) => { const c = conversationOf(r); if (c) setConv(c); open(r); }} />
         <section className="cvw-float flex flex-col min-h-0 min-w-0 overflow-hidden" aria-label={shown.name}>
           <ThreadHead conv={shown} labelOf={p.labelOf} onOpen={open} onPickMobile={setConv} conversations={p.conversations} />
           <Thread key={shown.id} conv={shown.id} routes={shown.routes} aboutOf={p.aboutOf || (() => '')} story={storyFor(story, shown.id)} now={now} loading={!records} onOpen={open}
@@ -413,6 +447,13 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
                     summary={`${signals.length === 1 ? '1 on this project' : `${signals.length} on this project`} · ${signals[0].line}`}
                     open={isOpen('watch')} onToggle={() => toggle('watch')}>
                     <WatchOuts signals={signals} names={p.conversations} labelOf={p.labelOf} onOpen={open} />
+                  </Brief>
+                )}
+                {promises && (
+                  <Brief label="Promises" title="Promises" tone={promises.late ? 'late' : 'turn'}
+                    summary={[`${promises.ours.length} open from us`, `${promises.theirs.length} from the client`, promises.late ? `${promises.late} late` : ''].filter(Boolean).join(' · ')}
+                    open={isOpen('promises')} onToggle={() => toggle('promises')}>
+                    <PromisesCard data={promises} onDone={markDone} onMinutes={canOpen('site-meetings') ? () => open('site-meetings') : undefined} />
                   </Brief>
                 )}
               </>
@@ -517,12 +558,24 @@ function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, onLeave, 
 
 /* ───────────── the list ───────────── */
 
-function ConversationList({ conversations, conv, story, now, needsOf, money, journey, onPick, findScreen, onOpenScreen, signals }: {
+function ConversationList({ conversations, conv, story, now, needsOf, money, journey, onPick, findScreen, onOpenScreen, signals, onAsk, labelOf, onOpenRoute }: {
   conversations: ConversationDef[]; conv: ConversationId; story: StoryItem[]; now: number; needsOf: (r: string) => number;
   money: ClientMoney | null; journey: ConversationsWorkspaceProps['journey']; onPick: (c: ConversationId) => void; signals: Signal[];
   findScreen: (q: string) => ReturnType<typeof findScreens>; onOpenScreen: (c: ConversationId, route: string) => void;
+  /** Ask this project (PR 4): only when the brief is read and the AI is reachable. */
+  onAsk?: (question: string) => Promise<ProjectAnswer>; labelOf: (r: string) => string; onOpenRoute: (r: string) => void;
 }) {
   const [q, setQ] = useState('');
+  /* The question asked and its answer; a new search clears it. */
+  const [asked, setAsked] = useState<{ q: string; state: 'asking' | 'done' | 'failed'; a?: ProjectAnswer } | null>(null);
+  const question = !!onAsk && looksLikeQuestion(q);
+  const runAsk = async () => {
+    if (!onAsk || !q.trim()) return;
+    const text = q.trim();
+    setAsked({ q: text, state: 'asking' });
+    try { setAsked({ q: text, state: 'done', a: await onAsk(text) }); }
+    catch { setAsked({ q: text, state: 'failed' }); }
+  };
   const term = q.trim().toLowerCase();
   const list = term ? conversations.filter((c) => c.name.toLowerCase().includes(term) || c.about.toLowerCase().includes(term)) : conversations;
   /* "Where did it go?": a screen found by today's name, its Classic name or its Classic stage. */
@@ -539,9 +592,17 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
       <div className="p-3">
         <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E3E8F4] bg-[#F8FAFF] focus-within:ring-2 focus-within:ring-[#3D52A0]/30">
           <Search className="w-4 h-4 text-slate-400" aria-hidden />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a screen or old name" aria-label="Find a conversation or a screen" className="flex-1 min-w-0 text-[13px] outline-none bg-transparent" />
-          {q && <button type="button" onClick={() => setQ('')} aria-label="Clear the search" className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" aria-hidden /></button>}
+          <input value={q} onChange={(e) => { setQ(e.target.value); if (asked && asked.state !== 'asking') setAsked(null); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && question) { e.preventDefault(); void runAsk(); } }}
+            placeholder={onAsk ? 'Find a screen, or ask a question' : 'Find a screen or old name'} aria-label="Find a conversation or a screen" className="flex-1 min-w-0 text-[13px] outline-none bg-transparent" />
+          {q && <button type="button" onClick={() => { setQ(''); setAsked(null); }} aria-label="Clear the search" className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" aria-hidden /></button>}
         </label>
+        {question && !asked && (
+          <button type="button" data-ripple onClick={runAsk} className="cvw-hot hud-row-in mt-2 w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-[#EEF2FD] text-left text-xs font-bold text-[#3D52A0] hover:bg-[#3D52A0]/15">
+            <Sparkles className="w-4 h-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate">Ask this project</span><span className="text-[11px] font-semibold text-slate-500">Enter</span>
+          </button>
+        )}
+        {asked && <AskAnswer asked={asked} labelOf={labelOf} onOpenRoute={onOpenRoute} onClose={() => setAsked(null)} />}
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
         {list.map((c, i) => {
@@ -600,7 +661,7 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
             })}
           </div>
         )}
-        {!list.length && !screens.length && <p className="px-4 py-6 text-xs text-slate-500">Nothing matches “{q}”. Try a screen’s name, such as Money or Drawings.</p>}
+        {!list.length && !screens.length && !question && <p className="px-4 py-6 text-xs text-slate-500">Nothing matches “{q}”. Try a screen’s name, such as Money or Drawings.</p>}
       </div>
     </aside>
   );
@@ -1009,6 +1070,90 @@ function RippleCard({ steps, canOpen, onOpen, labelOf }: {
           );
         })}
       </ol>
+    </div>
+  );
+}
+
+/* ───────────── smart workspace, PR 4 ───────────── */
+
+/*
+  ASK THIS PROJECT (lib/projectAsk): the answer under the search box, from this
+  project's record only, with the parts of the record it used and up to three
+  screens to open. "The records here don't say" when they do not.
+*/
+function AskAnswer({ asked, labelOf, onOpenRoute, onClose }: {
+  asked: { q: string; state: 'asking' | 'done' | 'failed'; a?: ProjectAnswer }; labelOf: (r: string) => string; onOpenRoute: (r: string) => void; onClose: () => void;
+}) {
+  return (
+    <section className="hud-panel-in mt-2 rounded-xl bg-[#EEF2FD] px-3 py-2.5" aria-label="Answer" aria-live="polite">
+      <div className="flex items-start gap-2">
+        <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-[#3D52A0]" aria-hidden />
+        <div className="min-w-0 flex-1">
+          {asked.state === 'asking' && <p className="text-xs text-slate-500">Reading this project’s records…</p>}
+          {asked.state === 'failed' && <p className="text-xs text-rose-700">The AI did not answer. Check your connection and try again.</p>}
+          {asked.state === 'done' && asked.a && (
+            <>
+              <p className="text-[13px] text-slate-800">{asked.a.answer}</p>
+              {asked.a.sources.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">{asked.a.sources.map((s) => <Chip key={s} tone="brand">{s}</Chip>)}</div>
+              )}
+              {asked.a.routes.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {asked.a.routes.map((r) => <Button key={r} size="sm" variant="secondary" className="cvw-hot" data-ripple onClick={() => onOpenRoute(r)}>Open {labelOf(r)}</Button>)}
+                </div>
+              )}
+              <p className="mt-1.5 text-[11px] text-slate-500">From this project’s records only.</p>
+            </>
+          )}
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close the answer" className="text-slate-400 hover:text-slate-600 shrink-0"><X className="w-4 h-4" aria-hidden /></button>
+      </div>
+    </section>
+  );
+}
+
+/*
+  PROMISES (lib/projectAsk promisesOf): what the studio promised the client and
+  what the client promised, still open, late first. A follow-up's next step is
+  marked done here (as on the Ops Desk); a minutes action item is closed in the
+  minutes.
+*/
+function PromisesCard({ data, onDone, onMinutes }: { data: Promises; onDone: (followUpId: string) => Promise<void>; onMinutes?: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const dayOf = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const row = (l: PromiseLine) => (
+    <div key={l.id} className="hud-row-in flex items-center gap-3 rounded-xl bg-white px-3 py-2">
+      {l.due && <Chip tone={l.late ? 'bad' : 'slate'}>{l.late ? `Late · ${dayOf(l.due)}` : `By ${dayOf(l.due)}`}</Chip>}
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-semibold text-slate-800">{l.text}</p>
+        <p className="text-[11px] text-slate-500">{l.from.kind === 'follow-up' ? `Logged by ${l.from.by}` : `From the minutes${l.from.ref ? ` · ${l.from.ref}` : ''}`}{l.owner && !(l.from.kind === 'follow-up' && l.from.by === l.owner) ? ` · ${l.owner} to do it` : ''}</p>
+        {failed === l.id && <p className="text-[11px] text-rose-700">Not saved. Try again.</p>}
+      </div>
+      {l.from.kind === 'follow-up' ? (
+        <Button size="sm" variant="quiet" className="cvw-hot shrink-0" data-ripple disabled={busy === l.id}
+          onClick={async () => { setBusy(l.id); setFailed(null); try { await onDone((l.from as any).followUpId); } catch { setFailed(l.id); } finally { setBusy(null); } }}>
+          {busy === l.id ? 'Saving…' : 'Done'}
+        </Button>
+      ) : onMinutes ? <Button size="sm" variant="quiet" className="cvw-hot shrink-0" data-ripple onClick={onMinutes}>Open minutes</Button> : null}
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-2.5">
+      {data.ours.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs font-bold text-slate-700">We promised</p>
+          {data.ours.slice(0, 5).map(row)}
+          {data.ours.length > 5 && <p className="px-1 text-[11px] text-slate-500">and {data.ours.length - 5} more on the Ops Desk</p>}
+        </div>
+      )}
+      {data.theirs.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs font-bold text-slate-700">The client promised</p>
+          {data.theirs.slice(0, 5).map(row)}
+          {data.theirs.length > 5 && <p className="px-1 text-[11px] text-slate-500">and {data.theirs.length - 5} more on the Ops Desk</p>}
+        </div>
+      )}
     </div>
   );
 }
