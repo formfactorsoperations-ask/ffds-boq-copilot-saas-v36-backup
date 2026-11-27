@@ -3,7 +3,23 @@ import { motion } from 'framer-motion';
 import {
   TrendingUp, TrendingDown, Wallet, Ruler, Percent, FileCheck,
   Compass, AlertTriangle, Lock, ShieldCheck, ArrowRight, Activity,
+  PieChart, Users, GitCompare, Clock,
 } from '@/lib/lucide-shim';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { db as fsDb } from '../../services/firebaseClient';
+import { useOrg } from '../../contexts/OrgContext';
+import { useProjectJourney } from '../../hooks/useProjectJourney';
+import { useMomScopeQueue } from '../../hooks/useMomScopeQueue';
+import { computeSchedule as computePayments } from '../../lib/paymentSchedule';
+import { costModel, activityItems, shortDate } from '../../lib/projectHome';
+import { boqRevisionInsight, timeSpent } from '../../lib/boqRevisionInsight';
+import { STAGE_LABELS } from '../../constants/journeyConstants';
+import { UiProvider } from '../projectHome/bits';
+import { CostPanel, ActivityPanel, marginLineFor } from '../projectHome/InsightsCard';
+import ProjectPnlCard from './ProjectPnlCard';
+import { SiteVisitLogModal } from '../SiteVisitLogModal';
+import SiteVisitHistory from '../../pages/SiteVisitHistory';
+import { Chip, StateDot, EmptyState } from '../ui/kit';
 import { FullProjectData, ProjectContext, FullBoqItem, PurchaseOrder, Item } from '../../types';
 import { db } from '../../services/dbService';
 import { formatINR } from '../../lib/utils';
@@ -73,6 +89,21 @@ const ProjectReportsTab: React.FC<Props> = ({
 }) => {
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const { orgData } = useOrg();
+  const studioId: string | null = (orgData as any)?.tenantId || null;
+  const journeyCtx = useProjectJourney(projectId || undefined, projectContext);
+  const momQueue = useMomScopeQueue(studioId, projectId);
+
+  /* Meetings and site visits, as the Hub reads them (components/projectHome/ProjectHome). */
+  const [visits, setVisits] = useState<any[]>([]);
+  useEffect(() => {
+    if (!fsDb || !projectId || !studioId) { setVisits([]); return; }
+    // Its own error path: an unhandled one stalls Firestore's queue for the whole page.
+    return onSnapshot(query(collection(fsDb, `organizations/${studioId}/projects/${projectId}/siteVisits`), orderBy('date', 'desc')),
+      snap => setVisits(snap.docs.map(d => ({ id: d.id, ...d.data() }))), () => setVisits([]));
+  }, [projectId, studioId]);
+  const [logOpen, setLogOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -98,6 +129,26 @@ const ProjectReportsTab: React.FC<Props> = ({
     return { ...r, signals: r.signals.map(veil), active: r.active.map(veil) };
   }, [projectContext, pnl, marginsHidden]);
   const docs = useMemo(() => buildDocumentCompleteness(projectContext), [projectContext]);
+
+  /* From the Hub: Cost & margin (cost by trade and room, the full P&L) and Activity. */
+  const ctxAny: any = projectContext || {};
+  const cost = useMemo(() => costModel(boq, ctxAny.rooms || []), [boq, ctxAny.rooms]);
+  const assumption = useMemo(() => marginAssumption(projectContext, tiers, bank), [projectContext, tiers, bank]);
+  const paidAmounts = useMemo(() => {
+    try {
+      const r = computePayments({ context: ctxAny, tierSummary: activeTier?.summary });
+      return new Map((r?.amounts || []).filter((a: any) => a.status === 'paid').map((a: any) => [a.id, a.invoiceTotal] as [string, number]));
+    } catch { return new Map<string, number>(); }
+  }, [ctxAny, activeTier]);
+  const activity = useMemo(() => activityItems({
+    visits, milestones: ctxAny.paymentMilestones || [], paidAmounts, decisions: ctxAny.projectDecisions || [], steps: journeyCtx.steps as any,
+  }), [visits, ctxAny.paymentMilestones, paidAmounts, ctxAny.projectDecisions, journeyCtx.steps]);
+  const time = useMemo(() => timeSpent(visits), [visits]);
+  const revisions = useMemo(
+    () => boqRevisionInsight(projectContext, tiers, activeTier?.id, momQueue.items.length),
+    [projectContext, tiers, activeTier, momQueue.items.length],
+  );
+  const stageNum = typeof ctxAny.lifecycle?.stage === 'number' ? ctxAny.lifecycle.stage : 1;
 
   /* Same formulas as StudioReports, one project deep. */
   const contracted    = fin.currentProjectValue || 0;
@@ -324,6 +375,24 @@ const ProjectReportsTab: React.FC<Props> = ({
         </Panel>
       </div>
 
+      {/* ── Cost & margin, as on the Hub ─────────────────────────────────── */}
+      {!feeOnly && (
+        <Panel title="Where the cost goes" sub="By trade and by room, from the BOQ, with the full P&L" icon={<PieChart className="w-4 h-4" />}>
+          {marginsHidden ? <MarginsHidden what="Costs" /> : (
+            <div className="ph ph-embed">
+              <UiProvider>
+                <CostPanel
+                  cost={cost}
+                  marginLine={marginLineFor(pnl)}
+                  pnlCard={<ProjectPnlCard projectContext={projectContext} boq={boq} projectId={projectId} activeTier={activeTier}
+                    assumption={assumption} currentUserRole={currentUserRole} onOpenProcurement={() => setActiveTab?.('materials')} />}
+                />
+              </UiProvider>
+            </div>
+          )}
+        </Panel>
+      )}
+
       {/* ── Delivery ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Panel title="Progress" icon={<Compass className="w-4 h-4" />}>
@@ -375,11 +444,136 @@ const ProjectReportsTab: React.FC<Props> = ({
         )}
       </div>
 
+      {/* ── BOQ revisions and time with the client ───────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <Panel
+          title="BOQ revisions"
+          sub={revisions.toDo === 0
+            ? 'Nothing left to revise'
+            : `${revisions.toDo} to be done: ${revisions.withStudio + revisions.queued} with the studio, ${revisions.withClient} with the client`}
+          icon={<GitCompare className="w-4 h-4" />}
+          right={setActiveTab ? (
+            <button onClick={() => setActiveTab('revision-studio')} className="text-[12px] font-bold text-[#3D52A0] hover:text-[#334486] inline-flex items-center gap-1">
+              Open revisions <ArrowRight className="w-3 h-3" />
+            </button>
+          ) : undefined}
+        >
+          <div className="grid grid-cols-3 gap-4">
+            <Stat label="To be done" value={revisions.toDo} tone={revisions.toDo > 0 ? 'text-amber-700' : 'text-emerald-700'}
+              foot={revisions.queued ? `incl. ${revisions.queued} item${revisions.queued === 1 ? '' : 's'} from meetings` : 'open scope revisions'} />
+            <Stat label="Applied" value={revisions.applied} foot="scope revisions in the BOQ" />
+            <Stat label="Before signing" value={revisions.preSignRevisions}
+              foot={revisions.optionName ? `revised versions of ${revisions.optionName}` : 'revised versions of the option'} />
+          </div>
+
+          {(revisions.open.length > 0 || revisions.queued > 0) && (
+            <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
+              {revisions.open.map(r => (
+                <div key={r.id} className="flex items-center gap-2.5">
+                  <StateDot tone={r.holder === 'client' ? 'slate' : r.state === 'sent-back' || r.state === 'reworking' ? 'bad' : 'warn'} />
+                  <p className="text-[13px] font-semibold text-slate-700 shrink-0">Revision {r.number}</p>
+                  <p className="text-[12px] text-slate-500 min-w-0 truncate flex-1">{r.label}</p>
+                  <Chip tone={r.holder === 'client' ? 'slate' : 'warn'}>{r.holder === 'client' ? 'Client' : 'Studio'}</Chip>
+                </div>
+              ))}
+              {revisions.queued > 0 && (
+                <div className="flex items-center gap-2.5">
+                  <StateDot tone="warn" />
+                  <p className="text-[13px] font-semibold text-slate-700 shrink-0">From meetings</p>
+                  <p className="text-[12px] text-slate-500 min-w-0 truncate flex-1">
+                    {revisions.queued} cost or scope item{revisions.queued === 1 ? '' : 's'} waiting to go into a revision
+                  </p>
+                  <Chip tone="warn">Studio</Chip>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Why lines changed</p>
+            {revisions.ledger.total === 0 ? (
+              <p className="text-[12px] text-slate-400 mt-1.5">No line changes recorded in the BOQ yet.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {revisions.ledger.byReason.map(r => (
+                  <Chip key={r.reason} tone={/client/i.test(r.reason) ? 'brand' : 'slate'}>{r.reason} · {r.count}</Chip>
+                ))}
+              </div>
+            )}
+            {revisions.sentBackTimes > 0 && (
+              <p className="text-[11px] text-slate-500 mt-2">
+                The client has sent a version back for changes {revisions.sentBackTimes} time{revisions.sentBackTimes === 1 ? '' : 's'}.
+              </p>
+            )}
+          </div>
+        </Panel>
+
+        <Panel
+          title="Meetings and hours"
+          sub={time.lastAt ? `Last meeting or site visit: ${shortDate(time.lastAt)}` : 'No meetings or site visits logged yet'}
+          icon={<Users className="w-4 h-4" />}
+        >
+          {time.meetings + time.siteVisits === 0 ? (
+            <EmptyState icon={Clock} title="Nothing logged yet"
+              text="Meetings and site visits logged with Record on the Hub are counted here, with their hours." />
+          ) : (<>
+            <div className="grid grid-cols-3 gap-4">
+              <Stat label="Meetings" value={time.meetings}
+                foot={`${time.inPerson} in person · ${time.online} online`} />
+              <Stat label="Meeting hours" value={`${time.meetingHours} h`}
+                foot={time.avgMeetingMinutes != null ? `about ${time.avgMeetingMinutes} min a meeting` : 'no durations logged'} />
+              <Stat label="Total hours" value={`${time.totalHours} h`} foot="meetings and site visits" tone="text-[#3D52A0]" />
+            </div>
+            <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-100">
+              <Stat label="Site visits" value={time.siteVisits} foot={`${time.siteHours} h on site`} />
+              <Stat label="Last 30 days" value={time.last30} foot="meetings and site visits" />
+              <Stat label="Decisions" value={(ctxAny.projectDecisions || []).length} foot="raised on the project" />
+            </div>
+            {time.meetingsWithoutTime > 0 && (
+              <p className="text-[11px] text-slate-500 mt-3">
+                {time.meetingsWithoutTime} meeting{time.meetingsWithoutTime === 1 ? ' has' : 's have'} no duration logged, so the hours are short by {time.meetingsWithoutTime === 1 ? 'it' : 'them'}.
+              </p>
+            )}
+          </>)}
+        </Panel>
+      </div>
+
+      {/* ── Activity, as on the Hub ──────────────────────────────────────── */}
+      <Panel title="Activity" sub="The last eight weeks: meetings, site visits, payments, decisions and Ops Matrix steps" icon={<Activity className="w-4 h-4" />}>
+        <div className="ph ph-embed">
+          <UiProvider>
+            <ActivityPanel
+              activity={activity}
+              activitySummary={time.lastAt ? `Last meeting or site visit: ${shortDate(time.lastAt)}.` : 'No meetings or site visits logged yet.'}
+              activityStats={{ meetings: time.meetings, sites: time.siteVisits, hours: time.meetingHours, decisions: (ctxAny.projectDecisions || []).length, received: collected }}
+              openHistory={() => setHistoryOpen(true)}
+              onPlanCheckIn={() => setLogOpen(true)}
+            />
+          </UiProvider>
+        </div>
+      </Panel>
+
       <p className="text-[10.5px] text-slate-400 leading-relaxed">
         {feeOnly
           ? 'Contract value and collections include GST; the design fee is shown ex-GST. Realized rate and collection percentage use the same formulas as the studio-wide report, so the two screens agree.'
           : 'Contract value and collections include GST. Margin is ex-GST and includes the design fee, which carries no cost. Realized rate and collection percentage use the same formulas as the studio-wide report, so the two screens agree.'}
       </p>
+
+      {projectId && studioId && (
+        <SiteVisitLogModal
+          isOpen={logOpen}
+          onClose={() => setLogOpen(false)}
+          projectId={projectId}
+          studioId={studioId}
+          defaultType="client_meeting"
+          projectContext={projectContext}
+          currentPhaseStep={stageNum}
+          currentPhaseTitle={STAGE_LABELS[stageNum] || 'Agreement & Design'}
+        />
+      )}
+      {historyOpen && projectId && studioId && (
+        <SiteVisitHistory projectId={projectId} studioId={studioId} onClose={() => setHistoryOpen(false)} projectContext={projectContext} />
+      )}
     </motion.div>
   );
 };
