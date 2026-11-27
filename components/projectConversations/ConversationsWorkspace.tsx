@@ -227,8 +227,7 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
   const classicOf = (route: string) => classic.find((c) => c.route === route) || null;
 
   return (
-    <div className="relative isolate flex flex-col h-full bg-slate-50 min-w-0 overflow-hidden">
-      <ConversationsBackdrop conv={shown.id} still={still || !!windowRoute} />
+    <div className="flex flex-col h-full bg-slate-50 min-w-0">
       <WayOut desks={p.desks} onLeave={p.onLeaveProject} onUseClassic={p.onUseClassic} showHideFigures={p.showHideFigures} onTour={beginTour} still={still} onStill={toggleStill} />
       <ProjectTitle ctx={ctx} name={name} statusLabel={p.statusLabel} onStatusClick={p.onStatusClick}
         onPortal={p.conversations.some((c) => c.routes.includes('client-portal')) ? () => open('client-portal') : undefined} />
@@ -245,12 +244,13 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 mx-3 sm:mx-5 mb-3 sm:mb-5 grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px] rounded-2xl border border-white/80 bg-white/10 shadow-xl shadow-slate-900/5 overflow-hidden hud-panel-in">
+      <div className="flex-1 min-h-0 mx-3 sm:mx-5 mb-3 sm:mb-5 grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hud-panel-in">
         <ConversationList conversations={p.conversations} conv={shown.id} story={story} now={now} needsOf={p.needsOf}
           money={p.money} journey={p.journey} onPick={setConv}
           findScreen={(q) => findScreens(q, p.conversations, (r) => (r === p.homeRoute ? p.hubLabel : p.labelOf(r)), classic, p.homeRoute)}
           onOpenScreen={(c, r) => { setConv(c); open(r); }} />
-        <section className="flex flex-col min-h-0 min-w-0 border-l border-slate-200/60 bg-white/20" aria-label={shown.name}>
+        <section className="relative flex flex-col min-h-0 min-w-0 border-l border-slate-200" aria-label={shown.name}>
+          <ConversationsBackdrop conv={shown.id} still={still || !!windowRoute || tour} />
           <ThreadHead conv={shown} labelOf={p.labelOf} onOpen={open} onPickMobile={setConv} conversations={p.conversations} />
           <Thread key={shown.id} conv={shown.id} routes={shown.routes} aboutOf={p.aboutOf || (() => '')} story={storyFor(story, shown.id)} now={now} loading={!records} onOpen={open}
             labelOf={p.labelOf} visible={(r) => p.conversations.some((c) => c.routes.includes(r))}
@@ -286,7 +286,7 @@ function WayOut({ desks, onLeave, onUseClassic, showHideFigures, onTour, still, 
 }) {
   const item = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap';
   return (
-    <nav aria-label="Studio" data-tour="way" className="h-12 shrink-0 bg-white/85 border-b border-slate-200/70 px-3 sm:px-5 flex items-center gap-1 min-w-0 overflow-x-auto">
+    <nav aria-label="Studio" data-tour="way" className="h-12 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-1 min-w-0 overflow-x-auto">
       <button type="button" onClick={() => onLeave('projects')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/15 whitespace-nowrap">
         <ArrowLeft className="w-4 h-4" aria-hidden />All projects
       </button>
@@ -351,7 +351,7 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
     return last ? { text: last.text, at: last.at } : { text: c.about, at: null };
   };
   return (
-    <aside data-tour="list" className="hidden md:flex flex-col min-h-0 bg-white/85" aria-label="This project's conversations">
+    <aside data-tour="list" className="hidden md:flex flex-col min-h-0 bg-white" aria-label="This project's conversations">
       <div className="p-3 border-b border-slate-100">
         <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-300 focus-within:ring-2 focus-within:ring-[#3D52A0]/30">
           <Search className="w-4 h-4 text-slate-400" aria-hidden />
@@ -423,7 +423,7 @@ function ThreadHead({ conv, labelOf, onOpen, onPickMobile, conversations }: {
 }) {
   const Icon = CONV_ICON[conv.id];
   return (
-    <div data-tour="open" className="shrink-0 border-b border-slate-200/60 bg-white/85">
+    <div data-tour="open" className="relative z-[1] shrink-0 border-b border-slate-200 bg-white/90">
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="w-9 h-9 rounded-xl bg-[#3D52A0]/10 text-[#3D52A0] grid place-items-center shrink-0"><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
         <div className="min-w-0 flex-1">
@@ -459,7 +459,7 @@ const Thread: React.FC<{
   const scroller = useRef<HTMLDivElement | null>(null);
   useEffect(() => { const el = scroller.current; if (el) el.scrollTop = el.scrollHeight; }, [story.length, conv]);
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
+    <div className="relative z-[1] flex-1 min-h-0 flex flex-col">
       {pinned}
       <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-2.5">
         {story.length > SHOW && !all && (
@@ -636,7 +636,7 @@ function Composer({ conv, convName, canLog, onWrite, onRecord }: {
     } catch { setState('failed'); }
   };
   return (
-    <div className="shrink-0 border-t border-slate-200/60 px-4 py-2.5 bg-white/85 flex flex-col gap-2">
+    <div className="relative z-[1] shrink-0 border-t border-slate-200 px-4 py-2.5 bg-white/90 flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-1.5">
         {onRecord && (
           <>
@@ -703,7 +703,7 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, glance, portalLin
     </button>
   );
   return (
-    <aside className="hidden xl:flex flex-col min-h-0 overflow-y-auto border-l border-slate-200/60 bg-white/85" aria-label="Project card">
+    <aside className="hidden xl:flex flex-col min-h-0 overflow-y-auto border-l border-slate-200" aria-label="Project card">
       <Sec title="At a glance">
         <div className="grid grid-cols-2 gap-2">
           {seesMoney && (

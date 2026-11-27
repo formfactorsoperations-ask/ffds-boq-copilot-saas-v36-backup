@@ -1369,19 +1369,27 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   tiles lift on hover (`phd-lift`); figures count up (`CountUp`); the window's screen tabs glide
   (`Segmented glide`); panes `hud-panel-in`, the window `phd-scrim` / `phd-pop`. All of it stops under
   reduced motion. Same fonts and colours; no new accent.
-- **The 3D backdrop** (owner, 27 Nov 2026: "some 3D background … funky motions outside DESIGN.md are
-  okay"; this workspace only, `ConversationsBackdrop` and its `cvb-*` classes). Pure CSS 3D behind the
-  panes: soft glows that drift, a grid floor rolling toward you, glass cubes turning, a gyroscope of three
-  rings, shiny orbs bobbing. The scene leans a few degrees toward the pointer and swings round when a
-  conversation is picked. The glows and the gyroscope's middle ring take the conversation's tint, from the
-  palette only: brand (Whole project, Client & portal, BOQ, Plan), emerald (Money, Brief & Site), amber
-  (Site), rose (Design), slate (Documents).
-  - The middle pane is the stage: nearly clear (`bg-white/20`), so the scene shows behind the story's
-    solid cards. The list, the conversation's head, the composer, the project card and the top bar are
-    `bg-white/85`. No `backdrop-blur` over the scene: it costs too much to draw.
-  - It never takes a click and is hidden from assistive tech. It stands still under reduced motion, while
-    a window is open, and when the person pauses it (the pause button in the top bar, remembered on that
-    device).
+- **The 3D stage** (owner, 27 Nov 2026: "some 3D background … funky motions outside DESIGN.md are
+  okay", then "3D shapes related to the conversation we are on, related to interior and architecture
+  practice"; this workspace only). It fills the conversation pane, under the story's solid cards
+  (`ConversationsBackdrop`, `cvb-*`), and never depends on what surrounds the workspace.
+  - **A maquette per conversation** (`maquette.ts`, three.js, loaded only when this view opens), drawn
+    like a studio model: matte white card with the brand blue along every edge, in an axonometric view,
+    one or two pieces in the conversation's tint:
+    Whole project, a room cut open (sofa, rug, table, pendant lamp, plant); Client & portal, an arched
+    doorway whose door swings, two speech bubbles; Money, coin stacks rising like a payment schedule, a
+    gold coin flipping; BOQ, a material sample fan opening, a tile grid, planks; Documents, a stack of
+    drawings with a blueprint lifting, rolls, a set square; Design, a lounge chair and ottoman on a
+    plinth, an arc lamp, swatches; Site, a tower crane turning over a frame going up, bricks, a cone;
+    Plan & timeline, a staircase of milestones lighting step by step, a ball hopping up to the flag;
+    Brief & Site, a contoured site with a house on its plateau, a tree, a north arrow.
+  - **Motion:** opening a conversation drops its model in piece by piece (the old one sinks away); the
+    model turns gently, floats, leans toward the pointer, and its one part moves. Two soft glows drift in
+    the tint: brand, amber (Money, Site), rose (Design), emerald (Brief & Site).
+  - Palette only (slate card, brand lines, emerald, amber, rose); `src/tests/maquette.test.ts` pins it.
+  - Decoration only: hidden from assistive tech, never takes a click. Still (assembled, not moving) under
+    reduced motion, during the tour, while a window is open, and when the person pauses it (the pause
+    button in the top bar, remembered on that device). Without WebGL only the glows show.
 
 ### Summary-first sections (approved 16 Nov 2026)
 

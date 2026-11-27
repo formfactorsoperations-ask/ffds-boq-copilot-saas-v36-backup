@@ -1,92 +1,84 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { ConversationId } from '../../lib/projectConversations';
+import type { Stage } from './maquette';
 import './conversationsBackdrop.css';
 
 /*
-  The 3D backdrop behind the Conversations workspace (owner, 27 Nov 2026).
-  It shows through the glass panes:
-    - soft glows that drift and take the tint of the conversation that is open;
-    - a grid floor rolling toward you;
-    - glass cubes turning, a gyroscope of three rings, shiny orbs bobbing;
-    - the whole scene leans toward the pointer, and swings when you pick a
-      conversation.
+  The 3D stage behind the open conversation (owner, 27 Nov 2026: "3D shapes
+  related to the conversation we are on, related to interior and
+  architecture practice"). It fills the conversation pane, under the story's
+  solid cards:
+    - two soft glows in the conversation's tint;
+    - the conversation's maquette (./maquette: a room, a doorway, coin
+      stacks, sample boards, drawings, a chair, a crane, a staircase, a
+      contoured site), which assembles piece by piece when you open the
+      conversation, turns gently, leans toward the pointer and moves one part.
+  three.js is loaded only when this mounts. Without WebGL only the glows show.
   Decoration only: hidden from assistive tech, never takes a click. Still
-  under reduced motion, when the person pauses it, or under a window.
+  under reduced motion, while a window is open, or when the person pauses it.
 */
 
-/** Palette only: brand blue, emerald, amber, rose, slate (as r, g, b). */
-const TINT: Record<ConversationId, string> = {
-  whole: '61, 82, 160', chat: '61, 82, 160', money: '16, 185, 129', boq: '61, 82, 160', docs: '100, 116, 139',
+/** The tint as r, g, b, for the glows (palette only; maquette TINT is the same). */
+const TINT_RGB: Record<ConversationId, string> = {
+  whole: '61, 82, 160', chat: '61, 82, 160', money: '245, 158, 11', boq: '61, 82, 160', docs: '61, 82, 160',
   design: '244, 63, 94', site: '245, 158, 11', plan: '61, 82, 160', brief: '16, 185, 129',
 };
-
-const BRAND = '61, 82, 160';
-const AMBER = '245, 158, 11';
-const EMERALD = '16, 185, 129';
-const ROSE = '244, 63, 94';
-
-const css = (v: Record<string, string>) => v as React.CSSProperties;
 
 function reducedMotion() {
   try { return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
 }
+/* jsdom and very old browsers have no WebGL: draw the glows only. */
+const hasWebGL = () => typeof window !== 'undefined' && 'WebGLRenderingContext' in window;
 
 export default function ConversationsBackdrop({ conv, still }: { conv: ConversationId; still: boolean }) {
-  const tilt = useRef<HTMLDivElement | null>(null);
-  const kick = useRef<HTMLDivElement | null>(null);
+  const wrap = useRef<HTMLDivElement | null>(null);
+  const canvas = useRef<HTMLCanvasElement | null>(null);
+  const stage = useRef<Stage | null>(null);
+  const [ready, setReady] = useState(false);
+  const quiet = still || reducedMotion();
 
-  /* Lean toward the pointer, a few degrees at most, once a frame. */
+  /* Load three.js and set the stage up once. */
   useEffect(() => {
-    if (still || reducedMotion()) { tilt.current?.style.setProperty('--cvb-tx', '0deg'); tilt.current?.style.setProperty('--cvb-ty', '0deg'); return; }
+    if (!hasWebGL()) return;
+    let alive = true;
+    let ro: ResizeObserver | null = null;
+    import('./maquette').then(({ createStage }) => {
+      if (!alive || !canvas.current || !wrap.current) return;
+      try { stage.current = createStage(canvas.current); } catch { return; }
+      const fit = () => { const r = wrap.current?.getBoundingClientRect(); if (r && stage.current) { stage.current.resize(r.width, r.height); stage.current.frame(performance.now() / 1000, true); } };
+      fit();
+      if (typeof ResizeObserver === 'function') { ro = new ResizeObserver(fit); ro.observe(wrap.current); }
+      setReady(true);
+    }).catch(() => { /* no 3D: the glows stay */ });
+    return () => { alive = false; ro?.disconnect(); stage.current?.dispose(); stage.current = null; };
+  }, []);
+
+  /* The conversation's model; it assembles unless the stage is quiet. */
+  useEffect(() => {
+    if (!ready || !stage.current) return;
+    stage.current.show(conv, !quiet);
+    if (quiet) stage.current.frame(performance.now() / 1000, true);
+  }, [conv, ready]);
+
+  /* Moving: a frame each animation frame and a lean toward the pointer. Quiet: one still frame. */
+  useEffect(() => {
+    const s = stage.current;
+    if (!ready || !s) return;
+    if (quiet) { s.lean(0, 0); s.frame(performance.now() / 1000, true); return; }
     let raf = 0;
-    let x = 0;
-    let y = 0;
-    const onMove = (e: PointerEvent) => {
-      x = e.clientX / Math.max(1, window.innerWidth) - 0.5;
-      y = e.clientY / Math.max(1, window.innerHeight) - 0.5;
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        tilt.current?.style.setProperty('--cvb-tx', `${(x * 10).toFixed(2)}deg`);
-        tilt.current?.style.setProperty('--cvb-ty', `${(-y * 7).toFixed(2)}deg`);
-      });
-    };
+    const loop = () => { s.frame(performance.now() / 1000, false); raf = requestAnimationFrame(loop); };
+    raf = requestAnimationFrame(loop);
+    const onMove = (e: PointerEvent) => s.lean(e.clientX / Math.max(1, window.innerWidth) - 0.5, e.clientY / Math.max(1, window.innerHeight) - 0.5);
     window.addEventListener('pointermove', onMove, { passive: true });
-    return () => { window.removeEventListener('pointermove', onMove); if (raf) cancelAnimationFrame(raf); };
-  }, [still]);
-
-  /* Picking a conversation swings the scene round and back. */
-  const first = useRef(true);
-  useEffect(() => {
-    if (first.current) { first.current = false; return; }
-    const el = kick.current;
-    if (!el || still || reducedMotion() || typeof el.animate !== 'function') return;
-    el.animate(
-      [{ transform: 'rotateY(0deg) translateZ(0)' }, { transform: 'rotateY(18deg) translateZ(-60px)' }, { transform: 'rotateY(-4deg) translateZ(0)' }, { transform: 'rotateY(0deg)' }],
-      { duration: 1100, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
-    );
-  }, [conv, still]);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('pointermove', onMove); };
+  }, [ready, quiet]);
 
   return (
-    <div className="cvb" aria-hidden data-still={still ? '' : undefined} data-testid="conversations-backdrop"
-      style={css({ '--cvb-tint': TINT[conv] || BRAND })}>
+    <div className="cvb" aria-hidden data-still={quiet ? '' : undefined} data-testid="conversations-backdrop"
+      style={{ '--cvb-tint': TINT_RGB[conv] || TINT_RGB.whole } as React.CSSProperties}>
       <div className="cvb-glow cvb-glow-a" />
       <div className="cvb-glow cvb-glow-b" />
-      <div className="cvb-glow cvb-glow-c" />
-      <div className="cvb-stage">
-        <div ref={tilt} className="cvb-tilt">
-          <div ref={kick} className="cvb-kick">
-            <div className="cvb-floor" />
-            <div className="cvb-obj cvb-cube" style={css({ '--s': '130px', '--c': BRAND, '--d': '28s', right: '25%', top: '60%' })}><i /><i /><i /><i /><i /><i /></div>
-            <div className="cvb-obj cvb-cube" style={css({ '--s': '64px', '--c': AMBER, '--d': '19s', left: '4%', bottom: '14%' })}><i /><i /><i /><i /><i /><i /></div>
-            <div className="cvb-obj cvb-cube" style={css({ '--s': '44px', '--c': ROSE, '--d': '15s', left: '46%', top: '6%' })}><i /><i /><i /><i /><i /><i /></div>
-            <div className="cvb-obj cvb-gyro" style={css({ '--s': '300px', left: '33%', top: '50%' })}><i /><i /><i /></div>
-            <div className="cvb-obj cvb-orb" style={css({ '--s': '54px', '--c': BRAND, '--d': '7s', left: '22%', top: '14%' })} />
-            <div className="cvb-obj cvb-orb" style={css({ '--s': '34px', '--c': EMERALD, '--d': '9s', '--delay': '-3s', right: '24%', bottom: '18%' })} />
-            <div className="cvb-obj cvb-orb" style={css({ '--s': '26px', '--c': AMBER, '--d': '6s', '--delay': '-1.5s', right: '40%', top: '18%' })} />
-          </div>
-        </div>
-      </div>
+      <div ref={wrap} className="cvb-model"><canvas ref={canvas} /></div>
     </div>
   );
 }

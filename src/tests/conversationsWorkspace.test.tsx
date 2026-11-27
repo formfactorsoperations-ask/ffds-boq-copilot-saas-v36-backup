@@ -238,16 +238,17 @@ describe('the Conversations workspace', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
   });
-  it('draws the 3D backdrop as decoration only, tinted by the conversation, and lets a person keep it still (owner, 27 Nov 2026)', () => {
+  it('draws the 3D stage in the conversation pane as decoration only, tinted by the conversation, and lets a person keep it still (owner, 27 Nov 2026)', () => {
     window.localStorage.removeItem('studiodesk.projectView.stillBackground');
     setup();
     const bg = screen.getByTestId('conversations-backdrop');
     expect(bg.getAttribute('aria-hidden')).toBe('true');
+    expect(bg.closest('section')?.getAttribute('aria-label')).toBe('Whole project'); // inside the conversation pane
     expect(bg.hasAttribute('data-still')).toBe(false);
     expect(bg.style.getPropertyValue('--cvb-tint')).toBe('61, 82, 160');
     const list = screen.getByRole('complementary', { name: "This project's conversations" });
     fireEvent.click(within(list).getByRole('button', { name: /^Money/ }));
-    expect(bg.style.getPropertyValue('--cvb-tint')).toBe('16, 185, 129');
+    expect(bg.style.getPropertyValue('--cvb-tint')).toBe('245, 158, 11'); // Money: gold coins
     fireEvent.click(screen.getByRole('button', { name: 'Pause the background' }));
     expect(bg.hasAttribute('data-still')).toBe(true);
     expect(window.localStorage.getItem('studiodesk.projectView.stillBackground')).toBe('1');

@@ -21,7 +21,7 @@ new work must look like part of the existing app, not a new design.
   "Ops Desk motion", "Ops Desk 2.1", "Pricing & Tiers motion", "Project sidebar", "Projects: journey, needs you, one list",
   "Money motion", "Item bank motion", "Playground library motion", "BOQ Playground", "Clients: conversations" and "Studio stories" in DESIGN.md.
   The Conversations project workspace (`components/projectConversations/`) follows "Project workspace: conversations",
-  including its 3D backdrop (`cvb-*`), which the owner approved for that workspace only.
+  including its 3D stage (`maquette.ts`, `cvb-*`), which the owner approved for that workspace only.
   Same fonts and colours.
 - Do not use half-pixel font sizes, new accent colours or new fonts.
 - Before shipping a screen, compare a screenshot of it with Studio settings.

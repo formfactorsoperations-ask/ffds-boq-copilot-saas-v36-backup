@@ -1,131 +1,49 @@
 /*
-  The Conversations workspace's 3D backdrop (owner, 27 Nov 2026: "some 3D
-  background … funky motions outside DESIGN.md are okay"). Pure CSS 3D, no
-  library. Only the brand blue and the palette's emerald, amber and rose, at
-  low strength. Everything stops under reduced motion, when the person pauses
-  it, and while a full-screen window covers it.
+  The 3D stage behind the open conversation (owner, 27 Nov 2026). It sits
+  inside the conversation pane, under the story (the pane's other children
+  are raised with `relative z-[1]`), so it never depends on what surrounds
+  the workspace. Palette only.
 */
 
 .cvb {
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  --cvb-tint: 61, 82, 160; /* the conversation's tint, set from the component */
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); /* slate-50 to slate-100 */
+  --cvb-tint: 61, 82, 160;
 }
 
-/* ── soft glows that drift and take the conversation's tint ── */
+/* Two soft glows that drift and take the conversation's tint. */
 .cvb-glow {
   position: absolute;
   border-radius: 9999px;
-  opacity: 0.85;
-  background: radial-gradient(circle, rgba(var(--cvb-tint), 0.3), rgba(var(--cvb-tint), 0.12) 35%, rgba(var(--cvb-tint), 0) 68%);
+  background: radial-gradient(circle, rgba(var(--cvb-tint), 0.22), rgba(var(--cvb-tint), 0.08) 38%, rgba(var(--cvb-tint), 0) 68%);
   transition: background 1.2s ease;
-  animation: cvb-drift 26s ease-in-out infinite alternate;
+  animation: cvb-drift 24s ease-in-out infinite alternate;
   will-change: transform;
 }
-.cvb-glow-a { width: 46vw; height: 46vw; left: -10vw; top: -14vw; }
-.cvb-glow-b { width: 38vw; height: 38vw; right: -8vw; top: 20vh; animation-duration: 32s; animation-delay: -8s; background: radial-gradient(circle, rgba(61, 82, 160, 0.22), rgba(61, 82, 160, 0.08) 35%, rgba(61, 82, 160, 0) 68%); }
-.cvb-glow-c { width: 30vw; height: 30vw; left: 30vw; bottom: -16vw; animation-duration: 22s; animation-delay: -14s; }
+.cvb-glow-a { width: 70%; aspect-ratio: 1; right: -12%; bottom: -30%; }
+.cvb-glow-b { width: 50%; aspect-ratio: 1; left: -14%; top: -18%; animation-duration: 30s; animation-delay: -9s; }
 
 @keyframes cvb-drift {
   0% { transform: translate3d(0, 0, 0) scale(1); }
-  50% { transform: translate3d(4vw, 3vh, 0) scale(1.08); }
-  100% { transform: translate3d(-3vw, 5vh, 0) scale(0.96); }
+  50% { transform: translate3d(5%, -4%, 0) scale(1.08); }
+  100% { transform: translate3d(-4%, 3%, 0) scale(0.95); }
 }
 
-/* ── the 3D stage: tilts toward the pointer ── */
-.cvb-stage {
+/* The maquette, in the lower right of the pane where the story is thinnest. */
+.cvb-model {
   position: absolute;
-  inset: 0;
-  perspective: 1100px;
-  perspective-origin: 50% 40%;
+  right: 0;
+  bottom: 0;
+  width: min(640px, 82%);
+  height: min(500px, 74%);
 }
-.cvb-tilt {
-  position: absolute;
-  inset: 0;
-  transform-style: preserve-3d;
-  transform: rotateX(var(--cvb-ty, 0deg)) rotateY(var(--cvb-tx, 0deg));
-  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.cvb-kick { position: absolute; inset: 0; transform-style: preserve-3d; }
+.cvb-model > canvas { display: block; width: 100%; height: 100%; }
 
-/* ── the grid floor, rolling toward you ── */
-.cvb-floor {
-  position: absolute;
-  left: -50%;
-  right: -50%;
-  bottom: -38%;
-  height: 90%;
-  transform: rotateX(78deg);
-  transform-origin: 50% 100%;
-  background-image:
-    linear-gradient(rgba(61, 82, 160, 0.28) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(61, 82, 160, 0.28) 1px, transparent 1px);
-  background-size: 64px 64px;
-  -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 85%);
-  mask-image: linear-gradient(to top, #000 10%, transparent 85%);
-  animation: cvb-roll 6s linear infinite;
-}
-@keyframes cvb-roll { to { background-position: 0 64px, 0 0; } }
-
-/* ── a glass cube ── */
-.cvb-obj { position: absolute; transform-style: preserve-3d; }
-.cvb-cube { width: var(--s); height: var(--s); animation: cvb-spin var(--d, 24s) linear infinite; }
-.cvb-cube > i {
-  position: absolute;
-  inset: 0;
-  border: 2px solid rgba(var(--c), 0.65);
-  background: linear-gradient(135deg, rgba(var(--c), 0.28), rgba(255, 255, 255, 0.08));
-  box-shadow: inset 0 0 24px rgba(var(--c), 0.18);
-  border-radius: 10px;
-}
-.cvb-cube > i:nth-child(1) { transform: translateZ(calc(var(--s) / 2)); }
-.cvb-cube > i:nth-child(2) { transform: rotateY(180deg) translateZ(calc(var(--s) / 2)); }
-.cvb-cube > i:nth-child(3) { transform: rotateY(90deg) translateZ(calc(var(--s) / 2)); }
-.cvb-cube > i:nth-child(4) { transform: rotateY(-90deg) translateZ(calc(var(--s) / 2)); }
-.cvb-cube > i:nth-child(5) { transform: rotateX(90deg) translateZ(calc(var(--s) / 2)); }
-.cvb-cube > i:nth-child(6) { transform: rotateX(-90deg) translateZ(calc(var(--s) / 2)); }
-
-@keyframes cvb-spin {
-  from { transform: rotateX(-20deg) rotateY(0deg) rotateZ(8deg); }
-  to { transform: rotateX(340deg) rotateY(360deg) rotateZ(368deg); }
-}
-
-/* ── a gyroscope: three rings turning on their own axes ── */
-.cvb-gyro { width: var(--s); height: var(--s); animation: cvb-bob 9s ease-in-out infinite; }
-.cvb-gyro > i {
-  position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  border: 3px solid rgba(61, 82, 160, 0.55);
-  box-shadow: 0 0 24px rgba(61, 82, 160, 0.12), inset 0 0 18px rgba(61, 82, 160, 0.08);
-}
-.cvb-gyro > i:nth-child(1) { animation: cvb-ring-x 14s linear infinite; }
-.cvb-gyro > i:nth-child(2) { inset: 12%; border-color: rgba(var(--cvb-tint), 0.7); animation: cvb-ring-y 10s linear infinite; transition: border-color 1.2s ease; }
-.cvb-gyro > i:nth-child(3) { inset: 26%; border-color: rgba(245, 158, 11, 0.65); animation: cvb-ring-z 7s linear infinite; }
-@keyframes cvb-ring-x { from { transform: rotateX(70deg) rotateZ(0deg); } to { transform: rotateX(70deg) rotateZ(360deg); } }
-@keyframes cvb-ring-y { from { transform: rotateY(0deg) rotateX(20deg); } to { transform: rotateY(360deg) rotateX(20deg); } }
-@keyframes cvb-ring-z { from { transform: rotateX(-50deg) rotateY(30deg) rotateZ(0deg); } to { transform: rotateX(-50deg) rotateY(30deg) rotateZ(-360deg); } }
-
-/* ── shiny spheres that bob ── */
-.cvb-orb {
-  width: var(--s);
-  height: var(--s);
-  border-radius: 9999px;
-  background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95), rgba(var(--c), 0.55) 45%, rgba(var(--c), 0.15) 80%);
-  box-shadow: 0 18px 40px rgba(var(--c), 0.18);
-  animation: cvb-bob var(--d, 8s) ease-in-out infinite;
-  animation-delay: var(--delay, 0s);
-}
-@keyframes cvb-bob {
-  0%, 100% { translate: 0 0; }
-  50% { translate: 0 -26px; }
-}
-
-/* Quiet: reduced motion, paused by the person, or covered by a window. */
-.cvb[data-still] *, .cvb[data-still] { animation-play-state: paused !important; }
+.cvb[data-still] .cvb-glow { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
-  .cvb *, .cvb { animation: none !important; transition: none !important; }
+  .cvb-glow { animation: none; transition: none; }
 }
