@@ -49,8 +49,7 @@ export function handoverOutlook(schedule: ProjectSchedule, result: ScheduleResul
 
   const scored: Array<{ text: string; weight: number }> = [];
   for (const t of onPath) {
-    const holdDays = t.heldBy.reduce((s, h) => s + h.workDays, 0);
-    if (t.heldBy.length) scored.push({ text: `${t.title}: held ${plural(holdDays, 'working day')} (${t.heldBy.map((h) => h.reason).join(', ')})`, weight: 100 + holdDays });
+    /* Holds are not listed per task: each is measured below by what it costs the handover itself. */
     if (t.openGates.length) scored.push({ text: `${t.title}: waiting on ${t.openGates.map((g) => GATE_LABEL[g]).join(' and ')}`, weight: 90 });
     if (t.overrunning) scored.push({ text: `${t.title}: running past its planned end${t.driftDays ? `, ${plural(t.driftDays, 'working day')} over` : ''}`, weight: 50 + t.driftDays });
     else if (t.overdueToStart) scored.push({ text: `${t.title}: should have started on ${dayLabel(t.plannedStartISO)}`, weight: 40 + t.driftDays });
@@ -58,8 +57,8 @@ export function handoverOutlook(schedule: ProjectSchedule, result: ScheduleResul
   }
   /*
     Holds, measured: each open hold is lifted in turn and the programme run
-    again, so a hold's cost is the days it really moves handover (a hold that
-    lands on a task's first day moves it without being listed on it).
+    again, so a hold's cost is the days it really moves handover, not the
+    days it held one task.
   */
   const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
   const measured = (schedule.holds || []).filter((h) => !h.liftedAt).slice(0, 8).map((h) => {
