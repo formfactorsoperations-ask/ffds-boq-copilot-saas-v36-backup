@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ConversationId } from '../../lib/projectConversations';
 import type { Stage } from './maquette';
-import './conversationsBackdrop.css';
 
 /*
   The 3D stage behind the open conversation (owner, 27 Nov 2026: "3D shapes
@@ -14,6 +13,11 @@ import './conversationsBackdrop.css';
       contoured site), which assembles piece by piece when you open the
       conversation, turns gently, leans toward the pointer and moves one part.
   three.js is loaded only when this mounts. Without WebGL only the glows show.
+
+  Its look lives in conversationsBackdrop.css, imported from src/index.css
+  (build.js keeps only that file's CSS). What holds the layout is written
+  inline below as well, so that if the stylesheet is ever missing the stage
+  still stays inside its pane and behind the story, never over the screen.
   Decoration only: hidden from assistive tech, never takes a click. Still
   under reduced motion, while a window is open, or when the person pauses it.
 */
@@ -75,10 +79,12 @@ export default function ConversationsBackdrop({ conv, still }: { conv: Conversat
 
   return (
     <div className="cvb" aria-hidden data-still={quiet ? '' : undefined} data-testid="conversations-backdrop"
-      style={{ '--cvb-tint': TINT_RGB[conv] || TINT_RGB.whole } as React.CSSProperties}>
+      style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none', '--cvb-tint': TINT_RGB[conv] || TINT_RGB.whole } as React.CSSProperties}>
       <div className="cvb-glow cvb-glow-a" />
       <div className="cvb-glow cvb-glow-b" />
-      <div ref={wrap} className="cvb-model"><canvas ref={canvas} /></div>
+      <div ref={wrap} className="cvb-model" style={{ position: 'absolute', right: 0, bottom: 0, width: 'min(640px, 82%)', height: 'min(500px, 74%)' }}>
+        <canvas ref={canvas} style={{ display: 'block', width: '100%', height: '100%' }} />
+      </div>
     </div>
   );
 }

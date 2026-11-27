@@ -1372,7 +1372,9 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
 - **The 3D stage** (owner, 27 Nov 2026: "some 3D background … funky motions outside DESIGN.md are
   okay", then "3D shapes related to the conversation we are on, related to interior and architecture
   practice"; this workspace only). It fills the conversation pane, under the story's solid cards
-  (`ConversationsBackdrop`, `cvb-*`), and never depends on what surrounds the workspace.
+  (`ConversationsBackdrop`, `cvb-*`), and never depends on what surrounds the workspace. Its stylesheet is
+  imported from `src/index.css` (build.js compiles only that file), and the styles that hold its layout
+  are also inline, so it can never cover the screen.
   - **A maquette per conversation** (`maquette.ts`, three.js, loaded only when this view opens), drawn
     like a studio model: matte white card with the brand blue along every edge, in an axonometric view,
     one or two pieces in the conversation's tint:
