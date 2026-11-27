@@ -1416,6 +1416,15 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   - **The ripple:** when the client holds copies older than the payment schedule, Money shows them in
     the order to bring them up to date (amber card, numbered, because the order matters), each step
     opening its screen; Whole project lists it as a Watch-out.
+- **Smart cards fold to one line** (owner, 27 Nov 2026: "actual conversation doesnt have much space,
+  please check for all tabs"). Every smart card (Since you were here, Watch-outs, Money waiting, the ripple,
+  What will hold up site) sits on its conversation as one line on `#F7F9FF`: a dot in its tone (rose late,
+  amber your turn, brand otherwise), its name in `text-[13px] font-bold`, the one fact that matters in
+  `text-xs` (amounts behind the hide-figures eye), and "Show" / "Hide" with a chevron. Pressing it opens the
+  card under it (`hud-panel-in`); one card is open at a time in a conversation, and the workspace remembers
+  which in this browser (`studiodesk.smartBriefs`). This week's update is one line of its own. **Up next**
+  shows its first step; the rest fold under "Show n more", beside "n more on the Hub". So the story keeps
+  most of the pane: about 55% on Whole project and 70–80% elsewhere at 1500×940.
 - **Smart workspace, PR 2** (owner, 27 Nov 2026, same mockups). From the records the Design Desk and the
   Ops Desk already keep (`lib/projectCare.ts`, `components/projectConversations/useProjectCare.ts`), each
   for the roles that see them there; nothing leaves the app.

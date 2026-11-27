@@ -261,6 +261,15 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
   const readiness = useMemo(() => (careData.care ? handoverReadiness(ctx, careData.care.checklists, now) : null), [careData.care, ctx, now]);
   const openClients = () => { askClientsToOpen(p.projectId); p.onLeaveProject('clients'); };
 
+  /* Which smart card is open in each conversation: none at first, then the person's last choice (a convenience, this browser only). */
+  const [briefs, setBriefs] = useState<Record<string, string | null>>(() => { try { return JSON.parse(window.localStorage.getItem('studiodesk.smartBriefs') || '{}') || {}; } catch { return {}; } });
+  const isOpen = (id: string) => briefs[conv] === id;
+  const toggle = (id: string) => setBriefs((b) => {
+    const next = { ...b, [conv]: b[conv] === id ? null : id };
+    try { window.localStorage.setItem('studiodesk.smartBriefs', JSON.stringify(next)); } catch { /* private window */ }
+    return next;
+  });
+
   /*
     Since you were here: when this person last opened the project is read once
     as the project opens and kept as the "since" for this visit; the visit
@@ -374,23 +383,47 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
             labelOf={p.labelOf} visible={(r) => p.conversations.some((c) => c.routes.includes(r))}
             pinned={shown.id === 'whole' ? (
               <>
-                {sinceThen && <SinceCard data={sinceThen} now={now} names={p.conversations} canOpen={canOpen} onOpen={open} onPick={setConv} onDone={() => setCaughtUp(true)} />}
+                {sinceThen && (
+                  <Brief label="Since you were here" title={`Since you were here ${sinceLabel(sinceThen.since, now)}`} tone="plain"
+                    summary={`${sinceThen.lines.length + sinceThen.more === 1 ? '1 update' : `${sinceThen.lines.length + sinceThen.more} updates`}: ${sinceThen.lines[0].text}`}
+                    open={isOpen('since')} onToggle={() => toggle('since')}>
+                    <SinceCard data={sinceThen} names={p.conversations} canOpen={canOpen} onOpen={open} onPick={setConv} onDone={() => setCaughtUp(true)} />
+                  </Brief>
+                )}
                 <UpNext stage={p.currentStage} stages={p.stages} journey={p.journey} hubLabel={p.hubLabel} onHub={() => setHubOpen(true)}
                   onMatrix={p.conversations.some((c) => c.routes.includes('project-journey')) ? () => open('project-journey') : undefined}
                   onOpen={open} labelOf={p.labelOf} />
-                {signals.length > 0 && <WatchOuts signals={signals} names={p.conversations} labelOf={p.labelOf} onOpen={open} />}
+                {signals.length > 0 && (
+                  <Brief label="Watch-outs" title="Watch-outs" tone={signals[0].tone}
+                    summary={`${signals.length === 1 ? '1 on this project' : `${signals.length} on this project`} · ${signals[0].line}`}
+                    open={isOpen('watch')} onToggle={() => toggle('watch')}>
+                    <WatchOuts signals={signals} names={p.conversations} labelOf={p.labelOf} onOpen={open} />
+                  </Brief>
+                )}
               </>
             ) : shown.id === 'money' && (moneyCard || copiesBehind.length) ? (
               <>
-                {moneyCard && <MoneyCard data={moneyCard} canOpen={canOpen('payment-calc')} openLabel={p.labelOf('payment-calc')} onOpen={() => open('payment-calc')} />}
-                {copiesBehind.length > 0 && <RippleCard steps={copiesBehind} canOpen={canOpen} onOpen={open} labelOf={p.labelOf} />}
+                {moneyCard && (() => { const b = moneyBrief(moneyCard); return (
+                  <Brief label="Money waiting" title="Money waiting" tone={b.tone} summary={b.summary} open={isOpen('money')} onToggle={() => toggle('money')}>
+                    <MoneyCard data={moneyCard} canOpen={canOpen('payment-calc')} openLabel={p.labelOf('payment-calc')} onOpen={() => open('payment-calc')} />
+                  </Brief>
+                ); })()}
+                {copiesBehind.length > 0 && (
+                  <Brief label="What the client holds" title="The client holds older copies" tone="turn"
+                    summary={`${copiesBehind.length === 1 ? '1 step' : `${copiesBehind.length} steps`} to bring them up to date · ${copiesBehind[0].title}`}
+                    open={isOpen('ripple')} onToggle={() => toggle('ripple')}>
+                    <RippleCard steps={copiesBehind} canOpen={canOpen} onOpen={open} labelOf={p.labelOf} />
+                  </Brief>
+                )}
               </>
-            ) : shown.id === 'design' && design ? (
-              <DesignCard data={design} rows={siteRows} me={p.me} isReviewer={!!p.isReviewer}
-                onOpenDrawing={(id) => openInDesignReview(p.projectId, id, { tab: p.homeRoute, label: name })}
-                onOpenTracker={canOpen('drawing-tracker') ? () => open('drawing-tracker') : undefined}
-                onDesk={() => p.onLeaveProject('design-review')} />
-            ) : shown.id === 'chat' && weekly ? (
+            ) : shown.id === 'design' && design ? (() => { const b = designBrief(design); return (
+              <Brief label="What will hold up site" title="What will hold up site" tone={b.tone} summary={b.summary} open={isOpen('design')} onToggle={() => toggle('design')}>
+                <DesignCard data={design} rows={siteRows} me={p.me} isReviewer={!!p.isReviewer}
+                  onOpenDrawing={(id) => openInDesignReview(p.projectId, id, { tab: p.homeRoute, label: name })}
+                  onOpenTracker={canOpen('drawing-tracker') ? () => open('drawing-tracker') : undefined}
+                  onDesk={() => p.onLeaveProject('design-review')} />
+              </Brief>
+            ); })() : shown.id === 'chat' && weekly ? (
               <WeeklyCard line={weekly} onOpsDesk={() => p.onLeaveProject('ops-desk')} />
             ) : null}
             tail={null} />
@@ -713,7 +746,10 @@ function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, lab
   onHub: () => void; onMatrix?: () => void; onOpen: (r: string) => void; labelOf: (r: string) => string;
 }) {
   const stageName = stages.find((s) => s.stage === stage)?.label || '';
-  const rows = journey.upNext;
+  /* The first step shows; the next ones fold under "Show n more" so the story keeps its room (owner, 27 Nov 2026). */
+  const [all, setAll] = useState(false);
+  const rows = all ? journey.upNext : journey.upNext.slice(0, 1);
+  const folded = journey.upNext.length - 1;
   return (
     <div className="shrink-0 mx-4 mt-1 rounded-2xl bg-gradient-to-b from-[#F7F9FF] to-[#EEF2FD] overflow-hidden hud-panel-in">
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-100">
@@ -737,10 +773,20 @@ function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, lab
           {!r.actions?.length && r.route && <Button size="sm" variant="secondary" className="cvw-hot cvw-lift" data-ripple onClick={() => onOpen(r.route!)}>Open {labelOf(r.route)}</Button>}
         </div>
       ))}
-      {!!journey.more && (
-        <button type="button" data-ripple onClick={onHub} className="cvw-hot w-full text-left px-4 py-2 border-t border-slate-100 text-xs font-bold text-[#3D52A0] hover:bg-[#3D52A0]/5">
-          {journey.more} more on the Hub →
-        </button>
+      {(folded > 0 || !!journey.more) && (
+        <div className="flex items-center gap-2 px-2 py-1 border-t border-slate-100">
+          {folded > 0 && (
+            <button type="button" data-ripple aria-expanded={all} onClick={() => setAll((v) => !v)} className="cvw-hot px-2 py-1 rounded-lg text-xs font-bold text-[#3D52A0] hover:bg-[#3D52A0]/5">
+              {all ? 'Show less' : `Show ${folded} more`}
+            </button>
+          )}
+          <span className="flex-1" />
+          {!!journey.more && (
+            <button type="button" data-ripple onClick={onHub} className="cvw-hot px-2 py-1 rounded-lg text-xs font-bold text-[#3D52A0] hover:bg-[#3D52A0]/5">
+              {journey.more} more on the Hub →
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -749,22 +795,46 @@ function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, lab
 /* ───────────── smart workspace, PR 1 ───────────── */
 
 /*
+  A SMART CARD, FOLDED (owner, 27 Nov 2026: "actual conversation doesnt have
+  much space, please check for all tabs"). Every smart card sits on top of its
+  conversation as one line: a dot in its tone (rose late, amber your turn,
+  brand otherwise), its name and the one fact that matters. Pressing the line
+  opens the card under it; one card is open at a time in a conversation, and
+  the workspace remembers which, so the story keeps the room.
+*/
+type BriefTone = 'late' | 'turn' | 'plain';
+const BRIEF_DOT: Record<BriefTone, string> = { late: 'bg-rose-500', turn: 'bg-amber-500', plain: 'bg-[#3D52A0]' };
+function Brief({ label, title, summary, tone, open, onToggle, children }: {
+  label: string; title: string; summary: React.ReactNode; tone: BriefTone; open: boolean; onToggle: () => void; children: React.ReactNode;
+}) {
+  return (
+    <section className="shrink-0 mx-4 rounded-2xl bg-[#F7F9FF] overflow-hidden shadow-[0_8px_18px_-16px_rgba(30,42,90,0.5)]" aria-label={label}>
+      <button type="button" data-ripple aria-expanded={open} onClick={onToggle}
+        className="cvw-hot w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-[#EEF2FD]">
+        <span className={cx('w-2 h-2 rounded-full shrink-0', BRIEF_DOT[tone])} aria-hidden />
+        <span className="shrink-0 text-[13px] font-bold text-slate-800">{title}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-slate-500">{summary}</span>
+        <span className="shrink-0 text-xs font-bold text-[#3D52A0]">{open ? 'Hide' : 'Show'}</span>
+        <ChevronRight className={cx('w-4 h-4 shrink-0 text-slate-400', open && 'rotate-90')} aria-hidden />
+      </button>
+      {open && <div className="px-4 pb-3 hud-panel-in">{children}</div>}
+    </section>
+  );
+}
+
+/*
   SINCE YOU WERE HERE (lib/projectCatchUp): what moved since this person last
   opened the project, at most three lines, the client's own first. Each line
   opens its screen (or its conversation); Mark as read puts it away for this
   visit. Owners and project leads open many projects a day (owner, 27 Nov 2026).
 */
-function SinceCard({ data, now, names, canOpen, onOpen, onPick, onDone }: {
-  data: CatchUp; now: number; names: ConversationDef[]; canOpen: (r: string) => boolean;
+function SinceCard({ data, names, canOpen, onOpen, onPick, onDone }: {
+  data: CatchUp; names: ConversationDef[]; canOpen: (r: string) => boolean;
   onOpen: (r: string) => void; onPick: (c: ConversationId) => void; onDone: () => void;
 }) {
   const nameOf = (c: ConversationId) => names.find((x) => x.id === c)?.name || conversationDef(c).name;
   return (
-    <section className="shrink-0 mx-4 mt-1 rounded-2xl bg-[#EEF2FD] px-3 py-2.5 hud-panel-in" aria-label="Since you were here">
-      <div className="flex items-center gap-2 px-1.5 mb-1">
-        <h3 className="flex-1 min-w-0 truncate text-[13px] font-bold text-slate-800">Since you were here {sinceLabel(data.since, now)}</h3>
-        <Button size="sm" variant="quiet" className="cvw-hot" data-ripple onClick={onDone}>Mark as read</Button>
-      </div>
+    <div className="-mx-1.5">
       <ul className="flex flex-col">
         {data.lines.map((l, i) => (
           <li key={l.id}>
@@ -777,8 +847,11 @@ function SinceCard({ data, now, names, canOpen, onOpen, onPick, onDone }: {
           </li>
         ))}
       </ul>
-      {data.more > 0 && <p className="mt-0.5 px-1.5 text-[11px] text-slate-500">and {data.more} more in the story below</p>}
-    </section>
+      <div className="flex items-center gap-2 px-1.5 mt-1">
+        <p className="min-w-0 flex-1 text-[11px] text-slate-500">{data.more > 0 ? `and ${data.more} more in the story below` : ''}</p>
+        <Button size="sm" variant="quiet" className="cvw-hot" data-ripple onClick={onDone}>Mark as read</Button>
+      </div>
+    </div>
   );
 }
 
@@ -793,13 +866,9 @@ function WatchOuts({ signals, names, labelOf, onOpen }: {
   const nameOf = (c: ConversationId) => names.find((x) => x.id === c)?.name || conversationDef(c).name;
   const top = signals.slice(0, 3);
   return (
-    <section className="shrink-0 mx-4 rounded-2xl bg-white border border-slate-100 overflow-hidden hud-panel-in" aria-label="Watch-outs">
-      <div className="flex items-center gap-2 px-4 pt-2.5 pb-1">
-        <h3 className="flex-1 text-[15px] font-bold text-slate-800">Watch-outs</h3>
-        <span className="text-[11px] text-slate-500">{signals.length === 1 ? '1 on this project' : `${signals.length} on this project`}</span>
-      </div>
+    <div className="flex flex-col gap-1.5">
       {top.map((s, i) => (
-        <div key={s.id} className="hud-row-in flex items-center gap-3 px-4 py-2 border-t border-slate-100" style={{ animationDelay: `${120 + i * 40}ms` }}>
+        <div key={s.id} className="hud-row-in flex items-center gap-3 rounded-xl bg-white px-3 py-2" style={{ animationDelay: `${60 + i * 40}ms` }}>
           <Chip tone={s.tone === 'late' ? 'bad' : 'warn'}>{s.tone === 'late' ? 'Late' : 'Your turn'}</Chip>
           <div className="min-w-0 flex-1">
             <p className="text-[13px] font-semibold text-slate-800 truncate">{s.line}</p>
@@ -809,9 +878,9 @@ function WatchOuts({ signals, names, labelOf, onOpen }: {
         </div>
       ))}
       {signals.length > 3 && (
-        <p className="px-4 py-2 border-t border-slate-100 text-xs text-slate-500">{signals.length - 3} more, each shown on its conversation in the list</p>
+        <p className="px-1 text-xs text-slate-500">{signals.length - 3} more, each shown on its conversation in the list</p>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -841,8 +910,7 @@ function MoneyCard({ data, canOpen, openLabel, onOpen }: { data: MoneyPicture; c
   const pastTerms = data.unpaid.filter((u) => u.level >= 1);
   const unpaidTint = !worst ? 'slate' : worst.level >= 2 ? 'rose' : worst.level === 1 ? 'amber' : 'slate';
   return (
-    <section className="shrink-0 mx-4 mt-1 rounded-2xl bg-gradient-to-b from-[#F7F9FF] to-[#EEF2FD] px-4 py-3 hud-panel-in" aria-label="Money waiting">
-      <h3 className="text-[15px] font-bold text-slate-800 mb-2">Money waiting</h3>
+    <div>
       <div className={cx('grid gap-2', data.drift ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2')}>
         <MoneyTile label="Unpaid" tint={unpaidTint}
           value={worst ? amt(data.unpaidTotal, data.unpaid.length === 1 ? '1 invoice' : `${data.unpaid.length} invoices`) : 'Nothing'}
@@ -868,8 +936,22 @@ function MoneyCard({ data, canOpen, openLabel, onOpen }: { data: MoneyPicture; c
         </p>
         {canOpen && <Button size="sm" variant="primary" className="cvw-hot cvw-lift" data-ripple onClick={onOpen}>Open {openLabel}<ArrowRight className="cvw-arrow w-3.5 h-3.5" aria-hidden /></Button>}
       </div>
-    </section>
+    </div>
   );
+}
+
+/* Money waiting, folded: the one or two facts that matter, amounts behind the hide-figures eye. */
+function moneyBrief(d: MoneyPicture): { tone: BriefTone; summary: React.ReactNode } {
+  const amt = (n: number | null) => (n == null ? null : <Masked>{inrOf(n)}</Masked>);
+  const worst = d.unpaid[0];
+  const parts: React.ReactNode[] = [];
+  if (worst) parts.push(<>{amt(d.unpaidTotal) ?? worst.name} unpaid {worst.days === 1 ? '1 day' : `${worst.days} days`}</>);
+  if (d.earned.length) parts.push(<>{amt(d.earnedTotal) ?? (d.earned.length === 1 ? d.earned[0].name : `${d.earned.length} stages`)} earned, not invoiced</>);
+  else if (d.nextToBill) parts.push(<>Next to bill: {d.nextToBill.name}</>);
+  if (d.drift) parts.push(<>stages add up to {d.drift.design ?? d.drift.execution}%</>);
+  if (!parts.length) parts.push(<>Nothing waiting</>);
+  const tone: BriefTone = worst && worst.level >= 2 ? 'late' : (worst && worst.level === 1) || d.earned.length || d.drift ? 'turn' : 'plain';
+  return { tone, summary: parts.map((x, i) => <React.Fragment key={i}>{i ? ' · ' : ''}{x}</React.Fragment>) };
 }
 
 /*
@@ -881,9 +963,8 @@ function RippleCard({ steps, canOpen, onOpen, labelOf }: {
   steps: ImpactStep[]; canOpen: (r: string) => boolean; onOpen: (r: string) => void; labelOf: (r: string) => string;
 }) {
   return (
-    <section className="shrink-0 mx-4 rounded-2xl bg-amber-50 px-4 py-3 hud-panel-in" aria-label="What the client holds">
-      <h3 className="text-[13px] font-bold text-amber-800">The client holds copies older than the payment schedule</h3>
-      <p className="text-xs text-amber-700 mb-2">Bring them up to date in this order.</p>
+    <div>
+      <p className="text-xs text-amber-700 mb-2">They are older than the payment schedule. Bring them up to date in this order.</p>
       <ol className="flex flex-col gap-1.5">
         {steps.map((s, i) => {
           const r = rippleRoute(s);
@@ -903,7 +984,7 @@ function RippleCard({ steps, canOpen, onOpen, labelOf }: {
           );
         })}
       </ol>
-    </section>
+    </div>
   );
 }
 
@@ -931,8 +1012,7 @@ function DesignCard({ data, rows, me, isReviewer, onOpenDrawing, onOpenTracker, 
   };
   const site = data.site.slice(0, 3);
   return (
-    <section className="shrink-0 mx-4 mt-1 rounded-2xl bg-gradient-to-b from-[#F7F9FF] to-[#EEF2FD] px-4 py-3 hud-panel-in" aria-label="What will hold up site">
-      <h3 className="text-[15px] font-bold text-slate-800 mb-2">What will hold up site</h3>
+    <div>
       {site.length > 0 && (
         <div className="flex flex-col gap-1.5">
           {site.map((s, i) => {
@@ -983,8 +1063,19 @@ function DesignCard({ data, rows, me, isReviewer, onOpenDrawing, onOpenTracker, 
           <Button size="sm" variant="secondary" className="cvw-hot cvw-lift shrink-0" data-ripple onClick={onDesk}>Bill or waive on the Design Desk</Button>
         </div>
       )}
-    </section>
+    </div>
   );
+}
+
+/* What will hold up site, folded. */
+function designBrief(d: DesignPicture): { tone: BriefTone; summary: string } {
+  const risky = d.site.filter((s) => s.risk.state === 'late' || s.risk.state === 'risk').length;
+  const parts: string[] = [];
+  if (risky) parts.push(`${risky === 1 ? '1 drawing' : `${risky} drawings`} late for site or at risk`);
+  else if (d.site.length) parts.push(`${d.site.length === 1 ? '1 drawing' : `${d.site.length} drawings`} ready for site`);
+  if (d.clientHolding.worst) parts.push(`the client has had ${d.clientHolding.worst.name} ${d.clientHolding.worst.days} days`);
+  if (d.rounds.length) parts.push(`${d.rounds.length === 1 ? '1 round' : `${d.rounds.length} rounds`} to bill or waive`);
+  return { tone: risky ? 'late' : 'turn', summary: parts.join(' · ') };
 }
 
 /*
@@ -996,11 +1087,10 @@ function WeeklyCard({ line, onOpsDesk }: { line: DigestLine; onOpsDesk: () => vo
   const tint = line.tone === 'turn' ? 'bg-amber-50' : line.tone === 'done' ? 'bg-emerald-50' : 'bg-[#F7F9FF]';
   const ink = line.tone === 'turn' ? 'text-amber-800' : line.tone === 'done' ? 'text-emerald-800' : 'text-slate-800';
   return (
-    <section className={cx('shrink-0 mx-4 mt-1 rounded-2xl px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-2 hud-panel-in', tint)} aria-label="This week’s update">
-      <div className="min-w-0 flex-1">
-        <p className={cx('text-[13px] font-bold', ink)}>{line.text}</p>
-        {line.detail && <p className="text-xs text-slate-500">{line.detail}</p>}
-      </div>
+    <section className={cx('shrink-0 mx-4 rounded-2xl px-4 py-2 flex items-center gap-3 hud-panel-in', tint)} aria-label="This week’s update">
+      <p className="min-w-0 flex-1 truncate text-xs text-slate-500">
+        <b className={cx('text-[13px]', ink)}>{line.text}</b>{line.detail ? ` · ${line.detail}` : ''}
+      </p>
       <Button size="sm" variant="secondary" className="cvw-hot cvw-lift shrink-0" data-ripple onClick={onOpsDesk}>Open the Ops Desk</Button>
     </section>
   );

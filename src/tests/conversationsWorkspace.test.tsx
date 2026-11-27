@@ -38,6 +38,14 @@ import ConversationsWorkspace, { type ConversationsWorkspaceProps } from '../../
 import { conversationsFor } from '../../lib/projectConversations';
 
 afterEach(cleanup);
+afterEach(() => { try { window.localStorage.removeItem('studiodesk.smartBriefs'); } catch { /* none */ } });
+
+/* A smart card starts folded to one line; pressing the line opens it (owner, 27 Nov 2026: room for the story). */
+const expand = (name: string) => {
+  const region = screen.getByRole('region', { name });
+  fireEvent.click(within(region).getByRole('button', { expanded: false }));
+  return region;
+};
 
 const LABELS: Record<string, string> = { 'payment-calc': 'Money', analytics: 'Money & Offers', 'boq-editor': 'BOQ Editor', 'client-portal': 'Client Portal', 'comms-tracker': 'Messages', timeline: 'Timeline', leadiq: 'Brief & Site', 'drawing-tracker': 'Drawings', ops: 'Pricing & Tiers' };
 
@@ -183,6 +191,9 @@ describe('the Conversations workspace', () => {
     ] } });
     expect(screen.getByText('Your sign-off')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Mark done' }));
+    /* The first step shows; the next fold under "Show 1 more", so the story keeps its room (owner, 27 Nov 2026). */
+    expect(screen.queryByRole('button', { name: 'Prepare Terms' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show 1 more' }));
     fireEvent.click(screen.getByRole('button', { name: 'Prepare Terms' }));
     expect(markDone).toHaveBeenCalled();
     expect(prepare).toHaveBeenCalled();
@@ -308,7 +319,7 @@ describe('the smart workspace', () => {
 
   it('gathers the worst on Whole project as Watch-outs, each opening its screen', () => {
     const { setActiveTab } = setup({ projectContext: OWING, money: MONEY });
-    const box = screen.getByRole('region', { name: 'Watch-outs' });
+    const box = expand('Watch-outs');
     expect(box.textContent).toContain('Late');
     expect(box.textContent).toContain('Sign-up & Concept unpaid 20 days');
     fireEvent.click(within(box).getByRole('button', { name: 'Open Money' }));
@@ -319,7 +330,7 @@ describe('the smart workspace', () => {
     setup({ projectContext: OWING, money: MONEY });
     const list = screen.getByRole('complementary', { name: "This project's conversations" });
     fireEvent.click(within(list).getByRole('button', { name: /^Money/ }));
-    const card = screen.getByRole('region', { name: 'Money waiting' });
+    const card = expand('Money waiting');
     expect(card.textContent).toContain('₹10,590');
     expect(card.textContent).toContain('Sign-up & Concept · 20 days');
     expect(card.textContent).toContain('Next to bill');
@@ -327,6 +338,22 @@ describe('the smart workspace', () => {
     setup({ projectContext: OWING, money: MONEY, seesMoney: false });
     fireEvent.click(within(screen.getByRole('complementary', { name: "This project's conversations" })).getByRole('button', { name: /^Money/ }));
     expect(screen.queryByRole('region', { name: 'Money waiting' })).toBeNull();
+  });
+
+  it('keeps each smart card to one line until it is opened, one at a time, and remembers which', () => {
+    setup({ projectContext: OWING, money: MONEY });
+    const box = screen.getByRole('region', { name: 'Watch-outs' });
+    const line = within(box).getByRole('button', { expanded: false });
+    expect(line.textContent).toContain('Sign-up & Concept unpaid 20 days');
+    expect(within(box).queryByRole('button', { name: 'Open Money' })).toBeNull();
+    fireEvent.click(line);
+    expect(within(box).getByRole('button', { name: 'Open Money' })).toBeTruthy();
+    expect(JSON.parse(window.localStorage.getItem('studiodesk.smartBriefs') || '{}')).toEqual({ whole: 'watch' });
+    cleanup();
+    setup({ projectContext: OWING, money: MONEY });
+    expect(within(screen.getByRole('region', { name: 'Watch-outs' })).getByRole('button', { expanded: true })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('complementary', { name: "This project's conversations" })).getByRole('button', { name: /^Money/ }));
+    expect(within(screen.getByRole('region', { name: 'Money waiting' })).getByRole('button', { expanded: false }).textContent).toContain('₹10,590 unpaid 20 days');
   });
 
   it('shows no signal for a screen the person cannot open', () => {
@@ -337,7 +364,8 @@ describe('the smart workspace', () => {
   it('says what moved since the last visit, and marks this one', async () => {
     seen.readSeen.mockResolvedValueOnce(Date.now() - 2 * DAY);
     setup();
-    const card = await screen.findByRole('region', { name: 'Since you were here' });
+    await screen.findByRole('region', { name: 'Since you were here' });
+    const card = expand('Since you were here');
     expect(card.textContent).toContain('BOQ v1 signed');
     expect(seen.markSeen).toHaveBeenCalledWith('owner@studio.in', 'p1');
     fireEvent.click(within(card).getByRole('button', { name: 'Mark as read' }));
@@ -364,7 +392,7 @@ describe('the smart workspace, PR 2', () => {
     smart.care = { care: null, digest: undefined, meetings: [{ id: 'm', state: 'CLOSED', closedAt: Date.now(), includedRounds: 2, rooms: [{ room: 'Kitchen', round: 3, changes: [], charge: { status: 'to_bill' } }] }] };
     const { onLeaveProject } = setup({ conversations: CONVS, canBillRounds: true });
     pick(/^Design/);
-    const card = screen.getByRole('region', { name: 'What will hold up site' });
+    const card = expand('What will hold up site');
     expect(card.textContent).toContain('Late for site');
     expect(card.textContent).toContain('With the Design Head 3 days');
     fireEvent.click(within(card).getByRole('button', { name: 'Open' }));
@@ -378,12 +406,15 @@ describe('the smart workspace, PR 2', () => {
     smart.items = [{ id: 'w', name: 'Master bed wardrobe', siteDate: day(-1), review: { state: 'IN_REVIEW', submittedAt: Date.now() - 3 * DAY } }];
     setup({ conversations: CONVS });
     pick(/^Design/);
+    expand('What will hold up site');
     fireEvent.click(screen.getByRole('button', { name: 'Nudge' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Reminded' })).toBeTruthy());
     expect(desk.nudgeHolder).toHaveBeenCalled();
     cleanup();
     setup({ conversations: CONVS, isReviewer: true });
     pick(/^Design/);
+    /* Still open from a moment ago: the workspace remembers the card opened in each conversation. */
+    expect(within(screen.getByRole('region', { name: 'What will hold up site' })).getByRole('button', { expanded: true })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Nudge' })).toBeNull();
   });
 
