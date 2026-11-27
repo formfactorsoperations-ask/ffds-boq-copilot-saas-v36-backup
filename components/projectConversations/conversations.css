@@ -103,3 +103,12 @@
 @media (prefers-reduced-motion: reduce) {
   .cvw-hot.cvw-lift:hover, .cvw-hot.cvw-lift:active { transform: none !important; }
 }
+
+/* The studio's sections as colour-filled tiles in the top bar: brand tint, solid on hover, the section you are in stays solid. */
+.cvw-tile { transition: background-color 0.2s ease, color 0.2s ease, transform 0.25s var(--cvw-spring, ease), box-shadow 0.25s ease; }
+.cvw-tile:hover, .cvw-tile:focus-visible { background-color: #3D52A0; color: #fff; transform: translateY(-2px); box-shadow: 0 8px 18px -8px rgba(61, 82, 160, 0.55); }
+.cvw-tile:active { transform: translateY(0) scale(0.94); }
+.cvw-tile.is-here { background-image: linear-gradient(180deg, #4C65B5 0%, #334486 100%); box-shadow: 0 0 0 3px rgba(61, 82, 160, 0.15), 0 6px 14px -6px rgba(61, 82, 160, 0.5); }
+@media (prefers-reduced-motion: reduce) {
+  .cvw-tile:hover, .cvw-tile:focus-visible, .cvw-tile:active { transform: none !important; }
+}

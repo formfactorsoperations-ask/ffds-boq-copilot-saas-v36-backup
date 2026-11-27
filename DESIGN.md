@@ -1318,13 +1318,19 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   - **Left, where you are:** the initials tile, then the breadcrumb **Projects ›** (the way back to the
     list) and the project's name (`text-base font-bold`), the status chip, and client · place · area in
     `text-[11px]`.
-  - **Right, the studio's sections**, named, iconed and ordered as on the studio bar (components/Header):
-    Home, **Projects**, Design Desk, Ops Desk, People, Clients, Item Bank (`studioJumpItems` decides which
-    desks a role sees). A project lives inside Projects, so Projects is the section lit, and choosing it
-    goes back to the list. There is no "All projects" item (owner: not right business-wise). Then Client
-    portal (globe) and Show me around, then Hide figures and Use Classic view.
-  - Labels give way to icons with a tooltip as the screen narrows: the desks below 1800px, Client portal
-    and Show me around below 1440px, Home and Clients below `lg`. Projects always keeps its word.
+  - **Right, the studio's sections as colour-filled icon tiles** (owner: "can we just have color filled
+    icons instead and when hovered user will understand where to navigate?"), named, iconed and ordered
+    as on the studio bar (components/Header): Home, **Projects**, Design Desk, Ops Desk, People, Clients,
+    Item Bank (`studioJumpItems` decides which desks a role sees); then Client portal (globe) and Show me
+    around; then Hide figures and Use Classic view. Each tile is 36px, brand tint (`bg-[#3D52A0]/10`,
+    brand icon); on hover or focus it fills solid brand, lifts 2px and its icon plays its motion, and
+    the Classic bar's tooltip (`.psb-tip`) gives its name and a line on what is there. **Projects**, where
+    a project lives, stays filled (the studio bar's brand gradient and a soft ring); choosing it goes back
+    to the list. There is no "All projects" item (owner: not right business-wise). Brand only: no tile
+    takes an accent colour of its own.
+- **The way back to Conversations from Classic** (owner: "if user selects classic view there is no
+  option to return to new view"): when the studio lets each person choose, Classic's page bar shows
+  **Try the new view** (brand tint, beside the studio icons), as well as the sidebar menu's item.
 - **Type, one step down the scale** (owner: "the font size is big in the project workspace"): row titles,
   story lines and buttons `text-[13px]`, conversation and Up next heads `text-[15px]`, the window title
   `text-xl`; meta stays `text-xs` / `text-[11px]`.
@@ -1399,13 +1405,9 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     the point clicked (`data-ripple`, `.cvw-ripple`, brand at low strength).
   - **Picked:** the open conversation's plate fills brand blue and pops; the conversation head's icon pops
     and plays its motion as you arrive.
-  - **The top bar** (the way out; owner: "this part is too boring") speaks the studio bar's language
-    (components/Header): the brand reticle with its sweep (`nav-pill hud-reticle`, `hud-sweep`) rests on
-    Projects and glides to whatever you point at or tab to, leaving an echo (`hud-echo`); the items
-    rise in turn (`hud-rise`); the energy rail runs along the bottom edge (`hud-rail`). Moved by
-    measuring and an inline transform, as the studio bar is. Calmer than the studio bar (owner: "the
-    glowing blue band is too fast"): it follows only after the pointer rests 140ms, glides over .8s
-    without overshoot, sweeps over 1.6s, and the rail turns over 28s.
+  - **The top bar's tiles** fill solid brand on hover and lift; the one you are in (Projects) stays
+    filled. The bar's items rise in turn as the view opens (`hud-rise`). (A gliding reticle was tried
+    and dropped, owner 27 Nov 2026: "still seems very odd".)
   - All of it stops under reduced motion. Palette only.
 
 ### Summary-first sections (approved 16 Nov 2026)

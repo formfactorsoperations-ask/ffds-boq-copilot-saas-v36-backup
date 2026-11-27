@@ -427,6 +427,13 @@ export function ProjectWorkspace({
           <HeaderFigures />
           <div className="ml-auto shrink-0 flex items-center gap-2">
             <LiveStamp match={(n) => n.projectId === projectId} className="hidden lg:inline-flex" />
+            {/* The way to the Conversations view, in sight, when the studio lets each person choose (owner, 27 Nov 2026: "there is no option to return to new view"). */}
+            {canChooseView && view === 'classic' && (
+              <button type="button" onClick={() => pv.setView('conversations')} title="Your own choice: the studio's setting stays as it is"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#3D52A0]/30 bg-[#3D52A0]/10 text-[#3D52A0] text-xs font-bold whitespace-nowrap hover:bg-[#3D52A0] hover:text-white transition-colors">
+                <MessagesSquare className="w-4 h-4" aria-hidden />Try the new view
+              </button>
+            )}
             {/* The studio's desks, one click from any project screen (components/projectNav/StudioJump). */}
             <StudioJump role={currentRoles?.length ? currentRoles : currentRole} onGo={(route) => onLeaveProject?.(route)} />
             {holdsFinanceRole(currentRole) && <HideFiguresButton />}

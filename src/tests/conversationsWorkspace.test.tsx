@@ -261,4 +261,17 @@ describe('the Conversations workspace', () => {
     expect(disc.className).toContain('is-pop');
     expect(money.querySelector('.cvw-ic')?.className).toContain('is-play');
   });
+
+  it('shows the studio as icon tiles that say where they go on hover, with Projects filled (owner, 27 Nov 2026)', () => {
+    setup();
+    const bar = screen.getByRole('navigation', { name: 'Studio' });
+    const projects = within(bar).getByRole('button', { name: 'Projects' });
+    expect(projects.getAttribute('aria-current')).toBe('page');
+    expect(projects.className).toContain('is-here');
+    expect(projects.textContent).toBe(''); // an icon, its name on hover
+    fireEvent.mouseEnter(within(bar).getByRole('button', { name: 'Home' }));
+    expect(screen.getByRole('tooltip').textContent).toContain('Home');
+    fireEvent.mouseLeave(within(bar).getByRole('button', { name: 'Home' }));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
 });

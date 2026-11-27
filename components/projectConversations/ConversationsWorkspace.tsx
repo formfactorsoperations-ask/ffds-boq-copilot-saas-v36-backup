@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowLeft, ArrowRight, Sparkles, MessageCircle, Wallet, Table, FolderOpen, PenTool, HardHat, CalendarRange, MapPin,
   X, Home, Users, Building2, ChevronRight as Crumb, Search, FileText, Globe, IndianRupee, NotebookPen, Info, Eye, Scale, ChevronRight, LayoutGrid, Compass, History,
@@ -296,20 +297,16 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
 /* ───────────── the way out ───────────── */
 
 /*
-  ONE BAR ON TOP (owner, 27 Nov 2026: "do we need a big menu bar? top left
-  corner as project name and on right side these options"; and earlier "this
-  part is too boring"). Left: the project, its status and client line. Right:
-  the way out and the studio's screens, in the studio bar's language
-  (components/Header: the reticle with its sweep and echo, items rising in
-  turn, the energy rail along the bottom edge). The reticle rests on All
-  projects and follows what you point at or tab to, slowly and only once you
-  stay a moment (owner: "the glowing blue band is too fast"). Moved by
-  measuring and an inline transform, as the studio bar does (framer's
-  layoutId does not move in this codebase).
+  ONE BAR ON TOP (owner, 27 Nov 2026). Left, where you are: "Projects ›" (the
+  way back) and the project's name, status and client line. Right, the
+  studio's sections as colour-filled icon tiles (owner: "can we just have
+  color filled icons instead and when hovered user will understand where to
+  navigate?"): named, iconed and ordered as on the studio bar, brand tiles
+  that fill solid on hover with the name and a line on what is there (the
+  Classic bar's tooltip, .psb-tip). Projects, where you are, stays filled.
+  No "All projects" item (owner: not right business-wise).
 */
-type WayItem = { key: string; label: string; icon: React.ElementType; move: string; go: () => void; title?: string; show?: string; labelAt?: string };
-
-const GLIDE = 'transform .8s cubic-bezier(.22,1,.36,1), width .8s cubic-bezier(.22,1,.36,1)';
+type WayItem = { key: string; label: string; sub: string; icon: React.ElementType; move: string; go: () => void; show?: string };
 
 function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, onLeave, onUseClassic, showHideFigures, onTour }: {
   ctx: any; name: string; statusLabel: string; onStatusClick?: () => void; onPortal?: () => void;
@@ -317,89 +314,54 @@ function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, on
 }) {
   const sub = [ctx.clientName || 'No client yet', ctx.location, ctx.area ? `${ctx.area} sq ft` : ''].filter(Boolean).join(' · ');
   const initials = (name.match(/[A-Za-z]+/g) || ['P']).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase();
-  /*
-    The studio's own sections, named and ordered as the studio bar has them
-    (components/Header TABS): Home, Projects, the desks, Clients, then the
-    library. A project lives inside Projects, so Projects is the section lit
-    here, and choosing it goes back to the list (owner, 27 Nov 2026: an "All
-    projects" item in the menu was not right business-wise).
-  */
   const desk = (route: string) => desks.find((d) => d.route === route);
-  const asItem = (d: StudioJumpItem | undefined, move: string, labelAt: string): WayItem[] =>
-    d ? [{ key: d.route, label: d.label, icon: d.icon, move, go: () => onLeave(d.route), title: d.sub, show: 'hidden md:inline-flex', labelAt }] : [];
-  const items: WayItem[] = [
-    { key: 'home', label: 'Home', icon: Home, move: 'bounce', go: () => onLeave('home'), title: 'Studio home', labelAt: 'hidden lg:inline' },
-    { key: 'projects', label: 'Projects', icon: Building2, move: 'back', go: () => onLeave('projects'), title: 'Back to all projects' },
-    ...asItem(desk('design-review'), 'draw', 'hidden min-[1800px]:inline'),
-    ...asItem(desk('ops-desk'), 'go', 'hidden min-[1800px]:inline'),
-    ...asItem(desk('people'), 'talk', 'hidden min-[1800px]:inline'),
-    { key: 'clients', label: 'Clients', icon: Users, move: 'talk', go: () => onLeave('clients'), show: 'hidden sm:inline-flex', labelAt: 'hidden lg:inline' },
-    ...asItem(desk('admin-templates-bank'), 'shuffle', 'hidden min-[1800px]:inline'),
+  const asItem = (d: StudioJumpItem | undefined, move: string): WayItem[] =>
+    d ? [{ key: d.route, label: d.label, sub: d.sub, icon: d.icon, move, go: () => onLeave(d.route), show: 'hidden md:inline-flex' }] : [];
+  const sections: WayItem[] = [
+    { key: 'home', label: 'Home', sub: 'The studio’s day at a glance', icon: Home, move: 'bounce', go: () => onLeave('home') },
+    { key: 'projects', label: 'Projects', sub: 'Back to all your projects', icon: Building2, move: 'back', go: () => onLeave('projects') },
+    ...asItem(desk('design-review'), 'draw'),
+    ...asItem(desk('ops-desk'), 'go'),
+    ...asItem(desk('people'), 'talk'),
+    { key: 'clients', label: 'Clients', sub: 'Every client and what they need', icon: Users, move: 'talk', go: () => onLeave('clients'), show: 'hidden sm:inline-flex' },
+    ...asItem(desk('admin-templates-bank'), 'shuffle'),
     /* Any other desk the studio adds later still appears. */
-    ...desks.filter((d) => !['design-review', 'ops-desk', 'people', 'admin-templates-bank'].includes(d.route)).flatMap((d) => asItem(d, 'go', 'hidden min-[1800px]:inline')),
+    ...desks.filter((d) => !['design-review', 'ops-desk', 'people', 'admin-templates-bank'].includes(d.route)).flatMap((d) => asItem(d, 'go')),
   ];
-  const tail: WayItem[] = [
-    ...(onPortal ? [{ key: 'portal', label: 'Client portal', icon: Globe, move: 'spin', go: onPortal, title: "See what the client sees", show: 'hidden sm:inline-flex', labelAt: 'hidden min-[1440px]:inline' }] : []),
-    { key: 'tour', label: 'Show me around', icon: Compass, move: 'spin', go: onTour, title: 'A short tour of this view', show: 'hidden sm:inline-flex', labelAt: 'hidden min-[1440px]:inline' },
+  const helpers: WayItem[] = [
+    ...(onPortal ? [{ key: 'portal', label: 'Client portal', sub: 'See what the client sees', icon: Globe, move: 'spin', go: onPortal, show: 'hidden sm:inline-flex' }] : []),
+    { key: 'tour', label: 'Show me around', sub: 'A short tour of this view', icon: Compass, move: 'spin', go: onTour, show: 'hidden sm:inline-flex' },
   ];
 
-  const track = useRef<HTMLDivElement | null>(null);
-  const [target, setTarget] = useState('projects');
-  const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
-  const [echo, setEcho] = useState<{ left: number; width: number; key: number } | null>(null);
-  const [sweep, setSweep] = useState(0);
-  const last = useRef<{ left: number; width: number } | null>(null);
-  /* It follows only once the pointer stays a moment, so a pass across the bar does not drag it along. */
-  const wait = useRef<number | undefined>(undefined);
-  const aim = (key: string, now = false) => {
-    window.clearTimeout(wait.current);
-    if (now) setTarget(key); else wait.current = window.setTimeout(() => setTarget(key), 140);
+  /* The name under a tile, as the Classic bar shows it (StudioJump). */
+  const [tip, setTip] = useState<null | { x: number; y: number; it: WayItem }>(null);
+  const show = (it: WayItem) => (e: React.SyntheticEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setTip({ x: r.left + r.width / 2, y: r.bottom + 8, it });
   };
-  useEffect(() => () => window.clearTimeout(wait.current), []);
+  const hide = () => setTip(null);
 
-  useEffect(() => {
-    const place = () => {
-      const el = track.current?.querySelector<HTMLElement>(`[data-way="${target}"]`);
-      if (!el || !el.offsetWidth) { setPill(null); return; }
-      const next = { left: el.offsetLeft, width: el.offsetWidth };
-      const prev = last.current;
-      if (prev && (prev.left !== next.left || prev.width !== next.width)) setEcho({ ...prev, key: Date.now() });
-      last.current = next;
-      setPill(next);
-    };
-    place();
-    setSweep((k) => k + 1);
-    if (typeof ResizeObserver !== 'function' || !track.current) return;
-    const ro = new ResizeObserver(() => { last.current = null; place(); });
-    ro.observe(track.current);
-    return () => ro.disconnect();
-  }, [target, desks.length, !!onPortal]);
-
-  const btn = (it: WayItem, i: number) => {
+  const tile = (it: WayItem, i: number) => {
     const Icon = it.icon;
-    const on = target === it.key;
+    const here = it.key === 'projects';
     return (
-      <button key={it.key} type="button" data-way={it.key} data-ripple onClick={it.go} title={it.title || it.label} aria-label={it.label}
-        onMouseEnter={() => aim(it.key)} onFocus={() => aim(it.key, true)}
-        style={{ animationDelay: `${Math.min(i, 9) * 45}ms` }}
-        className={cx('cvw-hot hud-rise relative z-10 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/40 transition-colors duration-500',
-          on ? 'text-white font-bold' : it.key === 'projects' ? 'text-[#3D52A0] font-bold' : 'text-slate-600 font-semibold', it.show)}>
-        <span className="cvw-ic" data-m={it.move}>
-          <Icon className={cx('w-4 h-4 transition-colors duration-500', on ? 'text-white' : it.key === 'projects' ? 'text-[#3D52A0]' : 'text-slate-400')} aria-hidden />
-        </span>
-        <span className={it.labelAt} aria-hidden>{it.label}</span>
+      <button key={it.key} type="button" data-way={it.key} data-ripple aria-label={it.label} aria-current={here ? 'page' : undefined}
+        onClick={() => { hide(); it.go(); }} onMouseEnter={show(it)} onMouseLeave={hide} onFocus={show(it)} onBlur={hide}
+        style={{ animationDelay: `${Math.min(i, 9) * 40}ms` }}
+        className={cx('cvw-hot cvw-tile hud-rise w-9 h-9 shrink-0 grid place-items-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/40',
+          here ? 'is-here text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]', it.show)}>
+        <span className="cvw-ic" data-m={it.move}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
       </button>
     );
   };
 
   return (
     <div className="relative h-14 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-3 min-w-0">
-      {/* Left: the project. */}
-      <div className="flex items-center gap-2.5 min-w-0 shrink max-w-[45%]">
+      {/* Left: where you are. */}
+      <div className="flex items-center gap-2.5 min-w-0 flex-1">
         <span className="w-9 h-9 rounded-xl grid place-items-center text-white text-xs font-bold bg-[#3D52A0] shrink-0">{initials}</span>
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
-            {/* Where you are: Projects › this project. Projects is the way back. */}
             <button type="button" onClick={() => onLeave('projects')} aria-label="Back to Projects" title="Back to all projects"
               className="cvw-hot shrink-0 inline-flex items-center gap-0.5 rounded-md px-1 -mx-1 text-[13px] font-semibold text-slate-500 hover:text-[#3D52A0] hover:bg-[#3D52A0]/10">
               Projects<Crumb className="cvw-arrow w-3.5 h-3.5 text-slate-400" aria-hidden />
@@ -413,30 +375,22 @@ function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, on
         </div>
       </div>
 
-      {/* Right: the way out and the studio's screens. */}
-      <nav aria-label="Studio" data-tour="way" onMouseLeave={() => aim('projects')} className="flex-1 min-w-0 overflow-x-auto py-1">
-        <div ref={track} className="relative w-max ml-auto flex items-center gap-0.5">
-          {echo && (
-            <span key={echo.key} aria-hidden className="hud-echo absolute left-0 top-0 bottom-0 rounded-lg pointer-events-none"
-              style={{ transform: `translateX(${echo.left}px)`, width: `${echo.width}px`, backgroundColor: 'rgba(61, 82, 160, 0.3)', animationDuration: '.9s' }} />
-          )}
-          {pill && (
-            <span aria-hidden className="nav-pill hud-reticle absolute left-0 top-0 bottom-0 rounded-lg pointer-events-none overflow-hidden"
-              style={{ transform: `translateX(${pill.left}px)`, width: `${pill.width}px`, transition: GLIDE }}>
-              <span key={sweep} className="hud-sweep absolute inset-y-0 w-1/3" style={{ animationDuration: '1.6s' }} />
-            </span>
-          )}
-          {items.map((it, i) => btn(it, i))}
-          <span className="w-px h-5 bg-slate-200 mx-1.5 shrink-0" aria-hidden />
-          {tail.map((it, i) => btn(it, items.length + i))}
-        </div>
+      {/* Right: the studio's sections, then this view's helpers. */}
+      <nav aria-label="Studio" data-tour="way" className="flex items-center gap-1.5 shrink-0">
+        {sections.map((it, i) => tile(it, i))}
+        <span className="w-px h-6 bg-slate-200 mx-1 shrink-0 hidden sm:block" aria-hidden />
+        {helpers.map((it, i) => tile(it, sections.length + i))}
       </nav>
       {showHideFigures && <HideFiguresButton />}
       {onUseClassic && (
         <Button size="sm" variant="secondary" className="cvw-hot shrink-0" data-ripple onClick={onUseClassic} title="Your own choice: the studio's setting stays as it is">Use Classic view</Button>
       )}
-      {/* The energy rail along the bottom edge, as under the studio bar, at a calm pace. */}
-      <span aria-hidden className="hud-rail absolute left-0 right-0 bottom-0 h-[2px] pointer-events-none" style={{ animationDuration: '28s' }} />
+      {tip && createPortal(
+        <div role="tooltip" className="fixed z-[320] pointer-events-none -translate-x-1/2" style={{ left: tip.x, top: tip.y }}>
+          <div className="psb-tip" style={{ position: 'static' }}>{tip.it.label}<small>{tip.it.sub}</small></div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
