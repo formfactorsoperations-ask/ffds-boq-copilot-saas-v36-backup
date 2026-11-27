@@ -105,22 +105,46 @@
 }
 
 /*
-  The studio's sections as colour tiles in the top bar (owner, 27 Nov 2026: "brand new icons color
-  filled or color icons"; StudioTiles.tsx draws the glyphs and sets each tile's gradient inline).
-  A soft top light and a shadow in the tile's own colour; on hover it rises, grows a little and glows;
-  the section you are in (Projects) wears a ring.
+  The studio's sections as glass bubbles in the top bar (owner, 27 Nov 2026: chose "D1", colour line
+  icons with glass morphism; StudioTiles.tsx draws the icons). A faint wash of the sections' colours sits
+  behind the row (.cvw-wash) so the frosted glass has something to frost. Each bubble: white glass,
+  blurred and saturated, a bright rim, a soft inner glow in its own colour (--cvw-soft) and a shadow in
+  its deeper colour (--cvw-tile). On hover the bubble lifts and the icon fills with its colour; the
+  section you are in (Projects) wears a ring in its colour.
 */
+.cvw-wash { position: relative; isolation: isolate; }
+.cvw-wash::before {
+  content: ""; position: absolute; inset: -8px -10px; z-index: -1; border-radius: 22px; filter: blur(8px); pointer-events: none;
+  background:
+    radial-gradient(28% 110% at 6% 50%, rgba(245, 158, 11, 0.36), transparent 70%),
+    radial-gradient(24% 110% at 24% 50%, rgba(61, 82, 160, 0.28), transparent 70%),
+    radial-gradient(24% 110% at 40% 50%, rgba(244, 63, 94, 0.30), transparent 70%),
+    radial-gradient(24% 110% at 56% 50%, rgba(16, 185, 129, 0.30), transparent 70%),
+    radial-gradient(24% 110% at 74% 50%, rgba(112, 145, 230, 0.32), transparent 70%),
+    radial-gradient(28% 110% at 94% 50%, rgba(244, 63, 94, 0.26), transparent 70%);
+}
 .cvw-tile {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 10px -6px var(--cvw-tile, #3D52A0);
-  transition: transform 0.25s var(--cvw-spring, ease), box-shadow 0.25s ease, filter 0.2s ease;
+  background: rgba(255, 255, 255, 0.42);
+  -webkit-backdrop-filter: blur(10px) saturate(1.6);
+  backdrop-filter: blur(10px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.95), inset 0 -8px 12px -8px var(--cvw-soft, #E2E8F0), 0 6px 14px -8px var(--cvw-tile, #3D52A0);
+  transition: transform 0.25s var(--cvw-spring, ease), box-shadow 0.25s ease, background-color 0.2s ease;
 }
 .cvw-tile:hover, .cvw-tile:focus-visible {
-  transform: translateY(-2px) scale(1.06);
-  filter: saturate(1.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 10px 20px -8px var(--cvw-tile, #3D52A0);
+  transform: translateY(-2px) scale(1.08);
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: inset 0 1px 1px #fff, inset 0 -10px 14px -8px var(--cvw-soft, #E2E8F0), 0 12px 22px -10px var(--cvw-tile, #3D52A0);
 }
 .cvw-tile:active { transform: translateY(0) scale(0.94); }
-.cvw-tile.is-here { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 2px #fff, 0 0 0 4px rgba(61, 82, 160, 0.45), 0 6px 14px -6px var(--cvw-tile, #3D52A0); }
+.cvw-tile.is-here { box-shadow: inset 0 1px 1px #fff, 0 0 0 2px var(--cvw-tile, #3D52A0), 0 8px 18px -8px var(--cvw-tile, #3D52A0); }
+
+/* The line icon fills with its colour on hover and where you are; its details turn white. */
+.cvw-tile .cvw-gp { transition: fill 0.25s ease, fill-opacity 0.25s ease; }
+.cvw-tile:hover .cvw-gp, .cvw-tile:focus-visible .cvw-gp, .cvw-tile.is-here .cvw-gp { fill: var(--cvw-tile, #3D52A0); fill-opacity: 1; }
+.cvw-tile:hover .cvw-gd, .cvw-tile:focus-visible .cvw-gd, .cvw-tile.is-here .cvw-gd { fill: #fff; }
+.cvw-tile:hover .cvw-gs, .cvw-tile:focus-visible .cvw-gs, .cvw-tile.is-here .cvw-gs { stroke: #fff; }
+
 @media (prefers-reduced-motion: reduce) {
   .cvw-tile:hover, .cvw-tile:focus-visible, .cvw-tile:active { transform: none !important; }
 }

@@ -1324,17 +1324,21 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     (components/Header): Home, **Projects**, Design Desk, Ops Desk, People, Clients, Item Bank
     (`studioJumpItems` decides which desks a role sees); then Client portal and Show me around; then
     Hide figures and Use Classic view.
-    - **Drawn for this bar** (`StudioTiles.tsx`), not the outline set: a 36px app-style tile, a gradient in
-      the app's own colour families, a solid white glyph whose details take the tile's deeper colour.
-      Home amber (house), Projects brand (building), Design Desk rose (drafting pen), Ops Desk emerald
-      (inbox tray), People light brand (two people), Clients amber into rose (contact card), Item Bank
-      slate (books), Client portal emerald into brand (globe), Show me around rose into amber (compass).
-    - **Owner's exception to "Colour":** these gradients are approved for the Conversations top bar only;
+    - **Glass bubbles with colour line icons** (owner chose "D1" from five directions and three glass
+      takes, 27 Nov 2026; `StudioTiles.tsx`, `conversations.css` `.cvw-tile`, `.cvw-wash`). Each section is
+      a line icon in two tones of its own colour (a light fill and a coloured outline), drawn for this bar,
+      in a 36px round frosted-glass bubble: white glass at 42%, `backdrop-filter: blur(10px) saturate(1.6)`,
+      a bright rim, a soft inner glow in its colour and a shadow in its deeper colour. A faint wash of the
+      sections' colours sits behind the row so the glass has something to frost. Colours: Home amber
+      (house), Projects brand (building), Design Desk rose (drafting pen), Ops Desk emerald (inbox tray),
+      People light brand (two people), Clients amber into rose (contact card), Item Bank slate (books),
+      Client portal emerald into brand (globe), Show me around rose into amber (compass).
+    - **Owner's exception to "Colour":** these colours are approved for the Conversations top bar only;
       every other icon tile in the app stays brand. No colour outside brand, amber, rose, emerald, slate.
-    - On hover or focus a tile rises 2px, grows 6%, glows in its own colour and its glyph plays its
-      motion, and the Classic bar's tooltip (`.psb-tip`) names it with a line on what is there.
-      **Projects**, where a project lives, wears a ring; choosing it goes back to the list. There is no
-      "All projects" item (owner: not right business-wise).
+    - On hover or focus a bubble lifts 2px and grows 8%, its icon fills with its colour (details turn
+      white) and plays its motion, and the Classic bar's tooltip (`.psb-tip`) names it with a line on what
+      is there. **Projects**, where a project lives, is filled and wears a ring in its colour; choosing it
+      goes back to the list. There is no "All projects" item (owner: not right business-wise).
 - **The way back to Conversations from Classic** (owner: "if user selects classic view there is no
   option to return to new view"): when the studio lets each person choose, Classic's page bar shows
   **Try the new view** (brand tint, beside the studio icons), as well as the sidebar menu's item.
@@ -1412,7 +1416,8 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     the point clicked (`data-ripple`, `.cvw-ripple`, brand at low strength).
   - **Picked:** the open conversation's plate fills brand blue and pops; the conversation head's icon pops
     and plays its motion as you arrive.
-  - **The top bar's tiles** rise, grow and glow on hover; the one you are in (Projects) wears a ring. The bar's items rise in turn as the view opens (`hud-rise`). (A gliding reticle was tried
+  - **The top bar's glass bubbles** lift on hover and their icons fill with colour; the one you are in
+    (Projects) is filled and ringed. The bar's items rise in turn as the view opens (`hud-rise`). (A gliding reticle was tried
     and dropped, owner 27 Nov 2026: "still seems very odd".)
   - All of it stops under reduced motion. Palette only.
 

@@ -23,7 +23,7 @@ import { loadClientRecords } from '../../services/clientThreadService';
 import { watchClientVisits } from '../../services/portalVisitsService';
 import { logFollowUp } from '../../services/opsDeskService';
 import type { StudioJumpItem } from '../projectNav/StudioJump';
-import { GLYPHS, TILE_COLOURS, DEFAULT_TILE } from './StudioTiles';
+import { StudioGlyph, hasGlyph, TILE_COLOURS, DEFAULT_TILE, toWhite } from './StudioTiles';
 import '../projectHeader/projectHeader.css';
 
 /*
@@ -344,16 +344,15 @@ function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, on
 
   const tile = (it: WayItem, i: number) => {
     const Icon = it.icon;
-    const Glyph = GLYPHS[it.key];
     const tone = TILE_COLOURS[it.key] || DEFAULT_TILE;
     const here = it.key === 'projects';
     return (
       <button key={it.key} type="button" data-way={it.key} data-ripple aria-label={it.label} aria-current={here ? 'page' : undefined}
         onClick={() => { hide(); it.go(); }} onMouseEnter={show(it)} onMouseLeave={hide} onFocus={show(it)} onBlur={hide}
-        style={{ animationDelay: `${Math.min(i, 9) * 40}ms`, backgroundImage: `linear-gradient(145deg, ${tone.from} 0%, ${tone.to} 100%)`, color: tone.to, ['--cvw-tile' as string]: tone.to }}
-        className={cx('cvw-hot cvw-tile hud-rise w-9 h-9 shrink-0 grid place-items-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/40',
+        style={{ animationDelay: `${Math.min(i, 9) * 40}ms`, ['--cvw-tile' as string]: tone.to, ['--cvw-soft' as string]: toWhite(tone.from, 0.7) }}
+        className={cx('cvw-hot cvw-tile hud-rise w-9 h-9 shrink-0 grid place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/40',
           here && 'is-here', it.show)}>
-        <span className="cvw-ic" data-m={it.move}>{Glyph ? <Glyph /> : <Icon className="w-[18px] h-[18px] text-white" aria-hidden />}</span>
+        <span className="cvw-ic" data-m={it.move}>{hasGlyph(it.key) ? <StudioGlyph name={it.key} /> : <Icon className="w-[18px] h-[18px]" style={{ color: tone.to }} aria-hidden />}</span>
       </button>
     );
   };
@@ -379,7 +378,7 @@ function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, on
       </div>
 
       {/* Right: the studio's sections, then this view's helpers. */}
-      <nav aria-label="Studio" data-tour="way" className="flex items-center gap-1.5 shrink-0">
+      <nav aria-label="Studio" data-tour="way" className="cvw-wash flex items-center gap-1.5 shrink-0">
         {sections.map((it, i) => tile(it, i))}
         <span className="w-px h-6 bg-slate-200 mx-1 shrink-0 hidden sm:block" aria-hidden />
         {helpers.map((it, i) => tile(it, sections.length + i))}
