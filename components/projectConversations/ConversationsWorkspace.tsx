@@ -244,9 +244,9 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
 
   return (
     <div className="flex flex-col h-full bg-slate-50 min-w-0" onPointerDown={ripple}>
-      <WayOut desks={p.desks} onLeave={p.onLeaveProject} onUseClassic={p.onUseClassic} showHideFigures={p.showHideFigures} onTour={beginTour} />
-      <ProjectTitle ctx={ctx} name={name} statusLabel={p.statusLabel} onStatusClick={p.onStatusClick}
-        onPortal={p.conversations.some((c) => c.routes.includes('client-portal')) ? () => open('client-portal') : undefined} />
+      <ProjectBar ctx={ctx} name={name} statusLabel={p.statusLabel} onStatusClick={p.onStatusClick}
+        onPortal={p.conversations.some((c) => c.routes.includes('client-portal')) ? () => open('client-portal') : undefined}
+        desks={p.desks} onLeave={p.onLeaveProject} onUseClassic={p.onUseClassic} showHideFigures={p.showHideFigures} onTour={beginTour} />
       {p.alertBar}
       {welcome && (
         <div className="mx-3 sm:mx-5 mb-2 flex items-center gap-3 rounded-xl border border-[#3D52A0]/20 bg-[#3D52A0]/10 px-4 py-2.5 text-xs text-slate-700 hud-panel-in">
@@ -296,25 +296,37 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
 /* ───────────── the way out ───────────── */
 
 /*
-  The way out, in the studio bar's language (components/Header: the reticle,
-  its sweep and echo, items rising in turn, the energy rail along the bottom;
-  owner, 27 Nov 2026: "this part is too boring"). The reticle rests on All
-  projects, the way out of the project, and glides to whatever you point at
-  or tab to, then back. Moved by measuring and an inline transform, as the
-  studio bar does (framer's layoutId does not move in this codebase).
+  ONE BAR ON TOP (owner, 27 Nov 2026: "do we need a big menu bar? top left
+  corner as project name and on right side these options"; and earlier "this
+  part is too boring"). Left: the project, its status and client line. Right:
+  the way out and the studio's screens, in the studio bar's language
+  (components/Header: the reticle with its sweep and echo, items rising in
+  turn, the energy rail along the bottom edge). The reticle rests on All
+  projects and follows what you point at or tab to, slowly and only once you
+  stay a moment (owner: "the glowing blue band is too fast"). Moved by
+  measuring and an inline transform, as the studio bar does (framer's
+  layoutId does not move in this codebase).
 */
-type WayItem = { key: string; label: string; icon: React.ElementType; move: string; go: () => void; title?: string; show?: string };
+type WayItem = { key: string; label: string; icon: React.ElementType; move: string; go: () => void; title?: string; show?: string; labelAt?: string };
 
-function WayOut({ desks, onLeave, onUseClassic, showHideFigures, onTour }: {
+const GLIDE = 'transform .8s cubic-bezier(.22,1,.36,1), width .8s cubic-bezier(.22,1,.36,1)';
+
+function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, onLeave, onUseClassic, showHideFigures, onTour }: {
+  ctx: any; name: string; statusLabel: string; onStatusClick?: () => void; onPortal?: () => void;
   desks: StudioJumpItem[]; onLeave: (t?: string) => void; onUseClassic?: () => void; showHideFigures: boolean; onTour: () => void;
 }) {
+  const sub = [ctx.clientName || 'No client yet', ctx.location, ctx.area ? `${ctx.area} sq ft` : ''].filter(Boolean).join(' · ');
+  const initials = (name.match(/[A-Za-z]+/g) || ['P']).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase();
   const items: WayItem[] = [
     { key: 'projects', label: 'All projects', icon: ArrowLeft, move: 'back', go: () => onLeave('projects') },
-    { key: 'home', label: 'Studio home', icon: Home, move: 'bounce', go: () => onLeave('home') },
-    { key: 'clients', label: 'Clients', icon: Users, move: 'talk', go: () => onLeave('clients'), show: 'hidden sm:inline-flex' },
-    ...desks.map((d): WayItem => ({ key: d.route, label: d.label, icon: d.icon, move: 'go', go: () => onLeave(d.route), title: d.sub, show: 'hidden md:inline-flex' })),
+    { key: 'home', label: 'Studio home', icon: Home, move: 'bounce', go: () => onLeave('home'), labelAt: 'hidden lg:inline' },
+    { key: 'clients', label: 'Clients', icon: Users, move: 'talk', go: () => onLeave('clients'), show: 'hidden sm:inline-flex', labelAt: 'hidden lg:inline' },
+    ...desks.map((d): WayItem => ({ key: d.route, label: d.label, icon: d.icon, move: 'go', go: () => onLeave(d.route), title: d.sub, show: 'hidden md:inline-flex', labelAt: 'hidden 2xl:inline' })),
   ];
-  const tour: WayItem = { key: 'tour', label: 'Show me around', icon: Compass, move: 'spin', go: onTour, title: 'A short tour of this view', show: 'hidden sm:inline-flex' };
+  const tail: WayItem[] = [
+    ...(onPortal ? [{ key: 'portal', label: 'Client portal', icon: Eye, move: 'spin', go: onPortal, title: "See what the client sees", show: 'hidden sm:inline-flex', labelAt: 'hidden xl:inline' }] : []),
+    { key: 'tour', label: 'Show me around', icon: Compass, move: 'spin', go: onTour, title: 'A short tour of this view', show: 'hidden sm:inline-flex', labelAt: 'hidden xl:inline' },
+  ];
 
   const track = useRef<HTMLDivElement | null>(null);
   const [target, setTarget] = useState('projects');
@@ -322,8 +334,14 @@ function WayOut({ desks, onLeave, onUseClassic, showHideFigures, onTour }: {
   const [echo, setEcho] = useState<{ left: number; width: number; key: number } | null>(null);
   const [sweep, setSweep] = useState(0);
   const last = useRef<{ left: number; width: number } | null>(null);
+  /* It follows only once the pointer stays a moment, so a pass across the bar does not drag it along. */
+  const wait = useRef<number | undefined>(undefined);
+  const aim = (key: string, now = false) => {
+    window.clearTimeout(wait.current);
+    if (now) setTarget(key); else wait.current = window.setTimeout(() => setTarget(key), 140);
+  };
+  useEffect(() => () => window.clearTimeout(wait.current), []);
 
-  /* Measure the item the reticle should sit on; leave an echo where it was. */
   useEffect(() => {
     const place = () => {
       const el = track.current?.querySelector<HTMLElement>(`[data-way="${target}"]`);
@@ -340,71 +358,65 @@ function WayOut({ desks, onLeave, onUseClassic, showHideFigures, onTour }: {
     const ro = new ResizeObserver(() => { last.current = null; place(); });
     ro.observe(track.current);
     return () => ro.disconnect();
-  }, [target, desks.length]);
+  }, [target, desks.length, !!onPortal]);
 
   const btn = (it: WayItem, i: number) => {
     const Icon = it.icon;
     const on = target === it.key;
     return (
-      <button key={it.key} type="button" data-way={it.key} data-ripple onClick={it.go} title={it.title}
-        onMouseEnter={() => setTarget(it.key)} onFocus={() => setTarget(it.key)}
+      <button key={it.key} type="button" data-way={it.key} data-ripple onClick={it.go} title={it.title || it.label} aria-label={it.label}
+        onMouseEnter={() => aim(it.key)} onFocus={() => aim(it.key, true)}
         style={{ animationDelay: `${Math.min(i, 9) * 45}ms` }}
-        className={cx('cvw-hot hud-rise relative z-10 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/40',
+        className={cx('cvw-hot hud-rise relative z-10 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/40 transition-colors duration-500',
           on ? 'text-white font-bold' : it.key === 'projects' ? 'text-[#3D52A0] font-bold' : 'text-slate-600 font-semibold', it.show)}>
         <span className="cvw-ic" data-m={it.move}>
-          <Icon className={cx('w-4 h-4 transition-colors', on ? 'text-white' : it.key === 'projects' ? 'text-[#3D52A0]' : 'text-slate-400')} aria-hidden />
+          <Icon className={cx('w-4 h-4 transition-colors duration-500', on ? 'text-white' : it.key === 'projects' ? 'text-[#3D52A0]' : 'text-slate-400')} aria-hidden />
         </span>
-        {it.label}
+        <span className={it.labelAt} aria-hidden>{it.label}</span>
       </button>
     );
   };
 
   return (
-    <div className="relative h-12 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-2 min-w-0">
-      <nav ref={track} aria-label="Studio" data-tour="way" onMouseLeave={() => setTarget('projects')}
-        className="relative flex-1 flex items-center gap-0.5 min-w-0 overflow-x-auto py-1">
-        {echo && (
-          <span key={echo.key} aria-hidden className="hud-echo absolute top-1 bottom-1 rounded-lg pointer-events-none"
-            style={{ transform: `translateX(${echo.left}px)`, width: `${echo.width}px`, backgroundColor: 'rgba(61, 82, 160, 0.35)' }} />
-        )}
-        {pill && (
-          <span aria-hidden className="nav-pill hud-reticle absolute left-0 top-1 bottom-1 rounded-lg pointer-events-none overflow-hidden"
-            style={{ transform: `translateX(${pill.left}px)`, width: `${pill.width}px`, transition: 'transform .42s cubic-bezier(.34,1.16,.44,1), width .42s cubic-bezier(.34,1.16,.44,1)' }}>
-            <span key={sweep} className="hud-sweep absolute inset-y-0 w-1/3" />
-          </span>
-        )}
-        {btn(items[0], 0)}
-        <span className="w-px h-5 bg-slate-200 mx-1.5 shrink-0" aria-hidden />
-        {items.slice(1).map((it, i) => btn(it, i + 1))}
-        <span className="flex-1 min-w-[8px]" aria-hidden />
-        {btn(tour, items.length)}
+    <div className="relative h-14 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-3 min-w-0">
+      {/* Left: the project. */}
+      <div className="flex items-center gap-2.5 min-w-0 shrink max-w-[45%]">
+        <span className="w-9 h-9 rounded-xl grid place-items-center text-white text-xs font-bold bg-[#3D52A0] shrink-0">{initials}</span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-base font-bold text-slate-800 tracking-tight truncate">{name}</h1>
+            <button type="button" onClick={onStatusClick} disabled={!onStatusClick} className="shrink-0 disabled:cursor-default" title={onStatusClick ? 'Change the project status' : undefined}>
+              <Chip tone="brand">{statusLabel}</Chip>
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500 truncate">{sub}</p>
+        </div>
+      </div>
+
+      {/* Right: the way out and the studio's screens. */}
+      <nav aria-label="Studio" data-tour="way" onMouseLeave={() => aim('projects')} className="flex-1 min-w-0 overflow-x-auto py-1">
+        <div ref={track} className="relative w-max ml-auto flex items-center gap-0.5">
+          {echo && (
+            <span key={echo.key} aria-hidden className="hud-echo absolute left-0 top-0 bottom-0 rounded-lg pointer-events-none"
+              style={{ transform: `translateX(${echo.left}px)`, width: `${echo.width}px`, backgroundColor: 'rgba(61, 82, 160, 0.3)', animationDuration: '.9s' }} />
+          )}
+          {pill && (
+            <span aria-hidden className="nav-pill hud-reticle absolute left-0 top-0 bottom-0 rounded-lg pointer-events-none overflow-hidden"
+              style={{ transform: `translateX(${pill.left}px)`, width: `${pill.width}px`, transition: GLIDE }}>
+              <span key={sweep} className="hud-sweep absolute inset-y-0 w-1/3" style={{ animationDuration: '1.6s' }} />
+            </span>
+          )}
+          {items.map((it, i) => btn(it, i))}
+          <span className="w-px h-5 bg-slate-200 mx-1.5 shrink-0" aria-hidden />
+          {tail.map((it, i) => btn(it, items.length + i))}
+        </div>
       </nav>
       {showHideFigures && <HideFiguresButton />}
       {onUseClassic && (
         <Button size="sm" variant="secondary" className="cvw-hot shrink-0" data-ripple onClick={onUseClassic} title="Your own choice: the studio's setting stays as it is">Use Classic view</Button>
       )}
-      {/* The energy rail along the bottom edge, as under the studio bar. */}
-      <span aria-hidden className="hud-rail absolute left-0 right-0 bottom-0 h-[2px] pointer-events-none" />
-    </div>
-  );
-}
-
-function ProjectTitle({ ctx, name, statusLabel, onStatusClick, onPortal }: {
-  ctx: any; name: string; statusLabel: string; onStatusClick?: () => void; onPortal?: () => void;
-}) {
-  const sub = [ctx.clientName || 'No client yet', ctx.location, ctx.area ? `${ctx.area} sq ft` : ''].filter(Boolean).join(' · ');
-  const initials = (name.match(/[A-Za-z]+/g) || ['P']).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase();
-  return (
-    <div className="shrink-0 px-3 sm:px-5 py-3 flex items-center gap-3 min-w-0">
-      <span className="w-11 h-11 rounded-xl grid place-items-center text-white text-sm font-bold bg-[#3D52A0] shrink-0">{initials}</span>
-      <div className="min-w-0 flex-1">
-        <h1 className="text-2xl font-bold text-slate-800 tracking-tight truncate">{name}</h1>
-        <p className="text-xs text-slate-500 truncate">{sub}</p>
-      </div>
-      <button type="button" onClick={onStatusClick} disabled={!onStatusClick} className="shrink-0 disabled:cursor-default" title={onStatusClick ? 'Change the project status' : undefined}>
-        <Chip tone="brand">{statusLabel}</Chip>
-      </button>
-      {onPortal && <Button size="sm" variant="secondary" icon={Eye} onClick={onPortal} className="hidden sm:inline-flex">Client portal</Button>}
+      {/* The energy rail along the bottom edge, as under the studio bar, at a calm pace. */}
+      <span aria-hidden className="hud-rail absolute left-0 right-0 bottom-0 h-[2px] pointer-events-none" style={{ animationDuration: '28s' }} />
     </div>
   );
 }
@@ -433,7 +445,7 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
       <div className="p-3 border-b border-slate-100">
         <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-300 focus-within:ring-2 focus-within:ring-[#3D52A0]/30">
           <Search className="w-4 h-4 text-slate-400" aria-hidden />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a screen or old name" aria-label="Find a conversation or a screen" className="flex-1 min-w-0 text-sm outline-none bg-transparent" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a screen or old name" aria-label="Find a conversation or a screen" className="flex-1 min-w-0 text-[13px] outline-none bg-transparent" />
           {q && <button type="button" onClick={() => setQ('')} aria-label="Clear the search" className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" aria-hidden /></button>}
         </label>
       </div>
@@ -445,17 +457,17 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
           const on = c.id === conv;
           return (
             <button key={c.id} type="button" data-ripple onClick={() => onPick(c.id)} aria-current={on ? 'true' : undefined}
-              className={cx('cvw-hot w-full flex items-center gap-3 px-3 py-3 text-left border-b border-slate-100 hud-row-in', !on && 'hover:bg-slate-50')}
+              className={cx('cvw-hot w-full flex items-center gap-2.5 px-3 py-2.5 text-left border-b border-slate-100 hud-row-in', !on && 'hover:bg-slate-50')}
               style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
               {/* The highlight slides to the conversation you pick, as the sidebar's does to the screen you are on. */}
               {on && <motion.span layoutId="conv-on" aria-hidden className="absolute inset-0 bg-[#3D52A0]/10 shadow-[inset_3px_0_0_#3D52A0]" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
               {/* The conversation you are in fills its disc; it pops and its icon plays as you pick it. */}
-              <span key={on ? 'on' : 'off'} className={cx('cvw-disc relative w-10 h-10 rounded-full grid place-items-center shrink-0', on ? 'is-pop bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
+              <span key={on ? 'on' : 'off'} className={cx('cvw-disc relative w-9 h-9 rounded-full grid place-items-center shrink-0', on ? 'is-pop bg-[#3D52A0] text-white' : 'bg-[#3D52A0]/10 text-[#3D52A0]')}>
                 <span className={cx('cvw-ic', on && 'is-play')} data-m={CONV_MOVE[c.id]}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
               </span>
               <span className="cvw-text relative min-w-0 flex-1">
                 <span className="flex items-baseline gap-2">
-                  <span className="flex-1 min-w-0 truncate text-sm font-bold text-slate-800">{c.name}</span>
+                  <span className="flex-1 min-w-0 truncate text-[13px] font-bold text-slate-800">{c.name}</span>
                   {pv.at && <span className="text-[11px] text-slate-400 whitespace-nowrap">{whenShort(pv.at, now)}</span>}
                 </span>
                 <span className="flex items-center gap-1.5 mt-0.5">
@@ -477,7 +489,7 @@ function ConversationList({ conversations, conv, story, now, needsOf, money, jou
                   style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
                   <span className="cvw-disc w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><span className="cvw-ic" data-m="go"><ArrowRight className="w-4 h-4" aria-hidden /></span></span>
                   <span className="cvw-text min-w-0 flex-1">
-                    <span className="block truncate text-sm font-bold text-slate-800">{m.label}</span>
+                    <span className="block truncate text-[13px] font-bold text-slate-800">{m.label}</span>
                     <span className="block text-xs text-slate-500">
                       In {m.conv.name}
                       {m.classic && <> · was {renamed ? <>“{m.classic.label}” </> : ''}in {m.classic.where || 'the top of the sidebar'}</>}
@@ -508,7 +520,7 @@ function ThreadHead({ conv, labelOf, onOpen, onPickMobile, conversations }: {
           <span className="cvw-ic is-play" data-m={CONV_MOVE[conv.id]}><Icon className="w-[18px] h-[18px]" aria-hidden /></span>
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="font-bold text-slate-800 truncate">{conv.name}</h2>
+          <h2 className="text-[15px] font-bold text-slate-800 truncate">{conv.name}</h2>
           <p className="text-xs text-slate-500 truncate">{conv.about}</p>
         </div>
         {/* Below 768px the list is a choice here. */}
@@ -572,7 +584,7 @@ const StartHere: React.FC<{ conv: ConversationId; routes: string[]; labelOf: (r:
   const Icon = CONV_ICON[conv];
   return (
     <div className="py-2">
-      <p className="text-sm font-bold text-slate-800">Nothing has happened here yet. Start here:</p>
+      <p className="text-[13px] font-bold text-slate-800">Nothing has happened here yet. Start here:</p>
       <p className="text-xs text-slate-500 mb-3">Open a screen below. What you do there will appear in this conversation.</p>
       <div className="grid gap-2.5 sm:grid-cols-2">
         {routes.map((r, i) => (
@@ -583,7 +595,7 @@ const StartHere: React.FC<{ conv: ConversationId; routes: string[]; labelOf: (r:
               <span className="cvw-ic" data-m={CONV_MOVE[conv]}><Icon className="w-5 h-5" aria-hidden /></span>
             </span>
             <span className="cvw-text min-w-0 flex-1">
-              <span className="block text-sm font-bold text-slate-800">{labelOf(r)}</span>
+              <span className="block text-[13px] font-bold text-slate-800">{labelOf(r)}</span>
               {aboutOf(r) && <span className="block text-xs text-slate-500 line-clamp-2">{aboutOf(r)}</span>}
             </span>
             <ArrowRight className="cvw-arrow w-4 h-4 text-[#3D52A0] shrink-0" aria-hidden />
@@ -615,7 +627,7 @@ const StoryRow: React.FC<{
   }
   if (it.kind === 'sent') {
     return (
-      <div className="self-end max-w-[78%] rounded-2xl rounded-br-md bg-[#3D52A0] text-white px-3.5 py-2.5 text-sm hud-row-in" style={style}>
+      <div className="self-end max-w-[78%] rounded-2xl rounded-br-md bg-[#3D52A0] text-white px-3.5 py-2.5 text-[13px] hud-row-in" style={style}>
         <p className="whitespace-pre-wrap">{it.text}</p>
         <p className="mt-1 text-[11px] text-white/75">{[it.meta, it.template].filter(Boolean).join(' · ')}</p>
       </div>
@@ -623,7 +635,7 @@ const StoryRow: React.FC<{
   }
   if (it.kind === 'said') {
     return (
-      <div className="self-start max-w-[78%] rounded-2xl rounded-bl-md bg-white border border-dashed border-slate-300 px-3.5 py-2.5 text-sm italic text-slate-700 hud-row-in" style={style}>
+      <div className="self-start max-w-[78%] rounded-2xl rounded-bl-md bg-white border border-dashed border-slate-300 px-3.5 py-2.5 text-[13px] italic text-slate-700 hud-row-in" style={style}>
         <p>“{it.text}”</p>
         {it.meta && <p className="mt-1 text-[11px] not-italic text-slate-400">{it.meta}</p>}
       </div>
@@ -635,7 +647,7 @@ const StoryRow: React.FC<{
     <div className={cx('cvw-hot cvw-lift max-w-[82%] flex gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hud-row-in', it.side === 'client' ? 'self-start' : 'self-end')} style={style}>
       <span className="cvw-disc w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><span className="cvw-ic" data-m={SOURCE_MOVE[it.source || 'team']}><Icon className="w-4 h-4" aria-hidden /></span></span>
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-800">{it.text}</p>
+        <p className="text-[13px] font-semibold text-slate-800">{it.text}</p>
         {it.detail && <p className="text-xs text-slate-500">{it.detail}</p>}
         <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
           {it.source === 'payments' && <Chip tone="good">{SOURCE_LABEL.payments}</Chip>}
@@ -668,12 +680,12 @@ function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, lab
         {onMatrix && <Button size="sm" variant="quiet" className="cvw-hot" data-ripple onClick={onMatrix}>Ops Matrix</Button>}
         <Button size="sm" variant="quiet" icon={LayoutGrid} className="cvw-hot" data-ripple onClick={onHub}>Open {hubLabel === 'Hub' ? 'the Hub' : hubLabel}</Button>
       </div>
-      <div className="px-4 pt-2.5 pb-1"><h3 className="font-bold text-slate-800">Up next</h3></div>
+      <div className="px-4 pt-2.5 pb-1"><h3 className="text-[15px] font-bold text-slate-800">Up next</h3></div>
       {!rows.length && <p className="px-4 pb-3 text-xs text-slate-500">Nothing needs you on this project right now.</p>}
       {rows.map((r, i) => (
         <div key={r.id} className="hud-row-in flex items-center gap-3 px-4 py-2 border-t border-slate-100 first:border-t-0" style={{ animationDelay: `${120 + i * 40}ms` }}>
           <p className="min-w-0 flex-1 flex items-center gap-2" title={r.text || undefined}>
-            <span className="text-sm font-semibold text-slate-800 truncate">{r.title}</span>
+            <span className="text-[13px] font-semibold text-slate-800 truncate">{r.title}</span>
             {r.badge && <Chip tone={r.badge === 'Blocker' ? 'bad' : 'brand'}>{r.badge}</Chip>}
           </p>
           {(r.actions || []).map((a) => (
@@ -889,7 +901,7 @@ function ScreenWindow({ route, isHub, hubLabel, projectName, labelOf, conversati
         <div className="shrink-0 flex items-center gap-3 px-4 sm:px-6 py-3 border-b border-slate-100 min-w-0">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0] truncate">{projectName} · {owner.name}</p>
-            <h2 className="text-2xl font-bold text-slate-800 tracking-tight truncate">{title}</h2>
+            <h2 className="text-xl font-bold text-slate-800 tracking-tight truncate">{title}</h2>
           </div>
           {home && home.routes.length > 1 && (
             <div className="hidden lg:block shrink-0">
@@ -991,8 +1003,8 @@ function Tour({ canClassic, onStep, onDone }: { canClassic: boolean; onStep: (n:
       <div key={i} ref={card} tabIndex={-1} role="dialog" aria-modal="true" aria-label={step.title}
         className="phd-pop absolute bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 outline-none" style={{ ...pos, width: W, maxWidth: 'calc(100vw - 32px)' }}>
         <p className="text-xs font-bold text-[#3D52A0]">{i + 1} of {steps.length}</p>
-        <h3 className="mt-1 text-lg font-bold text-slate-800">{step.title}</h3>
-        <p className="mt-1 text-sm text-slate-600">{step.text}</p>
+        <h3 className="mt-1 text-base font-bold text-slate-800">{step.title}</h3>
+        <p className="mt-1 text-[13px] text-slate-600">{step.text}</p>
         <div className="mt-4 flex items-center gap-2">
           <span className="flex gap-1.5 flex-1" aria-hidden>
             {steps.map((_, n) => <span key={n} className={cx('h-1.5 rounded-full transition-all duration-300', n === i ? 'w-5 bg-[#3D52A0]' : 'w-1.5 bg-slate-300')} />)}

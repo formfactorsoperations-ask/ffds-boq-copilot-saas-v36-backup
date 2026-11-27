@@ -1313,9 +1313,16 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   `projectView` on their `inbox/{email}` document (`services/projectViewService.ts`), from "Try the
   Conversations view" in the sidebar's person menu or "Use Classic view" in the new top bar. The studio's
   choice is read as a project opens, so a settings change never swaps the view under someone mid-work.
-- **The way out, always on top:** "← All projects" (brand tint), Studio home, Clients and the studio desks
-  the role may open (`studioJumpItems`), each with its word. Then the project's title row: initials tile,
-  name (`text-2xl font-bold`), client · place · area, the status chip and Client portal.
+- **One bar on top** (owner, 27 Nov 2026: "do we need a big menu bar? top left corner as project name
+  and on right side these options"), 56px: on the left the project (initials tile, name `text-base
+  font-bold`, the status chip, client · place · area in `text-[11px]`); on the right the way out, "← All
+  projects", Studio home, Clients and the studio desks the role may open (`studioJumpItems`), then Client
+  portal and Show me around, then Hide figures and Use Classic view. Labels give way to icons with a
+  tooltip as the screen narrows (desks below 2xl; Studio home and Clients below lg; Client portal and Show
+  me around below xl); All projects always keeps its words.
+- **Type, one step down the scale** (owner: "the font size is big in the project workspace"): row titles,
+  story lines and buttons `text-[13px]`, conversation and Up next heads `text-[15px]`, the window title
+  `text-xl`; meta stays `text-xs` / `text-[11px]`.
 - **One `Panel`, three panes**, as on Clients:
   - **Conversations** (~280px, `lib/projectConversations.ts`): Whole project, Client & portal, Money, BOQ,
     Documents, Design, Site, Plan & timeline, Brief & Site (its own, owner). Every screen of the project
@@ -1391,7 +1398,9 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     (components/Header): the brand reticle with its sweep (`nav-pill hud-reticle`, `hud-sweep`) rests on
     All projects and glides to whatever you point at or tab to, leaving an echo (`hud-echo`); the items
     rise in turn (`hud-rise`); the energy rail runs along the bottom edge (`hud-rail`). Moved by
-    measuring and an inline transform, as the studio bar is.
+    measuring and an inline transform, as the studio bar is. Calmer than the studio bar (owner: "the
+    glowing blue band is too fast"): it follows only after the pointer rests 140ms, glides over .8s
+    without overshoot, sweeps over 1.6s, and the rail turns over 28s.
   - All of it stops under reduced motion. Palette only.
 
 ### Summary-first sections (approved 16 Nov 2026)
