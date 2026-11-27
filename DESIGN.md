@@ -90,6 +90,16 @@ run `UPDATE_DESIGN_BASELINE=1 npx vitest run src/tests/designGuard.test.ts`. Des
 (`components/drawingReview`) keeps its own colours. Design Desk 2.0 (`components/designDesk2`) has
 its own section below.
 
+### Minutes register (asked for 27 Nov 2026)
+
+Meetings & Reports > Minutes and actions switches between **Open actions** and **All minutes** (kit `Segmented`,
+each with its count). It opens on All minutes when no action is open. All minutes
+(`components/ops/MinutesRegister.tsx`, logic in `lib/minutesRegister.ts`) is one register, not a grid of cards:
+four `SummaryStrip` figures that filter it (All, Drafts, Waiting for client, Confirmed), a status switch, a
+meeting-kind switch, search over titles, refs, decisions and actions, and Newest/Oldest first. Rows are grouped
+by month under field-label column heads: the day, title and ref, kind chip, decisions and actions (open ones in
+amber), the status chip, Open (or Carry on writing for a draft) and a dim delete button. Rows arrive with `hud-row-in`.
+
 ## Modals
 
 Copy `AssignProjectsModal`:

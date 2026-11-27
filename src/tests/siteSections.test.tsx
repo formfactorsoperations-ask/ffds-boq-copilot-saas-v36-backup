@@ -87,7 +87,7 @@ describe('section lines', () => {
   it('minutes and weekly reports', () => {
     expect(minutesLine({ meetings: 0, open: 0, overdue: 0, toConfirm: 0 }).summary).toBe('No meeting recorded yet');
     expect(minutesLine({ meetings: 3, open: 5, overdue: 2, toConfirm: 1 }))
-      .toEqual({ summary: '5 open actions · 2 overdue · 1 minutes to confirm', tone: 'bad' });
+      .toEqual({ summary: '3 minutes on record · 5 open actions · 2 overdue · 1 to confirm', tone: 'bad' });
     const now = Date.parse('2026-11-16T10:00:00Z');
     const reports = [
       { weekNumber: 2, weekOf: '2026-11-02', publishedAt: Date.parse('2026-11-06T10:00:00Z') },

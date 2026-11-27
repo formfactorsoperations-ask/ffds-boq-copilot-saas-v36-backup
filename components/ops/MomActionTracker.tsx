@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { MOM, MOMActionItem } from "../../types";
 import {
   collection,
@@ -21,7 +21,6 @@ import {
   Search,
   Filter,
   Trash2,
-  FileText,
   Sparkles,
   Plus,
   Loader2,
@@ -40,11 +39,13 @@ import { setActionDone } from "../../services/minutesService";
 import { opsSettingsOf } from "../../lib/opsDesk";
 import { CountUp, Dot } from "../ui/HudBits";
 import {
-  trackedActions, minutesStateLabel, audienceOf, statusChip, fmtShortDay, clientContactOf, AUDIENCE_LABEL,
+  trackedActions, minutesStateLabel, fmtShortDay, clientContactOf, AUDIENCE_LABEL,
   type ActionLane, type ChipTone,
 } from "../../lib/minutes";
 import "../projectHeader/projectHeader.css";
-import { EmptyState } from "../ui/kit";
+import { EmptyState, Segmented } from "../ui/kit";
+import { MinutesRegister } from "./MinutesRegister";
+import type { RegisterFilter } from "../../lib/minutesRegister";
 
 /*
   MINUTES AND ACTIONS, for one project.
@@ -66,12 +67,6 @@ const TAG: Record<ChipTone, string> = {
 const Tag: React.FC<{ tone: ChipTone; children: React.ReactNode }> = ({ tone, children }) => (
   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${TAG[tone]}`}>{children}</span>
 );
-
-const OLD_STATUS: Record<string, { label: string; tone: ChipTone }> = {
-  draft: { label: "Draft", tone: "slate" }, pending_review: { label: "With a lead", tone: "amber" }, finalised: { label: "Finalised", tone: "brand" },
-  shared: { label: "Waiting for client", tone: "amber" }, acknowledged: { label: "Confirmed", tone: "emerald" }, correction_requested: { label: "Correction asked", tone: "rose" },
-};
-const chipOf = (m: any): { label: string; tone: ChipTone } => (m?.format === 2 ? statusChip(m) : OLD_STATUS[String(m?.status)] || OLD_STATUS.draft);
 
 interface MomActionTrackerProps {
   projectId: string;
@@ -97,6 +92,10 @@ export function MomActionTracker({
   const [moms, setMoms] = useState<MOM[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"actions" | "history">("actions");
+  const [registerPile, setRegisterPile] = useState<RegisterFilter>("all");
+  /* Once the minutes load, open on the register when no action is waiting -- unless someone already chose a view. */
+  const viewChosen = useRef(false);
+  const chooseView = (v: "actions" | "history") => { viewChosen.current = true; setViewMode(v); };
   const [filter, setFilter] = useState<"all" | "open" | "overdue" | "client" | "studio" | "vendor" | "done">("open");
   const [writing, setWriting] = useState(false);
   const [ticking, setTicking] = useState<string | null>(null);
@@ -127,6 +126,10 @@ export function MomActionTracker({
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MOM);
       setMoms(data);
       setLoading(false);
+      if (!viewChosen.current) {
+        viewChosen.current = true;
+        if (data.length && !trackedActions(data as any[]).some((a) => !a.done)) setViewMode("history");
+      }
     });
     return () => unsub();
   }, [projectId, studioId]);
@@ -228,7 +231,6 @@ export function MomActionTracker({
   };
   const toConfirm = moms.filter((m: any) => m.status === "shared" || m.status === "correction_requested").length;
   const corrections = moms.filter((m: any) => m.status === "correction_requested").length;
-  const draftMomsCount = moms.filter((m) => m.status === "draft").length;
 
   const shown = tracked.filter((a) => {
     if (searchQuery) {
@@ -276,12 +278,10 @@ export function MomActionTracker({
         </div>
         )}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="inline-flex p-1 rounded-xl bg-slate-100" role="tablist" aria-label="Show">
-            <button type="button" role="tab" aria-selected={viewMode === "actions"} className={segBtn(viewMode === "actions")} onClick={() => setViewMode("actions")}>Actions</button>
-            <button type="button" role="tab" aria-selected={viewMode === "history"} className={segBtn(viewMode === "history")} onClick={() => setViewMode("history")}>
-              Minutes{draftMomsCount ? ` · ${draftMomsCount} draft${draftMomsCount === 1 ? "" : "s"}` : ""}
-            </button>
-          </div>
+          <Segmented label="Show" glide value={viewMode} onChange={chooseView} options={[
+            { id: "actions", label: "Open actions", count: open.length },
+            { id: "history", label: "All minutes", count: moms.length },
+          ]} />
           <button type="button" onClick={() => (newFlow ? setWriting(true) : setShowCreateModal(true))}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486]">
             <Plus className="w-4 h-4" />Record meeting
@@ -293,7 +293,9 @@ export function MomActionTracker({
         <div key="actions" className="hud-swap flex-1 flex flex-col">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-5 sm:p-6 pb-0 sm:pb-0">
             {tiles.map((t, i) => (
-              <button key={t.label} type="button" onClick={() => { setFilter(t.id); if (t.label === "Minutes to confirm") setViewMode("history"); }}
+              <button key={t.label} type="button" onClick={() => {
+                if (t.label === "Minutes to confirm") { setRegisterPile("client"); chooseView("history"); } else setFilter(t.id);
+              }}
                 className={`text-left rounded-2xl border bg-white p-4 hud-row-in transition-colors ${filter === t.id && t.label !== "Minutes to confirm" ? "border-[#3D52A0] ring-1 ring-[#3D52A0]/30" : "border-slate-200 hover:bg-slate-50"}`}
                 style={{ animationDelay: `${i * 30}ms` }}>
                 <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500"><Dot tone={t.tone} />{t.label}</span>
@@ -390,54 +392,8 @@ export function MomActionTracker({
         </div>
       ) : (
         <div key="history" className="hud-swap flex-1 p-5 sm:p-6">
-          {moms.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center">
-              <FileText className="w-6 h-6 text-slate-400 mx-auto" />
-              <p className="text-sm font-semibold text-slate-800 mt-2">No minutes yet</p>
-              <p className="text-xs text-slate-500 mt-1">Record your first meeting to start the list.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {moms.map((mom: any, i) => {
-                const chip = chipOf(mom);
-                const acts = (mom.actionItems || []).filter((a: any) => a.status !== "cancelled");
-                const openActs = acts.filter((a: any) => a.status !== "done").length;
-                return (
-                  <div key={mom.id} className="rounded-2xl border border-slate-200 bg-white p-5 flex flex-col gap-4 hud-row-in" style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}>
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{mom.meetingTitle || "Meeting"}</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          {mom.momRef}{mom.rev ? ` · revision ${mom.rev + 1}` : ""} · {mom.meetingDate ? fmtShortDay(Number(mom.meetingDate)) : ""}
-                        </p>
-                      </div>
-                      <Tag tone={chip.tone}>{chip.label}</Tag>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Tag tone={audienceOf(mom.meetingType) === "client" ? "brand" : "slate"}>{AUDIENCE_LABEL[audienceOf(mom.meetingType)]}</Tag>
-                      {mom.format !== 2 && <Tag tone="slate">Earlier format</Tag>}
-                    </div>
-                    <div className="grid grid-cols-3 rounded-xl border border-slate-200 divide-x divide-slate-100 text-center">
-                      {([["Decisions", (mom.decisions || []).length], ["Actions", acts.length], ["Still open", openActs]] as [string, number][]).map(([k, v]) => (
-                        <div key={k} className="py-2">
-                          <p className={`text-base font-black tabular-nums ${k === "Still open" && v ? "text-amber-700" : "text-slate-800"}`}>{v}</p>
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{k}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                      <button type="button" onClick={() => setSelectedMomId(mom.id)} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#3D52A0] hover:text-[#334486]">
-                        <ExternalLink className="w-3.5 h-3.5" />{mom.status === "draft" ? "Carry on writing" : "Open the minutes"}
-                      </button>
-                      <button type="button" onClick={() => deleteMom(mom.id)} className="text-slate-300 hover:text-rose-600 p-1.5 rounded-lg hover:bg-slate-100" title="Delete these minutes" aria-label={`Delete ${mom.momRef}`}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <MinutesRegister moms={moms as any[]} loading={loading} pile={registerPile} onPile={setRegisterPile}
+            onOpen={setSelectedMomId} onDelete={deleteMom} />
         </div>
       )}
 

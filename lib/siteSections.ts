@@ -111,10 +111,10 @@ export function electricalLine(ctx: Pick<ProjectContext, 'rooms' | 'qualityCheck
 /** Counts from lib/minutes trackedActions plus the minutes themselves. */
 export function minutesLine(c: { open: number; overdue: number; toConfirm: number; meetings: number }): SectionLine {
   if (c.meetings === 0) return { summary: 'No meeting recorded yet', tone: 'none' };
-  const parts: string[] = [];
-  parts.push(c.open ? `${c.open} open ${c.open === 1 ? 'action' : 'actions'}` : 'No open actions');
+  const parts: string[] = [`${c.meetings} minutes on record`];
+  parts.push(c.open ? `${c.open} open ${c.open === 1 ? 'action' : 'actions'}` : 'no open actions');
   if (c.overdue) parts.push(`${c.overdue} overdue`);
-  if (c.toConfirm) parts.push(`${c.toConfirm} minutes to confirm`);
+  if (c.toConfirm) parts.push(`${c.toConfirm} to confirm`);
   return { summary: parts.join(' · '), tone: c.overdue ? 'bad' : c.open || c.toConfirm ? 'warn' : 'ok' };
 }
 
