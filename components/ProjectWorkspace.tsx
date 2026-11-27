@@ -276,6 +276,8 @@ export function ProjectWorkspace({
   ) : null;
 
   if (view === 'conversations' && !isWizard) {
+    /* A project whose lifecycle has no stage yet is at stage 1, as the Hub reads it (components/Dashboard). */
+    const stageNow = typeof lifecycle.stage === 'number' ? lifecycle.stage : 1;
     const visible = new Set<string>([...sidebarStages.flatMap(s => s.screens.map(x => x.route)), ...sidebarHub.map(h => h.route)]);
     const labels: Record<string, string> = {};
     sidebarStages.forEach(s => s.screens.forEach(x => { labels[x.route] = ENGAGEMENT_PAGE_TITLES[engagement]?.[x.route]?.title || x.label; }));
@@ -301,8 +303,9 @@ export function ProjectWorkspace({
           conversations={conversationsFor(visible)}
           labelOf={labelOf}
           needsOf={(route) => noted[route]?.needs || 0}
-          stages={sidebarStages.map(s => ({ stage: s.stage, label: s.label, state: s.state, first: s.screens[0]?.route || null }))}
-          currentStage={currentStage}
+          stages={sidebarStages.map(s => ({ stage: s.stage, label: s.label, first: s.screens[0]?.route || null,
+            state: (s.stage < stageNow ? 'done' : s.stage === stageNow ? 'now' : 'todo') as 'done' | 'now' | 'todo' }))}
+          currentStage={stageNow}
           journey={{
             done: journey.overall.done, total: journey.overall.total,
             pct: Math.round(projectContext.journeySummary?.pct ?? journey.overall.pct ?? 0),

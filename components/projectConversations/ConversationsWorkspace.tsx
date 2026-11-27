@@ -105,7 +105,7 @@ export interface ConversationsWorkspaceProps {
 export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
   const ctx = p.projectContext || {};
   const name = ctx.name || 'Untitled project';
-  const clientName = ctx.clientName || 'the client';
+  const clientName = ctx.clientName || '';
   const now = useMemo(() => Date.now(), [p.activeTab]);
 
   /* Which conversation is open. A screen opened by a link opens its conversation behind the window. */
@@ -209,10 +209,11 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
           <Thread key={shown.id} conv={shown.id} story={storyFor(story, shown.id)} now={now} loading={!records} onOpen={open}
             labelOf={p.labelOf} visible={(r) => p.conversations.some((c) => c.routes.includes(r))}
             pinned={shown.id === 'whole' ? (
-              <NextStep stage={p.currentStage} stages={p.stages} journey={p.journey} hubLabel={p.hubLabel} onHub={() => setHubOpen(true)}
-                onMatrix={p.conversations.some((c) => c.routes.includes('project-journey')) ? () => open('project-journey') : undefined} />
+              <UpNext stage={p.currentStage} stages={p.stages} journey={p.journey} hubLabel={p.hubLabel} onHub={() => setHubOpen(true)}
+                onMatrix={p.conversations.some((c) => c.routes.includes('project-journey')) ? () => open('project-journey') : undefined}
+                onOpen={open} labelOf={p.labelOf} />
             ) : null}
-            tail={shown.id === 'whole' ? <UpNext rows={p.journey.upNext} onOpen={open} labelOf={p.labelOf} /> : null} />
+            tail={null} />
           <Composer conv={shown.id} canLog={p.canLog} clientName={clientName} phone={ctx.clientPhone || ''} projectName={name}
             studio={String(ctx.studioName || '') || 'the studio'} milestones={p.money?.milestones || []} onWrite={writeLine}
             onRecord={shown.id === 'whole' ? open : undefined} />
@@ -441,7 +442,7 @@ const StoryRow: React.FC<{
         <p className="text-sm font-semibold text-slate-800">{it.text}</p>
         {it.detail && <p className="text-xs text-slate-500">{it.detail}</p>}
         <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
-          <Chip tone={src.tone}>{SOURCE_LABEL[it.source || 'team']}</Chip>
+          {it.source === 'payments' && <Chip tone="good">{SOURCE_LABEL.payments}</Chip>}
           {new Date(it.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
           {it.meta ? ` · ${it.meta}` : ''}
         </p>
@@ -451,42 +452,31 @@ const StoryRow: React.FC<{
   );
 }
 
-function NextStep({ stage, stages, journey, hubLabel, onHub, onMatrix }: {
-  stage: number; stages: StageRow[]; journey: ConversationsWorkspaceProps['journey']; hubLabel: string; onHub: () => void; onMatrix?: () => void;
+/*
+  Whole project's one card on top: where the project is, and the three things
+  to do next, one button each. It replaced a "Next" card and an Up next list
+  that said the same first step twice (owner, 27 Nov 2026: "too busy").
+*/
+function UpNext({ stage, stages, journey, hubLabel, onHub, onMatrix, onOpen, labelOf }: {
+  stage: number; stages: StageRow[]; journey: ConversationsWorkspaceProps['journey']; hubLabel: string;
+  onHub: () => void; onMatrix?: () => void; onOpen: (r: string) => void; labelOf: (r: string) => string;
 }) {
   const stageName = stages.find((s) => s.stage === stage)?.label || '';
+  const rows = journey.upNext;
   return (
-    <div className="shrink-0 mx-4 mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm hud-panel-in">
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Stage {stage} of 6{stageName ? ` · ${stageName}` : ''}</p>
-          <p className="font-bold text-slate-800 mt-0.5"><span className="text-slate-400">Next:</span> {journey.next || 'nothing is waiting on you'}</p>
-          <p className="text-xs text-slate-500 mt-0.5">{journey.done} of {journey.total} steps · {Math.round(journey.pct)}% through the project</p>
-        </div>
-        <div className="flex gap-1.5 shrink-0">
-          {onMatrix && <Button size="sm" variant="quiet" onClick={onMatrix}>Ops Matrix</Button>}
-          <Button size="sm" variant="secondary" icon={LayoutGrid} onClick={onHub}>Open {hubLabel === 'Hub' ? 'the Hub' : hubLabel}</Button>
-        </div>
+    <div className="shrink-0 mx-4 mt-3 rounded-2xl border border-slate-200 bg-white overflow-hidden hud-panel-in">
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-100">
+        <p className="min-w-0 flex-1 text-xs text-slate-500 truncate">
+          <b className="text-slate-700">Stage {stage} of 6{stageName ? ` · ${stageName}` : ''}</b> · {journey.done} of {journey.total} steps done
+        </p>
+        {onMatrix && <Button size="sm" variant="quiet" onClick={onMatrix}>Ops Matrix</Button>}
+        <Button size="sm" variant="quiet" icon={LayoutGrid} onClick={onHub}>Open {hubLabel === 'Hub' ? 'the Hub' : hubLabel}</Button>
       </div>
-    </div>
-  );
-}
-
-function UpNext({ rows, onOpen, labelOf }: { rows: UpNextRow[]; onOpen: (r: string) => void; labelOf: (r: string) => string }) {
-  return (
-    <div className="mt-2 rounded-2xl border border-[#3D52A0]/20 bg-white overflow-hidden shrink-0">
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-[#3D52A0]/10">
-        <h3 className="font-bold text-slate-800">Up next</h3>
-        <span className="px-2 py-0.5 rounded-full bg-white text-xs font-bold text-slate-600">{rows.length}</span>
-        <span className="flex-1" /><span className="text-xs text-slate-500">Most important first</span>
-      </div>
-      {!rows.length && <p className="px-4 py-3 text-xs text-slate-500"><b className="text-slate-700">You’re clear.</b> Nothing needs you on this project right now.</p>}
+      <div className="px-4 pt-2.5 pb-1"><h3 className="font-bold text-slate-800">Up next</h3></div>
+      {!rows.length && <p className="px-4 pb-3 text-xs text-slate-500">Nothing needs you on this project right now.</p>}
       {rows.map((r) => (
-        <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 border-t border-slate-100">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-slate-800">{r.title}</p>
-            {r.text && <p className="text-xs text-slate-500 line-clamp-1">{r.text}</p>}
-          </div>
+        <div key={r.id} className="flex items-center gap-3 px-4 py-2 border-t border-slate-100 first:border-t-0">
+          <p className="min-w-0 flex-1 text-sm font-semibold text-slate-800 truncate" title={r.text || undefined}>{r.title}</p>
           {r.route && <Button size="sm" variant="secondary" onClick={() => onOpen(r.route!)}>Open {labelOf(r.route)}</Button>}
         </div>
       ))}
@@ -500,23 +490,26 @@ function Composer({ conv, canLog, clientName, phone, projectName, studio, milest
   conv: ConversationId; canLog: boolean; clientName: string; phone: string; projectName: string; studio: string;
   milestones: ClientMoney['milestones']; onWrite: (l: FollowUpLine) => Promise<void>; onRecord?: (r: string) => void;
 }) {
-  const chatty = conv === 'whole' || conv === 'chat';
+  /* Messages to the client belong with the client: only Client & portal writes to them (owner, 27 Nov 2026). */
+  const chatty = conv === 'chat';
   const [mode, setMode] = useState<'send' | 'reply' | 'note'>(chatty ? 'send' : 'note');
-  useEffect(() => { setMode(chatty ? 'send' : 'note'); }, [conv]);
+  const [noteOpen, setNoteOpen] = useState(false);
+  useEffect(() => { setMode(chatty ? 'send' : 'note'); setNoteOpen(false); }, [conv]);
   const [template, setTemplate] = useState<TemplateId>(WHATSAPP_TEMPLATES[0].id);
   const [text, setText] = useState('');
   const [mood, setMood] = useState<ReplyMood>('positive');
   const [from, setFrom] = useState<ReplyFrom>('whatsapp');
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  const who = clientName || 'the client';
   useEffect(() => {
     if (mode !== 'send') { setText(''); return; }
     const t = WHATSAPP_TEMPLATES.find((x) => x.id === template) || WHATSAPP_TEMPLATES[0];
-    setText(t.text(clientName, studio, projectName));
+    setText(t.text(clientName || 'there', studio, projectName));
   }, [mode, template, clientName, studio, projectName]);
 
   const save = async (line: FollowUpLine) => {
     setState('saving');
-    try { await onWrite(line); setState('saved'); if (mode !== 'send') setText(''); }
+    try { await onWrite(line); setState('saved'); if (mode !== 'send') setText(''); if (!chatty) setNoteOpen(false); }
     catch { setState('failed'); }
   };
   const link = whatsAppLink(phone, text);
@@ -525,24 +518,54 @@ function Composer({ conv, canLog, clientName, phone, projectName, studio, milest
     const t = WHATSAPP_TEMPLATES.find((x) => x.id === template) || WHATSAPP_TEMPLATES[0];
     if (canLog) save(sentLine(text, sendSubject(t, milestones)));
   };
+  const status = (
+    <>
+      {state === 'saving' && <span className="text-[11px] text-slate-500">Saving…</span>}
+      {state === 'saved' && <span className="text-[11px] text-emerald-700">Saved</span>}
+      {state === 'failed' && <span className="text-[11px] text-rose-700">Not saved. Try again.</span>}
+    </>
+  );
+
+  /* Every conversation but Client & portal: Record (Whole project) and a note, one line until it is needed. */
+  if (!chatty) {
+    if (!canLog && !onRecord) return null;
+    return (
+      <div className="shrink-0 border-t border-slate-200 px-4 py-2.5 bg-white flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {onRecord && (
+            <>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Record</span>
+              <Button size="sm" variant="secondary" icon={HardHat} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="S">Site visit</Button>
+              <Button size="sm" variant="secondary" icon={Users} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="M">Meeting</Button>
+              <Button size="sm" variant="secondary" icon={Scale} onClick={() => onRecord('record-decision')} aria-keyshortcuts="D">Decision</Button>
+            </>
+          )}
+          <span className="flex-1" />
+          {canLog && !noteOpen && <Button size="sm" variant="quiet" icon={NotebookPen} onClick={() => { setNoteOpen(true); setState('idle'); }}>Add a note</Button>}
+          {!noteOpen && status}
+        </div>
+        {canLog && noteOpen && (
+          <div className="flex gap-2 items-stretch">
+            <textarea autoFocus value={text} onChange={(e) => { setText(e.target.value); setState('idle'); }} rows={2}
+              placeholder="A note for the team" aria-label="Note" className={cx(INPUT, 'resize-none flex-1')} />
+            <div className="flex flex-col gap-1.5 shrink-0 justify-center">
+              <Button variant="primary" size="sm" onClick={() => save(noteLine(text))} disabled={!text.trim()}>Save note</Button>
+              <Button variant="quiet" size="sm" onClick={() => { setNoteOpen(false); setText(''); }}>Cancel</Button>
+              {status}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="shrink-0 border-t border-slate-200 px-4 py-3 flex flex-col gap-2 bg-white">
-      <div className="flex flex-wrap items-center gap-2">
-        {chatty && canLog && (
-          <Segmented<'send' | 'reply' | 'note'> label="What to add" size="sm" value={mode} onChange={setMode}
-            options={[{ id: 'send', label: 'Message the client' }, { id: 'reply', label: 'Log their reply' }, { id: 'note', label: 'Add a note' }]} />
-        )}
-        {onRecord && (
-          <span className="flex items-center gap-1.5 ml-auto">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Record</span>
-            <Button size="sm" variant="secondary" icon={HardHat} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="S">Site visit</Button>
-            <Button size="sm" variant="secondary" icon={Users} onClick={() => onRecord('site-meetings')} aria-keyshortcuts="M">Meeting</Button>
-            <Button size="sm" variant="secondary" icon={Scale} onClick={() => onRecord('record-decision')} aria-keyshortcuts="D">Decision</Button>
-          </span>
-        )}
-      </div>
-      {mode === 'send' && chatty && (
+      {canLog && (
+        <Segmented<'send' | 'reply' | 'note'> label="What to add" size="sm" value={mode} onChange={setMode}
+          options={[{ id: 'send', label: 'Message the client' }, { id: 'reply', label: 'Log their reply' }, { id: 'note', label: 'Add a note' }]} />
+      )}
+      {mode === 'send' && (
         <div className="flex gap-1.5 overflow-x-auto">
           {WHATSAPP_TEMPLATES.map((t) => (
             <button key={t.id} type="button" onClick={() => setTemplate(t.id)}
@@ -566,7 +589,7 @@ function Composer({ conv, canLog, clientName, phone, projectName, studio, milest
       {canLog ? (
         <div className="flex gap-2 items-stretch">
           <textarea value={text} onChange={(e) => { setText(e.target.value); setState('idle'); }} rows={2}
-            placeholder={mode === 'reply' ? `What ${clientName} said` : mode === 'note' ? 'A note for the team' : `Write to ${clientName}`}
+            placeholder={mode === 'reply' ? `What ${who} said` : mode === 'note' ? 'A note for the team' : `Write to ${who}`}
             aria-label="Message" className={cx(INPUT, 'resize-none flex-1')} />
           <div className="flex flex-col gap-1.5 shrink-0 justify-center">
             {mode === 'send' && (
@@ -576,9 +599,7 @@ function Composer({ conv, canLog, clientName, phone, projectName, studio, milest
             )}
             {mode === 'reply' && <Button variant="primary" onClick={() => save(replyLine(mood, text, from))}>Log their reply</Button>}
             {mode === 'note' && <Button variant="primary" icon={NotebookPen} onClick={() => save(noteLine(text))} disabled={!text.trim()}>Add note</Button>}
-            {state === 'saving' && <span className="text-[11px] text-slate-500">Saving…</span>}
-            {state === 'saved' && <span className="text-[11px] text-emerald-700">Saved to the follow-up log</span>}
-            {state === 'failed' && <span className="text-[11px] text-rose-700">Not saved. Try again.</span>}
+            {status}
           </div>
         </div>
       ) : (
@@ -613,7 +634,7 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, portalLine, onOpe
   );
   return (
     <aside className="hidden xl:flex flex-col min-h-0 overflow-y-auto border-l border-slate-100" aria-label="Project card">
-      <Sec title="At a glance">
+      {seesMoney && <Sec title="At a glance">
         <div className="grid grid-cols-2 gap-2">
           {seesMoney && (
             <Tile label="Collected" route="payment-calc"
@@ -625,16 +646,21 @@ function ProjectCard({ ctx, money, seesMoney, journey, stages, portalLine, onOpe
               value={next ? (next.owed != null ? <Masked>{inr(next.owed)}</Masked> : next.name) : '—'}
               sub={next ? `${next.name}${next.date ? ` · ${new Date(next.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}` : 'Nothing due'} />
           )}
-          <Tile label="Steps" route="project-journey" value={`${journey.done} of ${journey.total}`} sub={`${Math.round(journey.pct)}% through`} />
-          <Tile label="Stage" route={null} value={String(stages.find((s) => s.state === 'now')?.stage || '—')} sub={stages.find((s) => s.state === 'now')?.label || ''} />
         </div>
-      </Sec>
+      </Sec>}
       {has('client-portal') && (
         <Sec title="Client portal" action={<Button size="sm" variant="quiet" onClick={() => onOpen('client-portal')}>Open</Button>}>
           <PortalLineText line={portalLine} />
-          <div className="flex gap-1.5 mt-2">
-            <Button size="sm" variant="primary" className="flex-1" onClick={() => onOpen('client-portal')}>Review &amp; send</Button>
-          </div>
+          {portalLine.rule <= 4 && (
+            <div className="flex gap-1.5 mt-2">
+              <Button size="sm" variant="primary" className="flex-1" onClick={() => onOpen('client-portal')}>Review &amp; send</Button>
+            </div>
+          )}
+          {portalLine.giveAccess && (
+            <div className="flex gap-1.5 mt-2">
+              <Button size="sm" variant="secondary" className="flex-1" onClick={() => onOpen('client-portal')}>Give access</Button>
+            </div>
+          )}
         </Sec>
       )}
       {has('timeline') && (

@@ -107,4 +107,22 @@ describe('the Conversations workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use Classic view' }));
     expect(onUseClassic).toHaveBeenCalled();
   });
+
+  it('keeps Whole project calm: no WhatsApp box, just Record and a note (owner, 27 Nov 2026)', () => {
+    setup();
+    expect(screen.queryByRole('button', { name: /Open in WhatsApp/ })).toBeNull();
+    for (const n of ['Site visit', 'Meeting', 'Decision', 'Add a note']) expect(screen.getByRole('button', { name: new RegExp(n) })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Add a note/ }));
+    expect(screen.getByRole('textbox', { name: 'Note' })).toBeTruthy();
+  });
+
+  it('writes to the client from Client & portal, and greets them as "there" when the project has no client name', () => {
+    setup({ projectContext: { name: 'Palacia 3BHK', history: [] } });
+    const list = screen.getByRole('complementary', { name: "This project's conversations" });
+    fireEvent.click(within(list).getByRole('button', { name: /^Client & portal/ }));
+    expect(screen.getByRole('button', { name: /Open in WhatsApp/ })).toBeTruthy();
+    const box = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement;
+    expect(box.value).toMatch(/^Hi there,/);
+    expect(box.value).not.toMatch(/the client/);
+  });
 });
