@@ -21,7 +21,6 @@
 .cvw-hot {
   --cvw-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
-  overflow: hidden;
   transition: background-color 0.2s ease, transform 0.18s var(--cvw-spring), box-shadow 0.2s ease, border-color 0.2s ease;
 }
 .cvw-hot:active { transform: scale(0.975); transition-duration: 0.08s; }
@@ -79,7 +78,8 @@
 .cvw-hot .cvw-arrow { transition: transform 0.25s var(--cvw-spring, ease), opacity 0.2s ease; }
 .cvw-hot:hover .cvw-arrow { transform: translateX(4px); }
 
-/* ── the ripple from where you clicked ── */
+/* ── the ripple from where you clicked, in a clipping layer of its own (the host never clips) ── */
+.cvw-ripple-clip { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
 .cvw-ripple {
   position: absolute;
   border-radius: 9999px;
@@ -105,39 +105,22 @@
 }
 
 /*
-  The studio's sections as glass bubbles in the top bar (owner, 27 Nov 2026: chose "D1", colour line
-  icons with glass morphism; StudioTiles.tsx draws the icons). A faint wash of the sections' colours sits
-  behind the row (.cvw-wash) so the frosted glass has something to frost. Each bubble: white glass,
-  blurred and saturated, a bright rim, a soft inner glow in its own colour (--cvw-soft) and a shadow in
-  its deeper colour (--cvw-tile). On hover the bubble lifts and the icon fills with its colour; the
-  section you are in (Projects) wears a ring in its colour.
+  The studio's sections in the top bar: colour line icons (owner, 27 Nov 2026: chose "D", tried glass
+  on it, then "background on the entire page doesn't look good … drop glass, but i liked the icons";
+  StudioTiles.tsx draws them). At rest each icon sits on the white bar in two tones of its own colour.
+  On hover or focus a soft circle in its colour (--cvw-soft) grows behind it and the icon fills with its
+  colour (--cvw-tile). The section you are in (Projects) keeps its circle, filled icon and a ring.
 */
-.cvw-wash { position: relative; isolation: isolate; }
-.cvw-wash::before {
-  content: ""; position: absolute; inset: -8px -10px; z-index: -1; border-radius: 22px; filter: blur(8px); pointer-events: none;
-  background:
-    radial-gradient(28% 110% at 6% 50%, rgba(245, 158, 11, 0.36), transparent 70%),
-    radial-gradient(24% 110% at 24% 50%, rgba(61, 82, 160, 0.28), transparent 70%),
-    radial-gradient(24% 110% at 40% 50%, rgba(244, 63, 94, 0.30), transparent 70%),
-    radial-gradient(24% 110% at 56% 50%, rgba(16, 185, 129, 0.30), transparent 70%),
-    radial-gradient(24% 110% at 74% 50%, rgba(112, 145, 230, 0.32), transparent 70%),
-    radial-gradient(28% 110% at 94% 50%, rgba(244, 63, 94, 0.26), transparent 70%);
+.cvw-tile { background: transparent; transition: transform 0.25s var(--cvw-spring, ease); }
+.cvw-tile::before {
+  content: ""; position: absolute; inset: 0; border-radius: 9999px; background: var(--cvw-soft, #E2E8F0);
+  transform: scale(0.4); opacity: 0; transition: transform 0.3s var(--cvw-spring, ease), opacity 0.2s ease;
 }
-.cvw-tile {
-  background: rgba(255, 255, 255, 0.42);
-  -webkit-backdrop-filter: blur(10px) saturate(1.6);
-  backdrop-filter: blur(10px) saturate(1.6);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.95), inset 0 -8px 12px -8px var(--cvw-soft, #E2E8F0), 0 6px 14px -8px var(--cvw-tile, #3D52A0);
-  transition: transform 0.25s var(--cvw-spring, ease), box-shadow 0.25s ease, background-color 0.2s ease;
-}
-.cvw-tile:hover, .cvw-tile:focus-visible {
-  transform: translateY(-2px) scale(1.08);
-  background: rgba(255, 255, 255, 0.6);
-  box-shadow: inset 0 1px 1px #fff, inset 0 -10px 14px -8px var(--cvw-soft, #E2E8F0), 0 12px 22px -10px var(--cvw-tile, #3D52A0);
-}
-.cvw-tile:active { transform: translateY(0) scale(0.94); }
-.cvw-tile.is-here { box-shadow: inset 0 1px 1px #fff, 0 0 0 2px var(--cvw-tile, #3D52A0), 0 8px 18px -8px var(--cvw-tile, #3D52A0); }
+.cvw-tile:hover::before, .cvw-tile:focus-visible::before, .cvw-tile.is-here::before { transform: scale(1); opacity: 1; }
+.cvw-tile .cvw-ic { position: relative; }
+.cvw-tile:hover, .cvw-tile:focus-visible { transform: translateY(-1px); }
+.cvw-tile:active { transform: scale(0.92); }
+.cvw-tile.is-here { box-shadow: inset 0 0 0 2px var(--cvw-tile, #3D52A0); }
 
 /* The line icon fills with its colour on hover and where you are; its details turn white. */
 .cvw-tile .cvw-gp { transition: fill 0.25s ease, fill-opacity 0.25s ease; }
@@ -146,5 +129,6 @@
 .cvw-tile:hover .cvw-gs, .cvw-tile:focus-visible .cvw-gs, .cvw-tile.is-here .cvw-gs { stroke: #fff; }
 
 @media (prefers-reduced-motion: reduce) {
+  .cvw-tile, .cvw-tile::before { transition: none !important; }
   .cvw-tile:hover, .cvw-tile:focus-visible, .cvw-tile:active { transform: none !important; }
 }

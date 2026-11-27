@@ -236,12 +236,16 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
     try { if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return; } catch { /* old browser */ }
     const r = host.getBoundingClientRect();
     const d = Math.max(r.width, r.height) * 2.2;
+    /* The ring lives in a clipping layer of its own, so the card itself never clips (or, in a long story, gets squeezed). */
+    const clip = document.createElement('span');
+    clip.className = 'cvw-ripple-clip';
+    clip.setAttribute('aria-hidden', 'true');
     const dot = document.createElement('span');
     dot.className = 'cvw-ripple';
-    dot.setAttribute('aria-hidden', 'true');
     Object.assign(dot.style, { width: `${d}px`, height: `${d}px`, left: `${e.clientX - r.left - d / 2}px`, top: `${e.clientY - r.top - d / 2}px` });
-    host.appendChild(dot);
-    window.setTimeout(() => dot.remove(), 700);
+    clip.appendChild(dot);
+    host.appendChild(clip);
+    window.setTimeout(() => clip.remove(), 700);
   };
 
   return (
@@ -349,7 +353,7 @@ function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, on
     return (
       <button key={it.key} type="button" data-way={it.key} data-ripple aria-label={it.label} aria-current={here ? 'page' : undefined}
         onClick={() => { hide(); it.go(); }} onMouseEnter={show(it)} onMouseLeave={hide} onFocus={show(it)} onBlur={hide}
-        style={{ animationDelay: `${Math.min(i, 9) * 40}ms`, ['--cvw-tile' as string]: tone.to, ['--cvw-soft' as string]: toWhite(tone.from, 0.7) }}
+        style={{ animationDelay: `${Math.min(i, 9) * 40}ms`, ['--cvw-tile' as string]: tone.to, ['--cvw-soft' as string]: toWhite(tone.from, 0.78) }}
         className={cx('cvw-hot cvw-tile hud-rise w-9 h-9 shrink-0 grid place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/40',
           here && 'is-here', it.show)}>
         <span className="cvw-ic" data-m={it.move}>{hasGlyph(it.key) ? <StudioGlyph name={it.key} /> : <Icon className="w-[18px] h-[18px]" style={{ color: tone.to }} aria-hidden />}</span>
@@ -378,7 +382,7 @@ function ProjectBar({ ctx, name, statusLabel, onStatusClick, onPortal, desks, on
       </div>
 
       {/* Right: the studio's sections, then this view's helpers. */}
-      <nav aria-label="Studio" data-tour="way" className="cvw-wash flex items-center gap-1.5 shrink-0">
+      <nav aria-label="Studio" data-tour="way" className="flex items-center gap-1 shrink-0">
         {sections.map((it, i) => tile(it, i))}
         <span className="w-px h-6 bg-slate-200 mx-1 shrink-0 hidden sm:block" aria-hidden />
         {helpers.map((it, i) => tile(it, sections.length + i))}
