@@ -28,9 +28,13 @@ vi.mock('../../components/projectConversations/useProjectGlance', () => ({
     drawings: { total: 7, issued: 4, approved: 3 }, handoverISO: '2027-03-14', targetISO: null, hasProgramme: true,
     milestones: [{ id: 't1', title: 'Design sign-off', startISO: '2026-12-05' }, { id: 't2', title: 'Site work starts', startISO: '2026-12-08' }],
     items: smart.items,
+    programme: smart.programme,
   }),
 }));
-const smart = vi.hoisted(() => ({ items: null as any[] | null, care: { care: null, digest: undefined, meetings: null } as any }));
+const smart = vi.hoisted(() => ({ items: null as any[] | null, care: { care: null, digest: undefined, meetings: null } as any, programme: null as any }));
+const fin = vi.hoisted(() => ({ pnl: null as any }));
+vi.mock('../../components/projectConversations/useProjectPnl', () => ({ useProjectOrders: (_: string, on: boolean) => (on && fin.pnl ? [] : null) }));
+vi.mock('../../lib/projectPnl', async (orig) => ({ ...(await orig<any>()), buildProjectPnl: () => fin.pnl }));
 vi.mock('../../components/projectConversations/useProjectCare', () => ({ useProjectCare: () => smart.care }));
 const desk = vi.hoisted(() => ({ openInDesignReview: vi.fn(), nudgeHolder: vi.fn(async () => ({ to: 'x' })) }));
 vi.mock('../../services/drawingReviewService', async (orig) => ({ ...(await orig<any>()), ...desk }));
@@ -525,5 +529,42 @@ describe('Ask this project and promises', () => {
     fireEvent.click(within(card).getAllByRole('button', { name: 'Done' })[0]);
     await waitFor(() => expect(opsDesk.markNextDone).toHaveBeenCalledWith('p1', 'a', 'owner@studio.in'));
     await waitFor(() => expect(screen.getByRole('region', { name: 'Promises' }).textContent).not.toContain('Send the shutter samples'));
+  });
+});
+
+/* Where the project is heading (smart workspace, PR 5): the handover forecast and the margin. */
+describe('the handover forecast and the margin', () => {
+  afterEach(() => { smart.programme = null; fin.pnl = null; });
+  const pick = (name: RegExp) => fireEvent.click(within(screen.getByRole('complementary', { name: "This project's conversations" })).getByRole('button', { name }));
+  const CONVS = conversationsFor(new Set(['timeline', 'payment-calc', 'project-reports']));
+
+  it('opens Plan & timeline on the forecast, with what would pull it back', async () => {
+    const { buildScheduleFromProject } = await import('../../lib/scheduleBuilder');
+    const { computeSchedule } = await import('../../lib/schedule');
+    const schedule: any = { ...buildScheduleFromProject({ targetHandoverDate: '2026-11-15' } as any, [{ cat: 'Carpentry', qty: 1, materials: 900, labor: 100 }] as any, { designSteps: [{ stepNumber: 1, title: 'Concept', startDate: '2026-08-01', durationDays: 10 }] } as any), projectStartISO: '2026-08-01' };
+    smart.programme = { schedule, result: computeSchedule(schedule, '2026-10-18') };
+    setup({ conversations: CONVS });
+    pick(/^Plan & timeline/);
+    const line = within(screen.getByRole('region', { name: 'Handover forecast' })).getByRole('button', { expanded: false });
+    expect(line.textContent).toMatch(/Likely .* working days? past target/);
+    const card = expand('Handover forecast');
+    expect(card.textContent).toContain('Likely handover');
+    expect(card.textContent).toMatch(/remaining work has to run at \d+% of its planned time/);
+    expect(screen.getByRole('complementary', { name: "This project's conversations" }).textContent).toContain('Handover past its target');
+  });
+
+  it('shows the margin on Money for the roles that see money, and nothing to the rest', () => {
+    fin.pnl = { contractedTotal: 1000000, hasProcurement: true, quotedMargin: 310000, currentMargin: 264000, quotedMarginPct: 31, currentMarginPct: 26.4, overspentEnvelopes: [{ roomId: 'Kitchen', category: 'Carpentry', overBy: 9400 }], uncostedLines: 0, committedCost: 0, receivedFromClient: 0, confidence: 'partly-committed' };
+    setup({ conversations: CONVS });
+    pick(/^Money/);
+    const line = within(screen.getByRole('region', { name: 'Margin' })).getByRole('button', { expanded: false });
+    expect(line.textContent).toContain('Quoted 31% · on track for 26.4% · 1 envelope over budget');
+    const card = expand('Margin');
+    expect(card.textContent).toContain('Kitchen · Carpentry');
+    expect(card.textContent).toContain('₹46,000');
+    cleanup();
+    setup({ conversations: CONVS, seesMoney: false });
+    pick(/^Money/);
+    expect(screen.queryByRole('region', { name: 'Margin' })).toBeNull();
   });
 });

@@ -1425,6 +1425,20 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
   which in this browser (`studiodesk.smartBriefs`). This week's update is one line of its own. **Up next**
   shows its first step; the rest fold under "Show n more", beside "n more on the Hub". So the story keeps
   most of the pane: about 55% on Whole project and 70–80% elsewhere at 1500×940.
+- **Smart workspace, PR 5: where the project is heading** (owner, 27 Nov 2026; `lib/projectOutlook.ts`).
+  - **Handover forecast**, folded on Plan & timeline: "Likely 11 Mar ’27 · 34 working days past target" (rose
+    when late). Open: tiles for Likely handover (rose when late) and Target, up to three reasons (rose dots):
+    each open hold measured by running the programme again without it ("Payment not received: a hold of 8
+    working days moves handover 9 days"), then critical-path work waiting on a gate, overrunning or behind;
+    the lever on brand tint (Sparkles): the hold that costs most, lifted ("Without the … hold, handover moves
+    to …"), or the programme's own catch-up figure; "Open Timeline". A late forecast is a rose signal on Plan
+    & timeline ("Handover past its target") in place of the journey-based handover check.
+  - **Margin**, folded on Money, for the roles that see the studio's money, every figure behind the eye:
+    "Quoted 31% · on track for 26.4% · n envelopes over budget". Open: tiles Quoted (slate), On track for
+    (gold, amber past a tenth lost, rose past a quarter), Margin lost; envelopes over budget, lines with no
+    cost, cash committed to vendors beyond what the client has paid; how sure it is; "Open Reports". From the
+    P&L Reports builds (`buildProjectPnl` with the project's purchase orders), so with it the cash and margin
+    checks of `projectRisk` run too (their detail says "Hidden while figures are hidden." behind the eye).
 - **Smart workspace, PR 4: Ask this project and promises** (owner, 27 Nov 2026; for those who may open the
   Ops Desk, whose records feed both; nothing outside the app). `lib/projectAsk.ts`.
   - **Ask:** the list's search says "Find a screen, or ask a question". A search that reads as a question
