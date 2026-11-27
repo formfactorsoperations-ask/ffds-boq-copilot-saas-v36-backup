@@ -1387,6 +1387,11 @@ project. Classic (the sidebar above) stays, unchanged, until the pilot (the owne
     the point clicked (`data-ripple`, `.cvw-ripple`, brand at low strength).
   - **Picked:** the open conversation's plate fills brand blue and pops; the conversation head's icon pops
     and plays its motion as you arrive.
+  - **The top bar** (the way out; owner: "this part is too boring") speaks the studio bar's language
+    (components/Header): the brand reticle with its sweep (`nav-pill hud-reticle`, `hud-sweep`) rests on
+    All projects and glides to whatever you point at or tab to, leaving an echo (`hud-echo`); the items
+    rise in turn (`hud-rise`); the energy rail runs along the bottom edge (`hud-rail`). Moved by
+    measuring and an inline transform, as the studio bar is.
   - All of it stops under reduced motion. Palette only.
 
 ### Summary-first sections (approved 16 Nov 2026)

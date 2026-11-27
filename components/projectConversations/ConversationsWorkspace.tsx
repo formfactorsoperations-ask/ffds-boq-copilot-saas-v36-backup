@@ -295,29 +295,97 @@ export default function ConversationsWorkspace(p: ConversationsWorkspaceProps) {
 
 /* ───────────── the way out ───────────── */
 
+/*
+  The way out, in the studio bar's language (components/Header: the reticle,
+  its sweep and echo, items rising in turn, the energy rail along the bottom;
+  owner, 27 Nov 2026: "this part is too boring"). The reticle rests on All
+  projects, the way out of the project, and glides to whatever you point at
+  or tab to, then back. Moved by measuring and an inline transform, as the
+  studio bar does (framer's layoutId does not move in this codebase).
+*/
+type WayItem = { key: string; label: string; icon: React.ElementType; move: string; go: () => void; title?: string; show?: string };
+
 function WayOut({ desks, onLeave, onUseClassic, showHideFigures, onTour }: {
   desks: StudioJumpItem[]; onLeave: (t?: string) => void; onUseClassic?: () => void; showHideFigures: boolean; onTour: () => void;
 }) {
-  const item = 'cvw-hot inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap';
-  return (
-    <nav aria-label="Studio" data-tour="way" className="h-12 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-1 min-w-0 overflow-x-auto">
-      <button type="button" data-ripple onClick={() => onLeave('projects')} className="cvw-hot inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold bg-[#3D52A0]/10 text-[#3D52A0] hover:bg-[#3D52A0]/15 whitespace-nowrap">
-        <span className="cvw-ic" data-m="back"><ArrowLeft className="w-4 h-4" aria-hidden /></span>All projects
+  const items: WayItem[] = [
+    { key: 'projects', label: 'All projects', icon: ArrowLeft, move: 'back', go: () => onLeave('projects') },
+    { key: 'home', label: 'Studio home', icon: Home, move: 'bounce', go: () => onLeave('home') },
+    { key: 'clients', label: 'Clients', icon: Users, move: 'talk', go: () => onLeave('clients'), show: 'hidden sm:inline-flex' },
+    ...desks.map((d): WayItem => ({ key: d.route, label: d.label, icon: d.icon, move: 'go', go: () => onLeave(d.route), title: d.sub, show: 'hidden md:inline-flex' })),
+  ];
+  const tour: WayItem = { key: 'tour', label: 'Show me around', icon: Compass, move: 'spin', go: onTour, title: 'A short tour of this view', show: 'hidden sm:inline-flex' };
+
+  const track = useRef<HTMLDivElement | null>(null);
+  const [target, setTarget] = useState('projects');
+  const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
+  const [echo, setEcho] = useState<{ left: number; width: number; key: number } | null>(null);
+  const [sweep, setSweep] = useState(0);
+  const last = useRef<{ left: number; width: number } | null>(null);
+
+  /* Measure the item the reticle should sit on; leave an echo where it was. */
+  useEffect(() => {
+    const place = () => {
+      const el = track.current?.querySelector<HTMLElement>(`[data-way="${target}"]`);
+      if (!el || !el.offsetWidth) { setPill(null); return; }
+      const next = { left: el.offsetLeft, width: el.offsetWidth };
+      const prev = last.current;
+      if (prev && (prev.left !== next.left || prev.width !== next.width)) setEcho({ ...prev, key: Date.now() });
+      last.current = next;
+      setPill(next);
+    };
+    place();
+    setSweep((k) => k + 1);
+    if (typeof ResizeObserver !== 'function' || !track.current) return;
+    const ro = new ResizeObserver(() => { last.current = null; place(); });
+    ro.observe(track.current);
+    return () => ro.disconnect();
+  }, [target, desks.length]);
+
+  const btn = (it: WayItem, i: number) => {
+    const Icon = it.icon;
+    const on = target === it.key;
+    return (
+      <button key={it.key} type="button" data-way={it.key} data-ripple onClick={it.go} title={it.title}
+        onMouseEnter={() => setTarget(it.key)} onFocus={() => setTarget(it.key)}
+        style={{ animationDelay: `${Math.min(i, 9) * 45}ms` }}
+        className={cx('cvw-hot hud-rise relative z-10 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[#3D52A0]/40',
+          on ? 'text-white font-bold' : it.key === 'projects' ? 'text-[#3D52A0] font-bold' : 'text-slate-600 font-semibold', it.show)}>
+        <span className="cvw-ic" data-m={it.move}>
+          <Icon className={cx('w-4 h-4 transition-colors', on ? 'text-white' : it.key === 'projects' ? 'text-[#3D52A0]' : 'text-slate-400')} aria-hidden />
+        </span>
+        {it.label}
       </button>
-      <span className="w-px h-6 bg-slate-200 mx-1 shrink-0" aria-hidden />
-      <button type="button" data-ripple onClick={() => onLeave('home')} className={item}><span className="cvw-ic" data-m="bounce"><Home className="w-4 h-4 text-slate-400" aria-hidden /></span>Studio home</button>
-      <button type="button" data-ripple onClick={() => onLeave('clients')} className={cx(item, 'hidden sm:inline-flex')}><span className="cvw-ic" data-m="talk"><Users className="w-4 h-4 text-slate-400" aria-hidden /></span>Clients</button>
-      {desks.map((d) => {
-        const Icon = d.icon;
-        return <button key={d.route} type="button" data-ripple onClick={() => onLeave(d.route)} className={cx(item, 'hidden md:inline-flex')} title={d.sub}><span className="cvw-ic" data-m="go"><Icon className="w-4 h-4 text-slate-400" aria-hidden /></span>{d.label}</button>;
-      })}
-      <span className="flex-1" />
+    );
+  };
+
+  return (
+    <div className="relative h-12 shrink-0 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center gap-2 min-w-0">
+      <nav ref={track} aria-label="Studio" data-tour="way" onMouseLeave={() => setTarget('projects')}
+        className="relative flex-1 flex items-center gap-0.5 min-w-0 overflow-x-auto py-1">
+        {echo && (
+          <span key={echo.key} aria-hidden className="hud-echo absolute top-1 bottom-1 rounded-lg pointer-events-none"
+            style={{ transform: `translateX(${echo.left}px)`, width: `${echo.width}px`, backgroundColor: 'rgba(61, 82, 160, 0.35)' }} />
+        )}
+        {pill && (
+          <span aria-hidden className="nav-pill hud-reticle absolute left-0 top-1 bottom-1 rounded-lg pointer-events-none overflow-hidden"
+            style={{ transform: `translateX(${pill.left}px)`, width: `${pill.width}px`, transition: 'transform .42s cubic-bezier(.34,1.16,.44,1), width .42s cubic-bezier(.34,1.16,.44,1)' }}>
+            <span key={sweep} className="hud-sweep absolute inset-y-0 w-1/3" />
+          </span>
+        )}
+        {btn(items[0], 0)}
+        <span className="w-px h-5 bg-slate-200 mx-1.5 shrink-0" aria-hidden />
+        {items.slice(1).map((it, i) => btn(it, i + 1))}
+        <span className="flex-1 min-w-[8px]" aria-hidden />
+        {btn(tour, items.length)}
+      </nav>
       {showHideFigures && <HideFiguresButton />}
-      <button type="button" data-ripple onClick={onTour} className={cx(item, 'hidden sm:inline-flex')} title="A short tour of this view"><span className="cvw-ic" data-m="spin"><Compass className="w-4 h-4 text-slate-400" aria-hidden /></span>Show me around</button>
       {onUseClassic && (
-        <Button size="sm" variant="secondary" className="cvw-hot" data-ripple onClick={onUseClassic} title="Your own choice: the studio's setting stays as it is">Use Classic view</Button>
+        <Button size="sm" variant="secondary" className="cvw-hot shrink-0" data-ripple onClick={onUseClassic} title="Your own choice: the studio's setting stays as it is">Use Classic view</Button>
       )}
-    </nav>
+      {/* The energy rail along the bottom edge, as under the studio bar. */}
+      <span aria-hidden className="hud-rail absolute left-0 right-0 bottom-0 h-[2px] pointer-events-none" />
+    </div>
   );
 }
 
