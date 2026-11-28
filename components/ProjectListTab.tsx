@@ -41,7 +41,7 @@ import { FOLDER_STAGES, STAGE, stageOf, stageOfProject, kindOf, folderFiles, fol
 import { boqTagOf, type BoqTag } from "../lib/playground/versions";
 import { projectIntel, matchesKind, matchesStage, matchesBoq, matchesEngagement, matchesAlert, matchesSearch, needsCounts, routeTab } from "../lib/projectsJourney";
 import { usePageHeader } from "../contexts/PageHeaderContext";
-import { LayoutGrid, Rows3, Search as SearchIcon, X as XIcon, Check as CheckIcon } from "lucide-react";
+import { LayoutGrid, Rows3, Search as SearchIcon, X as XIcon, Check as CheckIcon, Gem } from "lucide-react";
 
 interface ProjectListTabProps {
   projects: FullProjectData[];
@@ -49,6 +49,8 @@ interface ProjectListTabProps {
   /** Opens the project, at a screen of it when a route is given (a folder's file or next step). */
   onOpenProject: (project: FullProjectData, route?: string) => void;
   onCreateNew: () => void;
+  /** Sample options for a first meeting (components/sampleOptions), for the roles that open it. */
+  onOpenSampleOptions?: () => void;
   onDeleteProject: (id: string) => void;
   onDuplicateProject: (project: FullProjectData) => void;
   onQuickUpdate?: (projectId: string, field: string, value: any) => void;
@@ -250,6 +252,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
   activeProjectId,
   onOpenProject,
   onCreateNew,
+  onOpenSampleOptions,
   onDeleteProject,
   onDuplicateProject,
   onQuickUpdate,
@@ -561,6 +564,11 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
             <Users className="w-4 h-4" /> Assign designer
           </button>
         )}
+        {onOpenSampleOptions && (
+          <button type="button" onClick={onOpenSampleOptions} className="h-10 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-bold hover:bg-slate-50 flex items-center gap-2">
+            <Gem className="w-4 h-4" /> Sample options
+          </button>
+        )}
         {!isLimitedRole(currentRole) && (
           <button type="button" onClick={onCreateNew} className="h-10 px-4 rounded-xl bg-[#3D52A0] text-white text-sm font-bold hover:bg-[#334486] flex items-center gap-2 shadow-sm">
             <PlusIcon className="w-4 h-4" /> New project
@@ -568,7 +576,7 @@ const ProjectListTab: React.FC<ProjectListTabProps> = ({
         )}
       </div>
     ),
-  }, [searchQuery, currentRole, onCreateNew]);
+  }, [searchQuery, currentRole, onCreateNew, onOpenSampleOptions]);
 
   /* "/" jumps to search, Escape clears it -- the two keys every list in this
      app should answer to. Ignored while you are already typing somewhere. */

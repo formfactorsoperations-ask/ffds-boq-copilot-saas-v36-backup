@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FolderOpen, Plus, Search, SlidersHorizontal, Trash2, Users } from 'lucide-react';
+import { FolderOpen, Gem, Plus, Search, SlidersHorizontal, Trash2, Users } from 'lucide-react';
 import type { FullProjectData, ProjectStatus } from '../../../types';
 import { useOrg } from '../../../contexts/OrgContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
@@ -58,6 +58,8 @@ interface Props {
   activeProjectId: string | null;
   onOpenProject: (project: FullProjectData, route?: string) => void;
   onCreateNew: () => void;
+  /** Sample options for a first meeting (components/sampleOptions), for the roles that open it. */
+  onOpenSampleOptions?: () => void;
   onDeleteProject: (id: string) => void;
   onDuplicateProject: (project: FullProjectData) => void;
   onQuickUpdate?: (projectId: string, field: string, value: any) => void;
@@ -76,7 +78,7 @@ const readPrefs = (): { view?: View; group?: GroupBy } => {
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
 
 export default function ProjectsJourney({
-  projects, onOpenProject, onCreateNew, onDeleteProject, onDuplicateProject, onQuickUpdate, onStatusChange, loading = false,
+  projects, onOpenProject, onCreateNew, onOpenSampleOptions, onDeleteProject, onDuplicateProject, onQuickUpdate, onStatusChange, loading = false,
 }: Props) {
   const { orgData, currentRole } = useOrg();
 
@@ -199,10 +201,11 @@ export default function ProjectsJourney({
           <span className="text-[11px] font-bold text-slate-500 border border-slate-200 rounded-md px-1.5 bg-slate-50 whitespace-nowrap">Ctrl K</span>
         </button>
         {seesStudioFinance(currentRole) && <Button icon={Users} onClick={() => setAssignOpen(true)}>Assign designer</Button>}
+        {onOpenSampleOptions && <Button icon={Gem} onClick={onOpenSampleOptions}>Sample options</Button>}
         {!isLimitedRole(currentRole) && <Button variant="primary" icon={Plus} onClick={onCreateNew}>New project</Button>}
       </div>
     ),
-  }, [currentRole, onCreateNew]);
+  }, [currentRole, onCreateNew, onOpenSampleOptions]);
 
   const peekRow = peek ? byId.get(peek) : undefined;
   const menuRow = menu ? byId.get(menu.id) : undefined;

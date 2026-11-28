@@ -105,7 +105,7 @@ export const DESIGNER_EDITABLE_TABS = new Set(['drawing-tracker']);
 export const STUDIO_TABS = new Set([
   'home', 'reports', 'projects', 'clients', 'bank', 'templates', 'ai-settings', 'setup-wizard', 'design-review', 'ops-desk', 'people',
   'studio-settings', 'terms-and-payment', 'communication-templates', 'saas-dashboard',
-  'admin-templates-bank', 'data-privacy', 'support', 'terms-of-use',
+  'admin-templates-bank', 'data-privacy', 'support', 'terms-of-use', 'sample-options',
 ]);
 
 /*
@@ -142,6 +142,8 @@ export const STUDIO_TAB_ROLES: Record<string, string[]> = {
   reports: LEADS,
   'studio-settings': LEADS,
   'admin-templates-bank': LEADS,
+  /* Sample options (components/sampleOptions): client prices for a first meeting, never a cost or a margin. */
+  'sample-options': [...LEADS, 'Design Head'],
 };
 
 /** Whether any of these roles opens this studio screen. Screens not listed are not role-gated here. */
