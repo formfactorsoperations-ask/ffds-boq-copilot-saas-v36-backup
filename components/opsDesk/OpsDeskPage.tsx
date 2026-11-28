@@ -349,7 +349,7 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
 
   const onItem = (q: QueueItem) => {
     if (q.kind === 'payment' || q.kind === 'decision') return setLogFor({ projectId: q.projectId, subjectKey: q.ref });
-    if (q.kind === 'mom_review') return setReviewing(mm.find((m) => m.id === q.ref) || null);
+    if (q.kind === 'mom_review' || q.kind === 'mom_send') return setReviewing(mm.find((m) => m.id === q.ref) || null);
     if (q.kind === 'escalation_open') return setDeciding(esc.find((e) => e.id === q.ref) || null);
     if (q.kind === 'escalation_decided') return go('escalations');
     if (q.kind === 'lead' || q.kind === 'lead_open') return openLead(q.ref);

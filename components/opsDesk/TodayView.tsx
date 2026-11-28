@@ -29,6 +29,7 @@ export const KIND: Record<QueueKind, { icon: React.ComponentType<any>; label: st
   payment: { icon: IndianRupee, label: 'Payment' },
   decision: { icon: Clock, label: 'Waiting on client' },
   mom_review: { icon: FileText, label: 'Minutes' },
+  mom_send: { icon: Send, label: 'Minutes to send' },
   escalation_open: { icon: Flag, label: 'Escalation' },
   escalation_decided: { icon: Flag, label: 'Decision back' },
   visit: { icon: CalendarCheck, label: 'Meeting or visit' },
@@ -43,7 +44,7 @@ const GROUP_TONE = { overdue: 'bad', today: 'warn', week: 'ok', later: 'ok' } as
 const GROUP_LABEL = { overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later' } as const;
 
 export const ACTION: Record<QueueKind, string> = {
-  next: 'Done', payment: 'Remind', decision: 'Remind', mom_review: 'Review', escalation_open: 'Decide', escalation_decided: 'Open',
+  next: 'Done', payment: 'Remind', decision: 'Remind', mom_review: 'Review', mom_send: 'Send', escalation_open: 'Decide', escalation_decided: 'Open',
   visit: 'Confirm', documents: 'Chase', checklist: 'Open', ask: 'Ask', lead: 'Call', lead_open: 'Open', digest: 'Open',
 };
 

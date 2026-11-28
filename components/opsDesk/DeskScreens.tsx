@@ -16,6 +16,7 @@ import { clock12 } from '../../lib/peopleDesk';
 import { payAgeing, payState, byLateness, runwayOf, APPROVAL_LABEL, HEALTH_LABEL } from '../../lib/opsDesk2';
 import type { AskKind, VisitRequest } from '../../lib/clientCare';
 import type { OpsMom } from '../../services/opsDeskService';
+import { statusChip, isNewMinutes, isLogOnly, type ChipTone } from '../../lib/minutes';
 import { useDesk, fmtDay, fmtWhen, dialable, waLink } from './DeskBits';
 import { reminderText } from './TodayView';
 import { asMeeting, PresentedOutside } from './DrawingApprovals';
@@ -373,13 +374,25 @@ export function MinutesScreen({ onReview, onWrite }: { onReview: (m: OpsMom) => 
   const ms = [...d.moms].sort((a, b) => Number(b.status === 'pending_review') - Number(a.status === 'pending_review') || (b.meetingDate || 0) - (a.meetingDate || 0));
   const toApprove = ms.filter((m) => m.status === 'pending_review');
   const monthStart = dayKey(d.now).slice(0, 7);
-  const ST: Record<string, [string, string]> = { pending_review: ['brand', 'Awaiting approval'], draft: ['warn', 'Draft'] };
+  const ST: Record<string, [string, string]> = {
+    pending_review: ['brand', 'Awaiting approval'], draft: ['warn', 'Draft'], finalised: ['good', 'Approved'],
+    shared: ['brand', 'Waiting for client'], acknowledged: ['good', 'Confirmed'], correction_requested: ['bad', 'Correction asked'],
+  };
+  const TONE: Record<ChipTone, string> = { brand: 'brand', amber: 'warn', emerald: 'good', rose: 'bad', slate: '' };
+  /*
+    Approved new minutes are Client Relations' to send, whoever approved them
+    (the approver can leave the sending to them), and theirs to send again or
+    answer a correction on. Older minutes stay with a lead, as the rules keep them.
+  */
+  const toSend = (m: OpsMom) => m.status === 'finalised' && isNewMinutes(m.raw) && !m.raw?.revisionStage && !isLogOnly(m.raw?.meetingType);
+  const issuedNew = (m: OpsMom) => isNewMinutes(m.raw) && ['finalised', 'shared', 'acknowledged', 'correction_requested'].includes(m.status);
   return (
     <>
       <Band eyebrow="Minutes" title={d.isLead ? 'Minutes to approve' : 'Write the minutes, a lead approves them'}
-        sub={d.isLead ? 'Written by Client Relations. Read, edit if needed, then approve: that finalises them and opens the email to the client.' : 'Write the minutes of a client meeting and send them for approval. They reach the client only once a lead approves them.'}>
+        sub={d.isLead ? 'Written by Client Relations. Read, edit if needed, then approve: send them to the client yourself, or leave the sending to Client Relations.' : 'Write the minutes of a client meeting and send them for approval. Once a lead approves them, you send them to the client.'}>
         <Tiles tiles={[
           { count: toApprove.length, title: 'Awaiting approval', sub: d.isLead ? 'Waiting on you' : 'With a lead', alarm: d.isLead && toApprove.length > 0 },
+          ...(d.isLead ? [] : [{ count: ms.filter(toSend).length, title: 'To send', sub: 'Approved, for the client', alarm: ms.some(toSend) }]),
           { count: ms.filter((m) => m.status === 'draft').length, title: 'Drafts', sub: 'Not sent yet' },
           { count: ms.filter((m) => m.status !== 'draft' && m.status !== 'pending_review' && m.meetingDate && dayKey(m.meetingDate).slice(0, 7) === monthStart).length, title: 'This month', sub: 'Approved' },
         ]} />
@@ -398,15 +411,17 @@ export function MinutesScreen({ onReview, onWrite }: { onReview: (m: OpsMom) => 
       )}
       <div className="od-list">
         {!ms.length ? <div className="od-lockbox"><FileText /><b>{d.isLead ? 'No minutes on the desk yet' : 'No minutes on your projects yet'}</b></div> : ms.map((m, i) => {
-          const st = ST[m.status] || ['good', m.status.replace(/_/g, ' ')];
-          const can = d.isLead || m.status === 'draft' || m.status === 'pending_review';
+          const chip = isNewMinutes(m.raw) ? statusChip(m.raw) : null;
+          const st: [string, string] = chip ? [TONE[chip.tone], chip.label] : ST[m.status] || ['good', m.status.replace(/_/g, ' ')];
+          const can = d.isLead || m.status === 'draft' || m.status === 'pending_review' || issuedNew(m);
+          const send = !d.isLead && toSend(m);
           return (
             <section key={`${m.projectId}:${m.id}`} className="od-card od-in" style={{ ['--i' as any]: Math.min(i, 12) }}>
               <div className="od-mhead">
                 <span className="od-tile"><Pen /></span>
                 <div className="od-who"><b>{m.meetingTitle || m.momRef || 'Meeting'}</b><small>{m.projectName}{m.momRef ? ` · ${m.momRef}` : ''}{m.meetingDate ? ` · ${fmtDay(dayKey(m.meetingDate))}` : ''}{m.raw?.preparedBy?.name ? ` · by ${m.raw.preparedBy.name}` : ''}</small></div>
                 <span className={`od-chip ${st[0]}`}>{st[1]}</span>
-                {can && <button type="button" className={`od-btn sm ${d.isLead && m.status === 'pending_review' ? 'pri' : ''}`} onClick={() => onReview(m)}>{d.isLead ? (m.status === 'pending_review' ? 'Review & approve' : 'Open') : m.status === 'draft' ? 'Edit & send' : 'Open'}</button>}
+                {can && <button type="button" className={`od-btn sm ${(d.isLead && m.status === 'pending_review') || send ? 'pri' : ''}`} onClick={() => onReview(m)}>{d.isLead ? (m.status === 'pending_review' ? 'Review & approve' : 'Open') : m.status === 'draft' ? 'Edit & send' : send ? 'Send to client' : 'Open'}</button>}
               </div>
             </section>
           );
