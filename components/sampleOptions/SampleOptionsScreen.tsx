@@ -1,27 +1,30 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Home, Sprout, Gem, Crown, Presentation, X, ChevronDown, Check, Minus, LayoutGrid, Plus } from 'lucide-react';
+import { Home, Sprout, Gem, Crown, Presentation, X, ChevronDown, Check, Minus, LayoutGrid, Plus, IndianRupee } from 'lucide-react';
 import type { Item } from '../../types';
 import type { TemplateData } from '../../lib/standardPackages';
 import {
-  sampleOptions, sampleSizesOf, defaultSampleSize, typicalCarpetOf, usualAreasOf, inLakhs,
-  type SampleBook, type SampleOption,
+  sampleOptions, sampleRatesOf, SAMPLE_SIZES, DEFAULT_SAMPLE_SIZE, DEFAULT_SAMPLE_RATES, RATE_LIMITS, OPTION_NAMES,
+  typicalCarpetOf, usualAreasOf, inLakhs, type SampleBook, type SampleOption, type SampleRates,
 } from '../../lib/sampleOptions';
-import { Panel, Button, Segmented, EmptyState, IconChip, LABEL, INPUT } from '../ui/kit';
+import { GRADES } from '../../lib/materialSpecs';
+import { holdsFinanceRole } from '../../lib/roleAccess';
+import { Panel, Button, Segmented, IconChip, LABEL, INPUT } from '../ui/kit';
 import { CountUp } from '../ui/HudBits';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
 import { useOrg } from '../../contexts/OrgContext';
+import '../projectHeader/projectHeader.css';
 
 /*
   Sample options (asked for 28 Nov 2026): the three options for a typical home,
   to show a client at the first meeting, before there is a project or a BOQ.
 
-  Priced by the generator a new project uses (lib/sampleOptions), from the
-  studio's Standard templates, Item bank and Option setup, so the figures move
-  when the studio's rates do. Nothing is saved. A client may be watching, so
-  there is never a cost or a margin here: ranges, room amounts, and what each
-  option includes. "Present to client" shows the same thing full screen,
-  without the app around it.
+  Each option is a range: the carpet area times the studio's rate per sq ft for
+  that option, low and high (lib/sampleOptions). The owner sets the rates here
+  ("Set the rates"); they are saved on the studio record. What each option
+  includes comes from the studio's Standard templates. Nothing else is saved.
+  A client may be watching, so there is never a cost or a margin here.
+  "Present to client" shows the same thing full screen, without the app.
 */
 
 const MEDAL = [Sprout, Gem, Crown];
@@ -32,31 +35,22 @@ interface Props {
 }
 
 /** The size and area the sample is for, shared by the page and the presenting view. */
-function useSample(templates: TemplateData) {
-  const sizes = useMemo(() => sampleSizesOf(templates), [templates]);
-  const [size, setSize] = useState<string | null>(() => defaultSampleSize(sizes));
-  const [carpet, setCarpet] = useState(() => typicalCarpetOf(size || '2-BHK'));
-  useEffect(() => {
-    if (!size || !sizes.includes(size)) {
-      const next = defaultSampleSize(sizes);
-      setSize(next);
-      if (next) setCarpet(typicalCarpetOf(next));
-    }
-  }, [sizes, size]);
+function useSample() {
+  const [size, setSize] = useState(DEFAULT_SAMPLE_SIZE);
+  const [carpet, setCarpet] = useState(() => typicalCarpetOf(DEFAULT_SAMPLE_SIZE));
   const pickSize = (s: string) => { setSize(s); setCarpet(typicalCarpetOf(s)); };
-  return { sizes, size, carpet, setCarpet, pickSize };
+  return { size, carpet, setCarpet, pickSize };
 }
 
 /** The size switch and the carpet area, with three usual areas to pick from. */
-function HomeControls({ sizes, size, carpet, setCarpet, pickSize, compact }: ReturnType<typeof useSample> & { compact?: boolean }) {
+function HomeControls({ size, carpet, setCarpet, pickSize, compact }: ReturnType<typeof useSample> & { compact?: boolean }) {
   const [draft, setDraft] = useState<string | null>(null);
-  if (!size) return null;
   return (
     <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
       <div>
         <span className={`${LABEL} block mb-1.5`}>Home</span>
         <Segmented size={compact ? 'sm' : 'md'} label="Size of the home" value={size} onChange={pickSize}
-          options={sizes.map(s => ({ id: s, label: s }))} />
+          options={SAMPLE_SIZES.map(s => ({ id: s, label: s }))} />
       </div>
       <label className="block">
         <span className={`${LABEL} block mb-1.5`}>Carpet area, sq ft</span>
@@ -78,9 +72,15 @@ function HomeControls({ sizes, size, carpet, setCarpet, pickSize, compact }: Ret
   );
 }
 
-/** One option: its range, what it costs a square foot, its finish and what it adds. */
+const rupees = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+const lakhsRounded = (v: number) => inLakhs(Math.round(v / 10000) * 10000);
+
+/** One option: its range, its rate per sq ft, its finish and what it adds. */
 const OptionCard: React.FC<{ option: SampleOption; index: number; previous?: SampleOption }> = ({ option, index, previous }) => {
   const featured = index === 1;
+  const adds = previous
+    ? [...(option.finish && option.finish !== previous.finish ? [`A better finish: ${option.finish}`] : []), ...option.adds]
+    : [];
   return (
     <article aria-label={option.name}
       className={`relative bg-white rounded-2xl border shadow-sm p-6 hud-panel-in ${featured ? 'border-[#3D52A0] ring-4 ring-[#3D52A0]/10' : 'border-slate-200'}`}
@@ -96,41 +96,42 @@ const OptionCard: React.FC<{ option: SampleOption; index: number; previous?: Sam
       <div className="mt-5">
         <span className={`${LABEL} block`}>Typical range</span>
         <span className="block text-2xl font-black text-slate-800 tabular-nums leading-tight mt-1">
-          <CountUp value={option.low} format={v => inLakhs(Math.round(v / 10000) * 10000)} />
+          <CountUp value={option.low} format={lakhsRounded} />
           <span className="text-slate-400 font-bold"> – </span>
-          <CountUp value={option.high} format={v => inLakhs(Math.round(v / 10000) * 10000)} />
+          <CountUp value={option.high} format={lakhsRounded} />
         </span>
-        <span className="block text-[11px] text-slate-500 tabular-nums mt-1">About ₹{option.perSqft.toLocaleString('en-IN')} per sq ft</span>
+        <span className="block text-[11px] text-slate-500 tabular-nums mt-1">{rupees(option.rate[0])}–{option.rate[1].toLocaleString('en-IN')} per sq ft</span>
       </div>
-      <div className="mt-5 pt-4 border-t border-slate-100">
-        <span className={`${LABEL} block mb-2`}>{previous ? `Adds to ${previous.name}` : 'The essentials'}</span>
-        {previous ? (
-          <ul className="space-y-1.5">
-            {[...(option.finish && option.finish !== previous.finish ? [`A better finish: ${option.finish}`] : []), ...option.adds].map(a => (
-              <li key={a} className="flex items-start gap-2 text-xs text-slate-700">
-                <Plus className="w-3.5 h-3.5 mt-px text-[#3D52A0] shrink-0" aria-hidden />
-                <span>{a}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-slate-500">Everything listed room by room below, in the standard finish.</p>
-        )}
-      </div>
+      {(previous ? adds.length > 0 : !!option.finish) && (
+        <div className="mt-5 pt-4 border-t border-slate-100">
+          <span className={`${LABEL} block mb-2`}>{previous ? `Adds to ${previous.name}` : 'The essentials'}</span>
+          {previous ? (
+            <ul className="space-y-1.5">
+              {adds.map(a => (
+                <li key={a} className="flex items-start gap-2 text-xs text-slate-700">
+                  <Plus className="w-3.5 h-3.5 mt-px text-[#3D52A0] shrink-0" aria-hidden />
+                  <span>{a}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-slate-500">Every room's furniture and storage and the work across the home, in the standard finish.</p>
+          )}
+        </div>
+      )}
     </article>
   );
 };
 
-/** Room by room: each option's amount, and a room opens to what each option includes there. */
-function RoomTable({ book }: { book: SampleBook }) {
+/** What each option includes, room by room; a room opens to its items. */
+function IncludesTable({ book }: { book: SampleBook }) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setOpen(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const grades = book.options.map(o => o.grade);
-  const totals = book.options.map(o => o.mid);
   return (
-    <Panel flush icon={LayoutGrid} title="Room by room"
-      blurb={`Each option for a ${book.size} of ${book.carpet.toLocaleString('en-IN')} sq ft. Open a room to see what each option includes.`}
-      foot="An indication from the studio's standard rates, before design and site measurement. Amounts rounded; GST extra.">
+    <Panel flush icon={LayoutGrid} title="What each option includes"
+      blurb="Room by room, from your Standard templates. Open a room to see its items."
+      foot="An indication before design and site measurement. Your quote follows once the home is measured and designed. GST extra.">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
           <thead>
@@ -149,15 +150,18 @@ function RoomTable({ book }: { book: SampleBook }) {
                       <ChevronDown className={`w-4 h-4 mt-0.5 text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? '' : '-rotate-90'}`} aria-hidden />
                       <span className="min-w-0">
                         <span className="block text-sm font-semibold text-slate-800">{r.label}</span>
-                        <span className="block text-[11px] text-slate-500">{r.area ? `${r.area.toLocaleString('en-IN')} sq ft` : r.detail}</span>
+                        <span className="block text-[11px] text-slate-500">{r.area ? `About ${r.area.toLocaleString('en-IN')} sq ft` : r.detail}</span>
                       </span>
                     </button>
                   </th>
-                  {grades.map(g => (
-                    <td key={g} className="px-4 py-3 text-right font-bold text-slate-800 tabular-nums whitespace-nowrap">
-                      {r.amounts[g] ? inLakhs(r.amounts[g]!) : <span className="text-slate-400 font-semibold">Not included</span>}
-                    </td>
-                  ))}
+                  {grades.map(g => {
+                    const n = r.lines.filter(l => l.in.includes(g)).length;
+                    return (
+                      <td key={g} className="px-4 py-3 text-right text-xs font-semibold text-slate-700 tabular-nums whitespace-nowrap">
+                        {n ? `${n} ${n === 1 ? 'item' : 'items'}` : <span className="text-slate-400">Not included</span>}
+                      </td>
+                    );
+                  })}
                 </tr>
                 {isOpen && r.lines.map(l => (
                   <tr key={l.name} className="bg-slate-50/60">
@@ -177,7 +181,9 @@ function RoomTable({ book }: { book: SampleBook }) {
           <tfoot>
             <tr className="bg-slate-50">
               <th scope="row" className="text-left px-6 py-3 text-sm font-bold text-slate-800">The whole home</th>
-              {totals.map((t, i) => <td key={i} className="px-4 py-3 text-right font-black text-slate-800 tabular-nums whitespace-nowrap">{inLakhs(t)}</td>)}
+              {book.options.map(o => (
+                <td key={o.grade} className="px-4 py-3 text-right font-black text-slate-800 tabular-nums whitespace-nowrap">{inLakhs(o.low)} – {inLakhs(o.high)}</td>
+              ))}
             </tr>
           </tfoot>
         </table>
@@ -186,20 +192,19 @@ function RoomTable({ book }: { book: SampleBook }) {
   );
 }
 
-/** The options and the rooms: what the client sees, on the page and full screen. */
+/** The options and what they include: what the client sees, on the page and full screen. */
 function SampleBody({ book }: { book: SampleBook }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
         {book.options.map((o, i) => <OptionCard key={o.grade} option={o} index={i} previous={book.options[i - 1]} />)}
       </div>
-      <RoomTable book={book} />
+      {book.rooms.length > 0 && <IncludesTable book={book} />}
     </div>
   );
 }
 
 const titleOf = (book: SampleBook) => `Three ways to do a ${book.size} of about ${book.carpet.toLocaleString('en-IN')} sq ft`;
-const bandLine = (book: SampleBook) => `Ranges cover homes of ${book.band[0].toLocaleString('en-IN')}–${book.band[1].toLocaleString('en-IN')} sq ft carpet.`;
 
 /** Full screen, without the app around it, for the meeting room's screen. */
 function Presenting({ book, sample, studio, onClose }: { book: SampleBook; sample: ReturnType<typeof useSample>; studio?: string; onClose: () => void }) {
@@ -226,7 +231,7 @@ function Presenting({ book, sample, studio, onClose }: { book: SampleBook; sampl
           <div className="min-w-0">
             <span className={LABEL}>{studio ? `${studio} · Sample options` : 'Sample options'}</span>
             <h2 className="text-2xl font-bold text-slate-800 tracking-tight mt-1">{titleOf(book)}</h2>
-            <p className="text-xs text-slate-500 mt-1">{bandLine(book)} Your own quote follows once we have measured and designed your home.</p>
+            <p className="text-xs text-slate-500 mt-1">Typical ranges for a home this size. Your own quote follows once we have measured and designed your home.</p>
           </div>
           <Button icon={X} onClick={onClose}>Close</Button>
         </header>
@@ -240,46 +245,115 @@ function Presenting({ book, sample, studio, onClose }: { book: SampleBook; sampl
   );
 }
 
+/** The owner's rates per sq ft for each option, saved on the studio record. */
+function RatesModal({ rates, onSave, onClose }: { rates: SampleRates; onSave: (r: SampleRates) => Promise<void>; onClose: () => void }) {
+  const [draft, setDraft] = useState<Record<string, [string, string]>>(() =>
+    Object.fromEntries(GRADES.map(g => [g, [String(rates[g][0]), String(rates[g][1])]])));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [onClose]);
+
+  const valid = GRADES.every(g => draft[g].every(v => { const n = Number(v); return v.trim() !== '' && n >= RATE_LIMITS[0] && n <= RATE_LIMITS[1]; }));
+  const set = (g: string, i: 0 | 1, v: string) => setDraft(prev => { const pair = [...prev[g]] as [string, string]; pair[i] = v; return { ...prev, [g]: pair }; });
+  const save = async () => {
+    if (!valid) return;
+    setSaving(true); setError(null);
+    try {
+      await onSave(sampleRatesOf(Object.fromEntries(GRADES.map(g => [g, draft[g].map(Number)]))));
+      onClose();
+    } catch {
+      setError('The rates could not be saved. Check the connection and try again.');
+      setSaving(false);
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+      <div className="phd-scrim absolute inset-0 bg-[#12182F]/40 backdrop-blur-sm" onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-label="Set the rates" className="phd-pop relative w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[86vh]">
+        <div className="px-6 pt-6 pb-4 border-b border-slate-100">
+          <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#3D52A0]">Sample options</span>
+          <h2 className="text-lg font-bold text-slate-800 mt-1">Set the rates</h2>
+          <p className="text-xs text-slate-500 mt-1">What each option usually comes to, in ₹ per sq ft of carpet area. The ranges are the carpet area times these. Saved for the whole studio.</p>
+        </div>
+        <div className="px-6 py-5 space-y-4 overflow-y-auto">
+          {GRADES.map((g, i) => {
+            const Icon = MEDAL[i];
+            return (
+              <div key={g} className="flex flex-wrap items-end gap-3">
+                <div className="flex items-center gap-3 min-w-0 grow basis-40">
+                  <IconChip icon={Icon} />
+                  <span className="text-sm font-semibold text-slate-800">{OPTION_NAMES[g]}</span>
+                </div>
+                {(['From', 'To'] as const).map((label, k) => (
+                  <label key={label} className="block">
+                    <span className={`${LABEL} block mb-1.5`}>{label}, ₹ per sq ft</span>
+                    <input type="number" inputMode="numeric" min={RATE_LIMITS[0]} value={draft[g][k]}
+                      onChange={(e) => set(g, k as 0 | 1, e.target.value)}
+                      className={`${INPUT} !w-28 font-bold tabular-nums`} />
+                  </label>
+                ))}
+              </div>
+            );
+          })}
+          {error && <p role="alert" className="text-xs font-semibold text-rose-700">{error}</p>}
+        </div>
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+          <Button variant="quiet" size="sm" onClick={() => setDraft(Object.fromEntries(GRADES.map(g => [g, [String(DEFAULT_SAMPLE_RATES[g][0]), String(DEFAULT_SAMPLE_RATES[g][1])]])))}>
+            Use the starting rates
+          </Button>
+          <span className="flex gap-2">
+            <Button onClick={onClose}>Cancel</Button>
+            <Button variant="primary" onClick={save} disabled={!valid || saving}>{saving ? 'Saving…' : 'Save the rates'}</Button>
+          </span>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export default function SampleOptionsScreen({ bank, templates }: Props) {
-  const sample = useSample(templates);
+  const sample = useSample();
   const { size, carpet } = sample;
-  const { orgData } = useOrg();
+  const { orgData, updateOrgData, currentRole, currentRoles } = useOrg();
+  const rates = useMemo(() => sampleRatesOf(orgData?.sampleRates), [orgData?.sampleRates]);
+  const mayEdit = holdsFinanceRole(currentRoles?.length ? currentRoles : currentRole);
   const [presenting, setPresenting] = useState(false);
+  const [editing, setEditing] = useState(false);
   /* Stable, so the presenting view does not leave and re-enter full screen each time the sample changes. */
   const stopPresenting = useCallback(() => setPresenting(false), []);
+  const stopEditing = useCallback(() => setEditing(false), []);
 
-  const book = useMemo(() => {
-    if (!size || !bank.length) return null;
-    try { return sampleOptions({ size, carpet, bank, templates }); } catch (e) { console.error('Sample options could not be priced:', e); return null; }
-  }, [size, carpet, bank, templates]);
+  const book = useMemo(() => sampleOptions({ size, carpet, rates, bank, templates }), [size, carpet, rates, bank, templates]);
 
   usePageHeader({
-    actions: book ? <Button variant="primary" icon={Presentation} onClick={() => setPresenting(true)}>Present to client</Button> : undefined,
-  }, [!!book]);
-
-  if (!sample.sizes.length) {
-    return <EmptyState icon={Home} title="No home sizes to sample" text="Add a 1-BHK, 2-BHK or 3-BHK typology in Templates & Bank > Standard templates, and its options appear here." />;
-  }
+    actions: (
+      <div className="flex flex-wrap items-center gap-2">
+        {mayEdit && <Button icon={IndianRupee} onClick={() => setEditing(true)}>Set the rates</Button>}
+        <Button variant="primary" icon={Presentation} onClick={() => setPresenting(true)}>Present to client</Button>
+      </div>
+    ),
+  }, [mayEdit]);
 
   return (
     <div className="space-y-6">
       <Panel icon={Home} title="The home"
-        blurb="Pick the size the client is asking about. The options are priced from your Item bank, Standard templates and Option setup. Nothing is saved and no project is made.">
+        blurb="Pick the size and carpet area the client is asking about. The ranges are the area times your rates per sq ft; what each option includes comes from your Standard templates. Nothing is saved and no project is made.">
         <HomeControls {...sample} />
-        {book && <p className="text-[11px] text-slate-500 mt-3">{bandLine(book)} Room amounts are for {book.carpet.toLocaleString('en-IN')} sq ft.</p>}
       </Panel>
 
-      {book ? (
-        <div key={`${size}-${carpet}`} className="hud-swap">
-          <SampleBody book={book} />
-        </div>
-      ) : (
-        <EmptyState icon={Gem} title="No options could be priced"
-          text={bank.length ? `The ${size} template has no items the Item bank can price. Add items to its rooms in Standard templates.` : 'The Item bank is still loading, or has no items yet.'} />
-      )}
+      <div key={`${size}-${carpet}`} className="hud-swap">
+        <SampleBody book={book} />
+      </div>
 
-      {presenting && book && <Presenting book={book} sample={sample} studio={(orgData as any)?.name} onClose={stopPresenting} />}
+      {presenting && <Presenting book={book} sample={sample} studio={orgData?.orgName} onClose={stopPresenting} />}
+      {editing && <RatesModal rates={rates} onClose={stopEditing} onSave={async (r) => { await updateOrgData({ sampleRates: r }); }} />}
     </div>
   );
 }
-

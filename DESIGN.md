@@ -104,17 +104,21 @@ amber), the status chip, Open (or Carry on writing for a draft) and a dim delete
 
 A studio screen (`sample-options`, `components/sampleOptions/SampleOptionsScreen.tsx`, logic in
 `lib/sampleOptions.ts`) for a first meeting, before there is a project: the three options for a typical
-home, priced by the generator a new project uses. Opened from **Sample options** beside New project on
-Projects, by the leads and the Design Head. A client may be watching, so it never shows a cost or a margin.
+home as ranges. Opened from **Sample options** beside New project on Projects, by the leads and the Design
+Head. A client may be watching, so it never shows a cost or a margin.
 
-- "The home" `Panel`: a `Segmented` of the studio's BHK typologies (opens at 2-BHK), the carpet area and
-  three usual areas, as in Standard templates > Preview the options.
+- "The home" `Panel`: a `Segmented` of 1-BHK to 4-BHK (opens at 2-BHK), the carpet area and three usual
+  areas, as in Standard templates > Preview the options.
 - Three option cards in a row, the middle one in the brand ring as in Preview the options: the medal in
-  the brand chip, the name, its finish, **Typical range** (the option for a home 10% smaller and 10% larger,
-  to ₹10,000, counting up), about ₹ per sq ft, and what it adds to the option before it as rows with a
-  brand `Plus`.
-- "Room by room": a flush `Panel` with a table, each option's amount per room; a room opens to its items
-  with a brand check or a slate dash per option; the whole home in the foot row.
+  the brand chip, the name, its finish, **Typical range** (carpet area × the option's rate per sq ft, low and
+  high, to ₹10,000, counting up), the rate per sq ft, and what it adds to the option before it as rows with
+  a brand `Plus`.
+- The rates are the owner's (₹1,600–1,800, ₹2,200–2,400, ₹2,600–2,800 per sq ft until changed), saved on
+  the studio record as `sampleRates`. **Set the rates** (leads only) opens a modal in the `AssignProjectsModal`
+  pattern with a From and To field per option.
+- "What each option includes": a flush `Panel` with a table, from the studio's Standard template for the size:
+  each room with its item count per option; a room opens to its items with a brand check or a slate dash per
+  option; the ranges in the foot row. No amount per room. Left out when the studio has no template for the size.
 - **Present to client** shows the same, full screen (`z-[300]`, the page background, `hud-swap`), with the
   size and area still adjustable and Close (or Esc) to leave.
 
