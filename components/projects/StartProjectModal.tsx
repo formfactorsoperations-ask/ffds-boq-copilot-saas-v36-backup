@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Search, X, Plus, Check } from '@/lib/lucide-shim';
 import { useOrg } from '../../contexts/OrgContext';
 import { useProjectTeam } from '../../services/projectTeam';
-import { loadLeads, createLead, saveLead, withTouch } from '../../services/leadsService';
+import { loadLeads, createLead, saveLead, withTouch, releaseDeletedProjectLinks } from '../../services/leadsService';
 import {
   LEAD_SOURCES, LEAD_STAGES, leadName, leadToProject, leadOpenedAsProject, quickLeadDraft, startableLeads, draftProblems,
   type Lead, type LeadSource,
@@ -41,12 +41,14 @@ interface Props {
   /** A practice or demo project, without a lead. */
   onPractice: () => void;
   onClose: () => void;
+  /** The studio's projects already loaded: a lead linked to any other is checked, and let go if its project was deleted. */
+  knownProjectIds?: string[];
 }
 
 const field = 'w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-[#3D52A0]/30 focus:border-[#3D52A0]';
 const label = 'block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5';
 
-export default function StartProjectModal({ prefill, canStart, createProject, onOpened, onPractice, onClose }: Props) {
+export default function StartProjectModal({ prefill, canStart, createProject, onOpened, onPractice, onClose, knownProjectIds }: Props) {
   const { orgData, currentUserAuth } = useOrg();
   const tenantId = orgData?.tenantId || '';
   const me = {
@@ -70,6 +72,8 @@ export default function StartProjectModal({ prefill, canStart, createProject, on
     if (!canStart || !tenantId) return;
     let live = true;
     loadLeads(tenantId, me.email, true)
+      /* A lead whose project was deleted is free again (services/leadsService). */
+      .then((ls) => releaseDeletedProjectLinks(ls, new Set(knownProjectIds || []), me).catch(() => ls))
       .then((ls) => { if (live) setLeads(startableLeads(ls)); })
       .catch((e) => { if (live) { setLeads([]); setLoadError(e?.message || 'The leads could not be read.'); } });
     return () => { live = false; };

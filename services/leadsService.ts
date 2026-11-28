@@ -3,13 +3,13 @@
   who may do what). Client Relations read their own leads only, so their query
   names them; a lead (Owner, Admin, Ops Director) reads the studio's.
 */
-import { collection, deleteDoc, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { Type } from './aiSchema';
 import { db, functions } from './firebaseClient';
 import { getAi, aiIsReachable } from './aiClient';
 import { FLASH_MODEL } from '../constants/aiModels';
-import { blankPerson, readChat, type Lead, type LeadDraft, type LeadStage, type LeadTouch, type LeadNote, type LeadMeetingLog, type Match, type TouchKind } from '../lib/leads';
+import { blankPerson, readChat, unlinkDeletedProject, type Lead, type LeadDraft, type LeadStage, type LeadTouch, type LeadNote, type LeadMeetingLog, type Match, type TouchKind } from '../lib/leads';
 
 const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 const clip = (v: any, n: number) => String(v ?? '').trim().slice(0, n);
@@ -134,6 +134,59 @@ export function withTouch(l: Lead, t: { kind: TouchKind; text: string; reached?:
 
 export async function deleteLead(id: string): Promise<void> {
   await deleteDoc(doc(db!, 'leads', id));
+}
+
+/* ── A project that was deleted ─────────────────────────────────────────── */
+
+/**
+ * A project was deleted: the leads linked to it are let go, so they can start
+ * a new one. Without this the lead kept the id of a project that no longer
+ * exists, was left out of New Project's list and showed "Open the project" on
+ * the Ops Desk. Only the leads (Owner, Admin, Ops Director) may change a link
+ * (firestore.rules), so for anyone else this does nothing. Best effort.
+ */
+export async function unlinkLeadsFromProject(tenantId: string, projectId: string, me: { email: string; name: string }, projectName?: string): Promise<number> {
+  if (!db || !tenantId || !projectId) return 0;
+  try {
+    const snap = await getDocs(query(collection(db, 'leads'), where('tenantId', '==', tenantId), where('projectId', '==', projectId)));
+    const now = Date.now();
+    await Promise.all(snap.docs.map((d) => saveLead(unlinkDeletedProject(normalise(d.id, d.data()), me, now, projectName), me.email)));
+    return snap.size;
+  } catch (e: any) {
+    console.warn('Leads of a deleted project', e?.code || e);
+    return 0;
+  }
+}
+
+/**
+ * Is the project still there? The studio's own document reads as missing or,
+ * since the rules read its tenant (firestore.rules /projects), as refused once
+ * it is gone; so a refusal is settled by the studio's copy of it.
+ */
+async function projectIsGone(tenantId: string, projectId: string): Promise<boolean> {
+  try {
+    return !(await getDoc(doc(db!, 'projects', projectId))).exists();
+  } catch (e: any) {
+    if (e?.code !== 'permission-denied') return false;
+    try { return !(await getDoc(doc(db!, `organizations/${tenantId}/projects`, projectId))).exists(); } catch { return false; }
+  }
+}
+
+/**
+ * Leads whose project was deleted before deleting a project let them go: the
+ * link is cleared and saved. `known` is the projects this screen already has,
+ * which are not asked about. Returns the leads as they now stand. Only for
+ * the leads (Owner, Admin, Ops Director), who may change a link.
+ */
+export async function releaseDeletedProjectLinks(leads: Lead[], known: Set<string>, me: { email: string; name: string }): Promise<Lead[]> {
+  const stale = leads.filter((l) => l.projectId && !known.has(l.projectId)).slice(0, 40);
+  if (!db || !stale.length) return leads;
+  const gone = new Map<string, Lead>();
+  await Promise.all(stale.map(async (l) => {
+    if (!(await projectIsGone(l.tenantId, l.projectId!))) return;
+    try { gone.set(l.id, await saveLead(unlinkDeletedProject(l, me, Date.now()), me.email)); } catch { /* not theirs to change */ }
+  }));
+  return gone.size ? leads.map((l) => gone.get(l.id) || l) : leads;
 }
 
 /* ── A pasted WhatsApp chat ─────────────────────────────────────────────── */

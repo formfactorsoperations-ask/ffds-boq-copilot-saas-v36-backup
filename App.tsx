@@ -2169,6 +2169,7 @@ export default function App() {
   };
 
   const handleDeleteProject = async (id: string) => {
+    const deletedName = projectLibrary.find((p) => p.id === id)?.context?.name || "";
     // 1. Optimistic UI Update: Remove immediately from list
     setProjectLibrary((prev) => prev.filter((p) => p.id !== id));
 
@@ -2185,6 +2186,13 @@ export default function App() {
 
     // 3. Perform actual deletion in background
     await db.deleteProject(id);
+    // 4. Let its leads go, so they can start a new project (services/leadsService).
+    if (orgData?.tenantId) {
+      const email = String(currentUserAuth?.email || "").toLowerCase();
+      import("./services/leadsService")
+        .then((m) => m.unlinkLeadsFromProject(orgData.tenantId, id, { email, name: currentUserAuth?.displayName || email || "Studio" }, deletedName))
+        .catch(() => undefined);
+    }
     // No need to fetch freshProjects immediately as we've already updated the UI.
     // Consistency will be restored on next reload or sync.
   };
@@ -4797,6 +4805,7 @@ export default function App() {
           }}
           onPractice={() => { setStartingProject(false); startBlankProject({ practice: true }); }}
           onClose={() => setStartingProject(false)}
+          knownProjectIds={projectLibrary.map((p) => p.id)}
         />
         </Suspense>
       )}
