@@ -40,6 +40,7 @@ const META: Record<string, PageMeta> = {
   bank:                   { title: 'Item Bank',         subtitle: 'Catalogue items, rates and packages', scope: 'studio' },
   templates:              { title: 'Templates',         subtitle: 'Reusable scopes and document templates', scope: 'studio' },
   'admin-templates-bank': { title: 'Templates & Bank',  subtitle: 'Studio catalogue and template library', scope: 'studio' },
+  'sample-options':       { title: 'Sample options',    subtitle: 'Three options for a typical home, to show a client before there is a project', scope: 'studio' },
   'studio-settings':      { title: 'Studio Settings',   subtitle: 'Branding, team, and defaults', scope: 'studio' },
   'communication-templates': { title: 'Communication Templates', subtitle: 'Global email and WhatsApp notification templates', scope: 'studio' },
   'ai-settings':          { title: 'AI Settings',       subtitle: 'Model behaviour and pricing strategy', scope: 'studio' },

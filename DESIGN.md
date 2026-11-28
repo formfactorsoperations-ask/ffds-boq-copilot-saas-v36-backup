@@ -100,6 +100,34 @@ meeting-kind switch, search over titles, refs, decisions and actions, and Newest
 by month under field-label column heads: the day, title and ref, kind chip, decisions and actions (open ones in
 amber), the status chip, Open (or Carry on writing for a draft) and a dim delete button. Rows arrive with `hud-row-in`.
 
+### Sample options (asked for 28 Nov 2026)
+
+A studio screen (`sample-options`, `components/sampleOptions/SampleOptionsScreen.tsx`, logic in
+`lib/sampleOptions.ts`) for a first meeting, before there is a project: the three options for a typical
+home as ranges. Opened from **Sample options** beside New project on Projects, by the leads and the Design
+Head. A client may be watching, so it never shows a cost or a margin.
+
+- "The home" `Panel`: a `Segmented` of 1-BHK to 4-BHK (opens at 2-BHK), the carpet area and three usual
+  areas, as in Standard templates > Preview the options.
+- Three option cards in a row, the middle one in the brand ring as in Preview the options: the medal in
+  the brand chip, the name, its finish, **Typical range** (carpet area × the option's rate per sq ft, low and
+  high, to ₹10,000, counting up), the rate per sq ft, and what it adds to the option before it as rows with
+  a brand `Plus`.
+- The rates are the owner's (₹1,600–1,800, ₹2,200–2,400, ₹2,600–2,800 per sq ft until changed), saved on
+  the studio record as `sampleRates`. **Set the rates** (leads only) opens a modal in the `AssignProjectsModal`
+  pattern with a From and To field per option.
+- "Material specifications": a flush `Panel` with a table read from the studio's Material specs bank
+  (`useMaterialSpecs`, the studio standard until the Owner saves one): one row per family (Plywood & boards,
+  Outer finishes, Hardware…), each option's material in a cell (the words in `text-xs font-semibold`, the brand
+  and "Choice of 300+ shades" under it in `text-[11px] text-slate-500`). A family every option shares is one
+  cell across the three with "The same in every option". An option card's finish line is its outer finish
+  from this table, so the two always agree.
+- "What each option includes": a flush `Panel` with a table, from the studio's Standard template for the size:
+  each room with its item count per option; a room opens to its items with a brand check or a slate dash per
+  option; the ranges in the foot row. No amount per room. Left out when the studio has no template for the size.
+- **Present to client** shows the same, full screen (`z-[300]`, the page background, `hud-swap`), with the
+  size and area still adjustable and Close (or Esc) to leave.
+
 ## Modals
 
 Copy `AssignProjectsModal`:

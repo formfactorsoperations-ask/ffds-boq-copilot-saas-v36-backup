@@ -21,6 +21,8 @@ export interface ProjectsScreenProps {
   activeProjectId: string | null;
   onOpenProject: (project: FullProjectData, route?: string) => void;
   onCreateNew: () => void;
+  /** Opens Sample options; left out for the roles that do not open it. */
+  onOpenSampleOptions?: () => void;
   onDeleteProject: (id: string) => void;
   onDuplicateProject: (project: FullProjectData) => void;
   onQuickUpdate?: (projectId: string, field: string, value: any) => void;

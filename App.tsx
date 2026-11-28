@@ -80,6 +80,8 @@ const PaymentCalculatorTab = lazyWithRetry(() => import("./components/PaymentCal
 const RevisionStudio = lazyWithRetry(() => import("./components/RevisionStudio"));
 const ClientPortal = lazyWithRetry(() => import("./components/ClientPortal"));
 const ClientsDirectory = lazyWithRetry(() => import("./components/ClientsDirectory"));
+/* Sample options: the three options for a typical home, for a first meeting (lib/sampleOptions). */
+const SampleOptionsScreen = lazyWithRetry(() => import("./components/sampleOptions/SampleOptionsScreen"));
 const StudioReports = lazyWithRetry(() => import("./components/StudioReports"));
 
 const LoginScreen = lazyWithRetry(() => import("./components/LoginScreen"));
@@ -135,6 +137,7 @@ import {
   ExecutionBundleStatus,
 } from "./types";
 import { db, dbWriteCount, hydrateProjectDetail, projectFromDoc } from "./services/dbService";
+import { useStudioTemplates } from "./hooks/useStudioTemplates";
 import { mergeClientOwned } from "./lib/clientOwned";
 import { engagementOf, isRouteHidden } from "./lib/engagement";
 import { signupAction, winOnSignup } from "./lib/signupWon";
@@ -286,7 +289,8 @@ export default function App() {
     })));
   }, [projectLibrary]);
   const [bank, setBank] = useState<Item[]>([]);
-  const [templates, setTemplates] = useState(INITIAL_TEMPLATES);
+  /* Standard templates (hooks/useStudioTemplates): setTemplates for what is read, editTemplates for a person's change, which is saved. */
+  const { templates, setTemplates, editTemplates } = useStudioTemplates(INITIAL_TEMPLATES, (t) => db.saveTemplates(t));
 
   // Active Project State
   const [activeInternalId, setActiveInternalId] = useState<string | null>(null);
@@ -2925,6 +2929,10 @@ export default function App() {
       writeAttentionEntry(currentUserAuth?.uid, projectId, entry);
     }, [currentUserAuth?.uid]);
 
+    /* Sample options (components/sampleOptions): for the roles lib/roleAccess lets open it. */
+    const mayOpenSampleOptions = mayOpenStudioTab("sample-options", currentRoles?.length ? currentRoles : currentRole) && !isLimitedRole(currentRole);
+    const openSampleOptions = useCallback(() => setActiveTab("sample-options"), []);
+
     const isProjectTab = ![
     "home",
     "reports",
@@ -2945,6 +2953,7 @@ export default function App() {
     "data-privacy",
     "support",
     "terms-of-use",
+    "sample-options",
   ].includes(activeTab);
 
   /* One effect rather than touching forty-six setActiveTab calls. Only fires
@@ -3543,8 +3552,12 @@ export default function App() {
                       onDuplicateProject={handleDuplicateProject}
                       onQuickUpdate={handleQuickProjectUpdate}
                       onStatusChange={handleProjectStatusChange}
+                      onOpenSampleOptions={mayOpenSampleOptions ? openSampleOptions : undefined}
                       // ACTIVE_PROJECTS
                     />
+                  )}
+                  {activeTab === "sample-options" && mayOpenSampleOptions && (
+                    <SampleOptionsScreen bank={bank} templates={templates} />
                   )}
                   {activeTab === "clients" && (
                     <ClientsDirectory
@@ -3561,7 +3574,7 @@ export default function App() {
                       bank={bank}
                       setBank={setBank}
                       templates={templates}
-                      setTemplates={setTemplates}
+                      setTemplates={editTemplates}
                       aiStrategy={aiStrategy}
                       highlightedBankItemId={highlightedBankItemId}
                       setHighlightedBankItemId={setHighlightedBankItemId}
@@ -3598,7 +3611,7 @@ export default function App() {
                     <TemplateEditorTab
                       bank={bank}
                       templates={templates}
-                      setTemplates={setTemplates}
+                      setTemplates={editTemplates}
                       // ACTIVE_TEMPLATES
                     />
                   )}
@@ -4213,7 +4226,11 @@ export default function App() {
                       onDuplicateProject={handleDuplicateProject}
                       onQuickUpdate={handleQuickProjectUpdate}
                       onStatusChange={handleProjectStatusChange}
+                      onOpenSampleOptions={mayOpenSampleOptions ? openSampleOptions : undefined}
                     />
+                  )}
+                  {activeTab === "sample-options" && mayOpenSampleOptions && (
+                    <SampleOptionsScreen bank={bank} templates={templates} />
                   )}
                   {activeTab === "clients" && (
                     <ClientsDirectory
@@ -4229,7 +4246,7 @@ export default function App() {
                       bank={bank}
                       setBank={setBank}
                       templates={templates}
-                      setTemplates={setTemplates}
+                      setTemplates={editTemplates}
                       aiStrategy={aiStrategy}
                       highlightedBankItemId={highlightedBankItemId}
                       setHighlightedBankItemId={setHighlightedBankItemId}
@@ -4265,7 +4282,7 @@ export default function App() {
                     <TemplateEditorTab
                       bank={bank}
                       templates={templates}
-                      setTemplates={setTemplates}
+                      setTemplates={editTemplates}
                     />
                   )}
                   {activeTab === "ai-settings" && (
