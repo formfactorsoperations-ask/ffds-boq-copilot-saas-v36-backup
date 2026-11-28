@@ -667,6 +667,19 @@ export function linkLeadProject(l: Lead, project: { id: string; name: string }, 
   return { ...l, projectId: project.id, openRequest: null, touches: [...l.touches, touch].slice(-300) };
 }
 
+/**
+ * The lead once its project has been deleted: the link is cleared, so it can
+ * start a new project (New Project, Ops Desk), with a note in its touches.
+ * Its stage is kept. The caller saves.
+ */
+export function unlinkDeletedProject(l: Lead, me: { email: string; name: string }, at: number, projectName?: string): Lead {
+  const touch: LeadTouch = {
+    id: `t${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`, at, by: me.email.toLowerCase(), byName: me.name, kind: 'note',
+    text: `Its project${projectName ? ` ${projectName}` : ''} was deleted, so the lead is free for a new one`.slice(0, 500), reached: null,
+  };
+  return { ...l, projectId: null, openRequest: null, touches: [...l.touches, touch].slice(-300) };
+}
+
 /* ── Starting a project from a lead ─────────────────────────────────────── */
 
 /**

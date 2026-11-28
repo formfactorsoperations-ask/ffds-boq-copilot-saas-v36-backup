@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { startableLeads, leadOpenedAsProject, quickLeadDraft, draftProblems, blankDraft, type Lead } from '../../lib/leads';
 
-const h = vi.hoisted(() => ({ leads: [] as any[], saved: [] as any[], created: [] as any[], assigned: [] as any[] }));
+const h = vi.hoisted(() => ({ leads: [] as any[], saved: [] as any[], created: [] as any[], assigned: [] as any[], gone: new Set<string>() }));
 
 vi.mock('../../contexts/OrgContext', () => ({
   useOrg: () => ({ orgData: { tenantId: 's1' }, currentUserAuth: { email: 'anish@ffds.in', displayName: 'Anish K' } }),
@@ -24,6 +24,9 @@ vi.mock('../../services/leadsService', () => ({
   },
   saveLead: async (l: any) => { h.saved.push(l); return l; },
   withTouch: (l: any, t: any) => ({ ...l, touches: [...(l.touches || []), t] }),
+  /* The project of a lead linked to one the studio does not have, and that is gone, is let go. */
+  releaseDeletedProjectLinks: async (ls: any[], known: Set<string>) =>
+    ls.map((l) => (l.projectId && !known.has(l.projectId) && h.gone.has(l.projectId) ? { ...l, projectId: null } : l)),
 }));
 
 import StartProjectModal from '../../components/projects/StartProjectModal';
@@ -46,7 +49,7 @@ beforeEach(() => {
     lead('c', 'lost', 'Waghmare family'),
     lead('d', 'won', 'Ms Dalal', { projectId: 'p-old' }),
   ];
-  h.saved = []; h.created = []; h.assigned = [];
+  h.saved = []; h.created = []; h.assigned = []; h.gone = new Set();
 });
 afterEach(cleanup);
 
@@ -90,6 +93,12 @@ describe('New Project window', () => {
     expect(createProject.mock.calls[0][0]).toMatchObject({ clientName: 'Mrs Naik', leadId: 'a', config: '2-BHK' });
     expect(h.saved[0]).toMatchObject({ id: 'a', projectId: 'p-new', stage: 'proposal' });
     expect(h.assigned).toEqual([['p-new', 'riya@ffds.in']]);
+  });
+
+  it('offers a lead again once its project was deleted', async () => {
+    h.gone = new Set(['p-old']);
+    setup();
+    expect(await screen.findByText('Ms Dalal')).toBeTruthy();
   });
 
   it('adds a lead that is not on the desk yet, then starts from it', async () => {

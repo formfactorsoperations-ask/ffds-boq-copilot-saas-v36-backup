@@ -24,7 +24,7 @@ import {
 import { leadQueue, leadToProject, leadOpenedAsProject, leadMeeting, linkLeadProject, isOpen as leadIsOpen, type Lead } from '../../lib/leads';
 import { projectGuesses, projectRefOf } from '../../lib/leadSmart';
 import { loadProjectOps, loadStudioOps, markNextDone, closeEscalation, logFollowUp, type OpsMom } from '../../services/opsDeskService';
-import { loadLeads, saveLead, withTouch, deleteLead } from '../../services/leadsService';
+import { loadLeads, saveLead, withTouch, deleteLead, releaseDeletedProjectLinks } from '../../services/leadsService';
 import {
   loadDeskRecord, saveDeskRecord, loadTeamRecords, closeDay, loadDayNotes, loadMyDay, markNoteRead, moveNextStep, type DeskRecord, type DayNote,
 } from '../../services/opsPeopleService';
@@ -217,7 +217,8 @@ export default function OpsDeskPage({ projects, onOpenProject, onCreateFromLead 
         isLead ? loadTeamRecords(tenantId).catch(() => [] as DeskRecord[]) : Promise.resolve([] as DeskRecord[]),
         isLead ? loadDayNotes(tenantId, dayKey(Date.now() - 7 * 86400000)).catch(() => [] as DayNote[]) : Promise.resolve([] as DayNote[]),
       ]);
-      setLeads(ls);
+      /* A lead whose project was deleted is let go, so it can start a new one (services/leadsService). */
+      setLeads(isLead ? await releaseDeletedProjectLinks(ls, new Set(projects.map((p) => String(p?.id))), me).catch(() => ls) : ls);
       setRecord(rec);
       setTeamRecords(recs);
       setNotes(ns);
