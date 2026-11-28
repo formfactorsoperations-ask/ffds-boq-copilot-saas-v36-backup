@@ -137,6 +137,7 @@ import {
   ExecutionBundleStatus,
 } from "./types";
 import { db, dbWriteCount, hydrateProjectDetail, projectFromDoc } from "./services/dbService";
+import { useStudioTemplates } from "./hooks/useStudioTemplates";
 import { mergeClientOwned } from "./lib/clientOwned";
 import { engagementOf, isRouteHidden } from "./lib/engagement";
 import { signupAction, winOnSignup } from "./lib/signupWon";
@@ -288,7 +289,8 @@ export default function App() {
     })));
   }, [projectLibrary]);
   const [bank, setBank] = useState<Item[]>([]);
-  const [templates, setTemplates] = useState(INITIAL_TEMPLATES);
+  /* Standard templates (hooks/useStudioTemplates): setTemplates for what is read, editTemplates for a person's change, which is saved. */
+  const { templates, setTemplates, editTemplates } = useStudioTemplates(INITIAL_TEMPLATES, (t) => db.saveTemplates(t));
 
   // Active Project State
   const [activeInternalId, setActiveInternalId] = useState<string | null>(null);
@@ -3572,7 +3574,7 @@ export default function App() {
                       bank={bank}
                       setBank={setBank}
                       templates={templates}
-                      setTemplates={setTemplates}
+                      setTemplates={editTemplates}
                       aiStrategy={aiStrategy}
                       highlightedBankItemId={highlightedBankItemId}
                       setHighlightedBankItemId={setHighlightedBankItemId}
@@ -3609,7 +3611,7 @@ export default function App() {
                     <TemplateEditorTab
                       bank={bank}
                       templates={templates}
-                      setTemplates={setTemplates}
+                      setTemplates={editTemplates}
                       // ACTIVE_TEMPLATES
                     />
                   )}
@@ -4244,7 +4246,7 @@ export default function App() {
                       bank={bank}
                       setBank={setBank}
                       templates={templates}
-                      setTemplates={setTemplates}
+                      setTemplates={editTemplates}
                       aiStrategy={aiStrategy}
                       highlightedBankItemId={highlightedBankItemId}
                       setHighlightedBankItemId={setHighlightedBankItemId}
@@ -4280,7 +4282,7 @@ export default function App() {
                     <TemplateEditorTab
                       bank={bank}
                       templates={templates}
-                      setTemplates={setTemplates}
+                      setTemplates={editTemplates}
                     />
                   )}
                   {activeTab === "ai-settings" && (
