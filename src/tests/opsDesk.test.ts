@@ -111,6 +111,23 @@ describe('the queue', () => {
     const q = buildQueue({ now: NOW, me: 'mayuri@s.in', isLead: true, followUps, waiting: [], moms, escalations });
     expect(q.map((i) => i.kind)).toEqual(['escalation_open', 'mom_review']);
   });
+
+  it('gives Client Relations approved new minutes to send, whoever approved them', () => {
+    const issued = (id: string, over: any = {}) => ({ id, projectId: 'p1', projectName: 'Kapoor Villa', status: 'finalised', meetingTitle: id,
+      raw: { format: 2, meetingType: 'client_meeting', approvedBy: { name: 'Anita Rao', role: 'Admin' }, ...over } });
+    const list = [
+      issued('byAdmin'),
+      issued('byOwner', { approvedBy: { name: 'Mayuri', role: 'Owner' } }),
+      issued('older', { format: undefined }),
+      issued('internal', { meetingType: 'internal_meeting' }),
+      { ...issued('sent'), status: 'shared' },
+    ];
+    const q = buildQueue({ now: NOW, me: 'riya@s.in', isLead: false, followUps: [], waiting: [], moms: list, escalations: [] });
+    expect(q.filter((i) => i.kind === 'mom_send').map((i) => i.ref)).toEqual(['byAdmin', 'byOwner']);
+    expect(q.find((i) => i.ref === 'byAdmin')?.detail).toBe('Approved by Anita Rao. Send them to the client');
+    const lead = buildQueue({ now: NOW, me: 'mayuri@s.in', isLead: true, followUps: [], waiting: [], moms: list, escalations: [] });
+    expect(lead.some((i) => i.kind === 'mom_send')).toBe(false);
+  });
 });
 
 describe('messages to copy', () => {

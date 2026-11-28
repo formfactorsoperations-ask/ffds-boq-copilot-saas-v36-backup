@@ -296,7 +296,7 @@ export function withChases(items: WaitingItem[], followUps: FollowUp[]): Waiting
 /* ── The queue ───────────────────────────────────────────────────────────── */
 
 export type QueueGroup = 'overdue' | 'today' | 'week' | 'later';
-export type QueueKind = 'next' | 'payment' | 'decision' | 'mom_review' | 'escalation_open' | 'escalation_decided'
+export type QueueKind = 'next' | 'payment' | 'decision' | 'mom_review' | 'mom_send' | 'escalation_open' | 'escalation_decided'
   /* Client care (lib/clientCare.ts). */
   | 'visit' | 'documents' | 'checklist' | 'ask'
   /* Leads (lib/leads.ts): one to call or chase, and one a lead is asked to open as a project. */
@@ -345,7 +345,8 @@ export interface QueueInput {
   isLead: boolean;
   followUps: FollowUp[];
   waiting: WaitingItem[];
-  moms: { id: string; projectId: string; projectName: string; status: string; meetingTitle?: string; momRef?: string }[];
+  /* `raw` is the minutes as stored: new minutes (format 2) a lead has approved are Client Relations' to send. */
+  moms: { id: string; projectId: string; projectName: string; status: string; meetingTitle?: string; momRef?: string; raw?: any }[];
   escalations: Escalation[];
   /** Items worked out elsewhere (lib/clientCare careQueue), sorted in with the rest. */
   extra?: QueueItem[];
@@ -413,6 +414,23 @@ export function buildQueue(input: QueueInput): QueueItem[] {
     }
   }
 
+  /*
+    Minutes a lead approved without sending them go back to Client Relations
+    to send (the approver chose "Client Relations then sends them"). Only new
+    minutes (format 2): older ones are shared by a lead, as before
+    (firestore.rules). Internal and vendor minutes are never sent.
+  */
+  if (!isLead) {
+    for (const m of input.moms) {
+      if (m.status !== 'finalised' || m.raw?.format !== 2 || m.raw?.revisionStage || /internal|vendor/.test(String(m.raw?.meetingType || ''))) continue;
+      const by = String(m.raw?.approvedBy?.name || '').trim();
+      items.push({
+        id: `momsend:${m.id}`, group: 'today', kind: 'mom_send', projectId: m.projectId, projectName: m.projectName,
+        title: `Send minutes: ${m.meetingTitle || m.momRef || 'Meeting'}`, detail: `Approved${by ? ` by ${by}` : ''}. Send them to the client`, due: today, ref: m.id,
+      });
+    }
+  }
+
   for (const e of input.escalations) {
     if (isLead && e.status === 'open') {
       items.push({
@@ -434,7 +452,7 @@ export function buildQueue(input: QueueInput): QueueItem[] {
   const order: Record<QueueGroup, number> = { overdue: 0, today: 1, week: 2, later: 3 };
   /* Within a day: what needs a decision, then money, then the rest. */
   const weight: Record<QueueKind, number> = {
-    escalation_open: 0, escalation_decided: 1, payment: 2, lead: 3, lead_open: 3, decision: 4, visit: 5, mom_review: 6, next: 7, documents: 8, checklist: 9, ask: 10, digest: 6,
+    escalation_open: 0, escalation_decided: 1, payment: 2, lead: 3, lead_open: 3, decision: 4, visit: 5, mom_review: 6, mom_send: 6, next: 7, documents: 8, checklist: 9, ask: 10, digest: 6,
   };
   return items.sort((a, b) => order[a.group] - order[b.group] || String(a.due || '').localeCompare(String(b.due || ''))
     || weight[a.kind] - weight[b.kind] || a.title.localeCompare(b.title));

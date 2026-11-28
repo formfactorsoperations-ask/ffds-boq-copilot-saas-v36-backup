@@ -55,7 +55,7 @@ export const WORK_FILTERS: { id: WorkFilter; label: string }[] = [
 ];
 const WORK: Record<QueueKind, WorkFilter> = {
   next: 'calls', payment: 'calls', decision: 'calls', ask: 'calls', lead: 'calls', escalation_decided: 'calls',
-  visit: 'meetings', mom_review: 'meetings',
+  visit: 'meetings', mom_review: 'meetings', mom_send: 'meetings',
   documents: 'paperwork', checklist: 'paperwork', escalation_open: 'paperwork', lead_open: 'paperwork', digest: 'paperwork',
 };
 export const matchesWork = (q: Pick<QueueItem, 'kind'>, f: WorkFilter) => f === 'all' || WORK[q.kind] === f;
@@ -64,7 +64,7 @@ export const matchesWork = (q: Pick<QueueItem, 'kind'>, f: WorkFilter) => f === 
 
 export type PlaybookKind = 'payment' | 'decision' | 'next' | 'lead' | 'minutes' | 'escalation' | 'visit' | 'documents' | 'ask' | 'digest';
 export const PLAYBOOK_OF: Record<QueueKind, PlaybookKind> = {
-  payment: 'payment', decision: 'decision', next: 'next', lead: 'lead', lead_open: 'lead', mom_review: 'minutes',
+  payment: 'payment', decision: 'decision', next: 'next', lead: 'lead', lead_open: 'lead', mom_review: 'minutes', mom_send: 'minutes',
   escalation_open: 'escalation', escalation_decided: 'escalation', visit: 'visit', documents: 'documents', checklist: 'documents', ask: 'ask', digest: 'digest',
 };
 
@@ -226,6 +226,12 @@ export function explain(q: QueueItem, x: { waiting?: WaitingItem | null; setting
         why: 'Minutes written by Client Relations are waiting for your approval.',
         todo: 'Read them, edit if needed, then approve or return them with notes on the lines.',
         ifWaits: 'The client hears nothing about what was agreed until they are approved and sent.',
+      };
+    case 'mom_send':
+      return {
+        why: `${q.detail.replace(/\. Send them to the client$/, '')}. The minutes are ready for the client.`,
+        todo: 'Open them and send: the portal always, WhatsApp and email with the PDF.',
+        ifWaits: 'The client hears nothing about what was agreed until they are sent, and cannot confirm them.',
       };
     case 'escalation_open':
       return {
