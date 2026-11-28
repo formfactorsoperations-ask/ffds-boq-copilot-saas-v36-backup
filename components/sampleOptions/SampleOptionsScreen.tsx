@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Home, Sprout, Gem, Crown, Presentation, X, ChevronDown, Check, Minus, LayoutGrid, Plus, IndianRupee } from 'lucide-react';
+import { Home, Sprout, Gem, Crown, Presentation, X, ChevronDown, Check, Minus, LayoutGrid, Plus, IndianRupee, Layers } from 'lucide-react';
 import type { Item } from '../../types';
 import type { TemplateData } from '../../lib/standardPackages';
 import {
   sampleOptions, sampleRatesOf, SAMPLE_SIZES, DEFAULT_SAMPLE_SIZE, DEFAULT_SAMPLE_RATES, RATE_LIMITS, OPTION_NAMES,
-  typicalCarpetOf, usualAreasOf, inLakhs, type SampleBook, type SampleOption, type SampleRates,
+  typicalCarpetOf, usualAreasOf, inLakhs, sampleSpecs, type SampleBook, type SampleOption, type SampleRates, type SampleSpec, type SampleSpecRow,
 } from '../../lib/sampleOptions';
 import { GRADES } from '../../lib/materialSpecs';
 import { holdsFinanceRole } from '../../lib/roleAccess';
@@ -13,6 +13,7 @@ import { Panel, Button, Segmented, IconChip, LABEL, INPUT } from '../ui/kit';
 import { CountUp } from '../ui/HudBits';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
 import { useOrg } from '../../contexts/OrgContext';
+import { useMaterialSpecs } from '../materialSpecs/useMaterialSpecs';
 import '../projectHeader/projectHeader.css';
 
 /*
@@ -193,12 +194,64 @@ function IncludesTable({ book }: { book: SampleBook }) {
 }
 
 /** The options and what they include: what the client sees, on the page and full screen. */
-function SampleBody({ book }: { book: SampleBook }) {
+/** One option's material in a family: the words, the brand, and the choice of shades. */
+function SpecCell({ specs }: { specs: SampleSpec[] }) {
+  if (!specs.length) return <span className="text-xs text-slate-400">Not included</span>;
+  return (
+    <div className="space-y-1.5">
+      {specs.map(s => (
+        <div key={s.words}>
+          <span className="block text-xs font-semibold text-slate-800">{s.words}</span>
+          {(s.brand || s.choice) && <span className="block text-[11px] text-slate-500">{[s.brand, s.choice].filter(Boolean).join(' · ')}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** What each option is built with, family by family, from the studio's Material specs bank. */
+function SpecsTable({ rows, names }: { rows: SampleSpecRow[]; names: { grade: string; name: string }[] }) {
+  return (
+    <Panel flush icon={Layers} title="Material specifications"
+      blurb="What each option is built with: boards, finishes, hardware, paint and electrical. Exact shades are picked with you at Selections."
+      foot="Brands are named as the standard or an equivalent of the same grade.">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-sm table-fixed">
+          <colgroup><col className="w-[22%]" />{names.map(n => <col key={n.grade} />)}</colgroup>
+          <thead>
+            <tr className="border-y border-slate-100 bg-slate-50">
+              <th scope="col" className={`${LABEL} text-left px-6 py-2.5`}>Material</th>
+              {names.map(n => <th key={n.grade} scope="col" className={`${LABEL} text-left px-4 py-2.5`}>{n.name}</th>)}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((r, i) => (
+              <tr key={r.family} className="align-top hover:bg-slate-50 transition-colors hud-row-in" style={{ animationDelay: `${i * 30}ms` }}>
+                <th scope="row" className="text-left px-6 py-3 text-sm font-semibold text-slate-800">{r.family}</th>
+                {r.same ? (
+                  <td colSpan={names.length} className="px-4 py-3">
+                    <SpecCell specs={r.byGrade.E} />
+                    <span className="block text-[11px] text-slate-400 mt-1">The same in every option</span>
+                  </td>
+                ) : names.map(n => (
+                  <td key={n.grade} className="px-4 py-3"><SpecCell specs={r.byGrade[n.grade as 'E' | 'C' | 'P']} /></td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+function SampleBody({ book, specs }: { book: SampleBook; specs: SampleSpecRow[] }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
         {book.options.map((o, i) => <OptionCard key={o.grade} option={o} index={i} previous={book.options[i - 1]} />)}
       </div>
+      {specs.length > 0 && <SpecsTable rows={specs} names={book.options.map(o => ({ grade: o.grade, name: o.name }))} />}
       {book.rooms.length > 0 && <IncludesTable book={book} />}
     </div>
   );
@@ -207,7 +260,7 @@ function SampleBody({ book }: { book: SampleBook }) {
 const titleOf = (book: SampleBook) => `Three ways to do a ${book.size} of about ${book.carpet.toLocaleString('en-IN')} sq ft`;
 
 /** Full screen, without the app around it, for the meeting room's screen. */
-function Presenting({ book, sample, studio, onClose }: { book: SampleBook; sample: ReturnType<typeof useSample>; studio?: string; onClose: () => void }) {
+function Presenting({ book, specs, sample, studio, onClose }: { book: SampleBook; specs: SampleSpecRow[]; sample: ReturnType<typeof useSample>; studio?: string; onClose: () => void }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', key);
@@ -238,7 +291,7 @@ function Presenting({ book, sample, studio, onClose }: { book: SampleBook; sampl
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-4">
           <HomeControls {...sample} compact />
         </div>
-        <SampleBody book={book} />
+        <SampleBody book={book} specs={specs} />
       </div>
     </div>,
     document.body,
@@ -330,7 +383,10 @@ export default function SampleOptionsScreen({ bank, templates }: Props) {
   const stopPresenting = useCallback(() => setPresenting(false), []);
   const stopEditing = useCallback(() => setEditing(false), []);
 
-  const book = useMemo(() => sampleOptions({ size, carpet, rates, bank, templates }), [size, carpet, rates, bank, templates]);
+  /* The studio's Material specs bank (or the studio standard until the Owner saves one). */
+  const materialSpecs = useMaterialSpecs(orgData?.tenantId);
+  const specs = useMemo(() => sampleSpecs(materialSpecs.bank), [materialSpecs.bank]);
+  const book = useMemo(() => sampleOptions({ size, carpet, rates, bank, templates, specs }), [size, carpet, rates, bank, templates, specs]);
 
   usePageHeader({
     actions: (
@@ -349,10 +405,10 @@ export default function SampleOptionsScreen({ bank, templates }: Props) {
       </Panel>
 
       <div key={`${size}-${carpet}`} className="hud-swap">
-        <SampleBody book={book} />
+        <SampleBody book={book} specs={specs} />
       </div>
 
-      {presenting && <Presenting book={book} sample={sample} studio={orgData?.orgName} onClose={stopPresenting} />}
+      {presenting && <Presenting book={book} specs={specs} sample={sample} studio={orgData?.orgName} onClose={stopPresenting} />}
       {editing && <RatesModal rates={rates} onClose={stopEditing} onSave={async (r) => { await updateOrgData({ sampleRates: r }); }} />}
     </div>
   );

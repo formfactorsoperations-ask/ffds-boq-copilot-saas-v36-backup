@@ -116,6 +116,12 @@ Head. A client may be watching, so it never shows a cost or a margin.
 - The rates are the owner's (₹1,600–1,800, ₹2,200–2,400, ₹2,600–2,800 per sq ft until changed), saved on
   the studio record as `sampleRates`. **Set the rates** (leads only) opens a modal in the `AssignProjectsModal`
   pattern with a From and To field per option.
+- "Material specifications": a flush `Panel` with a table read from the studio's Material specs bank
+  (`useMaterialSpecs`, the studio standard until the Owner saves one): one row per family (Plywood & boards,
+  Outer finishes, Hardware…), each option's material in a cell (the words in `text-xs font-semibold`, the brand
+  and "Choice of 300+ shades" under it in `text-[11px] text-slate-500`). A family every option shares is one
+  cell across the three with "The same in every option". An option card's finish line is its outer finish
+  from this table, so the two always agree.
 - "What each option includes": a flush `Panel` with a table, from the studio's Standard template for the size:
   each room with its item count per option; a room opens to its items with a brand check or a slate dash per
   option; the ranges in the foot row. No amount per room. Left out when the studio has no template for the size.

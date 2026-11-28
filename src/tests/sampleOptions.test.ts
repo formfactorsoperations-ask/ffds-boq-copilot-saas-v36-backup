@@ -7,8 +7,9 @@ import { describe, it, expect } from 'vitest';
 import { INITIAL_BANK } from '../../constants';
 import { INITIAL_TEMPLATES } from '../../lib/standardPackages';
 import {
-  sampleOptions, sampleRatesOf, DEFAULT_SAMPLE_RATES, typologyFor, typicalCarpetOf, usualAreasOf, inLakhs, rangeText, itemLabel,
+  sampleOptions, sampleSpecs, sampleRatesOf, DEFAULT_SAMPLE_RATES, typologyFor, typicalCarpetOf, usualAreasOf, inLakhs, rangeText, itemLabel,
 } from '../../lib/sampleOptions';
+import { studioStandard, saveNewVersion } from '../../lib/materialSpecs';
 import { mayOpenStudioTab, STUDIO_TABS, limitedMayOpen } from '../../lib/roleAccess';
 import type { Item } from '../../types';
 
@@ -74,6 +75,40 @@ describe('without a template for the size', () => {
     expect(four.options.map(o => o.name)).toEqual(['Essential Elegance', 'Comfort Upgrade', 'Complete Harmony']);
     expect(four.options[0]).toMatchObject({ low: 2880000, high: 3240000, finish: '' });
     expect(sampleOptions({ size: '2-BHK', carpet: 850 }).options[0].low).toBe(1360000);
+  });
+});
+
+describe('the material specifications', () => {
+  const rows = sampleSpecs(studioStandard());
+  const row = (family: string) => rows.find(r => r.family === family)!;
+
+  it('give each family what each option uses, in the bank’s order', () => {
+    expect(rows.map(r => r.family)).toEqual(['Plywood & boards', 'Outer finishes', 'Inner finishes', 'Hardware', 'Handles', 'Countertops', 'Glass & mirror', 'Paint', 'False ceiling', 'Electrical']);
+    const ply = row('Plywood & boards');
+    expect(ply.same).toBe(false);
+    expect(ply.byGrade.E).toEqual([{ words: '18 mm MR-grade plywood', brand: 'Greenply MR equivalent' }]);
+    expect(ply.byGrade.P[0].words).toBe('18 mm BWP marine plywood');
+  });
+
+  it('say when every option uses the same, and the choice of shades', () => {
+    expect(row('False ceiling').same).toBe(true);
+    expect(row('Outer finishes').byGrade.C[0].choice).toBe('Choice of 250+ shades');
+    expect(row('Countertops').byGrade.E[0].words).toBe('18 mm black granite, polished edge');
+  });
+
+  it('read the latest version the Owner saved', () => {
+    const next = saveNewVersion(studioStandard(), 'ply-bwr', { words: '18 mm BWR plywood, termite proof', brand: 'Century Club', note: 'Named the grade' }, 'Owner', 1);
+    expect(sampleSpecs(next).find(r => r.family === 'Plywood & boards')!.byGrade.C).toEqual([{ words: '18 mm BWR plywood, termite proof', brand: 'Century Club' }]);
+  });
+
+  it('name each option’s finish on its card, so the card and the table agree', () => {
+    const withSpecs = sampleOptions({ size: '2-BHK', carpet: 850, bank, templates: INITIAL_TEMPLATES, specs: rows });
+    expect(withSpecs.options.map(o => o.finish)).toEqual(['1 mm standard laminate', '1 mm textured designer laminate', '4 mm natural veneer, PU lacquered']);
+    expect(row('Outer finishes').finish).toBe(true);
+  });
+
+  it('is empty with no bank', () => {
+    expect(sampleSpecs(null)).toEqual([]);
   });
 });
 

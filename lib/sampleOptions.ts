@@ -22,7 +22,7 @@ import type { Item, ProjectContext, ProposalTier } from '../types';
 import { generateStandardPackages, type TemplateData } from './standardPackages';
 import { typologiesOf } from './optionSetup';
 import { asScopeBucket, isScopeBucket, SCOPE_BUCKET_META, type ScopeBucket } from './scopeBuckets';
-import { GRADES, type Grade } from './materialSpecs';
+import { GRADES, currentVersion, materialsIn, rangeLabel, type Grade, type MaterialSpecsBank } from './materialSpecs';
 
 /* ─────────────────────────── sizes ─────────────────────────── */
 
@@ -167,6 +167,12 @@ const finishOf = (t: ProposalTier | undefined): string => {
   return plain.charAt(0).toUpperCase() + plain.slice(1);
 };
 
+/** The option's outer finish in the Material specs, e.g. "1 mm textured designer laminate". */
+function specFinish(specs: SampleSpecRow[] | undefined, g: Grade): string {
+  const row = specs?.find(r => r.finish);
+  return row ? row.byGrade[g].map(x => x.words).join(' or ') : '';
+}
+
 const contextFor = (typology: string, area: number): ProjectContext => ({
   name: `Sample ${typology}`,
   type: 'TURNKEY',
@@ -193,6 +199,8 @@ export function sampleOptions(args: {
   rates?: SampleRates | null;
   bank?: Item[];
   templates?: TemplateData;
+  /** The Material specs (sampleSpecs): when given, an option's finish is its outer finish there. */
+  specs?: SampleSpecRow[];
 }): SampleBook {
   const { size } = args;
   const carpet = Math.max(100, Math.round(Number(args.carpet) || typicalCarpetOf(size)));
@@ -214,7 +222,7 @@ export function sampleOptions(args: {
     return {
       grade: g,
       name: t?.name || OPTION_NAMES[g],
-      finish: finishOf(t),
+      finish: specFinish(args.specs, g) || finishOf(t),
       low: roundTo(carpet * lo, 10000, 'down'),
       high: roundTo(carpet * hi, 10000, 'up'),
       rate: [lo, hi],
@@ -254,4 +262,58 @@ export function sampleOptions(args: {
   }
 
   return { size, carpet, options, rooms };
+}
+
+/* ─────────────────────────── material specifications ─────────────────────────── */
+
+/** One material as the client reads it. */
+export interface SampleSpec {
+  words: string;
+  brand?: string;
+  /** "Choice of 300+ shades", when the material is priced as a range. */
+  choice?: string;
+}
+
+/** One family (Plywood & boards, Hardware…): what each option uses. */
+export interface SampleSpecRow {
+  family: string;
+  /** What each option uses; empty when the option has nothing of the family. */
+  byGrade: Record<Grade, SampleSpec[]>;
+  /** Every option uses the same. */
+  same: boolean;
+  /** The outer finish: what a client sees on every shutter. */
+  finish?: boolean;
+}
+
+const sentence = (s: string) => { const t = String(s || '').trim(); return t.charAt(0).toUpperCase() + t.slice(1); };
+
+/**
+ * The studio's Material specs bank as the client reads it: for each family,
+ * the latest version of each material used at each option. Families no
+ * option uses are left out.
+ */
+export function sampleSpecs(bank: MaterialSpecsBank | null | undefined): SampleSpecRow[] {
+  if (!bank) return [];
+  const rows: SampleSpecRow[] = [];
+  bank.families.forEach(f => {
+    const byGrade = {} as Record<Grade, SampleSpec[]>;
+    GRADES.forEach(g => {
+      byGrade[g] = materialsIn(bank, f.id)
+        .filter(m => m.grades.includes(g))
+        .map(m => {
+          const v = currentVersion(bank, m.id);
+          if (!v) return null;
+          return {
+            words: sentence(v.words || m.name),
+            ...(v.brand ? { brand: v.brand } : {}),
+            ...(v.range ? { choice: `Choice of ${rangeLabel(v.range)}` } : {}),
+          } as SampleSpec;
+        })
+        .filter((x): x is SampleSpec => !!x);
+    });
+    if (GRADES.every(g => !byGrade[g].length)) return;
+    const key = (g: Grade) => JSON.stringify(byGrade[g]);
+    rows.push({ family: f.name, byGrade, same: GRADES.every(g => key(g) === key('E')), ...(f.finish ? { finish: true } : {}) });
+  });
+  return rows;
 }
